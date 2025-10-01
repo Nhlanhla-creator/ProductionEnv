@@ -1,0 +1,222 @@
+.create-event-form {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 2rem;
+  background-color: #fff9f2;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(90, 57, 33, 0.1);
+  font-family: 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+.heading {
+  color: #5a3921;
+  text-align: center;
+  margin-bottom: 1.5rem;
+  font-weight: 600;
+  font-size: 1.8rem;
+  position: relative;
+  padding-bottom: 0.5rem;
+}
+
+.heading:after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80px;
+  height: 3px;
+  background-color: #d4b483;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #5a3921;
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.form-group input[type="text"],
+.form-group input[type="date"],
+.form-group input[type="time"],
+.form-group select {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid #d4b483;
+  border-radius: 8px;
+  background-color: #fff;
+  color: #5a3921;
+  font-size: 1rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-group input[type="text"]:focus,
+.form-group input[type="date"]:focus,
+.form-group input[type="time"]:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #8c6842;
+  box-shadow: 0 0 0 3px rgba(140, 104, 66, 0.1);
+}
+
+.form-row {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.form-row .form-group {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.collapsible {
+  margin-bottom: 1rem;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: #f5e9dc;
+  transition: all 0.3s ease;
+}
+
+.collapsible-header {
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  color: #5a3921;
+  font-weight: 500;
+  background-color: #f0e0cc;
+  transition: background-color 0.2s;
+}
+
+.collapsible-header:hover {
+  background-color: #e8d8c5;
+}
+
+.collapsible-header span:first-child {
+  font-size: 1rem;
+}
+
+.collapsible-header span:last-child {
+  font-size: 0.9rem;
+  transition: transform 0.2s;
+}
+
+.collapsible .form-group {
+  padding: 0 1rem 1rem;
+  margin-bottom: 0;
+}
+
+.tip {
+  font-size: 0.85rem;
+  color: #8b6d4f;
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.cancel-btn,
+.submit-btn {
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.cancel-btn {
+  background-color: #f0e0cc;
+  color: #5a3921;
+}
+
+.cancel-btn:hover {
+  background-color: #e8d8c5;
+}
+
+.submit-btn {
+  background-color: #8c6842;
+  color: white;
+}
+
+.submit-btn:hover {
+  background-color: #6e4f32;
+}
+
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235a3921' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  background-size: 1rem;
+}
+
+/* Recipient select styles */
+.recipient-select {
+  position: relative;
+  width: 100%;
+}
+
+.recipient-select input {
+  width: 100%;
+  padding-right: 2rem;
+}
+
+.recipient-select:after {
+  content: '▼';
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #5a3921;
+  pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  .create-event-form {
+    padding: 1.5rem;
+  }
+  
+  .form-row {
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  
+  .form-actions {
+    flex-direction: column-reverse;
+    gap: 0.75rem;
+  }
+  
+  .cancel-btn,
+  .submit-btn {
+    width: 100%;
+  }
+}
+
+.collapsible-header.active span:last-child {
+  transform: rotate(180deg);
+}
+
+.collapsible-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease-out;
+}
+
+.collapsible-content.show {
+  max-height: 500px; 
+}

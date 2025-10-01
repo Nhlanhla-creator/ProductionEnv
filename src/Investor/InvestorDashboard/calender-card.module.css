@@ -1,0 +1,567 @@
+
+.calendarCard {
+    background-color: #fff;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+     padding: 30px;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid #e0d6c8;
+    margin-bottom: 150px; 
+  }
+
+  
+  
+  .cardHeader {
+  display: flex;
+  color: #4a352f;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1px; 
+  margin-left: 0; 
+  padding: 0 0 10px 0; 
+  border-bottom: 1px solid #e0d6c8; 
+  }
+  
+  .cardHeader h3 {
+    font-size: 17px;
+    font-weight: 600;
+    color: #5d4037;
+    margin: 10; 
+  }
+  
+  
+  .outlookBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f5f5f5;
+    border: none;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease;
+    color: #0078d4; 
+  }
+  
+  .outlookBtn:hover {
+    background-color: #e6e6e6;
+    transform: scale(1.05);
+  }
+  
+  .outlookBtn.connected {
+    background-color: #e3f2fd;
+  }
+  
+  .connectedIndicator {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 10px;
+    height: 10px;
+    background-color: #4caf50;
+    border-radius: 50%;
+    border: 2px solid white;
+  }
+  
+  .monthHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e0d6c8;
+  }
+  
+  .currentMonth {
+    font-size: 16px;
+    font-weight: 500;
+    color: #5d4037;
+    flex-grow: 1;
+    text-align: center;
+  }
+  
+  .monthNavBtn {
+    background: none;
+    border: none;
+    color: #8d6e63;
+    cursor: pointer;
+    padding: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+  }
+  
+  .monthNavBtn:hover {
+    background-color: #f5f0e8;
+  }
+  
+  .viewCalendarBtn {
+    background-color: #7a4e07;
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #8d6e63;
+    transition: all 0.2s ease;
+    margin-left: 10px;
+  }
+  
+  .viewCalendarBtn:hover {
+    background-color: #4d2e03;
+    transform: scale(1.05);
+  }
+  
+  .viewCalendarBtn.bounce {
+    animation: bounce 0.5s ease;
+  }
+  
+  @keyframes bounce {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-5px);
+    }
+  }
+  
+  .upcomingSection {
+    margin-bottom: 15px;
+  }
+  
+  .upcomingSection h4 {
+    font-size: 14px;
+    font-weight: 500;
+    color: #8d6e63;
+    margin-bottom: 10px;
+    margin-top: 0; 
+  }
+  
+  .eventsList {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding-right: 5px;
+  }
+  
+  .eventItem {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    background-color: #f9f5f0;
+    border-radius: 8px;
+    transition: transform 0.2s;
+  }
+  
+  .eventItem:hover {
+    transform: translateX(5px);
+    background-color: #f5f0e8;
+  }
+  
+  .eventItem.meeting .eventIndicator {
+    background-color: #4caf50;
+  }
+  
+  .eventItem.deadline .eventIndicator {
+    background-color: #f44336;
+  }
+  
+  .eventItem.workshop .eventIndicator {
+    background-color: #2196f3;
+  }
+  
+  .eventIndicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 10px;
+  }
+  
+  .eventDetails {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .eventTitle {
+    font-size: 14px;
+    font-weight: 500;
+    color: #5d4037;
+  }
+  
+  .eventDate {
+    font-size: 12px;
+    color: #8d6e63;
+  }
+  
+  .addEventBtn {
+    width: 100%;
+    padding: 10px;
+    background-color: #8d6e63;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    font-weight: 500;
+    transition: background-color 0.2s;
+     margin-top: 10px;
+  }
+  
+  .addEventBtn:hover {
+    background-color: #7d5e53;
+  }
+  
+  
+  .modalOpen {
+    overflow: hidden;
+  }
+  
+  .modalOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(5px);
+  }
+  
+  .modalContainer {
+    background-color: white;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 900px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .modalHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid #e0d6c8;
+  }
+  
+  .modalHeader h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #5d4037;
+    margin: 0;
+  }
+  
+  .closeBtn {
+    background: none;
+    border: none;
+    color: #8d6e63;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+  }
+  
+  .closeBtn:hover {
+    background-color: #f5f0e8;
+  }
+  
+  .modalBody {
+    padding: 20px;
+    flex-grow: 1;
+    overflow-y: auto;
+  }
+  
+  .modalFooter {
+    padding: 15px 20px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    border-top: 1px solid #e0d6c8;
+  }
+  
+  
+  .fullCalendar {
+    width: 100%;
+  }
+  
+  .monthNavigation {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+  }
+  
+  .currentMonthFull {
+    font-size: 18px;
+    font-weight: 500;
+    color: #5d4037;
+  }
+  
+  .fullCalendarGrid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 5px;
+  }
+  
+  .dayHeaderFull {
+    text-align: center;
+    font-size: 12px;
+    font-weight: 500;
+    color: #8d6e63;
+    padding: 5px;
+  }
+  
+  .calendarDayFull {
+    aspect-ratio: 1;
+    border-radius: 8px;
+    padding: 5px;
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    background-color: #f9f5f0;
+    transition: background-color 0.2s;
+    position: relative;
+  }
+  
+  .calendarDayFull:hover {
+    background-color: #f5f0e8;
+  }
+  
+  .calendarDayFull.today {
+    background-color: #e6dfd5;
+    font-weight: 600;
+  }
+  
+  .calendarDayFull.hasEvent:after {
+    content: "";
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: #8d6e63;
+  }
+  
+  .dayNumber {
+    font-size: 14px;
+    color: #5d4037;
+  }
+  
+  .emptyDayFull {
+    aspect-ratio: 1;
+  }
+  
+  .dayEvents {
+    margin-top: 5px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  
+  .dayEventIndicator {
+    font-size: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 2px 4px;
+    border-radius: 4px;
+    background-color: rgba(141, 110, 99, 0.1);
+    color: #5d4037;
+  }
+  
+  .addEventBtnFull {
+    padding: 10px 15px;
+    background-color: #8d6e63;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    font-weight: 500;
+    transition: background-color 0.2s;
+  }
+  
+  .addEventBtnFull:hover {
+    background-color: #7d5e53;
+  }
+  
+  
+  .eventModal {
+    max-width: 450px;
+  }
+  
+  .formGroup {
+    margin-bottom: 15px;
+  }
+  
+  .formGroup label {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: #5d4037;
+    margin-bottom: 5px;
+  }
+  
+  .formGroup input,
+  .formGroup select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #e0d6c8;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #5d4037;
+    background-color: #f9f5f0;
+    transition: border-color 0.2s;
+  }
+  
+  .formGroup input:focus,
+  .formGroup select:focus {
+    outline: none;
+    border-color: #8d6e63;
+    background-color: #fff;
+  }
+  
+  .cancelBtn {
+    padding: 10px 15px;
+    background-color: #f5f0e8;
+    color: #8d6e63;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s;
+  }
+  
+  .cancelBtn:hover {
+    background-color: #e6dfd5;
+  }
+  
+  .saveBtn {
+    padding: 10px 15px;
+    background-color: #8d6e63;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s;
+  }
+  
+  .saveBtn:hover {
+    background-color: #7d5e53;
+  }
+  
+  
+  .eventsListModal {
+    margin-bottom: 20px;
+  }
+  
+  .eventsListModal h4 {
+    font-size: 16px;
+    font-weight: 500;
+    color: #5d4037;
+    margin-bottom: 15px;
+  }
+  
+  .eventItemModal {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    background-color: #f9f5f0;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    transition: transform 0.2s;
+  }
+  
+  .eventItemModal:hover {
+    transform: translateX(5px);
+    background-color: #f5f0e8;
+  }
+  
+  .eventItemModal.meeting .eventIndicator {
+    background-color: #4caf50;
+  }
+  
+  .eventItemModal.deadline .eventIndicator {
+    background-color: #f44336;
+  }
+  
+  .eventItemModal.workshop .eventIndicator {
+    background-color: #2196f3;
+  }
+  
+  .noEvents {
+    color: #8d6e63;
+    font-style: italic;
+    text-align: center;
+    padding: 20px 0;
+  }
+  
+  .eventsFooter {
+    justify-content: center;
+    padding-top: 10px;
+  }
+  
+  .continueBtn {
+    padding: 10px 20px;
+    background-color: #8d6e63;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  
+  .continueBtn:hover {
+    background-color: #7d5e53;
+  }
+  
+  
+  @media (max-width: 768px) {
+    .fullCalendarGrid {
+      gap: 2px;
+    }
+  
+    .calendarDayFull {
+      padding: 2px;
+    }
+  
+    .dayNumber {
+      font-size: 12px;
+    }
+  
+    .dayHeaderFull {
+      font-size: 10px;
+    }
+  }

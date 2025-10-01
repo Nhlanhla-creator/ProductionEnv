@@ -1,0 +1,397 @@
+
+.meeting-details-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(90, 57, 33, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.meeting-details-card {
+  background-color: #F5E9DC;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(90, 57, 33, 0.2);
+  width: 100%;
+  max-width: 600px;
+  overflow: hidden;
+  position: relative;
+}
+
+.meeting-header {
+  background-color: #8C6842;
+  color: white;
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.meeting-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s;
+}
+
+.close-btn:hover {
+  transform: scale(1.1);
+}
+
+.meeting-content {
+  padding: 25px;
+}
+
+.meeting-info {
+  margin-bottom: 25px;
+}
+
+.info-row {
+  display: flex;
+  margin-bottom: 15px;
+  align-items: flex-start;
+}
+
+.info-label {
+  display: flex;
+  align-items: center;
+  width: 120px;
+  flex-shrink: 0;
+  color: #5A3921;
+  font-weight: 500;
+}
+
+.info-label svg {
+  margin-right: 10px;
+}
+
+.info-value {
+  flex: 1;
+  color: #7B5D3F;
+  line-height: 1.5;
+}
+
+.invitees-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.invitee-tag {
+  background-color: #E8D8C5;
+  color: #5A3921;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+}
+
+.reschedule-form {
+  background-color: #F0E0CC;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 20px 0;
+  border: 1px solid #D4B483;
+}
+
+.reschedule-form h3 {
+  margin-top: 0;
+  color: #5A3921;
+  font-size: 1.2rem;
+  margin-bottom: 15px;
+}
+
+.form-fields {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.input-group {
+  flex: 1;
+}
+
+.input-group label {
+  display: block;
+  margin-bottom: 5px;
+  color: #5A3921;
+  font-size: 0.9rem;
+}
+
+.date-input,
+.time-input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #D4B483;
+  border-radius: 6px;
+  background-color: white;
+  color: #5A3921;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.cancel-btn {
+  background-color: #E8D8C5;
+  color: #5A3921;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.cancel-btn:hover {
+  background-color: #D4B483;
+}
+
+.confirm-btn {
+  background-color: #8C6842;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.confirm-btn:hover {
+  background-color: #6E4F32;
+}
+
+.meeting-actions {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.accept-btn {
+  background-color: #5A8C42;
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.accept-btn:hover {
+  background-color: #4A7535;
+}
+
+.reschedule-btn {
+  background-color: #8C6842;
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.reschedule-btn:hover {
+  background-color: #6E4F32;
+}
+
+.reject-btn {
+  background-color: #D4B483;
+  color: #5A3921;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.reject-btn:hover {
+  background-color: #C19A63;
+}
+
+.response-message {
+  background-color: #F0E0CC;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  margin-top: 20px;
+  border: 1px solid #D4B483;
+}
+
+.response-message p {
+  margin: 0 0 15px 0;
+  color: #5A3921;
+}
+
+.close-message-btn {
+  background-color: #8C6842;
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.close-message-btn:hover {
+  background-color: #6E4F32;
+}
+
+
+@media (max-width: 600px) {
+  .form-fields {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .meeting-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .info-row {
+    flex-direction: column;
+    gap: 5px;
+  }
+  
+  .info-label {
+    width: 100%;
+  }
+}
+
+.available-slots-section {
+  margin: 20px 0;
+  border-top: 1px solid #e0e0e0;
+  padding-top: 20px;
+}
+
+.show-slots-btn {
+  background-color: #f5f5f5;
+  border: 1px solid #ddd;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s;
+}
+
+.show-slots-btn:hover {
+  background-color: #e0e0e0;
+}
+
+.available-slots {
+  margin-top: 15px;
+}
+
+.available-slots h3 {
+  font-size: 16px;
+  margin-bottom: 10px;
+  color: #5A3921;
+}
+
+.slots-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.slot-card {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.slot-card:hover {
+  border-color: #8C6842;
+  background-color: #f9f5f0;
+}
+
+.slot-card.selected {
+  border-color: #5A3921;
+  background-color: #f0e6d8;
+}
+
+.slot-date {
+  font-weight: 500;
+  color: #5A3921;
+}
+
+.slot-duration {
+  font-size: 13px;
+  color: #8C6842;
+}
+
+.slots-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.time-slot {
+  padding: 0.75rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.time-slot:hover {
+  background-color: #f9f9f9;
+}
+
+.time-slot.selected {
+  background-color: #e1f5fe;
+  border-color: #4fc3f7;
+}
+
+.time-slot.scheduled {
+  background-color: #e8f5e9;
+  border-color: #81c784;
+  cursor: not-allowed;
+}
+
+.slot-date {
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+.slot-time {
+  color: #555;
+  font-size: 0.9rem;
+}
+
+.slot-status {
+  margin-top: 0.25rem;
+  color: #2e7d32;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.info-value {
+  width: 70%;
+}

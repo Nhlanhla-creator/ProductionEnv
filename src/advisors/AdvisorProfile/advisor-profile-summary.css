@@ -1,0 +1,280 @@
+
+
+.investor-profile-summary-container {
+
+  display: flex;
+  justify-content: center;
+  padding: 20px;
+}
+
+.investor-profile-summary {
+
+  max-width: 900px;
+  margin: 40px 0 0 260px;
+  padding: 70px;
+  font-family: "Inter", sans-serif;
+  background-color: #fdfaf6;
+  width: 100%;
+}
+
+
+.summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #e0cdb8;
+}
+
+.summary-header h1 {
+  margin: 0;
+  color: #5d3a00;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.summary-actions {
+  display: flex;
+  gap: 15px;
+}
+
+
+.summary-section {
+  background-color: #fffaf3;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(90, 60, 20, 0.1);
+  margin-bottom: 20px;
+  overflow: hidden;
+  border: 1px solid #e0cdb8;
+}
+
+.summary-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  background-color: #f1e4d4;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.summary-section-header:hover {
+  background-color: #e8d9c5;
+}
+
+.summary-section-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #4e2c0a;
+}
+
+.summary-content {
+  padding: 20px;
+  background-color: #fff;
+}
+
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 20px;
+}
+
+.summary-item {
+  margin-bottom: 15px;
+}
+
+.summary-label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 5px;
+  color: #7b5e42;
+  font-size: 14px;
+}
+
+.summary-value {
+  display: block;
+  color: #3e2c1a;
+  padding: 8px 0;
+  line-height: 1.5;
+}
+
+
+.summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 20px 0;
+  font-size: 14px;
+}
+
+.summary-table th,
+.summary-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #e0cdb8;
+}
+
+.summary-table th {
+  background-color: #f7ecdd;
+  font-weight: 600;
+  color: #5e4025;
+}
+
+.summary-table tr:hover {
+  background-color: #faf5ed;
+}
+
+
+.summary-subheading {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 25px 0 15px;
+  color: #5a3b1a;
+  padding-bottom: 5px;
+  border-bottom: 1px solid #e0cdb8;
+}
+
+
+.document-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #8b5e3c;
+  text-decoration: none;
+  padding: 5px 10px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  margin-right: 10px;
+}
+
+.document-link:hover {
+  background-color: #f1e4d4;
+  color: #5d3a00;
+}
+
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  font-size: 14px;
+}
+
+.btn-primary {
+  background-color: #8b5e3c;
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: #754a2a;
+}
+
+.btn-secondary {
+  background-color: #e0cdb8;
+  color: #3e2c1a;
+  border: 1px solid #d6bfa6;
+}
+
+.btn-secondary:hover {
+  background-color: #d6bfa6;
+}
+
+
+.summary-empty {
+  color: #9c8a7d;
+  font-style: italic;
+  margin: 10px 0;
+}
+
+
+.mt-6 {
+  margin-top: 24px;
+}
+
+.text-center {
+  text-align: center;
+}
+
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  
+  .investor-profile-summary,
+  .investor-profile-summary * {
+    visibility: visible;
+  }
+  
+  .investor-profile-summary {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    background: white;
+    box-shadow: none;
+    border: none;
+  }
+  
+  
+  .summary-actions,
+  .btn {
+    display: none !important;
+  }
+  
+  
+  .summary-content {
+    display: block !important;
+  }
+  
+  
+  .summary-section {
+    page-break-inside: avoid;
+    border: none;
+    box-shadow: none;
+    margin-bottom: 10px;
+  }
+  
+  .summary-section-header {
+    background: white !important;
+    border-bottom: 1px solid #ddd !important;
+  }
+  
+  @page {
+    size: auto;
+    margin: 10mm;
+  }
+}
+
+
+@media (max-width: 768px) {
+  .investor-profile-summary {
+    margin-left: 0;
+    padding: 15px;
+  }
+  
+  .summary-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+  }
+  
+  .summary-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+}

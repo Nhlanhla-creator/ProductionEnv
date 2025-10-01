@@ -1,0 +1,137 @@
+.event-data-container {
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.event-data-pipeline {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+}
+
+.pipeline-card {
+  width: 23%;
+  height: 120px;
+  border-radius: 12px;
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  border: 1px solid rgba(140, 104, 66, 0.2);
+}
+
+.pipeline-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+}
+
+.pipeline-card:before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 50%);
+  z-index: 1;
+}
+
+.pipeline-value {
+  font-size: 2rem;
+  font-weight: bold;
+  color: #EFEBE9;
+  margin-bottom: 5px;
+  z-index: 2;
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.pipeline-title {
+  font-size: 0.95rem;
+  color: #EFEBE9;
+  text-align: center;
+  z-index: 2;
+  font-weight: 600;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.pipeline-tooltip {
+  position: absolute;
+  bottom: -50px;
+  left: 0;
+  width: 100%;
+  padding: 10px;
+  background-color: rgba(93, 64, 55, 0.95);
+  color: #EFEBE9;
+  border-radius: 0 0 12px 12px;
+  opacity: 0;
+  transition: all 0.3s ease;
+  z-index: 3;
+  font-size: 0.8rem;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.pipeline-card:hover .pipeline-tooltip {
+  bottom: 0;
+  opacity: 1;
+}
+
+.scheduled-card {
+  background: linear-gradient(135deg, #6D4C41 0%, #5D4037 100%);
+}
+
+.pending-card {
+  background: linear-gradient(135deg, #8D6E63 0%, #6D4C41 100%);
+}
+
+.completed-card {
+  background: linear-gradient(135deg, #A1887F 0%, #8D6E63 100%);
+}
+
+.cancelled-card {
+  background: linear-gradient(135deg, #BCAAA4 0%, #A1887F 100%);
+}
+
+.pipeline-card:after {
+  content: '';
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+.scheduled-card:after {
+  bottom: -10px;
+  right: -10px;
+}
+
+.pending-card:after {
+  top: -10px;
+  left: -10px;
+}
+
+.completed-card:after {
+  top: -10px;
+  right: -10px;
+  width: 50px;
+  height: 50px;
+}
+
+.cancelled-card:after {
+  bottom: -10px;
+  left: -10px;
+  width: 30px;
+  height: 30px;
+}
+
+.pipeline-card:hover:after {
+  transform: scale(1.1);
+}

@@ -1,0 +1,185 @@
+
+.calendar-system {
+  padding: 20px;
+  margin-left: 300px; 
+  width: calc(100% - 300px);
+  margin-top: 65px;
+}
+
+
+.event-data-container {
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+
+.dashboard-panels {
+  display: flex;
+  gap: 24px;
+}
+
+
+.meetings-panel {
+  flex: 2;
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  padding: 24px;
+}
+
+
+.meetings-panel table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.meetings-panel th {
+  text-align: left;
+  padding: 12px 16px;
+  background-color: #f8f5f2;
+  color: #5D4037;
+  font-weight: 600;
+}
+
+.meetings-panel td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #ede7e0;
+}
+
+.meetings-panel tr:last-child td {
+  border-bottom: none;
+}
+
+
+.availability-panel {
+  flex: 1;
+}
+
+.availability-card {
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  padding: 24px;
+  height: 100%;
+}
+
+.availability-card h3 {
+  color: #5D4037;
+  margin-top: 0;
+  margin-bottom: 16px;
+  font-size: 18px;
+}
+
+.availability-card .working-hours {
+  margin-bottom: 16px;
+}
+
+.availability-card .day-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid #f3efeb;
+}
+
+.availability-card .day-row:last-child {
+  border-bottom: none;
+}
+
+.availability-card .day-name {
+  font-weight: 500;
+  color: #6d4c41;
+}
+
+.availability-card .time-range {
+  color: #8d6e63;
+}
+
+.availability-card .edit-btn {
+  background-color: #f8f5f2;
+  border: 1px solid #d4c4b0;
+  color: #5D4037;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  margin-top: 16px;
+  transition: all 0.2s;
+}
+
+.availability-card .edit-btn:hover {
+  background-color: #efebe7;
+}
+
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.welcome-modal {
+  background: #f5f3f0;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 500px;
+  padding: 24px;
+  text-align: center;
+}
+
+.welcome-modal h2 {
+  color: #5D4037;
+  margin-bottom: 15px;
+}
+
+.welcome-modal p {
+  margin-bottom: 20px;
+  color: #555;
+}
+
+
+.setup-required {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 30px;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.setup-required h2 {
+  color: #5D4037;
+  margin-bottom: 20px;
+}
+
+
+@media (max-width: 1024px) {
+  .dashboard-panels {
+    flex-direction: column;
+  }
+  
+  .meetings-panel,
+  .availability-panel {
+    flex: auto;
+    width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .calendar-system {
+    margin-left: 0;
+    width: 100%;
+    padding: 15px;
+  }
+}

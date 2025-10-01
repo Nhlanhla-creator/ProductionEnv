@@ -1,0 +1,110 @@
+.create-event-form {
+  width: 100%;
+  max-width: 500px;
+}
+
+.create-event-form h3 {
+  color: var(--brown-dark);
+  margin-top: 0;
+  margin-bottom: 20px;
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 500;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--gray);
+  border-radius: 4px;
+}
+
+.form-row {
+  display: flex;
+  gap: 15px;
+}
+
+.form-row .form-group {
+  flex: 1;
+}
+
+.invitees-input {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.invitees-input input {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid var(--gray);
+  border-radius: 4px;
+}
+
+.invitees-input button {
+  background-color: var(--brown-light);
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.invitees-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.invitee-item {
+  background-color: var(--off-white);
+  padding: 5px 10px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.invitee-item button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #666;
+  font-size: 14px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.cancel-btn {
+  background-color: var(--gray);
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.submit-btn {
+  background-color: var(--brown-medium);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.submit-btn:hover {
+  background-color: var(--brown-dark);
+}
