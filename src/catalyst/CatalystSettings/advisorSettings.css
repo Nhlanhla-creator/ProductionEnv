@@ -1,0 +1,294 @@
+
+.advisor-settings-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.settings-title {
+  color: #654321;
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.settings-subtitle {
+  color: #8b4513;
+  font-size: 1.1rem;
+  margin-bottom: 2rem;
+}
+
+.settings-content {
+  display: flex;
+  gap: 2rem;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.settings-tabs {
+  width: 250px;
+  background: #f5f5dc;
+  padding: 1.5rem 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #d2b48c;
+}
+
+.tab-button {
+  padding: 1rem 1.5rem;
+  text-align: left;
+  background: none;
+  border: none;
+  font-size: 1rem;
+  color: #654321;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  font-weight: 500;
+}
+
+.tab-button:hover {
+  background: #f0e68c;
+  color: #8b4513;
+}
+
+.tab-button.active {
+  background: #d2b48c;
+  color: #654321;
+  font-weight: 600;
+}
+
+.tab-button.active:before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: #8b4513;
+}
+
+.settings-panel {
+  flex: 1;
+  padding: 2rem;
+}
+
+.settings-section {
+  max-width: 700px;
+}
+
+.section-title {
+  color: #654321;
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.section-description {
+  color: #8b4513;
+  font-size: 0.95rem;
+  margin-bottom: 2rem;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  color: #654321;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #d2b48c;
+  border-radius: 6px;
+  font-size: 1rem;
+  color: #654321;
+  background: #fff;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #8b4513;
+  box-shadow: 0 0 0 3px rgba(139, 69, 19, 0.1);
+}
+
+.password-field {
+  display: flex;
+  gap: 1rem;
+}
+
+.password-field input {
+  flex: 1;
+}
+
+.change-password-btn {
+  background: #f5f5dc;
+  color: #8b4513;
+  border: 1px solid #d2b48c;
+  padding: 0 1rem;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.change-password-btn:hover {
+  background: #f0e68c;
+  border-color: #8b4513;
+}
+
+.toggle-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.toggle-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: #f9f9f9;
+  border-radius: 8px;
+  border: 1px solid #d2b48c;
+}
+
+.toggle-info h3 {
+  color: #654321;
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0 0 0.25rem 0;
+}
+
+.toggle-info p {
+  color: #8b4513;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 60px;
+  height: 34px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #d2b48c;
+  transition: 0.4s;
+  border-radius: 34px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 26px;
+  width: 26px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: 0.4s;
+  border-radius: 50%;
+}
+
+input:checked + .toggle-slider {
+  background-color: #8b4513;
+}
+
+input:checked + .toggle-slider:before {
+  transform: translateX(26px);
+}
+
+.form-actions {
+  margin-top: 2rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.save-button {
+  background: #8b4513;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.save-button:hover {
+  background: #a0522d;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.save-button:active {
+  transform: translateY(0);
+}
+
+
+@media (max-width: 768px) {
+  .settings-content {
+    flex-direction: column;
+  }
+
+  .settings-tabs {
+    width: 100%;
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 1rem;
+    border-right: none;
+    border-bottom: 1px solid #d2b48c;
+  }
+
+  .tab-button {
+    padding: 0.75rem 1rem;
+    white-space: nowrap;
+  }
+
+  .tab-button.active:before {
+    width: 100%;
+    height: 4px;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+  }
+
+  .settings-panel {
+    padding: 1.5rem;
+  }
+
+  .password-field {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .change-password-btn {
+    width: 100%;
+    padding: 0.75rem;
+  }
+}

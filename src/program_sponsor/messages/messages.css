@@ -1,0 +1,418 @@
+
+
+
+.messages-page {
+    margin-top: 80px; 
+   
+    margin-left: 250px; 
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: #f8f4f0; 
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: #4a3a2a; 
+}
+
+
+.messages-header {
+  background-color: #6b4f37; 
+  color: #f8f4f0;
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.messages-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.search-bar {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.search-bar input {
+  padding: 0.5rem 1rem;
+  border: 1px solid #c4b6a6; 
+  border-radius: 4px;
+  background-color: #f8f4f0;
+  color: #4a3a2a;
+  width: 300px;
+}
+
+.search-bar input:focus {
+  outline: none;
+  border-color: #8b7355; 
+}
+
+.new-message-btn {
+  background-color: #a78a6f; 
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.new-message-btn:hover {
+  background-color: #8b7355; 
+}
+
+
+.messages-container {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+
+.messages-sidebar {
+  width: 300px;
+  background-color: #e8e0d9; 
+  border-right: 1px solid #d4c9bc; 
+  display: flex;
+  flex-direction: column;
+}
+
+.messages-tabs {
+  display: flex;
+  border-bottom: 1px solid #d4c9bc;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 1rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #6b4f37;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  background-color: #d9cdc0; 
+}
+
+.tab-btn.active {
+  background-color: #c4b6a6; 
+  color: #4a3a2a;
+  font-weight: 600;
+}
+
+
+.messages-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.message-item {
+  padding: 1rem;
+  margin-bottom: 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  background-color: #f0e9e0; 
+  border-left: 3px solid transparent;
+}
+
+.message-item:hover {
+  background-color: #e8e0d9; 
+}
+
+.message-item.selected {
+  background-color: #d9cdc0; 
+  border-left: 3px solid #8b7355; 
+}
+
+.message-item.unread {
+  background-color: #f0e9e0; 
+  border-left: 3px solid #6b4f37; 
+}
+
+.message-sender {
+  font-weight: 600;
+  color: #4a3a2a;
+  margin-bottom: 0.25rem;
+}
+
+.message-subject {
+  font-weight: 500;
+  color: #4a3a2a;
+  margin-bottom: 0.25rem;
+}
+
+.message-preview {
+  color: #6b4f37;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.message-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: #8b7355; 
+}
+
+.attachment-indicator {
+  margin-left: 0.5rem;
+}
+
+.no-messages {
+  padding: 2rem;
+  text-align: center;
+  color: #8b7355;
+}
+
+
+.message-content {
+  flex: 1;
+  padding: 1.5rem;
+  background-color: #ffffff;
+  overflow-y: auto;
+}
+
+
+.compose-message {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.compose-header {
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #d4c9bc;
+  margin-bottom: 1rem;
+}
+
+.compose-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #6b4f37;
+  font-weight: 500;
+}
+
+.form-group input,
+.form-group textarea {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #c4b6a6;
+  border-radius: 4px;
+  background-color: #f8f4f0;
+  color: #4a3a2a;
+}
+
+.form-group textarea {
+  flex: 1;
+  min-height: 200px;
+  resize: none;
+}
+
+.compose-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.send-btn, .save-draft-btn, .cancel-btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.send-btn {
+  background-color: #6b4f37;
+  color: white;
+}
+
+.send-btn:hover {
+  background-color: #5a4230;
+}
+
+.save-draft-btn {
+  background-color: #a78a6f;
+  color: white;
+}
+
+.save-draft-btn:hover {
+  background-color: #8b7355;
+}
+
+.cancel-btn {
+  background-color: #d4c9bc;
+  color: #4a3a2a;
+}
+
+.cancel-btn:hover {
+  background-color: #c4b6a6;
+}
+
+
+.message-header {
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #d4c9bc;
+  margin-bottom: 1rem;
+}
+
+.message-header h3 {
+  margin: 0 0 1rem 0;
+  color: #4a3a2a;
+}
+
+.message-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.meta-label {
+  font-weight: 500;
+  color: #6b4f37;
+  margin-right: 0.5rem;
+}
+
+.sender, .recipient, .date {
+  color: #4a3a2a;
+}
+
+.message-body {
+  line-height: 1.6;
+  margin-bottom: 2rem;
+}
+
+.meeting-details-box {
+  background-color: #f0e9e0;
+  border-left: 3px solid #8b7355;
+  padding: 1rem;
+  margin: 1rem 0;
+  border-radius: 0 4px 4px 0;
+}
+
+.meeting-details-box h4 {
+  margin-top: 0;
+  color: #6b4f37;
+}
+
+.attachments {
+  margin-top: 1rem;
+}
+
+.attachments h4 {
+  color: #6b4f37;
+  margin-bottom: 0.5rem;
+}
+
+.attachment-link {
+  color: #8b7355;
+  text-decoration: none;
+}
+
+.attachment-link:hover {
+  text-decoration: underline;
+}
+
+.message-actions {
+  display: flex;
+  gap: 0.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #d4c9bc;
+}
+
+.reply-btn, .forward-btn, .delete-btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.reply-btn {
+  background-color: #6b4f37;
+  color: white;
+}
+
+.reply-btn:hover {
+  background-color: #5a4230;
+}
+
+.forward-btn {
+  background-color: #a78a6f;
+  color: white;
+}
+
+.forward-btn:hover {
+  background-color: #8b7355;
+}
+
+.delete-btn {
+  background-color: #d4c9bc;
+  color: #4a3a2a;
+}
+
+.delete-btn:hover {
+  background-color: #c4b6a6;
+}
+
+
+.no-message-selected {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  color: #8b7355;
+}
+
+.empty-state-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.no-message-selected h3 {
+  color: #6b4f37;
+  margin-bottom: 0.5rem;
+}
+
+.no-message-selected p {
+  margin-bottom: 1.5rem;
+  max-width: 300px;
+}
+
+
+@media (max-width: 768px) {
+  .messages-container {
+    flex-direction: column;
+  }
+  
+  .messages-sidebar {
+    width: 100%;
+    height: 300px;
+  }
+  
+  .search-bar input {
+    width: 200px;
+  }
+}

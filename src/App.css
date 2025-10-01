@@ -1,0 +1,54 @@
+:root {
+    --primary: #9E6E3C;
+    --primary-light: #BCAE9C;
+    --primary-dark: #754A2D;
+    --secondary: #F2F0E6;
+    --white: #FFFFFF;
+    --text-dark: #333333;
+    --text-light: #777777;
+  }
+  
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  
+  .app {
+    display: flex;
+    min-height: 100vh;
+    background-color: #F5F5F5;
+  }
+  
+  .main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: #f8f9fc;
+  }
+  
+  .page-content {
+    padding: 20px;
+  }
+  .app-layout {
+    display: flex;
+    min-height: 100vh;
+  }
+  
+  
+  
+  @media (max-width: 768px) {
+    .app {
+      flex-direction: column;
+    }
+    
+    .sidebar {
+      width: 100%;
+      height: auto;
+    }
+    
+    .main-content {
+      width: 100%;
+    }
+  }

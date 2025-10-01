@@ -1,0 +1,292 @@
+:root {
+  --light-brown: #f5f0e1;
+  --medium-brown: #e6d7c3;
+  --accent-brown: #c8b6a6;
+  --primary-brown: #a67c52;
+  --dark-brown: #7d5a50;
+  --text-brown: #4a352f;
+  --background-brown: #faf7f2;
+  --pale-brown: #f0e6d9;
+  --soft-brown: #b89f8d;
+  --light-text: #6b5a50;
+  --success-green: #4caf50;
+  --error-red: #f44336;
+}
+
+.readinessCard {
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(166, 124, 82, 0.12);
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--medium-brown);
+  margin-bottom: 220px;
+}
+
+.readinessCard.blurred {
+  filter: blur(4px);
+  pointer-events: none;
+}
+
+.funCardHeader {
+  padding: 16px;
+  border-bottom: 1px solid var(--light-brown);
+  background-color: white;
+}
+
+.funCardHeader h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--dark-brown);
+  margin: 0;
+  position: relative;
+  text-align: center;
+  padding: 14px;
+}
+
+.funCardHeader h2:after {
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80px;
+  height: 2px;
+  background-color: white;
+}
+
+.scoreWrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 30px 0;
+  flex: 1;
+  background-color: white;
+}
+
+.scoreCircle {
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 36px;
+  font-weight: 800;
+  color: var(--text-brown);
+  border: 5px solid var(--accent-brown);
+  box-shadow: 0 4px 12px rgba(166, 124, 82, 0.15);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  margin-top: -30px;
+}
+
+.scoreCircle:before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle, rgba(255, 250, 245, 0.9) 0%, rgba(246, 242, 239, 0.7) 1%);
+  pointer-events: none;
+  border-radius: 50%;
+}
+
+.scoreCircle:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(166, 124, 82, 0.25);
+}
+
+.textCenter {
+  text-align: center;
+}
+
+.funButton {
+  margin-left: 30px;
+margin-bottom: 10px;
+  border-radius: 8px;
+  width: 220px;
+  height: 40px;
+  border: none;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  background-color: #8d6e63;
+  color: white;
+  box-shadow: 0 2px 8px rgba(125, 90, 80, 0.1);
+}
+
+.funButton:hover {
+  background-color: var(--primary-brown);
+  color: var(--pale-brown);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(125, 90, 80, 0.2);
+}
+
+.ml1 {
+  margin-left: 4px;
+}
+
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(107, 90, 80, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.modalContent {
+  background: white;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 85vh;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  position: relative;
+  overflow: auto;
+  animation: modalFadeIn 0.3s ease-out;
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.funPopup {
+  padding: 24px;
+  border-top: 5px solid var(--accent-brown);
+}
+
+.closeBtn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: var(--error-red);
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.closeBtn:hover {
+  background-color: var(--error-red);
+  color: white;
+  transform: rotate(90deg);
+}
+
+.popupTitle {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--primary-brown);
+  margin: 0 0 24px 0;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--accent-brown);
+  text-align: center;
+}
+
+.summaryList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.summaryItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--light-brown);
+}
+
+.summaryItem:last-child {
+  border-bottom: none;
+}
+
+.summaryLabel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15px;
+  color: var(--text-brown);
+  font-weight: 500;
+}
+
+.summaryBullet {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--accent-brown);
+}
+
+.statusIndicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+.statusIndicator svg {
+  color: var(--success-green);
+}
+
+.statusIndicator:not(:has(svg)) {
+  color: var(--error-red);
+}
+
+.inlineBlock {
+  display: inline-block;
+}
+
+@media (max-width: 768px) {
+  .scoreCircle {
+    width: 100px;
+    height: 100px;
+    font-size: 28px;
+  }
+
+  .funCardHeader h2 {
+    font-size: 16px;
+  }
+
+  .popupTitle {
+    font-size: 18px;
+  }
+
+  .summaryLabel {
+    font-size: 14px;
+  }
+}

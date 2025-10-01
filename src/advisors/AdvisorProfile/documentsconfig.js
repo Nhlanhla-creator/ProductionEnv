@@ -1,0 +1,38 @@
+export const documentsList = [
+  {
+    id: "idPassport",
+    label: "ID/Passport",
+    accept: ".pdf,.jpg,.jpeg,.png",
+    required: true,
+    multiple: false,
+    description: "Official identification document (ID or Passport)",
+    dataPath: "formData.requiredDocuments.idPassport",
+  },
+  {
+    id: "cvResume",
+    label: "CV or Resume",
+    accept: ".pdf,.doc,.docx",
+    required: false,
+    multiple: false,
+    description: "Current curriculum vitae or resume",
+      dataPath: "formData.requiredDocuments.cvResume",
+  },
+  {
+    id: "certifications",
+    label: "Certifications (Optional)",
+    accept: ".pdf,.jpg,.jpeg,.png,.doc,.docx",
+    required: false,
+    multiple: true,
+    description: "Professional certifications and qualifications",
+    dataPath: "formData.requiredDocuments.certifications",
+  },
+  {
+    id: "referenceLetters",
+    label: "Reference Letters (Optional)",
+    accept: ".pdf,.doc,.docx",
+    required: false,
+    multiple: true,
+    description: "Letters of recommendation or professional references",
+     dataPath: "formData.requiredDocuments.referenceLetters",
+  },
+]

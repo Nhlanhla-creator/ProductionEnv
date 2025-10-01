@@ -1,0 +1,477 @@
+/* Settings.css */
+.settings-page {
+    padding: 30px;
+    background-color: var(--background-brown);
+    min-height: 100vh;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.settings-page h2 {
+    color: var(--dark-brown);
+    margin-bottom: 25px;
+    font-size: 1.8rem;
+    font-weight: 600;
+}
+
+/* Tab Navigation */
+.settings-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 30px;
+    border-bottom: 2px solid var(--medium-brown);
+}
+
+.tab-btn {
+    padding: 12px 25px;
+    background-color: var(--light-brown);
+    border: none;
+    border-radius: 6px 6px 0 0;
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--text-brown);
+    transition: all 0.2s ease;
+    position: relative;
+    bottom: -2px;
+    margin-right: 5px;
+    border: 1px solid transparent;
+    border-bottom: none;
+}
+
+.tab-btn.active {
+    background-color: white;
+    color: var(--primary-brown);
+    border-color: var(--medium-brown);
+    border-bottom: 2px solid white;
+    font-weight: 600;
+}
+
+.tab-btn:not(.active):hover {
+    background-color: var(--pale-brown);
+    color: var(--dark-brown);
+}
+
+/* Form Styles */
+.settings-form {
+    background-color: white;
+    border-radius: 8px;
+    padding: 30px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    margin-bottom: 30px;
+    border: 1px solid var(--medium-brown);
+}
+
+.form-section {
+    margin-bottom: 30px;
+}
+
+.form-section h3 {
+    color: var(--primary-brown);
+    margin-bottom: 20px;
+    font-size: 1.2rem;
+    font-weight: 500;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--light-brown);
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--text-brown);
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    max-width: 500px;
+    padding: 12px;
+    border: 1px solid var(--medium-brown);
+    border-radius: 6px;
+    font-size: 0.95rem;
+    color: var(--text-brown);
+    background-color: var(--background-brown);
+    transition: all 0.2s ease;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: var(--primary-brown);
+    box-shadow: 0 0 0 2px rgba(166, 124, 82, 0.2);
+}
+
+.form-hint {
+    font-size: 0.85rem;
+    color: var(--primary-brown);
+    margin-top: 5px;
+    font-style: italic;
+}
+
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.checkbox-group input {
+    width: auto;
+    transform: scale(1.2);
+    accent-color: var(--primary-brown);
+}
+
+.checkbox-group label {
+    margin-bottom: 0;
+    cursor: pointer;
+}
+
+/* Password Change Section */
+.change-password-btn {
+    padding: 10px 20px;
+    background-color: var(--light-brown);
+    color: var(--primary-brown);
+    border: 1px solid var(--medium-brown);
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.change-password-btn:hover {
+    background-color: var(--pale-brown);
+}
+
+.password-fields {
+    background-color: var(--light-brown);
+    padding: 20px;
+    border-radius: 8px;
+    margin-top: 15px;
+    border: 1px solid var(--medium-brown);
+    animation: fadeIn 0.3s ease-out;
+}
+
+/* Form Actions */
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 15px;
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid var(--light-brown);
+}
+
+.cancel-btn,
+.save-btn {
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.95rem;
+}
+
+.cancel-btn {
+    background-color: white;
+    color: var(--primary-brown);
+    border: 1px solid var(--medium-brown);
+}
+
+.cancel-btn:hover {
+    background-color: var(--light-brown);
+}
+
+.save-btn {
+    background-color: var(--primary-brown);
+    color: white;
+    border: none;
+    min-width: 120px;
+}
+
+.save-btn:hover {
+    background-color: var(--dark-brown);
+}
+
+.save-btn:disabled {
+    background-color: var(--accent-brown);
+    cursor: not-allowed;
+}
+
+.save-success {
+    color: #2e8b57;
+    font-weight: 500;
+    margin-left: 15px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+/* Danger Zone */
+.danger-zone {
+    background-color: white;
+    border-radius: 8px;
+    padding: 30px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    border: 1px solid #ffcccc;
+}
+
+.danger-zone h3 {
+    color: #c33;
+    margin-bottom: 20px;
+    font-size: 1.2rem;
+    font-weight: 500;
+}
+
+.danger-zone-content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.danger-action {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #ffebeb;
+}
+
+.danger-action:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.danger-action h4 {
+    color: var(--text-brown);
+    margin-bottom: 5px;
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+.danger-action p {
+    color: var(--accent-brown);
+    font-size: 0.9rem;
+}
+
+/* Buttons in Danger Zone */
+.logout-btn,
+.delete-role-btn,
+.delete-account-btn,
+.confirm-delete-btn,
+.cancel-delete-btn {
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+.logout-btn {
+    background-color: var(--primary-brown);
+    color: white;
+    border: none;
+}
+
+.logout-btn:hover {
+    background-color: var(--dark-brown);
+}
+
+.delete-role-btn,
+.delete-account-btn {
+    background-color: white;
+    color: #c33;
+    border: 1px solid #ff9999;
+}
+
+.delete-role-btn:hover,
+.delete-account-btn:hover {
+    background-color: #fff0f0;
+}
+
+.delete-confirm {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.delete-confirm p {
+    color: #c33;
+    font-size: 0.9rem;
+    margin-right: 10px;
+}
+
+.confirm-delete-btn {
+    background-color: #c33;
+    color: white;
+    border: none;
+}
+
+.confirm-delete-btn:hover {
+    background-color: #a22;
+}
+
+.cancel-delete-btn {
+    background-color: white;
+    color: var(--text-brown);
+    border: 1px solid var(--medium-brown);
+}
+
+.cancel-delete-btn:hover {
+    background-color: var(--light-brown);
+}
+
+/* Role Popup */
+.popup-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.popup {
+    background-color: white;
+    padding: 30px;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    border: 1px solid var(--medium-brown);
+}
+
+.popup h3 {
+    color: var(--primary-brown);
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.role-btns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
+    justify-content: center;
+}
+
+.role-btns button {
+    padding: 8px 16px;
+    background-color: var(--light-brown);
+    color: var(--text-brown);
+    border: 1px solid var(--medium-brown);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.role-btns button:hover {
+    background-color: var(--pale-brown);
+    color: var(--dark-brown);
+}
+
+/* Status Messages */
+.form-error {
+    color: #c33;
+    font-size: 0.85rem;
+    margin-top: 5px;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.form-success {
+    color: #2e8b57;
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-top: 5px;
+    animation: fadeIn 0.3s ease-out;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .settings-page {
+        padding: 20px 15px;
+    }
+    
+    .settings-tabs {
+        overflow-x: auto;
+        padding-bottom: 5px;
+    }
+    
+    .tab-btn {
+        padding: 10px 15px;
+        font-size: 0.9rem;
+    }
+    
+    .settings-form {
+        padding: 20px;
+    }
+    
+    .form-actions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+    
+    .cancel-btn,
+    .save-btn {
+        width: 100%;
+    }
+    
+    .save-success {
+        margin-left: 0;
+        text-align: center;
+    }
+    
+    .danger-action {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 15px;
+    }
+    
+    .danger-action > div {
+        width: 100%;
+    }
+    
+    .logout-btn,
+    .delete-role-btn,
+    .delete-account-btn {
+        width: 100%;
+    }
+    
+    .delete-confirm {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .delete-confirm p {
+        margin-right: 0;
+        margin-bottom: 10px;
+    }
+    
+    .confirm-delete-btn,
+    .cancel-delete-btn {
+        width: 100%;
+    }
+}

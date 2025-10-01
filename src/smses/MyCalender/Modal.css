@@ -1,0 +1,122 @@
+/* Modal.css */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5); /* Added slight overlay for better focus */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px); /* Optional: adds subtle blur to background */
+}
+
+.modal-content {
+  background-color: transparent;
+  border-radius: 12px; /* Slightly increased */
+  padding: 30px;
+  width: 90vw; /* Changed from max-width to width for full control */
+  max-width: 1400px; /* Maximum width for very large screens */
+  min-width: 300px; /* Minimum width for small screens */
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  display: flex;
+  justify-content: center; /* Centers content horizontally */
+  align-items: center; /* Centers content vertically */
+}
+
+.modal-close {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: none;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  color: var(--brown-dark);
+  padding: 5px;
+  z-index: 1001;
+  transition: transform 0.2s ease;
+}
+
+.modal-close:hover {
+  color: var(--brown-medium);
+  transform: scale(1.1);
+}
+
+/* Specific styles for welcome modal */
+.welcome-modal {
+  text-align: center;
+  width: 100%; /* Takes full width of modal-content */
+  max-width: 600px; /* Increased from 500px */
+  padding: 30px;
+  background-color: rgba(255, 255, 255, 0.95); /* Slightly opaque white */
+  border-radius: 12px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.welcome-modal h2 {
+  color: var(--brown-dark);
+  margin-bottom: 20px;
+  font-size: 2rem;
+}
+
+.welcome-modal p {
+  margin-bottom: 25px;
+  color: #555;
+  font-size: 1.1rem;
+  line-height: 1.6;
+}
+
+/* Animation for modal appearance */
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.modal-content {
+  animation: modalFadeIn 0.3s ease-out;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .modal-content {
+    width: 95vw;
+    padding: 20px;
+  }
+  
+  .welcome-modal {
+    max-width: 90%;
+    padding: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .modal-content {
+    width: 98vw;
+    padding: 15px;
+  }
+  
+  .modal-close {
+    font-size: 24px;
+    top: 10px;
+    right: 10px;
+  }
+  
+  .welcome-modal h2 {
+    font-size: 1.5rem;
+  }
+  
+  .welcome-modal p {
+    font-size: 1rem;
+  }
+}
