@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { DashboardHeader } from "./dashboard-header"
 import { ApplicationTracker } from "./application-tracker"
-import  {LegitimacyScoreCard } from "./legitimacy-score-card"
+import { LegitimacyScoreCard } from "./legitimacy-score-card"
 import { FundabilityScoreCard } from "./fundability-score-card"
 import { ComplianceScoreCard } from "./compliance-score"
 import { BigScoreCard } from "./big-score"
@@ -30,7 +30,7 @@ import { API_KEYS } from "../../API"
 
 // const apiKey = API_KEYS.OPENAI;
 
-const sendMessageToChatGPT = async (message,apiKey) => {
+const sendMessageToChatGPT = async (message, apiKey) => {
   const API_URL = 'https://api.openai.com/v1/chat/completions';
 
   try {
@@ -85,7 +85,7 @@ const sendMessageToChatGPT = async (message,apiKey) => {
 };
 
 // Summary Report Card Component - Updated with Firebase Integration
-export const SummaryReportCard = ({ userId: propUserId, styles = {},apiKey }) => {
+export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) => {
   const [userId, setUserId] = useState(propUserId || null);
   const [reportData, setReportData] = useState(null);
   const [error, setError] = useState(null);
@@ -130,7 +130,7 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {},apiKey }) =>
     try {
       const summaryRef = doc(db, "Aisummaryreports", userId);
       const summarySnap = await getDoc(summaryRef);
-      
+
       if (summarySnap.exists()) {
         const data = summarySnap.data();
         return {
@@ -153,7 +153,7 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {},apiKey }) =>
     try {
       const profileRef = doc(db, "universalProfiles", userId);
       const profileSnap = await getDoc(profileRef);
-      
+
       if (profileSnap.exists()) {
         const data = profileSnap.data();
         return data.triggerLegitimacyEvaluation === true;
@@ -213,24 +213,24 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {},apiKey }) =>
       try {
         // Check if trigger is set
         const shouldTriggerNew = await checkTriggerFundabilityEvaluation(userId);
-        
+
         if (shouldTriggerNew) {
           console.log("Trigger detected, waiting 5 seconds then generating new evaluation...");
           setIsGeneratingNew(true);
-          
+
           // Wait 5 seconds
           await new Promise(resolve => setTimeout(resolve, 5000));
-          
+
           // Generate new evaluation
           await generateNewEvaluation(userId);
-          
+
           // Reset trigger
           await resetTrigger(userId);
           setIsGeneratingNew(false);
         } else {
           // Try to load existing data from Firebase first
           const existingSummary = await loadSummaryFromFirebase(userId);
-          
+
           if (existingSummary && existingSummary.reportData) {
             console.log("Loading existing summary from Firebase");
             setReportData(existingSummary.reportData);
@@ -250,188 +250,188 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {},apiKey }) =>
     };
 
     fetchData();
-  }, [userId,apiKey]);
+  }, [userId, apiKey]);
 
   // Enhanced generateNewEvaluation with better error handling and data validation
   const generateNewEvaluation = async (userId) => {
-  try {
-    console.log("Generating new evaluation for userId:", userId);
+    try {
+      console.log("Generating new evaluation for userId:", userId);
 
-    // Initialize an empty report data structure
-    const newReportData = {
-      generatedDate: new Date().toLocaleDateString('en-GB', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      }),
-      overallScore: 0,
-      fundabilityStatus: "Assessment Incomplete",
-      businessPlanScore: 0,
-      pitchDeckScore: 0,
-      profileEvaluationScore: 0,
-      weightedAverageScore: 0,
-      detailedScores: [],
-      improvementSuggestions: [],
-      structuredContent: {},
-      aiEvaluations: {},
-      missingSections: []
-    };
+      // Initialize an empty report data structure
+      const newReportData = {
+        generatedDate: new Date().toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        }),
+        overallScore: 0,
+        fundabilityStatus: "Assessment Incomplete",
+        businessPlanScore: 0,
+        pitchDeckScore: 0,
+        profileEvaluationScore: 0,
+        weightedAverageScore: 0,
+        detailedScores: [],
+        improvementSuggestions: [],
+        structuredContent: {},
+        aiEvaluations: {},
+        missingSections: []
+      };
 
-    // Check what data we have available
-    const availableData = {
-      combinedEvaluations: false,
-      fundability: false,
-      legitimacy: false,
-      profile: false,
-      pitch: false,
-      business: false
-    };
+      // Check what data we have available
+      const availableData = {
+        combinedEvaluations: false,
+        fundability: false,
+        legitimacy: false,
+        profile: false,
+        pitch: false,
+        business: false
+      };
 
-    // Try to get combined evaluations first
-    const combinedQuery = query(collection(db, "combinedEvaluations"), where("userId", "==", userId));
-    const combinedSnap = await getDocs(combinedQuery);
-    
-    if (!combinedSnap.empty) {
-      availableData.combinedEvaluations = true;
-      const combinedData = combinedSnap.docs[0].data();
-      newReportData.structuredContent = combinedData.structuredContent || {};
-      newReportData.overallScore = combinedData.combinedScore || 0;
-      newReportData.fundabilityStatus = combinedData.status || getScoreLevel(newReportData.overallScore).level;
-    }
+      // Try to get combined evaluations first
+      const combinedQuery = query(collection(db, "combinedEvaluations"), where("userId", "==", userId));
+      const combinedSnap = await getDocs(combinedQuery);
 
-    // Fetch all other evaluations in parallel
-    const [fundSnap, legitSnap, profileSnap, pitchSnap, businessSnap] = await Promise.all([
-      getDoc(doc(db, "aiFundabilityEvaluations", userId)),
-      getDoc(doc(db, "aiLegitimacyEvaluation", userId)),
-      getDoc(doc(db, "universalProfiles", userId)),
-      getDocs(query(collection(db, "aiPitchEvaluations"), where("userId", "==", userId))),
-      getDocs(query(collection(db, "aiEvaluations"), where("userId", "==", userId)))
-    ]);
-
-    // Process fundability data 
-        if (fundSnap.exists()) {
-      availableData.fundability = true;
-      newReportData.aiEvaluations.fundability = fundSnap.data();
-    } else {
-      newReportData.missingSections.push("Fundability Evaluation");
-    }
-
-    // Process legitimacy data
-    if (legitSnap.exists()) {
-      availableData.legitimacy = true;
-      newReportData.aiEvaluations.legitimacy = legitSnap.data();
-    } else {
-      newReportData.missingSections.push("Legitimacy Evaluation");
-    }
-
-    // Process profile data
-    if (profileSnap.exists()) {
-      availableData.profile = true;
-      const profileData = profileSnap.data();
-      newReportData.aiEvaluations.profile = profileData;
-      newReportData.overallScore = profileData.bigScore || newReportData.overallScore;
-      newReportData.profileEvaluationScore = profileData.pisScore || 0;
-      
-      // If we have profile data but no combined score, use profile score as fallback
-      if (!availableData.combinedEvaluations) {
-        newReportData.overallScore = profileData.bigScore || 0;
-        newReportData.fundabilityStatus = getScoreLevel(newReportData.overallScore).level;
+      if (!combinedSnap.empty) {
+        availableData.combinedEvaluations = true;
+        const combinedData = combinedSnap.docs[0].data();
+        newReportData.structuredContent = combinedData.structuredContent || {};
+        newReportData.overallScore = combinedData.combinedScore || 0;
+        newReportData.fundabilityStatus = combinedData.status || getScoreLevel(newReportData.overallScore).level;
       }
-    } else {
-      newReportData.missingSections.push("Business Profile");
-    }
 
-    // Process pitch data
-    if (!pitchSnap.empty) {
-      availableData.pitch = true;
-      const pitchData = pitchSnap.docs[0].data();
-      newReportData.aiEvaluations.pitch = pitchData;
-      newReportData.pitchDeckScore = pitchData.evaluation?.score || 0;
-    } else {
-      newReportData.missingSections.push("Pitch Deck Evaluation");
-    }
+      // Fetch all other evaluations in parallel
+      const [fundSnap, legitSnap, profileSnap, pitchSnap, businessSnap] = await Promise.all([
+        getDoc(doc(db, "aiFundabilityEvaluations", userId)),
+        getDoc(doc(db, "aiLegitimacyEvaluation", userId)),
+        getDoc(doc(db, "universalProfiles", userId)),
+        getDocs(query(collection(db, "aiPitchEvaluations"), where("userId", "==", userId))),
+        getDocs(query(collection(db, "aiEvaluations"), where("userId", "==", userId)))
+      ]);
 
-    // Process business plan data
-    if (!businessSnap.empty) {
-      availableData.business = true;
-      const businessData = businessSnap.docs[0].data();
-      newReportData.aiEvaluations.business = businessData;
-      newReportData.businessPlanScore = businessData.evaluation?.score || 0;
-    } else {
-      newReportData.missingSections.push("Business Plan Evaluation");
-    }
-
-    // Calculate weighted average if we have multiple scores
-    const scores = [];
-    if (availableData.business) scores.push(newReportData.businessPlanScore);
-    if (availableData.pitch) scores.push(newReportData.pitchDeckScore);
-    if (availableData.profile) scores.push(newReportData.profileEvaluationScore);
-    
-    if (scores.length > 0) {
-      newReportData.weightedAverageScore = scores.reduce((a, b) => a + b, 0) / scores.length;
-      // Only use weighted average if we don't have a combined score
-      if (!availableData.combinedEvaluations) {
-        newReportData.overallScore = newReportData.weightedAverageScore;
-        newReportData.fundabilityStatus = getScoreLevel(newReportData.overallScore).level;
+      // Process fundability data 
+      if (fundSnap.exists()) {
+        availableData.fundability = true;
+        newReportData.aiEvaluations.fundability = fundSnap.data();
+      } else {
+        newReportData.missingSections.push("Fundability Evaluation");
       }
+
+      // Process legitimacy data
+      if (legitSnap.exists()) {
+        availableData.legitimacy = true;
+        newReportData.aiEvaluations.legitimacy = legitSnap.data();
+      } else {
+        newReportData.missingSections.push("Legitimacy Evaluation");
+      }
+
+      // Process profile data
+      if (profileSnap.exists()) {
+        availableData.profile = true;
+        const profileData = profileSnap.data();
+        newReportData.aiEvaluations.profile = profileData;
+        newReportData.overallScore = profileData.bigScore || newReportData.overallScore;
+        newReportData.profileEvaluationScore = profileData.pisScore || 0;
+
+        // If we have profile data but no combined score, use profile score as fallback
+        if (!availableData.combinedEvaluations) {
+          newReportData.overallScore = profileData.bigScore || 0;
+          newReportData.fundabilityStatus = getScoreLevel(newReportData.overallScore).level;
+        }
+      } else {
+        newReportData.missingSections.push("Business Profile");
+      }
+
+      // Process pitch data
+      if (!pitchSnap.empty) {
+        availableData.pitch = true;
+        const pitchData = pitchSnap.docs[0].data();
+        newReportData.aiEvaluations.pitch = pitchData;
+        newReportData.pitchDeckScore = pitchData.evaluation?.score || 0;
+      } else {
+        newReportData.missingSections.push("Pitch Deck Evaluation");
+      }
+
+      // Process business plan data
+      if (!businessSnap.empty) {
+        availableData.business = true;
+        const businessData = businessSnap.docs[0].data();
+        newReportData.aiEvaluations.business = businessData;
+        newReportData.businessPlanScore = businessData.evaluation?.score || 0;
+      } else {
+        newReportData.missingSections.push("Business Plan Evaluation");
+      }
+
+      // Calculate weighted average if we have multiple scores
+      const scores = [];
+      if (availableData.business) scores.push(newReportData.businessPlanScore);
+      if (availableData.pitch) scores.push(newReportData.pitchDeckScore);
+      if (availableData.profile) scores.push(newReportData.profileEvaluationScore);
+
+      if (scores.length > 0) {
+        newReportData.weightedAverageScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+        // Only use weighted average if we don't have a combined score
+        if (!availableData.combinedEvaluations) {
+          newReportData.overallScore = newReportData.weightedAverageScore;
+          newReportData.fundabilityStatus = getScoreLevel(newReportData.overallScore).level;
+        }
+      }
+
+      // Extract detailed scores from available structured content
+      if (newReportData.structuredContent.businessPlan?.rawContent) {
+        newReportData.detailedScores = [
+          ...newReportData.detailedScores,
+          ...extractScoresFromMarkdown(newReportData.structuredContent.businessPlan.rawContent)
+        ];
+      }
+
+      if (newReportData.structuredContent.pitchDeck?.rawContent) {
+        newReportData.detailedScores = [
+          ...newReportData.detailedScores,
+          ...extractScoresFromMarkdown(newReportData.structuredContent.pitchDeck.rawContent)
+        ];
+      }
+
+      if (newReportData.structuredContent.profileEvaluation?.breakdown) {
+        newReportData.detailedScores = [
+          ...newReportData.detailedScores,
+          ...Object.entries(newReportData.structuredContent.profileEvaluation.breakdown).map(([category, score]) => ({
+            category,
+            score,
+            maxScore: getMaxScoreForProfileCategory(category),
+            rationale: `${category} scored ${score} out of ${getMaxScoreForProfileCategory(category)}`
+          }))
+        ];
+      }
+
+      // Set improvement suggestions based on available data
+      newReportData.improvementSuggestions = getImprovementSuggestions(newReportData.structuredContent);
+
+      // If we're missing critical sections, add a general improvement suggestion
+      if (newReportData.missingSections.length > 0) {
+        newReportData.improvementSuggestions.push({
+          category: "Complete Missing Evaluations",
+          suggestions: [
+            `The following evaluations are missing: ${newReportData.missingSections.join(', ')}.`,
+            "Complete these evaluations for a more comprehensive analysis."
+          ]
+        });
+      }
+
+      setReportData(newReportData);
+
+      // Generate AI insights with whatever data we have
+      if (Object.values(availableData).some(v => v)) {
+        await generateAIInsights(newReportData, userId);
+      } else {
+        // If no data at all, use the basic fallback
+        await generateBasicAIInsights(newReportData, userId);
+      }
+
+    } catch (error) {
+      console.error("Error generating new evaluation:", error);
+      throw error;
     }
-
-    // Extract detailed scores from available structured content
-    if (newReportData.structuredContent.businessPlan?.rawContent) {
-      newReportData.detailedScores = [
-        ...newReportData.detailedScores,
-        ...extractScoresFromMarkdown(newReportData.structuredContent.businessPlan.rawContent)
-      ];
-    }
-
-    if (newReportData.structuredContent.pitchDeck?.rawContent) {
-      newReportData.detailedScores = [
-        ...newReportData.detailedScores,
-        ...extractScoresFromMarkdown(newReportData.structuredContent.pitchDeck.rawContent)
-      ];
-    }
-
-    if (newReportData.structuredContent.profileEvaluation?.breakdown) {
-      newReportData.detailedScores = [
-        ...newReportData.detailedScores,
-        ...Object.entries(newReportData.structuredContent.profileEvaluation.breakdown).map(([category, score]) => ({
-          category,
-          score,
-          maxScore: getMaxScoreForProfileCategory(category),
-          rationale: `${category} scored ${score} out of ${getMaxScoreForProfileCategory(category)}`
-        }))
-      ];
-    }
-
-    // Set improvement suggestions based on available data
-    newReportData.improvementSuggestions = getImprovementSuggestions(newReportData.structuredContent);
-
-    // If we're missing critical sections, add a general improvement suggestion
-    if (newReportData.missingSections.length > 0) {
-      newReportData.improvementSuggestions.push({
-        category: "Complete Missing Evaluations",
-        suggestions: [
-          `The following evaluations are missing: ${newReportData.missingSections.join(', ')}.`,
-          "Complete these evaluations for a more comprehensive analysis."
-        ]
-      });
-    }
-
-    setReportData(newReportData);
-
-    // Generate AI insights with whatever data we have
-    if (Object.values(availableData).some(v => v)) {
-      await generateAIInsights(newReportData, userId);
-    } else {
-      // If no data at all, use the basic fallback
-      await generateBasicAIInsights(newReportData, userId);
-    }
-
-  } catch (error) {
-    console.error("Error generating new evaluation:", error);
-    throw error;
-  }
-};
+  };
 
   // New function for basic AI insights when limited data is available
   const generateBasicAIInsights = async (reportData, userId) => {
@@ -504,8 +504,8 @@ RESPONSE FORMAT:
 Respond only with valid JSON.
       `.trim();
 
-      const prioritiesResponse = await sendMessageToChatGPT(priorityPrompt,apiKey);
-      
+      const prioritiesResponse = await sendMessageToChatGPT(priorityPrompt, apiKey);
+
       let newTopPriorities = [];
       try {
         const jsonMatch = prioritiesResponse.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/) || [];
@@ -555,7 +555,7 @@ Respond with a bullet-pointed summary using the following structure:
 Keep it concise, professional, and actionable.
       `.trim();
 
-      const summaryResponse = await sendMessageToChatGPT(summaryPrompt + "\n\n" + combinedText,apiKey);
+      const summaryResponse = await sendMessageToChatGPT(summaryPrompt + "\n\n" + combinedText, apiKey);
       setImprovementSummary(summaryResponse);
 
       // Save to Firebase
@@ -570,7 +570,7 @@ Keep it concise, professional, and actionable.
     } catch (err) {
       console.error("Failed to generate AI insights:", err);
       setImprovementSummary("Unable to generate improvement summary at this time.");
-      
+
       // Save what we have to Firebase anyway
       const summaryData = {
         reportData,
@@ -578,7 +578,7 @@ Keep it concise, professional, and actionable.
         improvementSummary: "Unable to generate improvement summary at this time.",
         userId
       };
-      
+
       await saveSummaryToFirebase(userId, summaryData);
     } finally {
       setPrioritiesLoading(false);
@@ -1025,7 +1025,7 @@ Keep it concise, professional, and actionable.
                 fontWeight: '700',
                 margin: '0 0 4px 0'
               }}>
-               BIG Score Summary Analysis
+                BIG Score Summary Analysis
               </h3>
               <p style={{
                 color: '#BCAAA4',
@@ -1038,7 +1038,7 @@ Keep it concise, professional, and actionable.
             </div>
           </div>
 
-        
+
         </div>
 
         {/* Core Metrics - Updated */}
@@ -1086,63 +1086,63 @@ Keep it concise, professional, and actionable.
               Analyzing priorities...
             </div>
           ) : (
-<div style={{
-  display: 'grid',
-  gridTemplateColumns: 'repeat(3, 1fr)',
-  gap: '12px',
-  textAlign: 'left'
-}}>
-  {topPriorities.map((priority, index) => {
-  const trimmedDescription = priority.description.includes(',')
-    ? priority.description.split(',')[0].trim() + "..."
-    : priority.description.length > 100
-      ? priority.description.slice(0, 97).trim() + "..."
-      : priority.description;
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '12px',
+              textAlign: 'left'
+            }}>
+              {topPriorities.map((priority, index) => {
+                const trimmedDescription = priority.description.includes(',')
+                  ? priority.description.split(',')[0].trim() + "..."
+                  : priority.description.length > 100
+                    ? priority.description.slice(0, 97).trim() + "..."
+                    : priority.description;
 
-  return (
-   <div
-  key={index}
-  className="priority-card"
-  style={{
-    position: 'relative',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
-    borderRadius: '12px',
-    padding: '14px 12px',
-    minHeight: '90px',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    cursor: 'default'
-  }}
->
-  <h4 style={{ color: '#EFEBE9', fontSize: '0.8rem', fontWeight: '700', marginBottom: '4px' }}>
-    {priority.title}
-  </h4>
-  <p style={{
-    fontSize: '0.7rem',
-    color: '#D7CCC8',
-    lineHeight: '1.3',
-    margin: 0,
-    display: '-webkit-box',
-    WebkitLineClamp: 2,
-    WebkitBoxOrient: 'vertical',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis'
-  }}>
-    {priority.description}
-  </p>
+                return (
+                  <div
+                    key={index}
+                    className="priority-card"
+                    style={{
+                      position: 'relative',
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      borderRadius: '12px',
+                      padding: '14px 12px',
+                      minHeight: '90px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'center',
+                      cursor: 'default'
+                    }}
+                  >
+                    <h4 style={{ color: '#EFEBE9', fontSize: '0.8rem', fontWeight: '700', marginBottom: '4px' }}>
+                      {priority.title}
+                    </h4>
+                    <p style={{
+                      fontSize: '0.7rem',
+                      color: '#D7CCC8',
+                      lineHeight: '1.3',
+                      margin: 0,
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }}>
+                      {priority.description}
+                    </p>
 
-  <div className="tooltip-content">
-    <strong>{priority.title}</strong><br />
-    {priority.description}
-  </div>
-</div>
+                    <div className="tooltip-content">
+                      <strong>{priority.title}</strong><br />
+                      {priority.description}
+                    </div>
+                  </div>
 
-  );
-})}
+                );
+              })}
 
-</div>
+            </div>
 
 
 
@@ -1442,7 +1442,8 @@ export function Dashboard() {
   const [leadershipScore, setLeadershipScore] = useState(0) // New state
   const [fundabilityScore, setFundabilityScore] = useState(0)
   const [pisScore, setPisScore] = useState(0)
-const apiKey = API_KEYS.OPENAI;
+  
+  const apiKey = useApiKey();
   const user = auth.currentUser
   const userName = user ? user.email : "User"
 
@@ -1635,21 +1636,21 @@ const apiKey = API_KEYS.OPENAI;
 
             <CustomerReviewsCard styles={styles} />
 
-               {apiKey && (
-  <SummaryReportCard 
-    styles={styles} 
-    userId={profileData?.id} 
-    apiKey={apiKey} 
-  />
-)}
- {!apiKey && (
-            <section className="individual-scores-row" style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(5, 1fr)',
-              gap: '20px',
-              marginBottom: '20px'
-            }}>
-          
+            {apiKey && (
+              <SummaryReportCard
+                styles={styles}
+                userId={profileData?.id}
+                apiKey={apiKey}
+              />
+            )}
+            {!apiKey && (
+              <section className="individual-scores-row" style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(5, 1fr)',
+                gap: '20px',
+                marginBottom: '20px'
+              }}>
+
                 <div style={{
                   background: 'linear-gradient(135deg, #ffffff 0%, #faf8f6 100%)',
                   borderRadius: '20px',
@@ -1678,14 +1679,14 @@ const apiKey = API_KEYS.OPENAI;
                     <span style={{ fontSize: '12px', fontWeight: '500' }}>Loading...</span>
                   </div>
                 </div>
-             
-            </section>
-          )}
+
+              </section>
+            )}
           </section>
 
 
 
-         {apiKey && (
+          {apiKey && (
             <section className="individual-scores-row" style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(5, 1fr)',
