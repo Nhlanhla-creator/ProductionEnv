@@ -21,12 +21,15 @@ const programTargetBeneficiariesOptions = [
 
 // Program Structure options
 const programStructureOptions = [
-  { value: "grant_based", label: "Grant-Based" },
-  { value: "mentorship", label: "Mentorship Program" },
-  { value: "training_education", label: "Training & Education" },
-  { value: "incubator", label: "Incubator" },
-  { value: "accelerator", label: "Accelerator" },
-  { value: "hybrid", label: "Hybrid Program" },
+   { value: "Any", label: "Any" },
+  { value: "Venture Capital", label: "Venture Capital" },
+  { value: "Angel Investment", label: "Angel Investment" },
+  { value: "Private Equity", label: "Private Equity" },
+  { value: "Government Fund", label: "Government Fund" },
+  { value: "Grant / Non-Profit", label: "Grant / Non-Profit" },
+  { value: "Development Finance", label: "Development Finance" },
+  { value: "Corporate Investment", label: "Corporate Investment" },
+  { value: "Other (specify)", label: "Other (specify)" },
 ]
 
 // Program Legal Structure options

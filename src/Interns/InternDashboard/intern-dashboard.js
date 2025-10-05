@@ -9,7 +9,7 @@ import { BigInternReportSummary } from "./BigInternReportSummary"
 import { GraduationCap, Users, RefreshCw } from "lucide-react"
 import { db, auth } from "../../firebaseConfig"
 import { doc, onSnapshot } from "firebase/firestore"
-import { useApiKey } from '../../smses/SMSEDashboard/callapi'
+ import { useApiKey } from '../../smses/SMSEDashboard/callapi'
 import { API_KEYS } from "../../API"
 
 export default function InternDashboard() {
@@ -22,7 +22,7 @@ export default function InternDashboard() {
   const [profileData, setProfileData] = useState(null)
   const [triggerRefresh, setTriggerRefresh] = useState(false)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
-const apiKey = API_KEYS.OPENAI;
+const apiKey = useApiKey();
   // Add sidebar state detection
   useEffect(() => {
     const checkSidebarState = () => {

@@ -1,114 +1,149 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { createPortal } from "react-dom"
-import { Check, ChevronDown, Filter, X, Eye } from "lucide-react"
+import { Check, ChevronDown, Filter, Eye, X } from "lucide-react"
 import { collection, getDocs } from "firebase/firestore"
-import { auth, db } from "../../firebaseConfig"
-import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore"
+import { db } from "../../firebaseConfig" // adjust to your Firebase setup
+import { auth } from "../../firebaseConfig"
+import { doc, setDoc, serverTimestamp, getDoc, query, where, onSnapshot } from "firebase/firestore"
 
-// Mock data for the table
-const mockAccelerators = []
+// Mock data for the advisor table
+const mockAdvisors = []
 
-// Pipeline stage definitions with colors
-const PIPELINE_STAGES = {
-  MATCH: {
-    label: "Match",
-    next: "Application Sent",
+// Status definitions with colors
+const STATUS_TYPES = {
+  "New Match": {
+    color: "#F5EBE0",
+    textColor: "#5D2A0A",
   },
-  "APPLICATION SENT": {
-    label: "Application Sent",
-    next: "Evaluation",
+  Shortlisted: {
+    color: "#E8D5C4",
+    textColor: "#4E342E",
   },
-  EVALUATION: {
-    label: "Evaluation",
-    next: "Due Diligence",
+  Contacted: {
+    color: "#E8D5C4",
+    textColor: "#543c36ff",
   },
-  "DUE DILIGENCE": {
-    label: "Due Diligence",
-    next: "Decision",
+  Confirmed: {
+    color: "#E8F5E8",
+    textColor: "#388E3C",
   },
-  DECISION: {
-    label: "Decision",
-    next: "Support Approved",
+  Declined: {
+    color: "#FFEBEE",
+    textColor: "#D32F2F",
   },
-  "SUPPORT APPROVED": {
-    label: "Support Approved",
-    next: "Active Support",
-  },
-  "ACTIVE SUPPORT": {
-    label: "Active Support",
-    next: "N/A",
-  },
-  "SUPPORT DECLINED": {
-    label: "Support Declined",
-    next: "N/A",
+  Match: {
+    color: "#F5EBE0",
+    textColor: "#5D2A0A",
   },
 }
-
-// Geographic focus options
-const geographicFocusOptions = [
-  { value: "Global", label: "Global" },
-  { value: "Africa", label: "Africa" },
-  { value: "SADC", label: "SADC" },
-  { value: "East Africa", label: "East Africa" },
-  { value: "West Africa", label: "West Africa" },
-  { value: "North Africa", label: "North Africa" },
-  { value: "Southern Africa", label: "Southern Africa" },
-  { value: "South Africa", label: "South Africa" },
-  { value: "Nigeria", label: "Nigeria" },
-  { value: "Kenya", label: "Kenya" },
-  { value: "Ghana", label: "Ghana" },
-  { value: "Egypt", label: "Egypt" },
-]
-
-// Sector focus options
-const sectorFocusOptions = [
-  { value: "Generalist", label: "Generalist" },
-  { value: "Technology", label: "Technology" },
-  { value: "Agriculture", label: "Agriculture" },
-  { value: "Healthcare", label: "Healthcare" },
-  { value: "Finance", label: "Finance" },
-  { value: "Education", label: "Education" },
-  { value: "Energy", label: "Energy" },
-  { value: "Manufacturing", label: "Manufacturing" },
-  { value: "Retail", label: "Retail" },
-  { value: "Transportation", label: "Transportation" },
-  { value: "Construction", label: "Construction" },
-  { value: "Mining", label: "Mining" },
-]
-
-// Funding stage options
-const fundingStageOptions = [
-  { value: "Pre-seed", label: "Pre-seed" },
-  { value: "Seed", label: "Seed" },
-  { value: "Series A", label: "Series A" },
-  { value: "Series B", label: "Series B" },
-  { value: "Series C", label: "Series C" },
+const operationStages = [
+  { value: "Startup", label: "Startup" },
   { value: "Growth", label: "Growth" },
-  { value: "Bridge", label: "Bridge" },
-  { value: "Mezzanine", label: "Mezzanine" },
+  { value: "Scaling", label: "Scaling" },
+  { value: "Turnaround", label: "Turnaround" },
+  { value: "Mature", label: "Mature" },
 ]
 
-// Support offered options
-const supportOfferedOptions = [
-  { value: "Funding", label: "Funding" },
-  { value: "Mentorship", label: "Mentorship" },
-  { value: "Networking", label: "Networking" },
-  { value: "Training", label: "Training" },
-  { value: "Incubation", label: "Incubation" },
-  { value: "Acceleration", label: "Acceleration" },
-  { value: "Market Access", label: "Market Access" },
-  { value: "Technical Support", label: "Technical Support" },
+// Economic sectors data
+const economicSectors = [
+  { value: "Generalist", label: "Generalist" },
+  { value: "Agriculture", label: "Agriculture" },
+  { value: "Automotive", label: "Automotive" },
+  { value: "Banking, Finance & Insurance", label: "Banking, Finance & Insurance" },
+  { value: "Beauty / Cosmetics / Personal Care", label: "Beauty / Cosmetics / Personal Care" },
+  { value: "Construction", label: "Construction" },
+  { value: "Consulting", label: "Consulting" },
+  { value: "Creative Arts / Design", label: "Creative Arts / Design" },
+  { value: "Customer Service", label: "Customer Service" },
+  { value: "Education & Training", label: "Education & Training" },
+  { value: "Engineering", label: "Engineering" },
+  { value: "Environmental / Natural Sciences", label: "Environmental / Natural Sciences" },
+  { value: "Government / Public Sector", label: "Government / Public Sector" },
+  { value: "Healthcare / Medical", label: "Healthcare / Medical" },
+  { value: "Hospitality / Tourism", label: "Hospitality / Tourism" },
+  { value: "Human Resources", label: "Human Resources" },
+  { value: "Information Technology (IT)", label: "Information Technology (IT)" },
+  { value: "Infrastructure", label: "Infrastructure" },
+  { value: "Legal / Law", label: "Legal / Law" },
+  { value: "Logistics / Supply Chain", label: "Logistics / Supply Chain" },
+  { value: "Manufacturing", label: "Manufacturing" },
+  { value: "Marketing / Advertising / PR", label: "Marketing / Advertising / PR" },
+  { value: "Media / Journalism / Broadcasting", label: "Media / Journalism / Broadcasting" },
+  { value: "Mining", label: "Mining" },
+  { value: "Energy", label: "Energy" },
+  { value: "Oil & Gas", label: "Oil & Gas" },
+  { value: "Non-Profit / NGO", label: "Non-Profit / NGO" },
+  { value: "Property / Real Estate", label: "Property / Real Estate" },
+  { value: "Retail / Wholesale", label: "Retail / Wholesale" },
+  { value: "Safety & Security / Police / Defence", label: "Safety & Security / Police / Defence" },
+  { value: "Sales", label: "Sales" },
+  { value: "Science & Research", label: "Science & Research" },
+  { value: "Social Services / Social Work", label: "Social Services / Social Work" },
+  { value: "Sports / Recreation / Fitness", label: "Sports / Recreation / Fitness" },
+  { value: "Telecommunications", label: "Telecommunications" },
+  { value: "Transport", label: "Transport" },
+  { value: "Utilities (Water, Electricity, Waste)", label: "Utilities (Water, Electricity, Waste)" },
 ]
 
-// Helper function to get the next stage
-const getNextStage = (currentStage) => {
-  const stageEntry = Object.values(PIPELINE_STAGES).find(
-    (stage) => stage.label.toLowerCase() === currentStage?.toLowerCase(),
-  )
-  return stageEntry ? stageEntry.next : "N/A"
-}
+// African countries data
+const africanCountries = [
+  { value: "Algeria", label: "Algeria" },
+  { value: "Angola", label: "Angola" },
+  { value: "Benin", label: "Benin" },
+  { value: "Botswana", label: "Botswana" },
+  { value: "Burkina Faso", label: "Burkina Faso" },
+  { value: "Burundi", label: "Burundi" },
+  { value: "Cabo Verde", label: "Cabo Verde" },
+  { value: "Cameroon", label: "Cameroon" },
+  { value: "Central African Republic", label: "Central African Republic" },
+  { value: "Chad", label: "Chad" },
+  { value: "Comoros", label: "Comoros" },
+  { value: "Congo", label: "Congo" },
+  { value: "Côte d'Ivoire", label: "Côte d'Ivoire" },
+  { value: "Djibouti", label: "Djibouti" },
+  { value: "DR Congo", label: "DR Congo" },
+  { value: "Egypt", label: "Egypt" },
+  { value: "Equatorial Guinea", label: "Equatorial Guinea" },
+  { value: "Eritrea", label: "Eritrea" },
+  { value: "Eswatini", label: "Eswatini" },
+  { value: "Ethiopia", label: "Ethiopia" },
+  { value: "Gabon", label: "Gabon" },
+  { value: "Gambia", label: "Gambia" },
+  { value: "Ghana", label: "Ghana" },
+  { value: "Guinea", label: "Guinea" },
+  { value: "Guinea-Bissau", label: "Guinea-Bissau" },
+  { value: "Kenya", label: "Kenya" },
+  { value: "Lesotho", label: "Lesotho" },
+  { value: "Liberia", label: "Liberia" },
+  { value: "Libya", label: "Libya" },
+  { value: "Madagascar", label: "Madagascar" },
+  { value: "Malawi", label: "Malawi" },
+  { value: "Mali", label: "Mali" },
+  { value: "Mauritania", label: "Mauritania" },
+  { value: "Mauritius", label: "Mauritius" },
+  { value: "Morocco", label: "Morocco" },
+  { value: "Mozambique", label: "Mozambique" },
+  { value: "Namibia", label: "Namibia" },
+  { value: "Niger", label: "Niger" },
+  { value: "Nigeria", label: "Nigeria" },
+  { value: "Rwanda", label: "Rwanda" },
+  { value: "São Tomé and Príncipe", label: "São Tomé and Príncipe" },
+  { value: "Senegal", label: "Senegal" },
+  { value: "Seychelles", label: "Seychelles" },
+  { value: "Sierra Leone", label: "Sierra Leone" },
+  { value: "Somalia", label: "Somalia" },
+  { value: "South Africa", label: "South Africa" },
+  { value: "South Sudan", label: "South Sudan" },
+  { value: "Sudan", label: "Sudan" },
+  { value: "Tanzania", label: "Tanzania" },
+  { value: "Togo", label: "Togo" },
+  { value: "Tunisia", label: "Tunisia" },
+  { value: "Uganda", label: "Uganda" },
+  { value: "Zambia", label: "Zambia" },
+  { value: "Zimbabwe", label: "Zimbabwe" },
+]
 
 // MultiSelectDropdown component
 const MultiSelectDropdown = ({ options, selectedValues, onSelect, placeholder, onRemove }) => {
@@ -156,7 +191,7 @@ const MultiSelectDropdown = ({ options, selectedValues, onSelect, placeholder, o
           padding: "0.5rem",
           border: "1px solid #E8D5C4",
           borderRadius: "4px",
-          fontSize: "0.8rem",
+          fontSize: "0.75rem",
           cursor: "pointer",
           display: "flex",
           justifyContent: "space-between",
@@ -251,7 +286,7 @@ const MultiSelectDropdown = ({ options, selectedValues, onSelect, placeholder, o
                 display: "flex",
                 alignItems: "center",
                 gap: "8px",
-                fontSize: "0.8rem",
+                fontSize: "0.75rem",
                 ":hover": {
                   backgroundColor: "#F5EBE0",
                 },
@@ -268,11 +303,11 @@ const MultiSelectDropdown = ({ options, selectedValues, onSelect, placeholder, o
 }
 
 // Text truncation component
-const TruncatedText = ({ text, maxLength = 50 }) => {
+const TruncatedText = ({ text, maxLength = 30 }) => {
   const [isExpanded, setIsExpanded] = useState(false)
 
   if (!text || text === "-" || text === "Not specified" || text === "Various") {
-    return <span style={{ color: "#999" }}>{text || "-"}</span>
+    return <span style={{ color: "#999", fontSize: "0.75rem" }}>{text || "-"}</span>
   }
 
   const shouldTruncate = text.length > maxLength
@@ -284,7 +319,7 @@ const TruncatedText = ({ text, maxLength = 50 }) => {
   }
 
   return (
-    <div style={{ lineHeight: "1.4" }}>
+    <div style={{ lineHeight: "1.3", fontSize: "0.75rem" }}>
       <span style={{ wordBreak: "break-word" }}>{displayText}</span>
       {shouldTruncate && (
         <button
@@ -309,614 +344,485 @@ const TruncatedText = ({ text, maxLength = 50 }) => {
 
 const formatLabel = (value) => {
   if (!value) return ""
-  return value
-    .toString()
+
+  // Handle arrays by joining them first
+  if (Array.isArray(value)) {
+    return value.map((item) => formatLabel(item)).join(", ")
+  }
+
+  // Convert to string in case it's a number or other type
+  const stringValue = value.toString().trim()
+
+  // Return empty string if value is falsy after conversion
+  if (!stringValue) return ""
+
+  // Special cases
+  const specialCases = {
+    ict: "ICT",
+    southafrica: "South Africa",
+    south_africa: "South Africa",
+    usa: "USA",
+    uk: "UK",
+    uae: "UAE",
+  }
+
+  // Check for special cases
+  const lowerValue = stringValue.toLowerCase()
+  if (specialCases[lowerValue]) {
+    return specialCases[lowerValue]
+  }
+
+  // Process each word separated by commas first
+  return stringValue
     .split(",")
-    .map((item) => item.trim())
-    .map((word) => {
-      if (word.toLowerCase() === "ict") return "ICT"
-      if (word.toLowerCase() === "southafrica" || word.toLowerCase() === "south_africa") return "South Africa"
-      return word
+    .map((part) => {
+      // Process each word separated by underscores, hyphens, or spaces
+      return part
+        .trim()
         .split(/[_\s-]+/)
-        .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+        .map((word) => {
+          // Skip empty words
+          if (!word) return ""
+          // Capitalize first letter, lowercase the rest
+          return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+        })
         .join(" ")
     })
     .join(", ")
 }
 
-export function AcceleratorTable({ filters, onApplicationSubmitted }) {
+const breakdownItemStyle = (matched, label) => ({
+  background: "#FEFCFA",
+  border: "1px solid #E8D5C4",
+  borderRadius: "8px",
+  padding: "1.25rem",
+  borderLeft: `4px solid ${matched ? "#388E3C" : "#D32F2F"}`,
+  marginBottom: "1rem",
+})
+
+const getStatusStyle = (status) => {
+  return STATUS_TYPES[status] || { color: "#F5F5F5", textColor: "#666666" }
+}
+
+export function AdvisorTable({ filters, onConnectionRequested, onCountChange }) {
   const [showFilterModal, setShowFilterModal] = useState(false)
   const [appliedFilters, setAppliedFilters] = useState({})
-  const [accelerators, setAccelerators] = useState([])
+  const [advisors, setAdvisors] = useState([])
   const [loading, setLoading] = useState(false)
   const [statuses, setStatuses] = useState({})
-  const [pipelineStages, setPipelineStages] = useState({})
-  const [modalAccelerator, setModalAccelerator] = useState(null)
+  const [modalAdvisor, setModalAdvisor] = useState(null)
   const [notification, setNotification] = useState(null)
   const [mounted, setMounted] = useState(false)
-  const [showMatchBreakdown, setShowMatchBreakdown] = useState(false)
-  const [selectedAccelerator, setSelectedAccelerator] = useState(null)
+
   // Filter states
-  const [selectedGeographic, setSelectedGeographic] = useState([])
+  const [sectorFilter, setSectorFilter] = useState("")
+  const [stageFilter, setStageFilter] = useState("")
+  const [locationFilter, setLocationFilter] = useState("")
+  const [availabilityFilter, setAvailabilityFilter] = useState("")
+  const [selectedLocations, setSelectedLocations] = useState([])
   const [selectedSectors, setSelectedSectors] = useState([])
   const [selectedStages, setSelectedStages] = useState([])
-  const [selectedSupport, setSelectedSupport] = useState([])
-  const [nextStageFilter, setNextStageFilter] = useState("")
+  const [statusFilter, setStatusFilter] = useState("")
+  const [compensationFilter, setCompensationFilter] = useState("")
   const [minMatchFilter, setMinMatchFilter] = useState(0)
 
-  const hasApplication = (acceleratorId) => {
-    // Check both statuses and pipelineStages with proper ID matching
-    return statuses[acceleratorId] || (pipelineStages[acceleratorId] && pipelineStages[acceleratorId] !== "Match")
+  const [matchBreakdownModal, setMatchBreakdownModal] = useState(null)
+  // Add this useEffect to listen for status updates
+  useEffect(() => {
+    const user = auth.currentUser
+    if (!user) return
+
+    const unsubscribe = onSnapshot(
+      query(collection(db, "SmeAdvisorApplications"), where("smeId", "==", user.uid)),
+      (snapshot) => {
+        const statusUpdates = {}
+        snapshot.forEach((doc) => {
+          const data = doc.data()
+          statusUpdates[data.advisorId] = data.status
+        })
+        setStatuses(statusUpdates)
+      },
+    )
+
+    return () => unsubscribe()
+  }, [])
+
+  const mapFirestoreAdvisorToTable = (data, id) => {
+    const formData = data.formData || {}
+    const contact = formData.contactDetails || {}
+    const overview = formData.personalProfessionalOverview || {}
+    const selection = formData.selectionCriteria || {}
+    const declaration = formData.declarationConsent || {}
+
+    return {
+      id, // Firestore document ID
+      name: `${contact.name || ""} ${contact.surname || ""}`.trim(),
+      headline: overview.professionalHeadline || "Advisor",
+      location: formatLabel(contact.country || contact.province || "N/A"),
+      sectorFocus: formatLabel(overview.industryExperience || []),
+      functionalExpertise: formatLabel(overview.functionalExpertise || []),
+      fundingStage: formatLabel(selection.smeStageFit || []),
+      engagementType: formatLabel(selection.preferredAdvisorRole || "Not specified"),
+      compensationModel: formatLabel(selection.compensationModel || "Not specified"),
+      startDate: "Anytime",
+      availability: formatLabel(selection.timeCommitment + " hrs" || "Not specified"),
+      matchPercentage: 0, // 70-100%
+      responseRate: 0, // 30-90%
+      status: "Match",
+      nextAction: "Review Profile",
+    }
   }
 
-  const isMountedRef = useRef(false)
+  const ADVISORY_PIPELINE = {
+    MATCHED: { label: "Match", next: "Contacted" },
+    CONTACTED: { label: "Contacted", next: "Pending " },
+    CONFIRMED: { label: "Confirmed", next: "Engaged" },
+    DECLINED: { label: "Declined", next: null },
+  }
 
   useEffect(() => {
     setMounted(true)
     return () => setMounted(false)
   }, [])
 
-  const fetchAccelerators = async () => {
-    if (!isMountedRef.current) return
+  // ---- Functional-Expertise helpers ----
+const toArr = (v) => (Array.isArray(v) ? v : v ? [v] : []);
+const canon = (s) => s.toString().toLowerCase().replace(/[^a-z]/g, "");
 
+// Common aliases (extend as needed)
+const FE_ALIASES = {
+  hr: "hr", humanresources: "hr",
+  tech: "tech", technology: "tech", it: "tech", ict: "tech",
+  legal: "legal", law: "legal",
+  strategy: "strategy",
+  finance: "finance",
+  esg: "esg",
+  governance: "governance",
+};
+
+const normFE = (list) => {
+  const out = new Set();
+  for (const item of toArr(list)) {
+    const key = FE_ALIASES[canon(item)] || canon(item);
+    if (key) out.add(key);
+  }
+  return [...out];
+};
+
+const overlapFE = (a, b) => {
+  const A = new Set(normFE(a));
+  for (const t of normFE(b)) if (A.has(t)) return true;
+  return false;
+};
+
+  function calculateAdvisorMatch(smeProfile, advisorProfile) {
+    const supportFocus = smeProfile.advisoryNeedsAssessment?.supportFocus || []
+    const fundingStage = (smeProfile.entityOverview?.operationStage || "").toLowerCase()
+    const smeSectors = (smeProfile.entityOverview?.economicSectors || []).map((s) => s.toLowerCase())
+    const smeLocation = (smeProfile.entityOverview?.location || "").toLowerCase()
+    const smeLegal = (smeProfile.entityOverview?.legalStructure || "").toLowerCase()
+    const rawRevenue = smeProfile.financialOverview?.annualRevenue || "0"
+    const smeRevenue = Number.parseFloat(rawRevenue.replace(/[Rr\s,]/g, "").trim())
+const smeFunctionalExpertise = (smeProfile.entityOverview || [])
+    const advForm = advisorProfile.formData || {}
+    const contact = advForm.contactDetails || {}
+    const overview = advForm.personalProfessionalOverview || {}
+    const selection = advForm.selectionCriteria || {}
+const smeFE = toArr(smeProfile?.entityOverview?.functionalExpertise);
+const advisorFE = [
+  ...new Set([
+    ...toArr(overview?.functionalExpertise),
+    ...toArr(selection?.functionalExpertise),
+  ]),
+];
+
+    // Initialize breakdown with safe defaults
+    const breakdown = {
+      stageFit: {
+        matched: false,
+        smeValue: fundingStage,
+        advisorValue: selection.smeStageFit || [],
+      },
+      skillAlignment: {
+        matched: false,
+        smeValue: supportFocus,
+        advisorValue: selection.advisorySupportType || [],
+      },
+      location: {
+        matched: false,
+        smeValue: smeLocation,
+        advisorValue: contact.country || "",
+      },
+      sector: {
+        matched: false,
+        smeValue: smeSectors,
+        advisorValue: overview.industryExperience || [],
+      },
+      compensation: {
+        matched: !!selection.compensationModel,
+        advisorValue: selection.compensationModel || "Not specified",
+      },
+      functionalExpertise: {
+        matched: false,
+         smeValue: smeFE ||[],
+        advisorValue: overview.functionalExpertise || [],
+      },
+      legalEntityFit: {
+        matched: false,
+        smeValue: smeLegal,
+        advisorValue: selection.legalEntityFit || "",
+      },
+      revenueThreshold: {
+        matched: false,
+        smeValue: smeRevenue,
+        advisorRange: selection.revenueThreshold || "Not specified",
+      },
+    }
+
+    // Calculate matches with proper null checks
+    breakdown.stageFit.matched = (breakdown.stageFit.advisorValue || [])
+      .map((s) => s?.toLowerCase() || "")
+      .includes(fundingStage)
+
+    breakdown.skillAlignment.matched = (breakdown.skillAlignment.advisorValue || []).some((type) =>
+      supportFocus.includes(type),
+    )
+
+    breakdown.location.matched = (contact.country || "").toLowerCase() === smeLocation
+
+    breakdown.sector.matched = (breakdown.sector.advisorValue || []).some((sector) =>
+      smeSectors.includes((sector || "").toLowerCase()),
+    )
+
+    breakdown.functionalExpertise.matched = overlapFE(
+  breakdown.functionalExpertise.smeValue,
+  breakdown.functionalExpertise.advisorValue,
+);
+
+    breakdown.legalEntityFit.matched = (selection.legalEntityFit || "").toLowerCase() === smeLegal
+
+    // Revenue threshold calculation
+    const revenueBands = {
+      less_than_500k: [0, 500000],
+      "500k_to_1m": [500000, 1000000],
+      less_than_1m: [0, 1000000],
+      "1m_to_5m": [1000000, 5000000],
+      "5m_to_10m": [5000000, 10000000],
+      "10m_plus": [10000000, Number.POSITIVE_INFINITY],
+    }
+
+    const threshold = (selection.revenueThreshold || "").toLowerCase()
+    const [minRev, maxRev] = revenueBands[threshold] || [0, Number.POSITIVE_INFINITY]
+    breakdown.revenueThreshold.matched = smeRevenue >= minRev && smeRevenue <= maxRev
+
+    // Calculate score
+    const score = Object.values(breakdown).filter((item) => item.matched).length
+    const total = Object.keys(breakdown).length
+    const matchScore = Math.round((score / total) * 100)
+
+    console.groupCollapsed(`🧩 Advisor Match Debug: ${contact.name || "Unnamed Advisor"}`)
+    console.log("Breakdown:", breakdown)
+    console.log("Final Score:", matchScore)
+    console.groupEnd()
+
+    return {
+      score: matchScore,
+      breakdown,
+    }
+  }
+
+  useEffect(() => {
+  const fetchAdvisors = async () => {
     setLoading(true)
     try {
+      const snapshot = await getDocs(collection(db, "advisorProfiles"))
       const user = auth.currentUser
       if (!user) return
 
-      const smeId = user.uid
-      const smeDoc = await getDoc(doc(db, "universalProfiles", smeId))
-      const smeData = smeDoc.exists() ? smeDoc.data() : {}
+      const smeDoc = await getDoc(doc(db, "universalProfiles", user.uid))
+      const advisoryApp = await getDoc(doc(db, "advisoryApplications", user.uid))
 
-      // Get fresh data from Firebase
-      const snapshot = await getDocs(collection(db, "catalystProfiles"))
+      const profileData = {
+        ...(smeDoc.exists() ? smeDoc.data() : {}),
+        advisoryNeedsAssessment: advisoryApp.exists() ? advisoryApp.data().advisoryNeedsAssessment : {},
+      }
 
-      const profiles = await Promise.all(
-        snapshot.docs.flatMap(async (docSnap) => {
-          const catalystId = docSnap.id
-          const data = docSnap.data()
-          const formData = data.formData || {}
-          const overview = formData.entityOverview || {}
-          const programs = formData?.programmeDetails?.programs || []
-          const matchPrefs = formData.generalMatchingPreference || {}
+      const mapped = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data()
+        const id = docSnap.id
+        const matchResult = calculateAdvisorMatch(profileData, data)
 
-          // If no programs, create one entry with default values
-          if (programs.length === 0) {
-            const applicationId = `${catalystId}_${smeId}`
-            const appDocRef = doc(db, "catalystApplications", applicationId)
-            const appDocSnap = await getDoc(appDocRef)
-            const appData = appDocSnap.exists() ? appDocSnap.data() : null
-
-            return [
-              {
-                id: catalystId,
-                programIndex: 0,
-                name: overview.registeredName || "Unnamed",
-                location: overview.province || "N/A",
-                geographicFocus: matchPrefs.geographicFocus || "-",
-                sectorFocus: matchPrefs.sectorFocus || "-",
-                fundingStage: matchPrefs.programStage || "-",
-                fundingType: matchPrefs.supportFocusSubtype || "-",
-                ticketSize: "-",
-                supportOffered: matchPrefs.supportFocus || "-",
-                servicesOffered: matchPrefs.supportFocusSubtype || "-",
-                deadline: formData.applicationBrief?.applicationWindow || "unspecified",
-                speed: formData.applicationBrief?.estimatedReviewTime || "Unknown",
-                matchPercentage: calculateMatchScore(smeData, formData),
-                pipelineStage: appData?.pipelineStage || "Match",
-                nextStage: appData?.nextStage || "Application Review",
-              },
-            ]
-          }
-
-          // Create an entry for each program
-          return await Promise.all(
-            programs.map(async (program, index) => {
-              const applicationId = `${catalystId}_${smeId}_${index}`
-              const appDocRef = doc(db, "catalystApplications", applicationId)
-              const appDocSnap = await getDoc(appDocRef)
-              const appData = appDocSnap.exists() ? appDocSnap.data() : null
-              const matchResult = calculateMatchScore(smeData, formData, program)
-
-              return {
-                id: `${catalystId}_${index}`, // Unique ID for each program
-                originalCatalystId: catalystId, // Keep reference to original catalyst
-                programIndex: index,
-                name: `${overview.registeredName || "Unnamed"}${programs.length > 1 ? ` (Program ${program.name})` : ""}`,
-                location: overview.province || "N/A",
-                geographicFocus: matchPrefs.geographicFocus || "-",
-                sectorFocus: matchPrefs.sectorFocus || "-",
-                fundingStage: matchPrefs.programStage || "-",
-                fundingType: program.supportType || matchPrefs.supportFocusSubtype || "-",
-                ticketSize:
-                  program.budget || `${program.minimumSupport || "0"} - ${program.maximumSupport || "0"}` || "-",
-                supportOffered: program.supportOffered || matchPrefs.supportFocus || "-",
-                servicesOffered: program.servicesOffered || matchPrefs.supportFocusSubtype || "-",
-                deadline: formData.applicationBrief?.applicationWindow || "unspecified",
-                speed: formData.applicationBrief?.estimatedReviewTime || "Unknown",
-                matchPercentage: matchResult.score,
-                matchBreakdown: matchResult.breakdown,
-
-                pipelineStage: appData?.pipelineStage || "Match",
-                nextStage: appData?.nextStage || "Application Review",
-              }
-            }),
-          )
-        }),
-      )
-
-      // Flatten the array since flatMap with async doesn't work as expected
-      const flattenedProfiles = profiles.flat()
+        return {
+          ...mapFirestoreAdvisorToTable(data, id),
+          matchPercentage: matchResult.score,
+          matchBreakdown: matchResult.breakdown,
+        }
+      })
 
       // Sort by match percentage (highest to lowest)
-      flattenedProfiles.sort((a, b) => b.matchPercentage - a.matchPercentage)
+      mapped.sort((a, b) => b.matchPercentage - a.matchPercentage)
+      setAdvisors(mapped)
 
-      setAccelerators(flattenedProfiles)
-    } catch (err) {
-      console.error("Error loading accelerator profiles:", err)
-      setNotification({ type: "error", message: "Failed to load accelerator data." })
+      if (onCountChange) {
+        onCountChange(mapped.length) // Use mapped.length instead of advisors.length
+      }
+    } catch (error) {
+      console.error("Error fetching advisors:", error)
     } finally {
       setLoading(false)
     }
   }
 
-  // Fetch accelerators on mount and when filters change
-  useEffect(() => {
-    isMountedRef.current = true
-    fetchAccelerators()
+  fetchAdvisors()
+}, [onCountChange])
 
-    return () => {
-      isMountedRef.current = false
-    }
-  }, [filters]) // Add any dependencies that should trigger a refresh
-
-  // Fetch application statuses separately
-  useEffect(() => {
-    const user = auth.currentUser
-    if (!user) return
-
-    const loadStatusFromFirestore = async () => {
-      const snapshot = await getDocs(collection(db, "smeCatalystApplications"))
-      const statusMap = {}
-      const stageMap = {}
-
-      snapshot.docs.forEach((docSnap) => {
-        const data = docSnap.data()
-        if (data.smeId === user.uid) {
-          // Create the same composite ID used in the accelerators list
-          const acceleratorId = `${data.catalystId}_${data.programIndex || 0}`
-          statusMap[acceleratorId] = "Sent"
-          stageMap[acceleratorId] = data.pipelineStage || "Application Sent"
-        }
-      })
-
-      setStatuses(statusMap)
-      setPipelineStages(stageMap)
-    }
-
-    loadStatusFromFirestore()
-  }, [accelerators])
-
-  useEffect(() => {
-    const user = auth.currentUser
-    if (!user) return
-
-    const loadStatusFromFirestore = async () => {
-      const snapshot = await getDocs(collection(db, "smeCatalystApplications"))
-      const statusMap = {}
-      const stageMap = {}
-
-      snapshot.docs.forEach((docSnap) => {
-        const data = docSnap.data()
-        if (data.smeId === user.uid) {
-          statusMap[data.catalystId] = "Sent"
-          stageMap[data.catalystId] = data.pipelineStage || "Application Sent"
-        }
-      })
-
-      setStatuses(statusMap)
-      setPipelineStages(stageMap)
-    }
-
-    loadStatusFromFirestore()
-  }, [])
-
-  const calculateMatchScore = (smeData, acceleratorData, program = null) => {
-    const totalFields = 8
-    let matched = 0
-
-    // Initialize breakdown object
-    const breakdown = {
-      fundingStage: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-      ticketSize: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-      geographicFit: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-      sectorMatch: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-      instrumentFit: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-      firmTypeMatch: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-      legalEntityFit: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-      revenueThreshold: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-    }
-
-    const normalize = (val) => (Array.isArray(val) ? val.map((v) => v.toLowerCase().trim()) : val?.toLowerCase().trim())
-
-    const includesMatch = (smeVal, accelVal) => {
-      if (!smeVal || !accelVal) return false
-      const smeSet = new Set(Array.isArray(smeVal) ? smeVal : [smeVal])
-      const accelSet = new Set(Array.isArray(accelVal) ? accelVal : [accelVal])
-      return [...smeSet].some((v) => accelSet.has(v))
-    }
-
-    const cleanCurrency = (value) => {
-      if (!value) return 0
-      const cleaned = value.toString().replace(/[^0-9.]/g, "")
-      return Number.parseFloat(cleaned) || 0
-    }
-
-    // Utility to clean strings or arrays of strings
-    const cleanString = (input) => {
-      if (Array.isArray(input)) {
-        return input.map((str) => (typeof str === "string" ? str.replace(/[_-]/g, " ").toLowerCase() : str))
-      }
-      if (typeof input === "string") {
-        return input.replace(/[_-]/g, " ").toLowerCase()
-      }
-      return input
-    }
-
-    const checkGeographicMatch = (smeLocation, acceleratorGeoData) => {
-      const smeProvince = normalize(smeData.entityOverview?.province)
-      const smeCountry = cleanString(smeData.entityOverview?.location) || "not specified"
-
-      const accelGeoFocus = acceleratorGeoData.geographicFocus || []
-      const accelSelectedCountries = cleanString(acceleratorGeoData.selectedCountries) || []
-      const accelSelectedProvinces = cleanString(acceleratorGeoData.selectedProvinces) || []
-
-      console.log(accelSelectedCountries)
-
-      if (accelGeoFocus.includes("global")) return true
-      if (
-        accelGeoFocus.includes("regional_emea") ||
-        accelGeoFocus.includes("regional_na") ||
-        accelGeoFocus.includes("regional_apac")
-      )
-        return true
-
-      if (accelGeoFocus.includes("country_specific")) {
-        return accelSelectedCountries.includes(smeCountry) || accelSelectedCountries.includes(smeLocation)
-      }
-      if (accelGeoFocus.includes("province_specific")) {
-        return accelSelectedProvinces.includes(smeProvince)
-      }
-      return false
-    }
-
-    // Get the specific program data or fallback to first program or empty object
-    const programData = program || acceleratorData?.programmeDetails?.programs?.[0] || {}
-    const allPrograms = acceleratorData?.programmeDetails?.programs || []
-
-    // 1. Funding Stage Match
-    const smeStage = smeData.entityOverview?.operationStage
-    const accelStage = acceleratorData?.generalMatchingPreference?.programStage
-    const stageMatch = normalize(smeStage) === normalize(accelStage)
-
-    breakdown.fundingStage.details = { smeStage, accelStage, smeValue: smeStage, accelValue: accelStage }
-    breakdown.fundingStage.matched = stageMatch
-
-    if (stageMatch) {
-      breakdown.fundingStage.score = 12.5
-      breakdown.fundingStage.description = `Perfect match: Your ${smeStage} stage aligns with their ${accelStage} focus`
-      matched++
-    } else {
-      breakdown.fundingStage.description = `Stage mismatch: You're in ${smeStage || "unspecified"} stage, they focus on ${accelStage || "unspecified"}`
-    }
-
-    // 2. Ticket Size Compatibility - FIXED: Use specific program data
-    const smeAmountRequested = cleanCurrency(smeData.useOfFunds?.amountRequested)
-    const accelMinTicket = cleanCurrency(programData.minimumSupport || 0)
-    const accelMaxTicket = cleanCurrency(programData.maximumSupport || 0)
-    const ticketMatch = smeAmountRequested >= accelMinTicket && smeAmountRequested <= accelMaxTicket
-
-    breakdown.ticketSize.details = {
-      smeAmountRequested,
-      accelMinTicket,
-      accelMaxTicket,
-      smeValue: `${accelMinTicket}-${accelMaxTicket}`,
-      accelValue: smeAmountRequested,
-    }
-    breakdown.ticketSize.matched = ticketMatch
-
-    if (ticketMatch) {
-      breakdown.ticketSize.score = 12.5
-      breakdown.ticketSize.description = `Perfect fit: Your funding need (${smeAmountRequested}) fits their range (${accelMinTicket}-${accelMaxTicket})`
-      matched++
-    } else {
-      breakdown.ticketSize.description = `Size mismatch: You need ${smeAmountRequested || "unspecified"}, they offer ${accelMinTicket}-${accelMaxTicket}`
-    }
-
-    // 3. Geographic Fit
-    const smeLocation = cleanString(smeData.entityOverview?.location)
-    const accelGeoData = acceleratorData.generalMatchingPreference || {}
-    const geoMatch = checkGeographicMatch(smeLocation, accelGeoData)
-
-    breakdown.geographicFit.details = {
-      smeLocation,
-      accelGeoData,
-      smeValue: smeLocation,
-      accelValue: accelGeoData.geographicFocus,
-    }
-    breakdown.geographicFit.matched = geoMatch
-
-    if (geoMatch) {
-      breakdown.geographicFit.score = 12.5
-      breakdown.geographicFit.description = `Geographic compatibility: Your location (${smeLocation}) fits their focus areas`
-      matched++
-    } else {
-      breakdown.geographicFit.description = `Geographic mismatch: Your location (${smeLocation}) doesn't align with their focus areas`
-    }
-
-    // 4. Sector Match
-    const smeSectors = smeData.entityOverview?.economicSectors
-    const accelSectors = acceleratorData?.generalMatchingPreference?.sectorFocus
-    const sectorMatch = includesMatch(normalize(smeSectors), normalize(accelSectors))
-
-    breakdown.sectorMatch.details = {
-      smeSectors,
-      accelSectors,
-      smeValue: smeSectors?.join(", "),
-      accelValue: accelSectors?.join(", "),
-    }
-    breakdown.sectorMatch.matched = sectorMatch
-
-    if (sectorMatch) {
-      breakdown.sectorMatch.score = 12.5
-      breakdown.sectorMatch.description = `Sector alignment: Your sectors (${smeSectors?.join(", ")}) match their focus (${accelSectors?.join(", ")})`
-      matched++
-    } else {
-      breakdown.sectorMatch.description = `Sector mismatch: Your sectors (${smeSectors?.join(", ") || "unspecified"}) don't match their focus (${accelSectors?.join(", ") || "unspecified"})`
-    }
-
-    // 5. Instrument Fit - FIXED: Use program-specific data first, fallback to general
-    const smeInstrument = smeData.useOfFunds?.fundingInstruments
-    const accelInstrument = programData.supportType || acceleratorData?.generalMatchingPreference?.supportFocusSubtype
-    const instrumentMatch = normalize(smeInstrument) === normalize(accelInstrument)
-
-    breakdown.instrumentFit.details = {
-      smeInstrument,
-      accelInstrument,
-      smeValue: smeInstrument,
-      accelValue: accelInstrument,
-    }
-    breakdown.instrumentFit.matched = instrumentMatch
-
-    if (instrumentMatch) {
-      breakdown.instrumentFit.score = 12.5
-      breakdown.instrumentFit.description = `Instrument match: Both prefer ${smeInstrument}`
-      matched++
-    } else {
-      breakdown.instrumentFit.description = `Instrument mismatch: You prefer ${smeInstrument || "unspecified"}, they offer ${accelInstrument || "unspecified"}`
-    }
-
-    // 6. Firm Type Match - FIXED: Use program-specific data
-    const smeFirmType = cleanString(smeData.useOfFunds?.funderTypes)
-    const accelFirmType = cleanString(programData.programStructure)
-    const firmTypeMatch = normalize(smeFirmType) === normalize(accelFirmType) || accelFirmType.includes("any")
-
-    breakdown.firmTypeMatch.details = {
-      smeFirmType,
-      accelFirmType,
-      matched: firmTypeMatch,
-      matchType:
-        normalize(accelFirmType) === "any"
-          ? "any_accepted"
-          : normalize(smeFirmType) === normalize(accelFirmType)
-            ? "exact_match"
-            : "no_match",
-      smeValue: smeFirmType,
-      accelValue: accelFirmType,
-    }
-
-    breakdown.firmTypeMatch.matched = firmTypeMatch
-
-    if (firmTypeMatch) {
-      breakdown.firmTypeMatch.score = 12.5
-      if (normalize(accelFirmType) === "any") {
-        breakdown.firmTypeMatch.description = "Firm type: Accelerator accepts any firm type"
-      } else {
-        breakdown.firmTypeMatch.description = `Firm type alignment: Both align on ${smeFirmType}`
-      }
-      matched++
-    } else {
-      breakdown.firmTypeMatch.description = `Firm type mismatch: You prefer ${smeFirmType || "unspecified"}, they are ${accelFirmType || "unspecified"}`
-    }
-
-    // 7. Legal Entity Fit
-    const smeLegal = smeData.entityOverview?.legalStructure
-    const accelLegal = acceleratorData?.generalMatchingPreference?.legalEntityFit
-    const legalMatch = normalize(smeLegal) === normalize(accelLegal)
-
-    breakdown.legalEntityFit.details = { smeLegal, accelLegal, smeValue: smeLegal, accelValue: accelLegal }
-    breakdown.legalEntityFit.matched = legalMatch
-
-    if (legalMatch) {
-      breakdown.legalEntityFit.score = 12.5
-      breakdown.legalEntityFit.description = `Legal structure compatibility: Both work with ${smeLegal}`
-      matched++
-    } else {
-      breakdown.legalEntityFit.description = `Legal structure mismatch: You are ${smeLegal || "unspecified"}, they work with ${accelLegal || "unspecified"}`
-    }
-
-    // 8. Revenue Threshold - FIXED: Use program-specific minimum support
-    const smeRevenue = cleanCurrency(smeData.financialOverview?.annualRevenue)
-    const accelThreshold = cleanCurrency(programData.minimumSupport || "0")
-    const revenueMatch = smeRevenue >= accelThreshold
-
-    breakdown.revenueThreshold.details = {
-      smeRevenue,
-      accelThreshold,
-      smeValue: smeRevenue,
-      accelValue: accelThreshold,
-    }
-    breakdown.revenueThreshold.matched = revenueMatch
-
-    if (revenueMatch) {
-      breakdown.revenueThreshold.score = 12.5
-      breakdown.revenueThreshold.description = `Revenue meets requirements: Your ${smeRevenue} exceeds their ${accelThreshold} threshold`
-      matched++
-    } else {
-      breakdown.revenueThreshold.description = `Revenue below threshold: Your ${smeRevenue || "unspecified"} is below their ${accelThreshold} requirement`
-    }
-
-    return {
-      score: Math.round((matched / totalFields) * 100),
-      breakdown: breakdown,
-    }
-  }
-
-  const handleApplyClick = async (accelerator) => {
+  const handleConnectClick = async (advisor) => {
     const user = auth.currentUser
     if (!user) return
 
     const smeUserId = user.uid
-    // Use originalCatalystId if available, otherwise use id for backwards compatibility
-    const catalystId = accelerator.originalCatalystId || accelerator.id
-    const programIndex = accelerator.programIndex || 0
+    const advisorUserId = advisor.id
+
+    // Initialize matchData first
+    const matchData = {
+      advisorId: advisorUserId,
+      smeId: smeUserId,
+      createdAt: serverTimestamp(),
+      status: "Contacted",
+      matchPercentage: advisor.matchPercentage || 0,
+      advisorName: advisor.name,
+      advisorSector: advisor.sectorFocus,
+      advisorFundingStage: advisor.fundingStage,
+      advisorEngagementType: advisor.engagementType,
+      advisorCompensationModel: advisor.compensationModel,
+      advisorAvailability: advisor.availability,
+      bigScore: 0,
+      compliance: 0,
+      fundability: 0,
+      leadership: 0,
+      legitimacy: 0,
+      pis: 0,
+      smeName: "",
+      smeLocation: "",
+      smeSector: "",
+      smeStage: "",
+      smeSupport: "",
+      revenue: 0,
+    }
 
     try {
-      // Create unique application ID that includes program index
-      const appId = `${smeUserId}_${catalystId}_${programIndex}`
-      const appRef = doc(db, "catalystApplications", appId)
-      const appSnap = await getDoc(appRef)
-
-      if (appSnap.exists()) {
-        const existingData = appSnap.data()
-        setStatuses((prev) => ({ ...prev, [accelerator.id]: "Sent" }))
-        setPipelineStages((prev) => ({ ...prev, [accelerator.id]: existingData.pipelineStage || "Application Sent" }))
-        setNotification({ type: "info", message: `You've already applied to ${accelerator.name}` })
-        setTimeout(() => setNotification(null), 3000)
-        return
-      }
-
-      // 🔽 Fetch SME data and guarantees
+      // Fetch SME profile details
       const smeDoc = await getDoc(doc(db, "universalProfiles", smeUserId))
       const smeData = smeDoc.exists() ? smeDoc.data() : {}
+      const smeApplicationDoc = await getDoc(doc(db, "advisoryApplications", smeUserId))
+      const smeApplicationData = smeApplicationDoc.exists() ? smeApplicationDoc.data() : {}
+      const advisoryNeedsAssessment = smeApplicationData.advisoryNeedsAssessment || {}
+      const Revenue = smeData.financialOverview?.annualRevenue || "0"
+      const smeBigScoreDoc = await getDoc(doc(db, "bigEvaluations", smeUserId))
+      const smeBigScoreData = smeBigScoreDoc.exists() ? smeBigScoreDoc.data() : {}
 
-      const guarantees = smeData.guarantees || {}
-      const bigDoc = await getDoc(doc(db, "bigEvaluations", smeUserId))
-      const bigData = bigDoc.exists() ? bigDoc.data() : {}
-      const entity = smeData.entityOverview || {}
-      const funding = smeData.useOfFunds || {}
+      // Update match data with SME details
+      matchData.bigScore = smeBigScoreData.scores?.bigScore || 0
+      matchData.smeName = smeData.entityOverview?.registeredName || ""
+      matchData.revenue = Revenue
+      matchData.compliance = smeBigScoreData.scores?.compliance || 0
+      matchData.fundability = smeBigScoreData.scores?.fundability || 0
+      matchData.leadership = smeBigScoreData.scores?.leadership || 0
+      matchData.legitimacy = smeBigScoreData.scores?.legitimacy || 0
+      matchData.smeLocation = smeData.entityOverview?.location || ""
+      matchData.smeSector = (smeData.entityOverview?.economicSectors || []).join(", ")
+      matchData.smeStage = smeData.applicationOverview?.fundingStage || ""
+      matchData.smeSupport = (advisoryNeedsAssessment.supportFocus || []).join(", ")
 
-      // 🧠 Guarantee categories (same as before)
-      const guaranteeGroups = {
-        "Forward Contracts (Revenue Guarantees)": [
-          ["signedCustomerContracts", "Signed customer contracts"],
-          ["purchaseOrders", "Purchase orders"],
-          ["offtakeAgreements", "Offtake agreements"],
-          ["subscriptionRevenue", "Subscription revenue"],
-        ],
-        "Payment of Credit Guarantees": [
-          ["letterOfGuarantee", "Letter of guarantee"],
-          ["thirdPartyGuarantees", "Third-party guarantees"],
-          ["factoringAgreements", "Factoring agreements"],
-          ["suretyBonds", "Surety bonds"],
-        ],
-        "Government or Institutional Support": [
-          ["governmentContracts", "Government contracts"],
-          ["approvedSupplierStatus", "Approved supplier status"],
-          ["incubatorGuarantees", "Incubator guarantees"],
-          ["exportCreditGuarantees", "Export credit guarantees"],
-        ],
-        "Asset-backed Guarantees": [
-          ["liensCollateral", "Liens or collateral"],
-          ["securedAssets", "Secured assets"],
-          ["retentionGuarantees", "Retention guarantees"],
-        ],
-        "Export Credit or Trade Insurance Cover": [["exportCreditInsurance", "Export credit or trade insurance"]],
-        "Factoring or Receivables Finance Agreements": [["receivablesFinancing", "Receivables financing"]],
-        "Personal or Third-Party Guarantees": [
-          ["personalSurety", "Personal surety"],
-          ["corporateGuarantees", "Corporate guarantees"],
-        ],
-      }
+      // Save match record
+      await setDoc(doc(db, "AdvisoryMatches", `${smeUserId}_${advisorUserId}`), matchData)
 
-      // 🔍 Build summary of selected guarantees
-      const guaranteeTitles = Object.entries(guaranteeGroups)
-        .filter(([_, items]) => items.some(([key]) => guarantees[key] === "yes"))
-        .map(([category]) => category)
+      // Save views for SME and advisor sides
+      const advisorAppData = { ...matchData, viewType: "advisor" }
+      const smeAppData = { ...matchData, viewType: "sme" }
 
-      const guaranteeSummary = guaranteeTitles.join(", ")
-
-      // 🌱 Create application data
-      const pipelineStage = "Application Sent"
-      const nextStage = getNextStage(pipelineStage)
-
-      const applicationData = {
-        catalystId: catalystId,
-        programIndex: programIndex, // Include program index
-        smeId: smeUserId,
-        acceleratorName: accelerator.name,
-        location: entity.location || "-",
-        sector: (entity.economicSectors || []).join(", ") || "-",
-        fundingStage: smeData.applicationOverview?.fundingStage || "-",
-        fundingRequired: funding.amountRequested || "-",
-        equityOffered: funding.equityType || "",
-        guarantees: guaranteeSummary || "-",
-        supportRequired: accelerator.supportOffered || "-",
-        servicesRequired: accelerator.servicesOffered || "-",
-        applicationDate: new Date().toISOString(),
-        matchPercentage: accelerator.matchPercentage || 0,
-        status: "Application Sent",
-        pipelineStage,
-        nextStage,
-        createdAt: serverTimestamp(),
-        bigScore: bigData.scores?.bigScore || 0,
-        compliance: bigData.scores?.compliance || 0,
-        fundability: bigData.scores?.fundability || 0,
-        legitimacy: bigData.scores?.legitimacy || 0,
-        leadership: bigData.scores?.leadership || 0,
-        smeName: entity.registeredName || "-",
-      }
-
-      const catalystApp = { ...applicationData, viewType: "accelerator" }
-      const smeApp = { ...applicationData, viewType: "sme" }
-
-      // Use the unique application ID for both collections
       await Promise.all([
-        setDoc(doc(db, "catalystApplications", `${catalystId}_${smeUserId}_${programIndex}`), catalystApp),
-        setDoc(doc(db, "smeCatalystApplications", appId), smeApp),
+        setDoc(doc(db, "AdvisorApplications", `${advisorUserId}_${smeUserId}`), advisorAppData),
+        setDoc(doc(db, "SmeAdvisorApplications", `${smeUserId}_${advisorUserId}`), smeAppData),
       ])
 
-      setStatuses((prev) => ({ ...prev, [accelerator.id]: "Sent" }))
-      setPipelineStages((prev) => ({ ...prev, [accelerator.id]: pipelineStage }))
-      setNotification({ type: "success", message: `Application sent to ${accelerator.name}!` })
+      // Update UI status
+      setStatuses((prev) => ({ ...prev, [advisor.id]: "Contacted" }))
 
-      if (onApplicationSubmitted) onApplicationSubmitted()
+      // Dispatch notification event
+      const dispatchNotification = () => {
+        const notificationMessage = `Connection request sent to ${advisor.name}!`
+        console.log("Dispatching advisor notification:", notificationMessage)
+
+        const event = new CustomEvent("newNotification", {
+          detail: {
+            message: notificationMessage,
+            type: "success",
+            timestamp: new Date().toISOString(),
+          },
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+        })
+
+        setTimeout(() => {
+          window.dispatchEvent(event)
+          console.log("Advisor notification event dispatched")
+        }, 100)
+      }
+
+      dispatchNotification()
+
+      // UI notification
+      setNotification({ type: "success", message: `Connection request sent to ${advisor.name}!` })
       setTimeout(() => setNotification(null), 3000)
+
+      if (onConnectionRequested) {
+        onConnectionRequested()
+      }
     } catch (error) {
-      console.error("Failed to submit accelerator application:", error)
-      setNotification({ type: "error", message: "Failed to submit application." })
+      console.error("Error saving advisor match:", error)
+
+      // Dispatch error notification
+      const errorEvent = new CustomEvent("newNotification", {
+        detail: {
+          message: `Failed to send connection request to ${advisor.name}`,
+          type: "error",
+          timestamp: new Date().toISOString(),
+        },
+      })
+      window.dispatchEvent(errorEvent)
+
+      setNotification({ type: "error", message: "Failed to send connection request." })
       setTimeout(() => setNotification(null), 3000)
     }
   }
 
-  const handleViewClick = (accelerator) => {
-    setModalAccelerator(accelerator)
+  useEffect(() => {
+    const fetchAdvisorApplications = async () => {
+      const user = auth.currentUser
+      if (!user) return
+
+      const snapshot = await getDocs(collection(db, "SmeAdvisorApplications"))
+      const matches = snapshot.docs.filter((doc) => doc.data().smeId === user.uid).map((doc) => doc.data())
+
+      const updatedStatuses = {}
+      matches.forEach((match) => {
+        updatedStatuses[match.advisorId] = match.status || "Contacted"
+      })
+      setStatuses(updatedStatuses)
+    }
+
+    fetchAdvisorApplications()
+  }, [])
+
+  const handleViewClick = (advisor) => {
+    setModalAdvisor(advisor)
   }
 
-  const handleViewMatchBreakdown = (accelerator) => {
-    setSelectedAccelerator(accelerator)
-    setShowMatchBreakdown(true)
-  }
-
-  // 5. FIFTH - Update your closeAllModals function (or add if it doesn't exist)
-  const closeAllModals = () => {
-    setModalAccelerator(null)
-    setShowFilterModal(false)
-    setShowMatchBreakdown(false)
-    setSelectedAccelerator(null)
-  }
-  const handleCompareClick = (accelerator) => {
-    setNotification({ type: "info", message: `Added ${accelerator.name} to comparison` })
+  const handleShortlistClick = (advisor) => {
+    setStatuses((prev) => ({ ...prev, [advisor.id]: "Shortlisted" }))
+    setNotification({ type: "info", message: `${advisor.name} added to shortlist` })
     setTimeout(() => setNotification(null), 3000)
   }
 
@@ -925,59 +831,59 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
   }
 
   const resetFilters = () => {
-    setSelectedGeographic([])
+    setSelectedLocations([])
     setSelectedSectors([])
     setSelectedStages([])
-    setSelectedSupport([])
-    setNextStageFilter("")
+    setStatusFilter("")
+    setCompensationFilter("")
     setMinMatchFilter(0)
     setShowFilterModal(false)
   }
 
   // Get unique values for filter dropdowns
-  const uniqueGeographic = [...new Set(accelerators.map((acc) => acc.geographicFocus).filter(Boolean))]
-  const uniqueSectors = [...new Set(accelerators.map((acc) => acc.sectorFocus).filter(Boolean))]
-  const uniqueStages = [...new Set(accelerators.map((acc) => acc.fundingStage).filter(Boolean))]
-  const uniqueSupport = [...new Set(accelerators.map((acc) => acc.supportOffered).filter(Boolean))]
-  const uniqueNextStages = [...new Set(accelerators.map((acc) => acc.nextStage).filter(Boolean))]
+  const uniqueLocations = [...new Set(advisors.map((adv) => adv.location).filter(Boolean))]
+  const uniqueSectors = [...new Set(advisors.map((adv) => adv.sectorFocus).filter(Boolean))]
+  const uniqueStages = [...new Set(advisors.map((adv) => adv.fundingStage).filter(Boolean))]
+  const uniqueStatuses = [...new Set(advisors.map((adv) => statuses[adv.id] || adv.status).filter(Boolean))]
+  const uniqueCompensation = [...new Set(advisors.map((adv) => adv.compensationModel).filter(Boolean))]
 
-  const filteredAccelerators = accelerators.filter((accelerator) => {
-    // Filter by geographic focus
+  const filteredAdvisors = advisors.filter((advisor) => {
+    const currentStatus = statuses[advisor.id] || advisor.status
+
+    // Filter by location
     if (
-      selectedGeographic.length > 0 &&
-      !selectedGeographic.some((geo) =>
-        formatLabel(accelerator.geographicFocus).toLowerCase().includes(geo.toLowerCase()),
-      )
+      selectedLocations.length > 0 &&
+      !selectedLocations.some((loc) => formatLabel(advisor.location).toLowerCase().includes(loc.toLowerCase()))
     ) {
       return false
     }
     // Filter by sector
     if (
       selectedSectors.length > 0 &&
-      !selectedSectors.some((sec) => formatLabel(accelerator.sectorFocus).toLowerCase().includes(sec.toLowerCase()))
+      !selectedSectors.some((sec) => formatLabel(advisor.sectorFocus).toLowerCase().includes(sec.toLowerCase()))
     ) {
       return false
     }
     // Filter by stage
     if (
       selectedStages.length > 0 &&
-      !selectedStages.some((stage) => formatLabel(accelerator.fundingStage).toLowerCase().includes(stage.toLowerCase()))
+      !selectedStages.some((stage) => formatLabel(advisor.fundingStage).toLowerCase().includes(stage.toLowerCase()))
     ) {
       return false
     }
-    // Filter by support offered
+    // Filter by status
+    if (statusFilter && currentStatus.toLowerCase() !== statusFilter.toLowerCase()) {
+      return false
+    }
+    // Filter by compensation model
     if (
-      selectedSupport.length > 0 &&
-      !selectedSupport.some((sup) => formatLabel(accelerator.supportOffered).toLowerCase().includes(sup.toLowerCase()))
+      compensationFilter &&
+      !formatLabel(advisor.compensationModel).toLowerCase().includes(compensationFilter.toLowerCase())
     ) {
-      return false
-    }
-    // Filter by next stage
-    if (nextStageFilter && !formatLabel(accelerator.nextStage).toLowerCase().includes(nextStageFilter.toLowerCase())) {
       return false
     }
     // Filter by minimum match percentage
-    if (minMatchFilter > 0 && accelerator.matchPercentage < minMatchFilter) {
+    if (minMatchFilter > 0 && advisor.matchPercentage < minMatchFilter) {
       return false
     }
     return true
@@ -988,7 +894,7 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
       <div
         style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: "2rem", color: "#a67c52" }}
       >
-        <p>Loading accelerators...</p>
+        <p>Loading advisors...</p>
       </div>
     )
   }
@@ -999,7 +905,7 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
       <div
         style={{
           position: "relative",
-          filter: modalAccelerator || showFilterModal ? "blur(2px)" : "none",
+          filter: modalAdvisor || showFilterModal ? "blur(2px)" : "none",
           transition: "filter 0.2s ease",
         }}
       >
@@ -1045,18 +951,18 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
                 display: "flex",
                 alignItems: "center",
                 gap: "0.5rem",
-                fontSize: "0.8rem",
+                fontSize: "0.75rem",
                 transition: "all 0.2s",
               }}
               onClick={() => setShowFilterModal(true)}
             >
               <Filter size={16} />
               Filters
-              {(selectedGeographic.length > 0 ||
+              {(selectedLocations.length > 0 ||
                 selectedSectors.length > 0 ||
                 selectedStages.length > 0 ||
-                selectedSupport.length > 0 ||
-                nextStageFilter ||
+                statusFilter ||
+                compensationFilter ||
                 minMatchFilter > 0) && (
                 <span
                   style={{
@@ -1073,11 +979,11 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
                 >
                   {
                     [
-                      selectedGeographic.length,
+                      selectedLocations.length,
                       selectedSectors.length,
                       selectedStages.length,
-                      selectedSupport.length,
-                      nextStageFilter,
+                      statusFilter,
+                      compensationFilter,
                       minMatchFilter > 0,
                     ].filter(Boolean).length
                   }
@@ -1088,7 +994,7 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
         </div>
 
         {/* Table content */}
-        {filteredAccelerators.length === 0 ? (
+        {filteredAdvisors.length === 0 ? (
           <div
             style={{
               display: "flex",
@@ -1098,7 +1004,7 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
               color: "#a67c52",
             }}
           >
-            <p>No matching accelerators found. Try adjusting your filters.</p>
+            <p>   You have not applied for any advisors, so there are no matches available. You need to apply first</p>
           </div>
         ) : (
           <div
@@ -1114,155 +1020,183 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
                 width: "100%",
                 borderCollapse: "collapse",
                 background: "white",
-                fontSize: "0.8rem",
+                fontSize: "0.875rem", // Updated font size to match supplier table
                 backgroundColor: "#FEFCFA",
-                minWidth: "1200px",
-                fontFamily: "system-ui, -apple-system, sans-serif",
+                tableLayout: "fixed", // Added tableLayout fixed like supplier table
+                minWidth: "1200px", // Updated minWidth to match supplier table
               }}
             >
               <colgroup>
-                <col style={{ width: "160px" }} />
-                <col style={{ width: "130px" }} />
-                <col style={{ width: "120px" }} />
-                <col style={{ width: "110px" }} />
-                <col style={{ width: "110px" }} />
-                <col style={{ width: "120px" }} />
-                <col style={{ width: "140px" }} />
-                <col style={{ width: "130px" }} />
-                <col style={{ width: "100px" }} />
-                <col style={{ width: "90px" }} />
-                <col style={{ width: "100px" }} />
-                <col style={{ width: "120px" }} />
-                <col style={{ width: "130px" }} />
+                <col style={{ width: "8%" }} /> {/* Advisor Name */}
+                <col style={{ width: "8%" }} /> {/* Headline/Role */}
+                <col style={{ width: "8%" }} /> {/* Location */}
+                <col style={{ width: "8%" }} /> {/* Sector Focus */}
+                <col style={{ width: "8%" }} /> {/* Functional Expertise */}
+                <col style={{ width: "8%" }} /> {/* Funding Stage */}
+                <col style={{ width: "8%" }} /> {/* Engagement Type */}
+                <col style={{ width: "8%" }} /> {/* Compensation Model */}
+                <col style={{ width: "8%" }} /> {/* Start Date */}
+                <col style={{ width: "8%" }} /> {/* Availability */}
+                <col style={{ width: "8%" }} /> {/* Match % */}
+                <col style={{ width: "8%" }} /> {/* Status */}
+                <col style={{ width: "8%" }} /> {/* Action */}
               </colgroup>
               <thead>
                 <tr>
-                  <th style={tableHeaderStyle}>Catalyst Name</th>
-                  <th style={tableHeaderStyle}>Geographic Focus</th>
+                  <th style={tableHeaderStyle}>Advisor Name</th>
+                  <th style={tableHeaderStyle}>Headline/Role</th>
+                  <th style={tableHeaderStyle}>Location</th>
                   <th style={tableHeaderStyle}>Sector Focus</th>
+                  <th style={tableHeaderStyle}>Functional Expertise</th>
                   <th style={tableHeaderStyle}>Funding Stage</th>
-                  <th style={tableHeaderStyle}>Funding Type</th>
-                  <th style={tableHeaderStyle}>Ticket Size</th>
-                  <th style={tableHeaderStyle}>Support Offered</th>
-                  <th style={tableHeaderStyle}>Services Offered</th>
-                  <th style={tableHeaderStyle}>Deadline</th>
-                  <th style={tableHeaderStyle}>Speed (Days)</th>
+                  <th style={tableHeaderStyle}>Engagement Type</th>
+                  <th style={tableHeaderStyle}>Compensation Model</th>
+                  <th style={tableHeaderStyle}>Start Date</th>
+                  <th style={tableHeaderStyle}>Availability</th>
                   <th style={tableHeaderStyle}>Match %</th>
-                  <th style={tableHeaderStyle}>Action</th>
-                  <th style={{ ...tableHeaderStyle, borderRight: "none" }}>Next Stage</th>
+                  <th style={tableHeaderStyle}>Status</th>
+                  <th style={{ ...tableHeaderStyle, borderRight: "none" }}>Action</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredAccelerators.map((accelerator) => {
-                  const status = statuses[accelerator.id] || "Application not sent"
-                  const pipelineStage = pipelineStages[accelerator.id] || accelerator.pipelineStage
+                {filteredAdvisors.map((advisor) => {
+                  const currentStatus = statuses[advisor.id] || advisor.status
+                  const statusStyle = getStatusStyle(currentStatus)
 
                   return (
-                    <tr key={accelerator.id} style={{ borderBottom: "1px solid #E8D5C4" }}>
+                    <tr key={advisor.id} style={{ borderBottom: "1px solid #E8D5C4" }}>
                       <td style={tableCellStyle}>
                         <span
-                          onClick={() => handleViewClick(accelerator)}
+                          onClick={() => handleViewClick(advisor)}
                           style={{
                             color: "#a67c52",
                             textDecoration: "underline",
                             cursor: "pointer",
                             fontWeight: "500",
                             wordBreak: "break-word",
-                            fontSize: "0.8rem",
                           }}
                         >
-                          {accelerator.name}
+                          {advisor.name}
                         </span>
                       </td>
                       <td style={tableCellStyle}>
-                        <TruncatedText text={formatLabel(accelerator.geographicFocus)} maxLength={30} />
+                        <TruncatedText text={advisor.headline} maxLength={25} />
                       </td>
                       <td style={tableCellStyle}>
-                        <TruncatedText text={formatLabel(accelerator.sectorFocus)} maxLength={25} />
+                        <span style={{ wordBreak: "break-word" }}>{advisor.location}</span>
                       </td>
                       <td style={tableCellStyle}>
-                        <TruncatedText text={formatLabel(accelerator.fundingStage)} maxLength={25} />
+                        <TruncatedText text={formatLabel(advisor.sectorFocus)} maxLength={20} />
                       </td>
                       <td style={tableCellStyle}>
-                        <TruncatedText text={formatLabel(accelerator.fundingType)} maxLength={20} />
+                        <TruncatedText text={formatLabel(advisor.functionalExpertise)} maxLength={25} />
                       </td>
                       <td style={tableCellStyle}>
-                        <span style={{ wordBreak: "break-word", fontSize: "0.8rem" }}>{accelerator.ticketSize}</span>
+                        <TruncatedText text={formatLabel(advisor.fundingStage)} maxLength={20} />
                       </td>
                       <td style={tableCellStyle}>
-                        <TruncatedText text={formatLabel(accelerator.supportOffered)} maxLength={35} />
+                        <TruncatedText text={advisor.engagementType} maxLength={20} />
                       </td>
                       <td style={tableCellStyle}>
-                        <TruncatedText text={formatLabel(accelerator.servicesOffered)} maxLength={30} />
+                        <span style={{ wordBreak: "break-word", fontSize: "0.7rem" }}>{advisor.compensationModel}</span>
                       </td>
                       <td style={tableCellStyle}>
-                        <span style={{ wordBreak: "break-word", fontSize: "0.8rem" }}>
-                          {accelerator.deadline || "-"}
-                        </span>
+                        <span style={{ wordBreak: "break-word", fontSize: "0.7rem" }}>{advisor.startDate}</span>
                       </td>
                       <td style={tableCellStyle}>
-                        <span style={waitingBadgeStyle}>{accelerator.speed}</span>
+                        <span style={availabilityBadgeStyle}>{advisor.availability}</span>
                       </td>
                       <td style={tableCellStyle}>
                         <div style={matchContainerStyle}>
                           <div style={progressBarStyle}>
-                            <div style={{ ...progressFillStyle, width: `${accelerator.matchPercentage}%` }} />
+                            <div
+                              style={{
+                                ...progressFillStyle,
+                                width: `${Math.max(0, Math.min(100, advisor.matchPercentage || 0))}%`,
+                                backgroundColor:
+                                  advisor.matchPercentage > 75
+                                    ? "#48BB78"
+                                    : advisor.matchPercentage > 50
+                                      ? "#F6AD55"
+                                      : "#F56565",
+                              }}
+                            />
                           </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                            <span style={matchScoreStyle}>{accelerator.matchPercentage}%</span>
+                          <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "4px" }}>
+                            <span
+                              style={{
+                                ...matchScoreStyle,
+                                color:
+                                  advisor.matchPercentage > 75
+                                    ? "#48BB78"
+                                    : advisor.matchPercentage > 50
+                                      ? "#D69E2E"
+                                      : "#E53E3E",
+                              }}
+                            >
+                              {advisor.matchPercentage || 0}%
+                            </span>
                             <Eye
-                              size={14}
+                              size={14} // Updated eye icon size to match supplier table
                               style={{ cursor: "pointer", color: "#a67c52" }}
-                              onClick={() => handleViewMatchBreakdown(accelerator)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                // Pass the breakdown data correctly
+                                setMatchBreakdownModal({
+                                  ...advisor,
+                                  breakdown: advisor.matchBreakdown,
+                                })
+                              }}
+                              title="View match breakdown" // Added title tooltip like supplier table
                             />
                           </div>
                         </div>
                       </td>
-
                       <td style={tableCellStyle}>
-                        <div style={actionButtonsStyle}>
-                          {hasApplication(accelerator.id) ? (
-                            <span style={sentBadgeStyle}>
-                              <Check size={14} />
-                              {(pipelineStages[accelerator.id] || "Application Sent").length > 15
-                                ? (pipelineStages[accelerator.id] || "Application Sent").substring(0, 12) + "..."
-                                : pipelineStages[accelerator.id] || "Application Sent"}
-                            </span>
-                          ) : (
-                            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                              <button onClick={() => handleApplyClick(accelerator)} style={applyButtonStyle}>
-                                Apply
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-
-                      <td style={{ ...tableCellStyle, borderRight: "none" }}>
-                        <div
+                        <span
                           style={{
                             ...statusBadgeStyle,
-                            backgroundColor: "#F5EBE0",
-                            color: "#5D2A0A",
-                            fontSize: "0.55rem", // Reduced from 0.65rem to prevent overflow
-                            padding: "0.15rem 0.3rem",
-                            textAlign: "center",
-                            lineHeight: "1.1", // Reduced line height for tighter spacing
-                            minHeight: "2.2rem", // Reduced from 2.5rem
-                            display: "flex",
-                            flexDirection: "column",
-                            justifyContent: "center",
-                            maxWidth: "100px", // Added max width to prevent overflow
-                            overflow: "hidden", // Added overflow hidden
+                            backgroundColor: statusStyle.color,
+                            color: statusStyle.textColor,
                           }}
                         >
-                          {accelerator.nextStage.split(" ").map((word, index) => (
-                            <div key={index} style={{ fontSize: "0.55rem" }}>
-                              {" "}
-                              {/* Reduced from 0.6rem */}
-                              {word}
+                          {currentStatus}
+                        </span>
+                      </td>
+                      <td style={{ ...tableCellStyle, borderRight: "none" }}>
+                        <div style={actionButtonsStyle}>
+                          {currentStatus === "Confirmed" ? (
+                            <span style={confirmedBadgeStyle}>
+                              <Check size={12} /> Confirmed
+                            </span>
+                          ) : currentStatus === "Deal Successful" ? (
+                            <span style={confirmedBadgeStyle}>
+                              <Check size={12} /> Connected
+                            </span>
+                          ) : currentStatus === "Deal Declined" ? (
+                            <span style={contactedBadgeStyle}>Declined</span>
+                          ) : currentStatus === "Match" || currentStatus === "New Match" ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                              <button
+                                onClick={() => handleConnectClick(advisor)}
+                                style={{
+                                  ...statusBadgeStyle,
+                                  backgroundColor: "#5D2A0A",
+                                  color: "white",
+                                  padding: "0.25rem 0.5rem",
+                                  cursor: "pointer",
+                                  border: "none",
+                                  borderRadius: "3px",
+                                  fontWeight: "500",
+                                  fontSize: "0.65rem",
+                                }}
+                              >
+                                Connect
+                              </button>
                             </div>
-                          ))}
+                          ) : (
+                            <span style={contactedBadgeStyle}>Pending</span>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1273,174 +1207,9 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
           </div>
         )}
       </div>
+      {/* Portal for Advisor Details Modal */}
       {mounted &&
-        showMatchBreakdown &&
-        selectedAccelerator &&
-        createPortal(
-          <div
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: "rgba(0,0,0,0.5)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000,
-            }}
-          >
-            <div
-              style={{
-                background: "white",
-                borderRadius: "12px",
-                maxWidth: "800px", // Updated maxWidth to match advisor table
-                width: "95%", // Updated width to match advisor table
-                maxHeight: "90vh", // Updated maxHeight to match advisor table
-                overflowY: "auto",
-                boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-              }}
-            >
-              <div style={modalHeaderStyle}>
-                <h3 style={modalTitleStyle}>Match Breakdown - {selectedAccelerator?.name || "Accelerator"}</h3>
-                <button onClick={closeAllModals} style={modalCloseButtonStyle}>
-                  ✖
-                </button>
-              </div>
-              <div style={modalBodyStyle}>
-                <div
-                  style={{
-                    textAlign: "center",
-                    marginBottom: "2rem",
-                    paddingBottom: "1rem",
-                    borderBottom: "2px solid #E8D5C4",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: "3rem", // Updated font size to match advisor table
-                      fontWeight: "bold",
-                      color:
-                        selectedAccelerator?.matchPercentage >= 80
-                          ? "#388E3C"
-                          : selectedAccelerator?.matchPercentage >= 60
-                            ? "#F57C00"
-                            : "#D32F2F",
-                      marginBottom: "0.5rem",
-                    }}
-                  >
-                    {selectedAccelerator?.matchPercentage || 0}%
-                  </div>
-                  <p
-                    style={{
-                      fontSize: "1rem", // Updated font size to match advisor table
-                      color: "#8D6E63",
-                      margin: "0",
-                    }}
-                  >
-                    Overall Match Score
-                  </p>
-                </div>
-
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", // Updated grid to match advisor table
-                    gap: "1rem",
-                    marginBottom: "2rem",
-                  }}
-                >
-                  {selectedAccelerator?.matchBreakdown &&
-                    Object.entries(selectedAccelerator.matchBreakdown).map(([key, breakdown]) => {
-                      if (!breakdown || typeof breakdown !== "object") {
-                        return null
-                      }
-
-                      const scoreColor = breakdown.matched ? "#388E3C" : "#D32F2F"
-
-                      const titles = {
-                        fundingStage: "Funding Stage Match",
-                        ticketSize: "Ticket Size Compatibility",
-                        geographicFit: "Geographic Fit",
-                        sectorMatch: "Sector Match",
-                        instrumentFit: "Instrument Fit",
-                        firmTypeMatch: "Firm Type Match",
-                        legalEntityFit: "Legal Entity Fit",
-                        revenueThreshold: "Revenue Threshold",
-                      }
-
-                      return (
-                        <div
-                          key={key}
-                          style={{
-                            background: "#FEFCFA", // Updated background to match advisor table
-                            border: "1px solid #E8D5C4",
-                            borderRadius: "8px",
-                            padding: "1.25rem", // Updated padding to match advisor table
-                            borderLeft: `4px solid ${scoreColor}`, // Updated border to match advisor table
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "flex-start",
-                              marginBottom: "0.75rem", // Updated margin to match advisor table
-                            }}
-                          >
-                            <h4
-                              style={{
-                                fontSize: "0.875rem", // Updated font size to match advisor table
-                                fontWeight: "600",
-                                color: "#5D2A0A",
-                                margin: "0",
-                                lineHeight: "1.3",
-                                flex: "1",
-                              }}
-                            >
-                              {titles[key] || formatLabel(key)}
-                            </h4>
-                            <span
-                              style={{
-                                fontSize: "0.75rem", // Updated font size to match advisor table
-                                fontWeight: "600",
-                                color: scoreColor,
-                                marginLeft: "0.5rem",
-                              }}
-                            >
-                              {breakdown.matched ? "✓ Match" : "✗ No Match"}
-                            </span>
-                          </div>
-
-                          <div style={{ fontSize: "0.75rem", color: "#666", lineHeight: "1.4" }}>
-                            <div style={{ marginBottom: "0.5rem" }}>
-                              <strong>Your Need:</strong>{" "}
-                              {breakdown.details?.smeValue || breakdown.description || "N/A"}
-                            </div>
-                            <div>
-                              <strong>Accelerator Offers:</strong>{" "}
-                              {breakdown.details?.accelValue || breakdown.details?.acceleratorValue || "N/A"}
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                </div>
-              </div>
-              <div style={modalActionsStyle}>
-                <button onClick={() => setShowMatchBreakdown(false)} style={cancelButtonStyle}>
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
-
-      {/* Portal for Accelerator Details Modal */}
-      {mounted &&
-        modalAccelerator &&
+        modalAdvisor &&
         createPortal(
           <div
             style={{
@@ -1468,8 +1237,8 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
               }}
             >
               <div style={modalHeaderStyle}>
-                <h3 style={modalTitleStyle}>{modalAccelerator.name} Profile Summary</h3>
-                <button onClick={() => setModalAccelerator(null)} style={modalCloseButtonStyle}>
+                <h3 style={modalTitleStyle}>{modalAdvisor.name} Profile Summary</h3>
+                <button onClick={() => setModalAdvisor(null)} style={modalCloseButtonStyle}>
                   ✖
                 </button>
               </div>
@@ -1478,52 +1247,52 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
                   <div style={summarySectionStyle}>
                     <h4 style={summaryTitleStyle}>Basic Information</h4>
                     <p style={summaryTextStyle}>
-                      <strong>Location:</strong> {modalAccelerator.location}
+                      <strong>Role:</strong> {modalAdvisor.headline}
                     </p>
                     <p style={summaryTextStyle}>
-                      <strong>Geographic Focus:</strong> {modalAccelerator.geographicFocus}
+                      <strong>Location:</strong> {modalAdvisor.location}
                     </p>
                     <p style={summaryTextStyle}>
-                      <strong>Sector Focus:</strong> {modalAccelerator.sectorFocus}
-                    </p>
-                  </div>
-                  <div style={summarySectionStyle}>
-                    <h4 style={summaryTitleStyle}>Funding Details</h4>
-                    <p style={summaryTextStyle}>
-                      <strong>Stage:</strong> {modalAccelerator.fundingStage}
-                    </p>
-                    <p style={summaryTextStyle}>
-                      <strong>Type:</strong> {modalAccelerator.fundingType}
-                    </p>
-                    <p style={summaryTextStyle}>
-                      <strong>Ticket Size:</strong> {modalAccelerator.ticketSize}
+                      <strong>Sector Focus:</strong> {modalAdvisor.sectorFocus}
                     </p>
                   </div>
                   <div style={summarySectionStyle}>
-                    <h4 style={summaryTitleStyle}>Support & Services</h4>
+                    <h4 style={summaryTitleStyle}>Expertise & Experience</h4>
                     <p style={summaryTextStyle}>
-                      <strong>Support Offered:</strong> {modalAccelerator.supportOffered}
+                      <strong>Functional Expertise:</strong> {modalAdvisor.functionalExpertise}
                     </p>
                     <p style={summaryTextStyle}>
-                      <strong>Services:</strong> {modalAccelerator.servicesOffered}
+                      <strong>Funding Stage:</strong> {modalAdvisor.fundingStage}
+                    </p>
+                    <p style={summaryTextStyle}>
+                      <strong>Engagement Type:</strong> {modalAdvisor.engagementType}
                     </p>
                   </div>
                   <div style={summarySectionStyle}>
-                    <h4 style={summaryTitleStyle}>Application Details</h4>
+                    <h4 style={summaryTitleStyle}>Engagement Details</h4>
                     <p style={summaryTextStyle}>
-                      <strong>Deadline:</strong> {modalAccelerator.deadline}
+                      <strong>Compensation:</strong> {modalAdvisor.compensationModel}
                     </p>
                     <p style={summaryTextStyle}>
-                      <strong>Response Time:</strong> {modalAccelerator.speed} days
+                      <strong>Availability:</strong> {modalAdvisor.availability}
                     </p>
                     <p style={summaryTextStyle}>
-                      <strong>Match Score:</strong> {modalAccelerator.matchPercentage}%
+                      <strong>Start Date:</strong> {modalAdvisor.startDate}
+                    </p>
+                  </div>
+                  <div style={summarySectionStyle}>
+                    <h4 style={summaryTitleStyle}>Performance Metrics</h4>
+                    <p style={summaryTextStyle}>
+                      <strong>Match Score:</strong> {modalAdvisor.matchPercentage}%
+                    </p>
+                    <p style={summaryTextStyle}>
+                      <strong>Status:</strong> {modalAdvisor.status}
                     </p>
                   </div>
                 </div>
               </div>
               <div style={modalActionsStyle}>
-                <button onClick={() => setModalAccelerator(null)} style={cancelButtonStyle}>
+                <button onClick={() => setModalAdvisor(null)} style={cancelButtonStyle}>
                   Close
                 </button>
               </div>
@@ -1531,7 +1300,163 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
           </div>,
           document.body,
         )}
+      {/* Portal for Match Breakdown Modal */}
+      {mounted &&
+        matchBreakdownModal &&
+        createPortal(
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(0,0,0,0.5)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1000,
+            }}
+          >
+            <div
+              style={{
+                background: "white",
+                borderRadius: "12px",
+                maxWidth: "800px", // Updated maxWidth to match supplier table
+                width: "95%", // Updated width to match supplier table
+                maxHeight: "90vh", // Updated maxHeight to match supplier table
+                overflowY: "auto",
+                boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
+              }}
+            >
+              <div style={modalHeaderStyle}>
+                <h3 style={modalTitleStyle}>Match Breakdown - {matchBreakdownModal?.name || "Advisor"}</h3>
+                <button onClick={() => setMatchBreakdownModal(null)} style={modalCloseButtonStyle}>
+                  ✖
+                </button>
+              </div>
+              <div style={modalBodyStyle}>
+                <div
+                  style={{
+                    textAlign: "center",
+                    marginBottom: "2rem",
+                    paddingBottom: "1rem",
+                    borderBottom: "2px solid #E8D5C4",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "3rem",
+                      fontWeight: "bold",
+                      color:
+                        matchBreakdownModal?.matchPercentage >= 80
+                          ? "#388E3C"
+                          : matchBreakdownModal?.matchPercentage >= 60
+                            ? "#F57C00"
+                            : "#D32F2F",
+                      marginBottom: "0.5rem",
+                    }}
+                  >
+                    {matchBreakdownModal?.matchPercentage || 0}%
+                  </div>
+                  <p
+                    style={{
+                      fontSize: "1rem",
+                      color: "#8D6E63",
+                      margin: "0",
+                    }}
+                  >
+                    Overall Match Score
+                  </p>
+                </div>
 
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))",
+                    gap: "1rem",
+                    marginBottom: "2rem",
+                  }}
+                >
+                  {matchBreakdownModal?.breakdown &&
+                    Object.entries(matchBreakdownModal.breakdown).map(([key, criteria]) => {
+                      if (!criteria || typeof criteria !== "object") {
+                        return null
+                      }
+
+                      const scoreColor = criteria.matched ? "#388E3C" : "#D32F2F"
+
+                      return (
+                        <div
+                          key={key}
+                          style={{
+                            background: "#FEFCFA",
+                            border: "1px solid #E8D5C4",
+                            borderRadius: "8px",
+                            padding: "1.25rem",
+                            borderLeft: `4px solid ${scoreColor}`,
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "flex-start",
+                              marginBottom: "0.75rem",
+                            }}
+                          >
+                            <h4
+                              style={{
+                                fontSize: "0.875rem",
+                                fontWeight: "600",
+                                color: "#5D2A0A",
+                                margin: "0",
+                                lineHeight: "1.3",
+                                flex: "1",
+                              }}
+                            >
+                              {formatLabel(key)}
+                            </h4>
+                            <span
+                              style={{
+                                fontSize: "0.75rem",
+                                fontWeight: "600",
+                                color: scoreColor,
+                                marginLeft: "0.5rem",
+                              }}
+                            >
+                              {criteria.matched ? "✓ Match" : "✗ No Match"}
+                            </span>
+                          </div>
+
+                          <div style={{ fontSize: "0.75rem", color: "#666", lineHeight: "1.4" }}>
+                            <div style={{ marginBottom: "0.5rem" }}>
+                              <strong>Your Need:</strong>{" "}
+                              {Array.isArray(criteria.smeValue)
+                                ? criteria.smeValue.join(", ")
+                                : String(criteria.smeValue || "N/A")}
+                            </div>
+                            <div>
+                              <strong>Advisor Offers:</strong>{" "}
+                              {Array.isArray(criteria.advisorValue)
+                                ? criteria.advisorValue.join(", ")
+                                : String(criteria.advisorValue || "N/A")}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                </div>
+              </div>
+              <div style={modalActionsStyle}>
+                <button onClick={() => setMatchBreakdownModal(null)} style={cancelButtonStyle}>
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}{" "}
       {/* Portal for Filter Modal */}
       {mounted &&
         showFilterModal &&
@@ -1562,7 +1487,7 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
               }}
             >
               <div style={modalHeaderStyle}>
-                <h3 style={modalTitleStyle}>Filter Accelerators</h3>
+                <h3 style={modalTitleStyle}>Filter Advisors</h3>
                 <button onClick={() => setShowFilterModal(false)} style={modalCloseButtonStyle}>
                   ✖
                 </button>
@@ -1570,40 +1495,24 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
               <div style={modalBodyStyle}>
                 <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", padding: "1.5rem" }}>
                   <div>
-                    <label
-                      style={{
-                        display: "block",
-                        marginBottom: "0.5rem",
-                        fontWeight: "500",
-                        color: "#5D2A0A",
-                        fontSize: "0.8rem",
-                      }}
-                    >
-                      Geographic Focus
+                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500", color: "#5D2A0A" }}>
+                      Location
                     </label>
                     <MultiSelectDropdown
-                      options={geographicFocusOptions}
-                      selectedValues={selectedGeographic}
-                      onSelect={(value) => setSelectedGeographic((prev) => [...prev, value])}
-                      onRemove={(value) => setSelectedGeographic((prev) => prev.filter((v) => v !== value))}
-                      placeholder="Select geographic focus..."
+                      options={africanCountries}
+                      selectedValues={selectedLocations}
+                      onSelect={(value) => setSelectedLocations((prev) => [...prev, value])}
+                      onRemove={(value) => setSelectedLocations((prev) => prev.filter((v) => v !== value))}
+                      placeholder="Select locations..."
                     />
                   </div>
 
                   <div>
-                    <label
-                      style={{
-                        display: "block",
-                        marginBottom: "0.5rem",
-                        fontWeight: "500",
-                        color: "#5D2A0A",
-                        fontSize: "0.8rem",
-                      }}
-                    >
+                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500", color: "#5D2A0A" }}>
                       Sector Focus
                     </label>
                     <MultiSelectDropdown
-                      options={sectorFocusOptions}
+                      options={economicSectors}
                       selectedValues={selectedSectors}
                       onSelect={(value) => setSelectedSectors((prev) => [...prev, value])}
                       onRemove={(value) => setSelectedSectors((prev) => prev.filter((v) => v !== value))}
@@ -1612,89 +1521,68 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
                   </div>
 
                   <div>
-                    <label
-                      style={{
-                        display: "block",
-                        marginBottom: "0.5rem",
-                        fontWeight: "500",
-                        color: "#5D2A0A",
-                        fontSize: "0.8rem",
-                      }}
-                    >
+                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500", color: "#5D2A0A" }}>
                       Funding Stage
                     </label>
                     <MultiSelectDropdown
-                      options={fundingStageOptions}
+                      options={operationStages}
                       selectedValues={selectedStages}
                       onSelect={(value) => setSelectedStages((prev) => [...prev, value])}
                       onRemove={(value) => setSelectedStages((prev) => prev.filter((v) => v !== value))}
-                      placeholder="Select funding stages..."
+                      placeholder="Select stages..."
                     />
                   </div>
 
                   <div>
-                    <label
-                      style={{
-                        display: "block",
-                        marginBottom: "0.5rem",
-                        fontWeight: "500",
-                        color: "#5D2A0A",
-                        fontSize: "0.8rem",
-                      }}
-                    >
-                      Support Offered
-                    </label>
-                    <MultiSelectDropdown
-                      options={supportOfferedOptions}
-                      selectedValues={selectedSupport}
-                      onSelect={(value) => setSelectedSupport((prev) => [...prev, value])}
-                      onRemove={(value) => setSelectedSupport((prev) => prev.filter((v) => v !== value))}
-                      placeholder="Select support types..."
-                    />
-                  </div>
-
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        marginBottom: "0.5rem",
-                        fontWeight: "500",
-                        color: "#5D2A0A",
-                        fontSize: "0.8rem",
-                      }}
-                    >
-                      Next Stage
+                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500", color: "#5D2A0A" }}>
+                      Status
                     </label>
                     <select
-                      value={nextStageFilter}
-                      onChange={(e) => setNextStageFilter(e.target.value)}
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
                       style={{
                         width: "100%",
                         padding: "0.5rem",
                         border: "1px solid #E8D5C4",
                         borderRadius: "4px",
-                        fontSize: "0.8rem",
+                        fontSize: "0.75rem",
                       }}
                     >
-                      <option value="">All Next Stages</option>
-                      {uniqueNextStages.map((stage) => (
-                        <option key={stage} value={stage}>
-                          {stage}
+                      <option value="">All Statuses</option>
+                      {uniqueStatuses.map((status) => (
+                        <option key={status} value={status}>
+                          {status}
                         </option>
                       ))}
                     </select>
                   </div>
 
                   <div>
-                    <label
+                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500", color: "#5D2A0A" }}>
+                      Compensation Model
+                    </label>
+                    <select
+                      value={compensationFilter}
+                      onChange={(e) => setCompensationFilter(e.target.value)}
                       style={{
-                        display: "block",
-                        marginBottom: "0.5rem",
-                        fontWeight: "500",
-                        color: "#5D2A0A",
-                        fontSize: "0.8rem",
+                        width: "100%",
+                        padding: "0.5rem",
+                        border: "1px solid #E8D5C4",
+                        borderRadius: "4px",
+                        fontSize: "0.75rem",
                       }}
                     >
+                      <option value="">All Models</option>
+                      {uniqueCompensation.map((model) => (
+                        <option key={model} value={model}>
+                          {model}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500", color: "#5D2A0A" }}>
                       Minimum Match Percentage: {minMatchFilter}%
                     </label>
                     <input
@@ -1727,7 +1615,6 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
                     padding: "0.5rem 1rem",
                     borderRadius: "6px",
                     cursor: "pointer",
-                    fontSize: "0.8rem",
                   }}
                 >
                   Reset Filters
@@ -1741,7 +1628,6 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
                     padding: "0.5rem 1rem",
                     borderRadius: "6px",
                     cursor: "pointer",
-                    fontSize: "0.8rem",
                   }}
                 >
                   Apply Filters
@@ -1755,115 +1641,137 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
   )
 }
 
-// Style constants - reduced font sizes
 const tableHeaderStyle = {
   background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
   color: "#FEFCFA",
-  padding: "0.6rem 0.4rem",
+  padding: "0.75rem 0.4rem", // Updated padding to match supplier table
   textAlign: "left",
   fontWeight: "600",
-  fontSize: "0.8rem",
-  letterSpacing: "0.3px",
-  textTransform: "none",
+  fontSize: "0.7rem", // Updated font size to match supplier table
+  letterSpacing: "0.5px", // Updated letter spacing to match supplier table
+  textTransform: "uppercase",
   position: "sticky",
   top: "0",
   zIndex: "10",
   borderBottom: "2px solid #1a0c02",
   borderRight: "1px solid #1a0c02",
   lineHeight: "1.2",
-  fontFamily: "system-ui, -apple-system, sans-serif",
 }
 
 const tableCellStyle = {
-  padding: "0.6rem 0.4rem",
+  padding: "0.6rem 0.4rem", // Updated padding to match supplier table
   borderBottom: "1px solid #E8D5C4",
   borderRight: "1px solid #E8D5C4",
-  fontSize: "0.8rem",
+  fontSize: "0.75rem",
   verticalAlign: "top",
   color: "#5d2a0a",
-  lineHeight: "1.4",
-  maxWidth: "0",
+  lineHeight: "1.3", // Updated line height to match supplier table
   overflow: "hidden",
-  fontFamily: "system-ui, -apple-system, sans-serif",
 }
 
-const waitingBadgeStyle = {
+const availabilityBadgeStyle = {
   background: "#F5EBE0",
   color: "#5D2A0A",
-  padding: "0.2rem 0.4rem",
+  padding: "0.15rem 0.3rem",
   borderRadius: "4px",
-  fontSize: "0.8rem",
+  fontSize: "0.65rem",
   fontWeight: "500",
   whiteSpace: "nowrap",
-  fontFamily: "system-ui, -apple-system, sans-serif",
 }
 
 const matchContainerStyle = {
   display: "flex",
   flexDirection: "column",
   alignItems: "flex-start",
-  gap: "0.25rem",
+  width: "100%", // Added width 100% like supplier table
 }
 
 const progressBarStyle = {
-  width: "60px",
-  height: "6px",
-  background: "#E8D5C4",
+  width: "60%", // Updated width to match supplier table (reduced from 45px)
+  height: "6px", // Updated height to match supplier table
+  backgroundColor: "#E2E8F0", // Updated background color to match supplier table
   borderRadius: "3px",
   overflow: "hidden",
 }
 
 const progressFillStyle = {
   height: "100%",
-  background: "linear-gradient(90deg, #48BB78, #68d391)",
+  borderRadius: "3px", // Added border radius to match supplier table
   transition: "width 0.3s ease",
 }
 
 const matchScoreStyle = {
-  fontWeight: "600",
+  fontWeight: "500", // Updated font weight to match supplier table
+  fontSize: "0.75rem", // Updated font size to match supplier table
+}
+
+const responseRateStyle = {
+  fontWeight: "500",
   color: "#5D2A0A",
-  fontSize: "0.8rem",
-  fontFamily: "system-ui, -apple-system, sans-serif",
+  fontSize: "0.7rem",
+}
+
+const statusBadgeStyle = {
+  padding: "0.15rem 0.3rem",
+  borderRadius: "4px",
+  fontSize: "0.65rem",
+  fontWeight: "500",
+  display: "inline-block",
+  whiteSpace: "nowrap",
 }
 
 const actionButtonsStyle = {
   display: "flex",
   flexDirection: "column",
-  gap: "0.25rem",
+  gap: "0.2rem",
   width: "100%",
 }
 
-const applyButtonStyle = {
-  padding: "0.3rem 0.5rem", // Reduced padding
+const connectButtonStyle = {
+  padding: "0.3rem 0.5rem",
   background: "#5D2A0A",
   color: "white",
   border: "none",
   borderRadius: "4px",
-  fontSize: "0.7rem", // Reduced from 0.8rem
+  fontSize: "0.65rem",
   cursor: "pointer",
   transition: "background 0.2s",
   whiteSpace: "nowrap",
-  fontFamily: "system-ui, -apple-system, sans-serif",
 }
 
-const sentBadgeStyle = {
+const shortlistButtonStyle = {
+  padding: "0.3rem 0.5rem",
+  background: "#F5EBE0",
+  color: "#5D2A0A",
+  border: "1px solid #E8D5C4",
+  borderRadius: "4px",
+  fontSize: "0.65rem",
+  cursor: "pointer",
+  transition: "all 0.2s",
+  whiteSpace: "nowrap",
+}
+
+const confirmedBadgeStyle = {
   background: "#48BB78",
   color: "white",
-  padding: "0.3rem 0.5rem", // Reduced padding
+  padding: "0.3rem 0.5rem",
   borderRadius: "4px",
-  fontSize: "0.7rem", // Reduced from 0.8rem
+  fontSize: "0.65rem",
   fontWeight: "500",
   display: "flex",
   alignItems: "center",
-  gap: "0.25rem",
+  gap: "0.2rem",
   whiteSpace: "nowrap",
-  fontFamily: "system-ui, -apple-system, sans-serif",
 }
 
-const statusBadgeStyle = {
-  borderRadius: "3px",
+const contactedBadgeStyle = {
+  background: "#F3E5F5",
+  color: "#7B1FA2",
+  padding: "0.3rem 0.5rem",
+  borderRadius: "4px",
+  fontSize: "0.65rem",
   fontWeight: "500",
-  display: "inline-block",
+  whiteSpace: "nowrap",
 }
 
 const modalHeaderStyle = {
@@ -1872,23 +1780,23 @@ const modalHeaderStyle = {
   alignItems: "center",
   padding: "1.5rem",
   borderBottom: "1px solid #E8D5C4",
-  background: "#F5EBE0",
+  background: "#FEFCFA", // Updated background to match supplier table
 }
 
 const modalTitleStyle = {
   margin: "0",
-  fontSize: "1.1rem",
+  fontSize: "1.25rem",
   fontWeight: "600",
   color: "#5D2A0A",
-  fontFamily: "system-ui, -apple-system, sans-serif",
 }
 
 const modalCloseButtonStyle = {
   background: "none",
   border: "none",
-  fontSize: "1.5rem",
+  fontSize: "1.25rem", // Updated font size to match supplier table
   cursor: "pointer",
   color: "#5D2A0A",
+  padding: "0.25rem", // Added padding to match supplier table
 }
 
 const modalBodyStyle = {
@@ -1906,18 +1814,16 @@ const summarySectionStyle = {
 }
 
 const summaryTitleStyle = {
-  fontSize: "0.9rem",
+  fontSize: "1rem",
   fontWeight: "600",
   margin: "0 0 0.5rem 0",
   color: "#5D2A0A",
-  fontFamily: "system-ui, -apple-system, sans-serif",
 }
 
 const summaryTextStyle = {
   margin: "0.25rem 0",
-  fontSize: "0.8rem",
+  fontSize: "0.875rem",
   color: "#5D2A0A",
-  fontFamily: "system-ui, -apple-system, sans-serif",
 }
 
 const modalActionsStyle = {
@@ -1935,6 +1841,4 @@ const cancelButtonStyle = {
   padding: "0.5rem 1rem",
   borderRadius: "6px",
   cursor: "pointer",
-  fontSize: "0.8rem",
-  fontFamily: "system-ui, -apple-system, sans-serif",
 }

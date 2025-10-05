@@ -39,7 +39,7 @@ const revenueThresholdOptions = [
 ]
 
 const legalEntityFitOptions = [
-  { value: "(pty) Ltd", label: "(Pty) Ltd - Private Company" },
+   { value: "(pty) Ltd", label: "(Pty) Ltd - Private Company" },
   { value: "Ltd", label: "Ltd - Public Company" },
   { value: "NPC", label: "NPC - Non-Profit Company" },
   { value: "Sole Proprietor", label: "Sole Proprietor" },

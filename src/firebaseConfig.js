@@ -19,9 +19,13 @@ const firebaseConfig = {
   measurementId: "G-LK13NE8TBS"
 };
 
-// Initialize Firebase
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
 
-const app = initializeApp(firebaseConfig);
+// Get the app instance for modular functions
+const app = firebase.app();
+
 // Export Firebase services
 const functions = getFunctions(app, 'us-central1');
 if (window.location.hostname === 'localhost') {

@@ -3,7 +3,7 @@ import { Plus, Trash2 } from 'lucide-react'
 import FormField from "./form-field"
 import FileUpload from "./file-upload"
 import './UniversalProfile.css';
-
+import {deliveryModes} from '../ProductApplication/applicationOptions'
 // Updated category options for Products and Services
 const categoryOptions = [
   { value: "Agriculture", label: "Agriculture" },
@@ -91,6 +91,15 @@ export default function ProductsServices({ data = {}, updateData }) {
   const handleFileChange = (name, files) => {
     updateData({ [name]: files })
   }
+
+  const handleCheckboxChange = (name, value) => {
+  const currentValues = data[name] || []
+  const newValues = currentValues.includes(value)
+    ? currentValues.filter((v) => v !== value)
+    : [...currentValues, value]
+
+  updateData({ [name]: newValues })
+}
 
   const handleOfferingTypeChange = (e) => {
     const value = e.target.value
@@ -256,7 +265,98 @@ export default function ProductsServices({ data = {}, updateData }) {
           </div>
         </FormField>
       </div>
+<FormField label="Preferred Delivery Mode" >
+  <div className="checkbox-group">
+    {deliveryModes.map(mode => (
+      <label key={mode} className="checkbox-item">
+        <input
+          type="checkbox"
+          checked={(data.deliveryModes || []).includes(mode)}
+          onChange={() => handleCheckboxChange('deliveryModes', mode)}
+        />
+        {mode}
+      </label>
+    ))}
+  </div>
+        </FormField>
 
+        {/* Add this after the delivery modes section */}
+<FormField label="Lead Time" >
+  <div className="space-y-4">
+    <div className="grid grid-cols-2 gap-4">
+      <div>
+        <label className="block text-sm font-medium text-brown-700 mb-1">
+          Minimum Time
+        </label>
+        <div className="flex">
+          <input
+            type="number"
+            name="minLeadTime"
+            value={data.minLeadTime || ""}
+            onChange={handleChange}
+            placeholder="e.g., 2"
+            min="0"
+            className="w-full px-3 py-2 border border-brown-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+          />
+          <select
+            name="minLeadTimeUnit"
+            value={data.minLeadTimeUnit || "days"}
+            onChange={handleChange}
+            className="px-3 py-2 border border-brown-300 border-l-0 rounded-r-md focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white"
+          >
+            <option value="hours">Hours</option>
+            <option value="days">Days</option>
+            <option value="weeks">Weeks</option>
+            <option value="months">Months</option>
+          </select>
+        </div>
+      </div>
+      
+      <div>
+        <label className="block text-sm font-medium text-brown-700 mb-1">
+          Maximum Time
+        </label>
+        <div className="flex">
+          <input
+            type="number"
+            name="maxLeadTime"
+            value={data.maxLeadTime || ""}
+            onChange={handleChange}
+            placeholder="e.g., 5"
+            min="0"
+            className="w-full px-3 py-2 border border-brown-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+          />
+          <select
+            name="maxLeadTimeUnit"
+            value={data.maxLeadTimeUnit || "days"}
+            onChange={handleChange}
+            className="px-3 py-2 border border-brown-300 border-l-0 rounded-r-md focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white"
+          >
+            <option value="hours">Hours</option>
+            <option value="days">Days</option>
+            <option value="weeks">Weeks</option>
+            <option value="months">Months</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    
+    {/* Display summary */}
+    {(data.minLeadTime || data.maxLeadTime) && (
+      <div className="bg-blue-50 p-3 rounded-md">
+        <p className="text-sm text-blue-700">
+          <strong>Delivery timeframe:</strong> {
+            data.minLeadTime && data.maxLeadTime 
+              ? `${data.minLeadTime} ${data.minLeadTimeUnit} - ${data.maxLeadTime} ${data.maxLeadTimeUnit}`
+              : data.minLeadTime
+                ? `Minimum ${data.minLeadTime} ${data.minLeadTimeUnit}`
+                : `Maximum ${data.maxLeadTime} ${data.maxLeadTimeUnit}`
+          }
+        </p>
+      </div>
+    )}
+  </div>
+</FormField>
       {/* Show guidance only after selection */}
       {data.offeringType && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
