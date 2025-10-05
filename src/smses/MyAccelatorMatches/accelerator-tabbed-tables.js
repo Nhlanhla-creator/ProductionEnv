@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Eye, X, Trophy, TrendingUp, Calendar, DollarSign, BarChart3, Package, Building, Award } from "lucide-react"
 import { collection, getDocs, query, where } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
-import { AdvisorTable as AcceleratorTable } from "./accelator-table"
+import { AcceleratorTable } from "./accelator-table"
 
 // Text truncation component
 const TruncatedText = ({ text, maxLength = 40 }) => {
