@@ -25,6 +25,7 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointEleme
 // Balance Sheet Component - Now Primary
 const BalanceSheet = ({ activeSection, onUpdateBalanceSheet, balanceSheetData, currentMonth, onMonthChange, user }) => {
   const [showModal, setShowModal] = useState(false)
+  const [showUploadModal, setShowUploadModal] = useState(false)
   const [balanceSheetDetails, setBalanceSheetDetails] = useState({
     // Assets
     cash: "",
@@ -142,7 +143,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
       }
     }
     onUpdateBalanceSheet(updatedData)
-    
+
     // Save to Firebase if user is logged in
     if (user) {
       try {
@@ -157,7 +158,134 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
         console.error("Error saving balance sheet data:", error)
       }
     }
-    
+
+    setShowModal(false)
+  }
+
+  // CSV Upload Handler
+  const handleCSVUpload = (event) => {
+    const file = event.target.files[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const csvText = e.target.result
+      parseCSVData(csvText)
+    }
+    reader.readAsText(file)
+    setShowUploadModal(false)
+  }
+
+  // Parse CSV data and extract balance sheet values
+  const parseCSVData = (csvText) => {
+    const lines = csvText.split('\n')
+    const extractedData = {}
+
+    lines.forEach(line => {
+      const [key, value] = line.split(',').map(item => item.trim())
+      if (!key) return // Skip empty lines
+
+      // Map CSV headers to our data structure
+      const normalizedKey = key.toLowerCase().trim()
+
+      switch (normalizedKey) {
+        // Assets
+        case 'cash':
+          extractedData.cash = value || "0"
+          break
+        case 'inventory':
+          extractedData.inventory = value || "0"
+          break
+        case 'prepaid expenses':
+          extractedData.prepaidExpenses = value || "0"
+          break
+        case 'accounts receivable':
+          extractedData.accountsReceivable = value || "0"
+          break
+        case 'deposits':
+          extractedData.deposits = value || "0"
+          break
+        case 'property plant & equipment':
+        case 'property plant and equipment':
+        case 'property, plant & equipment':
+          extractedData.propertyPlantEquipment = value || "0"
+          break
+        case 'intangible assets':
+          extractedData.intangibleAssets = value || "0"
+          break
+        case 'accumulated depreciation':
+          extractedData.accumulatedDepreciation = value || "0"
+          break
+
+        // Liabilities & Equity
+        case 'accounts payable':
+          extractedData.accountsPayable = value || "0"
+          break
+        case 'current borrowing':
+          extractedData.currentBorrowing = value || "0"
+          break
+        case 'non-current liabilities':
+          extractedData.nonCurrentLiabilities = value || "0"
+          break
+        case 'long-term liabilities':
+          extractedData.longTermLiabilities = value || "0"
+          break
+        case 'owners equity':
+          extractedData.ownersEquity = value || "0"
+          break
+
+        // P&L Data - Enhanced parsing
+        case 'sales':
+        case 'sales revenue':
+        case 'revenue':
+        case 'income':
+          extractedData.sales = value || "0"
+          break
+        case 'cogs':
+        case 'cost of goods sold':
+        case 'cost of sales':
+          extractedData.cogs = value || "0"
+          break
+        case 'opex':
+        case 'operating expenses':
+        case 'expenses':
+        case 'operating costs':
+          extractedData.opex = value || "0"
+          break
+        case 'gross profit':
+        case 'grossprofit':
+          extractedData.grossProfit = value || "0"
+          break
+        case 'net profit':
+        case 'netprofit':
+        case 'net income':
+          extractedData.netProfit = value || "0"
+          break
+        default:
+          // Skip unrecognized headers
+          break
+      }
+    })
+
+    // Update the balance sheet details with extracted data
+    setBalanceSheetDetails(prev => ({
+      ...prev,
+      ...extractedData,
+      month: currentMonth
+    }))
+
+    // Auto-save the imported data
+    const updatedData = {
+      ...balanceSheetData,
+      [currentMonth]: {
+        ...extractedData,
+        month: currentMonth
+      }
+    }
+
+    onUpdateBalanceSheet(updatedData)
+
+    // Auto-close the modal after import
     setShowModal(false)
   }
 
@@ -171,7 +299,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
     >
-      {/* Month Selector and Download Button */}
+      {/* Month Selector and Action Buttons */}
       <div
         style={{
           display: "flex",
@@ -179,6 +307,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
           marginBottom: "20px",
           justifyContent: "center",
           alignItems: "center",
+          flexWrap: "wrap",
         }}
       >
         <div>
@@ -208,7 +337,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
             ))}
           </select>
         </div>
-        
+
         <button
           onClick={handleDownloadBalanceSheet}
           style={{
@@ -224,7 +353,23 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
         >
           📥 Download {currentMonth} Balance Sheet
         </button>
-        
+
+        <button
+          onClick={() => setShowUploadModal(true)}
+          style={{
+            padding: "12px 24px",
+            backgroundColor: "#5d4037",
+            color: "white",
+            border: "none",
+            borderRadius: "6px",
+            cursor: "pointer",
+            fontWeight: "600",
+            fontSize: "14px",
+          }}
+        >
+          📁 Upload CSV
+        </button>
+
         <button
           onClick={handleAddDetails}
           style={{
@@ -739,7 +884,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
               {/* P&L Data Column */}
               <div>
                 <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>P&L Data for Charts</h4>
-                
+
                 <div style={{ marginBottom: "15px" }}>
                   <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "500" }}>
                     Sales Revenue:
@@ -807,7 +952,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
                   }}
                 >
                   <p style={{ color: "#1e3a8a", margin: "0", fontSize: "12px", fontWeight: "500" }}>
-                    💡 <strong>Note:</strong> Enter P&L data here to populate the charts automatically. 
+                    💡 <strong>Note:</strong> Enter P&L data here to populate the charts automatically.
                     Gross Profit = Sales - COGS, Net Profit = Gross Profit - OPEX
                   </p>
                 </div>
@@ -854,6 +999,97 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
           </div>
         </div>
       )}
+
+      {/* CSV Upload Modal */}
+      {showUploadModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "white",
+              padding: "30px",
+              borderRadius: "8px",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
+              width: "500px",
+              maxWidth: "90vw",
+              textAlign: "center",
+            }}
+          >
+            <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "20px" }}>Upload CSV File</h3>
+
+            <div
+              style={{
+                backgroundColor: "#f0f8ff",
+                padding: "20px",
+                borderRadius: "6px",
+                marginBottom: "20px",
+                border: "2px dashed #b3d9ff",
+              }}
+            >
+              <p style={{ color: "#1e3a8a", margin: "0 0 15px 0", fontSize: "14px" }}>
+                Upload a CSV file with your balance sheet data. The CSV should have two columns: Account and Amount.
+              </p>
+
+              <div style={{ textAlign: "left", backgroundColor: "white", padding: "15px", borderRadius: "4px", fontSize: "12px", fontFamily: "monospace" }}>
+                <p><strong>Expected format:</strong></p>
+                <p>Cash,100000</p>
+                <p>Inventory,50000</p>
+                <p>Accounts Receivable,75000</p>
+                <p>Property Plant & Equipment,200000</p>
+                <p>...</p>
+              </div>
+            </div>
+
+            <input
+              type="file"
+              accept=".csv"
+              onChange={handleCSVUpload}
+              style={{
+                marginBottom: "20px",
+                width: "100%",
+                padding: "10px",
+                border: "2px solid #e8ddd4",
+                borderRadius: "4px",
+              }}
+            />
+
+            <div
+              style={{
+                display: "flex",
+                gap: "10px",
+                justifyContent: "center",
+              }}
+            >
+              <button
+                onClick={() => setShowUploadModal(false)}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -881,11 +1117,11 @@ const CashflowTrends = ({ activeSection, financialYearStart, chartData, balanceS
   const burnRateData = months.map(month => {
     const balanceData = balanceSheetData?.[month]
     if (!balanceData) return 0
-    
+
     const sales = Number.parseFloat(balanceData.sales) || 0
     const cogs = Number.parseFloat(balanceData.cogs) || 0
     const opex = Number.parseFloat(balanceData.opex) || 0
-    
+
     // Burn rate = Cash going out - Cash coming in
     // Cash going out = COGS + OPEX, Cash coming in = Sales
     const burnRate = (cogs + opex - sales) / 1000000 // Convert to millions
@@ -985,7 +1221,7 @@ const CashflowTrends = ({ activeSection, financialYearStart, chartData, balanceS
       }}
     >
       {/* Information Panel */}
-    
+
 
       <div
         style={{
@@ -1685,8 +1921,8 @@ const BalanceSheetHealth = ({ activeSection, financialYearStart, chartData, onUp
   )
 }
 
-const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, balanceSheetData, user }) => {
-  const [chartViewMode, setChartViewMode] = useState("data") // 'data' or 'variance'
+const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, user }) => {
+  const [chartViewMode, setChartViewMode] = useState("data")
   const [visibleCharts, setVisibleCharts] = useState({
     sales: true,
     cogs: true,
@@ -1713,52 +1949,82 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, balanceSheet
 
   const labels = generateLabels()
 
-  // Pull data from Balance Sheet entries
-  const getChartDataFromBalanceSheet = () => {
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    
-    const salesData = months.map(month => {
-      const data = balanceSheetData?.[month]
-      return data ? Number.parseFloat(data.sales) || 0 : 0
-    })
+  // Process uploaded PnL data
+  const processPnLData = () => {
+    // If we have uploaded PnL data, use it
+    if (pnlData && Object.keys(pnlData).length > 0) {
+      const sales = Number.parseFloat(pnlData.sales) || 0
+      const cogs = Number.parseFloat(pnlData.cogs) || 0
+      const opex = Number.parseFloat(pnlData.opex) || 0
+      const grossProfit = sales - cogs
+      const netProfit = grossProfit - opex
 
-    const cogsData = months.map(month => {
-      const data = balanceSheetData?.[month]
-      return data ? Number.parseFloat(data.cogs) || 0 : 0
-    })
+      // For monthly view, spread the data across months
+      const monthlyData = (value) => {
+        return labels.map((_, index) => {
+          // Distribute annual data across months (simple equal distribution)
+          return value / 12
+        })
+      }
 
-    const opexData = months.map(month => {
-      const data = balanceSheetData?.[month]
-      return data ? Number.parseFloat(data.opex) || 0 : 0
-    })
+      return {
+        sales: {
+          actual: monthlyData(sales),
+          budget: monthlyData(sales * 1.1) // 10% higher budget
+        },
+        cogs: {
+          actual: monthlyData(cogs),
+          budget: monthlyData(cogs * 0.9) // 10% lower budget
+        },
+        opex: {
+          actual: monthlyData(opex),
+          budget: monthlyData(opex * 0.95) // 5% lower budget
+        },
+        grossProfit: {
+          actual: monthlyData(grossProfit),
+          budget: monthlyData(grossProfit * 1.15)
+        },
+        netProfit: {
+          actual: monthlyData(netProfit),
+          budget: monthlyData(netProfit * 1.2)
+        },
+      }
+    }
 
-    // Calculate derived values
-    const grossProfitData = salesData.map((sales, i) => sales - (cogsData[i] || 0))
-    const netProfitData = grossProfitData.map((gp, i) => gp - (opexData[i] || 0))
-
+    // Default empty data
     return {
-      sales: { actual: salesData, budget: salesData.map(val => val * 1.1) }, // Assume budget is 10% higher
-      cogs: { actual: cogsData, budget: cogsData.map(val => val * 0.9) }, // Assume budget is 10% lower
-      opex: { actual: opexData, budget: opexData.map(val => val * 0.95) }, // Assume budget is 5% lower
-      grossProfit: { actual: grossProfitData, budget: grossProfitData.map(val => val * 1.15) },
-      netProfit: { actual: netProfitData, budget: netProfitData.map(val => val * 1.2) },
+      sales: { actual: Array(12).fill(0), budget: Array(12).fill(0) },
+      cogs: { actual: Array(12).fill(0), budget: Array(12).fill(0) },
+      opex: { actual: Array(12).fill(0), budget: Array(12).fill(0) },
+      grossProfit: { actual: Array(12).fill(0), budget: Array(12).fill(0) },
+      netProfit: { actual: Array(12).fill(0), budget: Array(12).fill(0) },
     }
   }
 
-  const chartData = getChartDataFromBalanceSheet()
+  const chartData = processPnLData()
+
+  // Check if we have uploaded PnL data
+  const hasPnLData = () => {
+    return pnlData && (
+      pnlData.sales ||
+      pnlData.cogs ||
+      pnlData.opex
+    )
+  }
 
   // Calculate variance (budget - actual)
   const calculateVariance = (budget, actual) => {
     return budget.map((b, i) => b - (actual[i] || 0))
   }
 
-  // Chart options for P&L charts
+  // Chart options
   const createChartOptions = (title, showNegative = false) => ({
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
       legend: {
-        display: false,
+        display: true,
+        position: 'top',
       },
       title: {
         display: true,
@@ -1771,7 +2037,11 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, balanceSheet
       },
       tooltip: {
         callbacks: {
-          label: (context) => `${context.dataset.label}: R${context.raw}'000`,
+          label: (context) => {
+            const datasetLabel = context.dataset.label || ''
+            const value = context.raw
+            return `${datasetLabel}: R${value.toLocaleString()}`
+          },
         },
       },
     },
@@ -1787,6 +2057,9 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, balanceSheet
             size: 10,
           },
           color: "#72542b",
+          callback: function (value) {
+            return 'R' + value.toLocaleString()
+          }
         },
       },
       x: {
@@ -1803,108 +2076,6 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, balanceSheet
       },
     },
   })
-
-  // Variance chart options
-  const createVarianceChartOptions = (title) => ({
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: false,
-      },
-      title: {
-        display: true,
-        text: `${title} - Variance`,
-        color: "#5d4037",
-        font: {
-          size: 14,
-          weight: "bold",
-        },
-      },
-      tooltip: {
-        callbacks: {
-          label: (context) => `Variance: R${context.raw}'000`,
-        },
-      },
-    },
-    scales: {
-      y: {
-        grid: {
-          display: true,
-          color: "#e0e0e0",
-        },
-        ticks: {
-          font: {
-            size: 10,
-          },
-          color: "#72542b",
-        },
-        title: {
-          display: true,
-          text: "Variance (R'000)",
-          color: "#72542b",
-        },
-      },
-      x: {
-        grid: {
-          display: false,
-        },
-        ticks: {
-          font: {
-            size: 9,
-          },
-          maxRotation: 45,
-          color: "#72542b",
-        },
-      },
-    },
-  })
-
-  // Percentage chart options
-  const percentageChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: false,
-      },
-      title: {
-        display: true,
-        text: "% GP, % NP",
-        color: "#5d4037",
-        font: {
-          size: 14,
-          weight: "bold",
-        },
-      },
-    },
-    scales: {
-      y: {
-        grid: {
-          display: true,
-          color: "#e0e0e0",
-        },
-        ticks: {
-          font: {
-            size: 10,
-          },
-          color: "#72542b",
-        },
-      },
-      x: {
-        grid: {
-          display: false,
-        },
-        ticks: {
-          font: {
-            size: 9,
-          },
-          maxRotation: 45,
-          color: "#72542b",
-        },
-      },
-    },
-  }
 
   // Calculate variances
   const salesVariance = calculateVariance(chartData.sales.budget, chartData.sales.actual)
@@ -1913,58 +2084,49 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, balanceSheet
   const grossProfitVariance = calculateVariance(chartData.grossProfit.budget, chartData.grossProfit.actual)
   const netProfitVariance = calculateVariance(chartData.netProfit.budget, chartData.netProfit.actual)
 
-  // Calculate percentages for GP and NP
-  const grossProfitPercent = chartData.grossProfit.actual.map((gp, i) =>
-    chartData.sales.actual[i] ? (gp / chartData.sales.actual[i]) * 100 : 0,
+  // Calculate percentages
+  const grossProfitPercent = chartData.sales.actual.map((sales, i) =>
+    sales > 0 ? (chartData.grossProfit.actual[i] / sales) * 100 : 0
   )
-  const netProfitPercent = chartData.netProfit.actual.map((np, i) =>
-    chartData.sales.actual[i] ? (np / chartData.sales.actual[i]) * 100 : 0,
+  const netProfitPercent = chartData.sales.actual.map((sales, i) =>
+    sales > 0 ? (chartData.netProfit.actual[i] / sales) * 100 : 0
   )
 
   const createDataChartDatasets = (data) => [
     {
       label: "Budget",
       data: data.budget,
-      backgroundColor: "#8b6914",
-      borderWidth: 0,
+      backgroundColor: "rgba(139, 105, 20, 0.7)",
+      borderColor: "#8b6914",
+      borderWidth: 1,
     },
     {
-      label: "Actuals",
+      label: "Actual",
       data: data.actual,
-      backgroundColor: "#5d4037",
-      borderWidth: 0,
+      backgroundColor: "rgba(93, 64, 55, 0.7)",
+      borderColor: "#5d4037",
+      borderWidth: 1,
     },
   ]
 
-  // Create chart datasets for variance view
-  const createVarianceChartDatasets = (variance) => [
+  const createVarianceChartDatasets = (variance, title) => [
     {
       label: "Variance",
       data: variance,
-      borderColor: "#ff6b35",
-      backgroundColor: "rgba(255, 107, 53, 0.1)",
-      borderWidth: 3,
-      tension: 0.1,
-      fill: true,
-      pointBackgroundColor: "#ff6b35",
-      pointBorderColor: "#ff6b35",
-      pointRadius: 4,
+      backgroundColor: variance.map(v =>
+        v >= 0 ? "rgba(76, 175, 80, 0.7)" : "rgba(244, 67, 54, 0.7)"
+      ),
+      borderColor: variance.map(v => v >= 0 ? "#4caf50" : "#f44336"),
+      borderWidth: 1,
     },
   ]
 
-  const toggleChartVisibility = (chartName) => {
-    setVisibleCharts(prev => ({
-      ...prev,
-      [chartName]: !prev[chartName]
-    }))
-  }
-
   const charts = [
-    { id: 'sales', title: 'Sales (R \'000)', data: chartData.sales, variance: salesVariance },
-    { id: 'cogs', title: 'COGS (R \'000)', data: chartData.cogs, variance: cogsVariance },
-    { id: 'opex', title: 'OPEX (R \'000)', data: chartData.opex, variance: opexVariance },
-    { id: 'grossProfit', title: 'GP (R \'000)', data: chartData.grossProfit, variance: grossProfitVariance, showNegative: true },
-    { id: 'netProfit', title: 'Net Profit (R \'000)', data: chartData.netProfit, variance: netProfitVariance, showNegative: true },
+    { id: 'sales', title: 'Sales Revenue', data: chartData.sales, variance: salesVariance },
+    { id: 'cogs', title: 'Cost of Goods Sold', data: chartData.cogs, variance: cogsVariance },
+    { id: 'opex', title: 'Operating Expenses', data: chartData.opex, variance: opexVariance },
+    { id: 'grossProfit', title: 'Gross Profit', data: chartData.grossProfit, variance: grossProfitVariance, showNegative: true },
+    { id: 'netProfit', title: 'Net Profit', data: chartData.netProfit, variance: netProfitVariance, showNegative: true },
   ]
 
   return (
@@ -1976,7 +2138,49 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, balanceSheet
         borderRadius: "8px",
       }}
     >
-      {/* Chart Visibility Controls */}
+      {/* Data Status */}
+      {!hasPnLData() ? (
+        <div
+          style={{
+            backgroundColor: "#fff3cd",
+            border: "1px solid #ffeaa7",
+            color: "#856404",
+            padding: "15px",
+            borderRadius: "6px",
+            marginBottom: "20px",
+            textAlign: "center",
+          }}
+        >
+          <p style={{ margin: 0, fontWeight: "500" }}>
+            📊 Upload a CSV file with P&L data (Sales, COGS, Operating Expenses) to see charts.
+          </p>
+        </div>
+      ) : (
+        <div
+          style={{
+            backgroundColor: "#d4edda",
+            border: "1px solid #c3e6cb",
+            color: "#155724",
+            padding: "15px",
+            borderRadius: "6px",
+            marginBottom: "20px",
+          }}
+        >
+          <p style={{ margin: 0, fontWeight: "500" }}>
+            ✅ Showing P&L data from uploaded CSV file
+          </p>
+          {pnlData.sales && (
+            <div style={{ marginTop: "10px", fontSize: "14px" }}>
+              <strong>Uploaded Data:</strong>
+              Sales: R{Number(pnlData.sales).toLocaleString()} |
+              COGS: R{Number(pnlData.cogs || 0).toLocaleString()} |
+              OPEX: R{Number(pnlData.opex || 0).toLocaleString()}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Rest of the PnL Snapshot component remains similar to previous version */}
       <div
         style={{
           backgroundColor: "#fdfcfb",
@@ -1987,17 +2191,11 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, balanceSheet
         }}
       >
         <h4 style={{ color: "#5d4037", margin: "0 0 15px 0" }}>Chart Visibility</h4>
-        <div
-          style={{
-            display: "flex",
-            gap: "10px",
-            flexWrap: "wrap",
-          }}
-        >
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
           {Object.entries(visibleCharts).map(([chartName, isVisible]) => (
             <button
               key={chartName}
-              onClick={() => toggleChartVisibility(chartName)}
+              onClick={() => setVisibleCharts(prev => ({ ...prev, [chartName]: !prev[chartName] }))}
               style={{
                 padding: "8px 16px",
                 backgroundColor: isVisible ? "#5d4037" : "#e8ddd4",
@@ -2010,118 +2208,25 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, balanceSheet
                 textTransform: "capitalize",
               }}
             >
-              {chartName === 'grossProfit' ? 'Gross Profit' : 
-               chartName === 'netProfit' ? 'Net Profit' :
-               chartName === 'percentage' ? 'Percentage' : chartName.toUpperCase()}
+              {chartName === 'grossProfit' ? 'Gross Profit' :
+                chartName === 'netProfit' ? 'Net Profit' :
+                  chartName === 'percentage' ? 'Profit Margins' :
+                    chartName === 'sales' ? 'Sales Revenue' :
+                      chartName === 'cogs' ? 'COGS' :
+                        chartName === 'opex' ? 'OPEX' : chartName}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Chart View Tabs */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          marginBottom: "20px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            backgroundColor: "#e8ddd4",
-            borderRadius: "8px",
-            padding: "4px",
-          }}
-        >
-          <button
-            onClick={() => setChartViewMode("data")}
-            style={{
-              padding: "12px 24px",
-              backgroundColor: chartViewMode === "data" ? "#5d4037" : "transparent",
-              color: chartViewMode === "data" ? "#fdfcfb" : "#5d4037",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontWeight: "600",
-              fontSize: "14px",
-              transition: "all 0.3s ease",
-              minWidth: "120px",
-            }}
-          >
-            Data Charts
-          </button>
-          <button
-            onClick={() => setChartViewMode("variance")}
-            style={{
-              padding: "12px 24px",
-              backgroundColor: chartViewMode === "variance" ? "#5d4037" : "transparent",
-              color: chartViewMode === "variance" ? "#fdfcfb" : "#5d4037",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontWeight: "600",
-              fontSize: "14px",
-              transition: "all 0.3s ease",
-              minWidth: "120px",
-            }}
-          >
-            Variance Charts
-          </button>
-        </div>
-      </div>
-
-      {/* Legend - Only show variance formula when in variance mode */}
-      {chartViewMode === "variance" && (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "20px",
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: "#9c7c5f",
-              color: "white",
-              padding: "8px 16px",
-              borderRadius: "20px",
-              fontSize: "14px",
-              fontWeight: "bold",
-            }}
-          >
-            Variance = budget - actual
-          </div>
-
-          <div
-            style={{
-              border: "2px solid #5d4037",
-              padding: "10px",
-              borderRadius: "8px",
-              backgroundColor: "white",
-            }}
-          >
-            <div style={{ fontSize: "14px", fontWeight: "bold", marginBottom: "5px", color: "#5d4037" }}>Key</div>
-            <div style={{ display: "flex", gap: "15px", fontSize: "12px", flexWrap: "wrap" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                <div style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: "#ff6b35" }}></div>
-                <span style={{ color: "#5d4037" }}>Variance Line</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Charts Grid */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))",
           gap: "20px",
         }}
       >
-        {/* Main Charts */}
         {charts.filter(chart => visibleCharts[chart.id]).map((chart) => (
           <div
             key={chart.id}
@@ -2131,6 +2236,7 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, balanceSheet
               borderRadius: "8px",
               border: "1px solid #ddd",
               height: "400px",
+              boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
             }}
           >
             <div style={{ height: "350px" }}>
@@ -2143,27 +2249,27 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, balanceSheet
                   options={createChartOptions(chart.title, chart.showNegative)}
                 />
               ) : (
-                <Line
+                <Bar
                   data={{
                     labels,
-                    datasets: createVarianceChartDatasets(chart.variance),
+                    datasets: createVarianceChartDatasets(chart.variance, chart.title),
                   }}
-                  options={createVarianceChartOptions(chart.title.split(' ')[0])}
+                  options={createChartOptions(`${chart.title} - Variance`, chart.showNegative)}
                 />
               )}
             </div>
           </div>
         ))}
 
-        {/* Percentage Chart */}
         {visibleCharts.percentage && (
-          <div 
-            style={{ 
-              backgroundColor: "white", 
-              padding: "15px", 
-              borderRadius: "8px", 
+          <div
+            style={{
+              backgroundColor: "white",
+              padding: "15px",
+              borderRadius: "8px",
               border: "1px solid #ddd",
               height: "400px",
+              boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
             }}
           >
             <div style={{ height: "350px" }}>
@@ -2172,26 +2278,26 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, balanceSheet
                   labels,
                   datasets: [
                     {
-                      label: "GP %",
+                      label: "Gross Profit %",
                       data: grossProfitPercent,
                       borderColor: "#8b6914",
                       backgroundColor: "rgba(139, 105, 20, 0.1)",
-                      borderWidth: 2,
+                      borderWidth: 3,
                       tension: 0.1,
                       fill: false,
                     },
                     {
-                      label: "NP %",
+                      label: "Net Profit %",
                       data: netProfitPercent,
-                      borderColor: "#b89f8d",
-                      backgroundColor: "rgba(184, 159, 141, 0.1)",
-                      borderWidth: 2,
+                      borderColor: "#5d4037",
+                      backgroundColor: "rgba(93, 64, 55, 0.1)",
+                      borderWidth: 3,
                       tension: 0.1,
                       fill: false,
                     },
                   ],
                 }}
-                options={percentageChartOptions}
+                options={createChartOptions("Profit Margins (%)")}
               />
             </div>
           </div>
@@ -2203,12 +2309,13 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, balanceSheet
 
 // Main Financial Performance Component
 const FinancialPerformance = () => {
-  const [activeSection, setActiveSection] = useState("balance-sheet") // Changed to balance-sheet as primary
+  const [activeSection, setActiveSection] = useState("balance-sheet")
   const [viewMode, setViewMode] = useState("month")
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [financialYearStart, setFinancialYearStart] = useState("Jan")
   const [chartData, setChartData] = useState({})
   const [balanceSheetData, setBalanceSheetData] = useState(null)
+  const [pnlData, setPnLData] = useState(null) // New state for PnL data
   const [currentMonth, setCurrentMonth] = useState("Jan")
   const [user, setUser] = useState(null)
 
@@ -2308,6 +2415,10 @@ const FinancialPerformance = () => {
 
   const handleMonthChange = (month) => {
     setCurrentMonth(month)
+  }
+
+  const handleUpdatePnLData = (data) => {
+    setPnLData(data)
   }
 
   return (
@@ -2493,17 +2604,18 @@ const FinancialPerformance = () => {
             currentMonth={currentMonth}
             onMonthChange={handleMonthChange}
             user={user}
+            onUpdatePnLData={handleUpdatePnLData} // Add this prop
           />
           <PnLSnapshot
             activeSection={activeSection}
             viewMode={viewMode}
             financialYearStart={financialYearStart}
-            balanceSheetData={balanceSheetData}
+            pnlData={pnlData} // Pass PnL data instead of balanceSheetData
             user={user}
           />
-          <CashflowTrends 
-            activeSection={activeSection} 
-            financialYearStart={financialYearStart} 
+          <CashflowTrends
+            activeSection={activeSection}
+            financialYearStart={financialYearStart}
             chartData={chartData}
             balanceSheetData={balanceSheetData}
             currentMonth={currentMonth}
