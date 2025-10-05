@@ -1444,6 +1444,7 @@ export function Dashboard() {
   const [pisScore, setPisScore] = useState(0)
   
   const apiKey = useApiKey();
+  console.log(apiKey)
   const user = auth.currentUser
   const userName = user ? user.email : "User"
 
