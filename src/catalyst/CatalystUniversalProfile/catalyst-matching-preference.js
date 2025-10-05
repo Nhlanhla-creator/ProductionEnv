@@ -118,7 +118,7 @@ const supportFocusCategories = [
   { value: "technology", label: "Technology & Innovation" },
   { value: "social_impact", label: "Social Impact" },
 ]
-
+ 
 // Support Focus subtypes based on main category
 const supportFocusSubtypes = {
   funding: [

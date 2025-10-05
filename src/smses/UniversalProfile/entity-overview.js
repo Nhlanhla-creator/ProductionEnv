@@ -44,6 +44,17 @@ const entitySizes = [
   { value: "Large", label: "Large (> R50M annual turnover)" },
 ]
 
+const functionalExpertiseOptions = [
+  { value: "finance", label: "Finance" },
+  { value: "hr", label: "HR" },
+  { value: "legal", label: "Legal" },
+  { value: "strategy", label: "Strategy" },
+  { value: "esg", label: "ESG" },
+  { value: "tech", label: "Tech" },
+  { value: "governance", label: "Governance" },
+]
+
+
 const operationStages = [
   { value: "Startup", label: "Startup" },
   { value: "Growth", label: "Growth" },
@@ -379,6 +390,16 @@ export default function EntityOverview({ data = {}, updateData, onSave }) {
               ))}
             </select>
           </FormField>
+          
+          <FormField label="Functional Expertise">
+  <MultiSelect
+    options={functionalExpertiseOptions}
+    selected={formData.functionalExpertise || []}
+    onChange={(value) => handleMultiSelectChange("functionalExpertise", value)}
+    label="Functional Expertise"
+  />
+</FormField>
+
 
           <FormField label="Entity Size" required>
             <select

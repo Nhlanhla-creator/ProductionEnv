@@ -141,7 +141,7 @@ const MATCHING_CRITERIA = {
   },
 
   // Lower importance (total 20%)
-  URGENCY: {
+  URGENCY_LEAD_TIME: {
     weight: 0.05, // 5%
     description: "Project Urgency Alignment",
   },
@@ -153,6 +153,40 @@ const MATCHING_CRITERIA = {
     weight: 0.05, // 5%
     description: "Supplier Rating",
   },
+}
+
+function getDeliveryModeMatches(appModes, supplyModes) {
+  const matches = []
+
+  // Check if either has Hybrid for full compatibility
+  const appHasHybrid = appModes.includes("Hybrid")
+  const supplyHasHybrid = supplyModes.includes("Hybrid")
+  
+  if (appHasHybrid || supplyHasHybrid) {
+    matches.push({
+      applicationMode: appHasHybrid ? "Hybrid" : appModes[0],
+      supplierMode: supplyHasHybrid ? "Hybrid" : supplyModes[0],
+      matchType: "hybrid-full-compatibility",
+      score: 1,
+      note: "Hybrid delivery provides full compatibility with all modes"
+    })
+  } else {
+    // Standard exact matching
+    appModes.forEach((appMode) => {
+      supplyModes.forEach((supplyMode) => {
+        if (appMode === supplyMode) {
+          matches.push({
+            applicationMode: appMode,
+            supplierMode: supplyMode,
+            matchType: "exact",
+            score: 1,
+          })
+        }
+      })
+    })
+  }
+
+  return matches
 }
 
 // Helper function to calculate ownership percentages from shareholder data
@@ -331,6 +365,21 @@ function getCategoryMatches(appCategories, supplierCategories) {
   return matches
 }
 
+function convertToDays(value, unit) {
+  const numericValue = parseInt(value) || 0
+  switch (unit) {
+    case 'hours':
+      return numericValue / 24
+    case 'days':
+      return numericValue
+    case 'weeks':
+      return numericValue * 7
+    case 'months':
+      return numericValue * 30 // Approximate
+    default:
+      return numericValue // Default to days
+  }
+}
 export function CustomerTable() {
   const [showFilters, setShowFilters] = useState(false)
   const [showModal, setShowModal] = useState(false)
@@ -510,24 +559,39 @@ const [supplierRatings, setSupplierRatings] = useState({})
       totalWeight += MATCHING_CRITERIA.LOCATION.weight * 100
     }
   
-    // 4. DELIVERY_MODE (10%)
-    if (MATCHING_CRITERIA.DELIVERY_MODE.weight > 0) {
-      let deliveryScore = 0
-  
-      if (appDeliveryModes.length > 0 && supplyDeliveryModes.length > 0) {
-        const deliveryMatches = appDeliveryModes.filter((mode) => supplyDeliveryModes.includes(mode))
-        deliveryScore = deliveryMatches.length / appDeliveryModes.length
-      } else if (appDeliveryModes.length === 0) {
-        deliveryScore = 0.5 // Neutral score if no delivery modes specified
-      }
-  
-      score += deliveryScore * MATCHING_CRITERIA.DELIVERY_MODE.weight * 100
-      breakdown.deliveryMatch = {
-        score: deliveryScore * 100,
-        description: MATCHING_CRITERIA.DELIVERY_MODE.description,
-      }
-      totalWeight += MATCHING_CRITERIA.DELIVERY_MODE.weight * 100
+    
+// 4. DELIVERY_MODE (10%) - SIMPLIFIED WITH HYBRID COMPATIBILITY
+if (MATCHING_CRITERIA.DELIVERY_MODE.weight > 0) {
+  let deliveryScore = 0
+
+  if (appDeliveryModes.length > 0 && supplyDeliveryModes.length > 0) {
+    // Check if either party has Hybrid - if so, full compatibility
+    const appHasHybrid = appDeliveryModes.includes("Hybrid")
+    const supplyHasHybrid = supplyDeliveryModes.includes("Hybrid")
+    
+    if (appHasHybrid || supplyHasHybrid) {
+      deliveryScore = 1 // Full score if either has Hybrid
+    } else {
+      // Standard matching for non-Hybrid cases
+      const deliveryMatches = appDeliveryModes.filter((appMode) => 
+        supplyDeliveryModes.includes(appMode)
+      )
+      deliveryScore = deliveryMatches.length / appDeliveryModes.length
     }
+  } else if (appDeliveryModes.length === 0) {
+    deliveryScore = 0.5 // Neutral score if no delivery modes specified
+  }
+
+  score += deliveryScore * MATCHING_CRITERIA.DELIVERY_MODE.weight * 100
+  breakdown.deliveryMatch = {
+    score: deliveryScore * 100,
+    description: MATCHING_CRITERIA.DELIVERY_MODE.description,
+    matches: appDeliveryModes.length > 0 ? getDeliveryModeMatches(appDeliveryModes, supplyDeliveryModes) : [],
+    hasHybrid: appDeliveryModes.includes("Hybrid") || supplyDeliveryModes.includes("Hybrid")
+  }
+  totalWeight += MATCHING_CRITERIA.DELIVERY_MODE.weight * 100
+}
+
   
     // 5. BUDGET_RANGE (10%)
     if (MATCHING_CRITERIA.BUDGET_RANGE.weight > 0) {
@@ -612,39 +676,81 @@ const [supplierRatings, setSupplierRatings] = useState({})
     totalWeight += MATCHING_CRITERIA.OWNERSHIP_PREFS.weight * 100
   }
   
-    // 7. URGENCY (5%)
-    if (MATCHING_CRITERIA.URGENCY.weight > 0) {
-      const urgencyMap = {
-        immediate: 7,
-        "1 week": 7,
-        "2 weeks": 14,
-        "1 month": 30,
-        "1-3 months": 90,
-        "3-6 months": 180,
+
+// 7. URGENCY_LEAD_TIME MATCHING (10%) - CORRECTED LOGIC
+if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
+  let urgencyLeadTimeScore = 0
+  
+  const appStartDate = requestOverview.startDate
+  const appEndDate = requestOverview.endDate
+  
+  // Check if we have application dates and supplier lead time data
+  if (appStartDate && (supply.minLeadTime || supply.maxLeadTime)) {
+    const requestStart = new Date(appStartDate).getTime()
+    const requestEnd = new Date(appEndDate || appStartDate).getTime() // Use start date if no end date
+    const now = new Date().getTime()
+    
+    const daysUntilRequestStart = (requestStart - now) / (1000 * 60 * 60 * 24)
+    const totalProjectDays = (requestEnd - now) / (1000 * 60 * 60 * 24)
+    
+    // Calculate supplier's delivery times in days
+    const minDeliveryDays = supply.minLeadTime ? 
+      convertToDays(supply.minLeadTime, supply.minLeadTimeUnit || 'days') : 0
+    const maxDeliveryDays = supply.maxLeadTime ? 
+      convertToDays(supply.maxLeadTime, supply.maxLeadTimeUnit || 'days') : minDeliveryDays * 1.5
+    
+    console.log("Lead Time Matching Debug:", {
+      appStartDate,
+      appEndDate,
+      daysUntilRequestStart: Math.round(daysUntilRequestStart),
+      totalProjectDays: Math.round(totalProjectDays),
+      minDeliveryDays: Math.round(minDeliveryDays),
+      maxDeliveryDays: Math.round(maxDeliveryDays),
+      supplierData: {
+        minLeadTime: supply.minLeadTime,
+        maxLeadTime: supply.maxLeadTime,
+        minLeadTimeUnit: supply.minLeadTimeUnit,
+        maxLeadTimeUnit: supply.maxLeadTimeUnit
       }
-  
-      const appUrgency = (requestOverview.urgency || "1 month").toLowerCase()
-      const supplierUrgency = (supplier.applicationOverview?.urgency || "1 month").toLowerCase()
-  
-      const appDays = urgencyMap[appUrgency] || 30
-      const supplierDays = urgencyMap[supplierUrgency] || 30
-  
-      let urgencyScore = 0
-      if (supplierDays <= appDays) {
-        urgencyScore = 1
-      } else if (supplierDays <= appDays * 1.5) {
-        urgencyScore = 0.7
-      } else {
-        urgencyScore = 0.3
-      }
-  
-      score += urgencyScore * MATCHING_CRITERIA.URGENCY.weight * 100
-      breakdown.urgencyMatch = {
-        score: urgencyScore * 100,
-        description: MATCHING_CRITERIA.URGENCY.description,
-      }
-      totalWeight += MATCHING_CRITERIA.URGENCY.weight * 100
+    })
+    
+    // Apply your scoring logic:
+    // 1.0 if both min and max fit within project timeframe
+    // 0.8 if only minimum fits but maximum doesn't
+    // 0.0 if neither fits
+    
+    const minFits = minDeliveryDays <= totalProjectDays
+    const maxFits = maxDeliveryDays <= totalProjectDays
+    console.log(minFits)
+    console.log(maxFits)
+    if (minFits && maxFits) {
+      urgencyLeadTimeScore = 1.0 // Full points - both fit perfectly
+    } else if (minFits && !maxFits) {
+      urgencyLeadTimeScore = 0.8 // Partial points - minimum fits but maximum doesn't
+    } else {
+      urgencyLeadTimeScore = 0.0 // No points - can't deliver in time
     }
+    
+    console.log("Lead Time Score Result:", {
+      minFits,
+      maxFits,
+      finalScore: urgencyLeadTimeScore
+    })
+    
+  } else {
+    // Missing data - neutral score
+    urgencyLeadTimeScore = 0.5
+    console.log("Lead Time: Missing data, using neutral score")
+  }
+
+  score += urgencyLeadTimeScore * MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100
+  breakdown.urgencyLeadTimeMatch = {
+    score: urgencyLeadTimeScore * 100,
+    description: MATCHING_CRITERIA.URGENCY_LEAD_TIME.description,
+    canDeliverInTime: urgencyLeadTimeScore > 0,
+  }
+  totalWeight += MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100
+}
   
     // 8. EXPERIENCE (10%)
     if (MATCHING_CRITERIA.EXPERIENCE.weight > 0) {
@@ -1556,8 +1662,8 @@ const getSupplierRating = (supplierId) => {
             <div style={{ textAlign: "center", padding: "2rem" }}>
               <FileText size={48} color="#a67c52" style={{ marginBottom: "1rem" }} />
               <h3 style={{ color: "#5D2A0A", marginBottom: "0.5rem" }}>No Applications Yet</h3>
-              <p style={{ color: "#8D6E63", marginBottom: "1rem" }}>
-                When suppliers send you applications, they'll appear here.
+                <p style={{ color: "#8D6E63", marginBottom: "1rem" }}>
+               You have not applied for any customers, so there are no matches available. You need to apply first
               </p>
             </div>
           </div>
