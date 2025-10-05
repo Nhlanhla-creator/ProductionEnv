@@ -485,6 +485,36 @@ export function AdvisorTable({ filters, onConnectionRequested, onCountChange }) 
     return () => setMounted(false)
   }, [])
 
+  // ---- Functional-Expertise helpers ----
+const toArr = (v) => (Array.isArray(v) ? v : v ? [v] : []);
+const canon = (s) => s.toString().toLowerCase().replace(/[^a-z]/g, "");
+
+// Common aliases (extend as needed)
+const FE_ALIASES = {
+  hr: "hr", humanresources: "hr",
+  tech: "tech", technology: "tech", it: "tech", ict: "tech",
+  legal: "legal", law: "legal",
+  strategy: "strategy",
+  finance: "finance",
+  esg: "esg",
+  governance: "governance",
+};
+
+const normFE = (list) => {
+  const out = new Set();
+  for (const item of toArr(list)) {
+    const key = FE_ALIASES[canon(item)] || canon(item);
+    if (key) out.add(key);
+  }
+  return [...out];
+};
+
+const overlapFE = (a, b) => {
+  const A = new Set(normFE(a));
+  for (const t of normFE(b)) if (A.has(t)) return true;
+  return false;
+};
+
   function calculateAdvisorMatch(smeProfile, advisorProfile) {
     const supportFocus = smeProfile.advisoryNeedsAssessment?.supportFocus || []
     const fundingStage = (smeProfile.entityOverview?.operationStage || "").toLowerCase()
@@ -493,11 +523,18 @@ export function AdvisorTable({ filters, onConnectionRequested, onCountChange }) 
     const smeLegal = (smeProfile.entityOverview?.legalStructure || "").toLowerCase()
     const rawRevenue = smeProfile.financialOverview?.annualRevenue || "0"
     const smeRevenue = Number.parseFloat(rawRevenue.replace(/[Rr\s,]/g, "").trim())
-
+const smeFunctionalExpertise = (smeProfile.entityOverview || [])
     const advForm = advisorProfile.formData || {}
     const contact = advForm.contactDetails || {}
     const overview = advForm.personalProfessionalOverview || {}
     const selection = advForm.selectionCriteria || {}
+const smeFE = toArr(smeProfile?.entityOverview?.functionalExpertise);
+const advisorFE = [
+  ...new Set([
+    ...toArr(overview?.functionalExpertise),
+    ...toArr(selection?.functionalExpertise),
+  ]),
+];
 
     // Initialize breakdown with safe defaults
     const breakdown = {
@@ -527,7 +564,7 @@ export function AdvisorTable({ filters, onConnectionRequested, onCountChange }) 
       },
       functionalExpertise: {
         matched: false,
-        smeValue: selection.functionalExpertise || [],
+         smeValue: smeFE ||[],
         advisorValue: overview.functionalExpertise || [],
       },
       legalEntityFit: {
@@ -557,9 +594,10 @@ export function AdvisorTable({ filters, onConnectionRequested, onCountChange }) 
       smeSectors.includes((sector || "").toLowerCase()),
     )
 
-    breakdown.functionalExpertise.matched = (breakdown.functionalExpertise.advisorValue || []).some(
-      (exp) => exp && (selection.functionalExpertise || []).includes(exp),
-    )
+    breakdown.functionalExpertise.matched = overlapFE(
+  breakdown.functionalExpertise.smeValue,
+  breakdown.functionalExpertise.advisorValue,
+);
 
     breakdown.legalEntityFit.matched = (selection.legalEntityFit || "").toLowerCase() === smeLegal
 
@@ -966,7 +1004,7 @@ export function AdvisorTable({ filters, onConnectionRequested, onCountChange }) 
               color: "#a67c52",
             }}
           >
-            <p>No matching advisors found. Try adjusting your filters.</p>
+            <p>   You have not applied for any advisors, so there are no matches available. You need to apply first</p>
           </div>
         ) : (
           <div
