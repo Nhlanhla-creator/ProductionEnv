@@ -20,16 +20,18 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 
+const app = initializeApp(firebaseConfig);
 // Export Firebase services
 const functions = getFunctions(app, 'us-central1');
-const isLocalhost = typeof window !== "undefined" && window.location.hostname === "localhost";
-if (isLocalhost) {
-  // Change ports if yours differ
+if (window.location.hostname === 'localhost') {
+  connectFunctionsEmulator(functions, 'localhost', 5001);
+  console.log('Using Firebase Functions emulator');
+}
 
-  connectFunctionsEmulator(functions, "localhost", 5001);
-  console.log("[Firebase] Using local emulators");
+if(process.env.NODE_ENV === "development"){
+ 
+  connectFunctionsEmulator(getFunctions(app),"localhost",5001)
 }
 
 // Export Firebase services
