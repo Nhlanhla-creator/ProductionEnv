@@ -3,6 +3,36 @@ import React from "react"
 import { useState } from "react"
 import { ChevronDown, ChevronUp } from 'lucide-react'
 
+// Funding Instrument options (same as in Use of Funds)
+const fundingInstrumentOptions = [
+  { value: "Any", label: "Any" },
+  { value: "Equity", label: "Equity (Buying shares in the business)" },
+  { value: "Debt", label: "Debt (Loan-based funding)" },
+  { value: "Grants", label: "Grants (Non-repayable funding)" },
+  { value: "Convertible Notes", label: "Convertible Notes (Loan that can turn into shares)" },
+  { value: "Revenue-based Financing", label: "Revenue-based Financing" },
+  { value: "grants", label: "Grants (non-repayable funding)" },
+  { value: "low_interest_loans", label: "Low-Interest Loans" },
+  { value: "seed_funding", label: "Seed Funding" },
+  { value: "crowdfunding_support", label: "Crowdfunding Support" },
+  { value: "skills_training", label: "Skills Training & Development" },
+  { value: "business_mentorship", label: "Business Mentorship" },
+  { value: "leadership_development", label: "Leadership Development" },
+  { value: "financial_literacy", label: "Financial Literacy" },
+  { value: "networking", label: "Networking & Partnerships" },
+  { value: "market_linkages", label: "Market Linkages" },
+  { value: "trade_facilitation", label: "Trade Facilitation" },
+  { value: "export_support", label: "Export Support" },
+  { value: "digital_tools", label: "Digital Tools & Platforms" },
+  { value: "tech_training", label: "Technology Training" },
+  { value: "innovation_labs", label: "Innovation Labs" },
+  { value: "research_development", label: "Research & Development" },
+  { value: "community_development", label: "Community Development" },
+  { value: "environmental_programs", label: "Environmental Programs" },
+  { value: "youth_development", label: "Youth Development" },
+  { value: "women_empowerment", label: "Women Empowerment" },
+]
+
 // South African provinces array
 const saProvinces = [
   { value: "gauteng", label: "Gauteng" },
@@ -86,7 +116,7 @@ const programStructureOptions = [
 
 // Program Stage options
 const programStageOptions = [
-   { value: "Startup", label: "Startup" },
+  { value: "Startup", label: "Startup" },
   { value: "Growth", label: "Growth" },
   { value: "Scaling", label: "Scaling" },
   { value: "Turnaround", label: "Turnaround" },
@@ -96,7 +126,7 @@ const programStageOptions = [
 
 // Legal Entity Fit options
 const legalEntityOptions = [
-    { value: "(pty) Ltd", label: "(Pty) Ltd - Private Company" },
+  { value: "(pty) Ltd", label: "(Pty) Ltd - Private Company" },
   { value: "Ltd", label: "Ltd - Public Company" },
   { value: "NPC", label: "NPC - Non-Profit Company" },
   { value: "Sole Proprietor", label: "Sole Proprietor" },
@@ -105,10 +135,9 @@ const legalEntityOptions = [
   { value: "Trust", label: "Trust" },
   { value: "Cooperative", label: "Cooperative" },
   { value: "Joint Venture", label: "Joint Venture" },
-  { value: "State Qwned", label: "State-Owned Enterprise" },
+  { value: "State Owned", label: "State-Owned Enterprise" },
   { value: "any_entity", label: "Any Legal Entity" },
 ]
-
 
 // Support Focus main categories
 const supportFocusCategories = [
@@ -118,7 +147,7 @@ const supportFocusCategories = [
   { value: "technology", label: "Technology & Innovation" },
   { value: "social_impact", label: "Social Impact" },
 ]
- 
+
 // Support Focus subtypes based on main category
 const supportFocusSubtypes = {
   funding: [
@@ -434,8 +463,8 @@ export default function CatalystMatchingPreference({
         General Matching Preferences
       </h2>
 
-      {/* Row 1: Program Structure and Legal Entity Fit */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginBottom: "24px" }}>
+      {/* Row 1: Program Structure, Legal Entity Fit, Instrument Fit */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "24px", marginBottom: "24px" }}>
         {/* Program Structure */}
         <div>
           <label style={labelStyle}>Program Structure</label>
@@ -465,6 +494,17 @@ export default function CatalystMatchingPreference({
               </option>
             ))}
           </select>
+        </div>
+
+        {/* Instrument Fit */}
+        <div>
+          <label style={labelStyle}>Instrument Fit</label>
+          <MultiSelect
+            options={fundingInstrumentOptions}
+            selected={data.instrumentFit || []}
+            onChange={(value) => handleMultiSelectChange("instrumentFit", value)}
+            label="Instruments"
+          />
         </div>
       </div>
 

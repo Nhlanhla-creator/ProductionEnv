@@ -46,6 +46,32 @@ const TruncatedText = ({ text, maxLength = 40 }) => {
   )
 }
 
+// Empty table row component for when there are no deals
+const EmptyTableRow = () => (
+  <tr style={{ borderBottom: "1px solid #E8D5C4" }}>
+    <td colSpan="10" style={{ 
+      ...tableCellStyle, 
+      textAlign: "center", 
+      padding: "2rem",
+      color: "#999",
+      fontStyle: "italic",
+      borderRight: "none"
+    }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+        <Trophy size={48} style={{ color: "#ddd" }} />
+        <div>
+          <p style={{ margin: "0 0 0.5rem 0", fontSize: "1rem", color: "#666" }}>
+            You have not applied for any accelerators, so there are no successful deals available.
+          </p>
+          <p style={{ margin: 0, fontSize: "0.9rem", color: "#999" }}>
+            You need to apply first to see your successful deals here.
+          </p>
+        </div>
+      </div>
+    </td>
+  </tr>
+)
+
 // Successful Accelerator Deals Table Component
 const SuccessfulAcceleratorDealsTable = () => {
   const [deals, setDeals] = useState([])
@@ -208,14 +234,6 @@ const SuccessfulAcceleratorDealsTable = () => {
     )
   }
 
-  if (deals.length === 0) {
-    return (
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: "2rem", color: "#a67c52" }}>
-        <p>No completed deals found.</p>
-      </div>
-    )
-  }
-
   return (
     <>
       <div
@@ -252,104 +270,108 @@ const SuccessfulAcceleratorDealsTable = () => {
             </tr>
           </thead>
           <tbody>
-            {deals.map((deal) => (
-              <tr
-                key={deal.id}
-                style={{
-                  borderBottom: "1px solid #E8D5C4",
-                  transition: "all 0.2s ease",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = "#f5f5f5"
-                  e.currentTarget.style.transform = "translateY(-1px)"
-                  e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.1)"
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = "white"
-                  e.currentTarget.style.transform = "translateY(0)"
-                  e.currentTarget.style.boxShadow = "none"
-                }}
-              >
-                <td style={tableCellStyle}>
-                  <span style={{ color: "#a67c52", fontSize: "0.8rem" }}>
-                    <TruncatedText text={deal.acceleratorName} maxLength={30} />
-                  </span>
-                </td>
+            {deals.length === 0 ? (
+              <EmptyTableRow />
+            ) : (
+              deals.map((deal) => (
+                <tr
+                  key={deal.id}
+                  style={{
+                    borderBottom: "1px solid #E8D5C4",
+                    transition: "all 0.2s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "#f5f5f5"
+                    e.currentTarget.style.transform = "translateY(-1px)"
+                    e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.1)"
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "white"
+                    e.currentTarget.style.transform = "translateY(0)"
+                    e.currentTarget.style.boxShadow = "none"
+                  }}
+                >
+                  <td style={tableCellStyle}>
+                    <span style={{ color: "#a67c52", fontSize: "0.8rem" }}>
+                      <TruncatedText text={deal.acceleratorName} maxLength={30} />
+                    </span>
+                  </td>
 
-                <td style={tableCellStyle}>
-                  <TruncatedText text={deal.sectorFocus} maxLength={20} />
-                </td>
+                  <td style={tableCellStyle}>
+                    <TruncatedText text={deal.sectorFocus} maxLength={20} />
+                  </td>
 
-                <td style={tableCellStyle}>
-                  <span style={{ color: "#374151", fontSize: "0.8rem" }}>
-                    {deal.fundingType}
-                  </span>
-                </td>
+                  <td style={tableCellStyle}>
+                    <span style={{ color: "#374151", fontSize: "0.8rem" }}>
+                      {deal.fundingType}
+                    </span>
+                  </td>
 
-                <td style={tableCellStyle}>
-                  <span style={{ fontSize: "0.8rem" }}>
-                    {formatDate(deal.completionDate)}
-                  </span>
-                </td>
+                  <td style={tableCellStyle}>
+                    <span style={{ fontSize: "0.8rem" }}>
+                      {formatDate(deal.completionDate)}
+                    </span>
+                  </td>
 
-                <td style={tableCellStyle}>
-                  <TruncatedText text={deal.ticketSize} maxLength={15} />
-                </td>
+                  <td style={tableCellStyle}>
+                    <TruncatedText text={deal.ticketSize} maxLength={15} />
+                  </td>
 
-                <td style={tableCellStyle}>
-                  <TruncatedText text={deal.geographicFocus} maxLength={15} />
-                </td>
+                  <td style={tableCellStyle}>
+                    <TruncatedText text={deal.geographicFocus} maxLength={15} />
+                  </td>
 
-                <td style={tableCellStyle}>
-                  <span style={{ fontSize: "0.8rem" }}>
-                    {deal.deadline}
-                  </span>
-                </td>
+                  <td style={tableCellStyle}>
+                    <span style={{ fontSize: "0.8rem" }}>
+                      {deal.deadline}
+                    </span>
+                  </td>
 
-                <td style={tableCellStyle}>
-                  <span style={{ fontSize: "0.8rem" }}>
-                    {deal.fundingStage}
-                  </span>
-                </td>
+                  <td style={tableCellStyle}>
+                    <span style={{ fontSize: "0.8rem" }}>
+                      {deal.fundingStage}
+                    </span>
+                  </td>
 
-                <td style={tableCellStyle}>
-                  <span
-                    style={{
-                      backgroundColor: getStatusColor(deal.currentStatus) + "20",
-                      color: getStatusColor(deal.currentStatus),
-                      padding: "4px 8px",
-                      borderRadius: "12px",
-                      fontSize: "0.7rem",
-                      display: "inline-block",
-                    }}
-                  >
-                    {deal.currentStatus}
-                  </span>
-                </td>
+                  <td style={tableCellStyle}>
+                    <span
+                      style={{
+                        backgroundColor: getStatusColor(deal.currentStatus) + "20",
+                        color: getStatusColor(deal.currentStatus),
+                        padding: "4px 8px",
+                        borderRadius: "12px",
+                        fontSize: "0.7rem",
+                        display: "inline-block",
+                      }}
+                    >
+                      {deal.currentStatus}
+                    </span>
+                  </td>
 
-                <td style={{ ...tableCellStyle, borderRight: "none" }}>
-                  <button
-                    onClick={() => handleViewDetails(deal)}
-                    style={{
-                      backgroundColor: "#5d4037",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "8px",
-                      padding: "6px",
-                      fontSize: "0.8rem",
-                      cursor: "pointer",
-                      transition: "all 0.3s ease",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      margin: "0 auto",
-                    }}
-                  >
-                    <Eye size={14} />
-                  </button>
-                </td>
-              </tr>
-            ))}
+                  <td style={{ ...tableCellStyle, borderRight: "none" }}>
+                    <button
+                      onClick={() => handleViewDetails(deal)}
+                      style={{
+                        backgroundColor: "#5d4037",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "8px",
+                        padding: "6px",
+                        fontSize: "0.8rem",
+                        cursor: "pointer",
+                        transition: "all 0.3s ease",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        margin: "0 auto",
+                      }}
+                    >
+                      <Eye size={14} />
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

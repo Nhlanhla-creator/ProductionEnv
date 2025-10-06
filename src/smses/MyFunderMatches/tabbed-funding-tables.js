@@ -95,6 +95,31 @@ const calculateDuration = (startDate, endDate) => {
   }
 }
 
+// Empty table row component for when there are no deals
+const EmptyTableRow = () => (
+  <tr>
+    <td colSpan="11" style={{ 
+      padding: "2rem",
+      textAlign: "center", 
+      color: "#999",
+      fontStyle: "italic",
+      borderRight: "none"
+    }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+        <Trophy size={48} style={{ color: "#ddd" }} />
+        <div>
+          <p style={{ margin: "0 0 0.5rem 0", fontSize: "1rem", color: "#666" }}>
+            You have not completed any funding deals, so there are no successful deals available.
+          </p>
+          <p style={{ margin: 0, fontSize: "0.9rem", color: "#999" }}>
+            You need to complete funding applications first to see your successful deals here.
+          </p>
+        </div>
+      </div>
+    </td>
+  </tr>
+)
+
 // Successful Deals Table Component
 const SuccessfulDealsTable = () => {
   const [deals, setDeals] = useState([])
@@ -285,36 +310,15 @@ const SuccessfulDealsTable = () => {
     )
   }
 
-  if (deals.length === 0) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          alignItems: "center",
-          minHeight: "200px",
-          fontSize: "16px",
-          color: "#666",
-          textAlign: "center",
-        }}
-      >
-        <Trophy size={48} style={{ color: "#ccc", marginBottom: "16px" }} />
-        <p>No successful deals yet.</p>
-        <p style={{ fontSize: "14px", color: "#999" }}>
-          Completed deals will appear here when applications reach "Deal Complete" status.
-        </p>
-      </div>
-    )
-  }
-
   return (
     <>
-      <div style={{ marginBottom: "24px" }}>
-        <p style={{ color: "#666", fontSize: "14px" }}>
-          {deals.length} successful deal{deals.length !== 1 ? "s" : ""} completed
-        </p>
-      </div>
+      {deals.length > 0 && (
+        <div style={{ marginBottom: "24px" }}>
+          <p style={{ color: "#666", fontSize: "14px" }}>
+            {deals.length} successful deal{deals.length !== 1 ? "s" : ""} completed
+          </p>
+        </div>
+      )}
 
       <div className={styles.tableContainer}>
         <table className={styles.fundingTable} style={{ tableLayout: "fixed", width: "100%" }}>
@@ -334,117 +338,120 @@ const SuccessfulDealsTable = () => {
             </tr>
           </thead>
           <tbody>
-            {deals.map((deal) => (
-              <tr key={deal.id}>
-                <td style={{ wordWrap: "break-word", whiteSpace: "normal", verticalAlign: "top", fontSize: "14px" }}>
-                  <span
+            {deals.length === 0 ? (
+              <EmptyTableRow />
+            ) : (
+              deals.map((deal) => (
+                <tr key={deal.id}>
+                  <td style={{ wordWrap: "break-word", whiteSpace: "normal", verticalAlign: "top", fontSize: "14px" }}>
+                    <span
+                      style={{
+                        color: "#a67c52",
+                        fontSize: "12px",
+                        display: "block",
+                        lineHeight: "1.3",
+                        wordWrap: "break-word",
+                        whiteSpace: "normal",
+                      }}
+                    >
+                      <TruncatedText text={deal.funderName} maxLines={2} />
+                    </span>
+                  </td>
+
+                  <td
                     style={{
-                      color: "#a67c52",
-                     
-                    fontSize: "12px",
-                      display: "block",
-                      lineHeight: "1.3",
-                      wordWrap: "break-word",
-                      whiteSpace: "normal",
-                    }}
-                  >
-                    <TruncatedText text={deal.funderName} maxLines={2} />
-                  </span>
-                </td>
-
-                <td
-                  style={{
-                    verticalAlign: "top",
-                    fontWeight: "400",
-                    color: "#321e0cff",
-                    fontSize: "12px",
-                  }}
-                >
-                  {deal.dealAmount}
-                </td>
-
-                <td style={{ verticalAlign: "top", fontSize: "12px", fontWeight: "400" }}>{deal.dealType}</td>
-
-                <td
-                  style={{
-                    verticalAlign: "top",
-                    color: "#321e0cff",
-                    fontSize: "12px",
-                    fontWeight: "400",
-                  }}
-                >
-                  {formatDate(deal.completionDate)}
-                </td>
-
-                <td style={{ verticalAlign: "top", fontSize: "12px", fontWeight: "400" }}>
-                  <TruncatedText text={deal.sector} maxLines={2} />
-                </td>
-
-                <td style={{ verticalAlign: "top", fontSize: "12px", fontWeight: "400" }}>
-                  <TruncatedText text={deal.dealStructure} maxLines={2} />
-                </td>
-
-                <td
-                  style={{
-                    verticalAlign: "top",
-                    textAlign: "center",
-                    color: "#321e0cff",
-                    fontSize: "12px",
-                  }}
-                >
-                  {deal.roi}
-                </td>
-
-                <td style={{ verticalAlign: "top", fontSize: "12px", fontWeight: "400" }}>
-                  <span
-                    style={{
-                      backgroundColor: getStatusColor(deal.currentStatus) + "20",
-                      color: getStatusColor(deal.currentStatus),
-                      padding: "6px 10px",
-                      borderRadius: "12px",
+                      verticalAlign: "top",
+                      fontWeight: "400",
+                      color: "#321e0cff",
                       fontSize: "12px",
-                      fontWeight: "500",
-                      display: "inline-block",
                     }}
                   >
-                    {deal.currentStatus}
-                  </span>
-                </td>
+                    {deal.dealAmount}
+                  </td>
 
-                <td style={{ verticalAlign: "top", fontSize: "12px", fontWeight: "400" }}>{deal.teamSize}</td>
+                  <td style={{ verticalAlign: "top", fontSize: "12px", fontWeight: "400" }}>{deal.dealType}</td>
 
-                <td style={{ verticalAlign: "top", fontSize: "12px", fontWeight: "400" }}>{deal.revenue}</td>
-
-                <td
-                  style={{
-                    verticalAlign: "top",
-                    textAlign: "center",
-                    fontSize: "14px",
-                  }}
-                >
-                  <button
-                    onClick={() => handleViewDetails(deal)}
+                  <td
                     style={{
-                      backgroundColor: "#5d4037",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "8px",
-                      padding: "8px",
+                      verticalAlign: "top",
+                      color: "#321e0cff",
                       fontSize: "12px",
-                      fontWeight: "600",
-                      cursor: "pointer",
-                      transition: "all 0.3s ease",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      margin: "0 auto",
+                      fontWeight: "400",
                     }}
                   >
-                    <Eye size={14} />
-                  </button>
-                </td>
-              </tr>
-            ))}
+                    {formatDate(deal.completionDate)}
+                  </td>
+
+                  <td style={{ verticalAlign: "top", fontSize: "12px", fontWeight: "400" }}>
+                    <TruncatedText text={deal.sector} maxLines={2} />
+                  </td>
+
+                  <td style={{ verticalAlign: "top", fontSize: "12px", fontWeight: "400" }}>
+                    <TruncatedText text={deal.dealStructure} maxLines={2} />
+                  </td>
+
+                  <td
+                    style={{
+                      verticalAlign: "top",
+                      textAlign: "center",
+                      color: "#321e0cff",
+                      fontSize: "12px",
+                    }}
+                  >
+                    {deal.roi}
+                  </td>
+
+                  <td style={{ verticalAlign: "top", fontSize: "12px", fontWeight: "400" }}>
+                    <span
+                      style={{
+                        backgroundColor: getStatusColor(deal.currentStatus) + "20",
+                        color: getStatusColor(deal.currentStatus),
+                        padding: "6px 10px",
+                        borderRadius: "12px",
+                        fontSize: "12px",
+                        fontWeight: "500",
+                        display: "inline-block",
+                      }}
+                    >
+                      {deal.currentStatus}
+                    </span>
+                  </td>
+
+                  <td style={{ verticalAlign: "top", fontSize: "12px", fontWeight: "400" }}>{deal.teamSize}</td>
+
+                  <td style={{ verticalAlign: "top", fontSize: "12px", fontWeight: "400" }}>{deal.revenue}</td>
+
+                  <td
+                    style={{
+                      verticalAlign: "top",
+                      textAlign: "center",
+                      fontSize: "14px",
+                    }}
+                  >
+                    <button
+                      onClick={() => handleViewDetails(deal)}
+                      style={{
+                        backgroundColor: "#5d4037",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "8px",
+                        padding: "8px",
+                        fontSize: "12px",
+                        fontWeight: "600",
+                        cursor: "pointer",
+                        transition: "all 0.3s ease",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        margin: "0 auto",
+                      }}
+                    >
+                      <Eye size={14} />
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

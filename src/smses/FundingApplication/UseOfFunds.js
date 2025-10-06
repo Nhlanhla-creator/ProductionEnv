@@ -3,9 +3,9 @@
 import { useState, useEffect } from "react"
 import FormField from "./FormField"
 import { Plus, Trash2, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react"
-import "./FundingApplication.css" // Regular CSS import
+import "./FundingApplication.css"
 
-// Funding Instrument options - added "Any" option
+// Funding Instrument options
 const fundingInstrumentOptions = [
   { value: "Any", label: "Any" },
   { value: "Equity", label: "Equity (Buying shares in the business)" },
@@ -13,26 +13,26 @@ const fundingInstrumentOptions = [
   { value: "Grants", label: "Grants (Non-repayable funding)" },
   { value: "Convertible Notes", label: "Convertible Notes (Loan that can turn into shares)" },
   { value: "Revenue-based Financing", label: "Revenue-based Financing" },
-     { value: "grants", label: "Grants (non-repayable funding)" },
-    { value: "low_interest_loans", label: "Low-Interest Loans" },
-    { value: "seed_funding", label: "Seed Funding" },
-    { value: "crowdfunding_support", label: "Crowdfunding Support" },
-    { value: "skills_training", label: "Skills Training & Development" },
-    { value: "business_mentorship", label: "Business Mentorship" },
-    { value: "leadership_development", label: "Leadership Development" },
-    { value: "financial_literacy", label: "Financial Literacy" },
-       { value: "networking", label: "Networking & Partnerships" },
-    { value: "market_linkages", label: "Market Linkages" },
-    { value: "trade_facilitation", label: "Trade Facilitation" },
-    { value: "export_support", label: "Export Support" },
-        { value: "digital_tools", label: "Digital Tools & Platforms" },
-    { value: "tech_training", label: "Technology Training" },
-    { value: "innovation_labs", label: "Innovation Labs" },
-    { value: "research_development", label: "Research & Development" },
-       { value: "community_development", label: "Community Development" },
-    { value: "environmental_programs", label: "Environmental Programs" },
-    { value: "youth_development", label: "Youth Development" },
-    { value: "women_empowerment", label: "Women Empowerment" },
+  { value: "grants", label: "Grants (non-repayable funding)" },
+  { value: "low_interest_loans", label: "Low-Interest Loans" },
+  { value: "seed_funding", label: "Seed Funding" },
+  { value: "crowdfunding_support", label: "Crowdfunding Support" },
+  { value: "skills_training", label: "Skills Training & Development" },
+  { value: "business_mentorship", label: "Business Mentorship" },
+  { value: "leadership_development", label: "Leadership Development" },
+  { value: "financial_literacy", label: "Financial Literacy" },
+  { value: "networking", label: "Networking & Partnerships" },
+  { value: "market_linkages", label: "Market Linkages" },
+  { value: "trade_facilitation", label: "Trade Facilitation" },
+  { value: "export_support", label: "Export Support" },
+  { value: "digital_tools", label: "Digital Tools & Platforms" },
+  { value: "tech_training", label: "Technology Training" },
+  { value: "innovation_labs", label: "Innovation Labs" },
+  { value: "research_development", label: "Research & Development" },
+  { value: "community_development", label: "Community Development" },
+  { value: "environmental_programs", label: "Environmental Programs" },
+  { value: "youth_development", label: "Youth Development" },
+  { value: "women_empowerment", label: "Women Empowerment" },
 ]
 
 const equityType = [
@@ -43,7 +43,7 @@ const equityType = [
   { value: "Any", label: "Any" },
 ]
 
-// Type of Funder options - added "Any" option
+// Type of Funder options
 const funderTypeOptions = [
   { value: "Any", label: "Any" },
   { value: "Venture Capital", label: "Venture Capital" },
@@ -56,7 +56,49 @@ const funderTypeOptions = [
   { value: "Other (specify)", label: "Other (specify)" },
 ]
 
-// Updated Funding Category options
+// Support Focus categories and subtypes
+const supportFocusCategories = [
+  { value: "funding", label: "Funding Support" },
+  { value: "capacity_building", label: "Capacity Building" },
+  { value: "market_access", label: "Market Access" },
+  { value: "technology", label: "Technology & Innovation" },
+  { value: "social_impact", label: "Social Impact" },
+]
+
+const supportFocusSubtypes = {
+  funding: [
+    { value: "grants", label: "Grants (non-repayable funding)" },
+    { value: "low_interest_loans", label: "Low-Interest Loans" },
+    { value: "seed_funding", label: "Seed Funding" },
+    { value: "crowdfunding_support", label: "Crowdfunding Support" },
+  ],
+  capacity_building: [
+    { value: "skills_training", label: "Skills Training & Development" },
+    { value: "business_mentorship", label: "Business Mentorship" },
+    { value: "leadership_development", label: "Leadership Development" },
+    { value: "financial_literacy", label: "Financial Literacy" },
+  ],
+  market_access: [
+    { value: "networking", label: "Networking & Partnerships" },
+    { value: "market_linkages", label: "Market Linkages" },
+    { value: "trade_facilitation", label: "Trade Facilitation" },
+    { value: "export_support", label: "Export Support" },
+  ],
+  technology: [
+    { value: "digital_tools", label: "Digital Tools & Platforms" },
+    { value: "tech_training", label: "Technology Training" },
+    { value: "innovation_labs", label: "Innovation Labs" },
+    { value: "research_development", label: "Research & Development" },
+  ],
+  social_impact: [
+    { value: "community_development", label: "Community Development" },
+    { value: "environmental_programs", label: "Environmental Programs" },
+    { value: "youth_development", label: "Youth Development" },
+    { value: "women_empowerment", label: "Women Empowerment" },
+  ],
+}
+
+// Funding Category options
 const fundingCategoryOptions = [
   { value: "Business Establishment (New ventures only)", label: "Business Establishment (New ventures only)" },
   { value: "Capital Expenditure (CapEx) - Physical/long-term assets", label: "Capital Expenditure (CapEx) - Physical/long-term assets" },
@@ -68,7 +110,7 @@ const fundingCategoryOptions = [
   { value: "Debt Refinancing - Balance sheet management", label: "Debt Refinancing - Balance sheet management" },
 ]
 
-// Updated Sub-area options based on new categories
+// Sub-area options based on categories
 const subAreaOptions = {
   "Business Establishment (New ventures only)": [
     { value: "Feasibility Studies", label: "Feasibility Studies" },
@@ -231,7 +273,6 @@ const parseCurrency = (value) => {
 const UseOfFunds = ({ data, updateData }) => {
   const [showValidationModal, setShowValidationModal] = useState(false)
   const [validationMessage, setValidationMessage] = useState("")
-  // Add this new state variable after the existing useState declarations
   const [hasShownValidationModal, setHasShownValidationModal] = useState(false)
 
   const handleChange = (e) => {
@@ -245,8 +286,17 @@ const UseOfFunds = ({ data, updateData }) => {
     }
   }
 
-  const handleFileChange = (name, files) => {
-    updateData({ [name]: files })
+  const handleSupportFocusChange = (e) => {
+    const { value } = e.target
+    updateData({
+      additionalSupportFocus: value,
+      additionalSupportFocusSubtype: "", // Reset subtype when main type changes
+    })
+  }
+
+  const getSupportFocusSubtypes = () => {
+    if (!data.additionalSupportFocus) return []
+    return supportFocusSubtypes[data.additionalSupportFocus] || []
   }
 
   const addFundingItem = () => {
@@ -259,12 +309,10 @@ const UseOfFunds = ({ data, updateData }) => {
   const updateFundingItem = (index, field, value) => {
     const fundingItems = [...(data.fundingItems || [])]
     if (field === "amount") {
-      // Format currency for amount field
       const formattedValue = formatCurrency(value)
       fundingItems[index] = { ...fundingItems[index], [field]: formattedValue }
     } else {
       fundingItems[index] = { ...fundingItems[index], [field]: value }
-      // Clear sub-area if category changes
       if (field === "category") {
         fundingItems[index].subArea = ""
       }
@@ -296,31 +344,28 @@ const UseOfFunds = ({ data, updateData }) => {
     return Number.parseInt(amount || 0)
   }
 
-  // Validation function
   const validateAmounts = () => {
     const totalRequested = getTotalRequested()
     const totalPurpose = calculateTotal()
 
     if (totalRequested !== totalPurpose && totalRequested > 0 && totalPurpose > 0) {
-      // Only show modal if it hasn't been shown before
       if (!hasShownValidationModal) {
         setValidationMessage(
           `Total Amount Requested (R ${totalRequested.toLocaleString()}) must equal the sum of Purpose of Funds (R ${totalPurpose.toLocaleString()}). Please adjust the amounts to match.`,
         )
         setShowValidationModal(true)
-        setHasShownValidationModal(true) // Mark that modal has been shown
+        setHasShownValidationModal(true)
       }
       return false
     }
     return true
   }
 
-  // Auto-validate when amounts change
   useEffect(() => {
     if (data.amountRequested && data.fundingItems?.length > 0) {
       const timer = setTimeout(() => {
         validateAmounts()
-      }, 1000) // Debounce validation
+      }, 1000)
       return () => clearTimeout(timer)
     }
   }, [data.amountRequested, data.fundingItems])
@@ -329,7 +374,6 @@ const UseOfFunds = ({ data, updateData }) => {
     updateData({ [field]: value })
   }
 
-  // Check if "other" is selected in funding instruments or funder types
   const showFundingInstrumentOther = data.fundingInstruments?.includes("other")
   const showFunderTypeOther = data.funderTypes?.includes("other")
 
@@ -393,7 +437,6 @@ const UseOfFunds = ({ data, updateData }) => {
             />
           </FormField>
 
-          {/* Show specification field when "other" is selected for funding instruments */}
           {showFundingInstrumentOther && (
             <FormField label="Please specify other funding instrument">
               <input
@@ -417,7 +460,6 @@ const UseOfFunds = ({ data, updateData }) => {
             />
           </FormField>
 
-          {/* Show specification field when "other" is selected for funder types */}
           {showFunderTypeOther && (
             <FormField label="Please specify other funder type">
               <input
@@ -434,7 +476,7 @@ const UseOfFunds = ({ data, updateData }) => {
         </div>
       </div>
 
-      {/* Fixed Purpose of Funds Section */}
+      {/* Purpose of Funds Section */}
       <div style={{ width: "100%", marginTop: "2rem" }}>
         <div
           style={{
@@ -686,12 +728,56 @@ const UseOfFunds = ({ data, updateData }) => {
         )}
       </div>
 
+      {/* Additional Support Required Section */}
+      <div style={{ width: "100%", marginTop: "2rem" }}>
+        <h3 style={{ marginBottom: "1rem" }}>Additional Support Required</h3>
+        <div className="grid-container">
+          <div>
+            <FormField label="Support Focus">
+              <select
+                name="additionalSupportFocus"
+                value={data.additionalSupportFocus || ""}
+                onChange={handleSupportFocusChange}
+                className="form-select"
+              >
+                <option value="">Select Support Focus</option>
+                {supportFocusCategories.map((category) => (
+                  <option key={category.value} value={category.value}>
+                    {category.label}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+          </div>
+
+          <div>
+            <FormField label="Support Focus Subtype">
+              <select
+                name="additionalSupportFocusSubtype"
+                value={data.additionalSupportFocusSubtype || ""}
+                onChange={handleChange}
+                className="form-select"
+                disabled={!data.additionalSupportFocus}
+              >
+                <option value="">
+                  {data.additionalSupportFocus ? "Select Support Focus Subtype" : "Select Support Focus first"}
+                </option>
+                {getSupportFocusSubtypes().map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+          </div>
+        </div>
+      </div>
+
       {/* Validation Modal */}
       <ValidationModal
         isOpen={showValidationModal}
         onClose={() => {
           setShowValidationModal(false)
-          // Don't reset hasShownValidationModal here so it stays true
         }}
         message={validationMessage}
       />
@@ -701,7 +787,6 @@ const UseOfFunds = ({ data, updateData }) => {
 
 // Export the renderUseOfFunds function for backward compatibility
 export const renderUseOfFunds = (data, updateFormData) => {
-  // Create a wrapper that transforms the updateFormData call
   const transformedUpdateData = (newData) => {
     updateFormData("useOfFunds", newData)
   }
