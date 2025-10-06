@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useRef, useEffect } from "react"
@@ -658,45 +657,7 @@ const fetchSMes = async () => {
   }
 
   // Use program sponsors data if available, otherwise fallback to mock data
-  const displayData = programSponsors.length > 0 ? programSponsors : interns.length > 0 ? interns : [
-    {
-      id: "INT-001",
-      smseName: "Sample Tech Corp",
-      location: "Cape Town",
-      sector: "Tech",
-      operationStage: "Seed",
-      internshipRole: "Software development",
-      briefDescription: {
-        title: "Software Development Intern",
-        company: "Sample Tech Corp",
-        duration: "6 months",
-        requirements: [
-          "Currently pursuing Computer Science or related degree",
-          "Basic knowledge of JavaScript, Python, or Java",
-          "Understanding of web development fundamentals"
-        ],
-        responsibilities: [
-          "Assist in developing web applications",
-          "Participate in code reviews and testing",
-          "Collaborate with senior developers"
-        ],
-        benefits: [
-          "Mentorship from experienced developers",
-          "Exposure to cutting-edge technologies",
-          "Professional development opportunities"
-        ],
-        applicationProcess: "Submit CV and cover letter through our portal."
-      },
-      stipend: "Pro-Bono",
-      startDate: "16 June 2024",
-      matchPercentage: 95,
-      status: "New Match",
-      action: "Application Review",
-      ratingRecommendation: "Not Yet Completed",
-      documents: [],
-      notes: []
-    }
-  ]
+  const displayData = programSponsors.length > 0 ? programSponsors : interns.length > 0 ? interns : []
 
   const filteredInterns = displayData.filter((intern) => {
     if (filters.location && !intern.location.toLowerCase().includes(filters.location.toLowerCase())) return false
@@ -1355,68 +1316,98 @@ const handleSendInternMessage = async () => {
           </div>
         </div>
 
-        {/* Table content */}
-        {filteredInterns.length === 0 ? (
-          <div
+        {/* Always show table structure */}
+        <div
+          style={{
+            borderRadius: "8px",
+            border: "1px solid #E0E0E0",
+            boxShadow: "0 4px 24px rgba(93, 64, 55, 0.08)",
+            width: "100%",
+          }}
+        >
+          <table
             style={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              padding: "2rem",
-              color: "#5D4037",
-            }}
-          >
-            <p>No matching interns found. Try adjusting your filters.</p>
-          </div>
-        ) : (
-          <div
-            style={{
-              borderRadius: "8px",
-              border: "1px solid #E0E0E0",
-              boxShadow: "0 4px 24px rgba(93, 64, 55, 0.08)",
               width: "100%",
+              borderCollapse: "collapse",
+              background: "white",
+              fontSize: "0.8rem",
+              backgroundColor: "#FFFFFF",
+              tableLayout: "fixed", // This makes columns respect width settings
             }}
           >
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                background: "white",
-                fontSize: "0.8rem",
-                backgroundColor: "#FFFFFF",
-                tableLayout: "fixed", // This makes columns respect width settings
-              }}
-            >
-              <colgroup>
-                <col style={{ width: "12%" }} />
-                <col style={{ width: "10%" }} />
-                <col style={{ width: "8%" }} />
-                <col style={{ width: "10%" }} />
-                <col style={{ width: "15%" }} />
-                <col style={{ width: "8%" }} />
-                <col style={{ width: "10%" }} />
-                <col style={{ width: "8%" }} />
-                <col style={{ width: "10%" }} />
-                <col style={{ width: "12%" }} />
-                <col style={{ width: "7%" }} />
-              </colgroup>
-              <thead>
+            <colgroup>
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "15%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "7%" }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th style={tableHeaderStyle}>SMSE Name</th>
+                <th style={tableHeaderStyle}>Location</th>
+                <th style={tableHeaderStyle}>Sector</th>
+                <th style={tableHeaderStyle}>Stage</th>
+                <th style={tableHeaderStyle}>Role</th>
+                <th style={tableHeaderStyle}>Stipend</th>
+                <th style={tableHeaderStyle}>Start Date</th>
+                <th style={tableHeaderStyle}>Match %</th>
+                <th style={tableHeaderStyle}>Status</th>
+                <th style={tableHeaderStyle}>Action</th>
+                <th style={{ ...tableHeaderStyle, borderRight: "none" }}>Rating</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredInterns.length === 0 ? (
+                // Empty state - show empty table row with message
                 <tr>
-                  <th style={tableHeaderStyle}>SMSE Name</th>
-                  <th style={tableHeaderStyle}>Location</th>
-                  <th style={tableHeaderStyle}>Sector</th>
-                  <th style={tableHeaderStyle}>Stage</th>
-                  <th style={tableHeaderStyle}>Role</th>
-                  <th style={tableHeaderStyle}>Stipend</th>
-                  <th style={tableHeaderStyle}>Start Date</th>
-                  <th style={tableHeaderStyle}>Match %</th>
-                  <th style={tableHeaderStyle}>Status</th>
-                  <th style={tableHeaderStyle}>Action</th>
-                  <th style={{ ...tableHeaderStyle, borderRight: "none" }}>Rating</th>
+                  <td colSpan="11" style={{
+                    padding: "3rem 2rem",
+                    textAlign: "center",
+                    color: "#666",
+                    fontSize: "1rem",
+                    borderBottom: "1px solid #E0E0E0"
+                  }}>
+                    <div style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: "1rem"
+                    }}>
+                      <div style={{
+                        fontSize: "3rem",
+                        color: "#D7CCC8"
+                      }}>
+                        📋
+                      </div>
+                      <div>
+                        <h3 style={{
+                          margin: "0 0 0.5rem 0",
+                          color: "#5D4037",
+                          fontSize: "1.2rem"
+                        }}>
+                          You have not applied for any customers, so there are no matches available.
+                        </h3>
+                        <p style={{
+                          margin: "0",
+                          color: "#666",
+                          fontSize: "0.9rem"
+                        }}>
+                          You need to apply first. Once you start applying to internship opportunities, your matches will appear in this table with details like company name, location, sector, and match percentage.
+                        </p>
+                      </div>
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {filteredInterns.map((intern) => {
+              ) : (
+                // Show actual data rows
+                filteredInterns.map((intern) => {
                   const currentStatus =  intern.status || statuses[intern.id]
                   const statusStyle = getStatusStyle(currentStatus)
                   return (
@@ -1595,11 +1586,11 @@ const handleSendInternMessage = async () => {
                       </td>
                     </tr>
                   )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* All your existing modals remain the same */}
@@ -2224,6 +2215,80 @@ const handleSendInternMessage = async () => {
                 </button>
                 <button style={cancelButtonStyle} onClick={closeAllModals}>
                   Close
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+
+      {/* Message Modal */}
+      {mounted &&
+        showMessageModal &&
+        selectedIntern &&
+        createPortal(
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(0,0,0,0.5)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1000,
+            }}
+          >
+            <div
+              style={{
+                background: "white",
+                borderRadius: "12px",
+                maxWidth: "600px",
+                width: "90%",
+                maxHeight: "70vh",
+                overflowY: "auto",
+                boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
+              }}
+            >
+              <div style={modalHeaderStyle}>
+                <h3 style={modalTitleStyle}>
+                  <MessageCircle size={20} style={{ marginRight: "0.5rem" }} />
+                  Send Message to {selectedIntern.smseName}
+                </h3>
+                <button onClick={closeAllModals} style={modalCloseButtonStyle}>
+                  ✖
+                </button>
+              </div>
+              <div style={modalBodyStyle}>
+                <textarea
+                  style={{
+                    width: "100%",
+                    height: "200px",
+                    padding: "1rem",
+                    border: "1px solid #E0E0E0",
+                    borderRadius: "8px",
+                    fontSize: "0.875rem",
+                    fontFamily: "inherit",
+                    resize: "vertical",
+                    outline: "none",
+                  }}
+                  placeholder="Type your message here..."
+                  value={messageText}
+                  onChange={(e) => setMessageText(e.target.value)}
+                />
+              </div>
+              <div style={modalActionsStyle}>
+                <button
+                  style={primaryButtonStyle}
+                  onClick={handleSendMessage}
+                  disabled={!messageText.trim()}
+                >
+                  <Send size={16} /> Send Message
+                </button>
+                <button style={cancelButtonStyle} onClick={closeAllModals}>
+                  Cancel
                 </button>
               </div>
             </div>

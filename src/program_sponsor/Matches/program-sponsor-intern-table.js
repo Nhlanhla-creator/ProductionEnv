@@ -726,6 +726,173 @@ const BigScoreBreakdownModal = ({ intern, onClose,bigScoreData }) => {
   );
 };
 
+// Empty State Component
+const EmptyStateTable = () => {
+  return (
+    <div>
+      {/* Empty Table Structure */}
+      <div
+        style={{
+          borderRadius: "8px",
+          border: "1px solid #E0E0E0",
+          boxShadow: "0 4px 24px rgba(93, 64, 55, 0.08)",
+          width: "100%",
+          marginBottom: "2rem",
+        }}
+      >
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "collapse",
+            background: "white",
+            fontSize: "0.8rem",
+            backgroundColor: "#FFFFFF",
+            tableLayout: "fixed",
+          }}
+        >
+          <colgroup>
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "9%" }} />
+            <col style={{ width: "7%" }} />
+            <col style={{ width: "8%" }} />
+            <col style={{ width: "8%" }} />
+            <col style={{ width: "9%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "8%" }} />
+            <col style={{ width: "7%" }} />
+            <col style={{ width: "7%" }} />
+            <col style={{ width: "8%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "8%" }} />
+          </colgroup>
+          <thead>
+            <tr>
+              <th style={tableHeaderStyle}>Intern Name</th>
+              <th style={tableHeaderStyle}>Institution</th>
+              <th style={tableHeaderStyle}>Degree</th>
+              <th style={tableHeaderStyle}>Field</th>
+              <th style={tableHeaderStyle}>Location</th>
+              <th style={tableHeaderStyle}>SME Name</th>
+              <th style={tableHeaderStyle}>Intern Role</th>
+              <th style={tableHeaderStyle}>Sponsorship Start</th>
+              <th style={tableHeaderStyle}>Internship Start</th>
+              <th style={tableHeaderStyle}>Match %</th>
+              <th style={tableHeaderStyle}>BIG Score</th>
+              <th style={tableHeaderStyle}>Internship Status</th>
+              <th style={tableHeaderStyle}>Sponsorship period</th>
+              <th style={{ ...tableHeaderStyle, borderRight: "none" }}>Rating</th>
+            </tr>
+          </thead>
+          <tbody>
+            {/* Empty rows to show structure */}
+            {[].map((index) => (
+              <tr key={index} style={{ borderBottom: "1px solid #E0E0E0", opacity: 0.3 }}>
+                <td style={tableCellStyle}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <div
+                      style={{
+                        width: "28px",
+                        height: "28px",
+                        borderRadius: "50%",
+                        background: "#EFEBE9",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "0.7rem",
+                        fontWeight: "bold",
+                        color: "#5D4037",
+                        flexShrink: 0,
+                      }}
+                    >
+                      -
+                    </div>
+                    <span style={{ color: "#999" }}>No data</span>
+                  </div>
+                </td>
+                <td style={tableCellStyle}><span style={{ color: "#999" }}>-</span></td>
+                <td style={tableCellStyle}><span style={{ color: "#999" }}>-</span></td>
+                <td style={tableCellStyle}><span style={{ color: "#999" }}>-</span></td>
+                <td style={tableCellStyle}><span style={{ color: "#999" }}>-</span></td>
+                <td style={tableCellStyle}><span style={{ color: "#999" }}>-</span></td>
+                <td style={tableCellStyle}><span style={{ color: "#999" }}>-</span></td>
+                <td style={tableCellStyle}><span style={{ color: "#999" }}>-</span></td>
+                <td style={tableCellStyle}><span style={{ color: "#999" }}>-</span></td>
+                <td style={tableCellStyle}>
+                  <div style={matchContainerStyle}>
+                    <div style={progressBarStyle}>
+                      <div style={{ ...progressFillStyle, width: "0%" }} />
+                    </div>
+                    <span style={{ ...matchScoreStyle, color: "#999" }}>0%</span>
+                  </div>
+                </td>
+                <td style={tableCellStyle}>
+                  <div style={matchContainerStyle}>
+                    <div style={progressBarStyle}>
+                      <div style={{ ...progressFillStyle, width: "0%" }} />
+                    </div>
+                    <span style={{ ...matchScoreStyle, color: "#999" }}>0%</span>
+                  </div>
+                </td>
+                <td style={tableCellStyle}><span style={{ color: "#999" }}>-</span></td>
+                <td style={tableCellStyle}><span style={{ color: "#999" }}>-</span></td>
+                <td style={{ ...tableCellStyle, borderRight: "none" }}><span style={{ color: "#999" }}>-</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      
+      {/* Message underneath the empty table */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "3rem 2rem",
+          backgroundColor: "#f8f9fa",
+          borderRadius: "12px",
+          border: "2px dashed #d7ccc8",
+          textAlign: "center",
+        }}
+      >
+        <div
+          style={{
+            fontSize: "3rem",
+            marginBottom: "1rem",
+            color: "#8d6e63",
+          }}
+        >
+          📋
+        </div>
+        <h3
+          style={{
+            fontSize: "1.5rem",
+            fontWeight: "600",
+            color: "#5d4037",
+            margin: "0 0 1rem 0",
+          }}
+        >
+          No Applications Yet
+        </h3>
+        <p
+          style={{
+            fontSize: "1.1rem",
+            color: "#666",
+            margin: "0 0 1.5rem 0",
+            maxWidth: "500px",
+            lineHeight: "1.6",
+          }}
+        >
+          You have not applied for any interns, so there are no matches available. You need to apply first.
+        </p>
+     
+      </div>
+    </div>
+  );
+};
+
 export function ProgramSponsorInternTable() {
   const [interns, setInterns] = useState([])
   const [loading, setLoading] = useState(true)
@@ -1348,17 +1515,7 @@ const closeMatchModal = () => {
 
         {/* Table content */}
         {filteredInterns.length === 0 ? (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              padding: "2rem",
-              color: "#5D4037",
-            }}
-          >
-            <p>No matching interns found. Try adjusting your filters.</p>
-          </div>
+          <EmptyStateTable />
         ) : (
           <div
             style={{
