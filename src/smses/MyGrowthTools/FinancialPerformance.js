@@ -1921,7 +1921,7 @@ const BalanceSheetHealth = ({ activeSection, financialYearStart, chartData, onUp
   )
 }
 
-const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, user }) => {
+const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, user, onUpdatePnLData }) => {
   const [chartViewMode, setChartViewMode] = useState("data")
   const [visibleCharts, setVisibleCharts] = useState({
     sales: true,
@@ -1931,6 +1931,10 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
     netProfit: true,
     percentage: true,
   })
+  const [showUploadModal, setShowUploadModal] = useState(false)
+  const [uploadedFileName, setUploadedFileName] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [uploadStatus, setUploadStatus] = useState("")
 
   if (activeSection !== "pnl-snapshot") return null
 
@@ -1953,6 +1957,8 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
   const processPnLData = () => {
     // If we have uploaded PnL data, use it
     if (pnlData && Object.keys(pnlData).length > 0) {
+      console.log("Processing P&L Data:", pnlData)
+
       const sales = Number.parseFloat(pnlData.sales) || 0
       const cogs = Number.parseFloat(pnlData.cogs) || 0
       const opex = Number.parseFloat(pnlData.opex) || 0
@@ -2010,6 +2016,163 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
       pnlData.cogs ||
       pnlData.opex
     )
+  }
+
+  // CSV Upload Handler for P&L Data
+  const handleCSVUpload = async (event) => {
+    const file = event.target.files[0]
+    if (!file) return
+
+    setIsLoading(true)
+    setUploadStatus("Processing file...")
+    setUploadedFileName(file.name)
+
+    try {
+      // Check file type
+      if (!file.name.toLowerCase().endsWith('.csv')) {
+        setUploadStatus("❌ Please upload a CSV file, not Excel (.xlsx)")
+        setIsLoading(false)
+        return
+      }
+
+      const text = await readFileAsText(file)
+      parsePnLCSVData(text)
+
+    } catch (error) {
+      console.error("Error processing file:", error)
+      setUploadStatus("❌ Error processing file. Please check the format.")
+      setIsLoading(false)
+    }
+  }
+
+  // Helper function to read file as text
+  const readFileAsText = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (e) => resolve(e.target.result)
+      reader.onerror = (e) => reject(e)
+      reader.readAsText(file)
+    })
+  }
+
+  // Improved P&L CSV parser based on your template
+  const parsePnLCSVData = (csvText) => {
+    setUploadStatus("Extracting data from CSV...")
+
+    const lines = csvText.split('\n').filter(line => line.trim())
+    const extractedData = {
+      sales: 0,
+      cogs: 0,
+      opex: 0,
+      grossProfit: 0,
+      netProfit: 0
+    }
+
+    console.log("Raw CSV lines:", lines)
+
+    let currentSection = ''
+    let hasData = false
+
+    lines.forEach((line, index) => {
+      // Clean the line and split by comma
+      const cleanLine = line.replace(/"/g, '').trim()
+      const cells = cleanLine.split(',').map(cell => cell.trim())
+
+      // Skip empty lines
+      if (cells.length < 2 || !cells[0]) return
+
+      const accountName = cells[0].toLowerCase()
+      const amount = parseFloat(cells[1]) || 0
+
+      console.log(`Line ${index}:`, { accountName, amount, currentSection })
+
+      // Detect sections based on your template
+      if (accountName.includes('trading income') || accountName.includes('sales -')) {
+        currentSection = 'income'
+      } else if (accountName.includes('cost of sales') || accountName.includes('cost of sales -')) {
+        currentSection = 'cogs'
+      } else if (accountName.includes('operating expenses') || accountName.includes('operating expense')) {
+        currentSection = 'opex'
+      } else if (accountName.includes('gross profit') && !accountName.includes('total')) {
+        currentSection = 'grossProfit'
+      } else if (accountName.includes('net profit') && !accountName.includes('total')) {
+        currentSection = 'netProfit'
+      }
+
+      // Extract data based on template structure
+      if (currentSection === 'income') {
+        if ((accountName.includes('sales') || accountName.includes('revenue')) &&
+          !accountName.includes('total') &&
+          amount > 0) {
+          extractedData.sales += amount
+          hasData = true
+          console.log(`Added to sales: ${amount}, Total: ${extractedData.sales}`)
+        }
+      } else if (currentSection === 'cogs') {
+        if (!accountName.includes('total cost of sales') &&
+          !accountName.includes('total') &&
+          amount !== 0) {
+          extractedData.cogs += Math.abs(amount) // Use absolute value for costs
+          hasData = true
+          console.log(`Added to COGS: ${amount}, Total: ${extractedData.cogs}`)
+        }
+      } else if (currentSection === 'opex') {
+        if (!accountName.includes('total operating expenses') &&
+          !accountName.includes('total') &&
+          amount !== 0) {
+          extractedData.opex += Math.abs(amount) // Use absolute value for expenses
+          hasData = true
+          console.log(`Added to OPEX: ${amount}, Total: ${extractedData.opex}`)
+        }
+      } else if (currentSection === 'grossProfit' && amount !== 0) {
+        extractedData.grossProfit = amount
+        hasData = true
+        console.log(`Set Gross Profit: ${amount}`)
+      } else if (currentSection === 'netProfit' && amount !== 0) {
+        extractedData.netProfit = amount
+        hasData = true
+        console.log(`Set Net Profit: ${amount}`)
+      }
+    })
+
+    // Calculate derived values if not explicitly found
+    if (extractedData.grossProfit === 0 && extractedData.sales > 0) {
+      extractedData.grossProfit = extractedData.sales - extractedData.cogs
+      console.log(`Calculated Gross Profit: ${extractedData.grossProfit}`)
+    }
+    if (extractedData.netProfit === 0 && extractedData.grossProfit > 0) {
+      extractedData.netProfit = extractedData.grossProfit - extractedData.opex
+      console.log(`Calculated Net Profit: ${extractedData.netProfit}`)
+    }
+
+    console.log("Final Extracted P&L Data:", extractedData)
+
+    if (hasData) {
+      setUploadStatus("✅ Data successfully extracted!")
+
+      // Update the parent component with the extracted data
+      onUpdatePnLData(extractedData)
+
+      // Save to Firebase if user is logged in
+      if (user) {
+        try {
+          setDoc(doc(db, "financialData", `${user.uid}_pnlData`), {
+            userId: user.uid,
+            chartName: "pnlData",
+            data: extractedData,
+            lastUpdated: new Date().toISOString()
+          })
+          console.log("P&L data saved to Firebase")
+        } catch (error) {
+          console.error("Error saving P&L data:", error)
+        }
+      }
+    } else {
+      setUploadStatus("❌ No valid data found. Please check your CSV format.")
+    }
+
+    setIsLoading(false)
+    setTimeout(() => setUploadStatus(""), 5000) // Clear status after 5 seconds
   }
 
   // Calculate variance (budget - actual)
@@ -2138,6 +2301,86 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
         borderRadius: "8px",
       }}
     >
+      {/* Upload Button and Status */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "20px",
+          flexWrap: "wrap",
+          gap: "15px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "15px", flexWrap: "wrap" }}>
+          <button
+            onClick={() => setShowUploadModal(true)}
+            disabled={isLoading}
+            style={{
+              padding: "12px 24px",
+              backgroundColor: isLoading ? "#cccccc" : "#5d4037",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              cursor: isLoading ? "not-allowed" : "pointer",
+              fontWeight: "600",
+              fontSize: "14px",
+            }}
+          >
+            {isLoading ? "⏳ Processing..." : "📁 Upload P&L CSV"}
+          </button>
+
+          {uploadedFileName && (
+            <span style={{ color: "#5d4037", fontWeight: "500" }}>
+              File: {uploadedFileName}
+            </span>
+          )}
+
+          {uploadStatus && (
+            <span style={{
+              color: uploadStatus.includes("❌") ? "#d32f2f" : "#388e3c",
+              fontWeight: "500",
+              fontSize: "14px"
+            }}>
+              {uploadStatus}
+            </span>
+          )}
+        </div>
+
+        <div style={{ display: "flex", gap: "10px" }}>
+          <button
+            onClick={() => setChartViewMode("data")}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: chartViewMode === "data" ? "#5d4037" : "#e8ddd4",
+              color: chartViewMode === "data" ? "#fdfcfb" : "#5d4037",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: "500",
+              fontSize: "14px",
+            }}
+          >
+            Actual vs Budget
+          </button>
+          <button
+            onClick={() => setChartViewMode("variance")}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: chartViewMode === "variance" ? "#5d4037" : "#e8ddd4",
+              color: chartViewMode === "variance" ? "#fdfcfb" : "#5d4037",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: "500",
+              fontSize: "14px",
+            }}
+          >
+            Variance Analysis
+          </button>
+        </div>
+      </div>
+
       {/* Data Status */}
       {!hasPnLData() ? (
         <div
@@ -2154,6 +2397,9 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
           <p style={{ margin: 0, fontWeight: "500" }}>
             📊 Upload a CSV file with P&L data (Sales, COGS, Operating Expenses) to see charts.
           </p>
+          <p style={{ margin: "10px 0 0 0", fontSize: "14px" }}>
+            💡 <strong>Note:</strong> Please export your Excel file as CSV before uploading.
+          </p>
         </div>
       ) : (
         <div
@@ -2167,20 +2413,21 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
           }}
         >
           <p style={{ margin: 0, fontWeight: "500" }}>
-            ✅ Showing P&L data from uploaded CSV file
+            ✅ P&L data loaded successfully!
           </p>
-          {pnlData.sales && (
-            <div style={{ marginTop: "10px", fontSize: "14px" }}>
-              <strong>Uploaded Data:</strong>
-              Sales: R{Number(pnlData.sales).toLocaleString()} |
-              COGS: R{Number(pnlData.cogs || 0).toLocaleString()} |
-              OPEX: R{Number(pnlData.opex || 0).toLocaleString()}
+          {pnlData && (
+            <div style={{ marginTop: "10px", fontSize: "14px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px" }}>
+              <div><strong>Sales:</strong> R{Number(pnlData.sales || 0).toLocaleString()}</div>
+              <div><strong>COGS:</strong> R{Number(pnlData.cogs || 0).toLocaleString()}</div>
+              <div><strong>OPEX:</strong> R{Number(pnlData.opex || 0).toLocaleString()}</div>
+              <div><strong>Gross Profit:</strong> R{Number(pnlData.grossProfit || 0).toLocaleString()}</div>
+              <div><strong>Net Profit:</strong> R{Number(pnlData.netProfit || 0).toLocaleString()}</div>
             </div>
           )}
         </div>
       )}
 
-      {/* Rest of the PnL Snapshot component remains similar to previous version */}
+      {/* Chart Visibility Controls */}
       <div
         style={{
           backgroundColor: "#fdfcfb",
@@ -2303,6 +2550,120 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
           </div>
         )}
       </div>
+
+      {/* CSV Upload Modal */}
+      {showUploadModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "white",
+              padding: "30px",
+              borderRadius: "8px",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
+              width: "600px",
+              maxWidth: "90vw",
+              textAlign: "center",
+            }}
+          >
+            <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "20px" }}>Upload P&L CSV File</h3>
+
+            <div
+              style={{
+                backgroundColor: "#f0f8ff",
+                padding: "20px",
+                borderRadius: "6px",
+                marginBottom: "20px",
+                border: "2px dashed #b3d9ff",
+              }}
+            >
+              <p style={{ color: "#1e3a8a", margin: "0 0 15px 0", fontSize: "14px", fontWeight: "bold" }}>
+                ⚠️ Important: Please export your Excel file as CSV first!
+              </p>
+              <p style={{ color: "#1e3a8a", margin: "0 0 15px 0", fontSize: "14px" }}>
+                In Excel: File → Save As → Choose "CSV (Comma delimited)" format
+              </p>
+
+              <div style={{ textAlign: "left", backgroundColor: "white", padding: "15px", borderRadius: "4px", fontSize: "12px", fontFamily: "monospace" }}>
+                <p><strong>Expected CSV format (based on your template):</strong></p>
+                <p>Sales - Kolomela DMS, 5480794.06</p>
+                <p>Sales - Sishen - JIG, 38444.0</p>
+                <p>Cost of Sales - [Category], [Amount]</p>
+                <p>Operating Expenses - [Category], [Amount]</p>
+                <p>Gross Profit, [Amount]</p>
+                <p>Net Profit, [Amount]</p>
+              </div>
+            </div>
+
+            <input
+              type="file"
+              accept=".csv"
+              onChange={handleCSVUpload}
+              disabled={isLoading}
+              style={{
+                marginBottom: "20px",
+                width: "100%",
+                padding: "10px",
+                border: "2px solid #e8ddd4",
+                borderRadius: "4px",
+                opacity: isLoading ? 0.6 : 1,
+              }}
+            />
+
+            {isLoading && (
+              <div style={{ marginBottom: "15px" }}>
+                <div style={{ display: "inline-block", width: "20px", height: "20px", border: "3px solid #f3f3f3", borderTop: "3px solid #5d4037", borderRadius: "50%", animation: "spin 1s linear infinite" }}></div>
+                <span style={{ marginLeft: "10px", color: "#5d4037" }}>Processing file...</span>
+              </div>
+            )}
+
+            <div
+              style={{
+                display: "flex",
+                gap: "10px",
+                justifyContent: "center",
+              }}
+            >
+              <button
+                onClick={() => setShowUploadModal(false)}
+                disabled={isLoading}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: isLoading ? "not-allowed" : "pointer",
+                  fontWeight: "500",
+                  opacity: isLoading ? 0.6 : 1,
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add CSS for spinner */}
+      <style jsx>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   )
 }
@@ -2328,6 +2689,7 @@ const FinancialPerformance = () => {
       } else {
         setChartData({})
         setBalanceSheetData(null)
+        setPnLData(null)
       }
     })
 
@@ -2343,11 +2705,14 @@ const FinancialPerformance = () => {
 
       const userData = {}
       let balanceSheet = null
+      let pnlData = null
 
       querySnapshot.forEach((doc) => {
         const data = doc.data()
         if (data.chartName === "balanceSheet") {
           balanceSheet = data.data
+        } else if (data.chartName === "pnlData") {
+          pnlData = data.data
         } else {
           userData[data.chartName] = {
             name: data.name,
@@ -2361,6 +2726,7 @@ const FinancialPerformance = () => {
 
       setChartData(userData)
       setBalanceSheetData(balanceSheet)
+      setPnLData(pnlData)
     } catch (error) {
       console.error("Error loading user data:", error)
     }
@@ -2610,8 +2976,9 @@ const FinancialPerformance = () => {
             activeSection={activeSection}
             viewMode={viewMode}
             financialYearStart={financialYearStart}
-            pnlData={pnlData} // Pass PnL data instead of balanceSheetData
+            pnlData={pnlData}
             user={user}
+            onUpdatePnLData={handleUpdatePnLData} // Add this prop
           />
           <CashflowTrends
             activeSection={activeSection}

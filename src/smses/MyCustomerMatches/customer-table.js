@@ -1656,47 +1656,36 @@ const getSupplierRating = (supplierId) => {
           </div>
         </div>
 
-        {/* Table Content */}
-        {applications.length === 0 ? (
-          <div style={emptyStateStyle}>
-            <div style={{ textAlign: "center", padding: "2rem" }}>
-              <FileText size={48} color="#a67c52" style={{ marginBottom: "1rem" }} />
-              <h3 style={{ color: "#5D2A0A", marginBottom: "0.5rem" }}>No Applications Yet</h3>
-                <p style={{ color: "#8D6E63", marginBottom: "1rem" }}>
-               You have not applied for any customers, so there are no matches available. You need to apply first
-              </p>
-            </div>
-          </div>
-        ) : filteredApplications.length === 0 ? (
-          <div style={noResultsStyle}>
-            <p>No applications match your current filters.</p>
-            <button onClick={clearAllFilters} style={clearFiltersButtonStyle}>
-              Clear All Filters
-            </button>
-          </div>
-        ) : (
-          <div style={tableContainerStyle}>
-            <table style={tableStyle}>
-              <thead>
+        {/* Table Content - Always show table structure */}
+        <div style={tableContainerStyle}>
+          <table style={tableStyle}>
+            <thead>
+              <tr>
+                <th style={tableHeaderStyle}>Customer Name</th>
+                <th style={tableHeaderStyle}>Location</th>
+                <th style={tableHeaderStyle}>Sector Focus</th>
+                <th style={tableHeaderStyle}>Customer Type</th>
+                <th style={tableHeaderStyle}>Budget Range</th>
+                <th style={tableHeaderStyle}>Service Requested</th>
+                <th style={tableHeaderStyle}>Last Activity</th>
+                <th style={tableHeaderStyle}>Delivery Turnaround</th>
+                <th style={tableHeaderStyle}>Match %</th>
+                <th style={tableHeaderStyle}>Current Stage</th>
+                <th style={tableHeaderStyle}>Next Stage</th>
+                <th style={tableHeaderStyle}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {applications.length === 0 ? (
+                // Empty state row
                 <tr>
-                  <th style={tableHeaderStyle}>Customer Name</th>
-                  <th style={tableHeaderStyle}>Location</th>
-                  <th style={tableHeaderStyle}>Sector Focus</th>
-                  <th style={tableHeaderStyle}>Customer Type</th>
-                  <th style={tableHeaderStyle}>Budget Range</th>
-                  <th style={tableHeaderStyle}>Service Requested</th>
-                  <th style={tableHeaderStyle}>Last Activity</th>
-                  <th style={tableHeaderStyle}>Delivery Turnaround</th>
-                  <th style={tableHeaderStyle}>Match %</th>
-
-                  <th style={tableHeaderStyle}>Current Stage</th>
-
-                  <th style={tableHeaderStyle}>Next Stage</th>
-                  <th style={tableHeaderStyle}>Action</th>
+                  <td colSpan="12" style={{ ...tableCellStyle, textAlign: "center", padding: "2rem", border: "none" }}>
+                    {/* Empty cell to maintain table structure */}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {sortedApplications.map((application) => {
+              ) : (
+                // Render actual applications
+                sortedApplications.map((application) => {
                   const statusStyle = getStatusStyle(application.status)
                   const budgetRange = application.originalRequest?.budgetRange
                   const budgetText = budgetRange
@@ -1808,8 +1797,6 @@ const getSupplierRating = (supplierId) => {
                         </div>
                       </td>
 
-                      {/* Action */}
-
                       {/* Current Stage */}
                       <td style={tableCellStyle}>
                         <span style={statusBadgeStyle}>{application.currentStage || "Application Submitted"}</span>
@@ -1835,6 +1822,7 @@ const getSupplierRating = (supplierId) => {
                         </span>
                       </td>
 
+                      {/* Action */}
                       <td style={tableCellStyle}>
                         <div style={{ display: "flex", gap: "0.5rem" }}>
                           <button
@@ -1858,9 +1846,32 @@ const getSupplierRating = (supplierId) => {
                       </td>
                     </tr>
                   )
-                })}
-              </tbody>
-            </table>
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Message below table when no applications */}
+        {applications.length === 0 && (
+          <div style={emptyMessageStyle}>
+            <div style={{ textAlign: "center", padding: "2rem" }}>
+              <FileText size={48} color="#a67c52" style={{ marginBottom: "1rem" }} />
+              <h3 style={{ color: "#5D2A0A", marginBottom: "0.5rem" }}>No Applications Yet</h3>
+              <p style={{ color: "#8D6E63", marginBottom: "1rem" }}>
+                You have not applied for any customers, so there are no matches available. You need to apply first
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* No results message for filtered results */}
+        {applications.length > 0 && filteredApplications.length === 0 && (
+          <div style={noResultsStyle}>
+            <p>No applications match your current filters.</p>
+            <button onClick={clearAllFilters} style={clearFiltersButtonStyle}>
+              Clear All Filters
+            </button>
           </div>
         )}
 
@@ -2944,14 +2955,15 @@ const errorStyle = {
   color: "#D32F2F",
 }
 
-const emptyStateStyle = {
+const emptyMessageStyle = {
   display: "flex",
   justifyContent: "center",
   alignItems: "center",
-  minHeight: "300px",
+  minHeight: "200px",
   background: "#FEFCFA",
   borderRadius: "8px",
   border: "1px dashed #E8D5C4",
+  marginTop: "1rem",
 }
 
 const noResultsStyle = {
