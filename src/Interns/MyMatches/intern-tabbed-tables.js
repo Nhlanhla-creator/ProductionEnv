@@ -639,180 +639,210 @@ const SuccessfulInternshipsTable = ({ refreshCount }) => {
     <>
       <div style={{ marginBottom: '24px' }}></div>
 
-      {successfulInternships.length === 0 ? (
-        <div style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          padding: "2rem",
-          color: "#5D4037",
-          flexDirection: "column",
-          gap: "1rem"
+      {/* Always show table structure */}
+      <div style={{
+        overflowX: "auto",
+        borderRadius: "8px",
+        border: "1px solid #E8D5C4",
+        boxShadow: "0 4px 24px rgba(139, 69, 19, 0.08)",
+      }}>
+        <table style={{
+          width: "100%",
+          borderCollapse: "collapse",
+          background: "white",
+          fontSize: "0.875rem",
+          backgroundColor: "#FEFCFA",
+          tableLayout: "fixed"
         }}>
-          <Trophy size={48} color="#8D6E63" />
-          <p>No successful internships yet. When your matches are confirmed, they will appear here.</p>
-        </div>
-      ) : (
-        <div style={{
-          overflowX: "auto",
-          borderRadius: "8px",
-          border: "1px solid #E8D5C4",
-          boxShadow: "0 4px 24px rgba(139, 69, 19, 0.08)",
-        }}>
-          <table style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            background: "white",
-            fontSize: "0.875rem",
-            backgroundColor: "#FEFCFA",
-            tableLayout: "fixed"
-          }}>
-            <thead>
+          <thead>
+            <tr>
+              <th style={{
+                background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                color: "#FEFCFA",
+                padding: "0.75rem 0.5rem",
+                textAlign: "left",
+                fontWeight: "600",
+                fontSize: "0.75rem",
+                letterSpacing: "0.5px",
+                textTransform: "uppercase",
+                borderRight: "1px solid #1a0c02",
+                width: '12%'
+              }}>
+                Company Name
+              </th>
+              <th style={{
+                background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                color: "#FEFCFA",
+                padding: "0.75rem 0.5rem",
+                textAlign: "left",
+                fontWeight: "600",
+                fontSize: "0.75rem",
+                letterSpacing: "0.5px",
+                textTransform: "uppercase",
+                borderRight: "1px solid #1a0c02",
+                width: '10%'
+              }}>
+                Monthly Stipend
+              </th>
+              <th style={{
+                background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                color: "#FEFCFA",
+                padding: "0.75rem 0.5rem",
+                textAlign: "left",
+                fontWeight: "600",
+                fontSize: "0.75rem",
+                letterSpacing: "0.5px",
+                textTransform: "uppercase",
+                borderRight: "1px solid #1a0c02",
+                width: '9%'
+              }}>
+                Location
+              </th>
+              <th style={{
+                background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                color: "#FEFCFA",
+                padding: "0.75rem 0.5rem",
+                textAlign: "left",
+                fontWeight: "600",
+                fontSize: "0.75rem",
+                letterSpacing: "0.5px",
+                textTransform: "uppercase",
+                borderRight: "1px solid #1a0c02",
+                width: '10%'
+              }}>
+                Completion Date
+              </th>
+              <th style={{
+                background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                color: "#FEFCFA",
+                padding: "0.75rem 0.5rem",
+                textAlign: "left",
+                fontWeight: "600",
+                fontSize: "0.75rem",
+                letterSpacing: "0.5px",
+                textTransform: "uppercase",
+                borderRight: "1px solid #1a0c02",
+                width: '9%'
+              }}>
+                Sector
+              </th>
+              <th style={{
+                background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                color: "#FEFCFA",
+                padding: "0.75rem 0.5rem",
+                textAlign: "left",
+                fontWeight: "600",
+                fontSize: "0.75rem",
+                letterSpacing: "0.5px",
+                textTransform: "uppercase",
+                borderRight: "1px solid #1a0c02",
+                width: '8%'
+              }}>
+                Duration
+              </th>
+              <th style={{
+                background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                color: "#FEFCFA",
+                padding: "0.75rem 0.5rem",
+                textAlign: "center",
+                fontWeight: "600",
+                fontSize: "0.75rem",
+                letterSpacing: "0.5px",
+                textTransform: "uppercase",
+                borderRight: "1px solid #1a0c02",
+                width: '7%'
+              }}>
+                Rating
+              </th>
+              <th style={{
+                background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                color: "#FEFCFA",
+                padding: "0.75rem 0.5rem",
+                textAlign: "left",
+                fontWeight: "600",
+                fontSize: "0.75rem",
+                letterSpacing: "0.5px",
+                textTransform: "uppercase",
+                borderRight: "1px solid #1a0c02",
+                width: '11%'
+              }}>
+                Status
+              </th>
+              <th style={{
+                background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                color: "#FEFCFA",
+                padding: "0.75rem 0.5rem",
+                textAlign: "left",
+                fontWeight: "600",
+                fontSize: "0.75rem",
+                letterSpacing: "0.5px",
+                textTransform: "uppercase",
+                borderRight: "1px solid #1a0c02",
+                width: '10%'
+              }}>
+                Post-Internship
+              </th>
+              <th style={{
+                background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                color: "#FEFCFA",
+                padding: "0.75rem 0.5rem",
+                textAlign: "center",
+                fontWeight: "600",
+                fontSize: "0.75rem",
+                letterSpacing: "0.5px",
+                textTransform: "uppercase",
+                borderRight: "none",
+                width: '14%'
+              }}>
+                Action
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {successfulInternships.length === 0 ? (
+              // Empty state - show empty table row with message
               <tr>
-                <th style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "left",
-                  fontWeight: "600",
-                  fontSize: "0.75rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: '12%'
-                }}>
-                  Company Name
-                </th>
-                <th style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "left",
-                  fontWeight: "600",
-                  fontSize: "0.75rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: '10%'
-                }}>
-                  Monthly Stipend
-                </th>
-                <th style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "left",
-                  fontWeight: "600",
-                  fontSize: "0.75rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: '9%'
-                }}>
-                  Location
-                </th>
-                <th style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "left",
-                  fontWeight: "600",
-                  fontSize: "0.75rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: '10%'
-                }}>
-                  Completion Date
-                </th>
-                <th style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "left",
-                  fontWeight: "600",
-                  fontSize: "0.75rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: '9%'
-                }}>
-                  Sector
-                </th>
-                <th style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "left",
-                  fontWeight: "600",
-                  fontSize: "0.75rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: '8%'
-                }}>
-                  Duration
-                </th>
-                <th style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
+                <td colSpan="10" style={{
+                  padding: "3rem 2rem",
                   textAlign: "center",
-                  fontWeight: "600",
-                  fontSize: "0.75rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: '7%'
+                  color: "#666",
+                  fontSize: "1rem",
+                  borderBottom: "1px solid #E8D5C4"
                 }}>
-                  Rating
-                </th>
-                <th style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "left",
-                  fontWeight: "600",
-                  fontSize: "0.75rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: '11%'
-                }}>
-                  Status
-                </th>
-                <th style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "left",
-                  fontWeight: "600",
-                  fontSize: "0.75rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: '10%'
-                }}>
-                  Post-Internship
-                </th>
-                <th style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "center",
-                  fontWeight: "600",
-                  fontSize: "0.75rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "none",
-                  width: '14%'
-                }}>
-                  Action
-                </th>
+                  <div style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: "1rem"
+                  }}>
+                    <div style={{
+                      fontSize: "3rem",
+                      color: "#D7CCC8"
+                    }}>
+                      🏆
+                    </div>
+                    <div>
+                      <h3 style={{
+                        margin: "0 0 0.5rem 0",
+                        color: "#5D4037",
+                        fontSize: "1.2rem"
+                      }}>
+                        No successful internships yet.
+                      </h3>
+                      <p style={{
+                        margin: "0",
+                        color: "#666",
+                        fontSize: "0.9rem"
+                      }}>
+                        When your matches are confirmed and completed, they will appear here with details like company name, stipend, completion date, rating, and post-internship outcomes.
+                      </p>
+                    </div>
+                  </div>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {successfulInternships.map((internship) => (
+            ) : (
+              // Show actual data rows
+              successfulInternships.map((internship) => (
                 <tr key={internship.id} style={{
                   borderBottom: "1px solid #E8D5C4",
                   transition: "all 0.2s ease"
@@ -1018,11 +1048,11 @@ const SuccessfulInternshipsTable = ({ refreshCount }) => {
                     </div>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
 
       {/* Internship Details Modal */}
       {selectedInternship && (

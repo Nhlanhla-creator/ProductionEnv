@@ -1,6 +1,6 @@
 "use client"
 import { useState, useRef, useEffect } from "react"
-import { ChevronDown, X, Trophy, TrendingUp, Calendar, DollarSign, Users, BarChart3 } from "lucide-react"
+import { ChevronDown, X, Trophy, TrendingUp, Calendar, DollarSign, Users, BarChart3, Info } from "lucide-react"
 import { InvestorSMETable } from "./investor-sme-table"
 import styles from "./investor-funding.module.css"
 import { collection, query, where, getDocs, onSnapshot, doc, getDoc } from "firebase/firestore"
@@ -270,27 +270,6 @@ const SuccessfulDealsTable = () => {
     )
   }
 
-  if (deals.length === 0) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          alignItems: "center",
-          minHeight: "400px",
-          fontSize: "16px",
-          color: "#666",
-          textAlign: "center",
-        }}
-      >
-        <Trophy size={48} style={{ color: "#ccc", marginBottom: "16px" }} />
-        <p>No successful deals yet.</p>
-        <p style={{ fontSize: "14px", color: "#999" }}>Completed deals will appear here automatically.</p>
-      </div>
-    )
-  }
-
   const modalOverlayStyle = {
     position: "fixed",
     top: 0,
@@ -320,179 +299,213 @@ const SuccessfulDealsTable = () => {
 
   return (
     <>
+      {/* Always show the table structure */}
       <div className={styles.tableContainer}>
         <table className={styles.fundingTable} style={{ tableLayout: "fixed", width: "100%" }}>
           <thead>
             <tr>
-              <th style={{ width: "12%", lineHeight: "1.2" }}>SME Name</th> {/* Reduced width slightly */}
-              <th style={{ width: "10%" }}>Deal Amount</th> {/* Reduced width */}
-              <th style={{ width: "9%" }}>Deal Type</th> {/* Reduced width */}
+              <th style={{ width: "12%", lineHeight: "1.2" }}>SME Name</th>
+              <th style={{ width: "10%" }}>Deal Amount</th>
+              <th style={{ width: "9%" }}>Deal Type</th>
               <th style={{ width: "10%" }}>Completion Date</th>
-              <th style={{ width: "11%" }}>Sector</th> {/* Increased width slightly */}
+              <th style={{ width: "11%" }}>Sector</th>
               <th style={{ width: "10%" }}>Location</th>
               <th style={{ width: "8%" }}>Team Size</th>
               <th style={{ width: "7%" }}>ROI</th>
               <th style={{ width: "8%" }}>Revenue Growth</th>
-              <th style={{ width: "10%" }}>Current Status</th> {/* Reduced width */}
-              <th style={{ width: "5%" }}>Action</th> {/* Added Action column */}
+              <th style={{ width: "10%" }}>Current Status</th>
+              <th style={{ width: "5%" }}>Action</th>
             </tr>
           </thead>
           <tbody>
-            {deals.map((deal) => (
-              <tr key={deal.id}>
-                <td style={{ wordWrap: "break-word", whiteSpace: "normal", verticalAlign: "top" }}>
-                  <span
-                    style={{
-                      color: "#a67c52",
-                      fontWeight: "500",
-                      display: "block",
-                      lineHeight: "1.3",
-                      wordWrap: "break-word",
-                      whiteSpace: "normal",
-                      cursor: "pointer",
-                    }}
-                    onClick={() => handleViewDetails(deal)}
-                  >
-                    <TruncatedText text={deal.smeName} maxLines={2} />
-                  </span>
-                </td>
+            {deals.length > 0 ? (
+              deals.map((deal) => (
+                <tr key={deal.id}>
+                  <td style={{ wordWrap: "break-word", whiteSpace: "normal", verticalAlign: "top" }}>
+                    <span
+                      style={{
+                        color: "#a67c52",
+                        fontWeight: "500",
+                        display: "block",
+                        lineHeight: "1.3",
+                        wordWrap: "break-word",
+                        whiteSpace: "normal",
+                        cursor: "pointer",
+                      }}
+                      onClick={() => handleViewDetails(deal)}
+                    >
+                      <TruncatedText text={deal.smeName} maxLines={2} />
+                    </span>
+                  </td>
 
-                <td
-                  style={{
-                    verticalAlign: "top",
-                    fontWeight: "600",
-                    color: "#2196f3",
-                    fontSize: "13px", // Reduced font size for better fit
-                  }}
-                >
-                  {deal.dealAmount}
-                </td>
-
-                <td style={{ verticalAlign: "top" }}>
-                  <span
+                  <td
                     style={{
-                      backgroundColor: "#e3f2fd",
-                      color: "#1976d2",
-                      padding: "3px 6px", // Reduced padding
-                      borderRadius: "10px", // Reduced border radius
-                      fontSize: "11px", // Reduced font size
+                      verticalAlign: "top",
                       fontWeight: "600",
+                      color: "#2196f3",
+                      fontSize: "13px",
                     }}
                   >
-                    {deal.dealType}
-                  </span>
-                </td>
+                    {deal.dealAmount}
+                  </td>
 
-                <td
-                  style={{
-                    verticalAlign: "top",
-                    fontSize: "13px", // Reduced font size
-                  }}
-                >
-                  {formatDate(deal.completionDate)}
-                </td>
+                  <td style={{ verticalAlign: "top" }}>
+                    <span
+                      style={{
+                        backgroundColor: "#e3f2fd",
+                        color: "#1976d2",
+                        padding: "3px 6px",
+                        borderRadius: "10px",
+                        fontSize: "11px",
+                        fontWeight: "600",
+                      }}
+                    >
+                      {deal.dealType}
+                    </span>
+                  </td>
 
-                <td style={{ verticalAlign: "top", fontSize: "13px" }}>
-                  {" "}
-                  {/* Reduced font size */}
-                  <TruncatedText text={deal.sector} maxLines={2} />
-                </td>
-
-                <td style={{ verticalAlign: "top", fontSize: "13px" }}>
-                  {" "}
-                  {/* Reduced font size */}
-                  <TruncatedText text={deal.location} maxLines={2} />
-                </td>
-
-                <td
-                  style={{
-                    verticalAlign: "top",
-                    fontSize: "13px", // Reduced font size
-                    textAlign: "center",
-                  }}
-                >
-                  {deal.teamSize}
-                </td>
-
-                <td
-                  style={{
-                    verticalAlign: "top",
-                    textAlign: "center",
-                  }}
-                >
-                  <span
+                  <td
                     style={{
-                      color: getRoiColor(deal.roi),
-                      fontWeight: "700",
-                      fontSize: "13px", // Reduced font size
+                      verticalAlign: "top",
+                      fontSize: "13px",
                     }}
                   >
-                    {deal.roi}
-                  </span>
-                </td>
+                    {formatDate(deal.completionDate)}
+                  </td>
 
-                <td
-                  style={{
-                    verticalAlign: "top",
-                    textAlign: "center",
-                  }}
-                >
-                  <span
-                    style={{
-                      color: getRoiColor(deal.revenueGrowth),
-                      fontWeight: "600",
-                      fontSize: "13px", // Reduced font size
-                    }}
-                  >
-                    {deal.revenueGrowth}
-                  </span>
-                </td>
+                  <td style={{ verticalAlign: "top", fontSize: "13px" }}>
+                    <TruncatedText text={deal.sector} maxLines={2} />
+                  </td>
 
-                <td style={{ verticalAlign: "top" }}>
-                  <span
-                    style={{
-                      backgroundColor: getStatusColor(deal.currentStatus) + "20",
-                      color: getStatusColor(deal.currentStatus),
-                      padding: "4px 8px", // Reduced padding
-                      borderRadius: "10px", // Reduced border radius
-                      fontSize: "11px", // Reduced font size
-                      fontWeight: "600",
-                      display: "inline-block",
-                    }}
-                  >
-                    {deal.currentStatus}
-                  </span>
-                </td>
+                  <td style={{ verticalAlign: "top", fontSize: "13px" }}>
+                    <TruncatedText text={deal.location} maxLines={2} />
+                  </td>
 
-                <td style={{ verticalAlign: "top", textAlign: "center" }}>
-                  <button
-                    onClick={() => handleViewDetails(deal)}
+                  <td
                     style={{
-                      backgroundColor: "#5d4037",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "6px",
-                      padding: "4px 8px",
-                      fontSize: "11px",
-                      fontWeight: "600",
-                      cursor: "pointer",
-                      transition: "all 0.2s ease",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.target.style.backgroundColor = "#3e2723"
-                    }}
-                    onMouseLeave={(e) => {
-                      e.target.style.backgroundColor = "#5d4037"
+                      verticalAlign: "top",
+                      fontSize: "13px",
+                      textAlign: "center",
                     }}
                   >
-                    View
-                  </button>
-                </td>
+                    {deal.teamSize}
+                  </td>
+
+                  <td
+                    style={{
+                      verticalAlign: "top",
+                      textAlign: "center",
+                    }}
+                  >
+                    <span
+                      style={{
+                        color: getRoiColor(deal.roi),
+                        fontWeight: "700",
+                        fontSize: "13px",
+                      }}
+                    >
+                      {deal.roi}
+                    </span>
+                  </td>
+
+                  <td
+                    style={{
+                      verticalAlign: "top",
+                      textAlign: "center",
+                    }}
+                  >
+                    <span
+                      style={{
+                        color: getRoiColor(deal.revenueGrowth),
+                        fontWeight: "600",
+                        fontSize: "13px",
+                      }}
+                    >
+                      {deal.revenueGrowth}
+                    </span>
+                  </td>
+
+                  <td style={{ verticalAlign: "top" }}>
+                    <span
+                      style={{
+                        backgroundColor: getStatusColor(deal.currentStatus) + "20",
+                        color: getStatusColor(deal.currentStatus),
+                        padding: "4px 8px",
+                        borderRadius: "10px",
+                        fontSize: "11px",
+                        fontWeight: "600",
+                        display: "inline-block",
+                      }}
+                    >
+                      {deal.currentStatus}
+                    </span>
+                  </td>
+
+                  <td style={{ verticalAlign: "top", textAlign: "center" }}>
+                    <button
+                      onClick={() => handleViewDetails(deal)}
+                      style={{
+                        backgroundColor: "#5d4037",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "6px",
+                        padding: "4px 8px",
+                        fontSize: "11px",
+                        fontWeight: "600",
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.backgroundColor = "#3e2723"
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.backgroundColor = "#5d4037"
+                      }}
+                    >
+                      View
+                    </button>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              // Empty state row to show table structure
+              <tr>
+                <td style={{ padding: "2rem 8px", color: "#ccc", textAlign: "center" }}>-</td>
+                <td style={{ padding: "2rem 8px", color: "#ccc", textAlign: "center" }}>-</td>
+                <td style={{ padding: "2rem 8px", color: "#ccc", textAlign: "center" }}>-</td>
+                <td style={{ padding: "2rem 8px", color: "#ccc", textAlign: "center" }}>-</td>
+                <td style={{ padding: "2rem 8px", color: "#ccc", textAlign: "center" }}>-</td>
+                <td style={{ padding: "2rem 8px", color: "#ccc", textAlign: "center" }}>-</td>
+                <td style={{ padding: "2rem 8px", color: "#ccc", textAlign: "center" }}>-</td>
+                <td style={{ padding: "2rem 8px", color: "#ccc", textAlign: "center" }}>-</td>
+                <td style={{ padding: "2rem 8px", color: "#ccc", textAlign: "center" }}>-</td>
+                <td style={{ padding: "2rem 8px", color: "#ccc", textAlign: "center" }}>-</td>
+                <td style={{ padding: "2rem 8px", color: "#ccc", textAlign: "center" }}>-</td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
       </div>
+
+      {/* Message shown when no deals */}
+      {deals.length === 0 && (
+        <div
+          style={{
+            backgroundColor: "#f8f5f3",
+            padding: "24px",
+            borderRadius: "8px",
+            textAlign: "center",
+            border: "1px solid #e8d5c4",
+            marginTop: "24px",
+          }}
+        >
+          <Trophy size={48} style={{ color: "#a67c52", marginBottom: "16px" }} />
+          <h3 style={{ color: "#5d4037", marginBottom: "8px" }}>No Successful Deals Yet</h3>
+          <p style={{ color: "#7d5a50" }}>
+            Your successful investment deals will appear here once you complete funding transactions.
+          </p>
+        </div>
+      )}
 
       {/* Deal Details Modal */}
       {selectedDeal && (

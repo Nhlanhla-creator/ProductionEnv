@@ -181,211 +181,193 @@ const SuccessfulAdvisorDealsTable = ({ onDealsCountChange }) => {
 
   return (
     <>
-      <div style={{ marginBottom: "24px" }}>
-        {deals.length === 0 && (
-          <div
-            style={{
-              backgroundColor: "#f8f5f3",
-              padding: "24px",
-              borderRadius: "8px",
-              textAlign: "center",
-              border: "1px solid #e8d5c4",
-            }}
-          >
-            <Trophy size={48} style={{ color: "#a67c52", marginBottom: "16px" }} />
-            <h3 style={{ color: "#5d4037", marginBottom: "8px" }}>No Successful Deals Yet</h3>
-            <p style={{ color: "#7d5a50" }}>
-              Your successful advisory deals will appear here once you complete matches.
-            </p>
-          </div>
-        )}
-      </div>
-
-      {deals.length > 0 && (
-        <div
+      {/* Always show the table structure */}
+      <div
+        style={{
+          overflowX: "auto",
+          borderRadius: "8px",
+          border: "1px solid #E8D5C4",
+          boxShadow: "0 4px 24px rgba(139, 69, 19, 0.08)",
+          marginBottom: deals.length === 0 ? "24px" : "0",
+        }}
+      >
+        <table
           style={{
-            overflowX: "auto",
-            borderRadius: "8px",
-            border: "1px solid #E8D5C4",
-            boxShadow: "0 4px 24px rgba(139, 69, 19, 0.08)",
+            width: "100%",
+            borderCollapse: "collapse",
+            background: "white",
+            fontSize: "0.875rem",
+            backgroundColor: "#FEFCFA",
+            tableLayout: "fixed",
           }}
         >
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              background: "white",
-              fontSize: "0.875rem",
-              backgroundColor: "#FEFCFA",
-              tableLayout: "fixed",
-            }}
-          >
-            <thead>
-              <tr>
-                <th
-                  style={{
-                    background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                    color: "#FEFCFA",
-                    padding: "0.75rem 0.5rem",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    fontSize: "0.75rem",
-                    letterSpacing: "0.5px",
-                    textTransform: "uppercase",
-                    borderRight: "1px solid #1a0c02",
-                    width: "12%",
-                  }}
-                >
-                  SMSE Name
-                </th>
-                <th
-                  style={{
-                    background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                    color: "#FEFCFA",
-                    padding: "0.75rem 0.5rem",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    fontSize: "0.75rem",
-                    letterSpacing: "0.5px",
-                    textTransform: "uppercase",
-                    borderRight: "1px solid #1a0c02",
-                    width: "10%",
-                  }}
-                >
-                  Revenue Band
-                </th>
-                <th
-                  style={{
-                    background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                    color: "#FEFCFA",
-                    padding: "0.75rem 0.5rem",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    fontSize: "0.75rem",
-                    letterSpacing: "0.5px",
-                    textTransform: "uppercase",
-                    borderRight: "1px solid #1a0c02",
-                    width: "9%",
-                  }}
-                >
-                  Support Required
-                </th>
-                <th
-                  style={{
-                    background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                    color: "#FEFCFA",
-                    padding: "0.75rem 0.5rem",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    fontSize: "0.75rem",
-                    letterSpacing: "0.5px",
-                    textTransform: "uppercase",
-                    borderRight: "1px solid #1a0c02",
-                    width: "10%",
-                  }}
-                >
-                  Start Date
-                </th>
-                <th
-                  style={{
-                    background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                    color: "#FEFCFA",
-                    padding: "0.75rem 0.5rem",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    fontSize: "0.75rem",
-                    letterSpacing: "0.5px",
-                    textTransform: "uppercase",
-                    borderRight: "1px solid #1a0c02",
-                    width: "9%",
-                  }}
-                >
-                  Sector
-                </th>
-                <th
-                  style={{
-                    background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                    color: "#FEFCFA",
-                    padding: "0.75rem 0.5rem",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    fontSize: "0.75rem",
-                    letterSpacing: "0.5px",
-                    textTransform: "uppercase",
-                    borderRight: "1px solid #1a0c02",
-                    width: "10%",
-                  }}
-                >
-                  Location
-                </th>
-                <th
-                  style={{
-                    background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                    color: "#FEFCFA",
-                    padding: "0.75rem 0.5rem",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    fontSize: "0.75rem",
-                    letterSpacing: "0.5px",
-                    textTransform: "uppercase",
-                    borderRight: "1px solid #1a0c02",
-                    width: "8%",
-                  }}
-                >
-                  Duration
-                </th>
-                <th
-                  style={{
-                    background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                    color: "#FEFCFA",
-                    padding: "0.75rem 0.5rem",
-                    textAlign: "center",
-                    fontWeight: "600",
-                    fontSize: "0.75rem",
-                    letterSpacing: "0.5px",
-                    textTransform: "uppercase",
-                    borderRight: "1px solid #1a0c02",
-                    width: "12%",
-                  }}
-                >
-                  Compensation Model
-                </th>
-                <th
-                  style={{
-                    background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                    color: "#FEFCFA",
-                    padding: "0.75rem 0.5rem",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    fontSize: "0.75rem",
-                    letterSpacing: "0.5px",
-                    textTransform: "uppercase",
-                    borderRight: "1px solid #1a0c02",
-                    width: "10%",
-                  }}
-                >
-                  Status
-                </th>
-                <th
-                  style={{
-                    background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                    color: "#FEFCFA",
-                    padding: "0.75rem 0.5rem",
-                    textAlign: "center",
-                    fontWeight: "600",
-                    fontSize: "0.75rem",
-                    letterSpacing: "0.5px",
-                    textTransform: "uppercase",
-                    borderRight: "none",
-                    width: "10%",
-                  }}
-                >
-                  Action
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {deals.map((deal) => (
+          <thead>
+            <tr>
+              <th
+                style={{
+                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                  color: "#FEFCFA",
+                  padding: "0.75rem 0.5rem",
+                  textAlign: "left",
+                  fontWeight: "600",
+                  fontSize: "0.75rem",
+                  letterSpacing: "0.5px",
+                  textTransform: "uppercase",
+                  borderRight: "1px solid #1a0c02",
+                  width: "12%",
+                }}
+              >
+                SMSE Name
+              </th>
+              <th
+                style={{
+                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                  color: "#FEFCFA",
+                  padding: "0.75rem 0.5rem",
+                  textAlign: "left",
+                  fontWeight: "600",
+                  fontSize: "0.75rem",
+                  letterSpacing: "0.5px",
+                  textTransform: "uppercase",
+                  borderRight: "1px solid #1a0c02",
+                  width: "10%",
+                }}
+              >
+                Revenue Band
+              </th>
+              <th
+                style={{
+                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                  color: "#FEFCFA",
+                  padding: "0.75rem 0.5rem",
+                  textAlign: "left",
+                  fontWeight: "600",
+                  fontSize: "0.75rem",
+                  letterSpacing: "0.5px",
+                  textTransform: "uppercase",
+                  borderRight: "1px solid #1a0c02",
+                  width: "9%",
+                }}
+              >
+                Support Required
+              </th>
+              <th
+                style={{
+                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                  color: "#FEFCFA",
+                  padding: "0.75rem 0.5rem",
+                  textAlign: "left",
+                  fontWeight: "600",
+                  fontSize: "0.75rem",
+                  letterSpacing: "0.5px",
+                  textTransform: "uppercase",
+                  borderRight: "1px solid #1a0c02",
+                  width: "10%",
+                }}
+              >
+                Start Date
+              </th>
+              <th
+                style={{
+                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                  color: "#FEFCFA",
+                  padding: "0.75rem 0.5rem",
+                  textAlign: "left",
+                  fontWeight: "600",
+                  fontSize: "0.75rem",
+                  letterSpacing: "0.5px",
+                  textTransform: "uppercase",
+                  borderRight: "1px solid #1a0c02",
+                  width: "9%",
+                }}
+              >
+                Sector
+              </th>
+              <th
+                style={{
+                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                  color: "#FEFCFA",
+                  padding: "0.75rem 0.5rem",
+                  textAlign: "left",
+                  fontWeight: "600",
+                  fontSize: "0.75rem",
+                  letterSpacing: "0.5px",
+                  textTransform: "uppercase",
+                  borderRight: "1px solid #1a0c02",
+                  width: "10%",
+                }}
+              >
+                Location
+              </th>
+              <th
+                style={{
+                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                  color: "#FEFCFA",
+                  padding: "0.75rem 0.5rem",
+                  textAlign: "left",
+                  fontWeight: "600",
+                  fontSize: "0.75rem",
+                  letterSpacing: "0.5px",
+                  textTransform: "uppercase",
+                  borderRight: "1px solid #1a0c02",
+                  width: "8%",
+                }}
+              >
+                Duration
+              </th>
+              <th
+                style={{
+                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                  color: "#FEFCFA",
+                  padding: "0.75rem 0.5rem",
+                  textAlign: "center",
+                  fontWeight: "600",
+                  fontSize: "0.75rem",
+                  letterSpacing: "0.5px",
+                  textTransform: "uppercase",
+                  borderRight: "1px solid #1a0c02",
+                  width: "12%",
+                }}
+              >
+                Compensation Model
+              </th>
+              <th
+                style={{
+                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                  color: "#FEFCFA",
+                  padding: "0.75rem 0.5rem",
+                  textAlign: "left",
+                  fontWeight: "600",
+                  fontSize: "0.75rem",
+                  letterSpacing: "0.5px",
+                  textTransform: "uppercase",
+                  borderRight: "1px solid #1a0c02",
+                  width: "10%",
+                }}
+              >
+                Status
+              </th>
+              <th
+                style={{
+                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                  color: "#FEFCFA",
+                  padding: "0.75rem 0.5rem",
+                  textAlign: "center",
+                  fontWeight: "600",
+                  fontSize: "0.75rem",
+                  letterSpacing: "0.5px",
+                  textTransform: "uppercase",
+                  borderRight: "none",
+                  width: "10%",
+                }}
+              >
+                Action
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {deals.length > 0 ? (
+              deals.map((deal) => (
                 <tr
                   key={deal.id}
                   style={{
@@ -573,9 +555,42 @@ const SuccessfulAdvisorDealsTable = ({ onDealsCountChange }) => {
                     </button>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              ))
+            ) : (
+              // Empty state row to show table structure
+              <tr style={{ borderBottom: "1px solid #E8D5C4" }}>
+                <td style={{ padding: "2rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", textAlign: "center" }}>-</td>
+                <td style={{ padding: "2rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", textAlign: "center" }}>-</td>
+                <td style={{ padding: "2rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", textAlign: "center" }}>-</td>
+                <td style={{ padding: "2rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", textAlign: "center" }}>-</td>
+                <td style={{ padding: "2rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", textAlign: "center" }}>-</td>
+                <td style={{ padding: "2rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", textAlign: "center" }}>-</td>
+                <td style={{ padding: "2rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", textAlign: "center" }}>-</td>
+                <td style={{ padding: "2rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", textAlign: "center" }}>-</td>
+                <td style={{ padding: "2rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", textAlign: "center" }}>-</td>
+                <td style={{ padding: "2rem 0.5rem", color: "#ccc", textAlign: "center" }}>-</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Message shown when no deals */}
+      {deals.length === 0 && (
+        <div
+          style={{
+            backgroundColor: "#f8f5f3",
+            padding: "24px",
+            borderRadius: "8px",
+            textAlign: "center",
+            border: "1px solid #e8d5c4",
+          }}
+        >
+          <Trophy size={48} style={{ color: "#a67c52", marginBottom: "16px" }} />
+          <h3 style={{ color: "#5d4037", marginBottom: "8px" }}>No Successful Deals Yet</h3>
+          <p style={{ color: "#7d5a50" }}>
+            Your successful advisory deals will appear here once you complete matches.
+          </p>
         </div>
       )}
 

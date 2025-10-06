@@ -86,7 +86,7 @@ const MATCHING_CRITERIA = {
   },
 
   // Lower importance (total 20%)
-   URGENCY_LEAD_TIME: { // COMBINED URGENCY AND LEAD TIME
+  URGENCY_LEAD_TIME: { // COMBINED URGENCY AND LEAD TIME
     weight: 0.05, // 10%
     description: "Delivery Timeframe & Urgency Match",
   },
@@ -156,7 +156,7 @@ function getDeliveryModeMatches(appModes, supplyModes) {
   // Check if either has Hybrid for full compatibility
   const appHasHybrid = appModes.includes("Hybrid")
   const supplyHasHybrid = supplyModes.includes("Hybrid")
-  
+
   if (appHasHybrid || supplyHasHybrid) {
     matches.push({
       applicationMode: appHasHybrid ? "Hybrid" : appModes[0],
@@ -227,7 +227,7 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
   const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [suppliers, setSuppliers] = useState([])
-   const [supplierRatings, setSupplierRatings] = useState({})
+  const [supplierRatings, setSupplierRatings] = useState({})
   const [productApplications, setProductApplications] = useState([])
   const [allSuppliers, setAllSuppliers] = useState([])
   const [filteredSuppliers, setFilteredSuppliers] = useState([])
@@ -268,16 +268,16 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
     )
   }
 
-   
+
   const fetchSupplierRatings = async () => {
     try {
       const ratingsSnapshot = await getDocs(collection(db, "supplierReviews"))
       const ratingsData = {}
-      
+
       ratingsSnapshot.forEach((doc) => {
         const ratingData = doc.data()
         const supplierId = ratingData.supplierId
-        
+
         if (supplierId) {
           if (!ratingsData[supplierId]) {
             ratingsData[supplierId] = []
@@ -291,7 +291,7 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
           })
         }
       })
-      
+
       // Calculate average ratings for each supplier
       const averageRatings = {}
       Object.keys(ratingsData).forEach(supplierId => {
@@ -312,18 +312,38 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
           }
         }
       })
-      
+
       console.log("Fetched supplier ratings:", averageRatings)
       setSupplierRatings(averageRatings)
       return averageRatings // Return the data so it can be used immediately
-     
+
     } catch (error) {
       console.error("Error fetching supplier ratings:", error)
       return {}
     }
   }
-  
-    const getSupplierRating = (supplierId) => {
+
+  // Add this function to fetch the current user's product application
+  const fetchCurrentUserProductApplication = async () => {
+    try {
+      const auth = getAuth()
+      const currentUser = auth.currentUser
+      if (!currentUser) return null
+
+      const docRef = doc(db, "productApplications", currentUser.uid)
+      const docSnap = await getDoc(docRef)
+
+      if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() }
+      }
+      return null
+    } catch (error) {
+      console.error("Error fetching product application:", error)
+      return null
+    }
+  }
+
+  const getSupplierRating = (supplierId) => {
     return supplierRatings[supplierId] || {
       average: 0,
       count: 0,
@@ -357,15 +377,39 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch product applications
-        const applicationsSnapshot = await getDocs(collection(db, "productApplications"))
-        const applicationsData = applicationsSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }))
-        setProductApplications(applicationsData)
+        setLoading(true)
 
-        // Fetch universal profiles (suppliers)
+        const auth = getAuth()
+        const currentUser = auth.currentUser
+
+        if (!currentUser) {
+          setError("Please log in to view suppliers")
+          setLoading(false)
+          return
+        }
+
+        // 1. FIRST: Fetch current user's product application
+        const currentUserApplication = await fetchCurrentUserProductApplication()
+
+        if (!currentUserApplication) {
+          // No product application found - show empty state with message
+          setSuppliers([])
+          setAllSuppliers([])
+          setFilteredSuppliers([])
+          setProductApplications([])
+          setLoading(false)
+
+          // Notify parent component
+          if (onSuppliersUpdate) {
+            onSuppliersUpdate([], [])
+          }
+          return
+        }
+
+        // User has a product application - proceed with matching
+        setProductApplications([currentUserApplication])
+
+        // 2. Fetch universal profiles (suppliers)
         const profilesSnapshot = await getDocs(collection(db, "universalProfiles"))
         const profilesData = profilesSnapshot.docs.map((doc) => {
           const data = doc.data()
@@ -376,151 +420,124 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
             financialOverview: data.financialOverview || {},
             legalCompliance: data.legalCompliance || {},
             entityOverview: data.entityOverview || {},
-            // Default stage values
             currentStage: "Potential Supplier",
             status: "New Lead",
           }
         })
 
-           const ratingsData = await fetchSupplierRatings()
-        // Fetch supplier applications to sync stages
-        const auth = getAuth()
-        const currentUser = auth.currentUser
+        // 3. Fetch ratings data
+        const ratingsData = await fetchSupplierRatings()
+
+        // 4. Fetch supplier applications to sync stages
         let supplierApplicationsData = []
+        const supplierAppsQuery = query(
+          collection(db, "supplierApplications"),
+          where("supplierId", "==", currentUser.uid),
+        )
+        const supplierAppsSnapshot = await getDocs(supplierAppsQuery)
+        supplierApplicationsData = supplierAppsSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }))
 
-        if (currentUser) {
-          const supplierAppsQuery = query(
-            collection(db, "supplierApplications"),
-            where("supplierId", "==", currentUser.uid),
-          )
-          const supplierAppsSnapshot = await getDocs(supplierAppsQuery)
-          supplierApplicationsData = supplierAppsSnapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }))
-        }
+        // 5. Calculate matches using current user's product application
+        const suppliersWithMatches = profilesData
+          .map((supplier) => {
+            // Skip the current user's own profile
+            if (supplier.id === currentUser.uid) return null
 
-        // Calculate matches if we have applications
-        let suppliersWithMatches
-        if (applicationsData.length > 0) {
-          const currentApplication = applicationsData.find((app) => app.id === auth.currentUser?.uid)
-          console.log(currentApplication)
+            // Calculate match score between current user's needs and supplier's offerings
+            const matchScore = calculateMatchScore(currentUserApplication, supplier, ratingsData)
 
-suppliersWithMatches = profilesData.map((supplier) => {
-  // Pass the ratings data directly to calculateMatchScore
-  const matchScore = calculateMatchScore(currentApplication, supplier, ratingsData)
-  console.log(matchScore.totalScore)
-  console.log(supplier)
+            // Filter out very low matches (adjust threshold as needed)
+            if (matchScore.totalScore < 10) return null
 
-  // Get first category name or default
-  const firstCategory = getFirstCategory(supplier.productsServices)
-  // Find if this supplier has an application (where they are the customer)
-  const supplierApp = supplierApplicationsData.find((app) => app.customerId === supplier.id)
+            // Get first category name or default
+            const firstCategory = getFirstCategory(supplier.productsServices)
 
-  // Get the actual rating from the ratings data
-  const supplierRatingData = ratingsData[supplier.id] || {
-    average: 0,
-    count: 0,
-    latestComment: "No ratings yet"
-  }
-  const actualRating = supplierRatingData.average
+            // Get the matched service from the breakdown
+            const matchedService = matchScore.breakdown.categoryMatch?.matchedServices?.[0] ||
+              firstCategory ||
+              "Service/Product"
 
-  return {
-    ...supplier,
-    matchPercentage: matchScore.totalScore,
-    matchDetails: matchScore.breakdown,
-    status: supplierApp?.status || getStatusBasedOnScore(matchScore.totalScore),
-    rating: actualRating, // Use the actual rating from supplierReviews
-    avgResponseTime: "1-2 days",
-    lastActivity: supplierApp?.updatedAt || new Date().toLocaleDateString(),
-    urgency: supplier.applicationOverview?.urgency || "Not specified",
-    dealSize: supplier.financialOverview?.annualRevenue || "Not specified",
-    serviceCategory: firstCategory,
-    currentStage: supplierApp?.currentStage || "Potential Supplier",
-    nextStage: supplierApp?.nextStage || "Initial Contact",
-    bbbeeLevel: supplier.legalCompliance?.bbbeeLevel || "N/A",
-    applicationId: supplierApp?.id || null,
-    ratingCount: supplierRatingData.count, // Add rating count for display
-  }
-})
+            // Find if this supplier has an existing application (where they are the customer)
+            const supplierApp = supplierApplicationsData.find((app) => app.customerId === supplier.id)
 
-          // Sort by match percentage (highest to lowest)
-          suppliersWithMatches.sort((a, b) => b.matchPercentage - a.matchPercentage)
-          setSuppliers(suppliersWithMatches)
-        } else {
-          // Fallback if no applications
-          suppliersWithMatches = profilesData.map((profile) => {
-            // Find if this supplier has an application (where they are the customer)
-            const supplierApp = supplierApplicationsData.find((app) => app.customerId === profile.id)
+            // Get the actual rating from the ratings data
+            const supplierRatingData = ratingsData[supplier.id] || {
+              average: 0,
+              count: 0,
+              latestComment: "No ratings yet"
+            }
 
             return {
-              ...profile,
-              // matchPercentage: Math.floor(Math.random() * 40) + 60,
-              status: supplierApp?.status || "New Lead",
-              rating: (profile.pisScore || 50) / 10,
-              serviceCategory: Array.isArray(profile.productsServices?.productCategories)
-                ? profile.productsServices.productCategories[0]?.name || "Not specified"
-                : "Not specified",
-              bbbeeLevel: profile.legalCompliance?.bbbeeLevel || "N/A",
-              dealSize: profile.financialOverview?.annualRevenue || "Not specified",
+              ...supplier,
+              matchPercentage: matchScore.totalScore,
+              matchDetails: matchScore.breakdown,
+              matchedService: matchedService, // Add this field
+              status: supplierApp?.status || getStatusBasedOnScore(matchScore.totalScore),
+              rating: supplierRatingData.average,
+              avgResponseTime: "1-2 days",
+              lastActivity: supplierApp?.updatedAt || new Date().toLocaleDateString(),
+              urgency: currentUserApplication.requestOverview?.urgency || "Not specified",
+              dealSize: supplier.financialOverview?.annualRevenue || "Not specified",
+              serviceCategory: firstCategory,
               currentStage: supplierApp?.currentStage || "Potential Supplier",
               nextStage: supplierApp?.nextStage || "Initial Contact",
+              bbbeeLevel: supplier.legalCompliance?.bbbeeLevel || "N/A",
               applicationId: supplierApp?.id || null,
-              lastActivity: supplierApp?.updatedAt || new Date().toLocaleDateString(),
+              ratingCount: supplierRatingData.count,
             }
           })
-          setSuppliers(suppliersWithMatches)
-        }
+          .filter(Boolean) // Remove null entries
 
+        // Sort by match percentage (highest to lowest)
+        suppliersWithMatches.sort((a, b) => b.matchPercentage - a.matchPercentage)
+
+        setSuppliers(suppliersWithMatches)
         setAllSuppliers(suppliersWithMatches)
         setFilteredSuppliers(suppliersWithMatches)
 
-        if (currentUser) {
-          const supplierAppsQuery = query(
-            collection(db, "supplierApplications"),
-            where("supplierId", "==", currentUser.uid),
-          )
+        // 6. Set up real-time listener for supplier application updates
+        const unsubscribe = onSnapshot(supplierAppsQuery, (snapshot) => {
+          const updatedApplications = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
 
-          const unsubscribe = onSnapshot(supplierAppsQuery, (snapshot) => {
-            const updatedApplications = snapshot.docs.map((doc) => ({
-              id: doc.id,
-              ...doc.data(),
-            }))
-
-            setAllSuppliers((prev) =>
-              prev.map((supplier) => {
-                const updatedApp = updatedApplications.find((app) => app.customerId === supplier.id)
-                if (updatedApp) {
-                  // Check if status changed to "Accepted"
-                  if (updatedApp.status === "Accepted" && supplier.status !== "Accepted") {
-                    // Notify parent about accepted supplier
-                    if (onSupplierAccepted) {
-                      onSupplierAccepted(supplier.id)
-                    }
-                  }
-
-                  return {
-                    ...supplier,
-                    currentStage: updatedApp.currentStage || supplier.currentStage,
-                    status: updatedApp.status || supplier.status,
-                    applicationId: updatedApp.id,
-
-                    lastActivity: updatedApp.updatedAt || updatedApp.createdAt || supplier.lastActivity,
+          setAllSuppliers((prev) =>
+            prev.map((supplier) => {
+              const updatedApp = updatedApplications.find((app) => app.customerId === supplier.id)
+              if (updatedApp) {
+                // Check if status changed to "Accepted"
+                if (updatedApp.status === "Accepted" && supplier.status !== "Accepted") {
+                  // Notify parent about accepted supplier
+                  if (onSupplierAccepted) {
+                    onSupplierAccepted(supplier.id)
                   }
                 }
-                return supplier
-              }),
-            )
-          })
 
-          // Cleanup function
-          return () => unsubscribe()
-        }
+                return {
+                  ...supplier,
+                  currentStage: updatedApp.currentStage || supplier.currentStage,
+                  status: updatedApp.status || supplier.status,
+                  applicationId: updatedApp.id,
+                  lastActivity: updatedApp.updatedAt || updatedApp.createdAt || supplier.lastActivity,
+                }
+              }
+              return supplier
+            }),
+          )
+        })
 
-        // Notify parent component of the update
+        // 7. Notify parent component of the update
         if (onSuppliersUpdate) {
           onSuppliersUpdate(suppliersWithMatches, suppliersWithMatches)
         }
+
+        // Cleanup function
+        return () => unsubscribe()
+
       } catch (err) {
         console.error("Error fetching data:", err)
         setError("Failed to load data. Please try again later.")
@@ -541,7 +558,7 @@ suppliersWithMatches = profilesData.map((supplier) => {
   }
 
 
-function calculateMatchScore(application, supplier, ratingsData = null) {
+  function calculateMatchScore(application, supplier, ratingsData = null) {
     if (!application || !supplier) {
       console.error("Invalid parameters to calculateMatchScore:", { application, supplier })
       return {
@@ -567,8 +584,8 @@ function calculateMatchScore(application, supplier, ratingsData = null) {
     // Normalize application categories
     const appCategories = Array.isArray(demand.categories)
       ? demand.categories
-          .map((c) => (typeof c === "string" ? c.toLowerCase().trim() : (c.name || "").toLowerCase().trim()))
-          .filter(Boolean)
+        .map((c) => (typeof c === "string" ? c.toLowerCase().trim() : (c.name || "").toLowerCase().trim()))
+        .filter(Boolean)
       : []
 
     console.log("Application Categories:", appCategories)
@@ -576,19 +593,26 @@ function calculateMatchScore(application, supplier, ratingsData = null) {
     // Normalize supplier categories from both productCategories and serviceCategories
     const supplierProductCategories = Array.isArray(supply.productCategories)
       ? supply.productCategories
-          .map((c) => (typeof c === "string" ? c.toLowerCase().trim() : (c.name || "").toLowerCase().trim()))
-          .filter(Boolean)
+        .map((c) => (typeof c === "string" ? c.toLowerCase().trim() : (c.name || "").toLowerCase().trim()))
+        .filter(Boolean)
       : []
 
     const supplierServiceCategories = Array.isArray(supply.serviceCategories)
       ? supply.serviceCategories
-          .map((c) => (typeof c === "string" ? c.toLowerCase().trim() : (c.name || "").toLowerCase().trim()))
-          .filter(Boolean)
+        .map((c) => (typeof c === "string" ? c.toLowerCase().trim() : (c.name || "").toLowerCase().trim()))
+        .filter(Boolean)
       : []
 
     // Combine all supplier categories and remove duplicates
     const allSupplierCategories = [...new Set([...supplierProductCategories, ...supplierServiceCategories])]
     console.log("Supplier Categories:", allSupplierCategories)
+
+    // Extract keywords from application
+    const userKeywords = demand.keywords
+      ? demand.keywords.toLowerCase().split(/[,\s]+/).filter(k => k.length > 2)
+      : []
+
+    console.log("User Keywords:", userKeywords)
 
     const appBudgetMin = Number.parseInt((requestOverview.minBudget || "0").replace(/\D/g, "")) || 0
     const appBudgetMax = Number.parseInt((requestOverview.maxBudget || "0").replace(/\D/g, "")) || 1000000
@@ -620,38 +644,57 @@ function calculateMatchScore(application, supplier, ratingsData = null) {
 
     console.log("Supplier Revenue:", revenue)
 
-    // IMPROVED CATEGORY MATCHING (30%)
-    if (MATCHING_CRITERIA.CATEGORY_MATCH.weight > 0) {
-      let categoryScore = 0
-
-      if (appCategories.length > 0 && allSupplierCategories.length > 0) {
-        // Find matching categories (case-insensitive, partial matches)
-        const matchingCategories = appCategories.filter((appCat) =>
-          allSupplierCategories.some(
-            (supplierCat) =>
-              supplierCat.includes(appCat) ||
-              appCat.includes(supplierCat) ||
-              calculateSimilarity(appCat, supplierCat) > 0.7,
-          ),
-        )
-
-        categoryScore = matchingCategories.length / appCategories.length
-        console.log("Category Matches:", matchingCategories, "Score:", categoryScore)
-      } else if (appCategories.length === 0) {
-        categoryScore = 0.5 // Neutral score if no categories specified
-      }
-
-      score += categoryScore * MATCHING_CRITERIA.CATEGORY_MATCH.weight * 100
-      breakdown.categoryMatch = {
-        score: categoryScore * 100,
-        description: MATCHING_CRITERIA.CATEGORY_MATCH.description,
-        matches: appCategories.length > 0 ? getCategoryMatches(appCategories, allSupplierCategories) : [],
-      }
-      totalWeight += MATCHING_CRITERIA.CATEGORY_MATCH.weight * 100
+    // 1. SERVICE/PRODUCT CATEGORY MATCH (Highest Priority - 40%)
+    {
+      filteredSuppliers.length === 0 && !loading && (
+        <div style={noResultsStyle}>
+          <div style={{ textAlign: "center" }}>
+            <p style={{ margin: "1rem 0", fontSize: "1rem", color: "#5D2A0A" }}>
+              {productApplications.length === 0
+                ? "You need to complete your Product Application first to see matching suppliers. Please fill out what products/services you need."
+                : "No suppliers match your current requirements. Try adjusting your filters or check back later."
+              }
+            </p>
+          </div>
+        </div>
+      )
     }
 
-    // Rest of your existing criteria calculations remain the same...
-    // 2. BBBEE_LEVEL (10%)
+    // 2. KEYWORD MATCH (New - 20%)
+    if (userKeywords.length > 0) {
+      let keywordScore = 0
+
+      // Combine supplier description and categories for keyword matching
+      const supplierText = [
+        supplierEntity.businessDescription || "",
+        ...supplierProductCategories,
+        ...supplierServiceCategories
+      ].join(" ").toLowerCase()
+
+      if (supplierText) {
+        const matchedKeywords = userKeywords.filter(keyword =>
+          supplierText.includes(keyword)
+        )
+        keywordScore = matchedKeywords.length / Math.max(userKeywords.length, 1)
+
+        console.log("Keyword Matches:", matchedKeywords, "Score:", keywordScore)
+      }
+
+      // Add keyword score with 20% weight (adjust MATCHING_CRITERIA if needed)
+      score += keywordScore * 0.2 * 100
+      breakdown.keywordMatch = {
+        score: keywordScore * 100,
+        description: "Keyword/Specific Needs Match",
+        matchedKeywords: userKeywords.length > 0 ? userKeywords.filter(kw =>
+          (supplierEntity.businessDescription || "").toLowerCase().includes(kw) ||
+          supplierProductCategories.some(cat => cat.includes(kw)) ||
+          supplierServiceCategories.some(cat => cat.includes(kw))
+        ) : []
+      }
+      totalWeight += 0.2 * 100
+    }
+
+    // 3. BBBEE_LEVEL (10%)
     if (MATCHING_CRITERIA.BBBEE_LEVEL.weight > 0) {
       let bbbeeScore = 0
 
@@ -669,7 +712,7 @@ function calculateMatchScore(application, supplier, ratingsData = null) {
       totalWeight += MATCHING_CRITERIA.BBBEE_LEVEL.weight * 100
     }
 
-    // 3. LOCATION (10%)
+    // 4. LOCATION (10%)
     if (MATCHING_CRITERIA.LOCATION.weight > 0) {
       const locationScore =
         location && appLocation && (location.includes(appLocation) || appLocation.includes(location)) ? 1 : 0
@@ -682,40 +725,39 @@ function calculateMatchScore(application, supplier, ratingsData = null) {
       totalWeight += MATCHING_CRITERIA.LOCATION.weight * 100
     }
 
-    
-// 4. DELIVERY_MODE (10%) - SIMPLIFIED WITH HYBRID COMPATIBILITY
-if (MATCHING_CRITERIA.DELIVERY_MODE.weight > 0) {
-  let deliveryScore = 0
+    // 5. DELIVERY_MODE (10%) - SIMPLIFIED WITH HYBRID COMPATIBILITY
+    if (MATCHING_CRITERIA.DELIVERY_MODE.weight > 0) {
+      let deliveryScore = 0
 
-  if (appDeliveryModes.length > 0 && supplyDeliveryModes.length > 0) {
-    // Check if either party has Hybrid - if so, full compatibility
-    const appHasHybrid = appDeliveryModes.includes("Hybrid")
-    const supplyHasHybrid = supplyDeliveryModes.includes("Hybrid")
-    
-    if (appHasHybrid || supplyHasHybrid) {
-      deliveryScore = 1 // Full score if either has Hybrid
-    } else {
-      // Standard matching for non-Hybrid cases
-      const deliveryMatches = appDeliveryModes.filter((appMode) => 
-        supplyDeliveryModes.includes(appMode)
-      )
-      deliveryScore = deliveryMatches.length / appDeliveryModes.length
+      if (appDeliveryModes.length > 0 && supplyDeliveryModes.length > 0) {
+        // Check if either party has Hybrid - if so, full compatibility
+        const appHasHybrid = appDeliveryModes.includes("hybrid")
+        const supplyHasHybrid = supplyDeliveryModes.includes("hybrid")
+
+        if (appHasHybrid || supplyHasHybrid) {
+          deliveryScore = 1 // Full score if either has Hybrid
+        } else {
+          // Standard matching for non-Hybrid cases
+          const deliveryMatches = appDeliveryModes.filter((appMode) =>
+            supplyDeliveryModes.includes(appMode)
+          )
+          deliveryScore = deliveryMatches.length / appDeliveryModes.length
+        }
+      } else if (appDeliveryModes.length === 0) {
+        deliveryScore = 0.5 // Neutral score if no delivery modes specified
+      }
+
+      score += deliveryScore * MATCHING_CRITERIA.DELIVERY_MODE.weight * 100
+      breakdown.deliveryMatch = {
+        score: deliveryScore * 100,
+        description: MATCHING_CRITERIA.DELIVERY_MODE.description,
+        matches: appDeliveryModes.length > 0 ? getDeliveryModeMatches(appDeliveryModes, supplyDeliveryModes) : [],
+        hasHybrid: appDeliveryModes.includes("hybrid") || supplyDeliveryModes.includes("hybrid")
+      }
+      totalWeight += MATCHING_CRITERIA.DELIVERY_MODE.weight * 100
     }
-  } else if (appDeliveryModes.length === 0) {
-    deliveryScore = 0.5 // Neutral score if no delivery modes specified
-  }
 
-  score += deliveryScore * MATCHING_CRITERIA.DELIVERY_MODE.weight * 100
-  breakdown.deliveryMatch = {
-    score: deliveryScore * 100,
-    description: MATCHING_CRITERIA.DELIVERY_MODE.description,
-    matches: appDeliveryModes.length > 0 ? getDeliveryModeMatches(appDeliveryModes, supplyDeliveryModes) : [],
-    hasHybrid: appDeliveryModes.includes("Hybrid") || supplyDeliveryModes.includes("Hybrid")
-  }
-  totalWeight += MATCHING_CRITERIA.DELIVERY_MODE.weight * 100
-}
-
-    // 5. BUDGET_RANGE (10%)
+    // 6. BUDGET_RANGE (10%)
     if (MATCHING_CRITERIA.BUDGET_RANGE.weight > 0) {
       let budgetScore = 0
 
@@ -737,8 +779,7 @@ if (MATCHING_CRITERIA.DELIVERY_MODE.weight > 0) {
       totalWeight += MATCHING_CRITERIA.BUDGET_RANGE.weight * 100
     }
 
-    // 6. OWNERSHIP_PREFS (10%)
-    // IMPROVED OWNERSHIP_PREFS (10%)
+    // 7. OWNERSHIP_PREFS (10%)
     if (MATCHING_CRITERIA.OWNERSHIP_PREFS.weight > 0) {
       let ownershipScore = 0
       const ownershipDetails = {
@@ -747,7 +788,7 @@ if (MATCHING_CRITERIA.DELIVERY_MODE.weight > 0) {
         youthOwned: { percentage: 0, meetsThreshold: false },
         disabilityInclusive: { percentage: 0, meetsThreshold: false },
       }
-      console.log(appOwnershipPrefs)
+
       if (appOwnershipPrefs.length > 0) {
         // Calculate ownership percentages from shareholders array
         const shareholderData = calculateOwnershipPercentages(supplierOwnership)
@@ -799,83 +840,63 @@ if (MATCHING_CRITERIA.DELIVERY_MODE.weight > 0) {
       totalWeight += MATCHING_CRITERIA.OWNERSHIP_PREFS.weight * 100
     }
 
- 
-// 7. URGENCY_LEAD_TIME MATCHING (10%) - CORRECTED LOGIC
-if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
-  let urgencyLeadTimeScore = 0
-  
-  const appStartDate = requestOverview.startDate
-  const appEndDate = requestOverview.endDate
-  
-  // Check if we have application dates and supplier lead time data
-  if (appStartDate && (supply.minLeadTime || supply.maxLeadTime)) {
-    const requestStart = new Date(appStartDate).getTime()
-    const requestEnd = new Date(appEndDate || appStartDate).getTime() // Use start date if no end date
-    const now = new Date().getTime()
-    
-    const daysUntilRequestStart = (requestStart - now) / (1000 * 60 * 60 * 24)
-    const totalProjectDays = (requestEnd - now) / (1000 * 60 * 60 * 24)
-    
-    // Calculate supplier's delivery times in days
-    const minDeliveryDays = supply.minLeadTime ? 
-      convertToDays(supply.minLeadTime, supply.minLeadTimeUnit || 'days') : 0
-    const maxDeliveryDays = supply.maxLeadTime ? 
-      convertToDays(supply.maxLeadTime, supply.maxLeadTimeUnit || 'days') : minDeliveryDays * 1.5
-    
-    console.log("Lead Time Matching Debug:", {
-      appStartDate,
-      appEndDate,
-      daysUntilRequestStart: Math.round(daysUntilRequestStart),
-      totalProjectDays: Math.round(totalProjectDays),
-      minDeliveryDays: Math.round(minDeliveryDays),
-      maxDeliveryDays: Math.round(maxDeliveryDays),
-      supplierData: {
-        minLeadTime: supply.minLeadTime,
-        maxLeadTime: supply.maxLeadTime,
-        minLeadTimeUnit: supply.minLeadTimeUnit,
-        maxLeadTimeUnit: supply.maxLeadTimeUnit
+    // 8. URGENCY_LEAD_TIME MATCHING (10%) - CORRECTED LOGIC
+    if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
+      let urgencyLeadTimeScore = 0
+
+      const appStartDate = requestOverview.startDate
+      const appEndDate = requestOverview.endDate
+
+      // Check if we have application dates and supplier lead time data
+      if (appStartDate && (supply.minLeadTime || supply.maxLeadTime)) {
+        const requestStart = new Date(appStartDate).getTime()
+        const requestEnd = new Date(appEndDate || appStartDate).getTime() // Use start date if no end date
+        const now = new Date().getTime()
+
+        const daysUntilRequestStart = (requestStart - now) / (1000 * 60 * 60 * 24)
+        const totalProjectDays = (requestEnd - now) / (1000 * 60 * 60 * 24)
+
+        // Calculate supplier's delivery times in days
+        const minDeliveryDays = supply.minLeadTime ?
+          convertToDays(supply.minLeadTime, supply.minLeadTimeUnit || 'days') : 0
+        const maxDeliveryDays = supply.maxLeadTime ?
+          convertToDays(supply.maxLeadTime, supply.maxLeadTimeUnit || 'days') : minDeliveryDays * 1.5
+
+        console.log("Lead Time Matching Debug:", {
+          appStartDate,
+          appEndDate,
+          daysUntilRequestStart: Math.round(daysUntilRequestStart),
+          totalProjectDays: Math.round(totalProjectDays),
+          minDeliveryDays: Math.round(minDeliveryDays),
+          maxDeliveryDays: Math.round(maxDeliveryDays),
+        })
+
+        const minFits = minDeliveryDays <= totalProjectDays
+        const maxFits = maxDeliveryDays <= totalProjectDays
+
+        if (minFits && maxFits) {
+          urgencyLeadTimeScore = 1.0 // Full points - both fit perfectly
+        } else if (minFits && !maxFits) {
+          urgencyLeadTimeScore = 0.8 // Partial points - minimum fits but maximum doesn't
+        } else {
+          urgencyLeadTimeScore = 0.0 // No points - can't deliver in time
+        }
+
+      } else {
+        // Missing data - neutral score
+        urgencyLeadTimeScore = 0.5
       }
-    })
-    
-    // Apply your scoring logic:
-    // 1.0 if both min and max fit within project timeframe
-    // 0.8 if only minimum fits but maximum doesn't
-    // 0.0 if neither fits
-    
-    const minFits = minDeliveryDays <= totalProjectDays
-    const maxFits = maxDeliveryDays <= totalProjectDays
-    console.log(minFits)
-    console.log(maxFits)
-    if (minFits && maxFits) {
-      urgencyLeadTimeScore = 1.0 // Full points - both fit perfectly
-    } else if (minFits && !maxFits) {
-      urgencyLeadTimeScore = 0.8 // Partial points - minimum fits but maximum doesn't
-    } else {
-      urgencyLeadTimeScore = 0.0 // No points - can't deliver in time
+
+      score += urgencyLeadTimeScore * MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100
+      breakdown.urgencyLeadTimeMatch = {
+        score: urgencyLeadTimeScore * 100,
+        description: MATCHING_CRITERIA.URGENCY_LEAD_TIME.description,
+        canDeliverInTime: urgencyLeadTimeScore > 0,
+      }
+      totalWeight += MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100
     }
-    
-    console.log("Lead Time Score Result:", {
-      minFits,
-      maxFits,
-      finalScore: urgencyLeadTimeScore
-    })
-    
-  } else {
-    // Missing data - neutral score
-    urgencyLeadTimeScore = 0.5
-    console.log("Lead Time: Missing data, using neutral score")
-  }
 
-  score += urgencyLeadTimeScore * MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100
-  breakdown.urgencyLeadTimeMatch = {
-    score: urgencyLeadTimeScore * 100,
-    description: MATCHING_CRITERIA.URGENCY_LEAD_TIME.description,
-    canDeliverInTime: urgencyLeadTimeScore > 0,
-  }
-  totalWeight += MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100
-}
-
-    // 8. EXPERIENCE (10%)
+    // 9. EXPERIENCE (10%)
     if (MATCHING_CRITERIA.EXPERIENCE.weight > 0) {
       let experienceScore = 0
 
@@ -896,49 +917,48 @@ if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
       totalWeight += MATCHING_CRITERIA.EXPERIENCE.weight * 100
     }
 
- // 9. RATING (5%)
+    // 10. RATING (5%)
     if (MATCHING_CRITERIA.RATING.weight > 0) {
-      console.log("Available ratings data:", ratingsData)
-      
-      // Use the ratings data passed as parameter, or fall back to state
-      const effectiveRatingsData = ratingsData || supplierRatings;
-      
+      // Use the ratings data passed as parameter
+      const effectiveRatingsData = ratingsData || {}
+
       // Helper function to get rating from the data
       const getRatingFromData = (supplierId) => {
         return effectiveRatingsData[supplierId] || {
           average: 0,
           count: 0,
           latestComment: "No ratings yet"
-        };
-      };
-  
+        }
+      }
+
       // Use the actual supplier rating
-      const supplierId = supplier?.id;
-      const supplierRatingData = getRatingFromData(supplierId);
-      const actualRating = supplierRatingData.average || 0;
-      
-      console.log("Rating calculation:", {
-        supplierId,
-        actualRating,
-        ratingData: supplierRatingData,
-        allRatings: effectiveRatingsData
-      });
-  
+      const supplierId = supplier?.id
+      const supplierRatingData = getRatingFromData(supplierId)
+      const actualRating = supplierRatingData.average || 0
+
       // Normalize rating to 0-1 scale (assuming 0-5 scale)
-      const ratingScore = actualRating / 5;
-  
-      score += ratingScore * MATCHING_CRITERIA.RATING.weight * 100;
+      const ratingScore = actualRating / 5
+
+      score += ratingScore * MATCHING_CRITERIA.RATING.weight * 100
       breakdown.ratingMatch = {
         score: ratingScore * 100,
         description: MATCHING_CRITERIA.RATING.description,
         actualRating: actualRating,
         ratingCount: supplierRatingData.count
-      };
-      totalWeight += MATCHING_CRITERIA.RATING.weight * 100;
+      }
+      totalWeight += MATCHING_CRITERIA.RATING.weight * 100
     }
 
     // Calculate final weighted score
     const finalScore = totalWeight > 0 ? score / totalWeight : 0
+
+    console.log("Final Match Score:", {
+      totalScore: Math.round(finalScore * 100),
+      breakdown,
+      applicationCategories: appCategories,
+      supplierCategories: allSupplierCategories,
+      userKeywords: userKeywords
+    })
 
     return {
       totalScore: Math.round(finalScore * 100), // Convert to percentage
@@ -1065,7 +1085,7 @@ if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
     return breakdown
   }
 
-  
+
   // Helper function to calculate string similarity (simple version)
   function calculateSimilarity(str1, str2) {
     const longer = str1.length > str2.length ? str1 : str2
@@ -1446,12 +1466,13 @@ if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
               <col style={{ width: "8%" }} /> {/* Supplier Name */}
               <col style={{ width: "8%" }} /> {/* Location */}
               <col style={{ width: "8%" }} /> {/* Sector */}
+              <col style={{ width: "8%" }} /> {/* Service Provided */} {/* NEW COLUMN */}
               <col style={{ width: "5%" }} /> {/* Rating */}
               <col style={{ width: "5%" }} /> {/* BBBEE */}
               <col style={{ width: "8%" }} /> {/* Revenue */}
               <col style={{ width: "8%" }} /> {/* Category */}
               <col style={{ width: "8%" }} /> {/* Urgency */}
-              <col style={{ width: "8%" }} /> {/* Match % */}
+              <col style={{ width: "8%" }} /> {/* Match %} */}
               <col style={{ width: "5%" }} /> {/* Action */}
               <col style={{ width: "8%" }} /> {/* Stage */}
             </colgroup>
@@ -1460,6 +1481,7 @@ if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
                 <th style={tableHeaderStyle}>Supplier Name</th>
                 <th style={tableHeaderStyle}>Location</th>
                 <th style={tableHeaderStyle}>Sector Focus</th>
+                <th style={tableHeaderStyle}>Service Provided</th> {/* NEW COLUMN HEADER */}
                 <th style={tableHeaderStyle}>Rating</th>
                 <th style={tableHeaderStyle}>BBBEE Level</th>
                 <th style={tableHeaderStyle}>Revenue</th>
@@ -1478,6 +1500,7 @@ if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
                     <td style={tableCellStyle}>-</td>
                     <td style={tableCellStyle}>-</td>
                     <td style={tableCellStyle}>-</td>
+                    <td style={tableCellStyle}>-</td> {/* NEW COLUMN */}
                     <td style={tableCellStyle}>-</td>
                     <td style={tableCellStyle}>-</td>
                     <td style={tableCellStyle}>-</td>
@@ -1495,7 +1518,7 @@ if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
 
                   return (
                     <tr key={supplier.id} style={tableRowStyle}>
-                      {/* Supplier Name Cell - CHANGE: Removed avatar */}
+                      {/* Supplier Name Cell */}
                       <td style={tableCellStyle}>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
                           <div>
@@ -1514,7 +1537,7 @@ if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
                         <TruncatedText text={supplier.entityOverview?.location || "Not specified"} maxLength={12} />
                       </td>
 
-                      {/* Sector Focus Cell - CHANGE: Normal text, see more underneath */}
+                      {/* Sector Focus Cell */}
                       <td style={tableCellStyle}>
                         <TruncatedText
                           text={supplier.entityOverview?.economicSectors?.[0] || "Not specified"}
@@ -1522,14 +1545,22 @@ if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
                         />
                       </td>
 
-                      {/* Rating Cell - CHANGE: Show numbers only like 4/5 */}
+                      {/* NEW: Service Provided Cell */}
+                      <td style={tableCellStyle}>
+                        <TruncatedText
+                          text={supplier.matchedService || "Not specified"}
+                          maxLength={15}
+                        />
+                      </td>
+
+                      {/* Rating Cell */}
                       <td style={tableCellStyle}>
                         <span style={{ fontSize: "0.75rem", color: "#5D2A0A", fontWeight: "500" }}>
-                           {supplier.rating}/5
+                          {supplier.rating}/5
                         </span>
                       </td>
 
-                      {/* BBBEE Level Cell - CHANGE: Normal text */}
+                      {/* BBBEE Level Cell */}
                       <td style={tableCellStyle}>
                         <TruncatedText text={supplier.legalCompliance?.bbbeeLevel || "N/A"} maxLength={8} />
                       </td>
@@ -1542,11 +1573,10 @@ if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
                         />
                       </td>
 
-                      {/* Service Category Cell - CHANGE: Normal text, see more underneath */}
+                      {/* Service Category Cell */}
                       <td style={tableCellStyle}>
                         <TruncatedText
                           text={
-                            // Check both productCategories and serviceCategories
                             supplier.productsServices?.productCategories?.[0]?.name ||
                             supplier.productsServices?.serviceCategories?.[0]?.name ||
                             "Not specified"
@@ -1555,12 +1585,12 @@ if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
                         />
                       </td>
 
-                      {/* Urgency Cell - CHANGE: Normal text, see more underneath */}
+                      {/* Urgency Cell */}
                       <td style={tableCellStyle}>
                         <TruncatedText text={supplier.urgency || "1 month"} maxLength={10} />
                       </td>
 
-                      {/* Match Percentage Cell - CHANGE: Added progress bar like customer table */}
+                      {/* Match Percentage Cell */}
                       <td style={tableCellStyle}>
                         <div style={matchContainerStyle}>
                           <div style={progressBarStyle}>
@@ -1624,7 +1654,7 @@ if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
                         </button>
                       </td>
 
-                      {/* Stage Cell - CHANGE: Two lines, different colors, no see more */}
+                      {/* Stage Cell */}
                       <td style={{ ...tableCellStyle, borderRight: "none" }}>
                         <div
                           style={{
@@ -1657,15 +1687,15 @@ if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
         </div>
 
         {/* Show message underneath the table when no suppliers */}
-        {filteredSuppliers.length === 0 && (
+        {filteredSuppliers.length === 0 && !loading && (
           <div style={noResultsStyle}>
             <div style={{ textAlign: "center" }}>
               <p style={{ margin: "1rem 0", fontSize: "1rem", color: "#5D2A0A" }}>
-                You have not applied for any suppliers, so there are no matches available. You need to apply first.
+                {productApplications.length === 0
+                  ? "You need to complete your Product Application first to see matching suppliers. Please fill out what products/services you need."
+                  : "No suppliers match your current requirements. Try adjusting your filters or check back later."
+                }
               </p>
-              <button onClick={clearAllFilters} style={clearFiltersButtonStyle}>
-                Clear All Filters
-              </button>
             </div>
           </div>
         )}

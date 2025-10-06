@@ -1,5 +1,3 @@
-
-
 "use client"
 
 import { useState, useEffect } from "react"
@@ -124,7 +122,7 @@ const getStatusStyle = (status) => {
   return STATUS_TYPES[status] || { color: "#F5F5F5", textColor: "#666666" }
 }
 
-export function AdvisorTable({ filters, stageFilter }) {
+export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
   const [advisors, setAdvisors] = useState([])
   const [selectedAdvisor, setSelectedAdvisor] = useState(null)
   const [modalType, setModalType] = useState(null)
@@ -140,7 +138,6 @@ export function AdvisorTable({ filters, stageFilter }) {
   const [showStageModal, setShowStageModal] = useState(false)
   const [selectedAdvisorForStage, setSelectedAdvisorForStage] = useState(null)
   const [updatedStages, setUpdatedStages] = useState({})
-  const [myMatchesCount, setMyMatchesCount] = useState(0);
   
   // ✅ Added availability management state (same as investor table)
   const [availabilities, setAvailabilities] = useState([])
@@ -170,10 +167,6 @@ export function AdvisorTable({ filters, stageFilter }) {
     sortBy: "",
   })
   const [termSheetFile, setTermSheetFile] = useState(null)
-// Add these style definitions after the existing style constants (around line 200-300)
- const handleMatchesCountChange = (count) => {
-    setMyMatchesCount(count);
-  };
 
 const modalHeaderStyle = {
   display: "flex",
@@ -339,42 +332,6 @@ const cancelButtonStyle = {
     return advisor.availableDates && advisor.availableDates.length > 0
   }
 
-  // Updated sample advisor data
-  const sampleAdvisors = [
-    {
-      id: "1",
-      name: "Nala",
-      location: "Cape Town",
-      sector: "Technology & Innovation",
-      fundingStage: "Seed",
-      supportRequired: "Network & governance",
-      revenueBand: "ZAR 1-5M",
-      compensationModel: "Pro-Bono",
-      applicationDate: "16 June 2024",
-      matchPercentage: 95,
-      bigScore: 95,
-      status: "Shortlisted",
-      pipelineStage: "Shortlisted",
-      action: "Application Received",
-    },
-    {
-      id: "2",
-      name: "BIG",
-      location: "Johannesburg",
-      sector: "Agriculture & Food Security",
-      fundingStage: "Series A",
-      supportRequired: "Product Development, Legal Compliance",
-      revenueBand: "ZAR 10-50M",
-      compensationModel: "Hourly rate",
-      applicationDate: "15 June 2025",
-      matchPercentage: 78,
-      bigScore: 78,
-      status: "New Match",
-      pipelineStage: "New Match",
-      action: "Application Received",
-    },
-  ]
-
   // Application stages for the workflow
   const applicationStages = [
     { id: "evaluation", name: "Evaluation", color: "#3b82f6" },
@@ -456,17 +413,28 @@ const fetchAdvisorApplications = async () => {
         availableDates: availabilityData,
       }
     })
-    setAdvisors(advisorMatches.length > 0 ? advisorMatches : sampleAdvisors)
+    
+    setAdvisors(advisorMatches)
     setLoading(false)
+    
+    // Notify parent component of the count
+    if (onMatchesCountChange) {
+      onMatchesCountChange(advisorMatches.length)
+    }
   } catch (error) {
     console.error("Failed to fetch advisor applications:", error)
-    setAdvisors(sampleAdvisors)
+    setAdvisors([])
     setLoading(false)
+    
+    // Notify parent component even on error
+    if (onMatchesCountChange) {
+      onMatchesCountChange(0)
+    }
   }
 }
 
 fetchAdvisorApplications()
-  }, [])
+  }, [onMatchesCountChange])
 
   const handleFilterChange = (key, value) => {
     setLocalFilters((prev) => ({ ...prev, [key]: value }))
@@ -1067,10 +1035,20 @@ const breakdownItemStyle = (matched, label) => ({
           </thead>
           <tbody>
             {advisors.length === 0 ? (
-              <tr>
-                <td colSpan="12" style={{ ...tableCellStyle, textAlign: "center", color: "#666" }}>
-                  No applications received yet
-                </td>
+              // Empty state row to show table structure
+              <tr style={{ borderBottom: "1px solid #E8D5C4" }}>
+                <td style={{ ...tableCellStyle, color: "#ccc", textAlign: "center", padding: "2rem 0.2rem" }}>-</td>
+                <td style={{ ...tableCellStyle, color: "#ccc", textAlign: "center", padding: "2rem 0.2rem" }}>-</td>
+                <td style={{ ...tableCellStyle, color: "#ccc", textAlign: "center", padding: "2rem 0.2rem" }}>-</td>
+                <td style={{ ...tableCellStyle, color: "#ccc", textAlign: "center", padding: "2rem 0.2rem" }}>-</td>
+                <td style={{ ...tableCellStyle, color: "#ccc", textAlign: "center", padding: "2rem 0.2rem" }}>-</td>
+                <td style={{ ...tableCellStyle, color: "#ccc", textAlign: "center", padding: "2rem 0.2rem" }}>-</td>
+                <td style={{ ...tableCellStyle, color: "#ccc", textAlign: "center", padding: "2rem 0.2rem" }}>-</td>
+                <td style={{ ...tableCellStyle, color: "#ccc", textAlign: "center", padding: "2rem 0.2rem" }}>-</td>
+                <td style={{ ...tableCellStyle, color: "#ccc", textAlign: "center", padding: "2rem 0.2rem" }}>-</td>
+                <td style={{ ...tableCellStyle, color: "#ccc", textAlign: "center", padding: "2rem 0.2rem" }}>-</td>
+                <td style={{ ...tableCellStyle, color: "#ccc", textAlign: "center", padding: "2rem 0.2rem" }}>-</td>
+                <td style={{ ...tableCellStyle, color: "#ccc", textAlign: "center", padding: "2rem 0.2rem", borderRight: "none" }}>-</td>
               </tr>
             ) : (
               advisors.map((advisor) => {
@@ -1230,6 +1208,26 @@ const breakdownItemStyle = (matched, label) => ({
           </tbody>
         </table>
       </div>
+
+      {/* Message shown when no applications */}
+      {advisors.length === 0 && (
+        <div
+          style={{
+            backgroundColor: "#f8f5f3",
+            padding: "24px",
+            borderRadius: "8px",
+            textAlign: "center",
+            border: "1px solid #e8d5c4",
+            marginTop: "24px",
+          }}
+        >
+          <Info size={48} style={{ color: "#a67c52", marginBottom: "16px" }} />
+          <h3 style={{ color: "#5d4037", marginBottom: "8px" }}>You have not applied for any SMSEs, so there are no matches available.</h3>
+          <p style={{ color: "#7d5a50" }}>
+            You need to apply first. Your applications will appear here once you apply to SMSEs.
+          </p>
+        </div>
+      )}
 
 
 {selectedAdvisor && modalType === "matchBreakdown" && (

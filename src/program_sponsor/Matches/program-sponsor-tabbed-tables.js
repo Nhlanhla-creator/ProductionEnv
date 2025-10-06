@@ -47,6 +47,352 @@ const TruncatedText = ({ text, maxLength = 40 }) => {
   );
 };
 
+// Empty State Component for Successful Placements
+const EmptySuccessfulPlacementsTable = () => {
+  return (
+    <div>
+      {/* Empty Table Structure */}
+      <div style={{
+        overflowX: "auto",
+        borderRadius: "8px",
+        border: "1px solid #E8D5C4",
+        boxShadow: "0 4px 24px rgba(139, 69, 19, 0.08)",
+        marginBottom: "2rem",
+      }}>
+        <table style={{
+          width: "100%",
+          borderCollapse: "collapse",
+          background: "white",
+          fontSize: "0.875rem",
+          backgroundColor: "#FEFCFA",
+          tableLayout: "fixed"
+        }}>
+          <thead>
+            <tr>
+              <th style={{
+                background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                color: "#FEFCFA",
+                padding: "0.75rem 0.5rem",
+                textAlign: "left",
+                fontWeight: "600",
+                fontSize: "0.75rem",
+                letterSpacing: "0.5px",
+                textTransform: "uppercase",
+                borderRight: "1px solid #1a0c02",
+                width: '12%'
+              }}>
+                Intern Name
+              </th>
+              <th style={{
+                background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                color: "#FEFCFA",
+                padding: "0.75rem 0.5rem",
+                textAlign: "left",
+                fontWeight: "600",
+                fontSize: "0.75rem",
+                letterSpacing: "0.5px",
+                textTransform: "uppercase",
+                borderRight: "1px solid #1a0c02",
+                width: '10%'
+              }}>
+                Monthly Stipend
+              </th>
+              <th style={{
+                background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                color: "#FEFCFA",
+                padding: "0.75rem 0.5rem",
+                textAlign: "left",
+                fontWeight: "600",
+                fontSize: "0.75rem",
+                letterSpacing: "0.5px",
+                textTransform: "uppercase",
+                borderRight: "1px solid #1a0c02",
+                width: '9%'
+              }}>
+                Program Name
+              </th>
+              <th style={{
+                background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                color: "#FEFCFA",
+                padding: "0.75rem 0.5rem",
+                textAlign: "left",
+                fontWeight: "600",
+                fontSize: "0.75rem",
+                letterSpacing: "0.5px",
+                textTransform: "uppercase",
+                borderRight: "1px solid #1a0c02",
+                width: '10%'
+              }}>
+                Location
+              </th>
+              <th style={{
+                background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                color: "#FEFCFA",
+                padding: "0.75rem 0.5rem",
+                textAlign: "left",
+                fontWeight: "600",
+                fontSize: "0.75rem",
+                letterSpacing: "0.5px",
+                textTransform: "uppercase",
+                borderRight: "1px solid #1a0c02",
+                width: '9%'
+              }}>
+                Field
+              </th>
+              <th style={{
+                background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                color: "#FEFCFA",
+                padding: "0.75rem 0.5rem",
+                textAlign: "left",
+                fontWeight: "600",
+                fontSize: "0.75rem",
+                letterSpacing: "0.5px",
+                textTransform: "uppercase",
+                borderRight: "1px solid #1a0c02",
+                width: '8%'
+              }}>
+                Duration
+              </th>
+              <th style={{
+                background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                color: "#FEFCFA",
+                padding: "0.75rem 0.5rem",
+                textAlign: "left",
+                fontWeight: "600",
+                fontSize: "0.75rem",
+                letterSpacing: "0.5px",
+                textTransform: "uppercase",
+                borderRight: "1px solid #1a0c02",
+                width: '11%'
+              }}>
+                Status
+              </th>
+              <th style={{
+                background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                color: "#FEFCFA",
+                padding: "0.75rem 0.5rem",
+                textAlign: "left",
+                fontWeight: "600",
+                fontSize: "0.75rem",
+                letterSpacing: "0.5px",
+                textTransform: "uppercase",
+                borderRight: "1px solid #1a0c02",
+                width: '10%'
+              }}>
+                Post Internship
+              </th>
+              <th style={{
+                background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                color: "#FEFCFA",
+                padding: "0.75rem 0.5rem",
+                textAlign: "center",
+                fontWeight: "600",
+                fontSize: "0.75rem",
+                letterSpacing: "0.5px",
+                textTransform: "uppercase",
+                borderRight: "none",
+                width: '14%'
+              }}>
+                Action
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {/* Empty rows to show structure */}
+            {[].map((index) => (
+              <tr key={index} style={{
+                borderBottom: "1px solid #E8D5C4",
+                opacity: 0.3
+              }}>
+                <td style={{
+                  padding: "0.75rem 0.5rem",
+                  borderRight: "1px solid #E8D5C4",
+                  wordWrap: "break-word",
+                  whiteSpace: "normal",
+                  verticalAlign: "top"
+                }}>
+                  <span style={{
+                    color: "#999",
+                    fontWeight: "500",
+                    lineHeight: "1.3"
+                  }}>
+                    No data
+                  </span>
+                </td>
+                
+                <td style={{
+                  padding: "0.75rem 0.5rem",
+                  borderRight: "1px solid #E8D5C4",
+                  verticalAlign: "top",
+                  fontWeight: "600",
+                  color: "#999"
+                }}>
+                  -
+                </td>
+                
+                <td style={{
+                  padding: "0.75rem 0.5rem",
+                  borderRight: "1px solid #E8D5C4",
+                  verticalAlign: "top"
+                }}>
+                  <span style={{
+                    backgroundColor: "#f5f5f5",
+                    color: "#999",
+                    padding: "4px 8px",
+                    borderRadius: "12px",
+                    fontSize: "12px",
+                    fontWeight: "600"
+                  }}>
+                    -
+                  </span>
+                </td>
+                
+                <td style={{
+                  padding: "0.75rem 0.5rem",
+                  borderRight: "1px solid #E8D5C4",
+                  verticalAlign: "top",
+                  color: "#999"
+                }}>
+                  -
+                </td>
+                
+                <td style={{
+                  padding: "0.75rem 0.5rem",
+                  borderRight: "1px solid #E8D5C4",
+                  verticalAlign: "top",
+                  color: "#999"
+                }}>
+                  -
+                </td>
+                
+                <td style={{
+                  padding: "0.75rem 0.5rem",
+                  borderRight: "1px solid #E8D5C4",
+                  verticalAlign: "top",
+                  fontSize: "14px",
+                  color: "#999"
+                }}>
+                  -
+                </td>
+                
+                <td style={{
+                  padding: "0.75rem 0.5rem",
+                  borderRight: "1px solid #E8D5C4",
+                  verticalAlign: "top"
+                }}>
+                  <span style={{
+                    backgroundColor: "#f5f5f5",
+                    color: "#999",
+                    padding: "6px 10px",
+                    borderRadius: "12px",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    display: "inline-block"
+                  }}>
+                    -
+                  </span>
+                </td>
+                
+                <td style={{
+                  padding: "0.75rem 0.5rem",
+                  borderRight: "1px solid #E8D5C4",
+                  verticalAlign: "top"
+                }}>
+                  <span style={{
+                    backgroundColor: "#f5f5f5",
+                    color: "#999",
+                    padding: "4px 8px",
+                    borderRadius: "12px",
+                    fontSize: "11px",
+                    fontWeight: "600",
+                    display: "inline-block"
+                  }}>
+                    -
+                  </span>
+                </td>
+                
+                <td style={{
+                  padding: "0.75rem 0.5rem",
+                  verticalAlign: "top",
+                  textAlign: "center"
+                }}>
+                  <button
+                    disabled
+                    style={{
+                      backgroundColor: "#e0e0e0",
+                      color: "#999",
+                      border: "none",
+                      borderRadius: "8px",
+                      padding: "8px 16px",
+                      fontSize: "12px",
+                      fontWeight: "600",
+                      cursor: "not-allowed",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      margin: "0 auto"
+                    }}
+                  >
+                    <Eye size={14} />
+                    View Details
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      
+      {/* Message underneath the empty table */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "3rem 2rem",
+          backgroundColor: "#f8f9fa",
+          borderRadius: "12px",
+          border: "2px dashed #d7ccc8",
+          textAlign: "center",
+        }}
+      >
+        <div
+          style={{
+            fontSize: "3rem",
+            marginBottom: "1rem",
+            color: "#8d6e63",
+          }}
+        >
+          🏆
+        </div>
+        <h3
+          style={{
+            fontSize: "1.5rem",
+            fontWeight: "600",
+            color: "#5d4037",
+            margin: "0 0 1rem 0",
+          }}
+        >
+          No Successful Deals Yet
+        </h3>
+        <p
+          style={{
+            fontSize: "1.1rem",
+            color: "#666",
+            margin: "0 0 1.5rem 0",
+            maxWidth: "500px",
+            lineHeight: "1.6",
+          }}
+        >
+          When you accept matches, they will appear here as successful deals.
+        </p>
+     
+      </div>
+    </div>
+  );
+};
+
 // Successful Program Placements Table Component
 const SuccessfulPlacementsTable = () => {
   const [placements, setPlacements] = useState([]);
@@ -248,11 +594,7 @@ const SuccessfulPlacementsTable = () => {
     <>
       <div style={{ marginBottom: '24px' }}>
         {placements.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "2rem", color: "#666" }}>
-            <Trophy size={48} style={{ marginBottom: "1rem", opacity: 0.5 }} />
-            <h3>No Successful Deals Yet</h3>
-            <p>When you accept matches, they will appear here as successful deals.</p>
-          </div>
+          <EmptySuccessfulPlacementsTable />
         ) : (
           <div style={{
             overflowX: "auto",
