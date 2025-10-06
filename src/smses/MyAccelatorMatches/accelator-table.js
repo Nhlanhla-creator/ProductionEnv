@@ -1224,73 +1224,67 @@ if (firmTypeMatch) {
           </div>
         </div>
 
-        {/* Table content */}
-        {filteredAccelerators.length === 0 ? (
-          <div
+        {/* Table structure - always show */}
+        <div
+          style={{
+            overflowX: "auto",
+            borderRadius: "8px",
+            border: "1px solid #E8D5C4",
+            boxShadow: "0 4px 24px rgba(139, 69, 19, 0.08)",
+          }}
+        >
+          <table
             style={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              padding: "2rem",
-              color: "#a67c52",
+              width: "100%",
+              borderCollapse: "collapse",
+              background: "white",
+              fontSize: "0.8rem",
+              backgroundColor: "#FEFCFA",
+              minWidth: "1200px",
+              fontFamily: "system-ui, -apple-system, sans-serif",
             }}
           >
-            <p> You have not applied for any catalysts, so there are no matches available. You need to apply first</p>
-          </div>
-        ) : (
-          <div
-            style={{
-              overflowX: "auto",
-              borderRadius: "8px",
-              border: "1px solid #E8D5C4",
-              boxShadow: "0 4px 24px rgba(139, 69, 19, 0.08)",
-            }}
-          >
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                background: "white",
-                fontSize: "0.8rem",
-                backgroundColor: "#FEFCFA",
-                minWidth: "1200px",
-                fontFamily: "system-ui, -apple-system, sans-serif",
-              }}
-            >
-              <colgroup>
-                <col style={{ width: "160px" }} />
-                <col style={{ width: "130px" }} />
-                <col style={{ width: "120px" }} />
-                <col style={{ width: "110px" }} />
-                <col style={{ width: "110px" }} />
-                <col style={{ width: "120px" }} />
-                <col style={{ width: "140px" }} />
-                <col style={{ width: "130px" }} />
-                <col style={{ width: "100px" }} />
-                <col style={{ width: "90px" }} />
-                <col style={{ width: "100px" }} />
-                <col style={{ width: "120px" }} />
-                <col style={{ width: "130px" }} />
-              </colgroup>
-              <thead>
+            <colgroup>
+              <col style={{ width: "160px" }} />
+              <col style={{ width: "130px" }} />
+              <col style={{ width: "120px" }} />
+              <col style={{ width: "110px" }} />
+              <col style={{ width: "110px" }} />
+              <col style={{ width: "120px" }} />
+              <col style={{ width: "140px" }} />
+              <col style={{ width: "130px" }} />
+              <col style={{ width: "100px" }} />
+              <col style={{ width: "90px" }} />
+              <col style={{ width: "100px" }} />
+              <col style={{ width: "120px" }} />
+              <col style={{ width: "130px" }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th style={tableHeaderStyle}>Catalyst Name</th>
+                <th style={tableHeaderStyle}>Geographic Focus</th>
+                <th style={tableHeaderStyle}>Sector Focus</th>
+                <th style={tableHeaderStyle}>Funding Stage</th>
+                <th style={tableHeaderStyle}>Funding Type</th>
+                <th style={tableHeaderStyle}>Ticket Size</th>
+                <th style={tableHeaderStyle}>Support Offered</th>
+                <th style={tableHeaderStyle}>Services Offered</th>
+                <th style={tableHeaderStyle}>Deadline</th>
+                <th style={tableHeaderStyle}>Speed (Days)</th>
+                <th style={tableHeaderStyle}>Match %</th>
+                <th style={tableHeaderStyle}>Action</th>
+                <th style={{ ...tableHeaderStyle, borderRight: "none" }}>Next Stage</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredAccelerators.length === 0 ? (
                 <tr>
-                  <th style={tableHeaderStyle}>Catalyst Name</th>
-                  <th style={tableHeaderStyle}>Geographic Focus</th>
-                  <th style={tableHeaderStyle}>Sector Focus</th>
-                  <th style={tableHeaderStyle}>Funding Stage</th>
-                  <th style={tableHeaderStyle}>Funding Type</th>
-                  <th style={tableHeaderStyle}>Ticket Size</th>
-                  <th style={tableHeaderStyle}>Support Offered</th>
-                  <th style={tableHeaderStyle}>Services Offered</th>
-                  <th style={tableHeaderStyle}>Deadline</th>
-                  <th style={tableHeaderStyle}>Speed (Days)</th>
-                  <th style={tableHeaderStyle}>Match %</th>
-                  <th style={tableHeaderStyle}>Action</th>
-                  <th style={{ ...tableHeaderStyle, borderRight: "none" }}>Next Stage</th>
+                  <td colSpan="13" style={{ ...tableCellStyle, textAlign: "center", padding: "2rem", borderRight: "none" }}>
+                    <span style={{ color: "#999", fontSize: "0.875rem" }}>No catalyst data available</span>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {filteredAccelerators.map((accelerator) => {
+              ) : (
+                filteredAccelerators.map((accelerator) => {
                   const status = statuses[accelerator.id] || "Application not sent"
                   const pipelineStage = pipelineStages[accelerator.id] || accelerator.pipelineStage
 
@@ -1404,12 +1398,31 @@ if (firmTypeMatch) {
                       </td>
                     </tr>
                   )
-                })}
-              </tbody>
-            </table>
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Message below table when no accelerators */}
+        {filteredAccelerators.length === 0 && !loading && (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              padding: "2rem",
+              color: "#a67c52",
+              marginTop: "1rem",
+            }}
+          >
+            <p style={{ textAlign: "center", fontSize: "0.875rem" }}>
+              You have not applied for any catalysts, so there are no matches available. You need to apply first.
+            </p>
           </div>
         )}
       </div>
+
       {mounted &&
         showMatchBreakdown &&
         selectedAccelerator &&
