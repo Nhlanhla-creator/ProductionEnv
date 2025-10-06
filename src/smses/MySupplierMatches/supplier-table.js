@@ -1439,47 +1439,57 @@ if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
           </div>
         </div>
 
-        {/* Table Content */}
-        {filteredSuppliers.length === 0 ? (
-          <div style={noResultsStyle}>
-              <p>  You have not applied for any suppliers/ no matches available. You need to apply first</p>
-            <button onClick={clearAllFilters} style={clearFiltersButtonStyle}>
-              Clear All Filters
-            </button>
-          </div>
-        ) : (
-          <div style={tableContainerStyle}>
-            <table style={tableStyle}>
-              <colgroup>
-                <col style={{ width: "8%" }} /> {/* Supplier Name */}
-                <col style={{ width: "8%" }} /> {/* Location */}
-                <col style={{ width: "8%" }} /> {/* Sector */}
-                <col style={{ width: "5%" }} /> {/* Rating */}
-                <col style={{ width: "5%" }} /> {/* BBBEE */}
-                <col style={{ width: "8%" }} /> {/* Revenue */}
-                <col style={{ width: "8%" }} /> {/* Category */}
-                <col style={{ width: "8%" }} /> {/* Urgency */}
-                <col style={{ width: "8%" }} /> {/* Match % */}
-                <col style={{ width: "5%" }} /> {/* Action */}
-                <col style={{ width: "8%" }} /> {/* Stage */}
-              </colgroup>
-              <thead>
-                <tr>
-                  <th style={tableHeaderStyle}>Supplier Name</th>
-                  <th style={tableHeaderStyle}>Location</th>
-                  <th style={tableHeaderStyle}>Sector Focus</th>
-                  <th style={tableHeaderStyle}>Rating</th>
-                  <th style={tableHeaderStyle}>BBBEE Level</th>
-                  <th style={tableHeaderStyle}>Revenue</th>
-                  <th style={tableHeaderStyle}>Category</th>
-                  <th style={tableHeaderStyle}>Urgency</th>
-                  <th style={tableHeaderStyle}>Match %</th>
-                  <th style={tableHeaderStyle}>Action</th>
-                  <th style={{ ...tableHeaderStyle, borderRight: "none" }}>Stage</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredSuppliers.map((supplier) => {
+        {/* Always show the table structure */}
+        <div style={tableContainerStyle}>
+          <table style={tableStyle}>
+            <colgroup>
+              <col style={{ width: "8%" }} /> {/* Supplier Name */}
+              <col style={{ width: "8%" }} /> {/* Location */}
+              <col style={{ width: "8%" }} /> {/* Sector */}
+              <col style={{ width: "5%" }} /> {/* Rating */}
+              <col style={{ width: "5%" }} /> {/* BBBEE */}
+              <col style={{ width: "8%" }} /> {/* Revenue */}
+              <col style={{ width: "8%" }} /> {/* Category */}
+              <col style={{ width: "8%" }} /> {/* Urgency */}
+              <col style={{ width: "8%" }} /> {/* Match % */}
+              <col style={{ width: "5%" }} /> {/* Action */}
+              <col style={{ width: "8%" }} /> {/* Stage */}
+            </colgroup>
+            <thead>
+              <tr>
+                <th style={tableHeaderStyle}>Supplier Name</th>
+                <th style={tableHeaderStyle}>Location</th>
+                <th style={tableHeaderStyle}>Sector Focus</th>
+                <th style={tableHeaderStyle}>Rating</th>
+                <th style={tableHeaderStyle}>BBBEE Level</th>
+                <th style={tableHeaderStyle}>Revenue</th>
+                <th style={tableHeaderStyle}>Category</th>
+                <th style={tableHeaderStyle}>Urgency</th>
+                <th style={tableHeaderStyle}>Match %</th>
+                <th style={tableHeaderStyle}>Action</th>
+                <th style={{ ...tableHeaderStyle, borderRight: "none" }}>Stage</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredSuppliers.length === 0 ? (
+                // Show empty rows to maintain table structure
+                Array.from({ length: 3 }, (_, index) => (
+                  <tr key={`empty-${index}`} style={tableRowStyle}>
+                    <td style={tableCellStyle}>-</td>
+                    <td style={tableCellStyle}>-</td>
+                    <td style={tableCellStyle}>-</td>
+                    <td style={tableCellStyle}>-</td>
+                    <td style={tableCellStyle}>-</td>
+                    <td style={tableCellStyle}>-</td>
+                    <td style={tableCellStyle}>-</td>
+                    <td style={tableCellStyle}>-</td>
+                    <td style={tableCellStyle}>-</td>
+                    <td style={tableCellStyle}>-</td>
+                    <td style={{ ...tableCellStyle, borderRight: "none" }}>-</td>
+                  </tr>
+                ))
+              ) : (
+                filteredSuppliers.map((supplier) => {
                   const statusStyle = getStatusStyle(supplier.status)
                   const stageStyle = getStageStyle(supplier.currentStage)
 
@@ -1640,9 +1650,23 @@ if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
                       </td>
                     </tr>
                   )
-                })}
-              </tbody>
-            </table>
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Show message underneath the table when no suppliers */}
+        {filteredSuppliers.length === 0 && (
+          <div style={noResultsStyle}>
+            <div style={{ textAlign: "center" }}>
+              <p style={{ margin: "1rem 0", fontSize: "1rem", color: "#5D2A0A" }}>
+                You have not applied for any suppliers, so there are no matches available. You need to apply first.
+              </p>
+              <button onClick={clearAllFilters} style={clearFiltersButtonStyle}>
+                Clear All Filters
+              </button>
+            </div>
           </div>
         )}
 
@@ -2687,6 +2711,7 @@ const noResultsStyle = {
   padding: "2rem",
   color: "#a67c52",
   textAlign: "center",
+  marginTop: "1rem",
 }
 
 const clearFiltersButtonStyle = {

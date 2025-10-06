@@ -993,73 +993,67 @@ const advisorFE = [
           </div>
         </div>
 
-        {/* Table content */}
-        {filteredAdvisors.length === 0 ? (
-          <div
+        {/* Table structure - always show */}
+        <div
+          style={{
+            overflowX: "auto",
+            borderRadius: "8px",
+            border: "1px solid #E8D5C4",
+            boxShadow: "0 4px 24px rgba(139, 69, 19, 0.08)",
+          }}
+        >
+          <table
             style={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              padding: "2rem",
-              color: "#a67c52",
+              width: "100%",
+              borderCollapse: "collapse",
+              background: "white",
+              fontSize: "0.875rem",
+              backgroundColor: "#FEFCFA",
+              tableLayout: "fixed",
+              minWidth: "1200px",
             }}
           >
-            <p>   You have not applied for any advisors, so there are no matches available. You need to apply first</p>
-          </div>
-        ) : (
-          <div
-            style={{
-              overflowX: "auto",
-              borderRadius: "8px",
-              border: "1px solid #E8D5C4",
-              boxShadow: "0 4px 24px rgba(139, 69, 19, 0.08)",
-            }}
-          >
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                background: "white",
-                fontSize: "0.875rem", // Updated font size to match supplier table
-                backgroundColor: "#FEFCFA",
-                tableLayout: "fixed", // Added tableLayout fixed like supplier table
-                minWidth: "1200px", // Updated minWidth to match supplier table
-              }}
-            >
-              <colgroup>
-                <col style={{ width: "8%" }} /> {/* Advisor Name */}
-                <col style={{ width: "8%" }} /> {/* Headline/Role */}
-                <col style={{ width: "8%" }} /> {/* Location */}
-                <col style={{ width: "8%" }} /> {/* Sector Focus */}
-                <col style={{ width: "8%" }} /> {/* Functional Expertise */}
-                <col style={{ width: "8%" }} /> {/* Funding Stage */}
-                <col style={{ width: "8%" }} /> {/* Engagement Type */}
-                <col style={{ width: "8%" }} /> {/* Compensation Model */}
-                <col style={{ width: "8%" }} /> {/* Start Date */}
-                <col style={{ width: "8%" }} /> {/* Availability */}
-                <col style={{ width: "8%" }} /> {/* Match % */}
-                <col style={{ width: "8%" }} /> {/* Status */}
-                <col style={{ width: "8%" }} /> {/* Action */}
-              </colgroup>
-              <thead>
+            <colgroup>
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th style={tableHeaderStyle}>Advisor Name</th>
+                <th style={tableHeaderStyle}>Headline/Role</th>
+                <th style={tableHeaderStyle}>Location</th>
+                <th style={tableHeaderStyle}>Sector Focus</th>
+                <th style={tableHeaderStyle}>Functional Expertise</th>
+                <th style={tableHeaderStyle}>Funding Stage</th>
+                <th style={tableHeaderStyle}>Engagement Type</th>
+                <th style={tableHeaderStyle}>Compensation Model</th>
+                <th style={tableHeaderStyle}>Start Date</th>
+                <th style={tableHeaderStyle}>Availability</th>
+                <th style={tableHeaderStyle}>Match %</th>
+                <th style={tableHeaderStyle}>Status</th>
+                <th style={{ ...tableHeaderStyle, borderRight: "none" }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredAdvisors.length === 0 ? (
                 <tr>
-                  <th style={tableHeaderStyle}>Advisor Name</th>
-                  <th style={tableHeaderStyle}>Headline/Role</th>
-                  <th style={tableHeaderStyle}>Location</th>
-                  <th style={tableHeaderStyle}>Sector Focus</th>
-                  <th style={tableHeaderStyle}>Functional Expertise</th>
-                  <th style={tableHeaderStyle}>Funding Stage</th>
-                  <th style={tableHeaderStyle}>Engagement Type</th>
-                  <th style={tableHeaderStyle}>Compensation Model</th>
-                  <th style={tableHeaderStyle}>Start Date</th>
-                  <th style={tableHeaderStyle}>Availability</th>
-                  <th style={tableHeaderStyle}>Match %</th>
-                  <th style={tableHeaderStyle}>Status</th>
-                  <th style={{ ...tableHeaderStyle, borderRight: "none" }}>Action</th>
+                  <td colSpan="13" style={{ ...tableCellStyle, textAlign: "center", padding: "2rem", borderRight: "none" }}>
+                    <span style={{ color: "#999", fontSize: "0.875rem" }}>No advisor data available</span>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {filteredAdvisors.map((advisor) => {
+              ) : (
+                filteredAdvisors.map((advisor) => {
                   const currentStatus = statuses[advisor.id] || advisor.status
                   const statusStyle = getStatusStyle(currentStatus)
 
@@ -1137,17 +1131,16 @@ const advisorFE = [
                               {advisor.matchPercentage || 0}%
                             </span>
                             <Eye
-                              size={14} // Updated eye icon size to match supplier table
+                              size={14}
                               style={{ cursor: "pointer", color: "#a67c52" }}
                               onClick={(e) => {
                                 e.stopPropagation()
-                                // Pass the breakdown data correctly
                                 setMatchBreakdownModal({
                                   ...advisor,
                                   breakdown: advisor.matchBreakdown,
                                 })
                               }}
-                              title="View match breakdown" // Added title tooltip like supplier table
+                              title="View match breakdown"
                             />
                           </div>
                         </div>
@@ -1201,12 +1194,31 @@ const advisorFE = [
                       </td>
                     </tr>
                   )
-                })}
-              </tbody>
-            </table>
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Message below table when no advisors */}
+        {filteredAdvisors.length === 0 && !loading && (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              padding: "2rem",
+              color: "#a67c52",
+              marginTop: "1rem",
+            }}
+          >
+            <p style={{ textAlign: "center", fontSize: "0.875rem" }}>
+              You have not applied for any advisors, so there are no matches available. You need to apply first.
+            </p>
           </div>
         )}
       </div>
+
       {/* Portal for Advisor Details Modal */}
       {mounted &&
         modalAdvisor &&
@@ -1322,9 +1334,9 @@ const advisorFE = [
               style={{
                 background: "white",
                 borderRadius: "12px",
-                maxWidth: "800px", // Updated maxWidth to match supplier table
-                width: "95%", // Updated width to match supplier table
-                maxHeight: "90vh", // Updated maxHeight to match supplier table
+                maxWidth: "800px",
+                width: "95%",
+                maxHeight: "90vh",
                 overflowY: "auto",
                 boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
               }}
@@ -1456,7 +1468,8 @@ const advisorFE = [
             </div>
           </div>,
           document.body,
-        )}{" "}
+        )}
+
       {/* Portal for Filter Modal */}
       {mounted &&
         showFilterModal &&
@@ -1644,11 +1657,11 @@ const advisorFE = [
 const tableHeaderStyle = {
   background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
   color: "#FEFCFA",
-  padding: "0.75rem 0.4rem", // Updated padding to match supplier table
+  padding: "0.75rem 0.4rem",
   textAlign: "left",
   fontWeight: "600",
-  fontSize: "0.7rem", // Updated font size to match supplier table
-  letterSpacing: "0.5px", // Updated letter spacing to match supplier table
+  fontSize: "0.7rem",
+  letterSpacing: "0.5px",
   textTransform: "uppercase",
   position: "sticky",
   top: "0",
@@ -1659,13 +1672,13 @@ const tableHeaderStyle = {
 }
 
 const tableCellStyle = {
-  padding: "0.6rem 0.4rem", // Updated padding to match supplier table
+  padding: "0.6rem 0.4rem",
   borderBottom: "1px solid #E8D5C4",
   borderRight: "1px solid #E8D5C4",
   fontSize: "0.75rem",
   verticalAlign: "top",
   color: "#5d2a0a",
-  lineHeight: "1.3", // Updated line height to match supplier table
+  lineHeight: "1.3",
   overflow: "hidden",
 }
 
@@ -1683,26 +1696,26 @@ const matchContainerStyle = {
   display: "flex",
   flexDirection: "column",
   alignItems: "flex-start",
-  width: "100%", // Added width 100% like supplier table
+  width: "100%",
 }
 
 const progressBarStyle = {
-  width: "60%", // Updated width to match supplier table (reduced from 45px)
-  height: "6px", // Updated height to match supplier table
-  backgroundColor: "#E2E8F0", // Updated background color to match supplier table
+  width: "60%",
+  height: "6px",
+  backgroundColor: "#E2E8F0",
   borderRadius: "3px",
   overflow: "hidden",
 }
 
 const progressFillStyle = {
   height: "100%",
-  borderRadius: "3px", // Added border radius to match supplier table
+  borderRadius: "3px",
   transition: "width 0.3s ease",
 }
 
 const matchScoreStyle = {
-  fontWeight: "500", // Updated font weight to match supplier table
-  fontSize: "0.75rem", // Updated font size to match supplier table
+  fontWeight: "500",
+  fontSize: "0.75rem",
 }
 
 const responseRateStyle = {
@@ -1780,7 +1793,7 @@ const modalHeaderStyle = {
   alignItems: "center",
   padding: "1.5rem",
   borderBottom: "1px solid #E8D5C4",
-  background: "#FEFCFA", // Updated background to match supplier table
+  background: "#FEFCFA",
 }
 
 const modalTitleStyle = {
@@ -1793,10 +1806,10 @@ const modalTitleStyle = {
 const modalCloseButtonStyle = {
   background: "none",
   border: "none",
-  fontSize: "1.25rem", // Updated font size to match supplier table
+  fontSize: "1.25rem",
   cursor: "pointer",
   color: "#5D2A0A",
-  padding: "0.25rem", // Added padding to match supplier table
+  padding: "0.25rem",
 }
 
 const modalBodyStyle = {
