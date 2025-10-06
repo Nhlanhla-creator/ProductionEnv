@@ -45,6 +45,31 @@ const TruncatedText = ({ text, maxLength = 40 }) => {
   )
 }
 
+// Empty table row component for when there are no deals
+const EmptyTableRow = () => (
+  <tr style={{ borderBottom: "1px solid #E8D5C4" }}>
+    <td colSpan="10" style={{ 
+      padding: "2rem",
+      textAlign: "center", 
+      color: "#999",
+      fontStyle: "italic",
+      borderRight: "none"
+    }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+        <Trophy size={48} style={{ color: "#ddd" }} />
+        <div>
+          <p style={{ margin: "0 0 0.5rem 0", fontSize: "1rem", color: "#666" }}>
+            You have not hired any interns, so there are no successful deals available.
+          </p>
+          <p style={{ margin: 0, fontSize: "0.9rem", color: "#999" }}>
+            You need to hire interns first to see your successful deals here.
+          </p>
+        </div>
+      </div>
+    </td>
+  </tr>
+)
+
 // Successful Intern Deals Table Component
 const SuccessfulInternDealsTable = () => {
   const [deals, setDeals] = useState([])
@@ -222,16 +247,6 @@ const SuccessfulInternDealsTable = () => {
     return (
       <div style={{ textAlign: "center", padding: "40px" }}>
         <div style={{ fontSize: "16px", color: "#666" }}>Loading successful deals...</div>
-      </div>
-    )
-  }
-
-  if (deals.length === 0) {
-    return (
-      <div style={{ textAlign: "center", padding: "40px" }}>
-        <Trophy size={48} style={{ color: "#ccc", marginBottom: "16px" }} />
-        <h3 style={{ color: "#666", marginBottom: "8px" }}>No Successful Deals Yet</h3>
-        <p style={{ color: "#999" }}>Completed internship programs will appear here.</p>
       </div>
     )
   }
@@ -448,190 +463,194 @@ const SuccessfulInternDealsTable = () => {
             </tr>
           </thead>
           <tbody>
-            {deals.map((deal) => (
-              <tr
-                key={deal.id}
-                style={{
-                  borderBottom: "1px solid #E8D5C4",
-                  transition: "all 0.2s ease",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = "#f5f5f5"
-                  e.currentTarget.style.transform = "translateY(-1px)"
-                  e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.1)"
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = "white"
-                  e.currentTarget.style.transform = "translateY(0)"
-                  e.currentTarget.style.boxShadow = "none"
-                }}
-              >
-                <td
+            {deals.length === 0 ? (
+              <EmptyTableRow />
+            ) : (
+              deals.map((deal) => (
+                <tr
+                  key={deal.id}
                   style={{
-                    padding: "0.75rem 0.5rem",
-                    borderRight: "1px solid #E8D5C4",
-                    wordWrap: "break-word",
-                    whiteSpace: "normal",
-                    verticalAlign: "top",
+                    borderBottom: "1px solid #E8D5C4",
+                    transition: "all 0.2s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "#f5f5f5"
+                    e.currentTarget.style.transform = "translateY(-1px)"
+                    e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.1)"
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "white"
+                    e.currentTarget.style.transform = "translateY(0)"
+                    e.currentTarget.style.boxShadow = "none"
                   }}
                 >
-                  <span
+                  <td
                     style={{
-                      color: "#a67c52",
-                      fontWeight: "500",
-                      lineHeight: "1.3",
+                      padding: "0.75rem 0.5rem",
+                      borderRight: "1px solid #E8D5C4",
+                      wordWrap: "break-word",
+                      whiteSpace: "normal",
+                      verticalAlign: "top",
                     }}
                   >
-                    <TruncatedText text={deal.internName} maxLength={30} />
-                  </span>
-                </td>
+                    <span
+                      style={{
+                        color: "#a67c52",
+                        fontWeight: "500",
+                        lineHeight: "1.3",
+                      }}
+                    >
+                      <TruncatedText text={deal.internName} maxLength={30} />
+                    </span>
+                  </td>
 
-                <td
-                  style={{
-                    padding: "0.75rem 0.5rem",
-                    borderRight: "1px solid #E8D5C4",
-                    verticalAlign: "top",
-                    fontWeight: "600",
-                    color: "#372306ff",
-                  }}
-                >
-                  {deal.dealAmount}
-                </td>
-
-                <td
-                  style={{
-                    padding: "0.75rem 0.5rem",
-                    borderRight: "1px solid #E8D5C4",
-                    verticalAlign: "top",
-                  }}
-                >
-                  <span
+                  <td
                     style={{
-                      color: "#372306ff",
-                      padding: "4px 8px",
-                      borderRadius: "12px",
-                      fontSize: "12px",
+                      padding: "0.75rem 0.5rem",
+                      borderRight: "1px solid #E8D5C4",
+                      verticalAlign: "top",
                       fontWeight: "600",
+                      color: "#372306ff",
                     }}
                   >
-                    {deal.dealType}
-                  </span>
-                </td>
+                    {deal.dealAmount}
+                  </td>
 
-                <td
-                  style={{
-                    padding: "0.75rem 0.5rem",
-                    borderRight: "1px solid #E8D5C4",
-                    verticalAlign: "top",
-                    fontSize: "14px",
-                  }}
-                >
-                  {formatDate(deal.completionDate)}
-                </td>
-
-                <td
-                  style={{
-                    padding: "0.75rem 0.5rem",
-                    borderRight: "1px solid #E8D5C4",
-                    verticalAlign: "top",
-                  }}
-                >
-                  <TruncatedText text={deal.sector} maxLength={20} />
-                </td>
-
-                <td
-                  style={{
-                    padding: "0.75rem 0.5rem",
-                    borderRight: "1px solid #E8D5C4",
-                    verticalAlign: "top",
-                  }}
-                >
-                  <TruncatedText text={deal.location} maxLength={15} />
-                </td>
-
-                <td
-                  style={{
-                    padding: "0.75rem 0.5rem",
-                    borderRight: "1px solid #E8D5C4",
-                    verticalAlign: "top",
-                    fontSize: "14px",
-                  }}
-                >
-                  {deal.dealDuration}
-                </td>
-
-                <td
-                  style={{
-                    padding: "0.75rem 0.5rem",
-                    borderRight: "1px solid #E8D5C4",
-                    verticalAlign: "top",
-                    textAlign: "center",
-                  }}
-                >
-                  <span
+                  <td
                     style={{
-                      color: getRatingColor(deal.performanceRating),
-                      fontWeight: "700",
+                      padding: "0.75rem 0.5rem",
+                      borderRight: "1px solid #E8D5C4",
+                      verticalAlign: "top",
+                    }}
+                  >
+                    <span
+                      style={{
+                        color: "#372306ff",
+                        padding: "4px 8px",
+                        borderRadius: "12px",
+                        fontSize: "12px",
+                        fontWeight: "600",
+                      }}
+                    >
+                      {deal.dealType}
+                    </span>
+                  </td>
+
+                  <td
+                    style={{
+                      padding: "0.75rem 0.5rem",
+                      borderRight: "1px solid #E8D5C4",
+                      verticalAlign: "top",
                       fontSize: "14px",
                     }}
                   >
-                    {deal.performanceRating}
-                  </span>
-                </td>
+                    {formatDate(deal.completionDate)}
+                  </td>
 
-                <td
-                  style={{
-                    padding: "0.75rem 0.5rem",
-                    borderRight: "1px solid #E8D5C4",
-                    verticalAlign: "top",
-                  }}
-                >
-                  <span
+                  <td
                     style={{
-                      backgroundColor: getStatusColor(deal.currentStatus) + "20",
-                      color: getStatusColor(deal.currentStatus),
-                      padding: "6px 10px",
-                      borderRadius: "12px",
-                      fontSize: "12px",
-                      fontWeight: "600",
-                      display: "inline-block",
+                      padding: "0.75rem 0.5rem",
+                      borderRight: "1px solid #E8D5C4",
+                      verticalAlign: "top",
                     }}
                   >
-                    {deal.currentStatus}
-                  </span>
-                </td>
+                    <TruncatedText text={deal.sector} maxLength={20} />
+                  </td>
 
-                <td
-                  style={{
-                    padding: "0.75rem 0.5rem",
-                    verticalAlign: "top",
-                    textAlign: "center",
-                  }}
-                >
-                  <button
-                    onClick={() => handleViewDetails(deal)}
+                  <td
                     style={{
-                      backgroundColor: "#5d4037",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "8px",
-                      padding: "8px 16px",
-                      fontSize: "12px",
-                      fontWeight: "600",
-                      cursor: "pointer",
-                      transition: "all 0.3s ease",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "4px",
-                      margin: "0 auto",
+                      padding: "0.75rem 0.5rem",
+                      borderRight: "1px solid #E8D5C4",
+                      verticalAlign: "top",
                     }}
                   >
-                    <Eye size={14} />
-                    View Details
-                  </button>
-                </td>
-              </tr>
-            ))}
+                    <TruncatedText text={deal.location} maxLength={15} />
+                  </td>
+
+                  <td
+                    style={{
+                      padding: "0.75rem 0.5rem",
+                      borderRight: "1px solid #E8D5C4",
+                      verticalAlign: "top",
+                      fontSize: "14px",
+                    }}
+                  >
+                    {deal.dealDuration}
+                  </td>
+
+                  <td
+                    style={{
+                      padding: "0.75rem 0.5rem",
+                      borderRight: "1px solid #E8D5C4",
+                      verticalAlign: "top",
+                      textAlign: "center",
+                    }}
+                  >
+                    <span
+                      style={{
+                        color: getRatingColor(deal.performanceRating),
+                        fontWeight: "700",
+                        fontSize: "14px",
+                      }}
+                    >
+                      {deal.performanceRating}
+                    </span>
+                  </td>
+
+                  <td
+                    style={{
+                      padding: "0.75rem 0.5rem",
+                      borderRight: "1px solid #E8D5C4",
+                      verticalAlign: "top",
+                    }}
+                  >
+                    <span
+                      style={{
+                        backgroundColor: getStatusColor(deal.currentStatus) + "20",
+                        color: getStatusColor(deal.currentStatus),
+                        padding: "6px 10px",
+                        borderRadius: "12px",
+                        fontSize: "12px",
+                        fontWeight: "600",
+                        display: "inline-block",
+                      }}
+                    >
+                      {deal.currentStatus}
+                    </span>
+                  </td>
+
+                  <td
+                    style={{
+                      padding: "0.75rem 0.5rem",
+                      verticalAlign: "top",
+                      textAlign: "center",
+                    }}
+                  >
+                    <button
+                      onClick={() => handleViewDetails(deal)}
+                      style={{
+                        backgroundColor: "#5d4037",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "8px",
+                        padding: "8px 16px",
+                        fontSize: "12px",
+                        fontWeight: "600",
+                        cursor: "pointer",
+                        transition: "all 0.3s ease",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        margin: "0 auto",
+                      }}
+                    >
+                      <Eye size={14} />
+                      View Details
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

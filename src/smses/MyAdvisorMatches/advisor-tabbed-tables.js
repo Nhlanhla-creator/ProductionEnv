@@ -58,6 +58,31 @@ const TruncatedText = ({ text, maxLength = 40 }) => {
   )
 }
 
+// Empty table row component for when there are no deals
+const EmptyTableRow = () => (
+  <tr style={{ borderBottom: "1px solid #E8D5C4" }}>
+    <td colSpan="10" style={{ 
+      padding: "2rem",
+      textAlign: "center", 
+      color: "#999",
+      fontStyle: "italic",
+      borderRight: "none"
+    }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+        <Trophy size={48} style={{ color: "#ddd" }} />
+        <div>
+          <p style={{ margin: "0 0 0.5rem 0", fontSize: "1rem", color: "#666" }}>
+            You have not engaged any advisors, so there are no successful deals available.
+          </p>
+          <p style={{ margin: 0, fontSize: "0.9rem", color: "#999" }}>
+            You need to engage advisors first to see your successful deals here.
+          </p>
+        </div>
+      </div>
+    </td>
+  </tr>
+)
+
 // Star Rating Component
 const StarRating = ({ rating, onRatingChange, readOnly = false, size = 24 }) => {
   const [hoverRating, setHoverRating] = useState(0)
@@ -512,208 +537,193 @@ const SuccessfulAdvisorDealsTable = ({ successfulDeals = [] }) => {
 
       <div style={{ marginBottom: "24px" }}></div>
 
-      {successfulDeals.length === 0 ? (
-        <div
+      <div
+        style={{
+          overflowX: "auto",
+          borderRadius: "8px",
+          border: "1px solid #E8D5C4",
+          boxShadow: "0 4px 24px rgba(139, 69, 19, 0.08)",
+        }}
+      >
+        <table
           style={{
-            textAlign: "center",
-            padding: "3rem",
-            color: "#8D6E63",
+            width: "100%",
+            borderCollapse: "collapse",
+            background: "white",
+            fontSize: "0.75rem",
             backgroundColor: "#FEFCFA",
-            borderRadius: "8px",
-            border: "1px solid #E8D5C4",
+            tableLayout: "fixed",
           }}
         >
-          <Trophy size={48} style={{ marginBottom: "1rem", opacity: 0.5 }} />
-          <h3 style={{ color: "#5D2A0A", marginBottom: "0.5rem" }}>No Successful Advisor Deals Yet</h3>
-          <p style={{ color: "#8D6E63", marginBottom: "1rem" }}>
-            When you complete advisor engagements, they'll appear here as successful deals.
-          </p>
-        </div>
-      ) : (
-        <div
-          style={{
-            overflowX: "auto",
-            borderRadius: "8px",
-            border: "1px solid #E8D5C4",
-            boxShadow: "0 4px 24px rgba(139, 69, 19, 0.08)",
-          }}
-        >
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              background: "white",
-              fontSize: "0.75rem",
-              backgroundColor: "#FEFCFA",
-              tableLayout: "fixed",
-            }}
-          >
-            <thead>
-              <tr>
-                <th
-                  style={{
-                    background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                    color: "#FEFCFA",
-                    padding: "0.75rem 0.5rem",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    fontSize: "0.75rem",
-                    letterSpacing: "0.5px",
-                    textTransform: "uppercase",
-                    borderRight: "1px solid #1a0c02",
-                    width: "14%",
-                  }}
-                >
-                  Advisor Name
-                </th>
-                <th
-                  style={{
-                    background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                    color: "#FEFCFA",
-                    padding: "0.75rem 0.5rem",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    fontSize: "0.75rem",
-                    letterSpacing: "0.5px",
-                    textTransform: "uppercase",
-                    borderRight: "1px solid #1a0c02",
-                    width: "11%",
-                  }}
-                >
-                  Deal Amount
-                </th>
-                <th
-                  style={{
-                    background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                    color: "#FEFCFA",
-                    padding: "0.75rem 0.5rem",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    fontSize: "0.75rem",
-                    letterSpacing: "0.5px",
-                    textTransform: "uppercase",
-                    borderRight: "1px solid #1a0c02",
-                    width: "10%",
-                  }}
-                >
-                  Deal Type
-                </th>
-                <th
-                  style={{
-                    background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                    color: "#FEFCFA",
-                    padding: "0.75rem 0.5rem",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    fontSize: "0.75rem",
-                    letterSpacing: "0.5px",
-                    textTransform: "uppercase",
-                    borderRight: "1px solid #1a0c02",
-                    width: "10%",
-                  }}
-                >
-                  Completion Date
-                </th>
-                <th
-                  style={{
-                    background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                    color: "#FEFCFA",
-                    padding: "0.75rem 0.5rem",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    fontSize: "0.75rem",
-                    letterSpacing: "0.5px",
-                    textTransform: "uppercase",
-                    borderRight: "1px solid #1a0c02",
-                    width: "8%",
-                  }}
-                >
-                  Sector
-                </th>
-                <th
-                  style={{
-                    background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                    color: "#FEFCFA",
-                    padding: "0.75rem 0.5rem",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    fontSize: "0.75rem",
-                    letterSpacing: "0.5px",
-                    textTransform: "uppercase",
-                    borderRight: "1px solid #1a0c02",
-                    width: "8%",
-                  }}
-                >
-                  Location
-                </th>
-                <th
-                  style={{
-                    background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                    color: "#FEFCFA",
-                    padding: "0.75rem 0.5rem",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    fontSize: "0.75rem",
-                    letterSpacing: "0.5px",
-                    textTransform: "uppercase",
-                    borderRight: "1px solid #1a0c02",
-                    width: "7%",
-                  }}
-                >
-                  Duration
-                </th>
-                <th
-                  style={{
-                    background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                    color: "#FEFCFA",
-                    padding: "0.5rem 0.3rem",
-                    textAlign: "center",
-                    fontWeight: "600",
-                    fontSize: "0.75rem",
-                    letterSpacing: "0.5px",
-                    textTransform: "uppercase",
-                    borderRight: "1px solid #1a0c02",
-                    width: "10%",
-                  }}
-                >
-                  Rating
-                </th>
-                <th
-                  style={{
-                    background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                    color: "#FEFCFA",
-                    padding: "0.75rem 0.5rem",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    fontSize: "0.75rem",
-                    letterSpacing: "0.5px",
-                    textTransform: "uppercase",
-                    borderRight: "1px solid #1a0c02",
-                    width: "10%",
-                  }}
-                >
-                  Current Status
-                </th>
-                <th
-                  style={{
-                    background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                    color: "#FEFCFA",
-                    padding: "0.75rem 0.5rem",
-                    textAlign: "center",
-                    fontWeight: "600",
-                    fontSize: "0.75rem",
-                    letterSpacing: "0.5px",
-                    textTransform: "uppercase",
-                    borderRight: "none",
-                    width: "12%",
-                  }}
-                >
-                  Action
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {successfulDeals.map((deal) => (
+          <thead>
+            <tr>
+              <th
+                style={{
+                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                  color: "#FEFCFA",
+                  padding: "0.75rem 0.5rem",
+                  textAlign: "left",
+                  fontWeight: "600",
+                  fontSize: "0.75rem",
+                  letterSpacing: "0.5px",
+                  textTransform: "uppercase",
+                  borderRight: "1px solid #1a0c02",
+                  width: "14%",
+                }}
+              >
+                Advisor Name
+              </th>
+              <th
+                style={{
+                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                  color: "#FEFCFA",
+                  padding: "0.75rem 0.5rem",
+                  textAlign: "left",
+                  fontWeight: "600",
+                  fontSize: "0.75rem",
+                  letterSpacing: "0.5px",
+                  textTransform: "uppercase",
+                  borderRight: "1px solid #1a0c02",
+                  width: "11%",
+                }}
+              >
+                Deal Amount
+              </th>
+              <th
+                style={{
+                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                  color: "#FEFCFA",
+                  padding: "0.75rem 0.5rem",
+                  textAlign: "left",
+                  fontWeight: "600",
+                  fontSize: "0.75rem",
+                  letterSpacing: "0.5px",
+                  textTransform: "uppercase",
+                  borderRight: "1px solid #1a0c02",
+                  width: "10%",
+                }}
+              >
+                Deal Type
+              </th>
+              <th
+                style={{
+                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                  color: "#FEFCFA",
+                  padding: "0.75rem 0.5rem",
+                  textAlign: "left",
+                  fontWeight: "600",
+                  fontSize: "0.75rem",
+                  letterSpacing: "0.5px",
+                  textTransform: "uppercase",
+                  borderRight: "1px solid #1a0c02",
+                  width: "10%",
+                }}
+              >
+                Completion Date
+              </th>
+              <th
+                style={{
+                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                  color: "#FEFCFA",
+                  padding: "0.75rem 0.5rem",
+                  textAlign: "left",
+                  fontWeight: "600",
+                  fontSize: "0.75rem",
+                  letterSpacing: "0.5px",
+                  textTransform: "uppercase",
+                  borderRight: "1px solid #1a0c02",
+                  width: "8%",
+                }}
+              >
+                Sector
+              </th>
+              <th
+                style={{
+                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                  color: "#FEFCFA",
+                  padding: "0.75rem 0.5rem",
+                  textAlign: "left",
+                  fontWeight: "600",
+                  fontSize: "0.75rem",
+                  letterSpacing: "0.5px",
+                  textTransform: "uppercase",
+                  borderRight: "1px solid #1a0c02",
+                  width: "8%",
+                }}
+              >
+                Location
+              </th>
+              <th
+                style={{
+                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                  color: "#FEFCFA",
+                  padding: "0.75rem 0.5rem",
+                  textAlign: "left",
+                  fontWeight: "600",
+                  fontSize: "0.75rem",
+                  letterSpacing: "0.5px",
+                  textTransform: "uppercase",
+                  borderRight: "1px solid #1a0c02",
+                  width: "7%",
+                }}
+              >
+                Duration
+              </th>
+              <th
+                style={{
+                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                  color: "#FEFCFA",
+                  padding: "0.5rem 0.3rem",
+                  textAlign: "center",
+                  fontWeight: "600",
+                  fontSize: "0.75rem",
+                  letterSpacing: "0.5px",
+                  textTransform: "uppercase",
+                  borderRight: "1px solid #1a0c02",
+                  width: "10%",
+                }}
+              >
+                Rating
+              </th>
+              <th
+                style={{
+                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                  color: "#FEFCFA",
+                  padding: "0.75rem 0.5rem",
+                  textAlign: "left",
+                  fontWeight: "600",
+                  fontSize: "0.75rem",
+                  letterSpacing: "0.5px",
+                  textTransform: "uppercase",
+                  borderRight: "1px solid #1a0c02",
+                  width: "10%",
+                }}
+              >
+                Current Status
+              </th>
+              <th
+                style={{
+                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+                  color: "#FEFCFA",
+                  padding: "0.75rem 0.5rem",
+                  textAlign: "center",
+                  fontWeight: "600",
+                  fontSize: "0.75rem",
+                  letterSpacing: "0.5px",
+                  textTransform: "uppercase",
+                  borderRight: "none",
+                  width: "12%",
+                }}
+              >
+                Action
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {successfulDeals.length === 0 ? (
+              <EmptyTableRow />
+            ) : (
+              successfulDeals.map((deal) => (
                 <tr
                   key={deal.id}
                   style={{
@@ -920,11 +930,11 @@ const SuccessfulAdvisorDealsTable = ({ successfulDeals = [] }) => {
                     </div>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
 
       {/* Rating Modal */}
       <RatingModal

@@ -1,26 +1,9 @@
 "use client"
 
+import { useState } from "react"
+import { ChevronDown, ChevronUp } from "lucide-react"
 import FormField from "./FormField"
 import "./AdvisoryApplication.css"
-
-// Barrier options for growth challenges
-const barrierOptions = [
-  { value: "access-to-finance", label: "Access to Finance" },
-  { value: "market-access", label: "Market Access" },
-  { value: "skills-shortage", label: "Skills Shortage" },
-  { value: "regulatory-compliance", label: "Regulatory Compliance" },
-  { value: "technology-adoption", label: "Technology Adoption" },
-  { value: "operational-efficiency", label: "Operational Efficiency" },
-  { value: "strategic-planning", label: "Strategic Planning" },
-  { value: "governance-structure", label: "Governance Structure" },
-  { value: "financial-management", label: "Financial Management" },
-  { value: "marketing-sales", label: "Marketing & Sales" },
-  { value: "supply-chain", label: "Supply Chain Management" },
-  { value: "human-resources", label: "Human Resources" },
-  { value: "legal-issues", label: "Legal Issues" },
-  { value: "competition", label: "Competition" },
-  { value: "other", label: "Other" },
-]
 
 // Advisory options
 const advisoryRoleOptions = [
@@ -32,6 +15,7 @@ const advisoryRoleOptions = [
   { value: "mentor", label: "Mentor" },
   { value: "board-member", label: "Board Member" },
   { value: "subject-matter-expert", label: "Subject-matter expert" },
+  { value: "other", label: "Other" },
 ]
 
 const supportFocusOptions = [
@@ -40,6 +24,19 @@ const supportFocusOptions = [
   { value: "fundraising", label: "Fundraising" },
   { value: "digital-transformation", label: "Digital Transformation" },
   { value: "esg-strategy", label: "ESG Strategy" },
+  { value: "other", label: "Other" },
+]
+
+// Functional expertise options
+const functionalExpertiseOptions = [
+  { value: "finance", label: "Finance" },
+  { value: "hr", label: "HR" },
+  { value: "legal", label: "Legal" },
+  { value: "strategy", label: "Strategy" },
+  { value: "esg", label: "ESG" },
+  { value: "tech", label: "Tech" },
+  { value: "governance", label: "Governance" },
+  { value: "other", label: "Other" },
 ]
 
 const timeCommitmentOptions = [
@@ -76,6 +73,67 @@ const provinceOptions = [
   { value: "northern-cape", label: "Northern Cape" },
 ]
 
+// MultiSelect Dropdown Component
+function MultiSelect({ options, selected, onChange, label }) {
+  const [isOpen, setIsOpen] = useState(false)
+
+  const toggleDropdown = () => setIsOpen(!isOpen)
+  const closeDropdown = () => setIsOpen(false)
+
+  const handleSelect = (value) => {
+    const newSelected = selected.includes(value) 
+      ? selected.filter((item) => item !== value) 
+      : [...selected, value]
+    onChange(newSelected)
+  }
+
+  return (
+    <div className="multi-select-container">
+      <div className="multi-select-header" onClick={toggleDropdown}>
+        {selected.length > 0 ? (
+          <div className="selected-items">
+            {selected.map((item) => (
+              <span key={item} className="selected-item">
+                {options.find((opt) => opt.value === item)?.label || item}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <span className="placeholder">Select {label}</span>
+        )}
+        {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+      </div>
+
+      {isOpen && (
+        <div className="multi-select-dropdown">
+          <div className="multi-select-options">
+            {options.map((option) => (
+              <div
+                key={option.value}
+                className={`multi-select-option ${selected.includes(option.value) ? "selected" : ""}`}
+                onClick={() => handleSelect(option.value)}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(option.value)}
+                  onChange={() => {}}
+                  className="multi-select-checkbox"
+                />
+                <span>{option.label}</span>
+              </div>
+            ))}
+          </div>
+          <div className="multi-select-actions">
+            <button type="button" className="multi-select-button" onClick={closeDropdown}>
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Component for Advisory Needs Assessment
 const AdvisoryNeedsAssessment = ({ data = {}, updateData }) => {
   const updateFormData = (section, newData) => {
@@ -94,25 +152,9 @@ export const renderAdvisoryNeedsAssessment = (data, updateFormData) => {
     updateFormData("advisoryNeedsAssessment", { [name]: type === "checkbox" ? checked : value })
   }
 
-  const handleMultiSelect = (fieldName) => (e) => {
-    const { value, checked } = e.target
-    let currentValues = [...(data[fieldName] || [])]
-
-    if (checked) {
-      currentValues.push(value)
-    } else {
-      currentValues = currentValues.filter((item) => item !== value)
-    }
-
-    updateFormData("advisoryNeedsAssessment", { [fieldName]: currentValues })
+  const handleMultiSelectChange = (fieldName, value) => {
+    updateFormData("advisoryNeedsAssessment", { [fieldName]: value })
   }
-
-  const handleFileChange = (name, files) => {
-    updateFormData("advisoryNeedsAssessment", { [name]: files })
-  }
-
-  // Check if "other" is selected in barriers
-  const isOtherBarrierSelected = (data.barriers || []).includes("other")
 
   return (
     <div className="advisory-needs-container">
@@ -124,42 +166,35 @@ export const renderAdvisoryNeedsAssessment = (data, updateFormData) => {
 
         <div className="form-row">
           <div className="form-column">
-            <FormField label="Advisory Role (Multi-select)" >
-              <div className="checkbox-grid">
-                {advisoryRoleOptions.map((role) => (
-                  <label key={role.value} className="form-checkbox-label">
-                    <input
-                      type="checkbox"
-                      name="advisoryRole"
-                      value={role.value}
-                      checked={(data.advisoryRole || []).includes(role.value)}
-                      onChange={handleMultiSelect("advisoryRole")}
-                      className="form-checkbox"
-                    />
-                    <span>{role.label}</span>
-                  </label>
-                ))}
-              </div>
+            <FormField label="Advisory Role (Multi-select)">
+              <MultiSelect
+                options={advisoryRoleOptions}
+                selected={data.advisoryRole || []}
+                onChange={(value) => handleMultiSelectChange("advisoryRole", value)}
+                label="Advisory Roles"
+              />
             </FormField>
           </div>
 
           <div className="form-column">
-            <FormField label="Support Focus (Multi-select)" >
-              <div className="checkbox-grid">
-                {supportFocusOptions.map((option) => (
-                  <label key={option.value} className="form-checkbox-label">
-                    <input
-                      type="checkbox"
-                      name="supportFocus"
-                      value={option.value}
-                      checked={(data.supportFocus || []).includes(option.value)}
-                      onChange={handleMultiSelect("supportFocus")}
-                      className="form-checkbox"
-                    />
-                    <span>{option.label}</span>
-                  </label>
-                ))}
-              </div>
+            <FormField label="Support Focus (Multi-select)">
+              <MultiSelect
+                options={supportFocusOptions}
+                selected={data.supportFocus || []}
+                onChange={(value) => handleMultiSelectChange("supportFocus", value)}
+                label="Support Focus Areas"
+              />
+            </FormField>
+          </div>
+
+          <div className="form-column">
+            <FormField label="Functional Expertise (Multi-select)">
+              <MultiSelect
+                options={functionalExpertiseOptions}
+                selected={data.functionalExpertise || []}
+                onChange={(value) => handleMultiSelectChange("functionalExpertise", value)}
+                label="Functional Expertise"
+              />
             </FormField>
           </div>
         </div>
@@ -171,7 +206,7 @@ export const renderAdvisoryNeedsAssessment = (data, updateFormData) => {
 
         <div className="form-row">
           <div className="form-column">
-            <FormField label="Time Commitment Needed" >
+            <FormField label="Time Commitment Needed">
               <select
                 name="timeCommitment"
                 value={data.timeCommitment || ""}
@@ -190,7 +225,7 @@ export const renderAdvisoryNeedsAssessment = (data, updateFormData) => {
           </div>
 
           <div className="form-column">
-            <FormField label="Compensation Type" >
+            <FormField label="Compensation Type">
               <select
                 name="compensationType"
                 value={data.compensationType || ""}
@@ -230,7 +265,7 @@ export const renderAdvisoryNeedsAssessment = (data, updateFormData) => {
 
             {data.meetingFormat === "in-person" && (
               <div className="conditional-field">
-                <FormField label="Province" >
+                <FormField label="Province">
                   <select
                     name="province"
                     value={data.province || ""}

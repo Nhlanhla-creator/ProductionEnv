@@ -1056,24 +1056,70 @@ const SuccessfulSupplierDealsTable = ({ acceptedSuppliers, supplier }) => {
                 </tr>
               ))
             ) : (
-              <tr>
-                <td
-                  colSpan="10"
-                  style={{
-                    textAlign: "center",
-                    padding: "40px",
-                    color: "#999",
-                    fontSize: "16px",
-                    fontStyle: "italic",
-                  }}
-                >
-                  No accepted suppliers yet. Suppliers will appear here once you accept them from the "My Matches" tab.
-                </td>
-              </tr>
+              // Empty state - show the table structure with no data message
+              <>
+                {/* Empty row to show table structure */}
+                <tr style={{ backgroundColor: "#f9f9f9" }}>
+                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", fontStyle: "italic" }}>
+                    Supplier Name
+                  </td>
+                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", fontStyle: "italic" }}>
+                    Contract Value
+                  </td>
+                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", fontStyle: "italic" }}>
+                    Deal Type
+                  </td>
+                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", fontStyle: "italic" }}>
+                    Start Date
+                  </td>
+                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", fontStyle: "italic" }}>
+                    Sector
+                  </td>
+                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", fontStyle: "italic" }}>
+                    Duration
+                  </td>
+                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", fontStyle: "italic" }}>
+                    BBBEE Level
+                  </td>
+                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", fontStyle: "italic", textAlign: "center" }}>
+                    Rating
+                  </td>
+                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", fontStyle: "italic" }}>
+                    Status
+                  </td>
+                  <td style={{ padding: "0.75rem 0.5rem", color: "#ccc", fontStyle: "italic", textAlign: "center" }}>
+                    Actions
+                  </td>
+                </tr>
+              </>
             )}
           </tbody>
         </table>
       </div>
+
+      {/* Message underneath the table */}
+      {deals.length === 0 && (
+        <div
+          style={{
+            textAlign: "center",
+            padding: "32px 20px",
+            backgroundColor: "#f8f9fa",
+            borderRadius: "0 0 8px 8px",
+            border: "1px solid #E8D5C4",
+            borderTop: "none",
+            color: "#666",
+            fontSize: "16px",
+            fontStyle: "italic",
+          }}
+        >
+          <div style={{ marginBottom: "8px", fontSize: "18px", fontWeight: "600", color: "#5d4037" }}>
+            You have not applied for any customers, so there are no matches available.
+          </div>
+          <div style={{ fontSize: "14px", color: "#999" }}>
+            You need to apply first. Once you accept suppliers from the "My Matches" tab, they will appear here with their contract details.
+          </div>
+        </div>
+      )}
 
       {/* Deal Details Modal */}
       {selectedDeal && (
