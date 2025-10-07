@@ -7,32 +7,13 @@ import "./FundingApplication.css"
 
 // Funding Instrument options
 const fundingInstrumentOptions = [
-  { value: "Any", label: "Any" },
+{ value: "Any", label: "Any" },
   { value: "Equity", label: "Equity (Buying shares in the business)" },
   { value: "Debt", label: "Debt (Loan-based funding)" },
   { value: "Grants", label: "Grants (Non-repayable funding)" },
   { value: "Convertible Notes", label: "Convertible Notes (Loan that can turn into shares)" },
   { value: "Revenue-based Financing", label: "Revenue-based Financing" },
-  { value: "grants", label: "Grants (non-repayable funding)" },
-  { value: "low_interest_loans", label: "Low-Interest Loans" },
-  { value: "seed_funding", label: "Seed Funding" },
-  { value: "crowdfunding_support", label: "Crowdfunding Support" },
-  { value: "skills_training", label: "Skills Training & Development" },
-  { value: "business_mentorship", label: "Business Mentorship" },
-  { value: "leadership_development", label: "Leadership Development" },
-  { value: "financial_literacy", label: "Financial Literacy" },
-  { value: "networking", label: "Networking & Partnerships" },
-  { value: "market_linkages", label: "Market Linkages" },
-  { value: "trade_facilitation", label: "Trade Facilitation" },
-  { value: "export_support", label: "Export Support" },
-  { value: "digital_tools", label: "Digital Tools & Platforms" },
-  { value: "tech_training", label: "Technology Training" },
-  { value: "innovation_labs", label: "Innovation Labs" },
-  { value: "research_development", label: "Research & Development" },
-  { value: "community_development", label: "Community Development" },
-  { value: "environmental_programs", label: "Environmental Programs" },
-  { value: "youth_development", label: "Youth Development" },
-  { value: "women_empowerment", label: "Women Empowerment" },
+  { value: "Other", label: "Other (please specify)" },
 ]
 
 const equityType = [
