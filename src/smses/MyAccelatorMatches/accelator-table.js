@@ -528,165 +528,108 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
     let matched = 0
 
     // Initialize breakdown object
-    const breakdown = {
-      fundingStage: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-      ticketSize: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-      geographicFit: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-      sectorMatch: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-      instrumentFit: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-      firmTypeMatch: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-      legalEntityFit: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-      revenueThreshold: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-    }
-
-// ---------- Sector helpers (drop-in) ----------
-const toArray = (v) => {
-  if (v == null) return [];
-  if (Array.isArray(v)) return v;
-  return v.toString().split(/[,\|/]+/g).map(s => s.trim()).filter(Boolean);
-};
-
-// Split items, then split composites by underscores, hyphens, slashes, and also by single spaces
-const splitSectorTokens = (v) =>
-  toArray(v)
-    .flatMap(item => item.split(/[,\|/]+/g))
-    .flatMap(item => item.split(/[_/\-\s]+/g))   // <— includes spaces too
-    .map(s => s.replace(/\(.*?\)/g, ""))         // remove parentheticals
-    .map(s => s.trim())
-    .filter(Boolean);
-
-// Canonicalize: letters only, lowercase
-const canon = (s) => s.toLowerCase().replace(/[^a-z]/g, "");
-
-// Aliases
-const SECTOR_ALIASES = {
-  it: "informationtechnology",
-  ict: "informationtechnology",
-  informationtechnology: "informationtechnology",
-  technology: "informationtechnology",
-  software: "informationtechnology",
-
-  agri: "agriculture",
-  agriculture: "agriculture",
-  forestry: "forestry",
-  fishing: "fishing",
-};
-
-// Known composites → expand to atomic sectors
-const COMPOSITE_EXPANSIONS = {
-  agricultureforestryfishing: ["agriculture", "forestry", "fishing"],
-  // add more if you encounter them
-};
-
-const mapAlias = (t) => SECTOR_ALIASES[t] || t;
-
-const normalizeSectors = (v) =>
-  splitSectorTokens(v)
-    .map(canon)
-    .map(mapAlias)
-    .flatMap(t => COMPOSITE_EXPANSIONS[t] ? COMPOSITE_EXPANSIONS[t] : [t])
-    .filter(Boolean);
-
-// any overlap?
-const hasOverlap = (a, b) => {
-  const A = new Set(normalizeSectors(a));
-  for (const t of normalizeSectors(b)) if (A.has(t)) return true;
-  return false;
-};
-
-// normalize each token: lower-case, trim, remove underscores/hyphens/spaces
-const normalizeToken = (s) =>
-  s.toString().toLowerCase().trim().replace(/[_\-\s]+/g, "");
-
-const normalizeList = (v) =>
-  toArray(v)
-    .flatMap(item => item.split(/\s*,\s*/)) // catch comma-separated inside array items
-    .map(normalizeToken)
-    .filter(Boolean);
-
-// true if any token overlaps between the two lists
-// ---- Firm type normalization/extraction ----
-const canonStr = (v) =>
-  (Array.isArray(v) ? v.join(" ") : (v ?? ""))
-    .toString()
-    .toLowerCase()
-    .replace(/[^a-z\s\/,_-]/g, "")   // strip digits & symbols, keep separators
-    .replace(/\s+/g, " ")            // collapse spaces
-    .trim();
-
-// canonical tags we will emit
-const FIRM_TAGS = {
-  venturecapital: ["vc", "venture capital", "venture-capital", "venture_capital", "vcfirms"],
-  privateequity: ["private equity", "pe", "private-equity", "private_equity"],
-  angel: ["angel", "angel investor", "angel-investor", "angel_investor", "angels"],
-  crowdfunding: ["crowdfunding", "crowd fund", "crowd-fund", "crowd_fund"],
-  lender: ["lender", "lenders", "loan", "loans", "bank", "banks", "credit", "debt"],
-  developmentfinance: ["development finance", "dfi", "dev finance", "development-finance", "development_finance"],
-  supplychainfinance: ["supply chain", "supply-chain", "supply_chain"],
-  corporate: ["corporate", "strategic"],
-  government: ["government", "public sector", "public-sector", "public_sector", "govt"],
-  accelerator: ["accelerator", "incubator"],
-  nonprofit: ["non profit", "non-profit", "non_profit", "nonprofit"],
-  grant: ["grant", "grants", "grantmaker", "grant maker"],
-  any: ["any", "open"], // safety valve
-};
-
-// scan a canonicalized string for aliases and emit canonical tags
-const extractFirmTags = (raw) => {
-  const s = canonStr(raw);
-  if (!s) return [];
-  const tags = new Set();
-  for (const [canonTag, aliases] of Object.entries(FIRM_TAGS)) {
-    for (const alias of aliases) {
-      const needle = alias.replace(/[^a-z]/g, "");
-      const hay = s.replace(/[^a-z]/g, ""); // remove separators then search
-      if (needle && hay.includes(needle)) {
-        tags.add(canonTag);
-        break;
-      }
-    }
+   const breakdown = {
+    fundingStage: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+    ticketSize: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+    geographicFit: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+    sectorMatch: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+    instrumentFit: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+    supportMatch: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} }, // Replaced firmTypeMatch
+    legalEntityFit: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+    revenueThreshold: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
   }
-  return [...tags];
-};
 
-// overlap
-const hasTagOverlap = (a, b) => {
-  const A = new Set(extractFirmTags(a));
-  const B = new Set(extractFirmTags(b));
-  if (B.has("any")) return true;
-  for (const t of B) if (A.has(t)) return true;
-  return false;
-};
+  // ---------- Sector helpers (drop-in) ----------
+  const toArray = (v) => {
+    if (v == null) return [];
+    if (Array.isArray(v)) return v;
+    return v.toString().split(/[,\|/]+/g).map(s => s.trim()).filter(Boolean);
+  };
 
+  // Split items, then split composites by underscores, hyphens, slashes, and also by single spaces
+  const splitSectorTokens = (v) =>
+    toArray(v)
+      .flatMap(item => item.split(/[,\|/]+/g))
+      .flatMap(item => item.split(/[_/\-\s]+/g))   // <— includes spaces too
+      .map(s => s.replace(/\(.*?\)/g, ""))         // remove parentheticals
+      .map(s => s.trim())
+      .filter(Boolean);
 
+  // Canonicalize: letters only, lowercase
+  const canon = (s) => s.toLowerCase().replace(/[^a-z]/g, "");
 
+  // Aliases
+  const SECTOR_ALIASES = {
+    it: "informationtechnology",
+    ict: "informationtechnology",
+    informationtechnology: "informationtechnology",
+    technology: "informationtechnology",
+    software: "informationtechnology",
 
+    agri: "agriculture",
+    agriculture: "agriculture",
+    forestry: "forestry",
+    fishing: "fishing",
+  };
 
-    const normalize = (val) => (Array.isArray(val) ? val.map((v) => v.toLowerCase().trim()) : val?.toLowerCase().trim())
+  // Known composites → expand to atomic sectors
+  const COMPOSITE_EXPANSIONS = {
+    agricultureforestryfishing: ["agriculture", "forestry", "fishing"],
+    // add more if you encounter them
+  };
 
-    const includesMatch = (smeVal, accelVal) => {
-      if (!smeVal || !accelVal) return false
-      const smeSet = new Set(Array.isArray(smeVal) ? smeVal : [smeVal])
-      const accelSet = new Set(Array.isArray(accelVal) ? accelVal : [accelVal])
-      return [...smeSet].some((v) => accelSet.has(v))
+  const mapAlias = (t) => SECTOR_ALIASES[t] || t;
+
+  const normalizeSectors = (v) =>
+    splitSectorTokens(v)
+      .map(canon)
+      .map(mapAlias)
+      .flatMap(t => COMPOSITE_EXPANSIONS[t] ? COMPOSITE_EXPANSIONS[t] : [t])
+      .filter(Boolean);
+
+  // any overlap?
+  const hasOverlap = (a, b) => {
+    const A = new Set(normalizeSectors(a));
+    for (const t of normalizeSectors(b)) if (A.has(t)) return true;
+    return false;
+  };
+
+  // normalize each token: lower-case, trim, remove underscores/hyphens/spaces
+  const normalizeToken = (s) =>
+    s.toString().toLowerCase().trim().replace(/[_\-\s]+/g, "");
+
+  const normalizeList = (v) =>
+    toArray(v)
+      .flatMap(item => item.split(/\s*,\s*/)) // catch comma-separated inside array items
+      .map(normalizeToken)
+      .filter(Boolean);
+
+  const normalize = (val) => (Array.isArray(val) ? val.map((v) => v.toLowerCase().trim()) : val?.toLowerCase().trim())
+
+  const includesMatch = (smeVal, accelVal) => {
+    if (!smeVal || !accelVal) return false
+    const smeSet = new Set(Array.isArray(smeVal) ? smeVal : [smeVal])
+    const accelSet = new Set(Array.isArray(accelVal) ? accelVal : [accelVal])
+    return [...smeSet].some((v) => accelSet.has(v))
+  }
+
+  const cleanCurrency = (value) => {
+    if (!value) return 0
+    const cleaned = value.toString().replace(/[^0-9.]/g, "")
+    return Number.parseFloat(cleaned) || 0
+  }
+
+  // Utility to clean strings or arrays of strings
+  const cleanString = (input) => {
+    if (Array.isArray(input)) {
+      return input.map((str) => (typeof str === "string" ? str.replace(/[_-]/g, " ").toLowerCase() : str))
     }
-
-    const cleanCurrency = (value) => {
-      if (!value) return 0
-      const cleaned = value.toString().replace(/[^0-9.]/g, "")
-      return Number.parseFloat(cleaned) || 0
+    if (typeof input === "string") {
+      return input.replace(/[_-]/g, " ").toLowerCase()
     }
+    return input
+  }
 
-    // Utility to clean strings or arrays of strings
-    const cleanString = (input) => {
-      if (Array.isArray(input)) {
-        return input.map((str) => (typeof str === "string" ? str.replace(/[_-]/g, " ").toLowerCase() : str))
-      }
-      if (typeof input === "string") {
-        return input.replace(/[_-]/g, " ").toLowerCase()
-      }
-      return input
-    }
 
     const checkGeographicMatch = (smeLocation, acceleratorGeoData) => {
       const smeProvince = normalize(smeData.entityOverview?.province)
@@ -830,40 +773,52 @@ if (instrumentMatch) {
   breakdown.instrumentFit.description = `Instrument mismatch: you have [${breakdown.instrumentFit.details.smeValue || "unspecified"}], they offer [${breakdown.instrumentFit.details.accelValue || "unspecified"}]`;
 }
 
-   // 6. Firm Type Match — alias/composite aware (program-specific first)
-const smeFirmTypeRaw = smeData.useOfFunds?.funderTypes;              // may be array or messy string
-const accelFirmTypeRaw =
-  programData.programStructure ||
-  acceleratorData?.generalMatchingPreference?.programStructure ||
-  acceleratorData?.generalMatchingPreference?.supportProviderType || // optional fallback
-  acceleratorData?.generalMatchingPreference?.supportFocusType;      // optional fallback
+  // 6. Support Match - NEW: Replaces firmTypeMatch with support focus matching
+  const smeSupportCategory = smeData.useOfFunds?.additionalSupportFocus;
+  const smeSupportSubtype = smeData.useOfFunds?.additionalSupportFocusSubtype;
+  
+  // Get accelerator support preferences - program specific first, then general
+  const accelSupportCategory = 
+    programData.supportFocusType || 
+    acceleratorData?.generalMatchingPreference?.supportFocus;
+  const accelSupportSubtype = 
+    programData.supportFocusSubtype || 
+    acceleratorData?.generalMatchingPreference?.supportFocusSubtype;
 
-const firmTypeMatch = hasTagOverlap(smeFirmTypeRaw, accelFirmTypeRaw);
+  // Calculate support match score (50% for category match, 100% for subtype match)
+  let supportMatchScore = 0;
+  let supportMatched = false;
+  let supportDescription = "";
 
-const smeFirmTags = extractFirmTags(smeFirmTypeRaw);
-const accelFirmTags = extractFirmTags(accelFirmTypeRaw);
+  if (smeSupportSubtype && accelSupportSubtype && smeSupportSubtype === accelSupportSubtype) {
+    // Full match - subtype level
+    supportMatchScore = 12.5;
+    supportMatched = true;
+    supportDescription = `Perfect support match: Your ${smeSupportSubtype} need aligns with their ${accelSupportSubtype} offering`;
+    matched++;
+  } else if (smeSupportCategory && accelSupportCategory && smeSupportCategory === accelSupportCategory) {
+    // Partial match - category level only
+    supportMatchScore = 6.25; // 50% of 12.5
+    supportMatched = true;
+    supportDescription = `Partial support match: Your ${smeSupportCategory} category aligns, but subtypes may differ`;
+    // Don't increment matched counter for partial matches to maintain scoring consistency
+  } else {
+    // No match
+    supportDescription = `Support mismatch: You need ${smeSupportCategory || "unspecified"}${smeSupportSubtype ? ` - ${smeSupportSubtype}` : ""}, they offer ${accelSupportCategory || "unspecified"}${accelSupportSubtype ? ` - ${accelSupportSubtype}` : ""}`;
+  }
 
-breakdown.firmTypeMatch.details = {
-  smeFirmTypeRaw,
-  accelFirmTypeRaw,
-  smeTokens: smeFirmTags,
-  accelTokens: accelFirmTags,
-  matched: firmTypeMatch,
-};
-breakdown.firmTypeMatch.matched = firmTypeMatch;
-
-if (firmTypeMatch) {
-  breakdown.firmTypeMatch.score = 12.5;
-  const overlap = smeFirmTags.filter(t => accelFirmTags.includes(t));
-  breakdown.firmTypeMatch.description =
-    overlap.length
-      ? `${overlap.join(", ")}`
-      : `Firm type: Accelerator accepts any provider type`;
-  matched++;
-} else {
-  breakdown.firmTypeMatch.description =
-    `Firm type mismatch: you seek [${smeFirmTags.join(", ") || "unspecified"}], they offer [${accelFirmTags.join(", ") || "unspecified"}]`;
-}
+  breakdown.supportMatch.details = {
+    smeSupportCategory,
+    smeSupportSubtype,
+    accelSupportCategory,
+    accelSupportSubtype,
+    smeValue: smeSupportSubtype ? `${smeSupportCategory} - ${smeSupportSubtype}` : smeSupportCategory,
+    accelValue: accelSupportSubtype ? `${accelSupportCategory} - ${accelSupportSubtype}` : accelSupportCategory,
+    matchLevel: supportMatchScore === 12.5 ? "subtype" : supportMatchScore === 6.25 ? "category" : "none"
+  };
+  breakdown.supportMatch.score = supportMatchScore;
+  breakdown.supportMatch.matched = supportMatched;
+  breakdown.supportMatch.description = supportDescription;
 
 
     // 7. Legal Entity Fit

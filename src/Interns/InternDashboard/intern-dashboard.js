@@ -5,11 +5,11 @@ import { AcademicFoundation } from "./AcademicFoundation"
 import { ProfessionalSkills } from "./ProfessionalSkills"
 import { WorkExperience } from "./WorkExperience"
 import { ProfessionalPresentation } from "./ProfessionalPresentation"
-import { BigInternReportSummary } from "./BigInternReportSummary"
+import { InternSummaryReportCard } from "./BigInternReportSummary"
 import { GraduationCap, Users, RefreshCw } from "lucide-react"
 import { db, auth } from "../../firebaseConfig"
 import { doc, onSnapshot } from "firebase/firestore"
- import { useApiKey } from '../../smses/SMSEDashboard/callapi'
+import {useApiKey} from '../../smses/SMSEDashboard/callapi'
 import { API_KEYS } from "../../API"
 
 export default function InternDashboard() {
@@ -226,15 +226,17 @@ const apiKey = useApiKey();
             />
           </div>
           <div style={{ height: "100%" }}>
-            <BigInternReportSummary
-              profileData={profileData}
-              academicScore={academicScore}
-              professionalSkillsScore={professionalSkillsScore}
-              workExperienceScore={workExperienceScore}
-              professionalPresentationScore={professionalPresentationScore}
-              bigInternScore={bigInternScore}
-              apiKey={apiKey}
-            />
+       <div style={{ height: "100%" }}>
+  <InternSummaryReportCard
+    userId={auth.currentUser?.uid}
+    apiKey={apiKey}
+    styles={{
+      minHeight: "400px",
+      display: "flex",
+      flexDirection: "column"
+    }}
+  />
+</div>
           </div>
         </div>
 

@@ -528,7 +528,7 @@ const smeFunctionalExpertise = (smeProfile.entityOverview || [])
     const contact = advForm.contactDetails || {}
     const overview = advForm.personalProfessionalOverview || {}
     const selection = advForm.selectionCriteria || {}
-const smeFE = toArr(smeProfile?.entityOverview?.functionalExpertise);
+const smeFE = toArr(smeProfile?.advisoryNeedsAssessment?.functionalExpertise);
 const advisorFE = [
   ...new Set([
     ...toArr(overview?.functionalExpertise),
