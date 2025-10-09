@@ -8,16 +8,22 @@ import { validate, saveToFirebase, updateCurrentPlan } from "./actions"
 import { useNavigate } from "react-router-dom"
 import EmbeddedCheckout from "../../components/EmbeddedCheckout"
 
-// UPDATED: New function to create subscription checkout with PeachPayments
-const createSubscriptionCheckout = async (amount, currency, userId, planName, billingCycle, actionType = 'subscription') => {
+const createSubscriptionCheckout = async (
+  amount,
+  currency,
+  userId,
+  planName,
+  billingCycle,
+  actionType = "subscription",
+) => {
   try {
-    console.log('🔄 Creating subscription checkout:', { amount, currency, userId, planName, billingCycle, actionType });
-    
+    console.log("🔄 Creating subscription checkout:", { amount, currency, userId, planName, billingCycle, actionType })
+
     // Use the NEW subscription endpoint for PeachPayments
     const response = await fetch(`${process.env.REACT_APP_API_URL}/api/payments/create-subscription`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         userId,
@@ -27,34 +33,33 @@ const createSubscriptionCheckout = async (amount, currency, userId, planName, bi
         currency,
         customerEmail: getAuth().currentUser?.email,
         customerName: getAuth().currentUser?.displayName,
-        actionType
+        actionType,
       }),
-    });
+    })
 
-    const data = await response.json();
-    console.log('✅ Subscription checkout response:', data);
+    const data = await response.json()
+    console.log("✅ Subscription checkout response:", data)
 
     if (!data.success) {
-      throw new Error(data.error || 'Failed to create subscription checkout');
+      throw new Error(data.error || "Failed to create subscription checkout")
     }
 
-    return data;
+    return data
   } catch (error) {
-    console.error('❌ Subscription checkout error:', error);
-    throw error;
+    console.error("❌ Subscription checkout error:", error)
+    throw error
   }
-};
+}
 
-// UPDATED: Function to create one-time payment (for growth tools)
-const createOneTimeCheckout = async (amount, currency, userId, planName, billingCycle, actionType = 'one_time') => {
+const createOneTimeCheckout = async (amount, currency, userId, planName, billingCycle, actionType = "one_time") => {
   try {
-    console.log('💳 Creating one-time checkout:', { amount, currency, userId, planName, billingCycle, actionType });
-    
+    console.log("💳 Creating one-time checkout:", { amount, currency, userId, planName, billingCycle, actionType })
+
     // Use the existing checkout endpoint for one-time payments
     const response = await fetch(`${process.env.REACT_APP_API_URL}/api/payments/create-checkout`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         userId,
@@ -64,23 +69,23 @@ const createOneTimeCheckout = async (amount, currency, userId, planName, billing
         currency,
         customerEmail: getAuth().currentUser?.email,
         customerName: getAuth().currentUser?.displayName,
-        actionType
+        actionType,
       }),
-    });
+    })
 
-    const data = await response.json();
-    console.log('✅ One-time checkout response:', data);
+    const data = await response.json()
+    console.log("✅ One-time checkout response:", data)
 
     if (!data.success) {
-      throw new Error(data.error || 'Failed to create one-time checkout');
+      throw new Error(data.error || "Failed to create one-time checkout")
     }
 
-    return data;
+    return data
   } catch (error) {
-    console.error('❌ One-time checkout error:', error);
-    throw error;
+    console.error("❌ One-time checkout error:", error)
+    throw error
   }
-};
+}
 
 // Define your color palette
 const colors = {
@@ -101,6 +106,8 @@ const colors = {
   partnerCardBg: "linear-gradient(160deg, #A67C52 0%, #8D6E63 100%)",
   featureCheck: "#A67C52",
   featureCross: "#D32F2F",
+  // CHANGED: Trial colors from green to brown
+  trialBrown: "#8D6E63", // Changed from trialGreen to trialBrown
 }
 
 const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSidebarToggle }) => {
@@ -116,7 +123,6 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
   const [upgradeDowngradeAction, setUpgradeDowngradeAction] = useState(null)
   const [showPlanChangeConfirm, setShowPlanChangeConfirm] = useState(false)
   const [showDowngradeOptions, setShowDowngradeOptions] = useState(false)
-  // Remove add-on related state variables
   const [hoveredPlan, setHoveredPlan] = useState(null)
   const [paymentProcessing, setPaymentProcessing] = useState(false)
   const [checkoutId, setCheckoutId] = useState(null)
@@ -130,7 +136,6 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
   const currentSidebarOpen = sidebarOpen !== undefined ? sidebarOpen : internalSidebarOpen
   const currentSidebarWidth = sidebarWidth !== undefined ? sidebarWidth : internalSidebarWidth
 
-  // UPDATED: Plans with detailed feature descriptions for Investors
   const plans = {
     discover: {
       name: "Discover",
@@ -156,7 +161,7 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
       name: "Engage",
       price: { monthly: 2000, annually: 20000 },
       currency: "ZAR",
-    description: "Everything in Discover Plan + Engage Plan",
+      description: "Everything in Discover Plan + Engage Plan",
       features: {
         "Access to BIG Score Profiles": "Full profile access + filters",
         "Funder/Buyer Matching Tools": "Smart filters (stage, sector, score)",
@@ -181,7 +186,7 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
       name: "Partner",
       price: { monthly: 6500, annually: 65000 },
       currency: "ZAR",
-        description: "Everything in Engage Plan + partner",
+      description: "Everything in Discover Plan + Partner",
       features: {
         "Access to BIG Score Profiles": "Full access + private deal room",
         "Funder/Buyer Matching Tools": "Priority-matching dashboard + alerts",
@@ -204,9 +209,6 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
       ],
     },
   }
-
-  // Remove add-ons completely - not needed for investor subscriptions
-  // const addOns = [...] - REMOVED
 
   // Feature order for the comparison table
   const featureOrder = [
@@ -231,20 +233,25 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
   const [history, setHistory] = useState([])
   const [errors, setErrors] = useState({})
 
+  // Helper function to check if user is new (for trial eligibility)
+  const isNewUser = () => {
+    return !isExistingUser || !currentSubscription || currentSubscription.plan === "Discover"
+  }
+
   // Helper function to safely get plan name for investors only
   const getCurrentPlanKey = () => {
     if (!currentSubscription || !currentSubscription.plan) {
       return "discover"
     }
-    
+
     // For investor plans only - no mapping needed
     const investorPlan = currentSubscription.plan.toLowerCase()
-    
+
     // Ensure it's a valid investor plan
     if (investorPlan === "discover" || investorPlan === "engage" || investorPlan === "partner") {
       return investorPlan
     }
-    
+
     // Default to discover for any invalid plan
     return "discover"
   }
@@ -258,16 +265,16 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
   // Helper function to get the correct plan amount for display
   const getCurrentPlanAmount = () => {
     if (!currentSubscription) return 0
-    
+
     const planKey = getCurrentPlanKey()
     const cycle = currentSubscription?.cycle || "monthly"
-    
+
     // Safety check: ensure the plan exists
     if (!plans[planKey]) {
       console.warn(`Plan "${planKey}" not found, defaulting to discover`)
       return 0
     }
-    
+
     return plans[planKey]?.price?.[cycle] || 0
   }
 
@@ -275,19 +282,19 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
   const loadUserSubscription = async (userId) => {
     console.log("🔍 Loading subscription for user:", userId)
     setIsLoading(true)
-    
+
     try {
       // First, check user document for current subscription
       const userRef = doc(db, "users", userId)
       const userDoc = await getDoc(userRef)
-      
+
       if (userDoc.exists()) {
         const userData = userDoc.data()
         console.log("👤 User data:", userData)
-        
+
         if (userData.currentSubscription && userData.currentSubscription.plan) {
           console.log("✅ Found current subscription in user doc:", userData.currentSubscription)
-          
+
           // Create subscription object from user data
           const subscriptionFromUser = {
             id: `user_${userId}`,
@@ -298,68 +305,74 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
             createdAt: userData.currentSubscription.lastUpdated || userData.subscriptionUpdatedAt,
             userId: userId,
             transactionRef: userData.currentSubscription.transactionRef,
-            autoRenew: userData.currentSubscription.status === "active" || userData.currentSubscription.status === "Success"
+            autoRenew:
+              userData.currentSubscription.status === "active" || userData.currentSubscription.status === "Success",
+            isTrialPeriod: userData.currentSubscription.isTrialPeriod || false,
+            originalAmount: userData.currentSubscription.originalAmount,
+            trialStartDate: userData.currentSubscription.trialStartDate,
+            trialEndDate: userData.currentSubscription.trialEndDate,
           }
-          
+
           setCurrentSubscription(subscriptionFromUser)
           setIsExistingUser(true)
-          
+
           // Safely set selected plan with mapping
           const planKey = getCurrentPlanKeyFromName(userData.currentSubscription.plan)
           setSelectedPlan(planKey)
           console.log("✅ Set subscription from user document")
         }
       }
-      
+
       // Also check subscriptions collection as backup
       const subscriptionsRef = collection(db, "subscriptions")
       const queries = [
         query(subscriptionsRef, where("userId", "==", userId), where("status", "==", "Success")),
         query(subscriptionsRef, where("userId", "==", userId), where("status", "==", "Active")),
-        query(subscriptionsRef, where("userId", "==", userId), where("status", "==", "active"))
+        query(subscriptionsRef, where("userId", "==", userId), where("status", "==", "active")),
       ]
 
-      const queryResults = await Promise.all(queries.map(q => getDocs(q)))
+      const queryResults = await Promise.all(queries.map((q) => getDocs(q)))
       const allSubscriptions = []
-      
-      queryResults.forEach(querySnapshot => {
-        querySnapshot.forEach(doc => {
+
+      queryResults.forEach((querySnapshot) => {
+        querySnapshot.forEach((doc) => {
           const data = doc.data()
-          // FIXED: Filter out add-on purchases from subscription data
+          // Filter out add-on purchases from subscription data
           if (!data.type || data.type !== "addon") {
             allSubscriptions.push({ id: doc.id, ...data })
           }
         })
       })
-      
+
       console.log("📄 Found subscription records in collection:", allSubscriptions.length)
-      
+
       if (allSubscriptions.length > 0) {
         // Get the most recent subscription
-        const latestSubscription = allSubscriptions
-          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0]
-        
+        const latestSubscription = allSubscriptions.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0]
+
         console.log("📄 Latest subscription from collection:", latestSubscription)
-        
+
         // Use collection data if user doc doesn't have subscription or if collection is more recent
-        if (!currentSubscription || new Date(latestSubscription.createdAt) > new Date(currentSubscription.createdAt || 0)) {
+        if (
+          !currentSubscription ||
+          new Date(latestSubscription.createdAt) > new Date(currentSubscription.createdAt || 0)
+        ) {
           setCurrentSubscription(latestSubscription)
           setIsExistingUser(true)
-          
+
           // Safely set selected plan with mapping
           const planKey = getCurrentPlanKeyFromName(latestSubscription.plan)
           setSelectedPlan(planKey)
           console.log("✅ Set subscription from collection")
         }
       }
-      
+
       // Set history (filter out add-ons from main history)
       const subscriptionHistory = allSubscriptions
-        .filter(record => !record.type || record.type !== "addon")
+        .filter((record) => !record.type || record.type !== "addon")
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-      
+
       setHistory(subscriptionHistory)
-      
     } catch (error) {
       console.error("❌ Error loading user subscription:", error)
       // Don't throw - just log and continue with default state
@@ -371,17 +384,147 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
   // Helper function to safely map plan names to keys (investor plans only)
   const getCurrentPlanKeyFromName = (planName) => {
     if (!planName) return "discover"
-    
+
     const investorPlan = planName.toLowerCase()
-    
+
     // Only accept valid investor plans
     if (investorPlan === "discover" || investorPlan === "engage" || investorPlan === "partner") {
       return investorPlan
     }
-    
+
     // Default to discover for any other plan
     return "discover"
   }
+
+  // NEW: Billing cycle toggle component
+  const BillingCycleToggle = () => (
+    <div style={styles.billingToggleContainer}>
+      <span style={{ color: colors.mediumBrown, fontWeight: 600, marginRight: "1rem" }}>Billing:</span>
+      <div style={styles.billingToggle}>
+        <div
+          style={{
+            ...styles.billingToggleOption,
+            ...(billingCycle === "monthly" ? styles.billingToggleActive : {}),
+          }}
+          onClick={() => setBillingCycle("monthly")}
+        >
+          Monthly
+        </div>
+        <div
+          style={{
+            ...styles.billingToggleOption,
+            ...(billingCycle === "annually" ? styles.billingToggleActive : {}),
+          }}
+          onClick={() => setBillingCycle("annually")}
+        >
+          Annual
+          <span style={styles.savingsBadge}>Save up to R13k</span>
+        </div>
+      </div>
+    </div>
+  )
+
+  // UPDATED: Feature comparison table component with correct plan keys and detailed descriptions
+  const FeatureComparisonTable = () => (
+    <div style={styles.featureComparisonContainer}>
+      <div style={styles.featureComparisonTitle}>
+        <span>Plan Features Comparison</span>
+      </div>
+      {/* Add billing cycle toggle */}
+      <BillingCycleToggle />
+      <div style={{ overflowX: "auto" }}>
+        <table style={styles.featureComparisonTable}>
+          <thead>
+            <tr>
+              <th style={styles.featureTh}>Feature</th>
+              <th style={styles.featureTh}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
+                  <div
+                    style={{ width: "12px", height: "12px", background: colors.accentGold, borderRadius: "50%" }}
+                  ></div>
+                  Discover (Free)
+                </div>
+              </th>
+              <th style={styles.featureTh}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
+                  <div
+                    style={{ width: "12px", height: "12px", background: colors.mediumBrown, borderRadius: "50%" }}
+                  ></div>
+                  Engage (R{billingCycle === "monthly" ? "2,000/month" : "20,000/year"})
+                </div>
+              </th>
+              <th style={styles.featureTh}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
+                  <div
+                    style={{ width: "12px", height: "12px", background: colors.darkBrown, borderRadius: "50%" }}
+                  ></div>
+                  Partner (R{billingCycle === "monthly" ? "6,500/month" : "65,000/year"})
+                </div>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {featureOrder.map((feature, index) => (
+              <tr key={feature} style={{ backgroundColor: index % 2 === 0 ? `${colors.cream}4D` : "transparent" }}>
+                <td style={{ ...styles.featureTd, ...styles.featureTdLeft }}>{feature}</td>
+                <td style={styles.featureTd}>
+                  {typeof plans.discover.features[feature] === "boolean" ? (
+                    plans.discover.features[feature] ? (
+                      <span style={{ color: colors.darkBrown, fontWeight: "bold" }}>✓</span>
+                    ) : (
+                      <span style={{ color: colors.featureCross, fontWeight: "bold" }}>✗</span>
+                    )
+                  ) : (
+                    plans.discover.features[feature]
+                  )}
+                </td>
+                <td style={styles.featureTd}>
+                  {typeof plans.engage.features[feature] === "boolean" ? (
+                    plans.engage.features[feature] ? (
+                      <span style={{ color: colors.darkBrown, fontWeight: "bold" }}>✓</span>
+                    ) : (
+                      <span style={{ color: colors.featureCross, fontWeight: "bold" }}>✗</span>
+                    )
+                  ) : (
+                    plans.engage.features[feature]
+                  )}
+                </td>
+                <td style={styles.featureTd}>
+                  {typeof plans.partner.features[feature] === "boolean" ? (
+                    plans.partner.features[feature] ? (
+                      <span style={{ color: colors.darkBrown, fontWeight: "bold" }}>✓</span>
+                    ) : (
+                      <span style={{ color: colors.featureCross, fontWeight: "bold" }}>✗</span>
+                    )
+                  ) : (
+                    plans.partner.features[feature]
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {billingCycle === "annually" && (
+        <div
+          style={{
+            marginTop: "1.5rem",
+            padding: "1rem",
+            background: colors.cream,
+            border: `1px solid ${colors.lightTan}`,
+            borderRadius: "8px",
+            fontSize: "clamp(0.8rem, 1.5vw, 0.9rem)",
+            color: colors.darkBrown,
+          }}
+        >
+          <strong>Annual Discount Options:</strong>
+          <div style={{ marginTop: "0.5rem" }}>
+            Discover: N/A | Engage: R20,000/year (save R4,000) | Partner: R65,000/year (save R13,000)
+          </div>
+        </div>
+      )}
+    </div>
+  )
 
   // Handle plan selection
   const handlePlanSelect = (planKey) => {
@@ -478,9 +621,6 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
     setUpgradeDowngradeAction(null)
   }
 
-  // Remove all add-on related functions
-  // handleAddOnClick, handleAddOnPayment, handleAddOnSuccess - REMOVED
-
   // Handle subscription cancellation
   const handleCancelSubscription = async () => {
     if (!currentSubscription || !user) {
@@ -489,7 +629,7 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
     }
 
     const confirmMessage = `Are you sure you want to cancel your ${currentSubscription.plan} subscription?\n\nThis will:\n• Stop automatic renewals\n• Downgrade you to Discover plan\n• Remove premium features\n\nThis action cannot be undone.`
-    
+
     if (!window.confirm(confirmMessage)) {
       return
     }
@@ -515,22 +655,23 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
 
       // Save cancellation record
       await saveToFirebase(cancellationRecord)
-      
+
       // Update current plan to Discover
       await updateCurrentPlan("Discover", "monthly")
-      
+
       // Update local state
       setHistory([cancellationRecord, ...history])
       setCurrentSubscription(cancellationRecord)
       setSelectedPlan("discover")
-      
-      alert(`Subscription cancelled successfully!\n\nYou've been downgraded to the Discover plan.\nYour premium features will remain active until the end of your current billing period.`)
-      
+
+      alert(
+        `Subscription cancelled successfully!\n\nYou've been downgraded to the Discover plan.\nYour premium features will remain active until the end of your current billing period.`,
+      )
+
       // Reload subscription data
       setTimeout(() => {
         loadUserSubscription(user.uid)
       }, 1000)
-      
     } catch (error) {
       console.error("Error cancelling subscription:", error)
       alert("Failed to cancel subscription. Please try again or contact support.")
@@ -563,7 +704,7 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
           status: "Success",
           autoRenew: true,
           userId: user.uid,
-          action: isExistingUser ? (upgradeDowngradeAction || "downgrade") : "new_subscription",
+          action: isExistingUser ? upgradeDowngradeAction || "downgrade" : "new_subscription",
         }
 
         setHistory([newRecord, ...history])
@@ -572,11 +713,11 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
         setCurrentSubscription(newRecord)
         setIsExistingUser(true)
         alert("Discover plan activated successfully!")
-        
+
         // Clear any upgrade/downgrade state
         setUpgradeDowngradeAction(null)
         setShowPlanChangeConfirm(false)
-        
+
         return
       } catch (error) {
         console.error("Error activating discover plan:", error)
@@ -602,7 +743,7 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
         user.uid,
         plans[selectedPlan].name,
         billingCycle,
-        isExistingUser ? (upgradeDowngradeAction || "upgrade") : "subscription"
+        isExistingUser ? upgradeDowngradeAction || "upgrade" : "subscription",
       )
 
       console.log("Subscription checkout created:", checkoutData)
@@ -621,34 +762,43 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
     }
   }
 
-  // UPDATED: Handle checkout completion (removed add-on logic)
+  // UPDATED: Handle checkout completion
   const handleCheckoutCompleted = async (event) => {
     console.log("🎉 Payment completed:", event)
     setPaymentProcessing(true) // Show processing state
 
     try {
-      // Handle subscription/plan payment
+      // Handle subscription/plan payment with trial period
+      const isTrialEligible = isNewUser()
+      const trialStartDate = new Date()
+      const trialEndDate = new Date()
+      trialEndDate.setMonth(trialEndDate.getMonth() + 3)
+
       const newRecord = {
         id: uuidv4(),
         email: email,
         plan: plans[selectedPlan].name,
         cycle: billingCycle,
-        amount: plans[selectedPlan].price[billingCycle],
+        amount: 0, // First 3 months are free
+        originalAmount: plans[selectedPlan].price[billingCycle], // Store original price
         fullName: fullName,
         companyName,
         createdAt: new Date().toISOString(),
         status: "Success",
         autoRenew: true,
-        transactionRef: event.id || event.transactionId || `manual_${Date.now()}`,
+        transactionRef: event.id || event.transactionId || `trial_${Date.now()}`,
         userId: user.uid,
         subscriptionType: "recurring",
-        // FIXED: Handle potentially undefined registrationId
+        isTrialPeriod: isTrialEligible,
+        trialStartDate: isTrialEligible ? trialStartDate.toISOString() : null,
+        trialEndDate: isTrialEligible ? trialEndDate.toISOString() : null,
+        // Handle potentially undefined registrationId
         ...(event.registrationId && { registrationId: event.registrationId }),
         ...(event.cardBrand && { cardBrand: event.cardBrand }),
         ...(event.cardLast4 && { cardLast4: event.cardLast4 }),
-        action: isExistingUser ? (upgradeDowngradeAction || "upgrade") : "new_subscription",
+        action: isExistingUser ? upgradeDowngradeAction || "upgrade" : "new_subscription",
         paymentCompleted: true,
-        paymentDate: new Date().toISOString()
+        paymentDate: new Date().toISOString(),
       }
 
       console.log("💾 Saving subscription record:", newRecord)
@@ -670,31 +820,36 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
         console.error("❌ Plan update failed:", updateError)
         // Don't throw here - subscription was saved, plan update is secondary
       }
-      
+
       // Update local state
       setHistory([newRecord, ...history])
       setCurrentSubscription(newRecord)
       setIsExistingUser(true)
       setShowCheckout(false)
       setPaymentProcessing(false)
-      
+
       // Clear upgrade/downgrade state
       setUpgradeDowngradeAction(null)
       setShowPlanChangeConfirm(false)
-      
-      // Show success message
-      alert(`🎉 Subscription activated successfully!\n\nYour ${plans[selectedPlan].name} plan is now active with automatic renewals.\n\nYou can now access all premium features!`)
-      
+
+      // Show success message with trial information
+      const successMessage = isTrialEligible
+        ? `🎉 Welcome to your ${plans[selectedPlan].name} plan!\n\n✨ You're getting 3 MONTHS FREE!\n• Trial period: ${trialStartDate.toLocaleDateString()} - ${trialEndDate.toLocaleDateString()}\n• Regular billing starts: ${trialEndDate.toLocaleDateString()}\n• Monthly rate after trial: R${plans[selectedPlan].price[billingCycle]}\n\nEnjoy all premium features at no cost for the first 3 months!`
+        : `🎉 Subscription activated successfully!\n\nYour ${plans[selectedPlan].name} plan is now active with automatic renewals.\n\nYou can now access all premium features!`
+
+      alert(successMessage)
+
       // Reload subscription data to ensure sync
       setTimeout(async () => {
         console.log("🔄 Reloading subscription data...")
         await loadUserSubscription(user.uid)
       }, 2000)
-      
     } catch (error) {
       console.error("❌ Error processing completed payment:", error)
       setPaymentProcessing(false)
-      alert(`❌ Payment Error\n\nYour payment was processed but there was an error saving your subscription:\n\n${error.message}\n\nPlease contact support with your transaction ID: ${event.id || event.transactionId}`)
+      alert(
+        `❌ Payment Error\n\nYour payment was processed but there was an error saving your subscription:\n\n${error.message}\n\nPlease contact support with your transaction ID: ${event.id || event.transactionId}`,
+      )
     }
   }
 
@@ -744,118 +899,6 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
     setBillingCycle(cycle)
     console.log("Billing cycle changed to:", cycle)
   }
-
-  // Feature comparison table component
-  const FeatureComparisonTable = () => (
-    <div style={styles.featureComparisonContainer}>
-      <div style={styles.featureComparisonTitle}>
-        <span>Plan Features Comparison</span>
-        <div style={styles.billingToggle}>
-          <button
-            style={{
-              ...styles.billingToggleButton,
-              ...(billingCycle === "monthly" ? styles.billingToggleActive : styles.billingToggleInactive),
-            }}
-            onClick={() => setBillingCycle("monthly")}
-          >
-            Monthly
-          </button>
-          <button
-            style={{
-              ...styles.billingToggleButton,
-              ...(billingCycle === "annually" ? styles.billingToggleActive : styles.billingToggleInactive),
-            }}
-            onClick={() => setBillingCycle("annually")}
-          >
-            Annual
-          </button>
-        </div>
-      </div>
-      <div style={{ overflowX: "auto" }}>
-        <table style={styles.featureComparisonTable}>
-          <thead>
-            <tr>
-              <th style={styles.featureTh}>Feature</th>
-              <th style={styles.featureTh}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
-                  <div style={{ width: "12px", height: "12px", background: colors.accentGold, borderRadius: "50%" }}></div>
-                  Discover (Free)
-                </div>
-              </th>
-              <th style={styles.featureTh}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
-                  <div style={{ width: "12px", height: "12px", background: colors.mediumBrown, borderRadius: "50%" }}></div>
-                  Engage (R{billingCycle === "monthly" ? "2,000/month" : "20,000/year"})
-                </div>
-              </th>
-              <th style={styles.featureTh}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
-                  <div style={{ width: "12px", height: "12px", background: colors.darkBrown, borderRadius: "50%" }}></div>
-                  Partner (R{billingCycle === "monthly" ? "6,500/month" : "65,000/year"})
-                </div>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {featureOrder.map((feature, index) => (
-              <tr key={feature} style={{ backgroundColor: index % 2 === 0 ? `${colors.cream}4D` : "transparent" }}>
-                <td style={{ ...styles.featureTd, ...styles.featureTdLeft }}>{feature}</td>
-                <td style={styles.featureTd}>
-                  {typeof plans.discover.features[feature] === "boolean" ? (
-                    plans.discover.features[feature] ? (
-                      <span style={{ color: colors.darkBrown, fontWeight: "bold" }}>✓</span>
-                    ) : (
-                      <span style={{ color: colors.featureCross, fontWeight: "bold" }}>✗</span>
-                    )
-                  ) : (
-                    plans.discover.features[feature]
-                  )}
-                </td>
-                <td style={styles.featureTd}>
-                  {typeof plans.engage.features[feature] === "boolean" ? (
-                    plans.engage.features[feature] ? (
-                      <span style={{ color: colors.darkBrown, fontWeight: "bold" }}>✓</span>
-                    ) : (
-                      <span style={{ color: colors.featureCross, fontWeight: "bold" }}>✗</span>
-                    )
-                  ) : (
-                    plans.engage.features[feature]
-                  )}
-                </td>
-                <td style={styles.featureTd}>
-                  {typeof plans.partner.features[feature] === "boolean" ? (
-                    plans.partner.features[feature] ? (
-                      <span style={{ color: colors.darkBrown, fontWeight: "bold" }}>✓</span>
-                    ) : (
-                      <span style={{ color: colors.featureCross, fontWeight: "bold" }}>✗</span>
-                    )
-                  ) : (
-                    plans.partner.features[feature]
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {billingCycle === "annually" && (
-        <div style={{
-          marginTop: "1.5rem",
-          padding: "1rem",
-          background: colors.cream,
-          border: `1px solid ${colors.lightTan}`,
-          borderRadius: "8px",
-          fontSize: "clamp(0.8rem, 1.5vw, 0.9rem)",
-          color: colors.darkBrown,
-        }}>
-          <strong>Annual Discount Options:</strong>
-          <div style={{ marginTop: "0.5rem" }}>
-            Discover: N/A | Engage: R20,000/year (save R4,000) | Partner: R65,000/year (save R13,000)
-          </div>
-        </div>
-      )}
-    </div>
-  )
 
   const styles = {
     container: {
@@ -911,9 +954,9 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
       opacity: 0.9,
     },
     betaNotice: {
-      background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
+      background: `linear-gradient(135deg, ${colors.trialBrown}20 0%, ${colors.accentGold}20 100%)`,
       color: colors.darkBrown,
-      border: `2px solid ${colors.lightBrown}`,
+      border: `2px solid ${colors.trialBrown}`,
       borderRadius: "16px",
       padding: "1.5rem 2rem",
       margin: "0 auto 3rem auto",
@@ -921,13 +964,54 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
       fontWeight: 600,
       fontSize: "clamp(1rem, 2vw, 1.125rem)",
       textAlign: "center",
-      boxShadow: `0 8px 24px ${colors.accentGold}1F`,
+      boxShadow: `0 8px 24px ${colors.trialBrown}1F`,
       position: "relative",
     },
     betaIcon: {
       display: "inline-block",
       marginRight: "0.5rem",
       fontSize: "1.25rem",
+    },
+    billingToggleContainer: {
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      margin: "2rem auto",
+      gap: "1rem",
+    },
+    billingToggle: {
+      display: "flex",
+      background: colors.cream,
+      borderRadius: "12px",
+      padding: "4px",
+      border: `1px solid ${colors.lightTan}`,
+      boxShadow: `0 4px 12px ${colors.darkBrown}0A`,
+    },
+    billingToggleOption: {
+      padding: "0.75rem 1.5rem",
+      borderRadius: "8px",
+      cursor: "pointer",
+      fontWeight: 600,
+      fontSize: "0.95rem",
+      transition: "all 0.3s ease",
+      color: colors.mediumBrown,
+      position: "relative",
+    },
+    billingToggleActive: {
+      background: colors.accentGold,
+      color: colors.lightText,
+      boxShadow: `0 2px 8px ${colors.accentGold}33`,
+    },
+    savingsBadge: {
+      background: colors.mediumBrown,
+      color: colors.lightText,
+      fontSize: "0.75rem",
+      padding: "0.25rem 0.5rem",
+      borderRadius: "6px",
+      fontWeight: 700,
+      marginLeft: "0.5rem",
+      textTransform: "uppercase",
+      letterSpacing: "0.5px",
     },
     featureComparisonContainer: {
       margin: "3rem auto",
@@ -950,31 +1034,6 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
       flexDirection: "column",
       gap: "1rem",
       alignItems: "center",
-    },
-    billingToggle: {
-      display: "flex",
-      background: colors.cream,
-      borderRadius: "12px",
-      padding: "4px",
-      border: `1px solid ${colors.lightTan}`,
-    },
-    billingToggleButton: {
-      padding: "8px 16px",
-      borderRadius: "8px",
-      border: "none",
-      fontWeight: 600,
-      cursor: "pointer",
-      transition: "all 0.3s ease",
-      fontSize: "0.9rem",
-    },
-    billingToggleActive: {
-      background: colors.accentGold,
-      color: colors.lightText,
-      boxShadow: `0 2px 4px ${colors.accentGold}4D`,
-    },
-    billingToggleInactive: {
-      background: "transparent",
-      color: colors.mediumBrown,
     },
     featureComparisonTable: {
       width: "100%",
@@ -1076,6 +1135,11 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
       lineHeight: "1",
       color: colors.darkBrown,
     },
+    planPriceFree: {
+      color: colors.trialBrown, // CHANGED: From trialGreen to trialBrown
+      fontSize: "clamp(2.5rem, 4vw, 3.5rem)",
+      fontWeight: 900,
+    },
     planPricePeriod: {
       fontSize: "clamp(1rem, 1.5vw, 1.25rem)",
       fontWeight: 500,
@@ -1089,16 +1153,27 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
       lineHeight: "1.6",
     },
     freeMonthsBadge: {
-      background: `linear-gradient(90deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
+      background: `linear-gradient(90deg, ${colors.trialBrown} 0%, ${colors.accentGold} 100%)`, // CHANGED: From trialGreen to trialBrown
       color: colors.lightText,
-      padding: "0.6rem 1.2rem",
-      borderRadius: "10px",
-      fontSize: "0.9rem",
-      fontWeight: 600,
-      marginBottom: "2rem",
+      padding: "0.8rem 1.2rem",
+      borderRadius: "12px",
+      fontSize: "1rem",
+      fontWeight: 700,
+      marginBottom: "1rem",
       textAlign: "center",
-      boxShadow: `0 4px 12px ${colors.accentGold}4D`,
+      boxShadow: `0 4px 12px ${colors.trialBrown}4D`, // CHANGED: From trialGreen to trialBrown
       display: "inline-block",
+      border: `2px solid ${colors.trialBrown}`, // CHANGED: From trialGreen to trialBrown
+    },
+    afterTrialPrice: {
+      background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
+      border: `1px solid ${colors.lightTan}`,
+      borderRadius: "8px",
+      padding: "0.8rem",
+      marginBottom: "1.5rem",
+      fontSize: "0.9rem",
+      color: colors.mediumBrown,
+      fontWeight: 600,
     },
     planFeaturesList: {
       listStyle: "none",
@@ -1166,7 +1241,6 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
       textTransform: "uppercase",
       letterSpacing: "0.5px",
     },
-    // Remove add-on related styles
     downgradeSection: {
       textAlign: "center",
       margin: "2.5rem 0",
@@ -1330,21 +1404,24 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
     <div style={styles.container}>
       <div style={styles.mainCard}>
         <div style={styles.decorativeElement}></div>
-        
-        {/* Beta Notice */}
+
+        {/* Updated Beta Notice with Trial Information - CHANGED: Green to Brown */}
         <div style={styles.betaNotice}>
-          <span style={styles.betaIcon}>🚀</span>
-          <strong>Beta Pricing:</strong> All plans are{" "}
-          <span style={{ color: colors.accentGold, fontWeight: 800 }}>FREE</span> during our beta period! Enjoy full
-          access at no cost.
+          <span style={styles.betaIcon}>🎉</span>
+          <strong>Special Launch Offer:</strong> Get your first{" "}
+          <span style={{ color: colors.trialBrown, fontWeight: 800 }}>3 MONTHS FREE</span> on any paid plan!
+          <br />
+          <small style={{ opacity: 0.8, marginTop: "0.5rem", display: "block" }}>
+            Start your trial today - billing begins after 3 months at regular rates
+          </small>
         </div>
 
         {isExistingUser && currentSubscription ? (
           <>
             <h1 style={styles.pageTitle}>Manage Your Subscription</h1>
             <p style={styles.subtitle}>Upgrade, downgrade, or manage your current plan with ease</p>
-            
-            {/* Current subscription info */}
+
+            {/* Enhanced Current subscription info with trial details */}
             <div style={styles.subscriptionInfo}>
               <h3 style={styles.subscriptionTitle}>Current Subscription</h3>
               <div style={styles.subscriptionDetail}>
@@ -1353,21 +1430,53 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
               </div>
               <div style={styles.subscriptionDetail}>
                 <span>Billing Cycle:</span>
-                <span style={{ fontWeight: 600 }}>{currentSubscription.cycle || 'Monthly'}</span>
+                <span style={{ fontWeight: 600 }}>{currentSubscription.cycle || "Monthly"}</span>
               </div>
               <div style={styles.subscriptionDetail}>
-                <span>Amount:</span>
-                <span style={{ fontWeight: 600 }}>
-                  {getCurrentPlanAmount() === 0 ? 'Free' : `R${getCurrentPlanAmount().toLocaleString()}`}
+                <span>Current Amount:</span>
+                <span
+                  style={{
+                    fontWeight: 600,
+                    color:
+                      currentSubscription.isTrialPeriod ? colors.trialBrown : colors.darkText,
+                  }}
+                >
+                  {currentSubscription.amount === 0 && currentSubscription.isTrialPeriod
+                    ? "FREE (Trial)"
+                    : currentSubscription.amount === 0
+                      ? "Free"
+                      : `R${getCurrentPlanAmount().toLocaleString()}`}
                 </span>
               </div>
+              {currentSubscription.originalAmount && currentSubscription.originalAmount > 0 && (
+                <div style={styles.subscriptionDetail}>
+                  <span>Regular Price:</span>
+                  <span style={{ fontWeight: 600 }}>
+                    R{currentSubscription.originalAmount}/
+                    {currentSubscription.cycle?.slice(0, -2) || "month"}
+                  </span>
+                </div>
+              )}
+              {currentSubscription.isTrialPeriod && currentSubscription.trialEndDate && (
+                <div style={styles.subscriptionDetail}>
+                  <span>Trial Ends:</span>
+                  <span style={{ fontWeight: 600, color: colors.trialBrown }}>
+                    {new Date(currentSubscription.trialEndDate).toLocaleDateString()}
+                  </span>
+                </div>
+              )}
               <div style={styles.subscriptionDetail}>
                 <span>Status:</span>
-                <span style={{ 
-                  fontWeight: 600, 
-                  color: currentSubscription.status === 'Success' || currentSubscription.status === 'active' ? colors.featureCheck : colors.featureCross 
-                }}>
-                  {currentSubscription.status === 'Success' ? 'Active' : currentSubscription.status}
+                <span
+                  style={{
+                    fontWeight: 600,
+                    color:
+                      currentSubscription.status === "Success" || currentSubscription.status === "active"
+                        ? colors.featureCheck
+                        : colors.featureCross,
+                  }}
+                >
+                  {currentSubscription.status === "Success" ? "Active" : currentSubscription.status}
                 </span>
               </div>
               {currentSubscription.autoRenew && (
@@ -1380,30 +1489,30 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
                 <div style={styles.subscriptionDetail}>
                   <span>Payment Method:</span>
                   <span style={{ fontWeight: 600 }}>
-                    {currentSubscription.cardBrand || 'Card'} ending in {currentSubscription.cardLast4}
+                    {currentSubscription.cardBrand || "Card"} ending in {currentSubscription.cardLast4}
                   </span>
                 </div>
               )}
-              {/* Remove migration notice - this is investor-only */}
             </div>
           </>
         ) : (
           <>
             <h1 style={styles.pageTitle}>Choose Your Plan</h1>
-            <p style={styles.subtitle}>Select the perfect plan for your business needs</p>
+            <p style={styles.subtitle}>Select the perfect plan for your business needs - first 3 months free!</p>
           </>
         )}
 
         {/* Feature Comparison Table */}
         <FeatureComparisonTable />
 
-        {/* Pricing Cards */}
+        {/* UPDATED: Pricing Cards with Zero Prices and "After Trial" Information - CHANGED: Green to Brown */}
         <div style={styles.planGrid}>
           {Object.entries(plans).map(([planKey, plan]) => {
             const isCurrentPlan = isExistingUser && getCurrentPlanKey() === planKey
             const isSelected = selectedPlan === planKey
             const isHovered = hoveredPlan === planKey
             const isPopular = planKey === "engage"
+            const showTrialOffer = planKey !== "discover" && isNewUser()
 
             let cardBackground = colors.offWhite
             let nameColor = colors.darkBrown
@@ -1413,13 +1522,25 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
             let buttonBg = `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`
             const buttonColor = colors.lightText
 
-            if (isPopular) {
+            if (planKey === "discover") {
+              cardBackground = colors.discoverCardBg
+              nameColor = colors.lightText
+              priceColor = colors.lightText
+              periodColor = colors.lightText
+              featureTextColor = colors.lightText
+            } else if (planKey === "engage") {
               cardBackground = colors.engageCardBg
               nameColor = colors.lightText
               priceColor = colors.lightText
               periodColor = colors.lightText
               featureTextColor = colors.lightText
               buttonBg = `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.lightBrown} 100%)`
+            } else if (planKey === "partner") {
+              cardBackground = colors.partnerCardBg
+              nameColor = colors.lightText
+              priceColor = colors.lightText
+              periodColor = colors.lightText
+              featureTextColor = colors.lightText
             }
 
             return (
@@ -1438,18 +1559,39 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
               >
                 {isPopular && <div style={styles.popularBadge}>POPULAR</div>}
                 <h3 style={{ ...styles.planName, color: nameColor }}>{plan.name}</h3>
-                <div style={{ ...styles.planPrice, color: priceColor }}>
-                  {plan.price[billingCycle] === 0 ? "Free" : `R${plan.price[billingCycle]}`}
-                </div>
-                {plan.price[billingCycle] > 0 && (
-                  <span style={{ ...styles.planPricePeriod, color: periodColor }}>
-                    / {billingCycle === "monthly" ? "month" : "year"}
-                  </span>
+
+                {/* UPDATED: Show R0/FREE for paid plans during trial, regular price for discover - CHANGED: Green to Brown */}
+                {plan.price[billingCycle] === 0 ? (
+                  <div style={{ ...styles.planPrice, color: priceColor }}>Free</div>
+                ) : (
+                  <>
+                    {/* Show FREE/R0 prominently for trial-eligible users */}
+                    {showTrialOffer ? (
+                      <div style={{ ...styles.planPriceFree, color: colors.trialBrown }}>FREE</div>
+                    ) : (
+                      <div style={{ ...styles.planPrice, color: priceColor }}>R{plan.price[billingCycle]}</div>
+                    )}
+
+                    {/* Show period for non-trial or regular price display */}
+                    {!showTrialOffer && (
+                      <span style={{ ...styles.planPricePeriod, color: periodColor }}>
+                        / {billingCycle === "monthly" ? "month" : "year"}
+                      </span>
+                    )}
+                  </>
                 )}
+
                 <p style={{ ...styles.planDescriptionText, color: featureTextColor }}>{plan.description}</p>
-                {plan.price[billingCycle] > 0 && billingCycle === "annually" && (
-                  <div style={styles.freeMonthsBadge}>
-                    🎉 Save R{(plan.price.monthly * 12 - plan.price.annually).toLocaleString()} annually
+
+                {/* Trial Badge for eligible plans */}
+                {showTrialOffer && <div style={styles.freeMonthsBadge}>🎉 First 3 Months FREE!</div>}
+
+                {/* UPDATED: "After Trial" pricing information */}
+                {showTrialOffer && (
+                  <div style={styles.afterTrialPrice}>
+                    <strong>After 3-month trial:</strong>
+                    <br />
+                    R{plan.price[billingCycle]} / {billingCycle === "monthly" ? "month" : "year"}
                   </div>
                 )}
 
@@ -1510,7 +1652,15 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
                     }}
                   >
                     {isExistingUser ? (
-                      planKey === "discover" ? "Downgrade" : "Upgrade"
+                      planKey === "discover" ? (
+                        "Downgrade"
+                      ) : showTrialOffer ? (
+                        "Start Free Trial"
+                      ) : (
+                        "Upgrade"
+                      )
+                    ) : showTrialOffer ? (
+                      "Start Free Trial"
                     ) : (
                       "Subscribe"
                     )}
@@ -1522,7 +1672,7 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
           })}
         </div>
 
-        {/* Payment Section */}
+        {/* Enhanced Payment Button */}
         {(!isExistingUser || (isExistingUser && selectedPlan !== getCurrentPlanKey())) && !showPlanChangeConfirm && (
           <div style={{ textAlign: "center", marginTop: "2rem" }}>
             <button
@@ -1535,15 +1685,17 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
             >
               {paymentProcessing ? (
                 <>
-                  <div style={{
-                    width: "20px",
-                    height: "20px",
-                    border: "2px solid transparent",
-                    borderTop: "2px solid currentColor",
-                    borderRadius: "50%",
-                    animation: "spin 1s linear infinite",
-                    marginRight: "0.5rem",
-                  }}></div>
+                  <div
+                    style={{
+                      width: "20px",
+                      height: "20px",
+                      border: "2px solid transparent",
+                      borderTop: "2px solid currentColor",
+                      borderRadius: "50%",
+                      animation: "spin 1s linear infinite",
+                      marginRight: "0.5rem",
+                    }}
+                  ></div>
                   Processing...
                 </>
               ) : (
@@ -1551,83 +1703,144 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
                   if (plans[selectedPlan].price[billingCycle] === 0) {
                     return "Activate Discover Plan"
                   } else if (isExistingUser) {
-                    if (upgradeDowngradeAction === 'upgrade') {
-                      return `Upgrade to ${plans[selectedPlan].name}`
+                    if (upgradeDowngradeAction === "upgrade") {
+                      return isNewUser()
+                        ? `Start ${plans[selectedPlan].name} Trial (FREE)`
+                        : `Upgrade to ${plans[selectedPlan].name}`
                     } else {
                       return `Change to ${plans[selectedPlan].name}`
                     }
                   } else {
-                    return `Subscribe to ${plans[selectedPlan].name}`
+                    return isNewUser()
+                      ? `Start ${plans[selectedPlan].name} Trial (FREE)`
+                      : `Subscribe to ${plans[selectedPlan].name}`
                   }
                 })()
               )}
             </button>
 
-            {/* Payment info for subscriptions */}
+            {/* Enhanced Payment info for subscriptions with trial details - CHANGED: Green to Brown */}
             {plans[selectedPlan].price[billingCycle] > 0 && (
-              <div style={{
-                background: `linear-gradient(135deg, ${colors.offWhite} 0%, ${colors.cream} 100%)`,
-                borderRadius: "12px",
-                padding: "1.5rem",
-                marginTop: "1.5rem",
-                border: `1px solid ${colors.lightTan}`,
-                textAlign: "left",
-              }}>
-                <h4 style={{ 
-                  color: colors.darkBrown, 
-                  marginBottom: "1rem",
-                  fontSize: "1.1rem",
-                  fontWeight: 700,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem"
-                }}>
-                  🔒 Secure Subscription Payment
-                </h4>
-                
-                <div style={{
-                  background: `linear-gradient(135deg, ${colors.accentGold}20 0%, ${colors.lightTan}40 100%)`,
-                  borderRadius: "8px",
-                  padding: "1rem",
-                  marginBottom: "1rem",
-                  border: `1px solid ${colors.accentGold}`,
-                }}>
-                  <p style={{ 
-                    color: colors.darkBrown, 
-                    margin: 0,
-                    fontSize: "0.95rem",
-                    fontWeight: 600,
+              <div
+                style={{
+                  background: `linear-gradient(135deg, ${colors.offWhite} 0%, ${colors.cream} 100%)`,
+                  borderRadius: "12px",
+                  padding: "1.5rem",
+                  marginTop: "1.5rem",
+                  border: `1px solid ${colors.lightTan}`,
+                  textAlign: "left",
+                }}
+              >
+                <h4
+                  style={{
+                    color: colors.darkBrown,
+                    marginBottom: "1rem",
+                    fontSize: "1.1rem",
+                    fontWeight: 700,
                     display: "flex",
                     alignItems: "center",
-                    gap: "0.5rem"
-                  }}>
-                    💳 <strong>Important:</strong> For automatic renewals, please pay with a <strong>Credit or Debit Card</strong>
+                    gap: "0.5rem",
+                  }}
+                >
+                  🎉 {isNewUser() ? "Free Trial Setup" : "Secure Subscription Payment"}
+                </h4>
+
+                {isNewUser() && (
+                  <div
+                    style={{
+                      background: `linear-gradient(135deg, ${colors.trialBrown}20 0%, ${colors.accentGold}20 100%)`,
+                      borderRadius: "8px",
+                      padding: "1rem",
+                      marginBottom: "1rem",
+                      border: `1px solid ${colors.trialBrown}`,
+                    }}
+                  >
+                    <p
+                      style={{
+                        color: colors.darkBrown,
+                        margin: 0,
+                        fontSize: "0.95rem",
+                        fontWeight: 600,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      ✨ <strong>3-Month Free Trial:</strong> No charges for 3 months!
+                    </p>
+                    <p
+                      style={{
+                        color: colors.mediumBrown,
+                        margin: "0.5rem 0 0 1.5rem",
+                        fontSize: "0.85rem",
+                        lineHeight: "1.4",
+                      }}
+                    >
+                      Your card will be saved for automatic billing after the trial period ends. Cancel anytime during
+                      the trial with no charges.
+                    </p>
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    background: `linear-gradient(135deg, ${colors.accentGold}20 0%, ${colors.lightTan}40 100%)`,
+                    borderRadius: "8px",
+                    padding: "1rem",
+                    marginBottom: "1rem",
+                    border: `1px solid ${colors.accentGold}`,
+                  }}
+                >
+                  <p
+                    style={{
+                      color: colors.darkBrown,
+                      margin: 0,
+                      fontSize: "0.95rem",
+                      fontWeight: 600,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                    }}
+                  >
+                    💳 <strong>Important:</strong> For automatic renewals, please pay with a{" "}
+                    <strong>Credit or Debit Card</strong>
                   </p>
-                  <p style={{ 
-                    color: colors.mediumBrown, 
-                    margin: "0.5rem 0 0 1.5rem",
-                    fontSize: "0.85rem",
-                    lineHeight: "1.4"
-                  }}>
-                    Other payment methods (Scan to Pay, EFT) will complete this payment but won't enable automatic subscription renewals.
+                  <p
+                    style={{
+                      color: colors.mediumBrown,
+                      margin: "0.5rem 0 0 1.5rem",
+                      fontSize: "0.85rem",
+                      lineHeight: "1.4",
+                    }}
+                  >
+                    Other payment methods (Scan to Pay, EFT) will complete this payment but won't enable automatic
+                    subscription renewals.
                   </p>
                 </div>
 
-                <ul style={{ 
-                  listStyle: "none", 
-                  padding: 0, 
-                  margin: 0,
-                  color: colors.darkText,
-                  fontSize: "0.95rem",
-                  lineHeight: "1.6"
-                }}>
+                <ul
+                  style={{
+                    listStyle: "none",
+                    padding: 0,
+                    margin: 0,
+                    color: colors.darkText,
+                    fontSize: "0.95rem",
+                    lineHeight: "1.6",
+                  }}
+                >
+                  <li style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <span style={{ color: colors.featureCheck }}>✓</span>
+                    {isNewUser() ? "Free for first 3 months" : "Immediate access to premium features"}
+                  </li>
                   <li style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
                     <span style={{ color: colors.featureCheck }}>✓</span>
                     Cards are securely saved for automatic {billingCycle} renewals
                   </li>
                   <li style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
                     <span style={{ color: colors.featureCheck }}>✓</span>
-                    Automatic billing at R{plans[selectedPlan].price[billingCycle]} per {billingCycle.slice(0, -2)}
+                    {isNewUser()
+                      ? `Billing starts at R${plans[selectedPlan].price[billingCycle]} per ${billingCycle.slice(0, -2)} after trial`
+                      : `Automatic billing at R${plans[selectedPlan].price[billingCycle]} per ${billingCycle.slice(0, -2)}`}
                   </li>
                   <li style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
                     <span style={{ color: colors.featureCheck }}>✓</span>
@@ -1642,8 +1855,6 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
             )}
           </div>
         )}
-
-        {/* Remove Add-ons Section - Not needed for investor subscriptions */}
 
         {/* Downgrade Section */}
         {isExistingUser && currentSubscription && getCurrentPlanKey() !== "discover" && (
@@ -1670,7 +1881,7 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
             </button>
           </div>
         )}
-        
+
         {/* Enhanced Checkout Modal with Loading States */}
         {showCheckout && checkoutId && (
           <div
@@ -1713,31 +1924,43 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
                   fontWeight: 700,
                 }}
               >
-                Complete Your Subscription
+                {isNewUser() ? "Start Your Free Trial" : "Complete Your Subscription"}
               </h2>
-              
-              <div style={{
-                background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
-                borderRadius: "12px",
-                padding: "1rem",
-                marginBottom: "1.5rem",
-                border: `1px solid ${colors.lightTan}`,
-                textAlign: "center",
-              }}>
-                <p style={{ 
-                  color: colors.darkBrown, 
-                  margin: 0, 
-                  fontSize: "1rem",
-                  fontWeight: 600 
-                }}>
-                  🔄 Setting up {plans[selectedPlan].name} Plan
+
+              <div
+                style={{
+                  background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
+                  borderRadius: "12px",
+                  padding: "1rem",
+                  marginBottom: "1.5rem",
+                  border: `1px solid ${colors.lightTan}`,
+                  textAlign: "center",
+                }}
+              >
+                <p
+                  style={{
+                    color: colors.darkBrown,
+                    margin: 0,
+                    fontSize: "1rem",
+                    fontWeight: 600,
+                  }}
+                >
+                  {isNewUser() ? (
+                    <>🎉 Starting {plans[selectedPlan].name} Free Trial</>
+                  ) : (
+                    <>🔄 Setting up {plans[selectedPlan].name} Plan</>
+                  )}
                 </p>
-                <p style={{ 
-                  color: colors.mediumBrown, 
-                  margin: "0.5rem 0 0 0", 
-                  fontSize: "0.9rem" 
-                }}>
-                  Your card will be saved for automatic {billingCycle} renewals
+                <p
+                  style={{
+                    color: colors.mediumBrown,
+                    margin: "0.5rem 0 0 0",
+                    fontSize: "0.9rem",
+                  }}
+                >
+                  {isNewUser()
+                    ? "Free for 3 months, then automatic billing begins"
+                    : `Your card will be saved for automatic ${billingCycle} renewals`}
                 </p>
               </div>
 
@@ -1747,7 +1970,7 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
                 onCancelled={handleCheckoutCancelled}
                 onExpired={handleCheckoutExpired}
                 paymentType="subscription"
-                amount={plans[selectedPlan].price[billingCycle]}
+                amount={0} // Always 0 for trial
                 planName={plans[selectedPlan].name}
                 userEmail={email}
                 userName={fullName}
@@ -1778,24 +2001,26 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
                 </button>
               </div>
 
-              {/* FIXED: Processing Overlay - Now positioned to cover entire modal */}
+              {/* Processing Overlay */}
               {paymentProcessing && (
-                <div style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  background: `${colors.offWhite}F5`,
-                  backdropFilter: "blur(6px)",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  zIndex: 1001, // Higher than modal content
-                  borderRadius: "24px",
-                  boxShadow: `inset 0 0 20px ${colors.darkBrown}20`,
-                }}>
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: `${colors.offWhite}F5`,
+                    backdropFilter: "blur(6px)",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    zIndex: 1001,
+                    borderRadius: "24px",
+                    boxShadow: `inset 0 0 20px ${colors.darkBrown}20`,
+                  }}
+                >
                   <div
                     style={{
                       width: "80px",
@@ -1807,47 +2032,56 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
                       marginBottom: "2rem",
                     }}
                   ></div>
-                  <h3 style={{
-                    color: colors.darkBrown,
-                    fontSize: "1.75rem",
-                    fontWeight: 800,
-                    marginBottom: "1rem",
-                    textAlign: "center",
-                    textShadow: `0 2px 4px ${colors.darkBrown}20`,
-                  }}>
-                    Processing Subscription...
+                  <h3
+                    style={{
+                      color: colors.darkBrown,
+                      fontSize: "1.75rem",
+                      fontWeight: 800,
+                      marginBottom: "1rem",
+                      textAlign: "center",
+                      textShadow: `0 2px 4px ${colors.darkBrown}20`,
+                    }}
+                  >
+                    {isNewUser() ? "Setting up Your Free Trial..." : "Processing Subscription..."}
                   </h3>
-                  <p style={{
-                    color: colors.mediumBrown,
-                    fontSize: "1.1rem",
-                    textAlign: "center",
-                    lineHeight: "1.6",
-                    maxWidth: "350px",
-                    fontWeight: 500,
-                    textShadow: `0 1px 2px ${colors.darkBrown}10`,
-                  }}>
-                    🔒 Securing your subscription...
+                  <p
+                    style={{
+                      color: colors.mediumBrown,
+                      fontSize: "1.1rem",
+                      textAlign: "center",
+                      lineHeight: "1.6",
+                      maxWidth: "350px",
+                      fontWeight: 500,
+                      textShadow: `0 1px 2px ${colors.darkBrown}10`,
+                    }}
+                  >
+                    🔒{" "}
+                    {isNewUser() ? "Activating your 3-month free trial" : "Securing your subscription"}...
                     <br />
                     <strong>Please do not close this window.</strong>
                   </p>
-                  
+
                   {/* Progress indicator */}
-                  <div style={{
-                    marginTop: "2rem",
-                    width: "200px",
-                    height: "4px",
-                    background: colors.lightTan,
-                    borderRadius: "2px",
-                    overflow: "hidden",
-                    position: "relative",
-                  }}>
-                    <div style={{
-                      width: "50%",
-                      height: "100%",
-                      background: `linear-gradient(90deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
+                  <div
+                    style={{
+                      marginTop: "2rem",
+                      width: "200px",
+                      height: "4px",
+                      background: colors.lightTan,
                       borderRadius: "2px",
-                      animation: "progressSlide 2s linear infinite",
-                    }}></div>
+                      overflow: "hidden",
+                      position: "relative",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: "50%",
+                        height: "100%",
+                        background: `linear-gradient(90deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
+                        borderRadius: "2px",
+                        animation: "progressSlide 2s linear infinite",
+                      }}
+                    ></div>
                   </div>
                 </div>
               )}
@@ -1882,7 +2116,9 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
                   <strong>New:</strong>{" "}
                   {plans[selectedPlan].price[billingCycle] === 0
                     ? "Free"
-                    : `R${plans[selectedPlan].price[billingCycle]}/${billingCycle === "monthly" ? "month" : "year"}`}
+                    : isNewUser()
+                      ? `FREE for 3 months, then R${plans[selectedPlan].price[billingCycle]}/${billingCycle === "monthly" ? "month" : "year"}`
+                      : `R${plans[selectedPlan].price[billingCycle]}/${billingCycle === "monthly" ? "month" : "year"}`}
                 </div>
               </div>
               <div style={styles.modalActions}>
@@ -1914,7 +2150,9 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
                 >
                   {upgradeDowngradeAction === "downgrade" && selectedPlan === "discover"
                     ? "Confirm Downgrade"
-                    : `Pay & ${upgradeDowngradeAction}`}
+                    : isNewUser()
+                      ? `Start Free Trial`
+                      : `Pay & ${upgradeDowngradeAction}`}
                 </button>
               </div>
             </div>
@@ -1999,33 +2237,37 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
           </div>
         )}
 
-        {/* Remove Add-on Modal - Not needed for investor subscriptions */}
-
         {/* Subscription management options for existing users */}
         {isExistingUser && currentSubscription && (
-          <div style={{
-            background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
-            borderRadius: "16px",
-            padding: "2rem",
-            marginTop: "3rem",
-            border: `1px solid ${colors.lightTan}`,
-          }}>
-            <h3 style={{
-              color: colors.darkBrown,
-              marginBottom: "1.5rem",
-              fontSize: "1.5rem",
-              fontWeight: 700,
-              textAlign: "center",
-            }}>
+          <div
+            style={{
+              background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
+              borderRadius: "16px",
+              padding: "2rem",
+              marginTop: "3rem",
+              border: `1px solid ${colors.lightTan}`,
+            }}
+          >
+            <h3
+              style={{
+                color: colors.darkBrown,
+                marginBottom: "1.5rem",
+                fontSize: "1.5rem",
+                fontWeight: 700,
+                textAlign: "center",
+              }}
+            >
               Subscription Management
             </h3>
-            
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-              gap: "1rem",
-              marginTop: "1.5rem",
-            }}>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                gap: "1rem",
+                marginTop: "1.5rem",
+              }}
+            >
               <button
                 style={{
                   padding: "1rem 1.5rem",
@@ -2040,12 +2282,12 @@ const InvestorsSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSide
                   textAlign: "center",
                 }}
                 onClick={() => {
-                  alert("Update payment method feature coming soon!");
+                  alert("Update payment method feature coming soon!")
                 }}
               >
                 💳 Update Payment Method
               </button>
-              
+
               <button
                 style={{
                   padding: "1rem 1.5rem",

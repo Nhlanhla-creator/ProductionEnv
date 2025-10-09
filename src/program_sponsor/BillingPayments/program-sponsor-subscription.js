@@ -4,9 +4,11 @@ import { v4 as uuidv4 } from "uuid"
 import { getAuth } from "firebase/auth"
 import { collection, getFirestore, query, where, getDocs, doc, getDoc, updateDoc, addDoc } from "firebase/firestore"
 // Remove the actions import since you've fixed it separately
-import { saveToFirebase, updateCurrentPlan } from "./actions"
+import { validate, saveToFirebase, updateCurrentPlan } from "./actions"
 import { useNavigate } from "react-router-dom"
+import EmbeddedCheckout from "../../components/EmbeddedCheckout"
 
+// UPDATED: New function to create subscription checkout with PeachPayments
 const createSubscriptionCheckout = async (
   amount,
   currency,
@@ -50,6 +52,7 @@ const createSubscriptionCheckout = async (
   }
 }
 
+// UPDATED: Function to create one-time payment (for growth tools)
 const createOneTimeCheckout = async (amount, currency, userId, planName, billingCycle, actionType = "one_time") => {
   try {
     console.log("💳 Creating one-time checkout:", { amount, currency, userId, planName, billingCycle, actionType })
@@ -105,6 +108,8 @@ const colors = {
   partnerCardBg: "linear-gradient(160deg, #A67C52 0%, #8D6E63 100%)",
   featureCheck: "#A67C52",
   featureCross: "#D32F2F",
+  // CHANGED: Trial colors from green to brown
+  trialBrown: "#8D6E63", // Changed from trialGreen to trialBrown
 }
 
 const ProgramSponsorSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSidebarToggle }) => {
@@ -231,570 +236,109 @@ const ProgramSponsorSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, o
   const [errors, setErrors] = useState({})
   const [showBillingInfo, setShowBillingInfo] = useState(false)
 
-  // Dynamic styles based on sidebar state
-  const styles = {
-    container: {
-      width: "100%",
-      minHeight: "100vh",
-      padding: "1rem",
-      background: colors.offWhite, // Use defined color
-      fontFamily: "'Inter', 'Segoe UI', 'Roboto', sans-serif",
-      boxSizing: "border-box",
-      marginLeft: currentSidebarOpen ? `${currentSidebarWidth}px` : "0px",
-      width: currentSidebarOpen ? `calc(100% - ${currentSidebarWidth}px)` : "100%",
-      transition: "all 0.3s ease",
-    },
-    mainCard: {
-      background: `linear-gradient(135deg, ${colors.offWhite} 0%, ${colors.cream} 100%)`, // Use defined colors
-      borderRadius: "24px",
-      padding: "clamp(1rem, 3vw, 2rem)",
-      boxShadow: `0 20px 60px ${colors.darkBrown}15, 0 8px 24px ${colors.darkBrown}0A`, // Use defined colors
-      border: `1px solid ${colors.lightTan}`, // Use defined color
-      position: "relative",
-      overflow: "hidden",
-      maxWidth: "100%",
-      margin: "0 auto",
-    },
-    decorativeElement: {
-      position: "absolute",
-      top: "-100px",
-      right: "-100px",
-      width: "300px",
-      height: "300px",
-      background: `radial-gradient(circle, ${colors.accentGold}14 0%, transparent 70%)`, // Use defined color
-      borderRadius: "50%",
-      pointerEvents: "none",
-    },
-    pageTitle: {
-      fontSize: "clamp(2rem, 4vw, 2.75rem)",
-      fontWeight: 800,
-      background: `linear-gradient(135deg, ${colors.darkBrown} 0%, ${colors.mediumBrown} 100%)`, // Use defined colors
-      backgroundClip: "text",
-      WebkitBackgroundClip: "text",
-      color: "transparent",
-      textAlign: "center",
-      marginBottom: "1rem",
-      letterSpacing: "-1.5px",
-      lineHeight: "1.2",
-    },
-    subtitle: {
-      fontSize: "clamp(1rem, 2vw, 1.125rem)",
-      color: colors.mediumBrown, // Use defined color
-      textAlign: "center",
-      marginBottom: "3rem",
-      fontWeight: 400,
-      opacity: 0.9,
-    },
-    betaNotice: {
-      background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`, // Use defined colors
-      color: colors.darkBrown, // Use defined color
-      border: `2px solid ${colors.lightBrown}`, // Use defined color
-      borderRadius: "16px",
-      padding: "1.5rem 2rem",
-      margin: "0 auto 3rem auto",
-      maxWidth: "800px",
-      fontWeight: 600,
-      fontSize: "clamp(1rem, 2vw, 1.125rem)",
-      textAlign: "center",
-      boxShadow: `0 8px 24px ${colors.accentGold}1F`, // Use defined color
-      position: "relative",
-    },
-    betaIcon: {
-      display: "inline-block",
-      marginRight: "0.5rem",
-      fontSize: "1.25rem",
-    },
-    // NEW: Billing cycle toggle styles
-    billingToggleContainer: {
-      display: "flex",
-      justifyContent: "center",
-      alignItems: "center",
-      margin: "2rem auto",
-      gap: "1rem",
-    },
-    billingToggle: {
-      display: "flex",
-      background: colors.cream, // Use defined color
-      borderRadius: "12px",
-      padding: "4px",
-      border: `1px solid ${colors.lightTan}`, // Use defined color
-      boxShadow: `0 4px 12px ${colors.darkBrown}0A`, // Use defined color
-    },
-    billingToggleOption: {
-      padding: "0.75rem 1.5rem",
-      borderRadius: "8px",
-      cursor: "pointer",
-      fontWeight: 600,
-      fontSize: "0.95rem",
-      transition: "all 0.3s ease",
-      color: colors.mediumBrown, // Use defined color
-      position: "relative",
-    },
-    billingToggleActive: {
-      background: colors.accentGold, // Use defined color
-      color: colors.lightText, // Use defined color
-      boxShadow: `0 2px 8px ${colors.accentGold}33`, // Use defined color
-    },
-    savingsBadge: {
-      background: colors.mediumBrown, // Use defined color
-      color: colors.lightText, // Use defined color
-      fontSize: "0.75rem",
-      padding: "0.25rem 0.5rem",
-      borderRadius: "6px",
-      fontWeight: 700,
-      marginLeft: "0.5rem",
-      textTransform: "uppercase",
-      letterSpacing: "0.5px",
-    },
-    featureComparisonContainer: {
-      margin: "3rem auto",
-      maxWidth: "100%",
-      background: `linear-gradient(135deg, ${colors.offWhite} 0%, ${colors.cream} 100%)`, // Use defined colors
-      borderRadius: "20px",
-      padding: "1.5rem",
-      boxShadow: `0 12px 40px ${colors.darkBrown}0A`, // Use defined color
-      border: `1px solid ${colors.lightTan}`, // Use defined color
-      overflow: "auto",
-    },
-    featureComparisonTitle: {
-      fontSize: "clamp(1.25rem, 3vw, 1.75rem)",
-      fontWeight: 700,
-      color: colors.darkBrown, // Use defined color
-      marginBottom: "2rem",
-      textAlign: "center",
-      position: "relative",
-      display: "flex",
-      flexDirection: "column",
-      gap: "1rem",
-      alignItems: "center",
-    },
-    featureComparisonTable: {
-      width: "100%",
-      borderCollapse: "separate",
-      borderSpacing: "0",
-      background: colors.offWhite, // Use defined color
-      borderRadius: "12px",
-      overflow: "hidden",
-      boxShadow: `0 4px 12px ${colors.darkBrown}0A`, // Use defined color
-      border: `1px solid ${colors.lightTan}`, // Use defined color
-      fontSize: "clamp(0.8rem, 1.5vw, 0.95rem)",
-    },
-    featureTh: {
-      background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`, // Use defined colors
-      fontWeight: 700,
-      padding: "1rem",
-      color: colors.darkBrown, // Use defined color
-      fontSize: "clamp(0.9rem, 1.5vw, 1.05rem)",
-      borderBottom: `2px solid ${colors.lightTan}`, // Use defined color
-      position: "relative",
-    },
-    featureTd: {
-      padding: "0.75rem",
-      textAlign: "center",
-      fontSize: "clamp(0.8rem, 1.5vw, 0.95rem)",
-      color: colors.mediumBrown, // Use defined color
-      borderBottom: `1px solid ${colors.lightTan}26`, // Use defined color
-      transition: "background-color 0.2s ease",
-    },
-    featureTdLeft: {
-      textAlign: "left",
-      fontWeight: 600,
-      color: colors.darkBrown, // Use defined color
-    },
-    planGrid: {
-      display: "grid",
-      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-      gap: "1.5rem",
-      margin: "3rem 0",
-      justifyContent: "center",
-      maxWidth: "100%",
-    },
-    planCard: {
-      background: colors.offWhite,
-      border: `1px solid ${colors.lightTan}`,
-      borderRadius: "16px", // Slightly smaller radius for a cleaner look
-      padding: "2rem", // Uniform padding
-      textAlign: "center", // Center content for a cleaner look
-      transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-      cursor: "pointer",
-      boxShadow: `0 8px 24px ${colors.darkBrown}14`, // More pronounced shadow
-      position: "relative",
-      overflow: "hidden",
-      display: "flex",
-      flexDirection: "column",
-      minHeight: "450px", // Ensure consistent height
-    },
-    planCardPopular: {
-      background: colors.engageCardBg, // Darker, more impactful gradient for popular
-      color: colors.lightText,
-      transform: "scale(1.03)", // Slightly more prominent
-      zIndex: 2,
-      boxShadow: `0 20px 60px ${colors.darkBrown}33`,
-      border: `1px solid ${colors.accentGold}`, // Accent border for popular
-    },
-    planCardHover: {
-      transform: "translateY(-8px)", // More noticeable lift
-      boxShadow: `0 16px 40px ${colors.darkBrown}26`,
-    },
-    planCardSelected: {
-      border: `2px solid ${colors.accentGold}`,
-      boxShadow: `0 12px 30px ${colors.accentGold}33`,
-    },
-    popularBadge: {
-      position: "absolute",
-      top: "1.5rem",
-      right: "1.5rem",
-      background: colors.accentGold,
-      color: colors.lightText,
-      padding: "0.4rem 1rem",
-      borderRadius: "20px", // Pill shape
-      fontSize: "0.8rem",
-      fontWeight: 700,
-      textTransform: "uppercase",
-      letterSpacing: "0.8px",
-      boxShadow: `0 2px 8px ${colors.accentGold}4D`,
-    },
-    planName: {
-      fontSize: "clamp(1.75rem, 3vw, 2.25rem)", // Larger name
-      fontWeight: 800,
-      marginBottom: "0.75rem",
-      letterSpacing: "-1px",
-      color: colors.darkBrown, // Default color
-    },
-    planPrice: {
-      fontSize: "clamp(2.5rem, 4vw, 3.5rem)", // Very large price
-      fontWeight: 900,
-      marginBottom: "0.5rem",
-      lineHeight: "1",
-      color: colors.darkBrown, // Default color
-    },
-    planPricePeriod: {
-      fontSize: "clamp(1rem, 1.5vw, 1.25rem)",
-      fontWeight: 500,
-      opacity: 0.8,
-      color: colors.mediumBrown, // Default color
-    },
-    planDescriptionText: {
-      fontSize: "clamp(0.9rem, 1.5vw, 1rem)",
-      color: colors.mediumBrown,
-      marginBottom: "2rem",
-      lineHeight: "1.6",
-    },
-    freeMonthsBadge: {
-      background: `linear-gradient(90deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
-      color: colors.lightText,
-      padding: "0.6rem 1.2rem",
-      borderRadius: "10px",
-      fontSize: "0.9rem",
-      fontWeight: 600,
-      marginBottom: "2rem",
-      textAlign: "center",
-      boxShadow: `0 4px 12px ${colors.accentGold}4D`,
-      display: "inline-block", // To center it with margin auto
-    },
-    planFeaturesList: {
-      listStyle: "none",
-      padding: "0",
-      margin: "0 0 2.5rem 0", // More space before button
-      flex: 1,
-      textAlign: "left", // Align features to the left
-    },
-    planFeatureItem: {
-      padding: "0.6rem 0",
-      fontSize: "clamp(0.9rem, 1.5vw, 1rem)",
-      display: "flex",
-      alignItems: "center",
-      lineHeight: "1.5",
-      color: colors.darkText,
-    },
-    featureIcon: {
-      marginRight: "0.8rem",
-      fontSize: "1.1rem",
-      flexShrink: 0, // Prevent icon from shrinking
-    },
-    featureCheckIcon: {
-      color: colors.featureCheck,
-    },
-    featureCrossIcon: {
-      color: colors.featureCross,
-    },
-    currentPlanBadge: {
-      display: "inline-block",
-      background: colors.accentGold, // Use defined color
-      color: colors.lightText, // Use defined color
-      fontWeight: 600,
-      borderRadius: "8px",
-      padding: "0.5rem 1rem",
-      fontSize: "0.875rem",
-      letterSpacing: "0.5px",
-    },
-    selectedBadge: {
-      display: "inline-block",
-      background: colors.mediumBrown, // Use defined color
-      color: colors.lightText, // Use defined color
-      fontWeight: 600,
-      borderRadius: "8px",
-      padding: "0.5rem 1rem",
-      fontSize: "0.875rem",
-      letterSpacing: "0.5px",
-    },
-    selectButton: {
-      width: "100%",
-      padding: "1rem 2rem",
-      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
-      color: colors.lightText,
-      border: "none",
-      borderRadius: "10px",
-      fontWeight: 700,
-      cursor: "pointer",
-      fontSize: "clamp(1rem, 1.8vw, 1.1rem)",
-      transition: "all 0.3s ease",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: "0.75rem",
-      marginTop: "auto",
-      boxShadow: `0 6px 18px ${colors.accentGold}4D`,
-      textTransform: "uppercase",
-      letterSpacing: "0.5px",
-    },
-    downgradeSection: {
-      textAlign: "center",
-      margin: "2.5rem auto",
-      padding: "2rem",
-      background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`, // Use defined colors
-      borderRadius: "16px",
-      border: `1px solid ${colors.lightTan}`, // Use defined color
-      maxWidth: "800px", // Constrain width
-    },
-    button: {
-      padding: "1rem 2.5rem",
-      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`, // Use defined colors
-      color: colors.lightText, // Use defined color
-      border: "none",
-      borderRadius: "12px",
-      fontWeight: 700,
-      fontSize: "clamp(0.9rem, 1.5vw, 1rem)",
-      cursor: "pointer",
-      margin: "0 0.75rem",
-      transition: "all 0.3s ease",
-      boxShadow: `0 4px 12px ${colors.accentGold}4D`, // Use defined color
-      letterSpacing: "0.5px",
-      textTransform: "uppercase",
-    },
-    buttonSecondary: {
-      background: `linear-gradient(135deg, ${colors.lightTan} 0%, ${colors.cream} 100%)`, // Use defined colors
-      color: colors.darkBrown, // Use defined color
-      border: `2px solid ${colors.lightTan}`, // Use defined color
-      fontWeight: 700,
-      borderRadius: "12px",
-      padding: "1rem 2.5rem",
-      fontSize: "clamp(0.9rem, 1.5vw, 1rem)",
-      cursor: "pointer",
-      margin: "0 0.75rem",
-      transition: "all 0.3s ease",
-      boxShadow: `0 4px 12px ${colors.lightTan}33`, // Use defined color
-      letterSpacing: "0.5px",
-      textTransform: "uppercase",
-    },
-    buttonDowngrade: {
-      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`, // Use defined colors
-      color: colors.lightText, // Use defined color
-      padding: "1rem 2.5rem",
-      fontWeight: 700,
-      fontSize: "clamp(0.9rem, 1.5vw, 1rem)",
-      borderRadius: "12px",
-      cursor: "pointer",
-      transition: "all 0.3s ease",
-      maxWidth: "250px",
-      margin: "0 auto",
-      display: "block",
-      textAlign: "center",
-      boxShadow: `0 4px 12px ${colors.accentGold}4D`, // Use defined color
-      letterSpacing: "0.5px",
-      textTransform: "uppercase",
-    },
-    planChangeModal: {
-      position: "fixed",
-      top: 0,
-      left: 0,
-      width: "100vw",
-      height: "100vh",
-      backgroundColor: `${colors.darkBrown}66`, // Use defined color with transparency
-      backdropFilter: "blur(8px)",
-      display: "flex",
-      justifyContent: "center",
-      alignItems: "center",
-      zIndex: 1000,
-      animation: "fadeIn 0.3s ease",
-      padding: "1rem",
-      boxSizing: "border-box",
-    },
-    modalContent: {
-      background: `linear-gradient(135deg, ${colors.offWhite} 0%, ${colors.cream} 100%)`, // Use defined colors
-      padding: "2rem",
-      borderRadius: "24px",
-      maxWidth: "500px",
-      width: "100%",
-      boxShadow: `0 24px 60px ${colors.darkBrown}33`, // Use defined color
-      textAlign: "center",
-      border: `1px solid ${colors.lightTan}`, // Use defined color
-      position: "relative",
-      maxHeight: "90vh",
-      overflow: "auto",
-    },
-    modalTitle: {
-      fontSize: "clamp(1.25rem, 3vw, 1.75rem)",
-      fontWeight: 800,
-      color: colors.darkBrown, // Use defined color
-      marginBottom: "1rem",
-      letterSpacing: "-0.5px",
-    },
-    modalText: {
-      fontSize: "clamp(1rem, 2vw, 1.125rem)",
-      color: colors.mediumBrown, // Use defined color
-      marginBottom: "2rem",
-      lineHeight: "1.6",
-    },
-    modalActions: {
-      display: "flex",
-      justifyContent: "center",
-      gap: "1rem",
-      marginTop: "2rem",
-      flexWrap: "wrap",
-    },
-    formContainerBillCentered: {
-      display: "flex",
-      justifyContent: "center",
-      margin: "3rem auto",
-      padding: "0 1rem",
-    },
-    formCardEnhanced: {
-      background: `linear-gradient(135deg, ${colors.offWhite} 0%, ${colors.cream} 100%)`, // Use defined colors
-      padding: "2rem",
-      borderRadius: "24px",
-      boxShadow: `0 16px 40px ${colors.darkBrown}14`, // Use defined color
-      width: "100%",
-      maxWidth: "450px",
-      textAlign: "center",
-      border: `1px solid ${colors.lightTan}`, // Use defined color
-    },
-    payButtonEnhanced: {
-      padding: "1.25rem 2rem",
-      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`, // Use defined colors
-      color: colors.lightText, // Use defined color
-      fontWeight: 700,
-      fontSize: "clamp(1rem, 2vw, 1.125rem)",
-      border: "none",
-      borderRadius: "16px",
-      cursor: "pointer",
-      textAlign: "center",
-      width: "100%",
-      display: "flex",
-      justifyContent: "center",
-      alignItems: "center",
-      gap: "0.75rem",
-      marginTop: "1.5rem",
-      boxShadow: `0 8px 20px ${colors.accentGold}4D`, // Use defined color
-      transition: "all 0.3s ease",
-      letterSpacing: "0.5px",
-      textTransform: "uppercase",
-    },
-    payButtonEnhancedLoading: {
-      background: `linear-gradient(135deg, ${colors.lightTan} 0%, ${colors.cream} 100%)`, // Use defined colors
-      color: colors.mediumBrown, // Use defined color
-      cursor: "not-allowed",
-      boxShadow: `0 4px 12px ${colors.lightTan}33`, // Use defined color
-    },
-    navButtonContainer: {
-      textAlign: "center",
-      marginTop: "3rem",
-      padding: "2rem",
-      background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`, // Use defined colors
-      borderRadius: "16px",
-      border: `1px solid ${colors.lightTan}`, // Use defined color
-    },
-    navButton: {
-      display: "inline-block",
-      padding: "1rem 2rem",
-      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`, // Use defined colors
-      color: colors.lightText, // Use defined color
-      border: "none",
-      borderRadius: "12px",
-      fontWeight: 700,
-      fontSize: "clamp(0.9rem, 1.5vw, 1rem)",
-      cursor: "pointer",
-      transition: "all 0.3s ease",
-      boxShadow: `0 4px 12px ${colors.accentGold}4D`, // Use defined color
-      letterSpacing: "0.5px",
-      textTransform: "uppercase",
-    },
-    backButton: {
-      display: "inline-flex",
-      alignItems: "center",
-      gap: "0.5rem",
-      padding: "0.75rem 1.5rem",
-      background: `linear-gradient(135deg, ${colors.lightTan} 0%, ${colors.cream} 100%)`, // Use defined colors
-      color: colors.darkBrown, // Use defined color
-      border: `2px solid ${colors.lightTan}`, // Use defined color
-      borderRadius: "12px",
-      fontWeight: 600,
-      fontSize: "clamp(0.85rem, 1.5vw, 0.95rem)",
-      cursor: "pointer",
-      transition: "all 0.3s ease",
-      boxShadow: `0 4px 12px ${colors.lightTan}33`, // Use defined color
-      marginBottom: "2rem",
-    },
-    contentWrapper: {
-      transition: "opacity 0.3s ease, transform 0.3s ease",
-    },
-    fadeOut: {
-      opacity: 0,
-      transform: "translateY(-10px)",
-    },
-    fadeIn: {
-      opacity: 1,
-      transform: "translateY(0)",
-    },
-    sidebarToggleButton: {
-      position: "fixed",
-      top: "1rem",
-      left: currentSidebarOpen ? `${currentSidebarWidth - 50}px` : "1rem",
-      zIndex: 1001,
-      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`, // Use defined colors
-      color: colors.lightText, // Use defined color
-      border: "none",
-      borderRadius: "8px",
-      padding: "0.5rem",
-      cursor: "pointer",
-      transition: "all 0.3s ease",
-      boxShadow: `0 2px 8px ${colors.accentGold}4D`, // Use defined color
-      display: "none", // Hidden by default, show only when needed
-    },
+  // Helper function to check if user is new (for trial eligibility)
+  const isNewUser = () => {
+    return !isExistingUser || !currentSubscription || currentSubscription.plan === "Discover"
   }
 
-  // Load user subscription data
+  // Helper function to safely get plan name
+  const getCurrentPlanKey = () => {
+    if (!currentSubscription || !currentSubscription.plan) {
+      return "discover"
+    }
+    return currentSubscription.plan.toLowerCase()
+  }
+
+  // Enhanced load user subscription data
   const loadUserSubscription = async (userId) => {
+    console.log("🔍 Loading subscription for user:", userId)
     setIsLoading(true)
+    
     try {
-      // Query subscriptions collection for user's active subscription
-      const subscriptionsRef = collection(db, "subscriptions")
-      const q = query(
-        subscriptionsRef,
-        where("userId", "==", userId),
-        where("status", "in", ["Success", "Paid", "Active"]),
-      )
-      const querySnapshot = await getDocs(q)
-      if (!querySnapshot.empty) {
-        // Get the most recent subscription
-        const subscriptions = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
-        const latestSubscription = subscriptions.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0]
-        setCurrentSubscription(latestSubscription)
-        setIsExistingUser(true)
-        setSelectedPlan(latestSubscription.plan.toLowerCase())
+      // First, check user document for current subscription
+      const userRef = doc(db, "users", userId)
+      const userDoc = await getDoc(userRef)
+      
+      if (userDoc.exists()) {
+        const userData = userDoc.data()
+        console.log("👤 User data:", userData)
+        
+        if (userData.currentSubscription && userData.currentSubscription.plan) {
+          console.log("✅ Found current subscription in user doc:", userData.currentSubscription)
+          
+          // Create subscription object from user data
+          const subscriptionFromUser = {
+            id: `user_${userId}`,
+            plan: userData.currentSubscription.plan,
+            status: userData.currentSubscription.status || "Success",
+            amount: userData.currentSubscription.amount || 0,
+            cycle: userData.currentSubscription.cycle || "monthly",
+            createdAt: userData.currentSubscription.lastUpdated || userData.subscriptionUpdatedAt,
+            userId: userId,
+            transactionRef: userData.currentSubscription.transactionRef,
+            autoRenew: userData.currentSubscription.status === "active" || userData.currentSubscription.status === "Success",
+            isTrialPeriod: userData.currentSubscription.isTrialPeriod || false,
+            originalAmount: userData.currentSubscription.originalAmount,
+            trialStartDate: userData.currentSubscription.trialStartDate,
+            trialEndDate: userData.currentSubscription.trialEndDate
+          }
+          
+          setCurrentSubscription(subscriptionFromUser)
+          setIsExistingUser(true)
+          setSelectedPlan(userData.currentSubscription.plan.toLowerCase())
+          console.log("✅ Set subscription from user document")
+        }
       }
+      
+      // Also check subscriptions collection as backup
+      const subscriptionsRef = collection(db, "subscriptions")
+      const queries = [
+        query(subscriptionsRef, where("userId", "==", userId), where("status", "==", "Success")),
+        query(subscriptionsRef, where("userId", "==", userId), where("status", "==", "Active")),
+        query(subscriptionsRef, where("userId", "==", userId), where("status", "==", "active"))
+      ]
+
+      const queryResults = await Promise.all(queries.map(q => getDocs(q)))
+      const allSubscriptions = []
+      
+      queryResults.forEach(querySnapshot => {
+        querySnapshot.forEach(doc => {
+          const data = doc.data()
+          // Filter out add-on purchases from subscription data
+          if (!data.type || data.type !== "addon") {
+            allSubscriptions.push({ id: doc.id, ...data })
+          }
+        })
+      })
+      
+      console.log("📄 Found subscription records in collection:", allSubscriptions.length)
+      
+      if (allSubscriptions.length > 0) {
+        // Get the most recent subscription
+        const latestSubscription = allSubscriptions
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0]
+        
+        console.log("📄 Latest subscription from collection:", latestSubscription)
+        
+        // Use collection data if user doc doesn't have subscription or if collection is more recent
+        if (!currentSubscription || new Date(latestSubscription.createdAt) > new Date(currentSubscription.createdAt || 0)) {
+          setCurrentSubscription(latestSubscription)
+          setIsExistingUser(true)
+          setSelectedPlan(latestSubscription.plan?.toLowerCase() || "discover")
+          console.log("✅ Set subscription from collection")
+        }
+      }
+      
+      // Set history (filter out add-ons from main history)
+      const subscriptionHistory = allSubscriptions
+        .filter(record => !record.type || record.type !== "addon")
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      
+      setHistory(subscriptionHistory)
+      
     } catch (error) {
-      console.error("Error loading subscription:", error)
+      console.error("❌ Error loading user subscription:", error)
+      // Don't throw - just log and continue with default state
     } finally {
       setIsLoading(false)
     }
@@ -847,7 +391,7 @@ const ProgramSponsorSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, o
                     style={{
                       width: "12px",
                       height: "12px",
-                      background: colors.discoverCardBg.split(" ")[2],
+                      background: colors.accentGold,
                       borderRadius: "50%",
                     }}
                   ></div>
@@ -860,7 +404,7 @@ const ProgramSponsorSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, o
                     style={{
                       width: "12px",
                       height: "12px",
-                      background: colors.engageCardBg.split(" ")[2],
+                      background: colors.mediumBrown,
                       borderRadius: "50%",
                     }}
                   ></div>
@@ -874,7 +418,7 @@ const ProgramSponsorSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, o
                     style={{
                       width: "12px",
                       height: "12px",
-                      background: colors.partnerCardBg.split(" ")[2],
+                      background: colors.darkBrown,
                       borderRadius: "50%",
                     }}
                   ></div>
@@ -973,52 +517,56 @@ const ProgramSponsorSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, o
   )
 
   useEffect(() => {
-    if (user) {
-      setEmail(user.email)
-      loadUserSubscription(user.uid)
-      // Fetch transaction history from Firestore
-      fetchUserTransactions(user.uid)
-      // Load company name if available
-      const userRef = doc(db, "users", user.uid)
-      getDoc(userRef).then((docSnap) => {
-        if (docSnap.exists() && docSnap.data().company) {
-          setCompanyName(docSnap.data().company)
+    const loadUserData = async () => {
+      if (user) {
+        try {
+          const userDoc = await getDoc(doc(db, "users", user.uid))
+          if (userDoc.exists()) {
+            const userData = userDoc.data()
+            setEmail(userData.email || user.email || "")
+            setFullName(userData.displayName || userData.fullName || "")
+            setCompanyName(userData.companyName || "")
+          } else {
+            setEmail(user.email || "")
+            setFullName(user.displayName || "")
+          }
+
+          await loadUserSubscription(user.uid)
+          // Fetch transaction history from Firestore
+          await fetchUserTransactions(user.uid)
+        } catch (error) {
+          console.error("Error loading user data:", error)
+          setEmail(user.email || "")
+          setFullName(user.displayName || "")
+          await loadUserSubscription(user.uid)
         }
-      })
+      }
     }
+
+    loadUserData()
   }, [user])
 
-  const validate = () => {
-    const newErrors = {}
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!email) newErrors.email = "Email is required"
-    else if (!emailRegex.test(email)) newErrors.email = "Enter a valid email"
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
-
   const handlePlanSelect = (planKey) => {
+    console.log("Plan selected:", planKey)
+    setSelectedPlan(planKey)
+    setErrors({})
+
     if (isExistingUser && currentSubscription) {
-      const currentPlanKey = currentSubscription.plan.toLowerCase()
+      const currentPlanKey = getCurrentPlanKey()
       if (planKey !== currentPlanKey) {
-        setSelectedPlan(planKey)
-        // Determine if it's upgrade or downgrade
         const planOrder = { discover: 0, engage: 1, partner: 2 }
         const action = planOrder[planKey] > planOrder[currentPlanKey] ? "upgrade" : "downgrade"
         setUpgradeDowngradeAction(action)
         setShowPlanChangeConfirm(true)
         setShowDowngradeOptions(false)
-        window.scrollTo({ top: 0, behavior: "smooth" }) // Scroll to top when modal opens
+        window.scrollTo({ top: 0, behavior: "smooth" })
       }
-    } else {
-      setSelectedPlan(planKey)
-      setErrors({})
     }
   }
 
   const handleDowngradeClick = () => {
     setShowDowngradeOptions(true)
-    window.scrollTo({ top: 0, behavior: "smooth" }) // Scroll to top when modal opens
+    window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
   const handleDowngradeSelect = (targetPlan) => {
@@ -1026,7 +574,7 @@ const ProgramSponsorSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, o
     setUpgradeDowngradeAction("downgrade")
     setShowDowngradeOptions(false)
     setShowPlanChangeConfirm(true)
-    window.scrollTo({ top: 0, behavior: "smooth" }) // Scroll to top when modal opens
+    window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
   const cancelDowngradeOptions = () => {
@@ -1042,23 +590,17 @@ const ProgramSponsorSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, o
     if (upgradeDowngradeAction === "downgrade" && selectedPlan === "discover") {
       console.log("Calling handleDowngradeToFree...")
       handleDowngradeToFree()
-    } else if (upgradeDowngradeAction === "downgrade") {
-      console.log("Calling handleUpgradePayment for paid downgrade...")
-      // Handle paid downgrade (like Partner to Engage)
-      handleUpgradePayment()
     } else {
-      console.log("Calling handleUpgradePayment for upgrade...")
-      // Handle upgrade
+      console.log("Calling handlePay for upgrade/downgrade...")
       setShowPlanChangeConfirm(false)
-      handleUpgradePayment()
+      handlePay()
     }
-    window.scrollTo({ top: 0, behavior: "smooth" }) // Scroll to top when modal opens
+    window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
   const handleDowngradeToFree = async () => {
+    console.log("Starting downgrade to free...")
     try {
-      const transactionIndex = history.length
-      const invoiceNumber = generateInvoiceNumber({ companyName, fullName }, transactionIndex)
       const newRecord = {
         id: uuidv4(),
         email,
@@ -1068,375 +610,278 @@ const ProgramSponsorSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, o
         fullName,
         companyName,
         createdAt: new Date().toISOString(),
-        status: "Active",
+        status: "Success",
         autoRenew: true,
         userId: user.uid,
         action: "downgrade",
-        invoiceNumber,
+        transactionRef: `downgrade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       }
-      // Save the transaction record
+
       await saveToFirebase(newRecord)
-
-      // Update subscription in database
-      await updateSubscriptionInDatabase({
-        plan: plans[selectedPlan].name,
-        amount: 0,
-        status: "Active",
-        lastModified: new Date().toISOString(),
-        userId: user.uid,
-      })
-
-      // Update user's current plan
       await updateCurrentPlan(plans[selectedPlan].name, billingCycle)
-
-      // Update local state
       setHistory([newRecord, ...history])
-      setCurrentSubscription({
-        id: newRecord.id,
-        ...newRecord,
-      })
+      setCurrentSubscription(newRecord)
+      setIsExistingUser(true)
       alert(`Successfully downgraded to ${plans[selectedPlan].name} plan!`)
       setShowPlanChangeConfirm(false)
       setUpgradeDowngradeAction(null)
+
+      setTimeout(() => {
+        loadUserSubscription(user.uid)
+      }, 1000)
     } catch (error) {
       console.error("Error in handleDowngradeToFree:", error)
       alert("An error occurred during downgrade. Please try again.")
     }
   }
 
-  const [paystackLoaded, setPaystackLoaded] = useState(false)
-  const publicKey = process.env.REACT_APP_PAYSTACK_PUBLIC_KEY
-
-  useEffect(() => {
-    const script = document.createElement("script")
-    script.src = "https://js.paystack.co/v1/inline.js"
-    script.onload = () => {
-      setPaystackLoaded(true)
-    }
-    script.onerror = () => {
-      console.error("Failed to load Paystack inline script.")
-    }
-    document.body.appendChild(script)
-
-    return () => {
-      document.body.removeChild(script)
-    }
-  }, [])
-
-  const handleUpgradePayment = async () => {
-    if (!validate()) return
-    if (!paystackLoaded || !window.PaystackPop) {
-      alert("Payment system is still loading. Please wait a moment and try again.")
-      return
-    }
-
-    console.log("Initializing Paystack payment for upgrade...")
-    try {
-      const planPrice = plans[selectedPlan].price[billingCycle]
-      const paystackConfig = {
-        key: publicKey,
-        email: email,
-        amount: planPrice * 100,
-        currency: "ZAR",
-        ref: `upgrade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        metadata: {
-          custom_fields: [
-            { display_name: "Full Name", variable_name: "full_name", value: fullName },
-            { display_name: "Company Name", variable_name: "company_name", value: companyName },
-            { display_name: "Plan", variable_name: "subscription_plan", value: plans[selectedPlan].name },
-            { display_name: "Cycle", variable_name: "billing_cycle", value: billingCycle },
-            { display_name: "Action", variable_name: "action", value: upgradeDowngradeAction },
-            { display_name: "Previous Plan", variable_name: "previous_plan", value: currentSubscription?.plan },
-          ],
-        },
-        callback: (response) => {
-          console.log("Payment successful:", response)
-          handleUpgradeSuccess(response, planPrice)
-        },
-        onClose: () => {
-          console.log("Payment modal closed")
-          handleUpgradeClose()
-        },
-      }
-      console.log("Paystack config:", paystackConfig)
-      const handler = window.PaystackPop.setup(paystackConfig)
-      if (handler && typeof handler.openIframe === "function") {
-        handler.openIframe()
-      } else {
-        throw new Error("Paystack handler not properly initialized")
-      }
-    } catch (error) {
-      console.error("Payment initialization error:", error)
-      alert("Failed to initialize payment. Please try again or refresh the page.")
-    }
-  }
-
-  const handleUpgradeSuccess = async (response, amountPaid) => {
-    const transactionIndex = history.length
-    const invoiceNumber = generateInvoiceNumber({ companyName, fullName }, transactionIndex)
-    const newRecord = {
-      id: uuidv4(),
-      email,
-      plan: plans[selectedPlan].name,
-      cycle: billingCycle,
-      amount: amountPaid,
-      fullName,
-      companyName,
-      createdAt: new Date().toISOString(),
-      status: "Paid",
-      autoRenew: true,
-      transactionRef: response.reference,
-      userId: user.uid,
-      action: upgradeDowngradeAction,
-      invoiceNumber,
-    }
-    setHistory([newRecord, ...history])
-    await saveToFirebase(newRecord)
-    await updateCurrentPlan(plans[selectedPlan].name, billingCycle)
-    await updateSubscriptionInDatabase({
-      plan: plans[selectedPlan].name,
-      amount: amountPaid,
-      status: "Paid",
-      transactionRef: response.reference,
-      lastModified: new Date().toISOString(),
-    })
-
-    // Update the current subscription state immediately
-    setCurrentSubscription({
-      ...currentSubscription,
-      plan: plans[selectedPlan].name,
-      amount: amountPaid,
-      status: "Paid",
-      transactionRef: response.reference,
-    })
-    alert(`Payment successful! Your plan has been ${upgradeDowngradeAction}d to ${plans[selectedPlan].name}.`)
-    // Reload the user subscription to ensure sync
-    setTimeout(() => {
-      loadUserSubscription(user.uid)
-    }, 1000)
-  }
-
-  const handleUpgradeClose = () => {
-    alert("Payment cancelled")
-  }
-
-  const updateSubscriptionInDatabase = async (subscriptionData) => {
-    try {
-      if (currentSubscription && currentSubscription.id) {
-        // Update existing subscription
-        const subscriptionRef = doc(db, "subscriptions", currentSubscription.id)
-        await updateDoc(subscriptionRef, subscriptionData)
-        console.log("Updated existing subscription:", currentSubscription.id)
-      } else {
-        // Create new subscription document
-        const subscriptionsRef = collection(db, "subscriptions")
-        const newSubscriptionData = {
-          ...subscriptionData,
-          userId: user.uid,
-          createdAt: new Date().toISOString(),
-        }
-        const docRef = await addDoc(subscriptionsRef, newSubscriptionData)
-        console.log("Created new subscription:", docRef.id)
-        // Update currentSubscription state with new document ID
-        setCurrentSubscription({
-          id: docRef.id,
-          ...newSubscriptionData,
-        })
-      }
-      return true
-    } catch (error) {
-      console.error("Error updating/creating subscription:", error)
-      console.error("Error details:", error.message)
-      return false
-    }
-  }
-
   const cancelPlanChange = () => {
-    setSelectedPlan(currentSubscription.plan.toLowerCase())
+    setSelectedPlan(getCurrentPlanKey())
     setShowPlanChangeConfirm(false)
     setShowDowngradeOptions(false)
     setUpgradeDowngradeAction(null)
   }
 
-  const handlePay = async () => {
-    const planPrice = plans[selectedPlan].price[billingCycle]
-    if (selectedPlan === "discover") {
-      try {
-        const transactionIndex = history.length
-        const invoiceNumber = generateInvoiceNumber({ companyName, fullName }, transactionIndex)
-        const newRecord = {
-          id: uuidv4(),
-          email,
-          plan: plans[selectedPlan].name,
-          cycle: billingCycle,
-          amount: 0,
-          fullName,
-          companyName,
-          createdAt: new Date().toISOString(),
-          status: "Active",
-          autoRenew: true,
-          userId: user.uid,
-          invoiceNumber,
-        }
-        // Save to Firebase
-        await saveToFirebase(newRecord)
-
-        // Update current plan in user document
-        await updateCurrentPlan(plans[selectedPlan].name, billingCycle)
-
-        // Update subscription in subscriptions collection
-        await updateSubscriptionInDatabase({
-          plan: plans[selectedPlan].name,
-          amount: 0,
-          status: "Active",
-          lastModified: new Date().toISOString(),
-          userId: user.uid,
-        })
-
-        // Update local state
-        setHistory([newRecord, ...history])
-        setCurrentSubscription({
-          id: newRecord.id,
-          ...newRecord,
-        })
-        alert("Discover plan activated successfully!")
-        return
-      } catch (error) {
-        console.error("Error activating Discover plan:", error)
-        alert("Failed to activate Discover plan. Please try again.")
-        return
-      }
-    }
-
-    // Rest of the payment handling for paid plans...
-    if (!validate()) return
-    if (!paystackLoaded || !window.PaystackPop) {
-      alert("Payment system is still loading. Please wait a moment and try again.")
+  // Handle subscription cancellation
+  const handleCancelSubscription = async () => {
+    if (!currentSubscription || !user) {
+      alert("No active subscription found.")
       return
     }
 
-    console.log("Initializing Paystack payment for new subscription...")
+    const confirmMessage = `Are you sure you want to cancel your ${currentSubscription.plan} subscription?\n\nThis will:\n• Stop automatic renewals\n• Downgrade you to Discover plan\n• Remove premium features\n\nThis action cannot be undone.`
+    
+    if (!window.confirm(confirmMessage)) {
+      return
+    }
+
     try {
-      const paystackConfig = {
-        key: publicKey,
+      // Create cancellation record
+      const cancellationRecord = {
+        id: uuidv4(),
         email: email,
-        amount: planPrice * 100,
-        currency: "ZAR",
-        ref: `new_sub_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        metadata: {
-          custom_fields: [
-            { display_name: "Full Name", variable_name: "full_name", value: fullName || "Not provided" },
-            { display_name: "Company Name", variable_name: "company_name", value: companyName || "Not provided" },
-            { display_name: "Plan", variable_name: "subscription_plan", value: plans[selectedPlan].name },
-            { display_name: "Cycle", variable_name: "billing_cycle", value: billingCycle },
-          ],
-        },
-        callback: (response) => {
-          console.log("Payment successful:", response)
-          handleSuccess(response, planPrice)
-        },
-        onClose: () => {
-          console.log("Payment modal closed")
-          handleClose()
-        },
+        plan: "Discover",
+        cycle: "monthly",
+        amount: 0,
+        fullName: fullName,
+        companyName: companyName,
+        createdAt: new Date().toISOString(),
+        status: "Success",
+        autoRenew: false,
+        userId: user.uid,
+        action: "cancellation",
+        previousPlan: currentSubscription.plan,
+        transactionRef: `cancellation_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       }
-      console.log("Paystack config:", paystackConfig)
-      const handler = window.PaystackPop.setup(paystackConfig)
-      if (handler && typeof handler.openIframe === "function") {
-        handler.openIframe()
+
+      // Save cancellation record
+      await saveToFirebase(cancellationRecord)
+      
+      // Update current plan to Discover
+      await updateCurrentPlan("Discover", "monthly")
+      
+      // Update local state
+      setHistory([cancellationRecord, ...history])
+      setCurrentSubscription(cancellationRecord)
+      setSelectedPlan("discover")
+      
+      alert(`Subscription cancelled successfully!\n\nYou've been downgraded to the Discover plan.\nYour premium features will remain active until the end of your current billing period.`)
+      
+      // Reload subscription data
+      setTimeout(() => {
+        loadUserSubscription(user.uid)
+      }, 1000)
+      
+    } catch (error) {
+      console.error("Error cancelling subscription:", error)
+      alert("Failed to cancel subscription. Please try again or contact support.")
+    }
+  }
+
+  // UPDATED: Handle payment with proper subscription vs one-time logic
+  const handlePay = async () => {
+    console.log("Starting payment process for plan:", selectedPlan)
+
+    if (!user) {
+      alert("Please log in to subscribe")
+      return
+    }
+
+    const planPrice = plans[selectedPlan].price[billingCycle]
+
+    // Handle free discover plan
+    if (selectedPlan === "discover") {
+      try {
+        const newRecord = {
+          id: uuidv4(),
+          email: email,
+          plan: plans[selectedPlan].name,
+          cycle: billingCycle,
+          amount: 0,
+          fullName: fullName,
+          companyName: companyName,
+          createdAt: new Date().toISOString(),
+          status: "Success",
+          autoRenew: true,
+          userId: user.uid,
+          action: isExistingUser ? (upgradeDowngradeAction || "downgrade") : "new_subscription",
+        }
+
+        setHistory([newRecord, ...history])
+        await saveToFirebase(newRecord)
+        await updateCurrentPlan(plans[selectedPlan].name, billingCycle)
+        setCurrentSubscription(newRecord)
+        setIsExistingUser(true)
+        alert("Discover plan activated successfully!")
+        
+        // Clear any upgrade/downgrade state
+        setUpgradeDowngradeAction(null)
+        setShowPlanChangeConfirm(false)
+        
+        return
+      } catch (error) {
+        console.error("Error activating discover plan:", error)
+        alert("Failed to activate discover plan. Please try again.")
+        return
+      }
+    }
+
+    // Validate for paid plans
+    const validationResult = validate(email, fullName)
+    if (!validationResult.isValid) {
+      setErrors(validationResult.errors)
+      return
+    }
+
+    console.log("Creating subscription checkout...")
+    setPaymentProcessing(true)
+
+    try {
+      const checkoutData = await createSubscriptionCheckout(
+        planPrice,
+        "ZAR",
+        user.uid,
+        plans[selectedPlan].name,
+        billingCycle,
+        isExistingUser ? (upgradeDowngradeAction || "upgrade") : "subscription"
+      )
+
+      console.log("Subscription checkout created:", checkoutData)
+
+      if (checkoutData.success && checkoutData.checkoutId) {
+        setCheckoutId(checkoutData.checkoutId)
+        setShowCheckout(true)
       } else {
-        throw new Error("Paystack handler not properly initialized")
+        throw new Error(checkoutData.error || "Failed to create subscription checkout")
       }
     } catch (error) {
-      console.error("Payment initialization error:", error)
-      alert("Failed to initialize payment. Please try again or refresh the page.")
+      console.error("Subscription checkout creation error:", error)
+      alert(`Failed to initialize subscription payment: ${error.message}. Please try again.`)
+    } finally {
+      setPaymentProcessing(false)
     }
   }
 
-  const handleSuccess = async (response, amountPaid) => {
-    const transactionIndex = history.length
-    const invoiceNumber = generateInvoiceNumber({ companyName, fullName }, transactionIndex)
-    const newRecord = {
-      id: uuidv4(),
-      email,
-      plan: plans[selectedPlan].name,
-      cycle: billingCycle,
-      amount: amountPaid,
-      fullName,
-      companyName,
-      createdAt: new Date().toISOString(),
-      status: "Paid",
-      autoRenew: true,
-      transactionRef: response.reference,
-      userId: user.uid,
-      invoiceNumber,
+  // UPDATED: Handle checkout completion with enhanced Firebase saving
+  const handleCheckoutCompleted = async (event) => {
+    console.log("🎉 Payment completed:", event)
+    setPaymentProcessing(true) // Show processing state
+
+    try {
+      // Handle subscription/plan payment with trial period
+      const isTrialEligible = isNewUser()
+      const trialStartDate = new Date()
+      const trialEndDate = new Date()
+      trialEndDate.setMonth(trialEndDate.getMonth() + 3)
+
+      const newRecord = {
+        id: uuidv4(),
+        email: email,
+        plan: plans[selectedPlan].name,
+        cycle: billingCycle,
+        amount: 0, // First 3 months are free
+        originalAmount: plans[selectedPlan].price[billingCycle], // Store original price
+        fullName: fullName,
+        companyName,
+        createdAt: new Date().toISOString(),
+        status: "Success",
+        autoRenew: true,
+        transactionRef: event.id || event.transactionId || `trial_${Date.now()}`,
+        userId: user.uid,
+        subscriptionType: "recurring",
+        isTrialPeriod: isTrialEligible,
+        trialStartDate: isTrialEligible ? trialStartDate.toISOString() : null,
+        trialEndDate: isTrialEligible ? trialEndDate.toISOString() : null,
+        // Handle potentially undefined registrationId
+        ...(event.registrationId && { registrationId: event.registrationId }),
+        ...(event.cardBrand && { cardBrand: event.cardBrand }),
+        ...(event.cardLast4 && { cardLast4: event.cardLast4 }),
+        action: isExistingUser ? (upgradeDowngradeAction || "upgrade") : "new_subscription",
+        paymentCompleted: true,
+        paymentDate: new Date().toISOString()
+      }
+
+      console.log("💾 Saving subscription record:", newRecord)
+
+      // Save to Firebase with enhanced error handling
+      try {
+        const saveResult = await saveToFirebase(newRecord)
+        console.log("✅ Firebase save result:", saveResult)
+      } catch (saveError) {
+        console.error("❌ Firebase save failed:", saveError)
+        throw new Error(`Failed to save subscription: ${saveError.message}`)
+      }
+
+      // Update current plan
+      try {
+        const updateResult = await updateCurrentPlan(plans[selectedPlan].name, billingCycle)
+        console.log("✅ Plan update result:", updateResult)
+      } catch (updateError) {
+        console.error("❌ Plan update failed:", updateError)
+        // Don't throw here - subscription was saved, plan update is secondary
+      }
+      
+      // Update local state
+      setHistory([newRecord, ...history])
+      setCurrentSubscription(newRecord)
+      setIsExistingUser(true)
+      setShowCheckout(false)
+      setPaymentProcessing(false)
+      
+      // Clear upgrade/downgrade state
+      setUpgradeDowngradeAction(null)
+      setShowPlanChangeConfirm(false)
+      
+      // Show success message with trial information
+      const successMessage = isTrialEligible 
+        ? `🎉 Welcome to your ${plans[selectedPlan].name} plan!\n\n✨ You're getting 3 MONTHS FREE!\n• Trial period: ${trialStartDate.toLocaleDateString()} - ${trialEndDate.toLocaleDateString()}\n• Regular billing starts: ${trialEndDate.toLocaleDateString()}\n• Monthly rate after trial: R${plans[selectedPlan].price[billingCycle]}\n\nEnjoy all premium features at no cost for the first 3 months!`
+        : `🎉 Subscription activated successfully!\n\nYour ${plans[selectedPlan].name} plan is now active with automatic renewals.\n\nYou can now access all premium features!`
+      
+      alert(successMessage)
+      
+      // Reload subscription data to ensure sync
+      setTimeout(async () => {
+        console.log("🔄 Reloading subscription data...")
+        await loadUserSubscription(user.uid)
+      }, 2000)
+      
+    } catch (error) {
+      console.error("❌ Error processing completed payment:", error)
+      setPaymentProcessing(false)
+      alert(`❌ Payment Error\n\nYour payment was processed but there was an error saving your subscription:\n\n${error.message}\n\nPlease contact support with your transaction ID: ${event.id || event.transactionId}`)
     }
-    setHistory([newRecord, ...history])
-    await saveToFirebase(newRecord)
-    await updateCurrentPlan(plans[selectedPlan].name, billingCycle)
-    alert("Payment successful! Your plan is now active.")
   }
 
-  const handleClose = () => {
-    const newRecord = {
-      id: uuidv4(),
-      email,
-      plan: plans[selectedPlan].name,
-      amount: plans[selectedPlan].price[billingCycle],
-      fullName,
-      companyName,
-      createdAt: new Date().toISOString(),
-      status: "Cancelled",
-      reason: "Payment cancelled by user",
-      userId: user.uid,
-    }
-    setHistory([newRecord, ...history])
+  const handleCheckoutCancelled = () => {
+    console.log("Payment cancelled")
+    setShowCheckout(false)
     alert("Payment cancelled")
   }
 
-  const saveToFirebase = async (record) => {
-    if (!user) {
-      console.error("No user found when saving to Firebase")
-      return false
-    }
-    try {
-      console.log("Saving record to Firebase:", record)
-      // Save to subscriptions collection
-      const subscriptionsRef = collection(db, "subscriptions")
-      const docRef = await addDoc(subscriptionsRef, record)
-      console.log("Saved to subscriptions collection:", docRef.id)
-
-      // Also save to user's subscription history
-      const userSubscriptionsRef = collection(db, "users", user.uid, "subscriptions")
-      await addDoc(userSubscriptionsRef, record)
-      console.log("Saved to user's subscription history")
-      return true
-    } catch (error) {
-      console.error("Error saving to Firebase:", error)
-      console.error("Error code:", error.code)
-      console.error("Error message:", error.message)
-      return false
-    }
-  }
-
-  const updateCurrentPlan = async (planName, cycle) => {
-    if (!user) return
-    try {
-      const userRef = doc(db, "users", user.uid)
-      await updateDoc(userRef, {
-        currentPlan: {
-          name: planName,
-          cycle: cycle,
-          activeSince: new Date().toISOString(),
-          status: "active",
-          lastPaymentDate: new Date().toISOString(),
-        },
-        planUpdatedAt: new Date().toISOString(),
-      })
-      console.log("User plan updated successfully")
-    } catch (error) {
-      console.error("Error updating current plan:", error)
-    }
+  const handleCheckoutExpired = () => {
+    console.log("Payment expired")
+    setShowCheckout(false)
+    alert("Payment session expired. Please try again.")
   }
 
   const generateInvoiceNumber = (userInfo, transactionIndex) => {
@@ -1452,139 +897,6 @@ const ProgramSponsorSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, o
     const month = (date.getMonth() + 1).toString().padStart(2, "0")
     const index = (transactionIndex + 1).toString().padStart(4, "0")
     return `${shortBase}-${year}${month}-${index}`
-  }
-
-  const generateInvoicePDF = (transaction) => {
-    console.log("Generating PDF for transaction:", transaction)
-    // Check if jsPDF is available
-    if (!window.jspdf || !window.jspdf.jsPDF) {
-      console.error("jsPDF not available")
-      throw new Error("PDF library not loaded")
-    }
-    const { jsPDF } = window.jspdf
-    const doc = new jsPDF()
-
-    try {
-      // Add company logo and info
-      doc.setFontSize(20)
-      doc.setTextColor(40, 40, 40)
-      doc.text("BIG DealFlow", 105, 20, { align: "center" })
-      doc.setFontSize(12)
-      doc.text("123 Business Street, Johannesburg, South Africa", 105, 28, { align: "center" })
-      doc.text("VAT: 123456789 | Tel: +27 11 123 4567", 105, 34, { align: "center" })
-
-      // Add invoice title
-      doc.setFontSize(16)
-      doc.text(`INVOICE #${transaction.invoiceNumber || transaction.id.slice(0, 8)}`, 105, 45, { align: "center" })
-
-      // Add dates
-      doc.setFontSize(10)
-      const invoiceDate = new Date(transaction.createdAt)
-      const dueDate = new Date(invoiceDate.getTime() + 7 * 24 * 60 * 60 * 1000)
-      doc.text(`Date: ${invoiceDate.toLocaleDateString()}`, 15, 55)
-      doc.text(`Due Date: ${dueDate.toLocaleDateString()}`, 15, 60)
-
-      // Add billing info
-      doc.setFontSize(12)
-      doc.text("Bill To:", 15, 75)
-      doc.text(transaction.email || "N/A", 15, 80)
-      if (transaction.fullName) doc.text(transaction.fullName, 15, 85)
-      if (transaction.companyName) doc.text(transaction.companyName, 15, 90)
-
-      // Add line items
-      doc.setFontSize(12)
-      doc.text("Description", 15, 110)
-      doc.text("Amount", 180, 110, { align: "right" })
-      doc.setDrawColor(200, 200, 200)
-      doc.line(15, 112, 195, 112)
-
-      const description = transaction.action
-        ? `${transaction.plan} Subscription (${transaction.action}) - ${transaction.cycle || "monthly"}`
-        : `${transaction.plan} Subscription - ${transaction.cycle || "monthly"}`
-      doc.text(description, 15, 120)
-      doc.text(`ZAR ${transaction.amount || 0}.00`, 180, 120, { align: "right" })
-
-      // Add total
-      doc.setFontSize(14)
-      doc.setDrawColor(100, 100, 100)
-      doc.line(15, 130, 195, 130)
-      doc.text("Total", 15, 138)
-      doc.text(`ZAR ${transaction.amount || 0}.00`, 180, 138, { align: "right" })
-
-      // Add payment status
-      doc.setFontSize(10)
-      doc.setTextColor(100, 100, 100)
-      doc.text(`Payment Status: ${transaction.status}`, 15, 160)
-      if (transaction.transactionRef) doc.text(`Transaction ID: ${transaction.transactionRef}`, 15, 165)
-
-      // Add footer
-      doc.setFontSize(8)
-      doc.setTextColor(150, 150, 150)
-      doc.text("Thank you for your business!", 105, 280, { align: "center" })
-      doc.text("Terms: Payment due within 7 days", 105, 285, { align: "center" })
-
-      console.log("PDF generated successfully")
-      return doc
-    } catch (error) {
-      console.error("Error generating PDF content:", error)
-      throw error
-    }
-  }
-
-  const downloadInvoice = (transaction) => {
-    console.log("=== DOWNLOAD INVOICE DEBUG ===")
-    console.log("Transaction:", transaction)
-    console.log("Window.jspdf available:", !!window.jspdf)
-    console.log("Window.jspdf.jsPDF available:", !!(window.jspdf && window.jspdf.jsPDF))
-
-    // Check if jsPDF is loaded
-    if (!window.jspdf || !window.jspdf.jsPDF) {
-      console.error("jsPDF not loaded properly")
-      alert("PDF generation library is still loading. Please wait a moment and try again.")
-      // Try to reload jsPDF
-      const existingScript = document.querySelector('script[src*="jspdf"]')
-      if (existingScript) {
-        existingScript.remove()
-      }
-      const script = document.createElement("script")
-      script.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
-      script.onload = () => {
-        console.log("jsPDF reloaded, try again")
-        alert("PDF library reloaded. Please try downloading again.")
-      }
-      document.head.appendChild(script)
-      return
-    }
-
-    try {
-      console.log("Generating PDF...")
-      const doc = generateInvoicePDF(transaction)
-      const filename = `invoice_${transaction.invoiceNumber || transaction.id.slice(0, 8)}_${transaction.plan.toLowerCase().replace(/\s+/g, "_")}.pdf`
-      console.log("Saving PDF as:", filename)
-      doc.save(filename)
-      console.log("PDF download initiated successfully")
-    } catch (error) {
-      console.error("Error in downloadInvoice:", error)
-      alert(`Error generating PDF: ${error.message}. Please try again.`)
-    }
-  }
-
-  const formatDateTime = (dateString) => {
-    const date = new Date(dateString)
-    const dateOptions = {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    }
-    const timeOptions = {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    }
-    return {
-      date: date.toLocaleDateString("en-US", dateOptions),
-      time: date.toLocaleTimeString("en-US", timeOptions),
-    }
   }
 
   // Add this function inside your component
@@ -1635,8 +947,583 @@ const ProgramSponsorSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, o
     )
   }
 
-  const getCurrentPlanKey = () => {
-    return currentSubscription?.plan.toLowerCase()
+  // Dynamic styles based on sidebar state
+  const styles = {
+    container: {
+      width: "100%",
+      minHeight: "100vh",
+      padding: "1rem",
+      background: colors.offWhite,
+      fontFamily: "'Inter', 'Segoe UI', 'Roboto', sans-serif",
+      boxSizing: "border-box",
+      marginLeft: currentSidebarOpen ? `${currentSidebarWidth}px` : "0px",
+      width: currentSidebarOpen ? `calc(100% - ${currentSidebarWidth}px)` : "100%",
+      transition: "all 0.3s ease",
+    },
+    mainCard: {
+      background: `linear-gradient(135deg, ${colors.offWhite} 0%, ${colors.cream} 100%)`,
+      borderRadius: "24px",
+      padding: "clamp(1rem, 3vw, 2rem)",
+      boxShadow: `0 20px 60px ${colors.darkBrown}15, 0 8px 24px ${colors.darkBrown}0A`,
+      border: `1px solid ${colors.lightTan}`,
+      position: "relative",
+      overflow: "hidden",
+      maxWidth: "100%",
+      margin: "0 auto",
+    },
+    decorativeElement: {
+      position: "absolute",
+      top: "-100px",
+      right: "-100px",
+      width: "300px",
+      height: "300px",
+      background: `radial-gradient(circle, ${colors.accentGold}14 0%, transparent 70%)`,
+      borderRadius: "50%",
+      pointerEvents: "none",
+    },
+    pageTitle: {
+      fontSize: "clamp(2rem, 4vw, 2.75rem)",
+      fontWeight: 800,
+      background: `linear-gradient(135deg, ${colors.darkBrown} 0%, ${colors.mediumBrown} 100%)`,
+      backgroundClip: "text",
+      WebkitBackgroundClip: "text",
+      color: "transparent",
+      textAlign: "center",
+      marginBottom: "1rem",
+      letterSpacing: "-1.5px",
+      lineHeight: "1.2",
+    },
+    subtitle: {
+      fontSize: "clamp(1rem, 2vw, 1.125rem)",
+      color: colors.mediumBrown,
+      textAlign: "center",
+      marginBottom: "3rem",
+      fontWeight: 400,
+      opacity: 0.9,
+    },
+    betaNotice: {
+      background: `linear-gradient(135deg, ${colors.trialBrown}20 0%, ${colors.accentGold}20 100%)`,
+      color: colors.darkBrown,
+      border: `2px solid ${colors.trialBrown}`,
+      borderRadius: "16px",
+      padding: "1.5rem 2rem",
+      margin: "0 auto 3rem auto",
+      maxWidth: "800px",
+      fontWeight: 600,
+      fontSize: "clamp(1rem, 2vw, 1.125rem)",
+      textAlign: "center",
+      boxShadow: `0 8px 24px ${colors.trialBrown}1F`,
+      position: "relative",
+    },
+    betaIcon: {
+      display: "inline-block",
+      marginRight: "0.5rem",
+      fontSize: "1.25rem",
+    },
+    billingToggleContainer: {
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      margin: "2rem auto",
+      gap: "1rem",
+    },
+    billingToggle: {
+      display: "flex",
+      background: colors.cream,
+      borderRadius: "12px",
+      padding: "4px",
+      border: `1px solid ${colors.lightTan}`,
+      boxShadow: `0 4px 12px ${colors.darkBrown}0A`,
+    },
+    billingToggleOption: {
+      padding: "0.75rem 1.5rem",
+      borderRadius: "8px",
+      cursor: "pointer",
+      fontWeight: 600,
+      fontSize: "0.95rem",
+      transition: "all 0.3s ease",
+      color: colors.mediumBrown,
+      position: "relative",
+    },
+    billingToggleActive: {
+      background: colors.accentGold,
+      color: colors.lightText,
+      boxShadow: `0 2px 8px ${colors.accentGold}33`,
+    },
+    savingsBadge: {
+      background: colors.mediumBrown,
+      color: colors.lightText,
+      fontSize: "0.75rem",
+      padding: "0.25rem 0.5rem",
+      borderRadius: "6px",
+      fontWeight: 700,
+      marginLeft: "0.5rem",
+      textTransform: "uppercase",
+      letterSpacing: "0.5px",
+    },
+    featureComparisonContainer: {
+      margin: "3rem auto",
+      maxWidth: "100%",
+      background: `linear-gradient(135deg, ${colors.offWhite} 0%, ${colors.cream} 100%)`,
+      borderRadius: "20px",
+      padding: "1.5rem",
+      boxShadow: `0 12px 40px ${colors.darkBrown}0A`,
+      border: `1px solid ${colors.lightTan}`,
+      overflow: "auto",
+    },
+    featureComparisonTitle: {
+      fontSize: "clamp(1.25rem, 3vw, 1.75rem)",
+      fontWeight: 700,
+      color: colors.darkBrown,
+      marginBottom: "2rem",
+      textAlign: "center",
+      position: "relative",
+      display: "flex",
+      flexDirection: "column",
+      gap: "1rem",
+      alignItems: "center",
+    },
+    featureComparisonTable: {
+      width: "100%",
+      borderCollapse: "separate",
+      borderSpacing: "0",
+      background: colors.offWhite,
+      borderRadius: "12px",
+      overflow: "hidden",
+      boxShadow: `0 4px 12px ${colors.darkBrown}0A`,
+      border: `1px solid ${colors.lightTan}`,
+      fontSize: "clamp(0.8rem, 1.5vw, 0.95rem)",
+    },
+    featureTh: {
+      background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
+      fontWeight: 700,
+      padding: "1rem",
+      color: colors.darkBrown,
+      fontSize: "clamp(0.9rem, 1.5vw, 1.05rem)",
+      borderBottom: `2px solid ${colors.lightTan}`,
+      position: "relative",
+    },
+    featureTd: {
+      padding: "0.75rem",
+      textAlign: "center",
+      fontSize: "clamp(0.8rem, 1.5vw, 0.95rem)",
+      color: colors.mediumBrown,
+      borderBottom: `1px solid ${colors.lightTan}26`,
+      transition: "background-color 0.2s ease",
+    },
+    featureTdLeft: {
+      textAlign: "left",
+      fontWeight: 600,
+      color: colors.darkBrown,
+    },
+    planGrid: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+      gap: "1.5rem",
+      margin: "3rem 0",
+      justifyContent: "center",
+      maxWidth: "100%",
+    },
+    planCard: {
+      background: colors.offWhite,
+      border: `1px solid ${colors.lightTan}`,
+      borderRadius: "16px",
+      padding: "2rem",
+      textAlign: "center",
+      transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+      cursor: "pointer",
+      boxShadow: `0 8px 24px ${colors.darkBrown}14`,
+      position: "relative",
+      overflow: "hidden",
+      display: "flex",
+      flexDirection: "column",
+      minHeight: "450px",
+    },
+    planCardPopular: {
+      background: colors.engageCardBg,
+      color: colors.lightText,
+      transform: "scale(1.03)",
+      zIndex: 2,
+      boxShadow: `0 20px 60px ${colors.darkBrown}33`,
+      border: `1px solid ${colors.accentGold}`,
+    },
+    planCardHover: {
+      transform: "translateY(-8px)",
+      boxShadow: `0 16px 40px ${colors.darkBrown}26`,
+    },
+    planCardSelected: {
+      border: `2px solid ${colors.accentGold}`,
+      boxShadow: `0 12px 30px ${colors.accentGold}33`,
+    },
+    popularBadge: {
+      position: "absolute",
+      top: "1.5rem",
+      right: "1.5rem",
+      background: colors.accentGold,
+      color: colors.lightText,
+      padding: "0.4rem 1rem",
+      borderRadius: "20px",
+      fontSize: "0.8rem",
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: "0.8px",
+      boxShadow: `0 2px 8px ${colors.accentGold}4D`,
+    },
+    planName: {
+      fontSize: "clamp(1.75rem, 3vw, 2.25rem)",
+      fontWeight: 800,
+      marginBottom: "0.75rem",
+      letterSpacing: "-1px",
+      color: colors.darkBrown,
+    },
+    planPrice: {
+      fontSize: "clamp(2.5rem, 4vw, 3.5rem)",
+      fontWeight: 900,
+      marginBottom: "0.5rem",
+      lineHeight: "1",
+      color: colors.darkBrown,
+    },
+    planPriceFree: {
+      color: colors.trialBrown, // CHANGED: From trialGreen to trialBrown
+      fontSize: "clamp(2.5rem, 4vw, 3.5rem)",
+      fontWeight: 900,
+    },
+    planPricePeriod: {
+      fontSize: "clamp(1rem, 1.5vw, 1.25rem)",
+      fontWeight: 500,
+      opacity: 0.8,
+      color: colors.mediumBrown,
+    },
+    planDescriptionText: {
+      fontSize: "clamp(0.9rem, 1.5vw, 1rem)",
+      color: colors.mediumBrown,
+      marginBottom: "2rem",
+      lineHeight: "1.6",
+    },
+    freeMonthsBadge: {
+      background: `linear-gradient(90deg, ${colors.trialBrown} 0%, ${colors.accentGold} 100%)`, // CHANGED: From trialGreen to trialBrown
+      color: colors.lightText,
+      padding: "0.8rem 1.2rem",
+      borderRadius: "12px",
+      fontSize: "1rem",
+      fontWeight: 700,
+      marginBottom: "1rem",
+      textAlign: "center",
+      boxShadow: `0 4px 12px ${colors.trialBrown}4D`, // CHANGED: From trialGreen to trialBrown
+      display: "inline-block",
+      border: `2px solid ${colors.trialBrown}`, // CHANGED: From trialGreen to trialBrown
+    },
+    afterTrialPrice: {
+      background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
+      border: `1px solid ${colors.lightTan}`,
+      borderRadius: "8px",
+      padding: "0.8rem",
+      marginBottom: "1.5rem",
+      fontSize: "0.9rem",
+      color: colors.mediumBrown,
+      fontWeight: 600,
+    },
+    planFeaturesList: {
+      listStyle: "none",
+      padding: "0",
+      margin: "0 0 2.5rem 0",
+      flex: 1,
+      textAlign: "left",
+    },
+    planFeatureItem: {
+      padding: "0.6rem 0",
+      fontSize: "clamp(0.9rem, 1.5vw, 1rem)",
+      display: "flex",
+      alignItems: "center",
+      lineHeight: "1.5",
+      color: colors.darkText,
+    },
+    featureIcon: {
+      marginRight: "0.8rem",
+      fontSize: "1.1rem",
+      flexShrink: 0,
+    },
+    featureCheckIcon: {
+      color: colors.featureCheck,
+    },
+    featureCrossIcon: {
+      color: colors.featureCross,
+    },
+    currentPlanBadge: {
+      display: "inline-block",
+      background: colors.accentGold,
+      color: colors.lightText,
+      fontWeight: 600,
+      borderRadius: "8px",
+      padding: "0.5rem 1rem",
+      fontSize: "0.875rem",
+      letterSpacing: "0.5px",
+    },
+    selectedBadge: {
+      display: "inline-block",
+      background: colors.mediumBrown,
+      color: colors.lightText,
+      fontWeight: 600,
+      borderRadius: "8px",
+      padding: "0.5rem 1rem",
+      fontSize: "0.875rem",
+      letterSpacing: "0.5px",
+    },
+    selectButton: {
+      width: "100%",
+      padding: "1rem 2rem",
+      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
+      color: colors.lightText,
+      border: "none",
+      borderRadius: "10px",
+      fontWeight: 700,
+      cursor: "pointer",
+      fontSize: "clamp(1rem, 1.8vw, 1.1rem)",
+      transition: "all 0.3s ease",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "0.75rem",
+      marginTop: "auto",
+      boxShadow: `0 6px 18px ${colors.accentGold}4D`,
+      textTransform: "uppercase",
+      letterSpacing: "0.5px",
+    },
+    downgradeSection: {
+      textAlign: "center",
+      margin: "2.5rem auto",
+      padding: "2rem",
+      background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
+      borderRadius: "16px",
+      border: `1px solid ${colors.lightTan}`,
+      maxWidth: "800px",
+    },
+    button: {
+      padding: "1rem 2.5rem",
+      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
+      color: colors.lightText,
+      border: "none",
+      borderRadius: "12px",
+      fontWeight: 700,
+      fontSize: "clamp(0.9rem, 1.5vw, 1rem)",
+      cursor: "pointer",
+      margin: "0 0.75rem",
+      transition: "all 0.3s ease",
+      boxShadow: `0 4px 12px ${colors.accentGold}4D`,
+      letterSpacing: "0.5px",
+      textTransform: "uppercase",
+    },
+    buttonSecondary: {
+      background: `linear-gradient(135deg, ${colors.lightTan} 0%, ${colors.cream} 100%)`,
+      color: colors.darkBrown,
+      border: `2px solid ${colors.lightTan}`,
+      fontWeight: 700,
+      borderRadius: "12px",
+      padding: "1rem 2.5rem",
+      fontSize: "clamp(0.9rem, 1.5vw, 1rem)",
+      cursor: "pointer",
+      margin: "0 0.75rem",
+      transition: "all 0.3s ease",
+      boxShadow: `0 4px 12px ${colors.lightTan}33`,
+      letterSpacing: "0.5px",
+      textTransform: "uppercase",
+    },
+    buttonDowngrade: {
+      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
+      color: colors.lightText,
+      padding: "1rem 2.5rem",
+      fontWeight: 700,
+      fontSize: "clamp(0.9rem, 1.5vw, 1rem)",
+      borderRadius: "12px",
+      cursor: "pointer",
+      transition: "all 0.3s ease",
+      maxWidth: "250px",
+      margin: "0 auto",
+      display: "block",
+      textAlign: "center",
+      boxShadow: `0 4px 12px ${colors.accentGold}4D`,
+      letterSpacing: "0.5px",
+      textTransform: "uppercase",
+    },
+    planChangeModal: {
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "100vw",
+      height: "100vh",
+      backgroundColor: `${colors.darkBrown}66`,
+      backdropFilter: "blur(8px)",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      zIndex: 1000,
+      animation: "fadeIn 0.3s ease",
+      padding: "1rem",
+      boxSizing: "border-box",
+    },
+    modalContent: {
+      background: `linear-gradient(135deg, ${colors.offWhite} 0%, ${colors.cream} 100%)`,
+      padding: "2rem",
+      borderRadius: "24px",
+      maxWidth: "500px",
+      width: "100%",
+      boxShadow: `0 24px 60px ${colors.darkBrown}33`,
+      textAlign: "center",
+      border: `1px solid ${colors.lightTan}`,
+      position: "relative",
+      maxHeight: "90vh",
+      overflow: "auto",
+    },
+    modalTitle: {
+      fontSize: "clamp(1.25rem, 3vw, 1.75rem)",
+      fontWeight: 800,
+      color: colors.darkBrown,
+      marginBottom: "1rem",
+      letterSpacing: "-0.5px",
+    },
+    modalText: {
+      fontSize: "clamp(1rem, 2vw, 1.125rem)",
+      color: colors.mediumBrown,
+      marginBottom: "2rem",
+      lineHeight: "1.6",
+    },
+    modalActions: {
+      display: "flex",
+      justifyContent: "center",
+      gap: "1rem",
+      marginTop: "2rem",
+      flexWrap: "wrap",
+    },
+    paymentButton: {
+      padding: "1rem 2rem",
+      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
+      color: colors.lightText,
+      border: "none",
+      borderRadius: "12px",
+      fontWeight: 700,
+      fontSize: "1rem",
+      cursor: "pointer",
+      transition: "all 0.3s ease",
+      boxShadow: `0 4px 12px ${colors.accentGold}4D`,
+      letterSpacing: "0.5px",
+      textTransform: "uppercase",
+      minWidth: "200px",
+      minHeight: "50px",
+    },
+    paymentButtonDisabled: {
+      opacity: 0.6,
+      cursor: "not-allowed",
+      background: `linear-gradient(135deg, ${colors.lightTan} 0%, ${colors.cream} 100%)`,
+      color: colors.mediumBrown,
+      boxShadow: `0 2px 8px ${colors.lightTan}33`,
+    },
+    subscriptionInfo: {
+      background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
+      borderRadius: "16px",
+      padding: "1.5rem",
+      marginBottom: "2rem",
+      border: `1px solid ${colors.lightTan}`,
+    },
+    subscriptionTitle: {
+      fontSize: "1.25rem",
+      fontWeight: 700,
+      color: colors.darkBrown,
+      marginBottom: "1rem",
+    },
+    subscriptionDetail: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: "0.5rem 0",
+      fontSize: "1rem",
+      color: colors.darkText,
+      borderBottom: `1px solid ${colors.lightTan}33`,
+    },
+    formContainerBillCentered: {
+      display: "flex",
+      justifyContent: "center",
+      margin: "3rem auto",
+      padding: "0 1rem",
+    },
+    formCardEnhanced: {
+      background: `linear-gradient(135deg, ${colors.offWhite} 0%, ${colors.cream} 100%)`,
+      padding: "2rem",
+      borderRadius: "24px",
+      boxShadow: `0 16px 40px ${colors.darkBrown}14`,
+      width: "100%",
+      maxWidth: "450px",
+      textAlign: "center",
+      border: `1px solid ${colors.lightTan}`,
+    },
+    payButtonEnhanced: {
+      padding: "1.25rem 2rem",
+      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
+      color: colors.lightText,
+      fontWeight: 700,
+      fontSize: "clamp(1rem, 2vw, 1.125rem)",
+      border: "none",
+      borderRadius: "16px",
+      cursor: "pointer",
+      textAlign: "center",
+      width: "100%",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: "0.75rem",
+      marginTop: "1.5rem",
+      boxShadow: `0 8px 20px ${colors.accentGold}4D`,
+      transition: "all 0.3s ease",
+      letterSpacing: "0.5px",
+      textTransform: "uppercase",
+    },
+    payButtonEnhancedLoading: {
+      background: `linear-gradient(135deg, ${colors.lightTan} 0%, ${colors.cream} 100%)`,
+      color: colors.mediumBrown,
+      cursor: "not-allowed",
+      boxShadow: `0 4px 12px ${colors.lightTan}33`,
+    },
+    sidebarToggleButton: {
+      position: "fixed",
+      top: "1rem",
+      left: currentSidebarOpen ? `${currentSidebarWidth - 50}px` : "1rem",
+      zIndex: 1001,
+      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
+      color: colors.lightText,
+      border: "none",
+      borderRadius: "8px",
+      padding: "0.5rem",
+      cursor: "pointer",
+      transition: "all 0.3s ease",
+      boxShadow: `0 2px 8px ${colors.accentGold}4D`,
+      display: "none",
+    },
+    backButton: {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: "0.5rem",
+      padding: "0.75rem 1.5rem",
+      background: `linear-gradient(135deg, ${colors.lightTan} 0%, ${colors.cream} 100%)`,
+      color: colors.darkBrown,
+      border: `2px solid ${colors.lightTan}`,
+      borderRadius: "12px",
+      fontWeight: 600,
+      fontSize: "clamp(0.85rem, 1.5vw, 0.95rem)",
+      cursor: "pointer",
+      transition: "all 0.3s ease",
+      boxShadow: `0 4px 12px ${colors.lightTan}33`,
+      marginBottom: "2rem",
+    },
+    contentWrapper: {
+      transition: "opacity 0.3s ease, transform 0.3s ease",
+    },
+    fadeOut: {
+      opacity: 0,
+      transform: "translateY(-10px)",
+    },
+    fadeIn: {
+      opacity: 1,
+      transform: "translateY(0)",
+    },
   }
 
   if (isLoading) {
@@ -1704,33 +1591,82 @@ const ProgramSponsorSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, o
             >
               ← Back to Subscriptions
             </button>
-            {/* Billing Info Component */}
-            {/* <BillingInfoProgramSponsor // Corrected component name
-              email={email}
-              fullName={fullName}
-              companyName={companyName}
-              history={history}
-              setHistory={setHistory}
-              setEmail={setEmail}
-              setFullName={setFullName}
-              setCompanyName={setCompanyName}
-            /> */}
           </div>
         ) : (
           <div style={{ ...styles.contentWrapper, ...styles.fadeIn }}>
-            {/* ======= BETA PRICING NOTICE ======= */}
+            {/* Updated Beta Notice with Trial Information - CHANGED: Green to Brown */}
             <div style={styles.betaNotice}>
-              <span style={styles.betaIcon}>🚀</span>
-              <strong>Beta Pricing:</strong> All plans are{" "}
-              <span style={{ color: colors.accentGold, fontWeight: 800 }}>FREE</span> during our beta period! Enjoy full
-              access at no cost.
+              <span style={styles.betaIcon}>🎉</span>
+              <strong>Special Launch Offer:</strong> Get your first{" "}
+              <span style={{ color: colors.trialBrown, fontWeight: 800 }}>3 MONTHS FREE</span> on any paid plan! 
+              <br />
+              <small style={{ opacity: 0.8, marginTop: "0.5rem", display: "block" }}>
+                Start your trial today - billing begins after 3 months at regular rates
+              </small>
             </div>
-            {/* ======= END BETA PRICING NOTICE ======= */}
+
             {isExistingUser && currentSubscription ? (
               <>
                 <h1 style={styles.pageTitle}>Manage Your Subscription</h1>
                 <p style={styles.subtitle}>Upgrade, downgrade, or manage your current plan with ease</p>
-                {/* <FeatureComparisonTable /> */}
+                
+                {/* Enhanced Current subscription info with trial details */}
+                <div style={styles.subscriptionInfo}>
+                  <h3 style={styles.subscriptionTitle}>Current Subscription</h3>
+                  <div style={styles.subscriptionDetail}>
+                    <span>Plan:</span>
+                    <span style={{ fontWeight: 600 }}>{currentSubscription.plan}</span>
+                  </div>
+                  <div style={styles.subscriptionDetail}>
+                    <span>Billing Cycle:</span>
+                    <span style={{ fontWeight: 600 }}>{currentSubscription.cycle || 'Monthly'}</span>
+                  </div>
+                  <div style={styles.subscriptionDetail}>
+                    <span>Current Amount:</span>
+                    <span style={{ fontWeight: 600, color: currentSubscription.isTrialPeriod ? colors.trialBrown : colors.darkText }}>
+                      {currentSubscription.amount === 0 && currentSubscription.isTrialPeriod ? 'FREE (Trial)' : 
+                       currentSubscription.amount === 0 ? 'Free' : `R${currentSubscription.amount}`}
+                    </span>
+                  </div>
+                  {currentSubscription.originalAmount && currentSubscription.originalAmount > 0 && (
+                    <div style={styles.subscriptionDetail}>
+                      <span>Regular Price:</span>
+                      <span style={{ fontWeight: 600 }}>R{currentSubscription.originalAmount}/{currentSubscription.cycle?.slice(0, -2) || 'month'}</span>
+                    </div>
+                  )}
+                  {currentSubscription.isTrialPeriod && currentSubscription.trialEndDate && (
+                    <div style={styles.subscriptionDetail}>
+                      <span>Trial Ends:</span>
+                      <span style={{ fontWeight: 600, color: colors.trialBrown }}>
+                        {new Date(currentSubscription.trialEndDate).toLocaleDateString()}
+                      </span>
+                    </div>
+                  )}
+                  <div style={styles.subscriptionDetail}>
+                    <span>Status:</span>
+                    <span style={{ 
+                      fontWeight: 600, 
+                      color: currentSubscription.status === 'Success' || currentSubscription.status === 'active' ? colors.featureCheck : colors.featureCross 
+                    }}>
+                      {currentSubscription.status === 'Success' ? 'Active' : currentSubscription.status}
+                    </span>
+                  </div>
+                  {currentSubscription.autoRenew && (
+                    <div style={styles.subscriptionDetail}>
+                      <span>Auto Renewal:</span>
+                      <span style={{ fontWeight: 600, color: colors.featureCheck }}>Enabled</span>
+                    </div>
+                  )}
+                  {currentSubscription.cardLast4 && (
+                    <div style={styles.subscriptionDetail}>
+                      <span>Payment Method:</span>
+                      <span style={{ fontWeight: 600 }}>
+                        {currentSubscription.cardBrand || 'Card'} ending in {currentSubscription.cardLast4}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
                 {isExistingUser && currentSubscription && currentSubscription.plan.toLowerCase() !== "discover" && (
                   <div style={styles.downgradeSection}>
                     <h3 style={{ color: colors.darkBrown, marginBottom: "1rem", fontSize: "1.25rem" }}>
@@ -1759,17 +1695,623 @@ const ProgramSponsorSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, o
             ) : (
               <>
                 <h1 style={styles.pageTitle}>Choose Your Plan</h1>
-                <p style={styles.subtitle}>Select the perfect plan for your business needs</p>
-                {/* <FeatureComparisonTable /> */}
+                <p style={styles.subtitle}>Select the perfect plan for your business needs - first 3 months free!</p>
               </>
             )}
+
+            {/* Feature Comparison Table */}
+            <FeatureComparisonTable />
+
+            {/* UPDATED: Pricing Cards with Zero Prices and "After Trial" Information - CHANGED: Green to Brown */}
+            <div style={styles.planGrid}>
+              {Object.entries(plans).map(([planKey, plan]) => {
+                const isCurrentPlan = isExistingUser && getCurrentPlanKey() === planKey
+                const isSelected = selectedPlan === planKey
+                const isHovered = hoveredPlan === planKey
+                const isPopular = planKey === "engage"
+                const showTrialOffer = planKey !== "discover" && isNewUser()
+
+                let cardBackground = colors.offWhite
+                let nameColor = colors.darkBrown
+                let priceColor = colors.darkBrown
+                let periodColor = colors.mediumBrown
+                let featureTextColor = colors.darkText
+                let buttonBg = `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`
+                const buttonColor = colors.lightText
+
+                if (planKey === "discover") {
+                  cardBackground = colors.discoverCardBg
+                  nameColor = colors.lightText
+                  priceColor = colors.lightText
+                  periodColor = colors.lightText
+                  featureTextColor = colors.lightText
+                } else if (planKey === "engage") {
+                  cardBackground = colors.engageCardBg
+                  nameColor = colors.lightText
+                  priceColor = colors.lightText
+                  periodColor = colors.lightText
+                  featureTextColor = colors.lightText
+                  buttonBg = `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.lightBrown} 100%)`
+                } else if (planKey === "partner") {
+                  cardBackground = colors.partnerCardBg
+                  nameColor = colors.lightText
+                  priceColor = colors.lightText
+                  periodColor = colors.lightText
+                  featureTextColor = colors.lightText
+                }
+
+                return (
+                  <div
+                    key={planKey}
+                    style={{
+                      ...styles.planCard,
+                      background: cardBackground,
+                      ...(isPopular ? styles.planCardPopular : {}),
+                      ...(isSelected && !isPopular ? styles.planCardSelected : {}),
+                      ...(isHovered && !isSelected && !isPopular ? styles.planCardHover : {}),
+                    }}
+                    onMouseEnter={() => setHoveredPlan(planKey)}
+                    onMouseLeave={() => setHoveredPlan(null)}
+                    onClick={() => handlePlanSelect(planKey)}
+                  >
+                    {isPopular && <div style={styles.popularBadge}>POPULAR</div>}
+                    <h3 style={{ ...styles.planName, color: nameColor }}>{plan.name}</h3>
+                    
+                    {/* UPDATED: Show R0/FREE for paid plans during trial, regular price for discover - CHANGED: Green to Brown */}
+                    {plan.price[billingCycle] === 0 ? (
+                      <div style={{ ...styles.planPrice, color: priceColor }}>Free</div>
+                    ) : (
+                      <>
+                        {/* Show FREE/R0 prominently for trial-eligible users */}
+                        {showTrialOffer ? (
+                          <div style={{ ...styles.planPriceFree, color: colors.trialBrown }}>
+                            FREE
+                          </div>
+                        ) : (
+                          <div style={{ ...styles.planPrice, color: priceColor }}>
+                            R{plan.price[billingCycle]}
+                          </div>
+                        )}
+                        
+                        {/* Show period for non-trial or regular price display */}
+                        {!showTrialOffer && (
+                          <span style={{ ...styles.planPricePeriod, color: periodColor }}>
+                            / {billingCycle === "monthly" ? "month" : "year"}
+                          </span>
+                        )}
+                      </>
+                    )}
+
+                    <p style={{ ...styles.planDescriptionText, color: featureTextColor }}>{plan.description}</p>
+                    
+                    {/* Trial Badge for eligible plans */}
+                    {showTrialOffer && (
+                      <div style={styles.freeMonthsBadge}>
+                        🎉 First 3 Months FREE!
+                      </div>
+                    )}
+
+                    {/* UPDATED: "After Trial" pricing information */}
+                    {showTrialOffer && (
+                      <div style={styles.afterTrialPrice}>
+                        <strong>After 3-month trial:</strong><br />
+                        R{plan.price[billingCycle]} / {billingCycle === "monthly" ? "month" : "year"}
+                      </div>
+                    )}
+
+                    <ul style={styles.planFeaturesList}>
+                      {plan.highlights.map((feature, index) => {
+                        const isIncluded = true
+                        const iconStyle = isIncluded ? styles.featureCheckIcon : styles.featureCrossIcon
+                        const icon = isIncluded ? "✓" : "✗"
+                        return (
+                          <li key={index} style={{ ...styles.planFeatureItem, color: featureTextColor }}>
+                            <span style={{ ...styles.featureIcon, ...iconStyle }}>{icon}</span>
+                            <span>{feature}</span>
+                          </li>
+                        )
+                      })}
+                    </ul>
+
+                    {isCurrentPlan ? (
+                      <div
+                        style={{
+                          ...styles.currentPlanBadge,
+                          width: "100%",
+                          textAlign: "center",
+                          padding: "1rem 1.5rem",
+                          borderRadius: "8px",
+                        }}
+                      >
+                        Current Plan
+                      </div>
+                    ) : isSelected ? (
+                      <div
+                        style={{
+                          ...styles.selectedBadge,
+                          width: "100%",
+                          textAlign: "center",
+                          padding: "1rem 1.5rem",
+                          borderRadius: "8px",
+                        }}
+                      >
+                        Selected Plan
+                      </div>
+                    ) : (
+                      <button
+                        style={{
+                          ...styles.selectButton,
+                          background: buttonBg,
+                          color: buttonColor,
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handlePlanSelect(planKey)
+                        }}
+                        onMouseEnter={(e) => {
+                          e.target.style.background = colors.mediumBrown
+                        }}
+                        onMouseLeave={(e) => {
+                          e.target.style.background = buttonBg
+                        }}
+                      >
+                        {isExistingUser ? (
+                          planKey === "discover" ? "Downgrade" : showTrialOffer ? "Start Free Trial" : "Upgrade"
+                        ) : (
+                          showTrialOffer ? "Start Free Trial" : "Subscribe"
+                        )}
+                        <span>→</span>
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Enhanced Payment Button */}
+            {(!isExistingUser || (isExistingUser && selectedPlan !== getCurrentPlanKey())) && !showPlanChangeConfirm && (
+              <div style={styles.formContainerBillCentered}>
+                <div style={styles.formCardEnhanced}>
+                  <div>
+                    <button
+                      style={{
+                        ...styles.payButtonEnhanced,
+                        ...(paymentProcessing ? styles.paymentButtonDisabled : {}),
+                      }}
+                      onClick={handlePay}
+                      disabled={paymentProcessing}
+                    >
+                      {paymentProcessing ? (
+                        <>
+                          <div style={{
+                            width: "20px",
+                            height: "20px",
+                            border: "2px solid transparent",
+                            borderTop: "2px solid currentColor",
+                            borderRadius: "50%",
+                            animation: "spin 1s linear infinite",
+                            marginRight: "0.5rem",
+                          }}></div>
+                          Processing...
+                        </>
+                      ) : (
+                        (() => {
+                          if (plans[selectedPlan].price[billingCycle] === 0) {
+                            return (
+                              <>
+                                <span style={{ marginRight: 8, fontSize: "1.25rem" }}>✨</span>
+                                Activate Discover Plan
+                              </>
+                            )
+                          } else if (isExistingUser) {
+                            if (upgradeDowngradeAction === 'upgrade') {
+                              return isNewUser() ? `Start ${plans[selectedPlan].name} Trial (FREE)` : `Upgrade to ${plans[selectedPlan].name}`
+                            } else {
+                              return `Change to ${plans[selectedPlan].name}`
+                            }
+                          } else {
+                            return isNewUser() ? (
+                              <>
+                                <span style={{ marginRight: 8, fontSize: "1.25rem" }}>🎉</span>
+                                Start {plans[selectedPlan].name} Trial (FREE)
+                              </>
+                            ) : (
+                              <>
+                                <span style={{ marginRight: 8, fontSize: "1.25rem" }}>💳</span>
+                                Pay {plans[selectedPlan].currency} {plans[selectedPlan].price[billingCycle].toLocaleString()}
+                              </>
+                            )
+                          }
+                        })()
+                      )}
+                    </button>
+
+                    {/* Enhanced Payment info for subscriptions with trial details - CHANGED: Green to Brown */}
+                    {plans[selectedPlan].price[billingCycle] > 0 && (
+                      <div style={{
+                        background: `linear-gradient(135deg, ${colors.offWhite} 0%, ${colors.cream} 100%)`,
+                        borderRadius: "12px",
+                        padding: "1.5rem",
+                        marginTop: "1.5rem",
+                        border: `1px solid ${colors.lightTan}`,
+                        textAlign: "left",
+                      }}>
+                        <h4 style={{ 
+                          color: colors.darkBrown, 
+                          marginBottom: "1rem",
+                          fontSize: "1.1rem",
+                          fontWeight: 700,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.5rem"
+                        }}>
+                          🎉 {isNewUser() ? "Free Trial Setup" : "Secure Subscription Payment"}
+                        </h4>
+                        
+                        {isNewUser() && (
+                          <div style={{
+                            background: `linear-gradient(135deg, ${colors.trialBrown}20 0%, ${colors.accentGold}20 100%)`,
+                            borderRadius: "8px",
+                            padding: "1rem",
+                            marginBottom: "1rem",
+                            border: `1px solid ${colors.trialBrown}`,
+                          }}>
+                            <p style={{ 
+                              color: colors.darkBrown, 
+                              margin: 0,
+                              fontSize: "0.95rem",
+                              fontWeight: 600,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem"
+                            }}>
+                              ✨ <strong>3-Month Free Trial:</strong> No charges for 3 months!
+                            </p>
+                            <p style={{ 
+                              color: colors.mediumBrown, 
+                              margin: "0.5rem 0 0 1.5rem",
+                              fontSize: "0.85rem",
+                              lineHeight: "1.4"
+                            }}>
+                              Your card will be saved for automatic billing after the trial period ends. Cancel anytime during the trial with no charges.
+                            </p>
+                          </div>
+                        )}
+
+                        <div style={{
+                          background: `linear-gradient(135deg, ${colors.accentGold}20 0%, ${colors.lightTan}40 100%)`,
+                          borderRadius: "8px",
+                          padding: "1rem",
+                          marginBottom: "1rem",
+                          border: `1px solid ${colors.accentGold}`,
+                        }}>
+                          <p style={{ 
+                            color: colors.darkBrown, 
+                            margin: 0,
+                            fontSize: "0.95rem",
+                            fontWeight: 600,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.5rem"
+                          }}>
+                            💳 <strong>Important:</strong> For automatic renewals, please pay with a <strong>Credit or Debit Card</strong>
+                          </p>
+                          <p style={{ 
+                            color: colors.mediumBrown, 
+                            margin: "0.5rem 0 0 1.5rem",
+                            fontSize: "0.85rem",
+                            lineHeight: "1.4"
+                          }}>
+                            Other payment methods (Scan to Pay, EFT) will complete this payment but won't enable automatic subscription renewals.
+                          </p>
+                        </div>
+
+                        <ul style={{ 
+                          listStyle: "none", 
+                          padding: 0, 
+                          margin: 0,
+                          color: colors.darkText,
+                          fontSize: "0.95rem",
+                          lineHeight: "1.6"
+                        }}>
+                          <li style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <span style={{ color: colors.featureCheck }}>✓</span>
+                            {isNewUser() ? "Free for first 3 months" : "Immediate access to premium features"}
+                          </li>
+                          <li style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <span style={{ color: colors.featureCheck }}>✓</span>
+                            Cards are securely saved for automatic {billingCycle} renewals
+                          </li>
+                          <li style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <span style={{ color: colors.featureCheck }}>✓</span>
+                            {isNewUser() ? `Billing starts at R${plans[selectedPlan].price[billingCycle]} per ${billingCycle.slice(0, -2)} after trial` : `Automatic billing at R${plans[selectedPlan].price[billingCycle]} per ${billingCycle.slice(0, -2)}`}
+                          </li>
+                          <li style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <span style={{ color: colors.featureCheck }}>✓</span>
+                            Cancel anytime from your account settings
+                          </li>
+                          <li style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <span style={{ color: colors.featureCheck }}>✓</span>
+                            256-bit SSL encryption for all transactions
+                          </li>
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Enhanced Checkout Modal with Loading States */}
+            {showCheckout && checkoutId && (
+              <div
+                style={{
+                  position: "fixed",
+                  top: 0,
+                  left: 0,
+                  width: "100vw",
+                  height: "100vh",
+                  backgroundColor: `${colors.darkBrown}66`,
+                  backdropFilter: "blur(8px)",
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  zIndex: 1000,
+                  padding: "1rem",
+                  boxSizing: "border-box",
+                }}
+              >
+                <div
+                  style={{
+                    background: colors.offWhite,
+                    padding: "2rem",
+                    borderRadius: "24px",
+                    maxWidth: "600px",
+                    width: "100%",
+                    maxHeight: "90vh",
+                    overflow: "auto",
+                    boxShadow: `0 24px 60px ${colors.darkBrown}33`,
+                    border: `1px solid ${colors.lightTan}`,
+                    position: "relative",
+                  }}
+                >
+                  <h2
+                    style={{
+                      color: colors.darkBrown,
+                      marginBottom: "0.5rem",
+                      textAlign: "center",
+                      fontSize: "1.5rem",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {isNewUser() ? "Start Your Free Trial" : "Complete Your Subscription"}
+                  </h2>
+                  
+                  <div style={{
+                    background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
+                    borderRadius: "12px",
+                    padding: "1rem",
+                    marginBottom: "1.5rem",
+                    border: `1px solid ${colors.lightTan}`,
+                    textAlign: "center",
+                  }}>
+                    <p style={{ 
+                      color: colors.darkBrown, 
+                      margin: 0, 
+                      fontSize: "1rem",
+                      fontWeight: 600 
+                    }}>
+                      {isNewUser() ? (
+                        <>🎉 Starting {plans[selectedPlan].name} Free Trial</>
+                      ) : (
+                        <>🔄 Setting up {plans[selectedPlan].name} Plan</>
+                      )}
+                    </p>
+                    <p style={{ 
+                      color: colors.mediumBrown, 
+                      margin: "0.5rem 0 0 0", 
+                      fontSize: "0.9rem" 
+                    }}>
+                      {isNewUser() ? (
+                        "Free for 3 months, then automatic billing begins"
+                      ) : (
+                        `Your card will be saved for automatic ${billingCycle} renewals`
+                      )}
+                    </p>
+                  </div>
+
+                  <EmbeddedCheckout
+                    checkoutId={checkoutId}
+                    onCompleted={handleCheckoutCompleted}
+                    onCancelled={handleCheckoutCancelled}
+                    onExpired={handleCheckoutExpired}
+                    paymentType="subscription"
+                    amount={0} // Always 0 for trial
+                    planName={plans[selectedPlan].name}
+                    userEmail={email}
+                    userName={fullName}
+                  />
+
+                  <div style={{ textAlign: "center", marginTop: "1rem" }}>
+                    <button
+                      style={{
+                        padding: "1rem 2rem",
+                        background: `linear-gradient(135deg, ${colors.lightTan} 0%, ${colors.cream} 100%)`,
+                        color: colors.darkBrown,
+                        border: "none",
+                        borderRadius: "12px",
+                        fontWeight: 700,
+                        fontSize: "1rem",
+                        cursor: "pointer",
+                        opacity: paymentProcessing ? 0.5 : 1,
+                      }}
+                      onClick={() => {
+                        if (!paymentProcessing) {
+                          setShowCheckout(false)
+                          setPaymentProcessing(false)
+                        }
+                      }}
+                      disabled={paymentProcessing}
+                    >
+                      {paymentProcessing ? "Processing..." : "Cancel"}
+                    </button>
+                  </div>
+
+                  {/* Processing Overlay */}
+                  {paymentProcessing && (
+                    <div style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      background: `${colors.offWhite}F5`,
+                      backdropFilter: "blur(6px)",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      zIndex: 1001,
+                      borderRadius: "24px",
+                      boxShadow: `inset 0 0 20px ${colors.darkBrown}20`,
+                    }}>
+                      <div
+                        style={{
+                          width: "80px",
+                          height: "80px",
+                          border: `6px solid ${colors.lightTan}`,
+                          borderTop: `6px solid ${colors.accentGold}`,
+                          borderRadius: "50%",
+                          animation: "spin 1s linear infinite",
+                          marginBottom: "2rem",
+                        }}
+                      ></div>
+                      <h3 style={{
+                        color: colors.darkBrown,
+                        fontSize: "1.75rem",
+                        fontWeight: 800,
+                        marginBottom: "1rem",
+                        textAlign: "center",
+                        textShadow: `0 2px 4px ${colors.darkBrown}20`,
+                      }}>
+                        {isNewUser() ? "Setting up Your Free Trial..." : "Processing Subscription..."}
+                      </h3>
+                      <p style={{
+                        color: colors.mediumBrown,
+                        fontSize: "1.1rem",
+                        textAlign: "center",
+                        lineHeight: "1.6",
+                        maxWidth: "350px",
+                        fontWeight: 500,
+                        textShadow: `0 1px 2px ${colors.darkBrown}10`,
+                      }}>
+                        🔒 {isNewUser() ? "Activating your 3-month free trial" : "Securing your subscription"}...
+                        <br />
+                        <strong>Please do not close this window.</strong>
+                      </p>
+                      
+                      {/* Progress indicator */}
+                      <div style={{
+                        marginTop: "2rem",
+                        width: "200px",
+                        height: "4px",
+                        background: colors.lightTan,
+                        borderRadius: "2px",
+                        overflow: "hidden",
+                        position: "relative",
+                      }}>
+                        <div style={{
+                          width: "50%",
+                          height: "100%",
+                          background: `linear-gradient(90deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
+                          borderRadius: "2px",
+                          animation: "progressSlide 2s linear infinite",
+                        }}></div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Plan Change Confirmation Modal */}
+            {showPlanChangeConfirm && (
+              <div style={styles.planChangeModal}>
+                <div style={styles.modalContent}>
+                  <h3 style={styles.modalTitle}>Confirm Plan Change</h3>
+                  <p style={styles.modalText}>
+                    You are about to <strong style={{ color: colors.accentGold }}>{upgradeDowngradeAction}</strong> from{" "}
+                    <strong style={{ color: colors.darkBrown }}>{currentSubscription?.plan || "Discover"}</strong> to{" "}
+                    <strong style={{ color: colors.darkBrown }}>{plans[selectedPlan].name}</strong>.
+                  </p>
+                  <div
+                    style={{
+                      margin: "2rem 0",
+                      padding: "1.5rem",
+                      background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
+                      borderRadius: "12px",
+                      border: `1px solid ${colors.lightTan}`,
+                    }}
+                  >
+                    <div style={{ marginBottom: "0.5rem", color: colors.mediumBrown }}>
+                      <strong>Current:</strong> R{currentSubscription?.amount || 0}/
+                      {currentSubscription?.cycle || "monthly"}
+                    </div>
+                    <div style={{ color: colors.mediumBrown }}>
+                      <strong>New:</strong>{" "}
+                      {plans[selectedPlan].price[billingCycle] === 0
+                        ? "Free"
+                        : isNewUser() 
+                          ? `FREE for 3 months, then R${plans[selectedPlan].price[billingCycle]}/${billingCycle === "monthly" ? "month" : "year"}`
+                          : `R${plans[selectedPlan].price[billingCycle]}/${billingCycle === "monthly" ? "month" : "year"}`}
+                    </div>
+                  </div>
+                  <div style={styles.modalActions}>
+                    <button
+                      style={styles.buttonSecondary}
+                      onMouseEnter={(e) => {
+                        e.target.style.transform = "translateY(-2px)"
+                        e.target.style.boxShadow = `0 8px 20px ${colors.lightTan}4D`
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.transform = "translateY(0)"
+                        e.target.style.boxShadow = `0 4px 12px ${colors.lightTan}33`
+                      }}
+                      onClick={cancelPlanChange}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      style={styles.button}
+                      onMouseEnter={(e) => {
+                        e.target.style.transform = "translateY(-2px)"
+                        e.target.style.boxShadow = `0 8px 20px ${colors.accentGold}66`
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.transform = "translateY(0)"
+                        e.target.style.boxShadow = `0 4px 12px ${colors.accentGold}4D`
+                      }}
+                      onClick={confirmPlanChange}
+                    >
+                      {upgradeDowngradeAction === "downgrade" && selectedPlan === "discover"
+                        ? "Confirm Downgrade"
+                        : isNewUser() 
+                          ? `Start Free Trial`
+                          : `Pay & ${upgradeDowngradeAction}`}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Downgrade Options Modal */}
             {showDowngradeOptions && (
               <div style={styles.planChangeModal}>
                 <div style={styles.modalContent}>
                   <h3 style={styles.modalTitle}>Choose Downgrade Option</h3>
                   <p style={styles.modalText}>Select which plan you'd like to downgrade to:</p>
                   <div style={{ margin: "2rem 0" }}>
-                    {currentSubscription.plan.toLowerCase() === "partner" && (
+                    {currentSubscription?.plan.toLowerCase() === "partner" && (
                       <div
                         style={{
                           cursor: "pointer",
@@ -1792,11 +2334,11 @@ const ProgramSponsorSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, o
                           Engage Plan
                         </div>
                         <div style={{ color: colors.mediumBrown, marginTop: "0.5rem" }}>
-                          ZAR {plans.engage.price[billingCycle].toLocaleString()}/
+                          R {plans.engage.price[billingCycle].toLocaleString()}/
                           {billingCycle === "monthly" ? "month" : "year"}
                         </div>
                         <p style={{ margin: "0.5rem 0 0 0", color: colors.accentGold, fontSize: "0.95rem" }}>
-                          Keep most features, save ZAR{" "}
+                          Keep most features, save R{" "}
                           {(plans.partner.price[billingCycle] - plans.engage.price[billingCycle]).toLocaleString()}/
                           {billingCycle === "monthly" ? "month" : "year"}
                         </p>
@@ -1846,247 +2388,75 @@ const ProgramSponsorSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, o
                 </div>
               </div>
             )}
-            {showPlanChangeConfirm && (
-              <div style={styles.planChangeModal}>
-                <div style={styles.modalContent}>
-                  <h3 style={styles.modalTitle}>Confirm Plan Change</h3>
-                  <p style={styles.modalText}>
-                    You are about to <strong style={{ color: colors.accentGold }}>{upgradeDowngradeAction}</strong> from{" "}
-                    <strong style={{ color: colors.darkBrown }}>{currentSubscription.plan}</strong> to{" "}
-                    <strong style={{ color: colors.darkBrown }}>{plans[selectedPlan].name}</strong>.
-                  </p>
-                  <div
+
+            {/* Subscription management options for existing users */}
+            {isExistingUser && currentSubscription && (
+              <div
+                style={{
+                  background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
+                  borderRadius: "16px",
+                  padding: "2rem",
+                  marginTop: "3rem",
+                  border: `1px solid ${colors.lightTan}`,
+                }}
+              >
+                <h3
+                  style={{
+                    color: colors.darkBrown,
+                    marginBottom: "1.5rem",
+                    fontSize: "1.5rem",
+                    fontWeight: 700,
+                    textAlign: "center",
+                  }}
+                >
+                  Subscription Management
+                </h3>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                    gap: "1rem",
+                    marginTop: "1.5rem",
+                  }}
+                >
+                  <button
                     style={{
-                      margin: "2rem 0",
-                      padding: "1.5rem",
-                      background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
+                      padding: "1rem 1.5rem",
+                      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.lightBrown} 100%)`,
+                      color: colors.lightText,
+                      border: "none",
                       borderRadius: "12px",
-                      border: `1px solid ${colors.lightTan}`,
+                      fontWeight: 600,
+                      fontSize: "0.95rem",
+                      cursor: "pointer",
+                      transition: "all 0.3s ease",
+                      textAlign: "center",
+                    }}
+                    onClick={() => {
+                      alert("Update payment method feature coming soon!")
                     }}
                   >
-                    <div style={{ marginBottom: "0.5rem", color: colors.mediumBrown }}>
-                      <strong>Current:</strong> ZAR {currentSubscription.amount.toLocaleString()}/
-                      {currentSubscription.cycle || "monthly"}
-                    </div>
-                    <div style={{ color: colors.mediumBrown }}>
-                      <strong>New:</strong>{" "}
-                      {plans[selectedPlan].price[billingCycle] === 0
-                        ? "Free"
-                        : `ZAR ${plans[selectedPlan].price[billingCycle].toLocaleString()}/${billingCycle === "monthly" ? "month" : "year"}`}
-                    </div>
-                  </div>
-                  <div style={styles.modalActions}>
-                    <button
-                      style={styles.buttonSecondary}
-                      onMouseEnter={(e) => {
-                        e.target.style.transform = "translateY(-2px)"
-                        e.target.style.boxShadow = `0 8px 20px ${colors.lightTan}4D`
-                      }}
-                      onMouseLeave={(e) => {
-                        e.target.style.transform = "translateY(0)"
-                        e.target.style.boxShadow = `0 4px 12px ${colors.lightTan}33`
-                      }}
-                      onClick={cancelPlanChange}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      style={{
-                        ...styles.button,
-                        ...(selectedPlan !== "discover" && !paystackLoaded ? styles.payButtonEnhancedLoading : {}),
-                      }}
-                      onMouseEnter={(e) => {
-                        if (paystackLoaded || selectedPlan === "discover") {
-                          e.target.style.transform = "translateY(-2px)"
-                          e.target.style.boxShadow = `0 8px 20px ${colors.accentGold}66`
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (paystackLoaded || selectedPlan === "discover") {
-                          e.target.style.transform = "translateY(0)"
-                          e.target.style.boxShadow = `0 4px 12px ${colors.accentGold}4D`
-                        }
-                      }}
-                      onClick={confirmPlanChange}
-                      disabled={!paystackLoaded && selectedPlan !== "discover"}
-                    >
-                      {!paystackLoaded && selectedPlan !== "discover"
-                        ? "Loading Payment System..."
-                        : upgradeDowngradeAction === "downgrade" && selectedPlan === "discover"
-                          ? "Confirm Downgrade"
-                          : `Pay & ${upgradeDowngradeAction}`}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
+                    💳 Update Payment Method
+                  </button>
 
-            {/* Pricing Cards */}
-            <div style={styles.planGrid}>
-              {Object.entries(plans).map(([planKey, plan]) => {
-                const isCurrentPlan = isExistingUser && getCurrentPlanKey() === planKey
-                const isSelected = selectedPlan === planKey
-                const isHovered = hoveredPlan === planKey
-                const isPopular = planKey === "engage"
-
-                let cardBackground = colors.offWhite
-                let nameColor = colors.darkBrown
-                let priceColor = colors.darkBrown
-                let periodColor = colors.mediumBrown
-                let featureTextColor = colors.darkText
-                let buttonBg = `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`
-                const buttonColor = colors.lightText
-
-                if (planKey === "discover") {
-                  cardBackground = colors.discoverCardBg
-                  nameColor = colors.lightText
-                  priceColor = colors.lightText
-                  periodColor = colors.lightText
-                  featureTextColor = colors.lightText
-                } else if (planKey === "engage") {
-                  cardBackground = colors.engageCardBg
-                  nameColor = colors.lightText
-                  priceColor = colors.lightText
-                  periodColor = colors.lightText
-                  featureTextColor = colors.lightText
-                  buttonBg = `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.lightBrown} 100%)`
-                } else if (planKey === "partner") {
-                  cardBackground = colors.partnerCardBg
-                  nameColor = colors.lightText
-                  priceColor = colors.lightText
-                  periodColor = colors.lightText
-                  featureTextColor = colors.lightText
-                }
-
-                return (
-                  <div
-                    key={planKey}
+                  <button
                     style={{
-                      ...styles.planCard,
-                      background: cardBackground,
-                      ...(isPopular ? styles.planCardPopular : {}),
-                      ...(isSelected && !isPopular ? styles.planCardSelected : {}),
-                      ...(isHovered && !isSelected && !isPopular ? styles.planCardHover : {}),
+                      padding: "1rem 1.5rem",
+                      background: `linear-gradient(135deg, ${colors.featureCross} 0%, #B71C1C 100%)`,
+                      color: colors.lightText,
+                      border: "none",
+                      borderRadius: "12px",
+                      fontWeight: 600,
+                      fontSize: "0.95rem",
+                      cursor: "pointer",
+                      transition: "all 0.3s ease",
+                      textAlign: "center",
                     }}
-                    onMouseEnter={() => setHoveredPlan(planKey)}
-                    onMouseLeave={() => setHoveredPlan(null)}
-                    onClick={() => handlePlanSelect(planKey)}
+                    onClick={handleCancelSubscription}
                   >
-                    {isPopular && <div style={styles.popularBadge}>POPULAR</div>}
-                    <h3 style={{ ...styles.planName, color: nameColor }}>{plan.name}</h3>
-                    <div style={{ ...styles.planPrice, color: priceColor }}>
-                      {plan.price[billingCycle] === 0 ? "Free" : `R${plan.price[billingCycle]}`}
-                    </div>
-                    {plan.price[billingCycle] > 0 && (
-                      <span style={{ ...styles.planPricePeriod, color: periodColor }}>
-                        / {billingCycle === "monthly" ? "month" : "year"}
-                      </span>
-                    )}
-                    <p style={{ ...styles.planDescriptionText, color: featureTextColor }}>{plan.description}</p>
-                    {plan.price[billingCycle] > 0 && billingCycle === "annually" && (
-                      <div style={styles.freeMonthsBadge}>
-                        🎉 Save R{(plan.price.monthly * 12 - plan.price.annually).toLocaleString()} annually
-                      </div>
-                    )}
-
-                    <ul style={styles.planFeaturesList}>
-                      {plan.highlights.map((feature, index) => {
-                        const isIncluded = true
-                        const iconStyle = isIncluded ? styles.featureCheckIcon : styles.featureCrossIcon
-                        const icon = isIncluded ? "✓" : "✗"
-                        return (
-                          <li key={index} style={{ ...styles.planFeatureItem, color: featureTextColor }}>
-                            <span style={{ ...styles.featureIcon, ...iconStyle }}>{icon}</span>
-                            <span>{feature}</span>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                    {isCurrentPlan ? (
-                      <div
-                        style={{
-                          ...styles.currentPlanBadge,
-                          width: "100%",
-                          textAlign: "center",
-                          padding: "1rem 1.5rem",
-                          borderRadius: "8px",
-                        }}
-                      >
-                        Current Plan
-                      </div>
-                    ) : isSelected ? (
-                      <div
-                        style={{
-                          ...styles.selectedBadge,
-                          width: "100%",
-                          textAlign: "center",
-                          padding: "1rem 1.5rem",
-                          borderRadius: "8px",
-                        }}
-                      >
-                        Selected Plan
-                      </div>
-                    ) : (
-                      <button
-                        style={{
-                          ...styles.selectButton,
-                          background: buttonBg,
-                          color: buttonColor,
-                        }}
-                        onMouseEnter={(e) => {
-                          e.target.style.background = colors.mediumBrown // Darker on hover
-                        }}
-                        onMouseLeave={(e) => {
-                          e.target.style.background = buttonBg // Revert to original gradient
-                        }}
-                      >
-                        Choose Plan
-                        <span>→</span>
-                      </button>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-            {!showPlanChangeConfirm && !isExistingUser && (
-              <div style={styles.formContainerBillCentered}>
-                <div style={styles.formCardEnhanced}>
-                  <div>
-                    <button
-                      style={{
-                        ...styles.payButtonEnhanced,
-                        ...(selectedPlan !== "discover" && !paystackLoaded ? styles.payButtonEnhancedLoading : {}),
-                      }}
-                      onMouseEnter={(e) => {
-                        if (paystackLoaded || selectedPlan === "discover") {
-                          e.target.style.transform = "translateY(-3px)"
-                          e.target.style.boxShadow = `0 12px 24px ${colors.accentGold}66`
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (paystackLoaded || selectedPlan === "discover") {
-                          e.target.style.transform = "translateY(0)"
-                          e.target.style.boxShadow = `0 8px 20px ${colors.accentGold}4D`
-                        }
-                      }}
-                      onClick={handlePay}
-                      disabled={!paystackLoaded && selectedPlan !== "discover"}
-                    >
-                      {!paystackLoaded && selectedPlan !== "discover" ? (
-                        "Loading Payment System..."
-                      ) : plans[selectedPlan].price[billingCycle] === 0 ? (
-                        <>
-                          <span style={{ marginRight: 8, fontSize: "1.25rem" }}>✨</span>
-                          Activate Discover Plan
-                        </>
-                      ) : (
-                        <>
-                          <span style={{ marginRight: 8, fontSize: "1.25rem" }}>💳</span>
-                          Pay {plans[selectedPlan].currency} {plans[selectedPlan].price[billingCycle].toLocaleString()}
-                        </>
-                      )}
-                    </button>
-                  </div>
+                    ❌ Cancel Subscription
+                  </button>
                 </div>
               </div>
             )}
@@ -2098,6 +2468,17 @@ const ProgramSponsorSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, o
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
         }
+
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        @keyframes progressSlide {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(300%); }
+        }
+
         /* Sidebar responsive adjustments */
         @media (max-width: 1400px) {
           .subscription-container {

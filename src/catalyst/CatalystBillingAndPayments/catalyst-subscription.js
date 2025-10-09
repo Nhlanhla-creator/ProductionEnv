@@ -106,6 +106,8 @@ const colors = {
   partnerCardBg: "linear-gradient(160deg, #A67C52 0%, #8D6E63 100%)",
   featureCheck: "#A67C52",
   featureCross: "#D32F2F",
+  // CHANGED: Trial colors from green to brown
+  trialBrown: "#8D6E63", // Changed from trialGreen to trialBrown
 }
 
 const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSidebarToggle }) => {
@@ -231,6 +233,11 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
   const [history, setHistory] = useState([])
   const [errors, setErrors] = useState({})
 
+  // Helper function to check if user is new (for trial eligibility)
+  const isNewUser = () => {
+    return !isExistingUser || !currentSubscription || currentSubscription.plan === "Discover"
+  }
+
   // Helper function to safely get plan name for catalyst only
   const getCurrentPlanKey = () => {
     if (!currentSubscription || !currentSubscription.plan) {
@@ -300,6 +307,10 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
             transactionRef: userData.currentSubscription.transactionRef,
             autoRenew:
               userData.currentSubscription.status === "active" || userData.currentSubscription.status === "Success",
+            isTrialPeriod: userData.currentSubscription.isTrialPeriod || false,
+            originalAmount: userData.currentSubscription.originalAmount,
+            trialStartDate: userData.currentSubscription.trialStartDate,
+            trialEndDate: userData.currentSubscription.trialEndDate
           }
 
           setCurrentSubscription(subscriptionFromUser)
@@ -751,27 +762,36 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
     }
   }
 
-  // UPDATED: Handle checkout completion
+  // UPDATED: Handle checkout completion with enhanced Firebase saving
   const handleCheckoutCompleted = async (event) => {
     console.log("🎉 Payment completed:", event)
     setPaymentProcessing(true) // Show processing state
 
     try {
-      // Handle subscription/plan payment
+      // Handle subscription/plan payment with trial period
+      const isTrialEligible = isNewUser()
+      const trialStartDate = new Date()
+      const trialEndDate = new Date()
+      trialEndDate.setMonth(trialEndDate.getMonth() + 3)
+
       const newRecord = {
         id: uuidv4(),
         email: email,
         plan: plans[selectedPlan].name,
         cycle: billingCycle,
-        amount: plans[selectedPlan].price[billingCycle],
+        amount: 0, // First 3 months are free
+        originalAmount: plans[selectedPlan].price[billingCycle], // Store original price
         fullName: fullName,
         companyName,
         createdAt: new Date().toISOString(),
         status: "Success",
         autoRenew: true,
-        transactionRef: event.id || event.transactionId || `manual_${Date.now()}`,
+        transactionRef: event.id || event.transactionId || `trial_${Date.now()}`,
         userId: user.uid,
         subscriptionType: "recurring",
+        isTrialPeriod: isTrialEligible,
+        trialStartDate: isTrialEligible ? trialStartDate.toISOString() : null,
+        trialEndDate: isTrialEligible ? trialEndDate.toISOString() : null,
         // Handle potentially undefined registrationId
         ...(event.registrationId && { registrationId: event.registrationId }),
         ...(event.cardBrand && { cardBrand: event.cardBrand }),
@@ -812,10 +832,12 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
       setUpgradeDowngradeAction(null)
       setShowPlanChangeConfirm(false)
 
-      // Show success message
-      alert(
-        `🎉 Subscription activated successfully!\n\nYour ${plans[selectedPlan].name} plan is now active with automatic renewals.\n\nYou can now access all premium features!`,
-      )
+      // Show success message with trial information
+      const successMessage = isTrialEligible
+        ? `🎉 Welcome to your ${plans[selectedPlan].name} plan!\n\n✨ You're getting 3 MONTHS FREE!\n• Trial period: ${trialStartDate.toLocaleDateString()} - ${trialEndDate.toLocaleDateString()}\n• Regular billing starts: ${trialEndDate.toLocaleDateString()}\n• Monthly rate after trial: R${plans[selectedPlan].price[billingCycle]}\n\nEnjoy all premium features at no cost for the first 3 months!`
+        : `🎉 Subscription activated successfully!\n\nYour ${plans[selectedPlan].name} plan is now active with automatic renewals.\n\nYou can now access all premium features!`
+
+      alert(successMessage)
 
       // Reload subscription data to ensure sync
       setTimeout(async () => {
@@ -933,9 +955,9 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
       opacity: 0.9,
     },
     betaNotice: {
-      background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
+      background: `linear-gradient(135deg, ${colors.trialBrown}20 0%, ${colors.accentGold}20 100%)`,
       color: colors.darkBrown,
-      border: `2px solid ${colors.lightBrown}`,
+      border: `2px solid ${colors.trialBrown}`,
       borderRadius: "16px",
       padding: "1.5rem 2rem",
       margin: "0 auto 3rem auto",
@@ -943,7 +965,7 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
       fontWeight: 600,
       fontSize: "clamp(1rem, 2vw, 1.125rem)",
       textAlign: "center",
-      boxShadow: `0 8px 24px ${colors.accentGold}1F`,
+      boxShadow: `0 8px 24px ${colors.trialBrown}1F`,
       position: "relative",
     },
     betaIcon: {
@@ -1114,6 +1136,11 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
       lineHeight: "1",
       color: colors.darkBrown,
     },
+    planPriceFree: {
+      color: colors.trialBrown, // CHANGED: From trialGreen to trialBrown
+      fontSize: "clamp(2.5rem, 4vw, 3.5rem)",
+      fontWeight: 900,
+    },
     planPricePeriod: {
       fontSize: "clamp(1rem, 1.5vw, 1.25rem)",
       fontWeight: 500,
@@ -1127,16 +1154,27 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
       lineHeight: "1.6",
     },
     freeMonthsBadge: {
-      background: `linear-gradient(90deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
+      background: `linear-gradient(90deg, ${colors.trialBrown} 0%, ${colors.accentGold} 100%)`, // CHANGED: From trialGreen to trialBrown
       color: colors.lightText,
-      padding: "0.6rem 1.2rem",
-      borderRadius: "10px",
-      fontSize: "0.9rem",
-      fontWeight: 600,
-      marginBottom: "2rem",
+      padding: "0.8rem 1.2rem",
+      borderRadius: "12px",
+      fontSize: "1rem",
+      fontWeight: 700,
+      marginBottom: "1rem",
       textAlign: "center",
-      boxShadow: `0 4px 12px ${colors.accentGold}4D`,
+      boxShadow: `0 4px 12px ${colors.trialBrown}4D`, // CHANGED: From trialGreen to trialBrown
       display: "inline-block",
+      border: `2px solid ${colors.trialBrown}`, // CHANGED: From trialGreen to trialBrown
+    },
+    afterTrialPrice: {
+      background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
+      border: `1px solid ${colors.lightTan}`,
+      borderRadius: "8px",
+      padding: "0.8rem",
+      marginBottom: "1.5rem",
+      fontSize: "0.9rem",
+      color: colors.mediumBrown,
+      fontWeight: 600,
     },
     planFeaturesList: {
       listStyle: "none",
@@ -1368,12 +1406,15 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
       <div style={styles.mainCard}>
         <div style={styles.decorativeElement}></div>
 
-        {/* Beta Notice */}
+        {/* Updated Beta Notice with Trial Information - CHANGED: Green to Brown */}
         <div style={styles.betaNotice}>
-          <span style={styles.betaIcon}>🚀</span>
-          <strong>Beta Pricing:</strong> All plans are{" "}
-          <span style={{ color: colors.accentGold, fontWeight: 800 }}>FREE</span> during our beta period! Enjoy full
-          access at no cost.
+          <span style={styles.betaIcon}>🎉</span>
+          <strong>Special Launch Offer:</strong> Get your first{" "}
+          <span style={{ color: colors.trialBrown, fontWeight: 800 }}>3 MONTHS FREE</span> on any paid plan!
+          <br />
+          <small style={{ opacity: 0.8, marginTop: "0.5rem", display: "block" }}>
+            Start your trial today - billing begins after 3 months at regular rates
+          </small>
         </div>
 
         {isExistingUser && currentSubscription ? (
@@ -1381,7 +1422,7 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
             <h1 style={styles.pageTitle}>Manage Your Subscription</h1>
             <p style={styles.subtitle}>Upgrade, downgrade, or manage your current plan with ease</p>
 
-            {/* Current subscription info */}
+            {/* Enhanced Current subscription info with trial details */}
             <div style={styles.subscriptionInfo}>
               <h3 style={styles.subscriptionTitle}>Current Subscription</h3>
               <div style={styles.subscriptionDetail}>
@@ -1393,11 +1434,38 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
                 <span style={{ fontWeight: 600 }}>{currentSubscription.cycle || "Monthly"}</span>
               </div>
               <div style={styles.subscriptionDetail}>
-                <span>Amount:</span>
-                <span style={{ fontWeight: 600 }}>
-                  {getCurrentPlanAmount() === 0 ? "Free" : `R${getCurrentPlanAmount().toLocaleString()}`}
+                <span>Current Amount:</span>
+                <span
+                  style={{
+                    fontWeight: 600,
+                    color:
+                      currentSubscription.isTrialPeriod ? colors.trialBrown : colors.darkText,
+                  }}
+                >
+                  {currentSubscription.amount === 0 && currentSubscription.isTrialPeriod
+                    ? "FREE (Trial)"
+                    : currentSubscription.amount === 0
+                      ? "Free"
+                      : `R${getCurrentPlanAmount().toLocaleString()}`}
                 </span>
               </div>
+              {currentSubscription.originalAmount && currentSubscription.originalAmount > 0 && (
+                <div style={styles.subscriptionDetail}>
+                  <span>Regular Price:</span>
+                  <span style={{ fontWeight: 600 }}>
+                    R{currentSubscription.originalAmount}/
+                    {currentSubscription.cycle?.slice(0, -2) || "month"}
+                  </span>
+                </div>
+              )}
+              {currentSubscription.isTrialPeriod && currentSubscription.trialEndDate && (
+                <div style={styles.subscriptionDetail}>
+                  <span>Trial Ends:</span>
+                  <span style={{ fontWeight: 600, color: colors.trialBrown }}>
+                    {new Date(currentSubscription.trialEndDate).toLocaleDateString()}
+                  </span>
+                </div>
+              )}
               <div style={styles.subscriptionDetail}>
                 <span>Status:</span>
                 <span
@@ -1431,20 +1499,21 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
         ) : (
           <>
             <h1 style={styles.pageTitle}>Choose Your Plan</h1>
-            <p style={styles.subtitle}>Select the perfect plan for your business needs</p>
+            <p style={styles.subtitle}>Select the perfect plan for your business needs - first 3 months free!</p>
           </>
         )}
 
         {/* Feature Comparison Table */}
         <FeatureComparisonTable />
 
-        {/* Pricing Cards */}
+        {/* UPDATED: Pricing Cards with Zero Prices and "After Trial" Information - CHANGED: Green to Brown */}
         <div style={styles.planGrid}>
           {Object.entries(plans).map(([planKey, plan]) => {
             const isCurrentPlan = isExistingUser && getCurrentPlanKey() === planKey
             const isSelected = selectedPlan === planKey
             const isHovered = hoveredPlan === planKey
             const isPopular = planKey === "engage"
+            const showTrialOffer = planKey !== "discover" && isNewUser()
 
             let cardBackground = colors.offWhite
             let nameColor = colors.darkBrown
@@ -1491,18 +1560,39 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
               >
                 {isPopular && <div style={styles.popularBadge}>POPULAR</div>}
                 <h3 style={{ ...styles.planName, color: nameColor }}>{plan.name}</h3>
-                <div style={{ ...styles.planPrice, color: priceColor }}>
-                  {plan.price[billingCycle] === 0 ? "Free" : `R${plan.price[billingCycle]}`}
-                </div>
-                {plan.price[billingCycle] > 0 && (
-                  <span style={{ ...styles.planPricePeriod, color: periodColor }}>
-                    / {billingCycle === "monthly" ? "month" : "year"}
-                  </span>
+
+                {/* UPDATED: Show R0/FREE for paid plans during trial, regular price for discover - CHANGED: Green to Brown */}
+                {plan.price[billingCycle] === 0 ? (
+                  <div style={{ ...styles.planPrice, color: priceColor }}>Free</div>
+                ) : (
+                  <>
+                    {/* Show FREE/R0 prominently for trial-eligible users */}
+                    {showTrialOffer ? (
+                      <div style={{ ...styles.planPriceFree, color: colors.trialBrown }}>FREE</div>
+                    ) : (
+                      <div style={{ ...styles.planPrice, color: priceColor }}>R{plan.price[billingCycle]}</div>
+                    )}
+
+                    {/* Show period for non-trial or regular price display */}
+                    {!showTrialOffer && (
+                      <span style={{ ...styles.planPricePeriod, color: periodColor }}>
+                        / {billingCycle === "monthly" ? "month" : "year"}
+                      </span>
+                    )}
+                  </>
                 )}
+
                 <p style={{ ...styles.planDescriptionText, color: featureTextColor }}>{plan.description}</p>
-                {plan.price[billingCycle] > 0 && billingCycle === "annually" && (
-                  <div style={styles.freeMonthsBadge}>
-                    🎉 Save R{(plan.price.monthly * 12 - plan.price.annually).toLocaleString()} annually
+
+                {/* Trial Badge for eligible plans */}
+                {showTrialOffer && <div style={styles.freeMonthsBadge}>🎉 First 3 Months FREE!</div>}
+
+                {/* UPDATED: "After Trial" pricing information */}
+                {showTrialOffer && (
+                  <div style={styles.afterTrialPrice}>
+                    <strong>After 3-month trial:</strong>
+                    <br />
+                    R{plan.price[billingCycle]} / {billingCycle === "monthly" ? "month" : "year"}
                   </div>
                 )}
 
@@ -1562,7 +1652,11 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
                       e.target.style.background = buttonBg
                     }}
                   >
-                    {isExistingUser ? (planKey === "discover" ? "Downgrade" : "Upgrade") : "Subscribe"}
+                    {isExistingUser ? (
+                      planKey === "discover" ? "Downgrade" : showTrialOffer ? "Start Free Trial" : "Upgrade"
+                    ) : (
+                      showTrialOffer ? "Start Free Trial" : "Subscribe"
+                    )}
                     <span>→</span>
                   </button>
                 )}
@@ -1571,7 +1665,7 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
           })}
         </div>
 
-        {/* Payment Section */}
+        {/* Enhanced Payment Button */}
         {(!isExistingUser || (isExistingUser && selectedPlan !== getCurrentPlanKey())) && !showPlanChangeConfirm && (
           <div style={{ textAlign: "center", marginTop: "2rem" }}>
             <button
@@ -1603,18 +1697,22 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
                     return "Activate Discover Plan"
                   } else if (isExistingUser) {
                     if (upgradeDowngradeAction === "upgrade") {
-                      return `Upgrade to ${plans[selectedPlan].name}`
+                      return isNewUser()
+                        ? `Start ${plans[selectedPlan].name} Trial (FREE)`
+                        : `Upgrade to ${plans[selectedPlan].name}`
                     } else {
                       return `Change to ${plans[selectedPlan].name}`
                     }
                   } else {
-                    return `Subscribe to ${plans[selectedPlan].name}`
+                    return isNewUser()
+                      ? `Start ${plans[selectedPlan].name} Trial (FREE)`
+                      : `Subscribe to ${plans[selectedPlan].name}`
                   }
                 })()
               )}
             </button>
 
-            {/* Payment info for subscriptions */}
+            {/* Enhanced Payment info for subscriptions with trial details - CHANGED: Green to Brown */}
             {plans[selectedPlan].price[billingCycle] > 0 && (
               <div
                 style={{
@@ -1637,8 +1735,45 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
                     gap: "0.5rem",
                   }}
                 >
-                  🔒 Secure Subscription Payment
+                  🎉 {isNewUser() ? "Free Trial Setup" : "Secure Subscription Payment"}
                 </h4>
+
+                {isNewUser() && (
+                  <div
+                    style={{
+                      background: `linear-gradient(135deg, ${colors.trialBrown}20 0%, ${colors.accentGold}20 100%)`,
+                      borderRadius: "8px",
+                      padding: "1rem",
+                      marginBottom: "1rem",
+                      border: `1px solid ${colors.trialBrown}`,
+                    }}
+                  >
+                    <p
+                      style={{
+                        color: colors.darkBrown,
+                        margin: 0,
+                        fontSize: "0.95rem",
+                        fontWeight: 600,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      ✨ <strong>3-Month Free Trial:</strong> No charges for 3 months!
+                    </p>
+                    <p
+                      style={{
+                        color: colors.mediumBrown,
+                        margin: "0.5rem 0 0 1.5rem",
+                        fontSize: "0.85rem",
+                        lineHeight: "1.4",
+                      }}
+                    >
+                      Your card will be saved for automatic billing after the trial period ends. Cancel anytime during
+                      the trial with no charges.
+                    </p>
+                  </div>
+                )}
 
                 <div
                   style={{
@@ -1688,11 +1823,17 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
                 >
                   <li style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
                     <span style={{ color: colors.featureCheck }}>✓</span>
+                    {isNewUser() ? "Free for first 3 months" : "Immediate access to premium features"}
+                  </li>
+                  <li style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <span style={{ color: colors.featureCheck }}>✓</span>
                     Cards are securely saved for automatic {billingCycle} renewals
                   </li>
                   <li style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
                     <span style={{ color: colors.featureCheck }}>✓</span>
-                    Automatic billing at R{plans[selectedPlan].price[billingCycle]} per {billingCycle.slice(0, -2)}
+                    {isNewUser()
+                      ? `Billing starts at R${plans[selectedPlan].price[billingCycle]} per ${billingCycle.slice(0, -2)} after trial`
+                      : `Automatic billing at R${plans[selectedPlan].price[billingCycle]} per ${billingCycle.slice(0, -2)}`}
                   </li>
                   <li style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
                     <span style={{ color: colors.featureCheck }}>✓</span>
@@ -1776,7 +1917,7 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
                   fontWeight: 700,
                 }}
               >
-                Complete Your Subscription
+                {isNewUser() ? "Start Your Free Trial" : "Complete Your Subscription"}
               </h2>
 
               <div
@@ -1797,7 +1938,11 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
                     fontWeight: 600,
                   }}
                 >
-                  🔄 Setting up {plans[selectedPlan].name} Plan
+                  {isNewUser() ? (
+                    <>🎉 Starting {plans[selectedPlan].name} Free Trial</>
+                  ) : (
+                    <>🔄 Setting up {plans[selectedPlan].name} Plan</>
+                  )}
                 </p>
                 <p
                   style={{
@@ -1806,7 +1951,9 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
                     fontSize: "0.9rem",
                   }}
                 >
-                  Your card will be saved for automatic {billingCycle} renewals
+                  {isNewUser()
+                    ? "Free for 3 months, then automatic billing begins"
+                    : `Your card will be saved for automatic ${billingCycle} renewals`}
                 </p>
               </div>
 
@@ -1816,7 +1963,7 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
                 onCancelled={handleCheckoutCancelled}
                 onExpired={handleCheckoutExpired}
                 paymentType="subscription"
-                amount={plans[selectedPlan].price[billingCycle]}
+                amount={0} // Always 0 for trial
                 planName={plans[selectedPlan].name}
                 userEmail={email}
                 userName={fullName}
@@ -1888,7 +2035,7 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
                       textShadow: `0 2px 4px ${colors.darkBrown}20`,
                     }}
                   >
-                    Processing Subscription...
+                    {isNewUser() ? "Setting up Your Free Trial..." : "Processing Subscription..."}
                   </h3>
                   <p
                     style={{
@@ -1901,7 +2048,7 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
                       textShadow: `0 1px 2px ${colors.darkBrown}10`,
                     }}
                   >
-                    🔒 Securing your subscription...
+                    🔒 {isNewUser() ? "Activating your 3-month free trial" : "Securing your subscription"}...
                     <br />
                     <strong>Please do not close this window.</strong>
                   </p>
@@ -1961,7 +2108,9 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
                   <strong>New:</strong>{" "}
                   {plans[selectedPlan].price[billingCycle] === 0
                     ? "Free"
-                    : `R${plans[selectedPlan].price[billingCycle]}/${billingCycle === "monthly" ? "month" : "year"}`}
+                    : isNewUser()
+                      ? `FREE for 3 months, then R${plans[selectedPlan].price[billingCycle]}/${billingCycle === "monthly" ? "month" : "year"}`
+                      : `R${plans[selectedPlan].price[billingCycle]}/${billingCycle === "monthly" ? "month" : "year"}`}
                 </div>
               </div>
               <div style={styles.modalActions}>
@@ -1993,7 +2142,9 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
                 >
                   {upgradeDowngradeAction === "downgrade" && selectedPlan === "discover"
                     ? "Confirm Downgrade"
-                    : `Pay & ${upgradeDowngradeAction}`}
+                    : isNewUser()
+                      ? `Start Free Trial`
+                      : `Pay & ${upgradeDowngradeAction}`}
                 </button>
               </div>
             </div>

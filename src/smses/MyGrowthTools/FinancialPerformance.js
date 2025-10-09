@@ -1921,7 +1921,7 @@ const BalanceSheetHealth = ({ activeSection, financialYearStart, chartData, onUp
   )
 }
 
-const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, user, onUpdatePnLData }) => {
+const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, user, onUpdateChartData }) => {
   const [chartViewMode, setChartViewMode] = useState("data")
   const [visibleCharts, setVisibleCharts] = useState({
     sales: true,
@@ -1931,10 +1931,23 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
     netProfit: true,
     percentage: true,
   })
-  const [showUploadModal, setShowUploadModal] = useState(false)
-  const [uploadedFileName, setUploadedFileName] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [uploadStatus, setUploadStatus] = useState("")
+  const [showModal, setShowModal] = useState(false)
+  const [pnlDetails, setPnlDetails] = useState({
+    // Monthly data for key P&L items
+    sales: Array(12).fill(""),
+    cogs: Array(12).fill(""),
+    opex: Array(12).fill(""),
+    grossProfit: Array(12).fill(""),
+    netProfit: Array(12).fill(""),
+    // Budget data
+    salesBudget: Array(12).fill(""),
+    cogsBudget: Array(12).fill(""),
+    opexBudget: Array(12).fill(""),
+    grossProfitBudget: Array(12).fill(""),
+    netProfitBudget: Array(12).fill(""),
+    notes: "",
+  })
+  const [localChartData, setLocalChartData] = useState({})
 
   if (activeSection !== "pnl-snapshot") return null
 
@@ -1953,12 +1966,126 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
 
   const labels = generateLabels()
 
-  // Process uploaded PnL data
+  // Handle manual data entry
+  const handleAddDetails = () => {
+    setShowModal(true)
+    // If we have existing data, pre-fill the form
+    if (localChartData.pnlManual) {
+      setPnlDetails(localChartData.pnlManual)
+    }
+  }
+
+  const handleSavePnlDetails = async () => {
+    const updatedData = {
+      ...pnlDetails,
+      // Convert string values to numbers
+      sales: pnlDetails.sales.map(val => Number.parseFloat(val) || 0),
+      cogs: pnlDetails.cogs.map(val => Number.parseFloat(val) || 0),
+      opex: pnlDetails.opex.map(val => Number.parseFloat(val) || 0),
+      grossProfit: pnlDetails.grossProfit.map(val => Number.parseFloat(val) || 0),
+      netProfit: pnlDetails.netProfit.map(val => Number.parseFloat(val) || 0),
+      salesBudget: pnlDetails.salesBudget.map(val => Number.parseFloat(val) || 0),
+      cogsBudget: pnlDetails.cogsBudget.map(val => Number.parseFloat(val) || 0),
+      opexBudget: pnlDetails.opexBudget.map(val => Number.parseFloat(val) || 0),
+      grossProfitBudget: pnlDetails.grossProfitBudget.map(val => Number.parseFloat(val) || 0),
+      netProfitBudget: pnlDetails.netProfitBudget.map(val => Number.parseFloat(val) || 0),
+    }
+
+    // Update chart data with manual entries
+    const manualChartData = {
+      sales: {
+        actual: updatedData.sales,
+        budget: updatedData.salesBudget.length > 0 && updatedData.salesBudget.some(val => val > 0)
+          ? updatedData.salesBudget
+          : updatedData.sales.map(val => val * 1.1)
+      },
+      cogs: {
+        actual: updatedData.cogs,
+        budget: updatedData.cogsBudget.length > 0 && updatedData.cogsBudget.some(val => val > 0)
+          ? updatedData.cogsBudget
+          : updatedData.cogs.map(val => val * 0.9)
+      },
+      opex: {
+        actual: updatedData.opex,
+        budget: updatedData.opexBudget.length > 0 && updatedData.opexBudget.some(val => val > 0)
+          ? updatedData.opexBudget
+          : updatedData.opex.map(val => val * 0.95)
+      },
+      grossProfit: {
+        actual: updatedData.grossProfit,
+        budget: updatedData.grossProfitBudget.length > 0 && updatedData.grossProfitBudget.some(val => val > 0)
+          ? updatedData.grossProfitBudget
+          : updatedData.grossProfit.map(val => val * 1.15)
+      },
+      netProfit: {
+        actual: updatedData.netProfit,
+        budget: updatedData.netProfitBudget.length > 0 && updatedData.netProfitBudget.some(val => val > 0)
+          ? updatedData.netProfitBudget
+          : updatedData.netProfit.map(val => val * 1.2)
+      },
+      pnlManual: updatedData
+    }
+
+    // Update local chart data
+    setLocalChartData(manualChartData)
+
+    // Update parent component's chart data
+    if (onUpdateChartData) {
+      Object.keys(manualChartData).forEach((key) => {
+        if (key !== 'pnlManual') {
+          onUpdateChartData(key, manualChartData[key])
+        }
+      })
+    }
+
+    // Save to Firebase if user is logged in
+    if (user) {
+      try {
+        await setDoc(doc(db, "financialData", `${user.uid}_pnlManual`), {
+          userId: user.uid,
+          chartName: "pnlManual",
+          ...updatedData,
+          lastUpdated: new Date().toISOString()
+        })
+        console.log("P&L manual data saved to Firebase")
+      } catch (error) {
+        console.error("Error saving P&L manual data:", error)
+      }
+    }
+
+    setShowModal(false)
+  }
+
+  // Process PnL data - prioritize manual data over uploaded data
   const processPnLData = () => {
+    // If we have manual data, use it
+    if (localChartData.pnlManual) {
+      return {
+        sales: {
+          actual: localChartData.pnlManual.sales,
+          budget: localChartData.sales?.budget || localChartData.pnlManual.sales.map(val => val * 1.1)
+        },
+        cogs: {
+          actual: localChartData.pnlManual.cogs,
+          budget: localChartData.cogs?.budget || localChartData.pnlManual.cogs.map(val => val * 0.9)
+        },
+        opex: {
+          actual: localChartData.pnlManual.opex,
+          budget: localChartData.opex?.budget || localChartData.pnlManual.opex.map(val => val * 0.95)
+        },
+        grossProfit: {
+          actual: localChartData.pnlManual.grossProfit,
+          budget: localChartData.grossProfit?.budget || localChartData.pnlManual.grossProfit.map(val => val * 1.15)
+        },
+        netProfit: {
+          actual: localChartData.pnlManual.netProfit,
+          budget: localChartData.netProfit?.budget || localChartData.pnlManual.netProfit.map(val => val * 1.2)
+        },
+      }
+    }
+
     // If we have uploaded PnL data, use it
     if (pnlData && Object.keys(pnlData).length > 0) {
-      console.log("Processing P&L Data:", pnlData)
-
       const sales = Number.parseFloat(pnlData.sales) || 0
       const cogs = Number.parseFloat(pnlData.cogs) || 0
       const opex = Number.parseFloat(pnlData.opex) || 0
@@ -1976,15 +2103,15 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
       return {
         sales: {
           actual: monthlyData(sales),
-          budget: monthlyData(sales * 1.1) // 10% higher budget
+          budget: monthlyData(sales * 1.1)
         },
         cogs: {
           actual: monthlyData(cogs),
-          budget: monthlyData(cogs * 0.9) // 10% lower budget
+          budget: monthlyData(cogs * 0.9)
         },
         opex: {
           actual: monthlyData(opex),
-          budget: monthlyData(opex * 0.95) // 5% lower budget
+          budget: monthlyData(opex * 0.95)
         },
         grossProfit: {
           actual: monthlyData(grossProfit),
@@ -2007,172 +2134,12 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
     }
   }
 
+  // Calculate chart data
   const chartData = processPnLData()
 
-  // Check if we have uploaded PnL data
-  const hasPnLData = () => {
-    return pnlData && (
-      pnlData.sales ||
-      pnlData.cogs ||
-      pnlData.opex
-    )
-  }
-
-  // CSV Upload Handler for P&L Data
-  const handleCSVUpload = async (event) => {
-    const file = event.target.files[0]
-    if (!file) return
-
-    setIsLoading(true)
-    setUploadStatus("Processing file...")
-    setUploadedFileName(file.name)
-
-    try {
-      // Check file type
-      if (!file.name.toLowerCase().endsWith('.csv')) {
-        setUploadStatus("❌ Please upload a CSV file, not Excel (.xlsx)")
-        setIsLoading(false)
-        return
-      }
-
-      const text = await readFileAsText(file)
-      parsePnLCSVData(text)
-
-    } catch (error) {
-      console.error("Error processing file:", error)
-      setUploadStatus("❌ Error processing file. Please check the format.")
-      setIsLoading(false)
-    }
-  }
-
-  // Helper function to read file as text
-  const readFileAsText = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = (e) => resolve(e.target.result)
-      reader.onerror = (e) => reject(e)
-      reader.readAsText(file)
-    })
-  }
-
-  // Improved P&L CSV parser based on your template
-  const parsePnLCSVData = (csvText) => {
-    setUploadStatus("Extracting data from CSV...")
-
-    const lines = csvText.split('\n').filter(line => line.trim())
-    const extractedData = {
-      sales: 0,
-      cogs: 0,
-      opex: 0,
-      grossProfit: 0,
-      netProfit: 0
-    }
-
-    console.log("Raw CSV lines:", lines)
-
-    let currentSection = ''
-    let hasData = false
-
-    lines.forEach((line, index) => {
-      // Clean the line and split by comma
-      const cleanLine = line.replace(/"/g, '').trim()
-      const cells = cleanLine.split(',').map(cell => cell.trim())
-
-      // Skip empty lines
-      if (cells.length < 2 || !cells[0]) return
-
-      const accountName = cells[0].toLowerCase()
-      const amount = parseFloat(cells[1]) || 0
-
-      console.log(`Line ${index}:`, { accountName, amount, currentSection })
-
-      // Detect sections based on your template
-      if (accountName.includes('trading income') || accountName.includes('sales -')) {
-        currentSection = 'income'
-      } else if (accountName.includes('cost of sales') || accountName.includes('cost of sales -')) {
-        currentSection = 'cogs'
-      } else if (accountName.includes('operating expenses') || accountName.includes('operating expense')) {
-        currentSection = 'opex'
-      } else if (accountName.includes('gross profit') && !accountName.includes('total')) {
-        currentSection = 'grossProfit'
-      } else if (accountName.includes('net profit') && !accountName.includes('total')) {
-        currentSection = 'netProfit'
-      }
-
-      // Extract data based on template structure
-      if (currentSection === 'income') {
-        if ((accountName.includes('sales') || accountName.includes('revenue')) &&
-          !accountName.includes('total') &&
-          amount > 0) {
-          extractedData.sales += amount
-          hasData = true
-          console.log(`Added to sales: ${amount}, Total: ${extractedData.sales}`)
-        }
-      } else if (currentSection === 'cogs') {
-        if (!accountName.includes('total cost of sales') &&
-          !accountName.includes('total') &&
-          amount !== 0) {
-          extractedData.cogs += Math.abs(amount) // Use absolute value for costs
-          hasData = true
-          console.log(`Added to COGS: ${amount}, Total: ${extractedData.cogs}`)
-        }
-      } else if (currentSection === 'opex') {
-        if (!accountName.includes('total operating expenses') &&
-          !accountName.includes('total') &&
-          amount !== 0) {
-          extractedData.opex += Math.abs(amount) // Use absolute value for expenses
-          hasData = true
-          console.log(`Added to OPEX: ${amount}, Total: ${extractedData.opex}`)
-        }
-      } else if (currentSection === 'grossProfit' && amount !== 0) {
-        extractedData.grossProfit = amount
-        hasData = true
-        console.log(`Set Gross Profit: ${amount}`)
-      } else if (currentSection === 'netProfit' && amount !== 0) {
-        extractedData.netProfit = amount
-        hasData = true
-        console.log(`Set Net Profit: ${amount}`)
-      }
-    })
-
-    // Calculate derived values if not explicitly found
-    if (extractedData.grossProfit === 0 && extractedData.sales > 0) {
-      extractedData.grossProfit = extractedData.sales - extractedData.cogs
-      console.log(`Calculated Gross Profit: ${extractedData.grossProfit}`)
-    }
-    if (extractedData.netProfit === 0 && extractedData.grossProfit > 0) {
-      extractedData.netProfit = extractedData.grossProfit - extractedData.opex
-      console.log(`Calculated Net Profit: ${extractedData.netProfit}`)
-    }
-
-    console.log("Final Extracted P&L Data:", extractedData)
-
-    if (hasData) {
-      setUploadStatus("✅ Data successfully extracted!")
-
-      // Update the parent component with the extracted data
-      onUpdatePnLData(extractedData)
-
-      // Save to Firebase if user is logged in
-      if (user) {
-        try {
-          setDoc(doc(db, "financialData", `${user.uid}_pnlData`), {
-            userId: user.uid,
-            chartName: "pnlData",
-            data: extractedData,
-            lastUpdated: new Date().toISOString()
-          })
-          console.log("P&L data saved to Firebase")
-        } catch (error) {
-          console.error("Error saving P&L data:", error)
-        }
-      }
-    } else {
-      setUploadStatus("❌ No valid data found. Please check your CSV format.")
-    }
-
-    setIsLoading(false)
-    setTimeout(() => setUploadStatus(""), 5000) // Clear status after 5 seconds
+  // Check if we have any data
+  const hasData = () => {
+    return localChartData.pnlManual || (pnlData && (pnlData.sales || pnlData.cogs || pnlData.opex))
   }
 
   // Calculate variance (budget - actual)
@@ -2292,6 +2259,9 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
     { id: 'netProfit', title: 'Net Profit', data: chartData.netProfit, variance: netProfitVariance, showNegative: true },
   ]
 
+  // Generate month labels for the form
+  const monthLabels = generateLabels()
+
   return (
     <div
       style={{
@@ -2301,88 +2271,33 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
         borderRadius: "8px",
       }}
     >
-      {/* Upload Button and Status */}
+      {/* Action Button */}
       <div
         style={{
           display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
+          justifyContent: "center",
           marginBottom: "20px",
-          flexWrap: "wrap",
-          gap: "15px",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "15px", flexWrap: "wrap" }}>
-          <button
-            onClick={() => setShowUploadModal(true)}
-            disabled={isLoading}
-            style={{
-              padding: "12px 24px",
-              backgroundColor: isLoading ? "#cccccc" : "#5d4037",
-              color: "white",
-              border: "none",
-              borderRadius: "6px",
-              cursor: isLoading ? "not-allowed" : "pointer",
-              fontWeight: "600",
-              fontSize: "14px",
-            }}
-          >
-            {isLoading ? "⏳ Processing..." : "📁 Upload P&L CSV"}
-          </button>
-
-          {uploadedFileName && (
-            <span style={{ color: "#5d4037", fontWeight: "500" }}>
-              File: {uploadedFileName}
-            </span>
-          )}
-
-          {uploadStatus && (
-            <span style={{
-              color: uploadStatus.includes("❌") ? "#d32f2f" : "#388e3c",
-              fontWeight: "500",
-              fontSize: "14px"
-            }}>
-              {uploadStatus}
-            </span>
-          )}
-        </div>
-
-        <div style={{ display: "flex", gap: "10px" }}>
-          <button
-            onClick={() => setChartViewMode("data")}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: chartViewMode === "data" ? "#5d4037" : "#e8ddd4",
-              color: chartViewMode === "data" ? "#fdfcfb" : "#5d4037",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontWeight: "500",
-              fontSize: "14px",
-            }}
-          >
-            Actual vs Budget
-          </button>
-          <button
-            onClick={() => setChartViewMode("variance")}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: chartViewMode === "variance" ? "#5d4037" : "#e8ddd4",
-              color: chartViewMode === "variance" ? "#fdfcfb" : "#5d4037",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontWeight: "500",
-              fontSize: "14px",
-            }}
-          >
-            Variance Analysis
-          </button>
-        </div>
+        <button
+          onClick={handleAddDetails}
+          style={{
+            padding: "12px 24px",
+            backgroundColor: "#5d4037",
+            color: "white",
+            border: "none",
+            borderRadius: "6px",
+            cursor: "pointer",
+            fontWeight: "600",
+            fontSize: "14px",
+          }}
+        >
+          ➕ Add/Edit P&L Details
+        </button>
       </div>
 
       {/* Data Status */}
-      {!hasPnLData() ? (
+      {!hasData() ? (
         <div
           style={{
             backgroundColor: "#fff3cd",
@@ -2395,10 +2310,7 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
           }}
         >
           <p style={{ margin: 0, fontWeight: "500" }}>
-            📊 Upload a CSV file with P&L data (Sales, COGS, Operating Expenses) to see charts.
-          </p>
-          <p style={{ margin: "10px 0 0 0", fontSize: "14px" }}>
-            💡 <strong>Note:</strong> Please export your Excel file as CSV before uploading.
+            📊 Click "Add/Edit P&L Details" to enter your Profit & Loss data manually, or upload a CSV file.
           </p>
         </div>
       ) : (
@@ -2413,21 +2325,13 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
           }}
         >
           <p style={{ margin: 0, fontWeight: "500" }}>
-            ✅ P&L data loaded successfully!
+            ✅ {localChartData.pnlManual ? "Showing manually entered P&L data" : "Showing P&L data from uploaded CSV file"}
           </p>
-          {pnlData && (
-            <div style={{ marginTop: "10px", fontSize: "14px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px" }}>
-              <div><strong>Sales:</strong> R{Number(pnlData.sales || 0).toLocaleString()}</div>
-              <div><strong>COGS:</strong> R{Number(pnlData.cogs || 0).toLocaleString()}</div>
-              <div><strong>OPEX:</strong> R{Number(pnlData.opex || 0).toLocaleString()}</div>
-              <div><strong>Gross Profit:</strong> R{Number(pnlData.grossProfit || 0).toLocaleString()}</div>
-              <div><strong>Net Profit:</strong> R{Number(pnlData.netProfit || 0).toLocaleString()}</div>
-            </div>
-          )}
         </div>
       )}
 
-      {/* Chart Visibility Controls */}
+      {/* Rest of the component remains the same... */}
+      {/* Chart Controls */}
       <div
         style={{
           backgroundColor: "#fdfcfb",
@@ -2551,8 +2455,8 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
         )}
       </div>
 
-      {/* CSV Upload Modal */}
-      {showUploadModal && (
+      {/* Modal for adding/editing P&L details */}
+      {showModal && (
         <div
           style={{
             position: "fixed",
@@ -2573,97 +2477,280 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
               padding: "30px",
               borderRadius: "8px",
               boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
-              width: "600px",
+              width: "900px",
               maxWidth: "90vw",
-              textAlign: "center",
+              maxHeight: "90vh",
+              overflowY: "auto",
             }}
           >
-            <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "20px" }}>Upload P&L CSV File</h3>
+            <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "20px" }}>P&L Details - Manual Entry</h3>
 
             <div
               style={{
                 backgroundColor: "#f0f8ff",
-                padding: "20px",
+                padding: "15px",
                 borderRadius: "6px",
                 marginBottom: "20px",
-                border: "2px dashed #b3d9ff",
+                border: "1px solid #b3d9ff",
               }}
             >
-              <p style={{ color: "#1e3a8a", margin: "0 0 15px 0", fontSize: "14px", fontWeight: "bold" }}>
-                ⚠️ Important: Please export your Excel file as CSV first!
+              <p style={{ color: "#1e3a8a", margin: "0", fontSize: "14px", fontWeight: "500" }}>
+                💡 <strong>Tip:</strong> Enter actual values for each month. Budget values will be auto-calculated if left empty.
+                Based on your spreadsheet, focus on key totals like Trading Income, Cost of Sales, Gross Profit, Operating Expenses, and Net Profit.
               </p>
-              <p style={{ color: "#1e3a8a", margin: "0 0 15px 0", fontSize: "14px" }}>
-                In Excel: File → Save As → Choose "CSV (Comma delimited)" format
-              </p>
-
-              <div style={{ textAlign: "left", backgroundColor: "white", padding: "15px", borderRadius: "4px", fontSize: "12px", fontFamily: "monospace" }}>
-                <p><strong>Expected CSV format (based on your template):</strong></p>
-                <p>Sales - Kolomela DMS, 5480794.06</p>
-                <p>Sales - Sishen - JIG, 38444.0</p>
-                <p>Cost of Sales - [Category], [Amount]</p>
-                <p>Operating Expenses - [Category], [Amount]</p>
-                <p>Gross Profit, [Amount]</p>
-                <p>Net Profit, [Amount]</p>
-              </div>
             </div>
 
-            <input
-              type="file"
-              accept=".csv"
-              onChange={handleCSVUpload}
-              disabled={isLoading}
-              style={{
-                marginBottom: "20px",
-                width: "100%",
-                padding: "10px",
-                border: "2px solid #e8ddd4",
-                borderRadius: "4px",
-                opacity: isLoading ? 0.6 : 1,
-              }}
-            />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+              {/* Actual Values Column */}
+              <div>
+                <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Actual Values (R)</h4>
 
-            {isLoading && (
-              <div style={{ marginBottom: "15px" }}>
-                <div style={{ display: "inline-block", width: "20px", height: "20px", border: "3px solid #f3f3f3", borderTop: "3px solid #5d4037", borderRadius: "50%", animation: "spin 1s linear infinite" }}></div>
-                <span style={{ marginLeft: "10px", color: "#5d4037" }}>Processing file...</span>
+                {/* Sales Revenue */}
+                <div style={{ marginBottom: "20px" }}>
+                  <h5 style={{ color: "#5d4037", marginBottom: "10px" }}>Sales Revenue</h5>
+                  {monthLabels.map((month, index) => (
+                    <div key={index} style={{ marginBottom: "8px" }}>
+                      <label style={{ display: "block", marginBottom: "3px", color: "#5d4037", fontSize: "12px", fontWeight: "500" }}>
+                        {month}:
+                      </label>
+                      <input
+                        type="number"
+                        value={pnlDetails.sales[index] || ""}
+                        onChange={(e) => {
+                          const newSales = [...pnlDetails.sales]
+                          newSales[index] = e.target.value
+                          setPnlDetails(prev => ({ ...prev, sales: newSales }))
+                        }}
+                        placeholder="0"
+                        style={{
+                          width: "100%",
+                          padding: "6px",
+                          border: "1px solid #e8ddd4",
+                          borderRadius: "4px",
+                          fontSize: "12px",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                {/* Cost of Goods Sold */}
+                <div style={{ marginBottom: "20px" }}>
+                  <h5 style={{ color: "#5d4037", marginBottom: "10px" }}>Cost of Goods Sold</h5>
+                  {monthLabels.map((month, index) => (
+                    <div key={index} style={{ marginBottom: "8px" }}>
+                      <label style={{ display: "block", marginBottom: "3px", color: "#5d4037", fontSize: "12px", fontWeight: "500" }}>
+                        {month}:
+                      </label>
+                      <input
+                        type="number"
+                        value={pnlDetails.cogs[index] || ""}
+                        onChange={(e) => {
+                          const newCogs = [...pnlDetails.cogs]
+                          newCogs[index] = e.target.value
+                          setPnlDetails(prev => ({ ...prev, cogs: newCogs }))
+                        }}
+                        placeholder="0"
+                        style={{
+                          width: "100%",
+                          padding: "6px",
+                          border: "1px solid #e8ddd4",
+                          borderRadius: "4px",
+                          fontSize: "12px",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                {/* Operating Expenses */}
+                <div style={{ marginBottom: "20px" }}>
+                  <h5 style={{ color: "#5d4037", marginBottom: "10px" }}>Operating Expenses</h5>
+                  {monthLabels.map((month, index) => (
+                    <div key={index} style={{ marginBottom: "8px" }}>
+                      <label style={{ display: "block", marginBottom: "3px", color: "#5d4037", fontSize: "12px", fontWeight: "500" }}>
+                        {month}:
+                      </label>
+                      <input
+                        type="number"
+                        value={pnlDetails.opex[index] || ""}
+                        onChange={(e) => {
+                          const newOpex = [...pnlDetails.opex]
+                          newOpex[index] = e.target.value
+                          setPnlDetails(prev => ({ ...prev, opex: newOpex }))
+                        }}
+                        placeholder="0"
+                        style={{
+                          width: "100%",
+                          padding: "6px",
+                          border: "1px solid #e8ddd4",
+                          borderRadius: "4px",
+                          fontSize: "12px",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
-            )}
+
+              {/* Budget Values Column */}
+              <div>
+                <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Budget Values (R) - Optional</h4>
+
+                {/* Sales Budget */}
+                <div style={{ marginBottom: "20px" }}>
+                  <h5 style={{ color: "#5d4037", marginBottom: "10px" }}>Sales Budget</h5>
+                  {monthLabels.map((month, index) => (
+                    <div key={index} style={{ marginBottom: "8px" }}>
+                      <label style={{ display: "block", marginBottom: "3px", color: "#5d4037", fontSize: "12px", fontWeight: "500" }}>
+                        {month}:
+                      </label>
+                      <input
+                        type="number"
+                        value={pnlDetails.salesBudget[index] || ""}
+                        onChange={(e) => {
+                          const newSalesBudget = [...pnlDetails.salesBudget]
+                          newSalesBudget[index] = e.target.value
+                          setPnlDetails(prev => ({ ...prev, salesBudget: newSalesBudget }))
+                        }}
+                        placeholder="Auto-calculated"
+                        style={{
+                          width: "100%",
+                          padding: "6px",
+                          border: "1px solid #e8ddd4",
+                          borderRadius: "4px",
+                          fontSize: "12px",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                {/* COGS Budget */}
+                <div style={{ marginBottom: "20px" }}>
+                  <h5 style={{ color: "#5d4037", marginBottom: "10px" }}>COGS Budget</h5>
+                  {monthLabels.map((month, index) => (
+                    <div key={index} style={{ marginBottom: "8px" }}>
+                      <label style={{ display: "block", marginBottom: "3px", color: "#5d4037", fontSize: "12px", fontWeight: "500" }}>
+                        {month}:
+                      </label>
+                      <input
+                        type="number"
+                        value={pnlDetails.cogsBudget[index] || ""}
+                        onChange={(e) => {
+                          const newCogsBudget = [...pnlDetails.cogsBudget]
+                          newCogsBudget[index] = e.target.value
+                          setPnlDetails(prev => ({ ...prev, cogsBudget: newCogsBudget }))
+                        }}
+                        placeholder="Auto-calculated"
+                        style={{
+                          width: "100%",
+                          padding: "6px",
+                          border: "1px solid #e8ddd4",
+                          borderRadius: "4px",
+                          fontSize: "12px",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                {/* OPEX Budget */}
+                <div style={{ marginBottom: "20px" }}>
+                  <h5 style={{ color: "#5d4037", marginBottom: "10px" }}>OPEX Budget</h5>
+                  {monthLabels.map((month, index) => (
+                    <div key={index} style={{ marginBottom: "8px" }}>
+                      <label style={{ display: "block", marginBottom: "3px", color: "#5d4037", fontSize: "12px", fontWeight: "500" }}>
+                        {month}:
+                      </label>
+                      <input
+                        type="number"
+                        value={pnlDetails.opexBudget[index] || ""}
+                        onChange={(e) => {
+                          const newOpexBudget = [...pnlDetails.opexBudget]
+                          newOpexBudget[index] = e.target.value
+                          setPnlDetails(prev => ({ ...prev, opexBudget: newOpexBudget }))
+                        }}
+                        placeholder="Auto-calculated"
+                        style={{
+                          width: "100%",
+                          padding: "6px",
+                          border: "1px solid #e8ddd4",
+                          borderRadius: "4px",
+                          fontSize: "12px",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                {/* Notes */}
+                <div style={{ marginBottom: "20px" }}>
+                  <h5 style={{ color: "#5d4037", marginBottom: "10px" }}>Notes</h5>
+                  <textarea
+                    value={pnlDetails.notes}
+                    onChange={(e) => setPnlDetails(prev => ({ ...prev, notes: e.target.value }))}
+                    placeholder="Enter any additional notes about your P&L data..."
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      border: "1px solid #e8ddd4",
+                      borderRadius: "4px",
+                      fontSize: "14px",
+                      boxSizing: "border-box",
+                      minHeight: "80px",
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
 
             <div
               style={{
                 display: "flex",
                 gap: "10px",
-                justifyContent: "center",
+                justifyContent: "flex-end",
+                marginTop: "20px",
               }}
             >
               <button
-                onClick={() => setShowUploadModal(false)}
-                disabled={isLoading}
+                onClick={() => setShowModal(false)}
                 style={{
                   padding: "10px 20px",
                   backgroundColor: "#e8ddd4",
                   color: "#5d4037",
                   border: "none",
                   borderRadius: "4px",
-                  cursor: isLoading ? "not-allowed" : "pointer",
+                  cursor: "pointer",
                   fontWeight: "500",
-                  opacity: isLoading ? 0.6 : 1,
                 }}
               >
                 Cancel
+              </button>
+              <button
+                onClick={handleSavePnlDetails}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#5d4037",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                }}
+              >
+                Save P&L Details
               </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* Add CSS for spinner */}
-      <style jsx>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   )
 }
@@ -2689,7 +2776,6 @@ const FinancialPerformance = () => {
       } else {
         setChartData({})
         setBalanceSheetData(null)
-        setPnLData(null)
       }
     })
 
@@ -2705,14 +2791,11 @@ const FinancialPerformance = () => {
 
       const userData = {}
       let balanceSheet = null
-      let pnlData = null
 
       querySnapshot.forEach((doc) => {
         const data = doc.data()
         if (data.chartName === "balanceSheet") {
           balanceSheet = data.data
-        } else if (data.chartName === "pnlData") {
-          pnlData = data.data
         } else {
           userData[data.chartName] = {
             name: data.name,
@@ -2726,7 +2809,6 @@ const FinancialPerformance = () => {
 
       setChartData(userData)
       setBalanceSheetData(balanceSheet)
-      setPnLData(pnlData)
     } catch (error) {
       console.error("Error loading user data:", error)
     }
@@ -2976,9 +3058,8 @@ const FinancialPerformance = () => {
             activeSection={activeSection}
             viewMode={viewMode}
             financialYearStart={financialYearStart}
-            pnlData={pnlData}
+            pnlData={pnlData} // Pass PnL data instead of balanceSheetData
             user={user}
-            onUpdatePnLData={handleUpdatePnLData} // Add this prop
           />
           <CashflowTrends
             activeSection={activeSection}
