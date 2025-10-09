@@ -18,6 +18,8 @@ import {
 import { db, } from "../../firebaseConfig"
 import { Eye, Filter } from "lucide-react"
 
+import { useNavigate } from "react-router-dom"
+
 // Status definitions with brown color scheme
 const STATUS_TYPES = {
   Pending: {
@@ -235,6 +237,7 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
   const [showMatchBreakdown, setShowMatchBreakdown] = useState(false)
   const [matchBreakdownData, setMatchBreakdownData] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
+  const [currentUserApplication, setCurrentUserApplication] = useState(null)
   const [filters, setFilters] = useState({
     location: "",
     matchScore: 50,
@@ -248,6 +251,11 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
     sortBy: "",
   })
 
+  const navigate = useNavigate()
+
+  const handleNewRequest = () => {
+    navigate("/applications/product/request-overview")
+  }
 
   const getImprovementSuggestion = (criteriaKey, score) => {
     const suggestions = {
@@ -323,26 +331,6 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
     }
   }
 
-  // Add this function to fetch the current user's product application
-  const fetchCurrentUserProductApplication = async () => {
-    try {
-      const auth = getAuth()
-      const currentUser = auth.currentUser
-      if (!currentUser) return null
-
-      const docRef = doc(db, "productApplications", currentUser.uid)
-      const docSnap = await getDoc(docRef)
-
-      if (docSnap.exists()) {
-        return { id: docSnap.id, ...docSnap.data() }
-      }
-      return null
-    } catch (error) {
-      console.error("Error fetching product application:", error)
-      return null
-    }
-  }
-
   const getSupplierRating = (supplierId) => {
     return supplierRatings[supplierId] || {
       average: 0,
@@ -363,8 +351,11 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
       if (user) {
         setCurrentUser(user)
+        // Fetch current user's product application
+        fetchCurrentUserApplication(user.uid)
       } else {
         setCurrentUser(null)
+        setCurrentUserApplication(null)
       }
     })
 
@@ -374,42 +365,36 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
     }
   }, [])
 
+  // Fetch current user's product application
+  const fetchCurrentUserApplication = async (userId) => {
+    try {
+      const applicationDoc = await getDoc(doc(db, "productApplications", userId))
+      if (applicationDoc.exists()) {
+        const applicationData = applicationDoc.data()
+        setCurrentUserApplication(applicationData)
+        console.log("Current user application:", applicationData)
+      } else {
+        console.log("No product application found for current user")
+        setCurrentUserApplication(null)
+      }
+    } catch (error) {
+      console.error("Error fetching current user application:", error)
+      setCurrentUserApplication(null)
+    }
+  }
+
   useEffect(() => {
     const fetchData = async () => {
       try {
-        setLoading(true)
+        // Fetch product applications
+        const applicationsSnapshot = await getDocs(collection(db, "productApplications"))
+        const applicationsData = applicationsSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }))
+        setProductApplications(applicationsData)
 
-        const auth = getAuth()
-        const currentUser = auth.currentUser
-
-        if (!currentUser) {
-          setError("Please log in to view suppliers")
-          setLoading(false)
-          return
-        }
-
-        // 1. FIRST: Fetch current user's product application
-        const currentUserApplication = await fetchCurrentUserProductApplication()
-
-        if (!currentUserApplication) {
-          // No product application found - show empty state with message
-          setSuppliers([])
-          setAllSuppliers([])
-          setFilteredSuppliers([])
-          setProductApplications([])
-          setLoading(false)
-
-          // Notify parent component
-          if (onSuppliersUpdate) {
-            onSuppliersUpdate([], [])
-          }
-          return
-        }
-
-        // User has a product application - proceed with matching
-        setProductApplications([currentUserApplication])
-
-        // 2. Fetch universal profiles (suppliers)
+        // Fetch universal profiles (suppliers)
         const profilesSnapshot = await getDocs(collection(db, "universalProfiles"))
         const profilesData = profilesSnapshot.docs.map((doc) => {
           const data = doc.data()
@@ -420,47 +405,45 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
             financialOverview: data.financialOverview || {},
             legalCompliance: data.legalCompliance || {},
             entityOverview: data.entityOverview || {},
+            // Default stage values
             currentStage: "Potential Supplier",
             status: "New Lead",
           }
         })
 
-        // 3. Fetch ratings data
         const ratingsData = await fetchSupplierRatings()
-
-        // 4. Fetch supplier applications to sync stages
+        // Fetch supplier applications to sync stages
+        const auth = getAuth()
+        const currentUser = auth.currentUser
         let supplierApplicationsData = []
-        const supplierAppsQuery = query(
-          collection(db, "supplierApplications"),
-          where("supplierId", "==", currentUser.uid),
-        )
-        const supplierAppsSnapshot = await getDocs(supplierAppsQuery)
-        supplierApplicationsData = supplierAppsSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }))
 
-        // 5. Calculate matches using current user's product application
-        const suppliersWithMatches = profilesData
-          .map((supplier) => {
-            // Skip the current user's own profile
-            if (supplier.id === currentUser.uid) return null
+        if (currentUser) {
+          const supplierAppsQuery = query(
+            collection(db, "supplierApplications"),
+            where("supplierId", "==", currentUser.uid),
+          )
+          const supplierAppsSnapshot = await getDocs(supplierAppsQuery)
+          supplierApplicationsData = supplierAppsSnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+        }
 
-            // Calculate match score between current user's needs and supplier's offerings
-            const matchScore = calculateMatchScore(currentUserApplication, supplier, ratingsData)
+        // Calculate matches if we have applications
+        let suppliersWithMatches
+        if (applicationsData.length > 0) {
+          const currentApplication = applicationsData.find((app) => app.id === auth.currentUser?.uid)
+          console.log(currentApplication)
 
-            // Filter out very low matches (adjust threshold as needed)
-            if (matchScore.totalScore < 10) return null
+          suppliersWithMatches = profilesData.map((supplier) => {
+            // Pass the ratings data directly to calculateMatchScore
+            const matchScore = calculateMatchScore(currentApplication, supplier, ratingsData)
+            console.log(matchScore.totalScore)
+            console.log(supplier)
 
             // Get first category name or default
             const firstCategory = getFirstCategory(supplier.productsServices)
-
-            // Get the matched service from the breakdown
-            const matchedService = matchScore.breakdown.categoryMatch?.matchedServices?.[0] ||
-              firstCategory ||
-              "Service/Product"
-
-            // Find if this supplier has an existing application (where they are the customer)
+            // Find if this supplier has an application (where they are the customer)
             const supplierApp = supplierApplicationsData.find((app) => app.customerId === supplier.id)
 
             // Get the actual rating from the ratings data
@@ -469,75 +452,108 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
               count: 0,
               latestComment: "No ratings yet"
             }
+            const actualRating = supplierRatingData.average
 
             return {
               ...supplier,
               matchPercentage: matchScore.totalScore,
               matchDetails: matchScore.breakdown,
-              matchedService: matchedService, // Add this field
               status: supplierApp?.status || getStatusBasedOnScore(matchScore.totalScore),
-              rating: supplierRatingData.average,
+              rating: actualRating, // Use the actual rating from supplierReviews
               avgResponseTime: "1-2 days",
               lastActivity: supplierApp?.updatedAt || new Date().toLocaleDateString(),
-              urgency: currentUserApplication.requestOverview?.urgency || "Not specified",
+              urgency: supplier.applicationOverview?.urgency || "Not specified",
               dealSize: supplier.financialOverview?.annualRevenue || "Not specified",
               serviceCategory: firstCategory,
               currentStage: supplierApp?.currentStage || "Potential Supplier",
               nextStage: supplierApp?.nextStage || "Initial Contact",
               bbbeeLevel: supplier.legalCompliance?.bbbeeLevel || "N/A",
               applicationId: supplierApp?.id || null,
-              ratingCount: supplierRatingData.count,
+              ratingCount: supplierRatingData.count, // Add rating count for display
+              // Add service required from current user's application
+              serviceRequired: currentUserApplication?.requestOverview?.purpose || "Not specified"
             }
           })
-          .filter(Boolean) // Remove null entries
 
-        // Sort by match percentage (highest to lowest)
-        suppliersWithMatches.sort((a, b) => b.matchPercentage - a.matchPercentage)
+          // Sort by match percentage (highest to lowest)
+          suppliersWithMatches.sort((a, b) => b.matchPercentage - a.matchPercentage)
+          setSuppliers(suppliersWithMatches)
+        } else {
+          // Fallback if no applications
+          suppliersWithMatches = profilesData.map((profile) => {
+            // Find if this supplier has an application (where they are the customer)
+            const supplierApp = supplierApplicationsData.find((app) => app.customerId === profile.id)
 
-        setSuppliers(suppliersWithMatches)
+            return {
+              ...profile,
+              // matchPercentage: Math.floor(Math.random() * 40) + 60,
+              status: supplierApp?.status || "New Lead",
+              rating: (profile.pisScore || 50) / 10,
+              serviceCategory: Array.isArray(profile.productsServices?.productCategories)
+                ? profile.productsServices.productCategories[0]?.name || "Not specified"
+                : "Not specified",
+              bbbeeLevel: profile.legalCompliance?.bbbeeLevel || "N/A",
+              dealSize: profile.financialOverview?.annualRevenue || "Not specified",
+              currentStage: supplierApp?.currentStage || "Potential Supplier",
+              nextStage: supplierApp?.nextStage || "Initial Contact",
+              applicationId: supplierApp?.id || null,
+              lastActivity: supplierApp?.updatedAt || new Date().toLocaleDateString(),
+              // Add service required from current user's application
+              serviceRequired: currentUserApplication?.requestOverview?.purpose || "Not specified"
+            }
+          })
+          setSuppliers(suppliersWithMatches)
+        }
+
         setAllSuppliers(suppliersWithMatches)
         setFilteredSuppliers(suppliersWithMatches)
 
-        // 6. Set up real-time listener for supplier application updates
-        const unsubscribe = onSnapshot(supplierAppsQuery, (snapshot) => {
-          const updatedApplications = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }))
+        if (currentUser) {
+          const supplierAppsQuery = query(
+            collection(db, "supplierApplications"),
+            where("supplierId", "==", currentUser.uid),
+          )
 
-          setAllSuppliers((prev) =>
-            prev.map((supplier) => {
-              const updatedApp = updatedApplications.find((app) => app.customerId === supplier.id)
-              if (updatedApp) {
-                // Check if status changed to "Accepted"
-                if (updatedApp.status === "Accepted" && supplier.status !== "Accepted") {
-                  // Notify parent about accepted supplier
-                  if (onSupplierAccepted) {
-                    onSupplierAccepted(supplier.id)
+          const unsubscribe = onSnapshot(supplierAppsQuery, (snapshot) => {
+            const updatedApplications = snapshot.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+            }))
+
+            setAllSuppliers((prev) =>
+              prev.map((supplier) => {
+                const updatedApp = updatedApplications.find((app) => app.customerId === supplier.id)
+                if (updatedApp) {
+                  // Check if status changed to "Accepted"
+                  if (updatedApp.status === "Accepted" && supplier.status !== "Accepted") {
+                    // Notify parent about accepted supplier
+                    if (onSupplierAccepted) {
+                      onSupplierAccepted(supplier.id)
+                    }
+                  }
+
+                  return {
+                    ...supplier,
+                    currentStage: updatedApp.currentStage || supplier.currentStage,
+                    status: updatedApp.status || supplier.status,
+                    applicationId: updatedApp.id,
+
+                    lastActivity: updatedApp.updatedAt || updatedApp.createdAt || supplier.lastActivity,
                   }
                 }
+                return supplier
+              }),
+            )
+          })
 
-                return {
-                  ...supplier,
-                  currentStage: updatedApp.currentStage || supplier.currentStage,
-                  status: updatedApp.status || supplier.status,
-                  applicationId: updatedApp.id,
-                  lastActivity: updatedApp.updatedAt || updatedApp.createdAt || supplier.lastActivity,
-                }
-              }
-              return supplier
-            }),
-          )
-        })
+          // Cleanup function
+          return () => unsubscribe()
+        }
 
-        // 7. Notify parent component of the update
+        // Notify parent component of the update
         if (onSuppliersUpdate) {
           onSuppliersUpdate(suppliersWithMatches, suppliersWithMatches)
         }
-
-        // Cleanup function
-        return () => unsubscribe()
-
       } catch (err) {
         console.error("Error fetching data:", err)
         setError("Failed to load data. Please try again later.")
@@ -547,7 +563,7 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
     }
 
     fetchData()
-  }, [])
+  }, [currentUserApplication]) // Add dependency to refetch when current user application is available
 
   const verifyStageUpdate = async (supplierId) => {
     const docRef = doc(db, "universalProfiles", supplierId)
@@ -607,13 +623,6 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
     const allSupplierCategories = [...new Set([...supplierProductCategories, ...supplierServiceCategories])]
     console.log("Supplier Categories:", allSupplierCategories)
 
-    // Extract keywords from application
-    const userKeywords = demand.keywords
-      ? demand.keywords.toLowerCase().split(/[,\s]+/).filter(k => k.length > 2)
-      : []
-
-    console.log("User Keywords:", userKeywords)
-
     const appBudgetMin = Number.parseInt((requestOverview.minBudget || "0").replace(/\D/g, "")) || 0
     const appBudgetMax = Number.parseInt((requestOverview.maxBudget || "0").replace(/\D/g, "")) || 1000000
     const appLocation = (requestOverview.location || "").toLowerCase().trim()
@@ -644,57 +653,38 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
 
     console.log("Supplier Revenue:", revenue)
 
-    // 1. SERVICE/PRODUCT CATEGORY MATCH (Highest Priority - 40%)
-    {
-      filteredSuppliers.length === 0 && !loading && (
-        <div style={noResultsStyle}>
-          <div style={{ textAlign: "center" }}>
-            <p style={{ margin: "1rem 0", fontSize: "1rem", color: "#5D2A0A" }}>
-              {productApplications.length === 0
-                ? "You need to complete your Product Application first to see matching suppliers. Please fill out what products/services you need."
-                : "No suppliers match your current requirements. Try adjusting your filters or check back later."
-              }
-            </p>
-          </div>
-        </div>
-      )
-    }
+    // IMPROVED CATEGORY MATCHING (30%)
+    if (MATCHING_CRITERIA.CATEGORY_MATCH.weight > 0) {
+      let categoryScore = 0
 
-    // 2. KEYWORD MATCH (New - 20%)
-    if (userKeywords.length > 0) {
-      let keywordScore = 0
-
-      // Combine supplier description and categories for keyword matching
-      const supplierText = [
-        supplierEntity.businessDescription || "",
-        ...supplierProductCategories,
-        ...supplierServiceCategories
-      ].join(" ").toLowerCase()
-
-      if (supplierText) {
-        const matchedKeywords = userKeywords.filter(keyword =>
-          supplierText.includes(keyword)
+      if (appCategories.length > 0 && allSupplierCategories.length > 0) {
+        // Find matching categories (case-insensitive, partial matches)
+        const matchingCategories = appCategories.filter((appCat) =>
+          allSupplierCategories.some(
+            (supplierCat) =>
+              supplierCat.includes(appCat) ||
+              appCat.includes(supplierCat) ||
+              calculateSimilarity(appCat, supplierCat) > 0.7,
+          ),
         )
-        keywordScore = matchedKeywords.length / Math.max(userKeywords.length, 1)
 
-        console.log("Keyword Matches:", matchedKeywords, "Score:", keywordScore)
+        categoryScore = matchingCategories.length / appCategories.length
+        console.log("Category Matches:", matchingCategories, "Score:", categoryScore)
+      } else if (appCategories.length === 0) {
+        categoryScore = 0.5 // Neutral score if no categories specified
       }
 
-      // Add keyword score with 20% weight (adjust MATCHING_CRITERIA if needed)
-      score += keywordScore * 0.2 * 100
-      breakdown.keywordMatch = {
-        score: keywordScore * 100,
-        description: "Keyword/Specific Needs Match",
-        matchedKeywords: userKeywords.length > 0 ? userKeywords.filter(kw =>
-          (supplierEntity.businessDescription || "").toLowerCase().includes(kw) ||
-          supplierProductCategories.some(cat => cat.includes(kw)) ||
-          supplierServiceCategories.some(cat => cat.includes(kw))
-        ) : []
+      score += categoryScore * MATCHING_CRITERIA.CATEGORY_MATCH.weight * 100
+      breakdown.categoryMatch = {
+        score: categoryScore * 100,
+        description: MATCHING_CRITERIA.CATEGORY_MATCH.description,
+        matches: appCategories.length > 0 ? getCategoryMatches(appCategories, allSupplierCategories) : [],
       }
-      totalWeight += 0.2 * 100
+      totalWeight += MATCHING_CRITERIA.CATEGORY_MATCH.weight * 100
     }
 
-    // 3. BBBEE_LEVEL (10%)
+    // Rest of your existing criteria calculations remain the same...
+    // 2. BBBEE_LEVEL (10%)
     if (MATCHING_CRITERIA.BBBEE_LEVEL.weight > 0) {
       let bbbeeScore = 0
 
@@ -712,7 +702,7 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
       totalWeight += MATCHING_CRITERIA.BBBEE_LEVEL.weight * 100
     }
 
-    // 4. LOCATION (10%)
+    // 3. LOCATION (10%)
     if (MATCHING_CRITERIA.LOCATION.weight > 0) {
       const locationScore =
         location && appLocation && (location.includes(appLocation) || appLocation.includes(location)) ? 1 : 0
@@ -725,14 +715,15 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
       totalWeight += MATCHING_CRITERIA.LOCATION.weight * 100
     }
 
-    // 5. DELIVERY_MODE (10%) - SIMPLIFIED WITH HYBRID COMPATIBILITY
+
+    // 4. DELIVERY_MODE (10%) - SIMPLIFIED WITH HYBRID COMPATIBILITY
     if (MATCHING_CRITERIA.DELIVERY_MODE.weight > 0) {
       let deliveryScore = 0
 
       if (appDeliveryModes.length > 0 && supplyDeliveryModes.length > 0) {
         // Check if either party has Hybrid - if so, full compatibility
-        const appHasHybrid = appDeliveryModes.includes("hybrid")
-        const supplyHasHybrid = supplyDeliveryModes.includes("hybrid")
+        const appHasHybrid = appDeliveryModes.includes("Hybrid")
+        const supplyHasHybrid = supplyDeliveryModes.includes("Hybrid")
 
         if (appHasHybrid || supplyHasHybrid) {
           deliveryScore = 1 // Full score if either has Hybrid
@@ -752,12 +743,12 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
         score: deliveryScore * 100,
         description: MATCHING_CRITERIA.DELIVERY_MODE.description,
         matches: appDeliveryModes.length > 0 ? getDeliveryModeMatches(appDeliveryModes, supplyDeliveryModes) : [],
-        hasHybrid: appDeliveryModes.includes("hybrid") || supplyDeliveryModes.includes("hybrid")
+        hasHybrid: appDeliveryModes.includes("Hybrid") || supplyDeliveryModes.includes("Hybrid")
       }
       totalWeight += MATCHING_CRITERIA.DELIVERY_MODE.weight * 100
     }
 
-    // 6. BUDGET_RANGE (10%)
+    // 5. BUDGET_RANGE (10%)
     if (MATCHING_CRITERIA.BUDGET_RANGE.weight > 0) {
       let budgetScore = 0
 
@@ -779,7 +770,8 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
       totalWeight += MATCHING_CRITERIA.BUDGET_RANGE.weight * 100
     }
 
-    // 7. OWNERSHIP_PREFS (10%)
+    // 6. OWNERSHIP_PREFS (10%)
+    // IMPROVED OWNERSHIP_PREFS (10%)
     if (MATCHING_CRITERIA.OWNERSHIP_PREFS.weight > 0) {
       let ownershipScore = 0
       const ownershipDetails = {
@@ -788,7 +780,7 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
         youthOwned: { percentage: 0, meetsThreshold: false },
         disabilityInclusive: { percentage: 0, meetsThreshold: false },
       }
-
+      console.log(appOwnershipPrefs)
       if (appOwnershipPrefs.length > 0) {
         // Calculate ownership percentages from shareholders array
         const shareholderData = calculateOwnershipPercentages(supplierOwnership)
@@ -840,7 +832,8 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
       totalWeight += MATCHING_CRITERIA.OWNERSHIP_PREFS.weight * 100
     }
 
-    // 8. URGENCY_LEAD_TIME MATCHING (10%) - CORRECTED LOGIC
+
+    // 7. URGENCY_LEAD_TIME MATCHING (10%) - CORRECTED LOGIC
     if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
       let urgencyLeadTimeScore = 0
 
@@ -869,11 +862,23 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
           totalProjectDays: Math.round(totalProjectDays),
           minDeliveryDays: Math.round(minDeliveryDays),
           maxDeliveryDays: Math.round(maxDeliveryDays),
+          supplierData: {
+            minLeadTime: supply.minLeadTime,
+            maxLeadTime: supply.maxLeadTime,
+            minLeadTimeUnit: supply.minLeadTimeUnit,
+            maxLeadTimeUnit: supply.maxLeadTimeUnit
+          }
         })
+
+        // Apply your scoring logic:
+        // 1.0 if both min and max fit within project timeframe
+        // 0.8 if only minimum fits but maximum doesn't
+        // 0.0 if neither fits
 
         const minFits = minDeliveryDays <= totalProjectDays
         const maxFits = maxDeliveryDays <= totalProjectDays
-
+        console.log(minFits)
+        console.log(maxFits)
         if (minFits && maxFits) {
           urgencyLeadTimeScore = 1.0 // Full points - both fit perfectly
         } else if (minFits && !maxFits) {
@@ -882,9 +887,16 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
           urgencyLeadTimeScore = 0.0 // No points - can't deliver in time
         }
 
+        console.log("Lead Time Score Result:", {
+          minFits,
+          maxFits,
+          finalScore: urgencyLeadTimeScore
+        })
+
       } else {
         // Missing data - neutral score
         urgencyLeadTimeScore = 0.5
+        console.log("Lead Time: Missing data, using neutral score")
       }
 
       score += urgencyLeadTimeScore * MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100
@@ -896,7 +908,7 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
       totalWeight += MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100
     }
 
-    // 9. EXPERIENCE (10%)
+    // 8. EXPERIENCE (10%)
     if (MATCHING_CRITERIA.EXPERIENCE.weight > 0) {
       let experienceScore = 0
 
@@ -917,10 +929,12 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
       totalWeight += MATCHING_CRITERIA.EXPERIENCE.weight * 100
     }
 
-    // 10. RATING (5%)
+    // 9. RATING (5%)
     if (MATCHING_CRITERIA.RATING.weight > 0) {
-      // Use the ratings data passed as parameter
-      const effectiveRatingsData = ratingsData || {}
+      console.log("Available ratings data:", ratingsData)
+
+      // Use the ratings data passed as parameter, or fall back to state
+      const effectiveRatingsData = ratingsData || supplierRatings;
 
       // Helper function to get rating from the data
       const getRatingFromData = (supplierId) => {
@@ -928,37 +942,36 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
           average: 0,
           count: 0,
           latestComment: "No ratings yet"
-        }
-      }
+        };
+      };
 
       // Use the actual supplier rating
-      const supplierId = supplier?.id
-      const supplierRatingData = getRatingFromData(supplierId)
-      const actualRating = supplierRatingData.average || 0
+      const supplierId = supplier?.id;
+      const supplierRatingData = getRatingFromData(supplierId);
+      const actualRating = supplierRatingData.average || 0;
+
+      console.log("Rating calculation:", {
+        supplierId,
+        actualRating,
+        ratingData: supplierRatingData,
+        allRatings: effectiveRatingsData
+      });
 
       // Normalize rating to 0-1 scale (assuming 0-5 scale)
-      const ratingScore = actualRating / 5
+      const ratingScore = actualRating / 5;
 
-      score += ratingScore * MATCHING_CRITERIA.RATING.weight * 100
+      score += ratingScore * MATCHING_CRITERIA.RATING.weight * 100;
       breakdown.ratingMatch = {
         score: ratingScore * 100,
         description: MATCHING_CRITERIA.RATING.description,
         actualRating: actualRating,
         ratingCount: supplierRatingData.count
-      }
-      totalWeight += MATCHING_CRITERIA.RATING.weight * 100
+      };
+      totalWeight += MATCHING_CRITERIA.RATING.weight * 100;
     }
 
     // Calculate final weighted score
     const finalScore = totalWeight > 0 ? score / totalWeight : 0
-
-    console.log("Final Match Score:", {
-      totalScore: Math.round(finalScore * 100),
-      breakdown,
-      applicationCategories: appCategories,
-      supplierCategories: allSupplierCategories,
-      userKeywords: userKeywords
-    })
 
     return {
       totalScore: Math.round(finalScore * 100), // Convert to percentage
@@ -1294,6 +1307,7 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
           deliveryTurnaround: getSafeValue(currentApplication, "requestOverview.endDate")
             ? `By ${currentApplication.requestOverview.endDate}`
             : "Not specified",
+          purpose: currentUserApplication?.requestOverview?.purpose || "Not specified", // Add purpose to the application
         },
         currentStage: "Contact Initiated",
         nextStage: "Proposal Sent",
@@ -1456,6 +1470,9 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
               <Filter size={16} />
               Filter
             </button>
+            <button onClick={handleNewRequest} style={newRequestButtonStyle}>
+              New Requests
+            </button>
           </div>
         </div>
 
@@ -1466,13 +1483,13 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
               <col style={{ width: "8%" }} /> {/* Supplier Name */}
               <col style={{ width: "8%" }} /> {/* Location */}
               <col style={{ width: "8%" }} /> {/* Sector */}
-              <col style={{ width: "8%" }} /> {/* Service Provided */} {/* NEW COLUMN */}
               <col style={{ width: "5%" }} /> {/* Rating */}
               <col style={{ width: "5%" }} /> {/* BBBEE */}
               <col style={{ width: "8%" }} /> {/* Revenue */}
               <col style={{ width: "8%" }} /> {/* Category */}
+              <col style={{ width: "8%" }} /> {/* Service Required */}
               <col style={{ width: "8%" }} /> {/* Urgency */}
-              <col style={{ width: "8%" }} /> {/* Match %} */}
+              <col style={{ width: "8%" }} /> {/* Match % */}
               <col style={{ width: "5%" }} /> {/* Action */}
               <col style={{ width: "8%" }} /> {/* Stage */}
             </colgroup>
@@ -1481,11 +1498,11 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
                 <th style={tableHeaderStyle}>Supplier Name</th>
                 <th style={tableHeaderStyle}>Location</th>
                 <th style={tableHeaderStyle}>Sector Focus</th>
-                <th style={tableHeaderStyle}>Service Provided</th> {/* NEW COLUMN HEADER */}
                 <th style={tableHeaderStyle}>Rating</th>
                 <th style={tableHeaderStyle}>BBBEE Level</th>
                 <th style={tableHeaderStyle}>Revenue</th>
                 <th style={tableHeaderStyle}>Category</th>
+                <th style={tableHeaderStyle}>Service Required</th>
                 <th style={tableHeaderStyle}>Urgency</th>
                 <th style={tableHeaderStyle}>Match %</th>
                 <th style={tableHeaderStyle}>Action</th>
@@ -1500,7 +1517,7 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
                     <td style={tableCellStyle}>-</td>
                     <td style={tableCellStyle}>-</td>
                     <td style={tableCellStyle}>-</td>
-                    <td style={tableCellStyle}>-</td> {/* NEW COLUMN */}
+                    <td style={tableCellStyle}>-</td>
                     <td style={tableCellStyle}>-</td>
                     <td style={tableCellStyle}>-</td>
                     <td style={tableCellStyle}>-</td>
@@ -1518,7 +1535,7 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
 
                   return (
                     <tr key={supplier.id} style={tableRowStyle}>
-                      {/* Supplier Name Cell */}
+                      {/* Supplier Name Cell - CHANGE: Removed avatar */}
                       <td style={tableCellStyle}>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
                           <div>
@@ -1537,7 +1554,7 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
                         <TruncatedText text={supplier.entityOverview?.location || "Not specified"} maxLength={12} />
                       </td>
 
-                      {/* Sector Focus Cell */}
+                      {/* Sector Focus Cell - CHANGE: Normal text, see more underneath */}
                       <td style={tableCellStyle}>
                         <TruncatedText
                           text={supplier.entityOverview?.economicSectors?.[0] || "Not specified"}
@@ -1545,22 +1562,14 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
                         />
                       </td>
 
-                      {/* NEW: Service Provided Cell */}
-                      <td style={tableCellStyle}>
-                        <TruncatedText
-                          text={supplier.matchedService || "Not specified"}
-                          maxLength={15}
-                        />
-                      </td>
-
-                      {/* Rating Cell */}
+                      {/* Rating Cell - CHANGE: Show numbers only like 4/5 */}
                       <td style={tableCellStyle}>
                         <span style={{ fontSize: "0.75rem", color: "#5D2A0A", fontWeight: "500" }}>
                           {supplier.rating}/5
                         </span>
                       </td>
 
-                      {/* BBBEE Level Cell */}
+                      {/* BBBEE Level Cell - CHANGE: Normal text */}
                       <td style={tableCellStyle}>
                         <TruncatedText text={supplier.legalCompliance?.bbbeeLevel || "N/A"} maxLength={8} />
                       </td>
@@ -1573,10 +1582,11 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
                         />
                       </td>
 
-                      {/* Service Category Cell */}
+                      {/* Service Category Cell - CHANGE: Normal text, see more underneath */}
                       <td style={tableCellStyle}>
                         <TruncatedText
                           text={
+                            // Check both productCategories and serviceCategories
                             supplier.productsServices?.productCategories?.[0]?.name ||
                             supplier.productsServices?.serviceCategories?.[0]?.name ||
                             "Not specified"
@@ -1585,12 +1595,20 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
                         />
                       </td>
 
-                      {/* Urgency Cell */}
+                      {/* NEW: Service Required Cell - Shows the purpose from current user's application */}
+                      <td style={tableCellStyle}>
+                        <TruncatedText
+                          text={supplier.serviceRequired || "Not specified"}
+                          maxLength={15}
+                        />
+                      </td>
+
+                      {/* Urgency Cell - CHANGE: Normal text, see more underneath */}
                       <td style={tableCellStyle}>
                         <TruncatedText text={supplier.urgency || "1 month"} maxLength={10} />
                       </td>
 
-                      {/* Match Percentage Cell */}
+                      {/* Match Percentage Cell - CHANGE: Added progress bar like customer table */}
                       <td style={tableCellStyle}>
                         <div style={matchContainerStyle}>
                           <div style={progressBarStyle}>
@@ -1654,7 +1672,7 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
                         </button>
                       </td>
 
-                      {/* Stage Cell */}
+                      {/* Stage Cell - CHANGE: Two lines, different colors, no see more */}
                       <td style={{ ...tableCellStyle, borderRight: "none" }}>
                         <div
                           style={{
@@ -1687,15 +1705,15 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
         </div>
 
         {/* Show message underneath the table when no suppliers */}
-        {filteredSuppliers.length === 0 && !loading && (
+        {filteredSuppliers.length === 0 && (
           <div style={noResultsStyle}>
             <div style={{ textAlign: "center" }}>
               <p style={{ margin: "1rem 0", fontSize: "1rem", color: "#5D2A0A" }}>
-                {productApplications.length === 0
-                  ? "You need to complete your Product Application first to see matching suppliers. Please fill out what products/services you need."
-                  : "No suppliers match your current requirements. Try adjusting your filters or check back later."
-                }
+                You have not applied for any suppliers, so there are no matches available. You need to apply first.
               </p>
+              <button onClick={clearAllFilters} style={clearFiltersButtonStyle}>
+                Clear All Filters
+              </button>
             </div>
           </div>
         )}
@@ -2718,6 +2736,22 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
         )}
     </>
   )
+}
+
+// ... rest of the styles remain the same ...
+const newRequestButtonStyle = {
+  background: "#5D2A0A",
+  color: "white",
+  border: "1px solid #5D2A0A",
+  padding: "0.5rem 1rem",
+  borderRadius: "6px",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  gap: "0.5rem",
+  fontSize: "0.875rem",
+  fontWeight: "500",
+  transition: "all 0.2s",
 }
 
 const filterButtonStyle = {
