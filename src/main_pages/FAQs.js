@@ -14,7 +14,18 @@ import {
   FaGlobe,
   FaLightbulb,
   FaUsers,
-  FaIndustry
+  FaIndustry,
+  FaUserTie,
+  FaRocket,
+  FaGraduationCap,
+  FaTruck,
+  FaUniversity,
+  FaSyncAlt,
+  FaUserCheck,
+  FaLock,
+  FaCreditCard,
+  FaEnvelope,
+  FaRocketchat
 } from 'react-icons/fa';
 import Header from './Header';
 import Footer from './Footer';
@@ -294,6 +305,17 @@ const IconWrapper = styled.span`
   }
 `;
 
+const SectionHeader = styled.h3`
+  color: ${colors.primary};
+  font-size: 1.5rem;
+  margin: 2rem 0 1rem 0;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid ${colors.highlight};
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+`;
+
 const FAQPage = () => {
   const [activeTab, setActiveTab] = useState('general');
   const [openQuestion, setOpenQuestion] = useState(null);
@@ -301,116 +323,290 @@ const FAQPage = () => {
   const faqData = {
     general: [
       {
-        question: "What is this platform for?",
-        answer: "This platform helps SMEs find funding, connect with service providers, or offer their services to other businesses in need.",
+        question: "What is BIG Marketplace Africa?",
+        answer: "BIG Marketplace Africa is a comprehensive platform that connects SMEs with investors, advisors, catalysts, interns, and other businesses. We use our proprietary BIG Score to create intelligent matches between stakeholders, simplifying connections and driving business growth across Africa.",
         icon: <FaQuestionCircle />
       },
       {
-        question: "Who can register?",
-        answer: "Any legally registered SME or business operating in South Africa or selected African countries.",
-        icon: <FaShieldAlt />
+        question: "Who can register on the platform?",
+        answer: "The following stakeholders can register:\n• SMEs (Small and Medium Enterprises)\n• Investors/Funders\n• Advisors (Experts and Consultants)\n• Graduates (for Internship roles)\n• Catalysts (Accelerators, Incubators)\n• Program Sponsors\n• Corporates\n• Suppliers and Service Providers",
+        icon: <FaUserCheck />
+      },
+      {
+        question: "Can SMEs become advisors on the platform?",
+        answer: "No, SMEs cannot register as advisors. SMEs are the primary beneficiaries who receive advice, funding, and support. However, SMEs can:\n• Register as suppliers to other businesses\n• Offer services to other SMEs\n• Purchase from other SMEs as customers\nThey receive guidance from dedicated professional advisors on the platform.",
+        icon: <FaUserTie />
       },
       {
         question: "Is registration free?",
-        answer: "Yes, basic registration is completely free. There may be premium or verified listings available for a fee.",
+        answer: "Yes, we offer a free Basic plan for all users. We also have Standard and Premium subscription plans with additional features, plus various add-ons for specific needs.",
         icon: <FaMoneyBillWave />
       },
       {
         question: "Can I update my profile later?",
-        answer: "Yes. You can edit your business profile, update your documents, or change your funding and service preferences anytime.",
+        answer: "Yes. You can edit your profile, update documents, and modify your preferences anytime through your dashboard.",
         icon: <FaCogs />
       },
       {
-        question: "Is my data secure?",
-        answer: "Absolutely. The platform uses encryption and privacy best practices to protect all your personal and business information.",
-        icon: <FaShieldAlt />
+        question: "How do I contact support?",
+        answer: "For all technical, billing, or privacy-related inquiries:\n📧 support@bigmarketplace.africa",
+        icon: <FaEnvelope />
       }
     ],
     funding: [
       {
+        question: "How does funding matching work?",
+        answer: "Our platform uses intelligent matching similar to dating apps:\n• Investors set their investment criteria\n• SMEs complete their profiles and get a BIG Score\n• Our algorithm matches investors with the most compatible SMEs\n• Highest matches appear at the top of investor dashboards\n• We simplify the process by pre-screening and scoring all SMEs",
+        icon: <FaChartLine />
+      },
+      {
         question: "What type of funding can I apply for?",
-        answer: "You can apply for the following:\n• Equity Investment\n• Debt Financing\n• Grants\n• Growth Enablers (like accelerators, incubators, mentorship)",
+        answer: "SMEs can apply for various funding types:\n• Equity Investment\n• Debt Financing\n• Grants\n• Growth funding opportunities",
         icon: <FaMoneyBillWave />
       },
       {
-        question: "How long does it take to get feedback on funding applications?",
-        answer: "Usually 2–4 weeks, depending on how complete your profile and documents are.",
-        icon: <FaChartLine />
-      },
-      {
-        question: "What documents do I need for funding?",
-        answer: "Investors usually want:\n• A pitch deck\n• Registration certificate\n• Financial summary or revenue reports\n• A clear business model or growth plan",
-        icon: <FaShieldAlt />
-      },
-      {
-        question: "How does the BIG Score impact the success rate of SMEs on your platform?",
-        answer: "The BIG Score impacts the success rate of SMEs on your platform by providing a data-driven legitimacy and fundability assessment that enhances access to capital and support, reduces transaction friction, and improves investor confidence.",
-        icon: <FaStar />
-      },
-      {
-        question: "How does the BIG Score correlate with revenue growth for SMEs?",
-        answer: "The BIG Score correlates positively with revenue growth for SMEs by serving as an objective, data-driven indicator of their legitimacy, fundability, and operational readiness, which in turn facilitates access to capital, customers, and support services that drive growth.",
-        icon: <FaChartLine />
-      }
-    ],
-    service: [
-      {
-        question: "Can I register as a service provider?",
-        answer: "Yes. If you offer services like legal support, accounting, marketing, IT, logistics, or business development, you can join the platform as a service provider.",
-        icon: <FaTools />
-      },
-      {
-        question: "How do SMEs find my services?",
-        answer: "Through searches, filters, and matchmaking based on service type, location, and business needs — similar to how dating apps match profiles.",
+        question: "How long does funding matching take?",
+        answer: "Initial matching happens instantly. Feedback on specific applications typically takes 2–4 weeks, depending on profile completeness and investor response times.",
         icon: <FaHandshake />
       },
       {
-        question: "What specific digital tools contribute most to improving the BIG Score?",
-        answer: "The specific digital tools that contribute most to improving the BIG Score are those that enable real-time data collection, interactive feedback, AI-driven analysis, and SME engagement to enhance legitimacy, fundability, and readiness.",
+        question: "What documents do I need for funding applications?",
+        answer: "Typically required:\n• Business registration documents\n• Financial summaries or revenue reports\n• Pitch deck or business plan\n• Compliance certificates\n• Growth strategy documentation",
+        icon: <FaShieldAlt />
+      },
+      {
+        question: "How does the BIG Score impact funding success?",
+        answer: "The BIG Score significantly improves funding success by:\n• Providing data-driven legitimacy assessment\n• Enhancing investor confidence\n• Reducing due diligence time\n• Highlighting growth potential and compliance readiness",
+        icon: <FaStar />
+      }
+    ],
+    stakeholders: [
+      {
+        section: "Advisors",
+        questions: [
+          {
+            question: "How do SMEs connect with advisors?",
+            answer: "SMEs can apply for advisory services through their dashboard. Our matching system connects them with qualified advisors based on business needs, industry expertise, and BIG Score compatibility.",
+            icon: <FaUserTie />
+          },
+          {
+            question: "What types of advisory services are available?",
+            answer: "Advisors provide expertise in business strategy, financial management, marketing, operations, technology, legal matters, and more.",
+            icon: <FaChartLine />
+          },
+          {
+            question: "How are advisors selected and verified?",
+            answer: "All advisors undergo rigorous verification including professional credential checks, experience validation, reference checks, and platform orientation.",
+            icon: <FaShieldAlt />
+          }
+        ]
+      },
+      {
+        section: "Interns & Graduates",
+        questions: [
+          {
+            question: "How does the internship program work?",
+            answer: "Graduates apply and create profiles, program sponsors review candidates, SMEs post opportunities, and our system matches graduates with SMEs based on skills and BIG Score.",
+            icon: <FaGraduationCap />
+          },
+          {
+            question: "Who can apply for internships?",
+            answer: "Graduates and students seeking practical experience can apply. They undergo verification and receive a BIG Score to ensure quality matching.",
+            icon: <FaUserCheck />
+          },
+          {
+            question: "What support do interns receive?",
+            answer: "Interns receive comprehensive support including program sponsor funding, SME mentorship, platform resources, and career development opportunities.",
+            icon: <FaUsers />
+          }
+        ]
+      },
+      {
+        section: "Catalysts",
+        questions: [
+          {
+            question: "What are catalysts and what do they do?",
+            answer: "Catalysts are growth enablers like accelerators and incubators who help SMEs scale operations, provide strategic guidance, and facilitate partnerships.",
+            icon: <FaRocket />
+          },
+          {
+            question: "How do catalysts connect with SMEs?",
+            answer: "Our matching system connects catalysts with SMEs based on growth stage, industry focus, and specific program criteria through the BIG Score system.",
+            icon: <FaHandshake />
+          }
+        ]
+      },
+      {
+        section: "Services & Suppliers",
+        questions: [
+          {
+            question: "How do SMEs offer or request services?",
+            answer: "SMEs can both list and request products or services through their profiles. Our matching system connects businesses based on compatibility and specific needs.",
+            icon: <FaTools />
+          },
+          {
+            question: "What types of services can be offered?",
+            answer: "SMEs can offer products like laptops and equipment, professional services, manufacturing, digital services, and logistics services.",
+            icon: <FaTruck />
+          },
+          {
+            question: "How are service deliveries handled?",
+            answer: "Delivery terms are agreed directly between SMEs. We facilitate connections but don't manage shipping or logistics directly.",
+            icon: <FaHandshake />
+          }
+        ]
+      }
+    ],
+    subscriptions: [
+      {
+        question: "What subscription plans are available?",
+        answer: "We offer three main subscription tiers:\n• Basic Plan (Free)\n• Standard Plan\n• Premium Plan\nEach plan offers different features and capabilities to suit various business needs.",
+        icon: <FaCreditCard />
+      },
+      {
+        question: "What add-on services are available?",
+        answer: "Additional services include:\n• API Access to BIG Score engine\n• Branded SME Portfolio Pages\n• Co-branded Calls for Applications\n• Custom BIG Score benchmarks\n• And other specialized services",
         icon: <FaCogs />
       },
       {
-        question: "How does the BIG Score impact the ability of SMEs to reach international markets?",
-        answer: "The BIG Score impacts SMEs' ability to reach international markets by serving as a comprehensive indicator of their legitimacy, fundability, and operational readiness—key factors that influence export propensity, participation, and success.",
+        question: "How do I manage my subscription?",
+        answer: "You can easily manage your subscription through your account dashboard:\n• Upgrade or downgrade your plan\n• Cancel your subscription\n• Update payment methods\n• View billing history and invoices\n• Manage add-on services",
+        icon: <FaSyncAlt />
+      },
+      {
+        question: "What is your refund policy?",
+        answer: "Refund Policy:\n• Digital products and tools: Non-refundable once accessed\n• Subscription fees: Refundable within 14 days if no services utilized\n• Service fees: Case-by-case basis depending on service delivery\n• All refund requests must be submitted in writing\n• Refunds processed within 7-10 business days",
+        icon: <FaMoneyBillWave />
+      },
+      {
+        question: "What are BIG Growth Tools?",
+        answer: "BIG Growth Tools are curated resources designed to boost your BIG Score:\n• Compliance toolkits (legal templates, policy essentials)\n• Legitimacy boosters (digital foundation, brand identity)\n• Capital appeal enhancers (financial readiness, investment packs)\n• Governance strengtheners (advisory readiness, board toolkits)\nAll tools are specifically designed to make your business more attractive to funders and investors.",
+        icon: <FaRocketchat />
+      }
+    ],
+    privacy: [
+      {
+        question: "How is my personal and business data protected?",
+        answer: "Your privacy is important to us. We collect and process only the data needed to create your profile, match you with opportunities, and improve your experience on the platform.",
+        icon: <FaLock />
+      },
+      {
+        question: "Who can view my information?",
+        answer: "Only authorized members of our team and relevant verified users (e.g., investors matched with SMEs) can view the information required for engagement. Sensitive details are kept strictly confidential.",
+        icon: <FaShieldAlt />
+      },
+      {
+        question: "Is my information shared with third parties?",
+        answer: "We do not sell or rent personal data. Limited information may be shared only where required for functionality (e.g., when an SME connects with an investor, or when an intern applies for a position).",
+        icon: <FaUsers />
+      },
+      {
+        question: "How is my data kept safe?",
+        answer: "All user data is stored on secure servers with encryption, secure access controls, and regular system audits to ensure compliance with data protection standards.",
+        icon: <FaLock />
+      },
+      {
+        question: "What laws govern your data protection policies?",
+        answer: "Our operations comply with applicable African data protection and e-commerce laws, including South Africa's Protection of Personal Information Act (POPIA) and related standards.",
         icon: <FaGlobe />
       },
       {
-        question: "Are there any industry-specific strategies to enhance the BIG Score?",
-        answer: "Industry-specific strategies to enhance the BIG Score focus on tailoring compliance, readiness, and fundability improvements to the unique requirements, risks, and opportunities within each sector.",
-        icon: <FaIndustry />
+        question: "Is Big Marketplace Africa responsible for partnership outcomes?",
+        answer: "No. We facilitate connections but are not responsible for outcomes, business decisions, or financial losses that occur between users. All partnerships are entered into directly between users.",
+        icon: <FaHandshake />
       }
     ],
     bigScore: [
       {
-        question: "How does the BIG Score influence the ability of SMEs to diversify their customer base?",
-        answer: "The BIG Score influences SMEs' ability to diversify their customer base by enhancing their legitimacy, fundability, and operational readiness, which are critical factors for building trust, meeting quality standards, and accessing new markets and customers.",
-        icon: <FaUsers />
-      },
-      {
-        question: "How does the BIG Score affect SMEs' ability to innovate?",
-        answer: "The BIG Score positively influences SMEs' ability to innovate by enhancing their legitimacy, fundability, and operational readiness—critical factors that enable SMEs to invest in and manage innovation processes effectively.",
-        icon: <FaLightbulb />
-      },
-      {
-        question: "How does the BIG Score impact SMEs' access to external innovation resources?",
-        answer: "The BIG Score positively impacts SMEs' ability to access external innovation resources by enhancing their legitimacy, fundability, and readiness, which are critical factors for overcoming common barriers to innovation collaboration and support.",
-        icon: <FaLightbulb />
-      },
-      {
-        question: "What specific digital tools contribute most to improving the BIG Score?",
-        answer: "The digital tools that contribute most to improving the BIG Score are those that enable comprehensive data collection, real-time feedback, AI-driven analysis, and SME engagement to enhance legitimacy, fundability, and readiness.",
-        icon: <FaCogs />
-      },
-      {
-        question: "How does the BIG Score impact the success rate of SMEs on your platform?",
-        answer: "The BIG Score significantly enhances the success rate of SMEs on your platform by leveraging data-driven insights and digital tools to improve their fundability, legitimacy, and growth potential.",
+        question: "What is the BIG Score?",
+        answer: "The BIG Score is our proprietary scoring system that evaluates businesses and individuals based on multiple factors including legitimacy, growth potential, compliance, and readiness for opportunities.",
         icon: <FaStar />
+      },
+      {
+        question: "How does the BIG Score improve matching?",
+        answer: "The BIG Score enhances matching by:\n• Providing objective assessment of credibility\n• Identifying growth potential and readiness\n• Ensuring compatibility between stakeholders\n• Reducing risk for investors and partners",
+        icon: <FaChartLine />
+      },
+      {
+        question: "Do all users get a BIG Score?",
+        answer: "Yes, all registered participants receive relevant scores:\n• SMEs get comprehensive business scores\n• Advisors receive credibility scores\n• Graduates/interns get performance metrics\n• All scores help ensure quality matches",
+        icon: <FaUserCheck />
+      },
+      {
+        question: "Can I improve my BIG Score?",
+        answer: "Yes, your BIG Score is dynamic and can be improved by:\n• Completing your profile with accurate information\n• Using BIG Growth Tools to address specific areas\n• Maintaining good platform engagement\n• Building positive relationships with partners\n• Demonstrating growth and compliance",
+        icon: <FaChartLine />
+      },
+      {
+        question: "How do BIG Growth Tools help improve my score?",
+        answer: "BIG Growth Tools are specifically designed to boost different aspects of your score:\n• Compliance tools address legal and policy requirements\n• Legitimacy tools enhance your professional presence\n• Capital appeal tools strengthen your funding readiness\n• Governance tools build proper business structure\nEach tool targets specific areas that funders and investors care about most.",
+        icon: <FaRocketchat />
       }
     ]
   };
 
   const toggleQuestion = (index) => {
     setOpenQuestion(openQuestion === index ? null : index);
+  };
+
+  const renderStakeholdersContent = () => {
+    return faqData.stakeholders.map((section, sectionIndex) => (
+      <div key={sectionIndex}>
+        <SectionHeader>
+          {section.section === "Advisors" && <FaUserTie />}
+          {section.section === "Interns & Graduates" && <FaGraduationCap />}
+          {section.section === "Catalysts" && <FaRocket />}
+          {section.section === "Services & Suppliers" && <FaTools />}
+          {section.section}
+        </SectionHeader>
+        {section.questions.map((item, index) => {
+          const globalIndex = sectionIndex * 10 + index;
+          return (
+            <FAQItem key={globalIndex}>
+              <FAQQuestion onClick={() => toggleQuestion(globalIndex)} aria-expanded={openQuestion === globalIndex}>
+                <QuestionText>
+                  {item.icon}
+                  {item.question}
+                </QuestionText>
+                <IconWrapper isOpen={openQuestion === globalIndex}>
+                  {openQuestion === globalIndex ? <MinusIcon /> : <PlusIcon />}
+                </IconWrapper>
+              </FAQQuestion>
+              <FAQAnswer isOpen={openQuestion === globalIndex} aria-hidden={!openQuestion === globalIndex}>
+                <p>{item.answer}</p>
+              </FAQAnswer>
+            </FAQItem>
+          );
+        })}
+      </div>
+    ));
+  };
+
+  const renderContent = () => {
+    if (activeTab === 'stakeholders') {
+      return <FAQList>{renderStakeholdersContent()}</FAQList>;
+    }
+
+    return (
+      <FAQList>
+        {faqData[activeTab].map((item, index) => (
+          <FAQItem key={index}>
+            <FAQQuestion onClick={() => toggleQuestion(index)} aria-expanded={openQuestion === index}>
+              <QuestionText>
+                {item.icon}
+                {item.question}
+              </QuestionText>
+              <IconWrapper isOpen={openQuestion === index}>
+                {openQuestion === index ? <MinusIcon /> : <PlusIcon />}
+              </IconWrapper>
+            </FAQQuestion>
+            <FAQAnswer isOpen={openQuestion === index} aria-hidden={!openQuestion === index}>
+              <p>{item.answer}</p>
+            </FAQAnswer>
+          </FAQItem>
+        ))}
+      </FAQList>
+    );
   };
 
   return (
@@ -423,7 +619,7 @@ const FAQPage = () => {
             <FaQuestionCircle /> Help Center
           </Title>
           <Subtitle>
-            <FaInfoCircle /> Find answers to common questions about our platform, funding opportunities, services, and how the BIG Score works to empower your business growth.
+            <FaInfoCircle /> Find answers about our platform, matching system, BIG Score, subscriptions, and how we connect SMEs with growth opportunities across Africa.
           </Subtitle>
           
           <TabsContainer>
@@ -446,13 +642,31 @@ const FAQPage = () => {
               <FaChartLine /> Funding
             </Tab>
             <Tab 
-              active={activeTab === 'service'} 
+              active={activeTab === 'stakeholders'} 
               onClick={() => {
-                setActiveTab('service');
+                setActiveTab('stakeholders');
                 setOpenQuestion(null);
               }}
             >
-              <FaTools /> Service
+              <FaUsers /> Stakeholders
+            </Tab>
+            <Tab 
+              active={activeTab === 'subscriptions'} 
+              onClick={() => {
+                setActiveTab('subscriptions');
+                setOpenQuestion(null);
+              }}
+            >
+              <FaCreditCard /> Subscriptions
+            </Tab>
+            <Tab 
+              active={activeTab === 'privacy'} 
+              onClick={() => {
+                setActiveTab('privacy');
+                setOpenQuestion(null);
+              }}
+            >
+              <FaLock /> Privacy
             </Tab>
             <Tab 
               active={activeTab === 'bigScore'} 
@@ -461,28 +675,11 @@ const FAQPage = () => {
                 setOpenQuestion(null);
               }}
             >
-              <FaHandshake /> BIG Score
+              <FaStar /> BIG Score
             </Tab>
           </TabsContainer>
 
-          <FAQList>
-            {faqData[activeTab].map((item, index) => (
-              <FAQItem key={index}>
-                <FAQQuestion onClick={() => toggleQuestion(index)} aria-expanded={openQuestion === index}>
-                  <QuestionText>
-                    {item.icon}
-                    {item.question}
-                  </QuestionText>
-                  <IconWrapper isOpen={openQuestion === index}>
-                    {openQuestion === index ? <MinusIcon /> : <PlusIcon />}
-                  </IconWrapper>
-                </FAQQuestion>
-                <FAQAnswer isOpen={openQuestion === index} aria-hidden={!openQuestion === index}>
-                  <p>{item.answer}</p>
-                </FAQAnswer>
-              </FAQItem>
-            ))}
-          </FAQList>
+          {renderContent()}
         </FAQContainer>
       </MainContent>
       
