@@ -25,7 +25,9 @@ import {
   FaLock,
   FaCreditCard,
   FaEnvelope,
-  FaRocketchat
+  FaRocketchat,
+  FaFileContract,
+  FaReceipt
 } from 'react-icons/fa';
 import Header from './Header';
 import Footer from './Footer';
@@ -349,7 +351,7 @@ const FAQPage = () => {
       },
       {
         question: "How do I contact support?",
-        answer: "For all technical, billing, or privacy-related inquiries:\n📧 support@bigmarketplace.africa",
+        answer: "For all technical, billing, or policy-related inquiries:\n📧 support@bigmarketplace.africa",
         icon: <FaEnvelope />
       }
     ],
@@ -474,46 +476,121 @@ const FAQPage = () => {
         icon: <FaSyncAlt />
       },
       {
-        question: "What is your refund policy?",
-        answer: "Refund Policy:\n• Digital products and tools: Non-refundable once accessed\n• Subscription fees: Refundable within 14 days if no services utilized\n• Service fees: Case-by-case basis depending on service delivery\n• All refund requests must be submitted in writing\n• Refunds processed within 7-10 business days",
-        icon: <FaMoneyBillWave />
-      },
-      {
         question: "What are BIG Growth Tools?",
         answer: "BIG Growth Tools are curated resources designed to boost your BIG Score:\n• Compliance toolkits (legal templates, policy essentials)\n• Legitimacy boosters (digital foundation, brand identity)\n• Capital appeal enhancers (financial readiness, investment packs)\n• Governance strengtheners (advisory readiness, board toolkits)\nAll tools are specifically designed to make your business more attractive to funders and investors.",
         icon: <FaRocketchat />
       }
     ],
-    privacy: [
+    policy: [
       {
-        question: "How is my personal and business data protected?",
-        answer: "Your privacy is important to us. We collect and process only the data needed to create your profile, match you with opportunities, and improve your experience on the platform.",
-        icon: <FaLock />
+        section: "Privacy & Data Protection",
+        questions: [
+          {
+            question: "How does Big Marketplace Africa protect my personal information?",
+            answer: "We use industry-standard security measures including encryption, secure servers, and access controls to protect your personal information. All data is stored in secure environments with regular security audits.",
+            icon: <FaLock />
+          },
+          {
+            question: "Is my card information safe when I make a payment?",
+            answer: "Yes, we use PCI-compliant payment processors and never store your full card details on our servers. All payment transactions are encrypted and processed through secure payment gateways.",
+            icon: <FaCreditCard />
+          },
+          {
+            question: "Do you share my data with third parties?",
+            answer: "We do not sell your personal data. We only share information with trusted third parties when necessary for platform functionality (e.g., payment processing) or when required by law.",
+            icon: <FaUsers />
+          },
+          {
+            question: "What type of personal data do you collect from users and vendors?",
+            answer: "We collect only necessary information including contact details, business information, verification documents, and platform usage data to provide and improve our services.",
+            icon: <FaFileContract />
+          },
+          {
+            question: "How can I request that my personal data be deleted or updated?",
+            answer: "You can update most information through your account settings. For data deletion requests, please contact our support team at support@bigmarketplace.africa.",
+            icon: <FaSyncAlt />
+          },
+          {
+            question: "Is my information encrypted during transactions?",
+            answer: "Yes, all data transmitted between your device and our servers is encrypted using SSL/TLS encryption protocols to ensure secure communication.",
+            icon: <FaLock />
+          },
+          {
+            question: "Do you store my payment information after I make a purchase?",
+            answer: "We only store minimal payment information necessary for billing and subscription management. Full card details are handled by our secure payment processors.",
+            icon: <FaCreditCard />
+          }
+        ]
       },
       {
-        question: "Who can view my information?",
-        answer: "Only authorized members of our team and relevant verified users (e.g., investors matched with SMEs) can view the information required for engagement. Sensitive details are kept strictly confidential.",
-        icon: <FaShieldAlt />
+        section: "Refund & Return Policy",
+        questions: [
+          {
+            question: "What is your refund policy for digital subscriptions or plans?",
+            answer: "Digital subscriptions can be refunded within 14 days of purchase if no services have been utilized. Refunds are processed on a case-by-case basis for exceptional circumstances.",
+            icon: <FaReceipt />
+          },
+          {
+            question: "Can I cancel my subscription and get a refund?",
+            answer: "You can cancel your subscription at any time. Refunds for unused portions are available within the first 14 days of the billing cycle.",
+            icon: <FaMoneyBillWave />
+          },
+          {
+            question: "How long does it take to process a refund?",
+            answer: "Refunds are typically processed within 7-10 business days after approval. The time to appear in your account depends on your financial institution.",
+            icon: <FaSyncAlt />
+          },
+          {
+            question: "Who do I contact if I haven't received my refund yet?",
+            answer: "Contact our support team at support@bigmarketplace.africa with your transaction details if you haven't received your refund within 10 business days.",
+            icon: <FaEnvelope />
+          },
+          {
+            question: "Are refunds available for vendor fees or featured listings?",
+            answer: "Vendor fees and featured listings are generally non-refundable once the service has been activated, except in cases of platform error or service failure.",
+            icon: <FaUsers />
+          },
+          {
+            question: "Do I need proof of payment to request a refund?",
+            answer: "Yes, please have your transaction ID or receipt ready when requesting a refund to help us process your request quickly.",
+            icon: <FaFileContract />
+          },
+          {
+            question: "Can I change or downgrade my subscription after purchase?",
+            answer: "Yes, you can upgrade or downgrade your subscription at any time through your account dashboard. Changes take effect at your next billing cycle.",
+            icon: <FaCreditCard />
+          }
+        ]
       },
       {
-        question: "Is my information shared with third parties?",
-        answer: "We do not sell or rent personal data. Limited information may be shared only where required for functionality (e.g., when an SME connects with an investor, or when an intern applies for a position).",
-        icon: <FaUsers />
-      },
-      {
-        question: "How is my data kept safe?",
-        answer: "All user data is stored on secure servers with encryption, secure access controls, and regular system audits to ensure compliance with data protection standards.",
-        icon: <FaLock />
-      },
-      {
-        question: "What laws govern your data protection policies?",
-        answer: "Our operations comply with applicable African data protection and e-commerce laws, including South Africa's Protection of Personal Information Act (POPIA) and related standards.",
-        icon: <FaGlobe />
-      },
-      {
-        question: "Is Big Marketplace Africa responsible for partnership outcomes?",
-        answer: "No. We facilitate connections but are not responsible for outcomes, business decisions, or financial losses that occur between users. All partnerships are entered into directly between users.",
-        icon: <FaHandshake />
+        section: "Terms of Service & General Policies",
+        questions: [
+          {
+            question: "What are the terms and conditions for using Big Marketplace Africa?",
+            answer: "Our comprehensive Terms of Service govern platform usage, covering user responsibilities, prohibited activities, intellectual property, and dispute resolution. These are available on our website.",
+            icon: <FaFileContract />
+          },
+          {
+            question: "Are there any restrictions on what vendors can sell?",
+            answer: "Yes, we prohibit illegal items, dangerous goods, counterfeit products, and services that violate local laws or our community guidelines. All listings must comply with our acceptable use policy.",
+            icon: <FaShieldAlt />
+          },
+          {
+            question: "How do I report a policy violation or fraudulent activity?",
+            answer: "Use the 'Help' feature on any listing or profile, or contact our support team immediately at support@bigmarketplace.africa with details of the violation.",
+            icon: <FaEnvelope />
+          },
+          {
+            question: "What happens if a vendor fails to deliver as promised?",
+            answer: "We encourage direct resolution between parties. If unresolved, our support team can mediate disputes according to our platform guidelines and dispute resolution process.",
+            icon: <FaHandshake />
+          },
+          {
+            question: "Do you have a dispute resolution process between buyers and sellers?",
+            answer: "Yes, we provide a structured dispute resolution process including mediation and, if necessary, arbitration to resolve conflicts between platform users fairly.",
+            icon: <FaUsers />
+          }
+        ]
       }
     ],
     bigScore: [
@@ -582,9 +659,45 @@ const FAQPage = () => {
     ));
   };
 
+  const renderPolicyContent = () => {
+    return faqData.policy.map((section, sectionIndex) => (
+      <div key={sectionIndex}>
+        <SectionHeader>
+          {section.section === "Privacy & Data Protection" && <FaLock />}
+          {section.section === "Refund & Return Policy" && <FaReceipt />}
+          {section.section === "Terms of Service & General Policies" && <FaFileContract />}
+          {section.section}
+        </SectionHeader>
+        {section.questions.map((item, index) => {
+          const globalIndex = sectionIndex * 20 + index;
+          return (
+            <FAQItem key={globalIndex}>
+              <FAQQuestion onClick={() => toggleQuestion(globalIndex)} aria-expanded={openQuestion === globalIndex}>
+                <QuestionText>
+                  {item.icon}
+                  {item.question}
+                </QuestionText>
+                <IconWrapper isOpen={openQuestion === globalIndex}>
+                  {openQuestion === globalIndex ? <MinusIcon /> : <PlusIcon />}
+                </IconWrapper>
+              </FAQQuestion>
+              <FAQAnswer isOpen={openQuestion === globalIndex} aria-hidden={!openQuestion === globalIndex}>
+                <p>{item.answer}</p>
+              </FAQAnswer>
+            </FAQItem>
+          );
+        })}
+      </div>
+    ));
+  };
+
   const renderContent = () => {
     if (activeTab === 'stakeholders') {
       return <FAQList>{renderStakeholdersContent()}</FAQList>;
+    }
+
+    if (activeTab === 'policy') {
+      return <FAQList>{renderPolicyContent()}</FAQList>;
     }
 
     return (
@@ -660,13 +773,13 @@ const FAQPage = () => {
               <FaCreditCard /> Subscriptions
             </Tab>
             <Tab 
-              active={activeTab === 'privacy'} 
+              active={activeTab === 'policy'} 
               onClick={() => {
-                setActiveTab('privacy');
+                setActiveTab('policy');
                 setOpenQuestion(null);
               }}
             >
-              <FaLock /> Privacy
+              <FaFileContract /> Policy & Protection
             </Tab>
             <Tab 
               active={activeTab === 'bigScore'} 

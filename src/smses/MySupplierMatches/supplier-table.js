@@ -17,7 +17,6 @@ import {
 } from "firebase/firestore"
 import { db, } from "../../firebaseConfig"
 import { Eye, Filter } from "lucide-react"
-
 import { useNavigate } from "react-router-dom"
 
 // Status definitions with brown color scheme
@@ -58,46 +57,45 @@ const STAGE_COLORS = {
   Rejected: { backgroundColor: "#FFEBEE", color: "#D32F2F" },
 }
 
-const MATCHING_CRITERIA = {
-  // High importance (total 50%)
+// Enhanced matching criteria with better weights
+const ENHANCED_MATCHING_CRITERIA = {
+  // Primary matching (60%)
   CATEGORY_MATCH: {
-    weight: 0.3, // 30%
-    description: "Service/Product Category Alignment",
+    weight: 0.4,
+    description: "Product/Service Category Alignment",
   },
   BBBEE_LEVEL: {
-    weight: 0.1, // 10%
+    weight: 0.1,
     description: "BBBEE Level Compliance",
   },
   LOCATION: {
-    weight: 0.1, // 10%
+    weight: 0.1,
     description: "Geographic Location Match",
   },
 
-  // Medium importance (total 30%)
+  // Secondary matching (40%)
   DELIVERY_MODE: {
-    weight: 0.1, // 10%
+    weight: 0.1,
     description: "Delivery Mode Compatibility",
   },
   BUDGET_RANGE: {
-    weight: 0.1, // 10%
+    weight: 0.1,
     description: "Budget Fit",
   },
   OWNERSHIP_PREFS: {
-    weight: 0.1, // 10%
+    weight: 0.05,
     description: "Ownership Preferences Match",
   },
-
-  // Lower importance (total 20%)
-  URGENCY_LEAD_TIME: { // COMBINED URGENCY AND LEAD TIME
-    weight: 0.05, // 10%
+  URGENCY_LEAD_TIME: {
+    weight: 0.05,
     description: "Delivery Timeframe & Urgency Match",
   },
   EXPERIENCE: {
-    weight: 0.1, // 10%
+    weight: 0.05,
     description: "Sector Experience Match",
   },
   RATING: {
-    weight: 0.05, // 5%
+    weight: 0.05,
     description: "Supplier Rating",
   },
 }
@@ -151,7 +149,6 @@ const getStageStyle = (stage) => {
   return STAGE_COLORS[stage] || { backgroundColor: "#F5F5F5", color: "#666666" }
 }
 
-// Add this helper function with other helper functions
 function getDeliveryModeMatches(appModes, supplyModes) {
   const matches = []
 
@@ -185,6 +182,7 @@ function getDeliveryModeMatches(appModes, supplyModes) {
 
   return matches
 }
+
 const getFirstCategory = (productsServices) => {
   if (!productsServices) return "Not specified"
 
@@ -202,7 +200,6 @@ const getFirstCategory = (productsServices) => {
 
   return "Not specified"
 }
-// Keep these essential helper functions:
 
 function convertToDays(value, unit) {
   const numericValue = parseInt(value) || 0
@@ -220,6 +217,309 @@ function convertToDays(value, unit) {
   }
 }
 
+// Enhanced match calculation functions
+function calculateCategoryMatch(application, supplier) {
+  const appCategories = application.productsServices?.categories || []
+
+  // Extract categories from supplier profile
+  const supplierProductCategories = supplier.productsServices?.productCategories || []
+  const supplierServiceCategories = supplier.productsServices?.serviceCategories || []
+
+  // Combine all supplier categories
+  const allSupplierCategories = [
+    ...supplierProductCategories.map(cat => typeof cat === 'string' ? cat : cat?.name || ''),
+    ...supplierServiceCategories.map(cat => typeof cat === 'string' ? cat : cat?.name || '')
+  ].filter(Boolean)
+
+  if (appCategories.length === 0 || allSupplierCategories.length === 0) {
+    return { score: 0, matches: [] }
+  }
+
+  let matches = 0
+  const matchedCategories = []
+
+  appCategories.forEach(appCat => {
+    const normalizedAppCat = appCat.toLowerCase().trim()
+    const foundMatch = allSupplierCategories.some(supplierCat => {
+      const normalizedSupplierCat = supplierCat.toLowerCase().trim()
+      return (
+        normalizedSupplierCat.includes(normalizedAppCat) ||
+        normalizedAppCat.includes(normalizedSupplierCat) ||
+        calculateSimilarity(normalizedAppCat, normalizedSupplierCat) > 0.7
+      )
+    })
+
+    if (foundMatch) {
+      matches++
+      matchedCategories.push(appCat)
+    }
+  })
+
+  return {
+    score: matches / appCategories.length,
+    matches: matchedCategories
+  }
+}
+
+function calculateLocationMatch(application, supplier) {
+  const appLocation = application.requestOverview?.location || ""
+  const supplierLocation = supplier.entityOverview?.location || ""
+
+  if (!appLocation || !supplierLocation) return 0.5
+
+  const normalizedApp = appLocation.toLowerCase().trim()
+  const normalizedSupplier = supplierLocation.toLowerCase().trim()
+
+  return normalizedApp === normalizedSupplier ? 1 : 0
+}
+
+function calculateDeliveryMatch(application, supplier) {
+  const appModes = application.requestOverview?.deliveryModes || []
+  const supplierModes = supplier.productsServices?.deliveryModes || []
+
+  if (appModes.length === 0 || supplierModes.length === 0) return 0.5
+
+  // Check if either party has Hybrid for full compatibility
+  const appHasHybrid = appModes.includes("Hybrid")
+  const supplyHasHybrid = supplierModes.includes("Hybrid")
+
+  if (appHasHybrid || supplyHasHybrid) {
+    return 1
+  }
+
+  // Standard matching for non-Hybrid cases
+  const deliveryMatches = appModes.filter(appMode =>
+    supplierModes.includes(appMode)
+  )
+  return deliveryMatches.length / appModes.length
+}
+
+function calculateBudgetMatch(application, supplier) {
+  const appBudgetMin = parseInt((application.requestOverview?.minBudget || "0").replace(/\D/g, "")) || 0
+  const appBudgetMax = parseInt((application.requestOverview?.maxBudget || "0").replace(/\D/g, "")) || 1000000
+  const revenue = parseInt((supplier.financialOverview?.annualRevenue || "0").replace(/\D/g, "")) || 0
+
+  if (revenue === 0) return 0.5
+
+  if (revenue >= appBudgetMin && revenue <= appBudgetMax) {
+    return 1
+  } else if (revenue >= appBudgetMin * 0.5 && revenue <= appBudgetMax * 1.5) {
+    return 0.7
+  } else {
+    return 0.3
+  }
+}
+
+function calculateBBBEEEMatch(application, supplier) {
+  const appBBBEEPref = parseInt(application.matchingPreferences?.bbeeLevel?.replace(/\D/g, "") || "0") || 0
+  const bbbeeLevel = parseInt(supplier.legalCompliance?.bbbeeLevel || "0") || 0
+
+  if (appBBBEEPref <= bbbeeLevel) {
+    return 1
+  } else if (appBBBEEPref - bbbeeLevel <= 2) {
+    return 0.5
+  }
+  return 0
+}
+
+function calculateOwnershipMatch(application, supplier) {
+  const appOwnershipPrefs = application.matchingPreferences?.ownershipPrefs || []
+  let ownershipScore = 0.5
+
+  if (appOwnershipPrefs.length > 0) {
+    const ownershipDetails = calculateOwnershipPercentages(supplier.ownershipManagement || {})
+
+    appOwnershipPrefs.forEach((pref) => {
+      const normalizedPref = pref.toLowerCase().trim()
+      if ((normalizedPref.includes("black-owned") || normalizedPref.includes("black owned")) &&
+        ownershipDetails.blackOwnership >= 51) {
+        ownershipScore += 0.4
+      } else if ((normalizedPref.includes("women-owned") || normalizedPref.includes("women owned")) &&
+        ownershipDetails.womenOwnership >= 30) {
+        ownershipScore += 0.3
+      } else if ((normalizedPref.includes("youth-owned") || normalizedPref.includes("youth owned")) &&
+        ownershipDetails.youthOwnership >= 25) {
+        ownershipScore += 0.2
+      } else if ((normalizedPref.includes("disability") || normalizedPref.includes("disabled")) &&
+        ownershipDetails.disabilityOwnership >= 5) {
+        ownershipScore += 0.1
+      }
+    })
+    ownershipScore = Math.min(ownershipScore, 1)
+  }
+
+  return ownershipScore
+}
+
+function calculateRatingMatch(supplier, ratingsData) {
+  const supplierId = supplier?.id
+  const supplierRatingData = ratingsData?.[supplierId] || { average: 0, count: 0 }
+  return supplierRatingData.average / 5
+}
+
+function calculateEnhancedMatchScore(application, supplier, ratingsData = null) {
+  if (!application || !supplier) {
+    return {
+      totalScore: 0,
+      breakdown: {},
+    }
+  }
+
+  let totalScore = 0
+  const breakdown = {}
+
+  // Category Match (40%)
+  const categoryMatch = calculateCategoryMatch(application, supplier)
+  totalScore += categoryMatch.score * ENHANCED_MATCHING_CRITERIA.CATEGORY_MATCH.weight * 100
+  breakdown.categoryMatch = {
+    score: categoryMatch.score * 100,
+    description: ENHANCED_MATCHING_CRITERIA.CATEGORY_MATCH.description,
+    matches: categoryMatch.matches
+  }
+
+  // BBBEE Match (10%)
+  const bbbeeScore = calculateBBBEEEMatch(application, supplier)
+  totalScore += bbbeeScore * ENHANCED_MATCHING_CRITERIA.BBBEE_LEVEL.weight * 100
+  breakdown.bbbeeMatch = {
+    score: bbbeeScore * 100,
+    description: ENHANCED_MATCHING_CRITERIA.BBBEE_LEVEL.description,
+  }
+
+  // Location Match (10%)
+  const locationScore = calculateLocationMatch(application, supplier)
+  totalScore += locationScore * ENHANCED_MATCHING_CRITERIA.LOCATION.weight * 100
+  breakdown.locationMatch = {
+    score: locationScore * 100,
+    description: ENHANCED_MATCHING_CRITERIA.LOCATION.description,
+  }
+
+  // Delivery Match (10%)
+  const deliveryScore = calculateDeliveryMatch(application, supplier)
+  totalScore += deliveryScore * ENHANCED_MATCHING_CRITERIA.DELIVERY_MODE.weight * 100
+  breakdown.deliveryMatch = {
+    score: deliveryScore * 100,
+    description: ENHANCED_MATCHING_CRITERIA.DELIVERY_MODE.description,
+  }
+
+  // Budget Match (10%)
+  const budgetScore = calculateBudgetMatch(application, supplier)
+  totalScore += budgetScore * ENHANCED_MATCHING_CRITERIA.BUDGET_RANGE.weight * 100
+  breakdown.budgetMatch = {
+    score: budgetScore * 100,
+    description: ENHANCED_MATCHING_CRITERIA.BUDGET_RANGE.description,
+  }
+
+  // Ownership Preferences (5%)
+  const ownershipScore = calculateOwnershipMatch(application, supplier)
+  totalScore += ownershipScore * ENHANCED_MATCHING_CRITERIA.OWNERSHIP_PREFS.weight * 100
+  breakdown.ownershipMatch = {
+    score: ownershipScore * 100,
+    description: ENHANCED_MATCHING_CRITERIA.OWNERSHIP_PREFS.description,
+  }
+
+  // Rating Match (5%)
+  const ratingScore = calculateRatingMatch(supplier, ratingsData)
+  totalScore += ratingScore * ENHANCED_MATCHING_CRITERIA.RATING.weight * 100
+  breakdown.ratingMatch = {
+    score: ratingScore * 100,
+    description: ENHANCED_MATCHING_CRITERIA.RATING.description,
+  }
+
+  // Experience Match (5%) - Simplified for now
+  const experienceScore = 0.5
+  totalScore += experienceScore * ENHANCED_MATCHING_CRITERIA.EXPERIENCE.weight * 100
+  breakdown.experienceMatch = {
+    score: experienceScore * 100,
+    description: ENHANCED_MATCHING_CRITERIA.EXPERIENCE.description,
+  }
+
+  // Urgency/Lead Time Match (5%) - Simplified for now
+  const urgencyScore = 0.5
+  totalScore += urgencyScore * ENHANCED_MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100
+  breakdown.urgencyLeadTimeMatch = {
+    score: urgencyScore * 100,
+    description: ENHANCED_MATCHING_CRITERIA.URGENCY_LEAD_TIME.description,
+  }
+
+  return {
+    totalScore: Math.round(totalScore),
+    breakdown,
+  }
+}
+
+// Helper function to calculate string similarity
+function calculateSimilarity(str1, str2) {
+  const longer = str1.length > str2.length ? str1 : str2
+  const shorter = str1.length > str2.length ? str2 : str1
+
+  if (longer.length === 0) return 1.0
+
+  return (longer.length - editDistance(longer, shorter)) / parseFloat(longer.length)
+}
+
+function editDistance(s1, s2) {
+  s1 = s1.toLowerCase()
+  s2 = s2.toLowerCase()
+
+  const costs = []
+  for (let i = 0; i <= s1.length; i++) {
+    let lastValue = i
+    for (let j = 0; j <= s2.length; j++) {
+      if (i === 0) {
+        costs[j] = j
+      } else if (j > 0) {
+        let newValue = costs[j - 1]
+        if (s1.charAt(i - 1) !== s2.charAt(j - 1)) {
+          newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1
+        }
+        costs[j - 1] = lastValue
+        lastValue = newValue
+      }
+    }
+    if (i > 0) costs[s2.length] = lastValue
+  }
+  return costs[s2.length]
+}
+
+// Helper function to calculate ownership percentages from shareholder data
+function calculateOwnershipPercentages(ownershipManagement) {
+  const result = {
+    blackOwnership: 0,
+    womenOwnership: 0,
+    youthOwnership: 0,
+    disabilityOwnership: 0,
+    totalShares: 0,
+  }
+
+  const shareholders = Array.isArray(ownershipManagement.shareholders) ? ownershipManagement.shareholders : []
+
+  shareholders.forEach((shareholder) => {
+    const shareholding = parseInt(shareholder.shareholding || "0") || 0
+    result.totalShares += shareholding
+
+    if (shareholder.race && shareholder.race.toLowerCase() === "black") {
+      result.blackOwnership += shareholding
+    }
+    if (shareholder.gender && shareholder.gender.toLowerCase() === "female") {
+      result.womenOwnership += shareholding
+    }
+    if (shareholder.isYouth === true) {
+      result.youthOwnership += shareholding
+    }
+    if (shareholder.isDisabled === true) {
+      result.disabilityOwnership += shareholding
+    }
+  })
+
+  if (result.totalShares > 0) {
+    result.blackOwnership = (result.blackOwnership / result.totalShares) * 100
+    result.womenOwnership = (result.womenOwnership / result.totalShares) * 100
+    result.youthOwnership = (result.youthOwnership / result.totalShares) * 100
+    result.disabilityOwnership = (result.disabilityOwnership / result.totalShares) * 100
+  }
+
+  return result
+}
 
 export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSupplierAccepted }) {
   const [showFilters, setShowFilters] = useState(false)
@@ -230,7 +530,6 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
   const [loading, setLoading] = useState(true)
   const [suppliers, setSuppliers] = useState([])
   const [supplierRatings, setSupplierRatings] = useState({})
-  const [productApplications, setProductApplications] = useState([])
   const [allSuppliers, setAllSuppliers] = useState([])
   const [filteredSuppliers, setFilteredSuppliers] = useState([])
   const [error, setError] = useState(null)
@@ -259,8 +558,7 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
 
   const getImprovementSuggestion = (criteriaKey, score) => {
     const suggestions = {
-      categoryMatch:
-        "Consider expanding your service categories or highlighting relevant subcategories that align with customer needs.",
+      categoryMatch: "Consider expanding your service categories or highlighting relevant subcategories that align with customer needs.",
       bbbeeMatch: "Improve your BBBEE certification level to better match customer transformation requirements.",
       locationMatch: "Consider expanding your service delivery areas or highlighting remote service capabilities.",
       deliveryMatch: "Add more delivery mode options (on-site, remote, hybrid) to match customer preferences.",
@@ -271,11 +569,8 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
       ratingMatch: "Focus on improving customer satisfaction and collecting more positive reviews.",
     }
 
-    return (
-      suggestions[criteriaKey] || "Review your profile to ensure all relevant information is complete and accurate."
-    )
+    return suggestions[criteriaKey] || "Review your profile to ensure all relevant information is complete and accurate."
   }
-
 
   const fetchSupplierRatings = async () => {
     try {
@@ -300,7 +595,6 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
         }
       })
 
-      // Calculate average ratings for each supplier
       const averageRatings = {}
       Object.keys(ratingsData).forEach(supplierId => {
         const ratings = ratingsData[supplierId]
@@ -312,7 +606,6 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
             latestComment: ratings[ratings.length - 1]?.comment || "No comments"
           }
         } else {
-          // Initialize with zero if no ratings
           averageRatings[supplierId] = {
             average: 0,
             count: 0,
@@ -321,10 +614,8 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
         }
       })
 
-      console.log("Fetched supplier ratings:", averageRatings)
       setSupplierRatings(averageRatings)
-      return averageRatings // Return the data so it can be used immediately
-
+      return averageRatings
     } catch (error) {
       console.error("Error fetching supplier ratings:", error)
       return {}
@@ -351,8 +642,6 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
       if (user) {
         setCurrentUser(user)
-        // Fetch current user's product application
-        fetchCurrentUserApplication(user.uid)
       } else {
         setCurrentUser(null)
         setCurrentUserApplication(null)
@@ -365,34 +654,42 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
     }
   }, [])
 
-  // Fetch current user's product application
-  const fetchCurrentUserApplication = async (userId) => {
-    try {
-      const applicationDoc = await getDoc(doc(db, "productApplications", userId))
-      if (applicationDoc.exists()) {
+  // Check if user has a product application
+  useEffect(() => {
+    const checkApplicationExists = async () => {
+      if (!currentUser) return
+
+      try {
+        const applicationDoc = await getDoc(doc(db, "productApplications", currentUser.uid))
+        if (!applicationDoc.exists()) {
+          setSuppliers([])
+          setFilteredSuppliers([])
+          setError("Please complete a product application first to see matching suppliers")
+          setLoading(false)
+          return
+        }
+
         const applicationData = applicationDoc.data()
         setCurrentUserApplication(applicationData)
         console.log("Current user application:", applicationData)
-      } else {
-        console.log("No product application found for current user")
-        setCurrentUserApplication(null)
+      } catch (error) {
+        console.error("Error checking application:", error)
+        setError("Failed to verify product application")
+        setLoading(false)
       }
-    } catch (error) {
-      console.error("Error fetching current user application:", error)
-      setCurrentUserApplication(null)
     }
-  }
 
+    checkApplicationExists()
+  }, [currentUser])
+
+  // Fetch data only when application exists
   useEffect(() => {
     const fetchData = async () => {
+      if (!currentUserApplication) return
+
       try {
-        // Fetch product applications
-        const applicationsSnapshot = await getDocs(collection(db, "productApplications"))
-        const applicationsData = applicationsSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }))
-        setProductApplications(applicationsData)
+        setLoading(true)
+        setError(null)
 
         // Fetch universal profiles (suppliers)
         const profilesSnapshot = await getDocs(collection(db, "universalProfiles"))
@@ -405,757 +702,72 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
             financialOverview: data.financialOverview || {},
             legalCompliance: data.legalCompliance || {},
             entityOverview: data.entityOverview || {},
-            // Default stage values
             currentStage: "Potential Supplier",
             status: "New Lead",
           }
         })
 
         const ratingsData = await fetchSupplierRatings()
-        // Fetch supplier applications to sync stages
-        const auth = getAuth()
-        const currentUser = auth.currentUser
-        let supplierApplicationsData = []
 
-        if (currentUser) {
-          const supplierAppsQuery = query(
-            collection(db, "supplierApplications"),
-            where("supplierId", "==", currentUser.uid),
-          )
-          const supplierAppsSnapshot = await getDocs(supplierAppsQuery)
-          supplierApplicationsData = supplierAppsSnapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }))
-        }
+        // Calculate matches using enhanced matching
+        const suppliersWithMatches = profilesData.map((supplier) => {
+          const matchScore = calculateEnhancedMatchScore(currentUserApplication, supplier, ratingsData)
 
-        // Calculate matches if we have applications
-        let suppliersWithMatches
-        if (applicationsData.length > 0) {
-          const currentApplication = applicationsData.find((app) => app.id === auth.currentUser?.uid)
-          console.log(currentApplication)
+          // Get first category name or default
+          const firstCategory = getFirstCategory(supplier.productsServices)
 
-          suppliersWithMatches = profilesData.map((supplier) => {
-            // Pass the ratings data directly to calculateMatchScore
-            const matchScore = calculateMatchScore(currentApplication, supplier, ratingsData)
-            console.log(matchScore.totalScore)
-            console.log(supplier)
+          // Get the actual rating
+          const supplierRatingData = ratingsData[supplier.id] || {
+            average: 0,
+            count: 0,
+            latestComment: "No ratings yet"
+          }
+          const actualRating = supplierRatingData.average
 
-            // Get first category name or default
-            const firstCategory = getFirstCategory(supplier.productsServices)
-            // Find if this supplier has an application (where they are the customer)
-            const supplierApp = supplierApplicationsData.find((app) => app.customerId === supplier.id)
+          return {
+            ...supplier,
+            matchPercentage: matchScore.totalScore,
+            matchDetails: matchScore.breakdown,
+            status: getStatusBasedOnScore(matchScore.totalScore),
+            rating: actualRating,
+            avgResponseTime: "1-2 days",
+            lastActivity: new Date().toLocaleDateString(),
+            urgency: supplier.applicationOverview?.urgency || "1 month", // ← CHANGED LINE
+            dealSize: supplier.financialOverview?.annualRevenue || "Not specified",
+            serviceCategory: firstCategory,
+            currentStage: "Potential Supplier",
+            nextStage: "Initial Contact",
+            bbbeeLevel: supplier.legalCompliance?.bbbeeLevel || "N/A",
+            applicationId: null,
+            ratingCount: supplierRatingData.count,
+            serviceRequired: currentUserApplication?.requestOverview?.purpose || "Not specified"
+          }
+        })
 
-            // Get the actual rating from the ratings data
-            const supplierRatingData = ratingsData[supplier.id] || {
-              average: 0,
-              count: 0,
-              latestComment: "No ratings yet"
-            }
-            const actualRating = supplierRatingData.average
+        // Filter out suppliers with 0% match and sort by match percentage
+        const relevantSuppliers = suppliersWithMatches
+          .filter(supplier => supplier.matchPercentage > 0)
+          .sort((a, b) => b.matchPercentage - a.matchPercentage)
 
-            return {
-              ...supplier,
-              matchPercentage: matchScore.totalScore,
-              matchDetails: matchScore.breakdown,
-              status: supplierApp?.status || getStatusBasedOnScore(matchScore.totalScore),
-              rating: actualRating, // Use the actual rating from supplierReviews
-              avgResponseTime: "1-2 days",
-              lastActivity: supplierApp?.updatedAt || new Date().toLocaleDateString(),
-              urgency: supplier.applicationOverview?.urgency || "Not specified",
-              dealSize: supplier.financialOverview?.annualRevenue || "Not specified",
-              serviceCategory: firstCategory,
-              currentStage: supplierApp?.currentStage || "Potential Supplier",
-              nextStage: supplierApp?.nextStage || "Initial Contact",
-              bbbeeLevel: supplier.legalCompliance?.bbbeeLevel || "N/A",
-              applicationId: supplierApp?.id || null,
-              ratingCount: supplierRatingData.count, // Add rating count for display
-              // Add service required from current user's application
-              serviceRequired: currentUserApplication?.requestOverview?.purpose || "Not specified"
-            }
-          })
-
-          // Sort by match percentage (highest to lowest)
-          suppliersWithMatches.sort((a, b) => b.matchPercentage - a.matchPercentage)
-          setSuppliers(suppliersWithMatches)
-        } else {
-          // Fallback if no applications
-          suppliersWithMatches = profilesData.map((profile) => {
-            // Find if this supplier has an application (where they are the customer)
-            const supplierApp = supplierApplicationsData.find((app) => app.customerId === profile.id)
-
-            return {
-              ...profile,
-              // matchPercentage: Math.floor(Math.random() * 40) + 60,
-              status: supplierApp?.status || "New Lead",
-              rating: (profile.pisScore || 50) / 10,
-              serviceCategory: Array.isArray(profile.productsServices?.productCategories)
-                ? profile.productsServices.productCategories[0]?.name || "Not specified"
-                : "Not specified",
-              bbbeeLevel: profile.legalCompliance?.bbbeeLevel || "N/A",
-              dealSize: profile.financialOverview?.annualRevenue || "Not specified",
-              currentStage: supplierApp?.currentStage || "Potential Supplier",
-              nextStage: supplierApp?.nextStage || "Initial Contact",
-              applicationId: supplierApp?.id || null,
-              lastActivity: supplierApp?.updatedAt || new Date().toLocaleDateString(),
-              // Add service required from current user's application
-              serviceRequired: currentUserApplication?.requestOverview?.purpose || "Not specified"
-            }
-          })
-          setSuppliers(suppliersWithMatches)
-        }
-
-        setAllSuppliers(suppliersWithMatches)
-        setFilteredSuppliers(suppliersWithMatches)
-
-        if (currentUser) {
-          const supplierAppsQuery = query(
-            collection(db, "supplierApplications"),
-            where("supplierId", "==", currentUser.uid),
-          )
-
-          const unsubscribe = onSnapshot(supplierAppsQuery, (snapshot) => {
-            const updatedApplications = snapshot.docs.map((doc) => ({
-              id: doc.id,
-              ...doc.data(),
-            }))
-
-            setAllSuppliers((prev) =>
-              prev.map((supplier) => {
-                const updatedApp = updatedApplications.find((app) => app.customerId === supplier.id)
-                if (updatedApp) {
-                  // Check if status changed to "Accepted"
-                  if (updatedApp.status === "Accepted" && supplier.status !== "Accepted") {
-                    // Notify parent about accepted supplier
-                    if (onSupplierAccepted) {
-                      onSupplierAccepted(supplier.id)
-                    }
-                  }
-
-                  return {
-                    ...supplier,
-                    currentStage: updatedApp.currentStage || supplier.currentStage,
-                    status: updatedApp.status || supplier.status,
-                    applicationId: updatedApp.id,
-
-                    lastActivity: updatedApp.updatedAt || updatedApp.createdAt || supplier.lastActivity,
-                  }
-                }
-                return supplier
-              }),
-            )
-          })
-
-          // Cleanup function
-          return () => unsubscribe()
-        }
+        setSuppliers(relevantSuppliers)
+        setAllSuppliers(relevantSuppliers)
+        setFilteredSuppliers(relevantSuppliers)
 
         // Notify parent component of the update
         if (onSuppliersUpdate) {
-          onSuppliersUpdate(suppliersWithMatches, suppliersWithMatches)
+          onSuppliersUpdate(relevantSuppliers, relevantSuppliers)
         }
+
       } catch (err) {
         console.error("Error fetching data:", err)
-        setError("Failed to load data. Please try again later.")
+        setError("Failed to load supplier matches. Please try again later.")
       } finally {
         setLoading(false)
       }
     }
 
     fetchData()
-  }, [currentUserApplication]) // Add dependency to refetch when current user application is available
-
-  const verifyStageUpdate = async (supplierId) => {
-    const docRef = doc(db, "universalProfiles", supplierId)
-    const docSnap = await getDoc(docRef)
-    if (docSnap.exists()) {
-      console.log("Current stage in Firestore:", docSnap.data().currentStage)
-    }
-  }
-
-
-  function calculateMatchScore(application, supplier, ratingsData = null) {
-    if (!application || !supplier) {
-      console.error("Invalid parameters to calculateMatchScore:", { application, supplier })
-      return {
-        totalScore: 0,
-        breakdown: {},
-      }
-    }
-
-    let score = 0
-    let totalWeight = 0
-    const breakdown = {}
-
-    // Safely extract all required data with fallbacks
-    const demand = application.productsServices || {}
-    const supply = supplier.productsServices || {}
-    const requestOverview = application.requestOverview || {}
-    const matchingPrefs = application.matchingPreferences || {}
-    const supplierLegal = supplier.legalCompliance || {}
-    const supplierFinancial = supplier.financialOverview || {}
-    const supplierEntity = supplier.entityOverview || {}
-    const supplierOwnership = supplier.ownershipManagement || {}
-
-    // Normalize application categories
-    const appCategories = Array.isArray(demand.categories)
-      ? demand.categories
-        .map((c) => (typeof c === "string" ? c.toLowerCase().trim() : (c.name || "").toLowerCase().trim()))
-        .filter(Boolean)
-      : []
-
-    console.log("Application Categories:", appCategories)
-
-    // Normalize supplier categories from both productCategories and serviceCategories
-    const supplierProductCategories = Array.isArray(supply.productCategories)
-      ? supply.productCategories
-        .map((c) => (typeof c === "string" ? c.toLowerCase().trim() : (c.name || "").toLowerCase().trim()))
-        .filter(Boolean)
-      : []
-
-    const supplierServiceCategories = Array.isArray(supply.serviceCategories)
-      ? supply.serviceCategories
-        .map((c) => (typeof c === "string" ? c.toLowerCase().trim() : (c.name || "").toLowerCase().trim()))
-        .filter(Boolean)
-      : []
-
-    // Combine all supplier categories and remove duplicates
-    const allSupplierCategories = [...new Set([...supplierProductCategories, ...supplierServiceCategories])]
-    console.log("Supplier Categories:", allSupplierCategories)
-
-    const appBudgetMin = Number.parseInt((requestOverview.minBudget || "0").replace(/\D/g, "")) || 0
-    const appBudgetMax = Number.parseInt((requestOverview.maxBudget || "0").replace(/\D/g, "")) || 1000000
-    const appLocation = (requestOverview.location || "").toLowerCase().trim()
-
-    console.log("Budget Range:", appBudgetMin, "-", appBudgetMax)
-
-    const appDeliveryModes = Array.isArray(requestOverview.deliveryModes)
-      ? requestOverview.deliveryModes.map((m) => m.toLowerCase().trim()).filter(Boolean)
-      : []
-
-    const number = matchingPrefs.bbeeLevel ? matchingPrefs.bbeeLevel.replace(/\D/g, "") : "0"
-    const appBBBEEPref = Number.parseInt(number || "0") || 0
-
-    const appOwnershipPrefs = Array.isArray(matchingPrefs.ownershipPrefs)
-      ? matchingPrefs.ownershipPrefs.map((p) => p.toLowerCase().trim()).filter(Boolean)
-      : []
-
-    const supplyDeliveryModes = Array.isArray(supply.deliveryModes)
-      ? supply.deliveryModes.map((m) => m.toLowerCase().trim()).filter(Boolean)
-      : []
-
-    const bbbeeLevel = Number.parseInt(supplierLegal.bbbeeLevel || "0") || 0
-    const revenue = Number.parseInt((supplierFinancial.annualRevenue || "0").replace(/\D/g, "")) || 0
-    const location = (supplierEntity.location || "").toLowerCase().trim()
-    const experienceText = (supplierEntity.businessDescription || "").toLowerCase().trim()
-    const sectorPref = (matchingPrefs.sectorExperience || "").toLowerCase().trim()
-    const supplierRating = (supplier.pisScore || 50) / 10
-
-    console.log("Supplier Revenue:", revenue)
-
-    // IMPROVED CATEGORY MATCHING (30%)
-    if (MATCHING_CRITERIA.CATEGORY_MATCH.weight > 0) {
-      let categoryScore = 0
-
-      if (appCategories.length > 0 && allSupplierCategories.length > 0) {
-        // Find matching categories (case-insensitive, partial matches)
-        const matchingCategories = appCategories.filter((appCat) =>
-          allSupplierCategories.some(
-            (supplierCat) =>
-              supplierCat.includes(appCat) ||
-              appCat.includes(supplierCat) ||
-              calculateSimilarity(appCat, supplierCat) > 0.7,
-          ),
-        )
-
-        categoryScore = matchingCategories.length / appCategories.length
-        console.log("Category Matches:", matchingCategories, "Score:", categoryScore)
-      } else if (appCategories.length === 0) {
-        categoryScore = 0.5 // Neutral score if no categories specified
-      }
-
-      score += categoryScore * MATCHING_CRITERIA.CATEGORY_MATCH.weight * 100
-      breakdown.categoryMatch = {
-        score: categoryScore * 100,
-        description: MATCHING_CRITERIA.CATEGORY_MATCH.description,
-        matches: appCategories.length > 0 ? getCategoryMatches(appCategories, allSupplierCategories) : [],
-      }
-      totalWeight += MATCHING_CRITERIA.CATEGORY_MATCH.weight * 100
-    }
-
-    // Rest of your existing criteria calculations remain the same...
-    // 2. BBBEE_LEVEL (10%)
-    if (MATCHING_CRITERIA.BBBEE_LEVEL.weight > 0) {
-      let bbbeeScore = 0
-
-      if (appBBBEEPref <= bbbeeLevel) {
-        bbbeeScore = 1 // Perfect match
-      } else if (appBBBEEPref - bbbeeLevel <= 2) {
-        bbbeeScore = 0.5 // Partial match
-      }
-
-      score += bbbeeScore * MATCHING_CRITERIA.BBBEE_LEVEL.weight * 100
-      breakdown.bbbeeMatch = {
-        score: bbbeeScore * 100,
-        description: MATCHING_CRITERIA.BBBEE_LEVEL.description,
-      }
-      totalWeight += MATCHING_CRITERIA.BBBEE_LEVEL.weight * 100
-    }
-
-    // 3. LOCATION (10%)
-    if (MATCHING_CRITERIA.LOCATION.weight > 0) {
-      const locationScore =
-        location && appLocation && (location.includes(appLocation) || appLocation.includes(location)) ? 1 : 0
-
-      score += locationScore * MATCHING_CRITERIA.LOCATION.weight * 100
-      breakdown.locationMatch = {
-        score: locationScore * 100,
-        description: MATCHING_CRITERIA.LOCATION.description,
-      }
-      totalWeight += MATCHING_CRITERIA.LOCATION.weight * 100
-    }
-
-
-    // 4. DELIVERY_MODE (10%) - SIMPLIFIED WITH HYBRID COMPATIBILITY
-    if (MATCHING_CRITERIA.DELIVERY_MODE.weight > 0) {
-      let deliveryScore = 0
-
-      if (appDeliveryModes.length > 0 && supplyDeliveryModes.length > 0) {
-        // Check if either party has Hybrid - if so, full compatibility
-        const appHasHybrid = appDeliveryModes.includes("Hybrid")
-        const supplyHasHybrid = supplyDeliveryModes.includes("Hybrid")
-
-        if (appHasHybrid || supplyHasHybrid) {
-          deliveryScore = 1 // Full score if either has Hybrid
-        } else {
-          // Standard matching for non-Hybrid cases
-          const deliveryMatches = appDeliveryModes.filter((appMode) =>
-            supplyDeliveryModes.includes(appMode)
-          )
-          deliveryScore = deliveryMatches.length / appDeliveryModes.length
-        }
-      } else if (appDeliveryModes.length === 0) {
-        deliveryScore = 0.5 // Neutral score if no delivery modes specified
-      }
-
-      score += deliveryScore * MATCHING_CRITERIA.DELIVERY_MODE.weight * 100
-      breakdown.deliveryMatch = {
-        score: deliveryScore * 100,
-        description: MATCHING_CRITERIA.DELIVERY_MODE.description,
-        matches: appDeliveryModes.length > 0 ? getDeliveryModeMatches(appDeliveryModes, supplyDeliveryModes) : [],
-        hasHybrid: appDeliveryModes.includes("Hybrid") || supplyDeliveryModes.includes("Hybrid")
-      }
-      totalWeight += MATCHING_CRITERIA.DELIVERY_MODE.weight * 100
-    }
-
-    // 5. BUDGET_RANGE (10%)
-    if (MATCHING_CRITERIA.BUDGET_RANGE.weight > 0) {
-      let budgetScore = 0
-
-      if (revenue > 0) {
-        if (revenue >= appBudgetMin && revenue <= appBudgetMax) {
-          budgetScore = 1
-        } else if (revenue >= appBudgetMin * 0.5 && revenue <= appBudgetMax * 1.5) {
-          budgetScore = 0.7
-        } else {
-          budgetScore = 0.3
-        }
-      }
-
-      score += budgetScore * MATCHING_CRITERIA.BUDGET_RANGE.weight * 100
-      breakdown.budgetMatch = {
-        score: budgetScore * 100,
-        description: MATCHING_CRITERIA.BUDGET_RANGE.description,
-      }
-      totalWeight += MATCHING_CRITERIA.BUDGET_RANGE.weight * 100
-    }
-
-    // 6. OWNERSHIP_PREFS (10%)
-    // IMPROVED OWNERSHIP_PREFS (10%)
-    if (MATCHING_CRITERIA.OWNERSHIP_PREFS.weight > 0) {
-      let ownershipScore = 0
-      const ownershipDetails = {
-        blackOwned: { percentage: 0, meetsThreshold: false },
-        womenOwned: { percentage: 0, meetsThreshold: false },
-        youthOwned: { percentage: 0, meetsThreshold: false },
-        disabilityInclusive: { percentage: 0, meetsThreshold: false },
-      }
-      console.log(appOwnershipPrefs)
-      if (appOwnershipPrefs.length > 0) {
-        // Calculate ownership percentages from shareholders array
-        const shareholderData = calculateOwnershipPercentages(supplierOwnership)
-
-        // Update ownership details with calculated percentages
-        ownershipDetails.blackOwned.percentage = shareholderData.blackOwnership
-        ownershipDetails.womenOwned.percentage = shareholderData.womenOwnership
-        ownershipDetails.youthOwned.percentage = shareholderData.youthOwnership
-        ownershipDetails.disabilityInclusive.percentage = shareholderData.disabilityOwnership
-
-        // Check thresholds for each preference
-        appOwnershipPrefs.forEach((pref) => {
-          const normalizedPref = pref.toLowerCase().trim()
-
-          if (normalizedPref.includes("black-owned") || normalizedPref.includes("black owned")) {
-            const meetsThreshold = shareholderData.blackOwnership >= 51
-            ownershipDetails.blackOwned.meetsThreshold = meetsThreshold
-            if (meetsThreshold) ownershipScore += 0.4
-          } else if (
-            normalizedPref.includes("women-owned") ||
-            normalizedPref.includes("women owned") ||
-            normalizedPref.includes("female-owned")
-          ) {
-            const meetsThreshold = shareholderData.womenOwnership >= 30
-            ownershipDetails.womenOwned.meetsThreshold = meetsThreshold
-            if (meetsThreshold) ownershipScore += 0.3
-          } else if (normalizedPref.includes("youth-owned") || normalizedPref.includes("youth owned")) {
-            const meetsThreshold = shareholderData.youthOwnership >= 25
-            ownershipDetails.youthOwned.meetsThreshold = meetsThreshold
-            if (meetsThreshold) ownershipScore += 0.2
-          } else if (normalizedPref.includes("disability") || normalizedPref.includes("disabled")) {
-            const meetsThreshold = shareholderData.disabilityOwnership >= 5
-            ownershipDetails.disabilityInclusive.meetsThreshold = meetsThreshold
-            if (meetsThreshold) ownershipScore += 0.1
-          }
-        })
-
-        ownershipScore = Math.min(ownershipScore, 1)
-      } else {
-        ownershipScore = 0.5 // Neutral score if no preferences
-      }
-
-      score += ownershipScore * MATCHING_CRITERIA.OWNERSHIP_PREFS.weight * 100
-      breakdown.ownershipMatch = {
-        score: ownershipScore * 100,
-        description: MATCHING_CRITERIA.OWNERSHIP_PREFS.description,
-        details: ownershipDetails,
-      }
-      totalWeight += MATCHING_CRITERIA.OWNERSHIP_PREFS.weight * 100
-    }
-
-
-    // 7. URGENCY_LEAD_TIME MATCHING (10%) - CORRECTED LOGIC
-    if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
-      let urgencyLeadTimeScore = 0
-
-      const appStartDate = requestOverview.startDate
-      const appEndDate = requestOverview.endDate
-
-      // Check if we have application dates and supplier lead time data
-      if (appStartDate && (supply.minLeadTime || supply.maxLeadTime)) {
-        const requestStart = new Date(appStartDate).getTime()
-        const requestEnd = new Date(appEndDate || appStartDate).getTime() // Use start date if no end date
-        const now = new Date().getTime()
-
-        const daysUntilRequestStart = (requestStart - now) / (1000 * 60 * 60 * 24)
-        const totalProjectDays = (requestEnd - now) / (1000 * 60 * 60 * 24)
-
-        // Calculate supplier's delivery times in days
-        const minDeliveryDays = supply.minLeadTime ?
-          convertToDays(supply.minLeadTime, supply.minLeadTimeUnit || 'days') : 0
-        const maxDeliveryDays = supply.maxLeadTime ?
-          convertToDays(supply.maxLeadTime, supply.maxLeadTimeUnit || 'days') : minDeliveryDays * 1.5
-
-        console.log("Lead Time Matching Debug:", {
-          appStartDate,
-          appEndDate,
-          daysUntilRequestStart: Math.round(daysUntilRequestStart),
-          totalProjectDays: Math.round(totalProjectDays),
-          minDeliveryDays: Math.round(minDeliveryDays),
-          maxDeliveryDays: Math.round(maxDeliveryDays),
-          supplierData: {
-            minLeadTime: supply.minLeadTime,
-            maxLeadTime: supply.maxLeadTime,
-            minLeadTimeUnit: supply.minLeadTimeUnit,
-            maxLeadTimeUnit: supply.maxLeadTimeUnit
-          }
-        })
-
-        // Apply your scoring logic:
-        // 1.0 if both min and max fit within project timeframe
-        // 0.8 if only minimum fits but maximum doesn't
-        // 0.0 if neither fits
-
-        const minFits = minDeliveryDays <= totalProjectDays
-        const maxFits = maxDeliveryDays <= totalProjectDays
-        console.log(minFits)
-        console.log(maxFits)
-        if (minFits && maxFits) {
-          urgencyLeadTimeScore = 1.0 // Full points - both fit perfectly
-        } else if (minFits && !maxFits) {
-          urgencyLeadTimeScore = 0.8 // Partial points - minimum fits but maximum doesn't
-        } else {
-          urgencyLeadTimeScore = 0.0 // No points - can't deliver in time
-        }
-
-        console.log("Lead Time Score Result:", {
-          minFits,
-          maxFits,
-          finalScore: urgencyLeadTimeScore
-        })
-
-      } else {
-        // Missing data - neutral score
-        urgencyLeadTimeScore = 0.5
-        console.log("Lead Time: Missing data, using neutral score")
-      }
-
-      score += urgencyLeadTimeScore * MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100
-      breakdown.urgencyLeadTimeMatch = {
-        score: urgencyLeadTimeScore * 100,
-        description: MATCHING_CRITERIA.URGENCY_LEAD_TIME.description,
-        canDeliverInTime: urgencyLeadTimeScore > 0,
-      }
-      totalWeight += MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100
-    }
-
-    // 8. EXPERIENCE (10%)
-    if (MATCHING_CRITERIA.EXPERIENCE.weight > 0) {
-      let experienceScore = 0
-
-      if (sectorPref && experienceText) {
-        // Simple keyword matching
-        const prefWords = sectorPref.split(/\s+/)
-        const matchedWords = prefWords.filter((word) => experienceText.includes(word))
-        experienceScore = matchedWords.length / Math.max(prefWords.length, 1)
-      } else if (!sectorPref) {
-        experienceScore = 0.5 // Neutral score if no preference
-      }
-
-      score += experienceScore * MATCHING_CRITERIA.EXPERIENCE.weight * 100
-      breakdown.experienceMatch = {
-        score: experienceScore * 100,
-        description: MATCHING_CRITERIA.EXPERIENCE.description,
-      }
-      totalWeight += MATCHING_CRITERIA.EXPERIENCE.weight * 100
-    }
-
-    // 9. RATING (5%)
-    if (MATCHING_CRITERIA.RATING.weight > 0) {
-      console.log("Available ratings data:", ratingsData)
-
-      // Use the ratings data passed as parameter, or fall back to state
-      const effectiveRatingsData = ratingsData || supplierRatings;
-
-      // Helper function to get rating from the data
-      const getRatingFromData = (supplierId) => {
-        return effectiveRatingsData[supplierId] || {
-          average: 0,
-          count: 0,
-          latestComment: "No ratings yet"
-        };
-      };
-
-      // Use the actual supplier rating
-      const supplierId = supplier?.id;
-      const supplierRatingData = getRatingFromData(supplierId);
-      const actualRating = supplierRatingData.average || 0;
-
-      console.log("Rating calculation:", {
-        supplierId,
-        actualRating,
-        ratingData: supplierRatingData,
-        allRatings: effectiveRatingsData
-      });
-
-      // Normalize rating to 0-1 scale (assuming 0-5 scale)
-      const ratingScore = actualRating / 5;
-
-      score += ratingScore * MATCHING_CRITERIA.RATING.weight * 100;
-      breakdown.ratingMatch = {
-        score: ratingScore * 100,
-        description: MATCHING_CRITERIA.RATING.description,
-        actualRating: actualRating,
-        ratingCount: supplierRatingData.count
-      };
-      totalWeight += MATCHING_CRITERIA.RATING.weight * 100;
-    }
-
-    // Calculate final weighted score
-    const finalScore = totalWeight > 0 ? score / totalWeight : 0
-
-    return {
-      totalScore: Math.round(finalScore * 100), // Convert to percentage
-      breakdown,
-    }
-  }
-
-  // Helper function to calculate ownership percentages from shareholder data
-  function calculateOwnershipPercentages(ownershipManagement) {
-    const result = {
-      blackOwnership: 0,
-      womenOwnership: 0,
-      youthOwnership: 0,
-      disabilityOwnership: 0,
-      totalShares: 0,
-    }
-
-    const shareholders = Array.isArray(ownershipManagement.shareholders) ? ownershipManagement.shareholders : []
-
-    // Calculate totals from shareholders
-    shareholders.forEach((shareholder) => {
-      const shareholding = Number.parseInt(shareholder.shareholding || "0") || 0
-      result.totalShares += shareholding
-
-      // Black ownership
-      if (shareholder.race && shareholder.race.toLowerCase() === "black") {
-        result.blackOwnership += shareholding
-      }
-
-      // Women ownership
-      if (shareholder.gender && shareholder.gender.toLowerCase() === "female") {
-        result.womenOwnership += shareholding
-      }
-
-      // Youth ownership (assuming isYouth flag)
-      if (shareholder.isYouth === true) {
-        result.youthOwnership += shareholding
-      }
-
-      // Disability ownership
-      if (shareholder.isDisabled === true) {
-        result.disabilityOwnership += shareholding
-      }
-    })
-
-    // Also check directors for management representation (weighted less than ownership)
-    const directors = Array.isArray(ownershipManagement.directors) ? ownershipManagement.directors : []
-
-    let blackDirectors = 0
-    let womenDirectors = 0
-    let youthDirectors = 0
-    let disabledDirectors = 0
-    const totalDirectors = directors.length
-
-    directors.forEach((director) => {
-      if (director.race && director.race.toLowerCase() === "black") {
-        blackDirectors++
-      }
-      if (director.gender && director.gender.toLowerCase() === "female") {
-        womenDirectors++
-      }
-      if (director.isYouth === true) {
-        youthDirectors++
-      }
-      if (director.isDisabled === true) {
-        disabledDirectors++
-      }
-    })
-
-    // If no shareholders data but we have directors, use directors as proxy (with lower weight)
-    if (result.totalShares === 0 && totalDirectors > 0) {
-      result.blackOwnership = (blackDirectors / totalDirectors) * 100 * 0.7 // 70% weight for directors as proxy
-      result.womenOwnership = (womenDirectors / totalDirectors) * 100 * 0.7
-      result.youthOwnership = (youthDirectors / totalDirectors) * 100 * 0.7
-      result.disabilityOwnership = (disabledDirectors / totalDirectors) * 100 * 0.7
-    } else if (result.totalShares > 0) {
-      // Convert to percentages
-      result.blackOwnership = (result.blackOwnership / result.totalShares) * 100
-      result.womenOwnership = (result.womenOwnership / result.totalShares) * 100
-      result.youthOwnership = (result.youthOwnership / result.totalShares) * 100
-      result.disabilityOwnership = (result.disabilityOwnership / result.totalShares) * 100
-    }
-
-    return result
-  }
-
-  // Additional helper function to get detailed ownership breakdown
-  function getOwnershipBreakdown(ownershipManagement) {
-    const breakdown = {
-      shareholders: [],
-      directors: [],
-      summary: {},
-    }
-
-    // Shareholder breakdown
-    if (Array.isArray(ownershipManagement.shareholders)) {
-      breakdown.shareholders = ownershipManagement.shareholders.map((shareholder) => ({
-        name: shareholder.name || "Unknown",
-        shareholding: Number.parseInt(shareholder.shareholding || "0") || 0,
-        race: shareholder.race || "Not specified",
-        gender: shareholder.gender || "Not specified",
-        isYouth: shareholder.isYouth || false,
-        isDisabled: shareholder.isDisabled || false,
-      }))
-    }
-
-    // Director breakdown
-    if (Array.isArray(ownershipManagement.directors)) {
-      breakdown.directors = ownershipManagement.directors.map((director) => ({
-        name: director.name || "Unknown",
-        position: director.position || director.customPosition || "Not specified",
-        race: director.race || "Not specified",
-        gender: director.gender || "Not specified",
-        isYouth: director.isYouth || false,
-        isDisabled: director.isDisabled || false,
-        execType: director.execType || "Not specified",
-      }))
-    }
-
-    // Calculate summary
-    const percentages = calculateOwnershipPercentages(ownershipManagement)
-    breakdown.summary = percentages
-
-    return breakdown
-  }
-
-
-  // Helper function to calculate string similarity (simple version)
-  function calculateSimilarity(str1, str2) {
-    const longer = str1.length > str2.length ? str1 : str2
-    const shorter = str1.length > str2.length ? str2 : str1
-
-    if (longer.length === 0) return 1.0
-
-    return (longer.length - editDistance(longer, shorter)) / Number.parseFloat(longer.length)
-  }
-
-  // Helper function for edit distance (Levenshtein distance)
-  function editDistance(s1, s2) {
-    s1 = s1.toLowerCase()
-    s2 = s2.toLowerCase()
-
-    const costs = []
-    for (let i = 0; i <= s1.length; i++) {
-      let lastValue = i
-      for (let j = 0; j <= s2.length; j++) {
-        if (i === 0) {
-          costs[j] = j
-        } else if (j > 0) {
-          let newValue = costs[j - 1]
-          if (s1.charAt(i - 1) !== s2.charAt(j - 1)) {
-            newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1
-          }
-          costs[j - 1] = lastValue
-          lastValue = newValue
-        }
-      }
-      if (i > 0) costs[s2.length] = lastValue
-    }
-    return costs[s2.length]
-  }
-
-  // Helper function to get detailed category matches
-  function getCategoryMatches(appCategories, supplierCategories) {
-    const matches = []
-
-    appCategories.forEach((appCat) => {
-      supplierCategories.forEach((supplierCat) => {
-        if (
-          supplierCat.includes(appCat) ||
-          appCat.includes(supplierCat) ||
-          calculateSimilarity(appCat, supplierCat) > 0.7
-        ) {
-          matches.push({
-            applicationCategory: appCat,
-            supplierCategory: supplierCat,
-            similarity: calculateSimilarity(appCat, supplierCat),
-          })
-        }
-      })
-    })
-
-    return matches
-  }
+  }, [currentUserApplication])
 
   // Determine status based on match score
   const getStatusBasedOnScore = (score) => {
@@ -1230,9 +842,7 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
 
       if (!supplierProfile.exists()) throw new Error("Your supplier profile not found")
       if (!customerProfile.exists()) throw new Error("Supplier profile not found")
-      if (!productApplications.length) throw new Error("No active product application found")
 
-      const currentApplication = productApplications[0]
       const customerData = customerProfile.data()
       const supplierData = supplierProfile.data()
 
@@ -1240,6 +850,7 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
       const getSafeValue = (obj, path, defaultValue = null) => {
         return path.split(".").reduce((acc, key) => acc?.[key] ?? defaultValue, obj)
       }
+
       const formatMatchBreakdown = (matchDetails) => {
         if (!matchDetails) return null
 
@@ -1247,13 +858,12 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
           acc[key] = {
             score: details.score,
             description: details.description,
-            // Add the weight information from MATCHING_CRITERIA
-            weight:
-              Object.values(MATCHING_CRITERIA).find((c) => c.description === details.description)?.weight * 100 || 0,
+            weight: ENHANCED_MATCHING_CRITERIA[key]?.weight * 100 || 0,
           }
           return acc
         }, {})
       }
+
       // Prepare the complete application payload
       const applicationPayload = {
         applicationSource: "supplier-directory",
@@ -1263,8 +873,7 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
           totalScore: supplier.matchPercentage || 0,
           breakdown: formatMatchBreakdown(supplier.matchDetails),
           calculatedAt: serverTimestamp(),
-          // Store the criteria weights for reference
-          criteriaWeights: Object.entries(MATCHING_CRITERIA).reduce((acc, [key, criteria]) => {
+          criteriaWeights: Object.entries(ENHANCED_MATCHING_CRITERIA).reduce((acc, [key, criteria]) => {
             acc[key] = {
               weight: criteria.weight * 100,
               description: criteria.description,
@@ -1292,22 +901,22 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
         customerType: getSafeValue(customerData, "entityOverview.entityType") || "Not specified",
         customerSector: getSafeValue(customerData, "entityOverview.economicSectors[0]") || "Not specified",
         originalRequest: {
-          id: currentApplication.id || "unknown-id",
-          businessName: getSafeValue(currentApplication, "contactSubmission.businessName") || "Unknown Business",
+          id: currentUserApplication?.id || "unknown-id",
+          businessName: getSafeValue(currentUserApplication, "contactSubmission.businessName") || "Unknown Business",
           serviceRequested:
-            getSafeValue(currentApplication, "productsServices.categories[0]") ||
-            getSafeValue(currentApplication, "productsServices.serviceCategories[0]") ||
+            getSafeValue(currentUserApplication, "productsServices.categories[0]") ||
+            getSafeValue(currentUserApplication, "productsServices.serviceCategories[0]") ||
             "Not specified",
           budgetRange: {
-            min: getSafeValue(currentApplication, "requestOverview.minBudget") || "0",
-            max: getSafeValue(currentApplication, "requestOverview.maxBudget") || "0",
+            min: getSafeValue(currentUserApplication, "requestOverview.minBudget") || "0",
+            max: getSafeValue(currentUserApplication, "requestOverview.maxBudget") || "0",
           },
-          location: getSafeValue(currentApplication, "requestOverview.location") || "Not specified",
-          urgency: getSafeValue(currentApplication, "applicationOverview.urgency") || "Not specified",
-          deliveryTurnaround: getSafeValue(currentApplication, "requestOverview.endDate")
-            ? `By ${currentApplication.requestOverview.endDate}`
+          location: getSafeValue(currentUserApplication, "requestOverview.location") || "Not specified",
+          urgency: getSafeValue(currentUserApplication, "applicationOverview.urgency") || "Not specified",
+          deliveryTurnaround: getSafeValue(currentUserApplication, "requestOverview.endDate")
+            ? `By ${currentUserApplication.requestOverview.endDate}`
             : "Not specified",
-          purpose: currentUserApplication?.requestOverview?.purpose || "Not specified", // Add purpose to the application
+          purpose: currentUserApplication?.requestOverview?.purpose || "Not specified",
         },
         currentStage: "Contact Initiated",
         nextStage: "Proposal Sent",
@@ -1322,10 +931,7 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
             ? supplierData.productsServices.deliveryModes
             : ["Not specified"],
           pisScore: supplierData.pisScore || 0,
-
           bigScore: supplierData.bigScore || 0,
-
-          // Add products information for better display
           products: Array.isArray(supplierData.productsServices?.products)
             ? supplierData.productsServices.products
             : [],
@@ -1350,7 +956,6 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
         currentStage: "Contact Initiated",
         updatedAt: serverTimestamp(),
       })
-      await verifyStageUpdate(supplier.id)
 
       setNotification({
         type: "success",
@@ -1358,7 +963,6 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
       })
 
       if (applicationPayload.status === "Accepted") {
-        // Notify parent about accepted supplier
         if (onSupplierAccepted) {
           onSupplierAccepted(supplier.id)
         }
@@ -1382,12 +986,6 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
     } finally {
       setTimeout(() => setNotification(null), 3000)
     }
-  }
-
-  const getUrgencyClass = (urgency) => {
-    if (urgency.includes("1 week")) return { backgroundColor: "#FFEBEE", color: "#D32F2F" }
-    if (urgency.includes("2 weeks")) return { backgroundColor: "#FFF3E0", color: "#F57C00" }
-    return { backgroundColor: "#E8F5E8", color: "#388E3C" }
   }
 
   const handleViewDetails = (supplier) => {
@@ -1431,7 +1029,55 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
   }
 
   if (loading) return <div>Loading suppliers...</div>
-  if (error) return <div>Error: {error}</div>
+
+  if (error) return (
+    <div style={{ textAlign: 'center', padding: '3rem' }}>
+      <div style={{ color: '#D32F2F', marginBottom: '1rem', fontSize: '1.1rem' }}>{error}</div>
+      {error.includes("complete a product application") && (
+        <button
+          onClick={() => navigate('/applications/product')}
+          style={{
+            padding: '0.75rem 1.5rem',
+            background: '#5D2A0A',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            fontSize: '1rem',
+            fontWeight: '500',
+            cursor: 'pointer',
+          }}
+        >
+          Create Product Application
+        </button>
+      )}
+    </div>
+  )
+
+  if (filteredSuppliers.length === 0 && !loading) return (
+    <div style={{ textAlign: 'center', padding: '3rem' }}>
+      <p style={{ fontSize: '1.1rem', color: '#5D2A0A', marginBottom: '1rem' }}>
+        No matching suppliers found based on your product application criteria.
+      </p>
+      <p style={{ color: '#7d5a50', marginBottom: '2rem' }}>
+        Try updating your product application or check back later for new suppliers.
+      </p>
+      <button
+        onClick={() => navigate('/applications/product')}
+        style={{
+          padding: '0.75rem 1.5rem',
+          background: '#5D2A0A',
+          color: 'white',
+          border: 'none',
+          borderRadius: '6px',
+          fontSize: '1rem',
+          fontWeight: '500',
+          cursor: 'pointer',
+        }}
+      >
+        Edit Product Application
+      </button>
+    </div>
+  )
 
   return (
     <>
@@ -1476,22 +1122,22 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
           </div>
         </div>
 
-        {/* Always show the table structure */}
+        {/* Table Structure */}
         <div style={tableContainerStyle}>
           <table style={tableStyle}>
             <colgroup>
-              <col style={{ width: "8%" }} /> {/* Supplier Name */}
-              <col style={{ width: "8%" }} /> {/* Location */}
-              <col style={{ width: "8%" }} /> {/* Sector */}
-              <col style={{ width: "5%" }} /> {/* Rating */}
-              <col style={{ width: "5%" }} /> {/* BBBEE */}
-              <col style={{ width: "8%" }} /> {/* Revenue */}
-              <col style={{ width: "8%" }} /> {/* Category */}
-              <col style={{ width: "8%" }} /> {/* Service Required */}
-              <col style={{ width: "8%" }} /> {/* Urgency */}
-              <col style={{ width: "8%" }} /> {/* Match % */}
-              <col style={{ width: "5%" }} /> {/* Action */}
-              <col style={{ width: "8%" }} /> {/* Stage */}
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "5%" }} />
+              <col style={{ width: "5%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "5%" }} />
+              <col style={{ width: "8%" }} />
             </colgroup>
             <thead>
               <tr>
@@ -1510,213 +1156,166 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
               </tr>
             </thead>
             <tbody>
-              {filteredSuppliers.length === 0 ? (
-                // Show empty rows to maintain table structure
-                Array.from({ length: 3 }, (_, index) => (
-                  <tr key={`empty-${index}`} style={tableRowStyle}>
-                    <td style={tableCellStyle}>-</td>
-                    <td style={tableCellStyle}>-</td>
-                    <td style={tableCellStyle}>-</td>
-                    <td style={tableCellStyle}>-</td>
-                    <td style={tableCellStyle}>-</td>
-                    <td style={tableCellStyle}>-</td>
-                    <td style={tableCellStyle}>-</td>
-                    <td style={tableCellStyle}>-</td>
-                    <td style={tableCellStyle}>-</td>
-                    <td style={tableCellStyle}>-</td>
-                    <td style={tableCellStyle}>-</td>
-                    <td style={{ ...tableCellStyle, borderRight: "none" }}>-</td>
+              {filteredSuppliers.map((supplier) => {
+                const statusStyle = getStatusStyle(supplier.status)
+                const stageStyle = getStageStyle(supplier.currentStage)
+
+                return (
+                  <tr key={supplier.id} style={tableRowStyle}>
+                    <td style={tableCellStyle}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                        <div>
+                          <span onClick={() => handleViewDetails(supplier)} style={supplierNameStyle}>
+                            <TruncatedText
+                              text={supplier.entityOverview?.tradingName || supplier.entityOverview?.registeredName}
+                              maxLength={15}
+                            />
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td style={tableCellStyle}>
+                      <TruncatedText text={supplier.entityOverview?.location || "Not specified"} maxLength={12} />
+                    </td>
+
+                    <td style={tableCellStyle}>
+                      <TruncatedText
+                        text={supplier.entityOverview?.economicSectors?.[0] || "Not specified"}
+                        maxLength={12}
+                      />
+                    </td>
+
+                    <td style={tableCellStyle}>
+                      <span style={{ fontSize: "0.75rem", color: "#5D2A0A", fontWeight: "500" }}>
+                        {supplier.rating}/5
+                      </span>
+                    </td>
+
+                    <td style={tableCellStyle}>
+                      <TruncatedText text={supplier.legalCompliance?.bbbeeLevel || "N/A"} maxLength={8} />
+                    </td>
+
+                    <td style={tableCellStyle}>
+                      <TruncatedText
+                        text={supplier.financialOverview?.annualRevenue || "Not specified"}
+                        maxLength={12}
+                      />
+                    </td>
+
+                    <td style={tableCellStyle}>
+                      <TruncatedText
+                        text={
+                          supplier.productsServices?.productCategories?.[0]?.name ||
+                          supplier.productsServices?.serviceCategories?.[0]?.name ||
+                          "Not specified"
+                        }
+                        maxLength={10}
+                      />
+                    </td>
+
+                    <td style={tableCellStyle}>
+                      <TruncatedText
+                        text={supplier.serviceRequired || "Not specified"}
+                        maxLength={15}
+                      />
+                    </td>
+
+                    <td style={tableCellStyle}>
+                      <TruncatedText text={supplier.urgency || "1 month"} maxLength={10} />
+                    </td>
+
+                    <td style={tableCellStyle}>
+                      <div style={matchContainerStyle}>
+                        <div style={progressBarStyle}>
+                          <div
+                            style={{
+                              ...progressFillStyle,
+                              width: `${supplier.matchPercentage}%`,
+                              background:
+                                supplier.matchPercentage > 75
+                                  ? "#48BB78"
+                                  : supplier.matchPercentage > 50
+                                    ? "#F6AD55"
+                                    : "#F56565",
+                            }}
+                          />
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "4px" }}>
+                          <span
+                            style={{
+                              ...matchScoreStyle,
+                              color:
+                                supplier.matchPercentage > 75
+                                  ? "#48BB78"
+                                  : supplier.matchPercentage > 50
+                                    ? "#D69E2E"
+                                    : "#E53E3E",
+                            }}
+                          >
+                            {supplier.matchPercentage}%
+                          </span>
+                          <Eye
+                            size={14}
+                            style={{
+                              cursor: "pointer",
+                              color: "#a67c52",
+                            }}
+                            onClick={() => handleShowMatchBreakdown(supplier)}
+                            title="View match breakdown"
+                          />
+                        </div>
+                      </div>
+                    </td>
+
+                    <td style={tableCellStyle}>
+                      <button
+                        onClick={() => handleConnectClick(supplier)}
+                        style={{
+                          ...statusBadgeStyle,
+                          backgroundColor: "#5D2A0A",
+                          color: "white",
+                          padding: "0.25rem 0.5rem",
+                          cursor: "pointer",
+                          border: "none",
+                          borderRadius: "3px",
+                          fontWeight: "500",
+                          fontSize: "0.65rem",
+                        }}
+                      >
+                        Contact
+                      </button>
+                    </td>
+
+                    <td style={{ ...tableCellStyle, borderRight: "none" }}>
+                      <div
+                        style={{
+                          ...statusBadgeStyle,
+                          backgroundColor: stageStyle.backgroundColor,
+                          color: stageStyle.color,
+                          fontSize: "0.65rem",
+                          padding: "0.15rem 0.3rem",
+                          textAlign: "center",
+                          lineHeight: "1.2",
+                          minHeight: "2.5rem",
+                          display: "flex",
+                          flexDirection: "column",
+                          justifyContent: "center",
+                        }}
+                      >
+                        {supplier.currentStage.split(" ").map((word, index) => (
+                          <div key={index} style={{ fontSize: "0.6rem" }}>
+                            {word}
+                          </div>
+                        ))}
+                      </div>
+                    </td>
                   </tr>
-                ))
-              ) : (
-                filteredSuppliers.map((supplier) => {
-                  const statusStyle = getStatusStyle(supplier.status)
-                  const stageStyle = getStageStyle(supplier.currentStage)
-
-                  return (
-                    <tr key={supplier.id} style={tableRowStyle}>
-                      {/* Supplier Name Cell - CHANGE: Removed avatar */}
-                      <td style={tableCellStyle}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                          <div>
-                            <span onClick={() => handleViewDetails(supplier)} style={supplierNameStyle}>
-                              <TruncatedText
-                                text={supplier.entityOverview?.tradingName || supplier.entityOverview?.registeredName}
-                                maxLength={15}
-                              />
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Location Cell */}
-                      <td style={tableCellStyle}>
-                        <TruncatedText text={supplier.entityOverview?.location || "Not specified"} maxLength={12} />
-                      </td>
-
-                      {/* Sector Focus Cell - CHANGE: Normal text, see more underneath */}
-                      <td style={tableCellStyle}>
-                        <TruncatedText
-                          text={supplier.entityOverview?.economicSectors?.[0] || "Not specified"}
-                          maxLength={12}
-                        />
-                      </td>
-
-                      {/* Rating Cell - CHANGE: Show numbers only like 4/5 */}
-                      <td style={tableCellStyle}>
-                        <span style={{ fontSize: "0.75rem", color: "#5D2A0A", fontWeight: "500" }}>
-                          {supplier.rating}/5
-                        </span>
-                      </td>
-
-                      {/* BBBEE Level Cell - CHANGE: Normal text */}
-                      <td style={tableCellStyle}>
-                        <TruncatedText text={supplier.legalCompliance?.bbbeeLevel || "N/A"} maxLength={8} />
-                      </td>
-
-                      {/* Annual Revenue Cell */}
-                      <td style={tableCellStyle}>
-                        <TruncatedText
-                          text={supplier.financialOverview?.annualRevenue || "Not specified"}
-                          maxLength={12}
-                        />
-                      </td>
-
-                      {/* Service Category Cell - CHANGE: Normal text, see more underneath */}
-                      <td style={tableCellStyle}>
-                        <TruncatedText
-                          text={
-                            // Check both productCategories and serviceCategories
-                            supplier.productsServices?.productCategories?.[0]?.name ||
-                            supplier.productsServices?.serviceCategories?.[0]?.name ||
-                            "Not specified"
-                          }
-                          maxLength={10}
-                        />
-                      </td>
-
-                      {/* NEW: Service Required Cell - Shows the purpose from current user's application */}
-                      <td style={tableCellStyle}>
-                        <TruncatedText
-                          text={supplier.serviceRequired || "Not specified"}
-                          maxLength={15}
-                        />
-                      </td>
-
-                      {/* Urgency Cell - CHANGE: Normal text, see more underneath */}
-                      <td style={tableCellStyle}>
-                        <TruncatedText text={supplier.urgency || "1 month"} maxLength={10} />
-                      </td>
-
-                      {/* Match Percentage Cell - CHANGE: Added progress bar like customer table */}
-                      <td style={tableCellStyle}>
-                        <div style={matchContainerStyle}>
-                          <div style={progressBarStyle}>
-                            <div
-                              style={{
-                                ...progressFillStyle,
-                                width: `${supplier.matchPercentage}%`,
-                                background:
-                                  supplier.matchPercentage > 75
-                                    ? "#48BB78"
-                                    : supplier.matchPercentage > 50
-                                      ? "#F6AD55"
-                                      : "#F56565",
-                              }}
-                            />
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "4px" }}>
-                            <span
-                              style={{
-                                ...matchScoreStyle,
-                                color:
-                                  supplier.matchPercentage > 75
-                                    ? "#48BB78"
-                                    : supplier.matchPercentage > 50
-                                      ? "#D69E2E"
-                                      : "#E53E3E",
-                              }}
-                            >
-                              {supplier.matchPercentage}%
-                            </span>
-                            <Eye
-                              size={14}
-                              style={{
-                                cursor: "pointer",
-                                color: "#a67c52",
-                              }}
-                              onClick={() => handleShowMatchBreakdown(supplier)}
-                              title="View match breakdown"
-                            />
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Action Cell */}
-                      <td style={tableCellStyle}>
-                        <button
-                          onClick={() => handleConnectClick(supplier)}
-                          style={{
-                            ...statusBadgeStyle,
-                            backgroundColor: "#5D2A0A",
-                            color: "white",
-                            padding: "0.25rem 0.5rem",
-                            cursor: "pointer",
-                            border: "none",
-                            borderRadius: "3px",
-                            fontWeight: "500",
-                            fontSize: "0.65rem",
-                          }}
-                        >
-                          Contact
-                        </button>
-                      </td>
-
-                      {/* Stage Cell - CHANGE: Two lines, different colors, no see more */}
-                      <td style={{ ...tableCellStyle, borderRight: "none" }}>
-                        <div
-                          style={{
-                            ...statusBadgeStyle,
-                            backgroundColor: stageStyle.backgroundColor,
-                            color: stageStyle.color,
-                            fontSize: "0.65rem",
-                            padding: "0.15rem 0.3rem",
-                            textAlign: "center",
-                            lineHeight: "1.2",
-                            minHeight: "2.5rem",
-                            display: "flex",
-                            flexDirection: "column",
-                            justifyContent: "center",
-                          }}
-                        >
-                          {supplier.currentStage.split(" ").map((word, index) => (
-                            <div key={index} style={{ fontSize: "0.6rem" }}>
-                              {word}
-                            </div>
-                          ))}
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
+                )
+              })}
             </tbody>
           </table>
         </div>
-
-        {/* Show message underneath the table when no suppliers */}
-        {filteredSuppliers.length === 0 && (
-          <div style={noResultsStyle}>
-            <div style={{ textAlign: "center" }}>
-              <p style={{ margin: "1rem 0", fontSize: "1rem", color: "#5D2A0A" }}>
-                You have not applied for any suppliers, so there are no matches available. You need to apply first.
-              </p>
-              <button onClick={clearAllFilters} style={clearFiltersButtonStyle}>
-                Clear All Filters
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Table Footer */}
         <div
@@ -1766,7 +1365,7 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
         </div>
       </div>
 
-      {/* {modal added 21st}  */}
+      {/* Match Breakdown Modal */}
       {mounted &&
         showMatchBreakdown &&
         createPortal(
@@ -1850,9 +1449,7 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
                 >
                   {matchBreakdownData?.matchDetails &&
                     Object.entries(matchBreakdownData.matchDetails).map(([key, details]) => {
-                      const criteriaInfo = Object.values(MATCHING_CRITERIA).find(
-                        (c) => c.description === details.description,
-                      )
+                      const criteriaInfo = ENHANCED_MATCHING_CRITERIA[key]
                       const weight = criteriaInfo ? criteriaInfo.weight * 100 : 0
                       const scoreColor = details.score >= 80 ? "#388E3C" : details.score >= 50 ? "#F57C00" : "#D32F2F"
 
@@ -1942,6 +1539,31 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
                               Contribution: {Math.round((details.score * weight) / 100)}%
                             </span>
                           </div>
+
+                          {/* Show matched categories for category match */}
+                          {key === 'categoryMatch' && details.matches && details.matches.length > 0 && (
+                            <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #E8D5C4' }}>
+                              <span style={{ fontSize: "0.75rem", color: "#8D6E63", fontWeight: "600" }}>
+                                Matched Categories:
+                              </span>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', marginTop: '0.25rem' }}>
+                                {details.matches.map((category, idx) => (
+                                  <span
+                                    key={idx}
+                                    style={{
+                                      background: '#E8F5E8',
+                                      color: '#388E3C',
+                                      padding: '0.25rem 0.5rem',
+                                      borderRadius: '12px',
+                                      fontSize: '0.7rem',
+                                    }}
+                                  >
+                                    {category}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )
                     })}
@@ -2041,6 +1663,7 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
           </div>,
           document.body,
         )}
+
       {/* Filter Modal */}
       {mounted &&
         showFilters &&
