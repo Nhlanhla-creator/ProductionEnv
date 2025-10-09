@@ -423,23 +423,59 @@ const StrategicGoals = ({ activeSection, milestoneData, onNavigateToMilestone })
 
     if (relevantMilestones.length === 0) return 0
 
-    const completedMilestones = relevantMilestones.filter((milestone) => milestone.status === "Done").length
+    // Calculate average percentage completion
+    const totalPercentage = relevantMilestones.reduce((sum, milestone) => {
+      return sum + (milestone.percentageCompletion || 0)
+    }, 0)
 
-    return Math.round((completedMilestones / relevantMilestones.length) * 100)
+    return Math.round(totalPercentage / relevantMilestones.length)
   }
 
   const createChartData = (growthStage, color) => {
     const goals = ["Goal 1", "Goal 2", "Goal 3", "Goal 4"]
     const completionData = goals.map((_, index) => calculateGoalCompletion(index + 1, growthStage))
 
+    // Filter out goals with no data (0% completion and no milestones)
+    const goalsWithData = []
+    const dataWithValues = []
+
+    goals.forEach((goal, index) => {
+      const completion = completionData[index]
+      const relevantMilestones = milestoneData.filter(
+        (milestone) => milestone.goal === goal && milestone.growthStage === growthStage,
+      )
+
+      // Only include goals that have milestones or completion data
+      if (relevantMilestones.length > 0 || completion > 0) {
+        goalsWithData.push(goal)
+        dataWithValues.push(completion)
+      }
+    })
+
+    // If no goals have data, return empty dataset
+    if (goalsWithData.length === 0) {
+      return {
+        labels: [],
+        datasets: [
+          {
+            label: "% Completion",
+            data: [],
+            backgroundColor: color,
+            borderColor: "#7d5a50",
+            borderWidth: 1,
+          },
+        ],
+      }
+    }
+
     return {
-      labels: goals,
+      labels: goalsWithData,
       datasets: [
         {
           label: "% Completion",
-          data: completionData,
+          data: dataWithValues,
           backgroundColor: color,
-          borderColor: "#5d4037",
+          borderColor: "#7d5a50",
           borderWidth: 1,
         },
       ],
@@ -460,13 +496,19 @@ const StrategicGoals = ({ activeSection, milestoneData, onNavigateToMilestone })
         callbacks: {
           afterLabel: (context) => {
             const goalNumber = context.dataIndex + 1
-            const goalDescriptions = {
-              1: "Increase market share and expand customer base",
-              2: "Improve operational efficiency and reduce costs",
-              3: "Enhance product quality and innovation",
-              4: "Strengthen financial performance and sustainability",
+            // Access growthStage from the dataset attribute
+            const growthStage = context.chart.canvas.dataset.growthStage
+
+            // Find the actual milestone for this goal and growth stage
+            const relevantMilestones = milestoneData.filter(
+              (milestone) => milestone.goal === `Goal ${goalNumber}` && milestone.growthStage === growthStage,
+            )
+
+            if (relevantMilestones.length > 0 && relevantMilestones[0].goalDescription) {
+              return relevantMilestones[0].goalDescription
             }
-            return goalDescriptions[goalNumber] || ""
+
+            return "No description available"
           },
         },
       },
@@ -475,83 +517,80 @@ const StrategicGoals = ({ activeSection, milestoneData, onNavigateToMilestone })
       y: {
         beginAtZero: true,
         max: 100,
+        ticks: {
+          callback: (value) => `${value}%`,
+        },
         title: {
           display: true,
-          text: "% Completion",
-          color: "#72542b",
+          text: "Completion %",
+          color: "#4a352f",
           font: {
             weight: "bold",
+            size: 12,
           },
         },
         grid: {
-          color: "#e8ddd4",
+          color: "#f0e6d9",
         },
       },
       x: {
-        title: {
-          display: true,
-          text: " ",
-          color: "#72542b",
-          font: {
-            weight: "bold",
-          },
-        },
         grid: {
-          color: "#f7f3f0",
+          display: false,
+        },
+        ticks: {
+          color: "#4a352f",
         },
       },
-    },
-    onClick: (event, elements, chart) => {
-      if (elements.length > 0) {
-        const elementIndex = elements[0].index
-        const datasetIndex = elements[0].datasetIndex
-        const categoryKey = chart.canvas.getAttribute("data-category")
-        if (categoryKey) {
-          onNavigateToMilestone(categoryKey)
-        }
-      }
     },
   }
 
   const categories = [
-    { key: "Growth", name: "Growth", color: "#9c7c5f" },
-    { key: "Finance", name: "Finance", color: "#8b6914" },
-    { key: "Operations", name: "Operations", color: "#b89f8d" },
-    { key: "People", name: "People", color: "#d4c4b0" },
-    { key: "Systems", name: "Systems", color: "#e8ddd4" },
-    { key: "Customers", name: "Customers", color: "#9c7c5f" },
+    { key: "Growth", name: "Growth", color: "#a67c52" },
+    { key: "Finance", name: "Finance", color: "#7d5a50" },
+    { key: "Operations", name: "Operations", color: "#c8b6a6" },
+    { key: "People", name: "People", color: "#e6d7c3" },
+    { key: "Systems", name: "Systems", color: "#f5f0e1" },
+    { key: "Customers", name: "Customers", color: "#a67c52" },
   ]
 
   return (
     <div
       style={{
-        backgroundColor: "#fdfcfb",
+        backgroundColor: "#faf7f2",
         padding: "20px",
         margin: "20px 0",
         borderRadius: "8px",
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
     >
-      <div style={{ marginBottom: "20px" }}>
-        <h3 style={{ color: "#5d4037", marginBottom: "15px" }}>Choose what to display:</h3>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+      <h3 style={{ color: "#4a352f", marginBottom: "10px" }}>Strategic Goals Progress</h3>
+
+      <div style={{ marginBottom: "20px", padding: "15px", backgroundColor: "#fdfcfb", borderRadius: "6px" }}>
+        <p style={{ color: "#4a352f", marginBottom: "10px", fontWeight: "500" }}>Select charts to display:</p>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "15px" }}>
           {categories.map((category) => (
-            <button
+            <label
               key={category.key}
-              onClick={() => toggleCategoryVisibility(category.key)}
               style={{
-                padding: "8px 16px",
-                backgroundColor: visibleCategories[category.key] ? "#5d4037" : "#e8ddd4",
-                color: visibleCategories[category.key] ? "white" : "#5d4037",
-                border: "none",
-                borderRadius: "4px",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
                 cursor: "pointer",
-                fontWeight: "500",
-                fontSize: "12px",
+                padding: "8px 12px",
+                backgroundColor: visibleCategories[category.key] ? "#e6d7c3" : "#f5f0e1",
+                borderRadius: "4px",
+                border: `2px solid ${category.color}`,
+                transition: "all 0.2s ease",
               }}
             >
-              {visibleCategories[category.key] ? "Hide" : "Show"} {category.name}
-            </button>
+              <input
+                type="checkbox"
+                checked={visibleCategories[category.key]}
+                onChange={() => toggleCategoryVisibility(category.key)}
+                style={{ cursor: "pointer", width: "16px", height: "16px" }}
+              />
+              <span style={{ color: "#4a352f", fontWeight: "500", fontSize: "14px" }}>{category.name}</span>
+            </label>
           ))}
         </div>
       </div>
@@ -559,20 +598,22 @@ const StrategicGoals = ({ activeSection, milestoneData, onNavigateToMilestone })
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
+          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
           gap: "20px",
         }}
       >
-        {categories
-          .filter((category) => visibleCategories[category.key])
-          .map((category) => (
+        {categories.map((category) => {
+          if (!visibleCategories[category.key]) return null
+
+          return (
             <div
               key={category.key}
               style={{
-                height: "auto",
+                backgroundColor: "#fdfcfb",
                 padding: "15px",
-                backgroundColor: "#f7f3f0",
                 borderRadius: "6px",
+                border: `2px solid ${category.color}`,
+                position: "relative",
               }}
             >
               <div
@@ -580,45 +621,45 @@ const StrategicGoals = ({ activeSection, milestoneData, onNavigateToMilestone })
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  marginBottom: "15px",
+                  marginBottom: "10px",
                 }}
               >
-                <h3 style={{ color: "#5d4037", margin: 0 }} title="Increase market share and expand customer base">
-                  {category.name}
-                </h3>
+                <h4 style={{ color: "#4a352f", margin: 0 }}>{category.name}</h4>
                 <button
-                  onClick={() => onNavigateToMilestone(category.key)}
+                  onClick={() => onNavigateToMilestone(category.name)}
                   style={{
-                    backgroundColor: "transparent",
+                    padding: "4px 8px",
+                    backgroundColor: category.color,
+                    color: "white",
                     border: "none",
+                    borderRadius: "4px",
                     cursor: "pointer",
-                    fontSize: "16px",
-                    color: "#5d4037",
-                    padding: "5px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
+                    fontSize: "10px",
+                    fontWeight: "500",
                   }}
-                  title={`View ${category.name} milestones`}
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" />
-                  </svg>
+                  View Milestones
                 </button>
               </div>
-              <div style={{ height: "220px", marginBottom: "15px" }}>
+
+              <div style={{ height: "200px" }}>
                 <Bar
-                  data={createChartData(category.key, category.color)}
-                  options={chartOptions}
-                  ref={(chartRef) => {
-                    if (chartRef?.canvas) {
-                      chartRef.canvas.setAttribute("data-category", category.key)
-                    }
+                  data={createChartData(category.name, category.color)}
+                  options={{
+                    ...chartOptions,
+                    onClick: (event, elements) => {
+                      if (elements.length > 0) {
+                        onNavigateToMilestone(category.name)
+                      }
+                    },
                   }}
+                  // Add a data attribute to pass the growth stage to the tooltip callback
+                  data-growth-stage={category.name}
                 />
               </div>
             </div>
-          ))}
+          )
+        })}
       </div>
     </div>
   )
@@ -638,6 +679,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
     status: "",
     owner: "",
     info: "",
+    percentageCompletion: 0,
   })
 
   useEffect(() => {
@@ -691,6 +733,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
       status: "",
       owner: "",
       info: "",
+      percentageCompletion: 0,
     })
     setShowModal(true)
   }
@@ -700,6 +743,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
     setNewMilestone({
       ...milestone,
       milestones: milestone.milestones || [],
+      percentageCompletion: milestone.percentageCompletion || 0,
     })
     setShowModal(true)
   }
@@ -739,6 +783,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
         status: "",
         owner: "",
         info: "",
+        percentageCompletion: 0,
       })
     } catch (error) {
       console.error("Error saving milestone:", error)
@@ -775,6 +820,12 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
     }
   }
 
+  const getPercentageColor = (percentage) => {
+    if (percentage < 30) return "#F44336" // Red
+    if (percentage < 70) return "#FF9800" // Orange
+    return "#4CAF50" // Green
+  }
+
   const handleMilestoneSelection = (milestone) => {
     const currentMilestones = newMilestone.milestones || []
     if (currentMilestones.includes(milestone)) {
@@ -793,7 +844,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
   return (
     <div
       style={{
-        backgroundColor: "#fdfcfb",
+        backgroundColor: "#faf7f2",
         padding: "20px",
         margin: "20px 0",
         borderRadius: "8px",
@@ -808,18 +859,18 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
           marginBottom: "20px",
         }}
       >
-        <h3 style={{ color: "#5d4037", margin: 0 }}>Milestone Tracking</h3>
+        <h3 style={{ color: "#4a352f", margin: 0 }}>Milestone Tracking</h3>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-          <label style={{ color: "#5d4037", fontWeight: "500" }}>Filter by:</label>
+          <label style={{ color: "#4a352f", fontWeight: "500" }}>Filter by:</label>
           <select
             value={filterBy}
             onChange={(e) => setFilterBy(e.target.value)}
             style={{
               padding: "8px 12px",
-              border: "2px solid #e8ddd4",
+              border: "2px solid #e6d7c3",
               borderRadius: "4px",
               fontSize: "14px",
-              color: "#5d4037",
+              color: "#4a352f",
             }}
           >
             <option value="all">All</option>
@@ -848,7 +899,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
             onClick={handleAddMilestone}
             style={{
               padding: "10px 20px",
-              backgroundColor: "#5d4037",
+              backgroundColor: "#7d5a50",
               color: "white",
               border: "none",
               borderRadius: "4px",
@@ -866,15 +917,15 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
           style={{
             textAlign: "center",
             padding: "40px",
-            color: "#5d4037",
-            backgroundColor: "#f7f3f0",
+            color: "#4a352f",
+            backgroundColor: "#f5f0e1",
             borderRadius: "6px",
           }}
         >
           <p style={{ fontSize: "16px", marginBottom: "10px" }}>
             {filterBy === "all" ? "No milestones added yet." : `No milestones found for filter: ${filterBy}`}
           </p>
-          <p style={{ fontSize: "14px", color: "#72542b" }}>
+          <p style={{ fontSize: "14px", color: "#7d5a50" }}>
             Click "Add Milestone" to get started with tracking your goals.
           </p>
         </div>
@@ -884,15 +935,15 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
             style={{
               width: "100%",
               borderCollapse: "collapse",
-              color: "#5d4037",
-              minWidth: "1000px",
+              color: "#4a352f",
+              minWidth: "1100px",
             }}
           >
             <thead>
               <tr
                 style={{
-                  backgroundColor: "#e8ddd4",
-                  borderBottom: "2px solid #d4c4b0",
+                  backgroundColor: "#e6d7c3",
+                  borderBottom: "2px solid #c8b6a6",
                 }}
               >
                 <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Growth Stage</th>
@@ -901,6 +952,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
                 <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Milestones</th>
                 <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Target Date</th>
                 <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Milestone Status</th>
+                <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>% Completion</th>
                 <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Owner</th>
                 <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Info</th>
                 <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Actions</th>
@@ -911,7 +963,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
                 <tr
                   key={milestone.id}
                   style={{
-                    borderBottom: "1px solid #e8ddd4",
+                    borderBottom: "1px solid #e6d7c3",
                   }}
                 >
                   <td style={{ padding: "12px" }}>{milestone.growthStage}</td>
@@ -927,7 +979,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
                             key={index}
                             style={{
                               padding: "2px 6px",
-                              backgroundColor: "#e8ddd4",
+                              backgroundColor: "#e6d7c3",
                               borderRadius: "4px",
                               fontSize: "10px",
                             }}
@@ -958,6 +1010,23 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
                       {milestone.status}
                     </span>
                   </td>
+                  <td style={{ padding: "12px" }}>
+                    <span
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: "4px",
+                        backgroundColor: getPercentageColor(milestone.percentageCompletion || 0),
+                        color: "white",
+                        fontSize: "12px",
+                        fontWeight: "500",
+                        display: "inline-block",
+                        minWidth: "50px",
+                        textAlign: "center",
+                      }}
+                    >
+                      {milestone.percentageCompletion || 0}%
+                    </span>
+                  </td>
                   <td style={{ padding: "12px" }}>{milestone.owner}</td>
                   <td style={{ padding: "12px", maxWidth: "150px", wordWrap: "break-word" }}>{milestone.info}</td>
                   <td style={{ padding: "12px" }}>
@@ -966,7 +1035,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
                         onClick={() => handleEditMilestone(milestone)}
                         style={{
                           padding: "4px 8px",
-                          backgroundColor: "#9c7c5f",
+                          backgroundColor: "#a67c52",
                           color: "white",
                           border: "none",
                           borderRadius: "4px",
@@ -1017,7 +1086,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
         >
           <div
             style={{
-              backgroundColor: "#fdfcfb",
+              backgroundColor: "#faf7f2",
               padding: "30px",
               borderRadius: "8px",
               boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
@@ -1029,7 +1098,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
           >
             <h3
               style={{
-                color: "#5d4037",
+                color: "#4a352f",
                 marginTop: 0,
                 marginBottom: "20px",
               }}
@@ -1043,7 +1112,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
                   style={{
                     display: "block",
                     marginBottom: "8px",
-                    color: "#5d4037",
+                    color: "#4a352f",
                     fontWeight: "500",
                   }}
                 >
@@ -1055,7 +1124,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
                   style={{
                     width: "100%",
                     padding: "10px",
-                    border: "2px solid #e8ddd4",
+                    border: "2px solid #e6d7c3",
                     borderRadius: "4px",
                     fontSize: "14px",
                     boxSizing: "border-box",
@@ -1075,7 +1144,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
                   style={{
                     display: "block",
                     marginBottom: "8px",
-                    color: "#5d4037",
+                    color: "#4a352f",
                     fontWeight: "500",
                   }}
                 >
@@ -1087,7 +1156,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
                   style={{
                     width: "100%",
                     padding: "10px",
-                    border: "2px solid #e8ddd4",
+                    border: "2px solid #e6d7c3",
                     borderRadius: "4px",
                     fontSize: "14px",
                     boxSizing: "border-box",
@@ -1108,7 +1177,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
                 style={{
                   display: "block",
                   marginBottom: "8px",
-                  color: "#5d4037",
+                  color: "#4a352f",
                   fontWeight: "500",
                 }}
               >
@@ -1122,7 +1191,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
                 style={{
                   width: "100%",
                   padding: "10px",
-                  border: "2px solid #e8ddd4",
+                  border: "2px solid #e6d7c3",
                   borderRadius: "4px",
                   fontSize: "14px",
                   boxSizing: "border-box",
@@ -1136,7 +1205,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
                 style={{
                   display: "block",
                   marginBottom: "8px",
-                  color: "#5d4037",
+                  color: "#4a352f",
                   fontWeight: "500",
                 }}
               >
@@ -1144,7 +1213,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
               </label>
               <div
                 style={{
-                  border: "2px solid #e8ddd4",
+                  border: "2px solid #e6d7c3",
                   borderRadius: "4px",
                   padding: "10px",
                   maxHeight: "150px",
@@ -1178,7 +1247,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
                   style={{
                     display: "block",
                     marginBottom: "8px",
-                    color: "#5d4037",
+                    color: "#4a352f",
                     fontWeight: "500",
                   }}
                 >
@@ -1191,7 +1260,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
                   style={{
                     width: "100%",
                     padding: "10px",
-                    border: "2px solid #e8ddd4",
+                    border: "2px solid #e6d7c3",
                     borderRadius: "4px",
                     fontSize: "14px",
                     boxSizing: "border-box",
@@ -1204,7 +1273,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
                   style={{
                     display: "block",
                     marginBottom: "8px",
-                    color: "#5d4037",
+                    color: "#4a352f",
                     fontWeight: "500",
                   }}
                 >
@@ -1216,7 +1285,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
                   style={{
                     width: "100%",
                     padding: "10px",
-                    border: "2px solid #e8ddd4",
+                    border: "2px solid #e6d7c3",
                     borderRadius: "4px",
                     fontSize: "14px",
                     boxSizing: "border-box",
@@ -1232,44 +1301,78 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
               </div>
             </div>
 
-            <div style={{ marginBottom: "20px", marginTop: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "8px",
-                  color: "#5d4037",
-                  fontWeight: "500",
-                }}
-              >
-                Owner:
-              </label>
-              <select
-                value={newMilestone.owner}
-                onChange={(e) => setNewMilestone((prev) => ({ ...prev, owner: e.target.value }))}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                }}
-              >
-                <option value="">Select Owner</option>
-                {owners.map((owner) => (
-                  <option key={owner} value={owner}>
-                    {owner}
-                  </option>
-                ))}
-              </select>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginTop: "15px" }}>
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    marginBottom: "8px",
+                    color: "#4a352f",
+                    fontWeight: "500",
+                  }}
+                >
+                  Owner:
+                </label>
+                <select
+                  value={newMilestone.owner}
+                  onChange={(e) => setNewMilestone((prev) => ({ ...prev, owner: e.target.value }))}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    border: "2px solid #e6d7c3",
+                    borderRadius: "4px",
+                    fontSize: "14px",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <option value="">Select Owner</option>
+                  {owners.map((owner) => (
+                    <option key={owner} value={owner}>
+                      {owner}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    marginBottom: "8px",
+                    color: "#4a352f",
+                    fontWeight: "500",
+                  }}
+                >
+                  Percentage Completion:
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={newMilestone.percentageCompletion}
+                  onChange={(e) => {
+                    const value = Math.min(100, Math.max(0, Number.parseInt(e.target.value) || 0))
+                    setNewMilestone((prev) => ({ ...prev, percentageCompletion: value }))
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    border: "2px solid #e6d7c3",
+                    borderRadius: "4px",
+                    fontSize: "14px",
+                    boxSizing: "border-box",
+                  }}
+                  placeholder="0-100"
+                />
+              </div>
             </div>
 
-            <div style={{ marginBottom: "25px" }}>
+            <div style={{ marginBottom: "25px", marginTop: "15px" }}>
               <label
                 style={{
                   display: "block",
                   marginBottom: "8px",
-                  color: "#5d4037",
+                  color: "#4a352f",
                   fontWeight: "500",
                 }}
               >
@@ -1283,7 +1386,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
                 style={{
                   width: "100%",
                   padding: "10px",
-                  border: "2px solid #e8ddd4",
+                  border: "2px solid #e6d7c3",
                   borderRadius: "4px",
                   fontSize: "14px",
                   boxSizing: "border-box",
@@ -1303,8 +1406,8 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
                 onClick={() => setShowModal(false)}
                 style={{
                   padding: "10px 20px",
-                  backgroundColor: "#e8ddd4",
-                  color: "#5d4037",
+                  backgroundColor: "#e6d7c3",
+                  color: "#4a352f",
                   border: "none",
                   borderRadius: "4px",
                   cursor: "pointer",
@@ -1317,7 +1420,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
                 onClick={handleSaveMilestone}
                 style={{
                   padding: "10px 20px",
-                  backgroundColor: "#5d4037",
+                  backgroundColor: "#7d5a50",
                   color: "white",
                   border: "none",
                   borderRadius: "4px",
@@ -1335,9 +1438,8 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
   )
 }
 
-// Risk Management Component with Business Risk Tab First
 const RiskManagement = ({ activeSection, currentUser, onNavigateToRiskCategory }) => {
-  const [riskSection, setRiskSection] = useState("business-risk")
+  const [riskSection, setRiskSection] = useState("financial")
   const [riskData, setRiskData] = useState({
     financial: [],
     operational: [],
@@ -1430,7 +1532,11 @@ const RiskManagement = ({ activeSection, currentUser, onNavigateToRiskCategory }
     }
 
     setRiskData(newRiskData)
-    saveRiskData(newRiskData)
+    // Debounce save to avoid too many writes
+    if (updateRiskItem.timeout) clearTimeout(updateRiskItem.timeout)
+    updateRiskItem.timeout = setTimeout(() => {
+      saveRiskData(newRiskData)
+    }, 500)
   }
 
   const deleteRiskItem = (category, itemId) => {
@@ -1448,24 +1554,26 @@ const RiskManagement = ({ activeSection, currentUser, onNavigateToRiskCategory }
   const createScatterChartData = (category, color) => {
     const data = riskData[category] || []
     return {
-      datasets: data.map((item, index) => ({
-        label: item.risk || `Risk ${index + 1}`,
-        data: [
-          {
-            x: item.likelihood || 0,
-            y: item.severity || 0,
-          },
-        ],
-        backgroundColor: color,
-        borderColor: "#5d4037",
-        borderWidth: 2,
-        pointRadius: 8,
-        pointHoverRadius: 10,
-      })),
+      datasets: data
+        .filter((item) => item.risk && item.likelihood && item.severity)
+        .map((item, index) => ({
+          label: item.risk,
+          data: [
+            {
+              x: item.likelihood,
+              y: item.severity,
+            },
+          ],
+          backgroundColor: color,
+          borderColor: "#7d5a50",
+          borderWidth: 2,
+          pointRadius: 10,
+          pointHoverRadius: 12,
+        })),
     }
   }
 
-  const scatterChartOptions = {
+  const scatterOptions = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
@@ -1491,13 +1599,14 @@ const RiskManagement = ({ activeSection, currentUser, onNavigateToRiskCategory }
         title: {
           display: true,
           text: "Likelihood",
-          color: "#72542b",
+          color: "#4a352f",
           font: {
             weight: "bold",
+            size: 14,
           },
         },
         grid: {
-          color: "#e8ddd4",
+          color: "#f0e6d9",
         },
         ticks: {
           stepSize: 1,
@@ -1509,13 +1618,14 @@ const RiskManagement = ({ activeSection, currentUser, onNavigateToRiskCategory }
         title: {
           display: true,
           text: "Severity",
-          color: "#72542b",
+          color: "#4a352f",
           font: {
             weight: "bold",
+            size: 14,
           },
         },
         grid: {
-          color: "#e8ddd4",
+          color: "#f0e6d9",
         },
         ticks: {
           stepSize: 1,
@@ -1524,568 +1634,315 @@ const RiskManagement = ({ activeSection, currentUser, onNavigateToRiskCategory }
     },
   }
 
-  // Business Risk Matrix Component
-  const BusinessRiskMatrix = () => {
-    // Aggregate all risk data for the matrix
-    const allRisks = []
-    const categoryColors = {
-      financial: "#2196F3",
-      operational: "#4CAF50",
-      "legal-compliance": "#9C27B0",
-      insurance: "#FF5722",
-      people: "#9E9E9E",
-      "disaster-recovery": "#F44336",
-      "stakeholder-management": "#FF9800",
-    }
-
-    Object.keys(riskData).forEach((category) => {
-      riskData[category].forEach((risk) => {
-        if (risk.risk && risk.likelihood && risk.severity) {
-          allRisks.push({
-            ...risk,
-            category,
-            color: categoryColors[category] || "#9E9E9E",
-          })
-        }
-      })
-    })
-
-    const handleRiskClick = (category) => {
-      setRiskSection(category)
-    }
-
-    const createRiskMatrixData = () => {
-      return {
-        datasets: allRisks.map((risk, index) => ({
-          label: risk.risk,
-          data: [
-            {
-              x: risk.likelihood,
-              y: risk.severity,
-              riskId: risk.risk,
-              description: risk.description,
-              category: risk.category,
-            },
-          ],
-          backgroundColor: risk.color,
-          borderColor: "#5d4037",
-          borderWidth: 2,
-          pointRadius: 15,
-          pointHoverRadius: 18,
-        })),
-      }
-    }
-
-    const matrixOptions = {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          display: false,
-        },
-        tooltip: {
-          callbacks: {
-            title: (context) => context[0].dataset.label,
-            label: (context) => {
-              const point = context.parsed
-              const dataPoint = context.dataset.data[0]
-              return [
-                `Likelihood: ${point.x}`,
-                `Severity: ${point.y}`,
-                `Description: ${dataPoint.description || "No description"}`,
-              ]
-            },
-          },
-        },
-      },
-      scales: {
-        x: {
-          type: "linear",
-          position: "bottom",
-          min: 0,
-          max: 5,
-          title: {
-            display: true,
-            text: "Likelihood",
-            color: "#72542b",
-            font: {
-              weight: "bold",
-              size: 14,
-            },
-          },
-          grid: {
-            color: "#e8ddd4",
-          },
-          ticks: {
-            stepSize: 1,
-          },
-        },
-        y: {
-          min: 0,
-          max: 5,
-          title: {
-            display: true,
-            text: "Severity",
-            color: "#72542b",
-            font: {
-              weight: "bold",
-              size: 14,
-            },
-          },
-          grid: {
-            color: "#e8ddd4",
-          },
-          ticks: {
-            stepSize: 1,
-          },
-        },
-      },
-      onClick: (event, elements) => {
-        if (elements.length > 0) {
-          const datasetIndex = elements[0].datasetIndex
-          const risk = allRisks[datasetIndex]
-          if (risk) {
-            handleRiskClick(risk.category)
-          }
-        }
-      },
-    }
-
-    return (
-      <div>
-        <h3 style={{ color: "#5d4037", marginTop: 0 }}>Business Risk Overview</h3>
-
-        <div
-          style={{
-            height: "500px",
-            marginBottom: "30px",
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-          }}
-        >
-          <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px" }}>Risk Matrix</h4>
-          {allRisks.length > 0 ? (
-            <Scatter data={createRiskMatrixData()} options={matrixOptions} />
-          ) : (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                height: "400px",
-                color: "#72542b",
-                fontSize: "16px",
-              }}
-            >
-              No risk data available. Add risks in other tabs to see them here.
-            </div>
-          )}
-        </div>
-
-        {/* Risk Category Legend */}
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h4 style={{ color: "#5d4037", margin: "0 0 15px 0" }}>Risk Categories</h4>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-              gap: "10px",
-            }}
-          >
-            {Object.entries(categoryColors).map(([category, color]) => (
-              <div
-                key={category}
-                onClick={() => handleRiskClick(category)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                  padding: "10px",
-                  backgroundColor: "#fdfcfb",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  transition: "all 0.2s ease",
-                  border: "1px solid #e8ddd4",
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.backgroundColor = "#e8ddd4"
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.backgroundColor = "#fdfcfb"
-                }}
-              >
-                <div
-                  style={{
-                    width: "16px",
-                    height: "16px",
-                    backgroundColor: color,
-                    borderRadius: "50%",
-                    border: "2px solid #5d4037",
-                  }}
-                ></div>
-                <span
-                  style={{
-                    color: "#5d4037",
-                    fontWeight: "500",
-                    textTransform: "capitalize",
-                  }}
-                >
-                  {category.replace("-", " & ")}
-                </span>
-                <span
-                  style={{
-                    color: "#72542b",
-                    fontSize: "12px",
-                    marginLeft: "auto",
-                  }}
-                >
-                  ({riskData[category]?.length || 0} risks)
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  const RiskSection = ({ category, title, color }) => {
-    const data = riskData[category] || []
-
-    return (
-      <div>
-        <h3 style={{ color: "#5d4037", marginTop: 0 }}>{title}</h3>
-
-        <div
-          style={{
-            height: "300px",
-            marginBottom: "30px",
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-          }}
-        >
-          <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px" }}>Risk Overview</h4>
-          {data.length > 0 ? (
-            <Scatter data={createScatterChartData(category, color)} options={scatterChartOptions} />
-          ) : (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                height: "200px",
-                color: "#72542b",
-              }}
-            >
-              No risk data available. Add risks to see the chart.
-            </div>
-          )}
-        </div>
-
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
-            <h4 style={{ color: "#5d4037", margin: 0 }}>Risk Assessment Table</h4>
-            <button
-              onClick={() => addRiskItem(category)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#5d4037",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "500",
-                fontSize: "12px",
-              }}
-            >
-              Add Risk Item
-            </button>
-          </div>
-
-          {data.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "40px", color: "#72542b" }}>
-              No risk items added yet. Click "Add Risk Item" to get started.
-            </div>
-          ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                  color: "#5d4037",
-                  minWidth: "900px",
-                }}
-              >
-                <thead>
-                  <tr
-                    style={{
-                      backgroundColor: "#e8ddd4",
-                      borderBottom: "2px solid #d4c4b0",
-                    }}
-                  >
-                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "80px" }}>Risk</th>
-                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "120px" }}>
-                      Risk Category
-                    </th>
-                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "200px" }}>
-                      Description
-                    </th>
-                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "100px" }}>
-                      Severity (1-5)
-                    </th>
-                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "100px" }}>
-                      Likelihood
-                    </th>
-                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "200px" }}>
-                      Mitigation
-                    </th>
-                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "120px" }}>
-                      Mitigation Status
-                    </th>
-                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "80px" }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.map((item) => (
-                    <tr
-                      key={item.id}
-                      style={{
-                        borderBottom: "1px solid #e8ddd4",
-                      }}
-                    >
-                      <td style={{ padding: "12px" }}>
-                        <input
-                          type="text"
-                          value={item.risk || ""}
-                          onChange={(e) => updateRiskItem(category, item.id, "risk", e.target.value)}
-                          placeholder="Risk ID"
-                          key={`risk-${item.id}`}
-                          style={{
-                            width: "100%",
-                            padding: "8px",
-                            border: "1px solid #e8ddd4",
-                            borderRadius: "4px",
-                            fontSize: "12px",
-                          }}
-                        />
-                      </td>
-                      <td style={{ padding: "12px" }}>
-                        <input
-                          type="text"
-                          value={item.riskCategory || ""}
-                          onChange={(e) => updateRiskItem(category, item.id, "riskCategory", e.target.value)}
-                          placeholder="Category"
-                          key={`category-${item.id}`}
-                          style={{
-                            width: "100%",
-                            padding: "8px",
-                            border: "1px solid #e8ddd4",
-                            borderRadius: "4px",
-                            fontSize: "12px",
-                          }}
-                        />
-                      </td>
-                      <td style={{ padding: "12px" }}>
-                        <textarea
-                          value={item.description || ""}
-                          onChange={(e) => updateRiskItem(category, item.id, "description", e.target.value)}
-                          placeholder="Enter description"
-                          rows="2"
-                          key={`description-${item.id}`}
-                          style={{
-                            width: "100%",
-                            padding: "8px",
-                            border: "1px solid #e8ddd4",
-                            borderRadius: "4px",
-                            fontSize: "12px",
-                            resize: "vertical",
-                          }}
-                        />
-                      </td>
-                      <td style={{ padding: "12px" }}>
-                        <select
-                          value={item.severity || 1}
-                          onChange={(e) =>
-                            updateRiskItem(category, item.id, "severity", Number.parseInt(e.target.value))
-                          }
-                          style={{
-                            width: "100%",
-                            padding: "8px",
-                            border: "1px solid #e8ddd4",
-                            borderRadius: "4px",
-                            fontSize: "12px",
-                          }}
-                        >
-                          <option value={1}>1</option>
-                          <option value={2}>2</option>
-                          <option value={3}>3</option>
-                          <option value={4}>4</option>
-                          <option value={5}>5</option>
-                        </select>
-                      </td>
-                      <td style={{ padding: "12px" }}>
-                        <select
-                          value={item.likelihood || 1}
-                          onChange={(e) =>
-                            updateRiskItem(category, item.id, "likelihood", Number.parseInt(e.target.value))
-                          }
-                          style={{
-                            width: "100%",
-                            padding: "8px",
-                            border: "1px solid #e8ddd4",
-                            borderRadius: "4px",
-                            fontSize: "12px",
-                          }}
-                        >
-                          <option value={1}>1</option>
-                          <option value={2}>2</option>
-                          <option value={3}>3</option>
-                          <option value={4}>4</option>
-                          <option value={5}>5</option>
-                        </select>
-                      </td>
-                      <td style={{ padding: "12px" }}>
-                        <textarea
-                          value={item.mitigation || ""}
-                          onChange={(e) => updateRiskItem(category, item.id, "mitigation", e.target.value)}
-                          placeholder="Enter mitigation strategy"
-                          rows="2"
-                          key={`mitigation-${item.id}`}
-                          style={{
-                            width: "100%",
-                            padding: "8px",
-                            border: "1px solid #e8ddd4",
-                            borderRadius: "4px",
-                            fontSize: "12px",
-                            resize: "vertical",
-                          }}
-                        />
-                      </td>
-                      <td style={{ padding: "12px" }}>
-                        <select
-                          value={item.mitigationStatus || "not done"}
-                          onChange={(e) => updateRiskItem(category, item.id, "mitigationStatus", e.target.value)}
-                          style={{
-                            width: "100%",
-                            padding: "8px",
-                            border: "1px solid #e8ddd4",
-                            borderRadius: "4px",
-                            fontSize: "12px",
-                          }}
-                        >
-                          <option value="not done">Not Done</option>
-                          <option value="done">Done</option>
-                        </select>
-                      </td>
-                      <td style={{ padding: "12px" }}>
-                        <button
-                          onClick={() => deleteRiskItem(category, item.id)}
-                          style={{
-                            padding: "4px 8px",
-                            backgroundColor: "#F44336",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "4px",
-                            cursor: "pointer",
-                            fontSize: "10px",
-                          }}
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  }
-
-  const riskSectionButtons = [
-    { id: "business-risk", label: "Business Risk", color: "#8B4513" },
-    { id: "financial", label: "Financial", color: "#2196F3" },
-    { id: "operational", label: "Operational", color: "#4CAF50" },
-    { id: "legal-compliance", label: "Legal/Compliance", color: "#9C27B0" },
-    { id: "insurance", label: "Insurance", color: "#FF5722" },
-    { id: "people", label: "People", color: "#9E9E9E" },
-    { id: "disaster-recovery", label: "Disaster Recovery", color: "#F44336" },
-    { id: "stakeholder-management", label: "Stakeholder Management", color: "#FF9800" },
+  const riskCategories = [
+    { id: "financial", name: "Financial Risk", color: "#e74c3c" },
+    { id: "operational", name: "Operational Risk", color: "#3498db" },
+    { id: "legal-compliance", name: "Legal & Compliance", color: "#9b59b6" },
+    { id: "insurance", name: "Insurance", color: "#f39c12" },
+    { id: "people", name: "People Risk", color: "#1abc9c" },
+    { id: "disaster-recovery", name: "Disaster Recovery", color: "#e67e22" },
+    { id: "stakeholder-management", name: "Stakeholder Management", color: "#2ecc71" },
   ]
 
   return (
     <div
       style={{
-        backgroundColor: "#fdfcfb",
+        backgroundColor: "#faf7f2",
         padding: "20px",
         margin: "20px 0",
         borderRadius: "8px",
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
     >
+      <h3 style={{ color: "#4a352f", marginBottom: "20px" }}>Risk Management</h3>
+
+      {/* Risk Category Tabs */}
       <div
         style={{
           display: "flex",
           gap: "10px",
           marginBottom: "20px",
-          padding: "10px",
-          backgroundColor: "#f7f3f0",
-          borderRadius: "6px",
-          overflowX: "auto",
-          whiteSpace: "nowrap",
+          flexWrap: "wrap",
         }}
       >
-        {riskSectionButtons.map((button) => (
+        {riskCategories.map((category) => (
           <button
-            key={button.id}
-            onClick={() => setRiskSection(button.id)}
+            key={category.id}
+            onClick={() => setRiskSection(category.id)}
             style={{
-              padding: "8px 12px",
-              backgroundColor: riskSection === button.id ? "#5d4037" : "#e8ddd4",
-              color: riskSection === button.id ? "#fdfcfb" : "#5d4037",
+              padding: "10px 20px",
+              backgroundColor: riskSection === category.id ? category.color : "#f5f0e1",
+              color: riskSection === category.id ? "white" : "#4a352f",
               border: "none",
               borderRadius: "4px",
               cursor: "pointer",
               fontWeight: "500",
-              fontSize: "12px",
-              minWidth: "100px",
-              textAlign: "center",
-              flexShrink: 0,
+              fontSize: "14px",
             }}
           >
-            {button.label}
+            {category.name}
           </button>
         ))}
       </div>
 
-      {riskSection === "business-risk" && <BusinessRiskMatrix />}
+      {/* Risk Category Content */}
+      {riskCategories.map((category) => {
+        if (riskSection !== category.id) return null
 
-      {riskSectionButtons
-        .slice(1)
-        .map(
-          (section) =>
-            riskSection === section.id && (
-              <RiskSection key={section.id} category={section.id} title={section.label} color={section.color} />
-            ),
-        )}
+        const data = riskData[category.id] || []
+
+        return (
+          <div key={category.id}>
+            {/* Scatter Chart */}
+            <div
+              style={{
+                backgroundColor: "#fdfcfb",
+                padding: "20px",
+                borderRadius: "6px",
+                marginBottom: "20px",
+                border: `2px solid ${category.color}`,
+              }}
+            >
+              <h4 style={{ color: "#4a352f", marginBottom: "15px" }}>{category.name} Matrix</h4>
+              <div style={{ height: "300px" }}>
+                <Scatter data={createScatterChartData(category.id, category.color)} options={scatterOptions} />
+              </div>
+            </div>
+
+            {/* Risk Assessment Table */}
+            <div
+              style={{
+                backgroundColor: "#fdfcfb",
+                padding: "20px",
+                borderRadius: "6px",
+                border: `2px solid ${category.color}`,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "15px",
+                }}
+              >
+                <h4 style={{ color: "#4a352f", margin: 0 }}>Risk Assessment Table</h4>
+                <button
+                  onClick={() => addRiskItem(category.id)}
+                  style={{
+                    padding: "8px 16px",
+                    backgroundColor: "#7d5a50",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontWeight: "500",
+                    fontSize: "12px",
+                  }}
+                >
+                  Add Risk Item
+                </button>
+              </div>
+
+              {data.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "40px", color: "#7d5a50" }}>
+                  No risk items added yet. Click "Add Risk Item" to get started.
+                </div>
+              ) : (
+                <div style={{ overflowX: "auto" }}>
+                  <table
+                    style={{
+                      width: "100%",
+                      borderCollapse: "collapse",
+                      color: "#4a352f",
+                      minWidth: "900px",
+                    }}
+                  >
+                    <thead>
+                      <tr
+                        style={{
+                          backgroundColor: "#e6d7c3",
+                          borderBottom: "2px solid #c8b6a6",
+                        }}
+                      >
+                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "80px" }}>Risk</th>
+                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "120px" }}>
+                          Risk Category
+                        </th>
+                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "200px" }}>
+                          Description
+                        </th>
+                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "100px" }}>
+                          Severity (1-5)
+                        </th>
+                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "100px" }}>
+                          Likelihood
+                        </th>
+                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "200px" }}>
+                          Mitigation
+                        </th>
+                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "120px" }}>
+                          Mitigation Status
+                        </th>
+                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "80px" }}>
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.map((item) => (
+                        <tr
+                          key={item.id}
+                          style={{
+                            borderBottom: "1px solid #e6d7c3",
+                          }}
+                        >
+                          <td style={{ padding: "12px" }}>
+                            <input
+                              type="text"
+                              value={item.risk || ""}
+                              onChange={(e) => updateRiskItem(category.id, item.id, "risk", e.target.value)}
+                              placeholder="Risk ID"
+                              style={{
+                                width: "100%",
+                                padding: "8px",
+                                border: "1px solid #e6d7c3",
+                                borderRadius: "4px",
+                                fontSize: "12px",
+                              }}
+                            />
+                          </td>
+                          <td style={{ padding: "12px" }}>
+                            <input
+                              type="text"
+                              value={item.riskCategory || ""}
+                              onChange={(e) => updateRiskItem(category.id, item.id, "riskCategory", e.target.value)}
+                              placeholder="Category"
+                              style={{
+                                width: "100%",
+                                padding: "8px",
+                                border: "1px solid #e6d7c3",
+                                borderRadius: "4px",
+                                fontSize: "12px",
+                              }}
+                            />
+                          </td>
+                          <td style={{ padding: "12px" }}>
+                            <textarea
+                              value={item.description || ""}
+                              onChange={(e) => updateRiskItem(category.id, item.id, "description", e.target.value)}
+                              placeholder="Enter description"
+                              rows="2"
+                              style={{
+                                width: "100%",
+                                padding: "8px",
+                                border: "1px solid #e6d7c3",
+                                borderRadius: "4px",
+                                fontSize: "12px",
+                                resize: "vertical",
+                              }}
+                            />
+                          </td>
+                          <td style={{ padding: "12px" }}>
+                            <select
+                              value={item.severity || 1}
+                              onChange={(e) =>
+                                updateRiskItem(category.id, item.id, "severity", Number.parseInt(e.target.value))
+                              }
+                              style={{
+                                width: "100%",
+                                padding: "8px",
+                                border: "1px solid #e6d7c3",
+                                borderRadius: "4px",
+                                fontSize: "12px",
+                              }}
+                            >
+                              <option value={1}>1</option>
+                              <option value={2}>2</option>
+                              <option value={3}>3</option>
+                              <option value={4}>4</option>
+                              <option value={5}>5</option>
+                            </select>
+                          </td>
+                          <td style={{ padding: "12px" }}>
+                            <select
+                              value={item.likelihood || 1}
+                              onChange={(e) =>
+                                updateRiskItem(category.id, item.id, "likelihood", Number.parseInt(e.target.value))
+                              }
+                              style={{
+                                width: "100%",
+                                padding: "8px",
+                                border: "1px solid #e6d7c3",
+                                borderRadius: "4px",
+                                fontSize: "12px",
+                              }}
+                            >
+                              <option value={1}>1</option>
+                              <option value={2}>2</option>
+                              <option value={3}>3</option>
+                              <option value={4}>4</option>
+                              <option value={5}>5</option>
+                            </select>
+                          </td>
+                          <td style={{ padding: "12px" }}>
+                            <textarea
+                              value={item.mitigation || ""}
+                              onChange={(e) => updateRiskItem(category.id, item.id, "mitigation", e.target.value)}
+                              placeholder="Enter mitigation strategy"
+                              rows="2"
+                              style={{
+                                width: "100%",
+                                padding: "8px",
+                                border: "1px solid #e6d7c3",
+                                borderRadius: "4px",
+                                fontSize: "12px",
+                                resize: "vertical",
+                              }}
+                            />
+                          </td>
+                          <td style={{ padding: "12px" }}>
+                            <select
+                              value={item.mitigationStatus || "not done"}
+                              onChange={(e) => updateRiskItem(category.id, item.id, "mitigationStatus", e.target.value)}
+                              style={{
+                                width: "100%",
+                                padding: "8px",
+                                border: "1px solid #e6d7c3",
+                                borderRadius: "4px",
+                                fontSize: "12px",
+                              }}
+                            >
+                              <option value="not done">Not Done</option>
+                              <option value="done">Done</option>
+                            </select>
+                          </td>
+                          <td style={{ padding: "12px" }}>
+                            <button
+                              onClick={() => deleteRiskItem(category.id, item.id)}
+                              style={{
+                                padding: "4px 8px",
+                                backgroundColor: "#F44336",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                fontSize: "10px",
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -2098,6 +1955,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
   const [meetings, setMeetings] = useState([])
   const [directors, setDirectors] = useState([])
   const [committees, setCommittees] = useState([])
+  const [uploadedFiles, setUploadedFiles] = useState({})
 
   // Modal states
   const [showMeetingModal, setShowMeetingModal] = useState(false)
@@ -2115,6 +1973,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
     status: "",
     date: "",
     fileAttached: false,
+    fileData: null, // To store file info
   })
 
   // Edit states
@@ -2129,12 +1988,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
       if (!currentUser) return
 
       try {
-        const [
-          meetingsSnapshot,
-          directorsSnapshot,
-          committeesSnapshot,
-          policyProceduresSnapshot,
-        ] = await Promise.all([
+        const [meetingsSnapshot, directorsSnapshot, committeesSnapshot, policyProceduresSnapshot] = await Promise.all([
           getDocs(query(collection(db, "meetings"), where("userId", "==", currentUser.uid))),
           getDocs(query(collection(db, "directors"), where("userId", "==", currentUser.uid))),
           getDocs(query(collection(db, "committees"), where("userId", "==", currentUser.uid))),
@@ -2157,7 +2011,15 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
 
   if (activeSection !== "governance") return null
 
+  const hasMinimumGovernanceScore = pisScore >= 262.5
+
   const handleBoardDirectorsResponse = (hasDirectors) => {
+    if (hasDirectors && !hasMinimumGovernanceScore) {
+      alert(
+        `Your governance score is ${Math.round((pisScore / 350) * 100)}%. You need at least 75% (262.5 points) to access board director features. You can purchase governance support under Tools and Tablets.`,
+      )
+      return
+    }
     setHasBoardDirectors(hasDirectors)
     setShowBoardQuestion(false)
   }
@@ -2341,6 +2203,47 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
     window.location.href = "/growth/shop?tab=governance"
   }
 
+  const handleFileUpload = async (e, policyId = null) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    // In a real implementation, you would upload to Firebase Storage
+    // For now, we'll simulate the upload
+    try {
+      // Simulate file upload
+      const fileData = {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        uploadedAt: new Date().toISOString(),
+      }
+
+      if (policyId) {
+        // Update specific policy
+        const policyRef = doc(db, "policyProcedures", policyId)
+        await updateDoc(policyRef, {
+          fileAttached: true,
+          fileData: fileData,
+        })
+
+        setPolicies((prev) =>
+          prev.map((p) => (p.id === policyId ? { ...p, fileAttached: true, fileData: fileData } : p)),
+        )
+      } else {
+        // Store for new policy
+        setUploadedFiles((prev) => ({
+          ...prev,
+          temp: fileData,
+        }))
+      }
+
+      alert(`File "${file.name}" uploaded successfully!`)
+    } catch (error) {
+      console.error("Error uploading file:", error)
+      alert("Error uploading file. Please try again.")
+    }
+  }
+
   const handleSavePolicyProcedure = async () => {
     if (!currentUser) {
       alert("You must be logged in to save policies/procedures.")
@@ -2352,6 +2255,8 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
         ...newPolicyProcedure,
         userId: currentUser.uid,
         createdAt: new Date().toISOString(),
+        // Include fileData if it exists from a temporary upload
+        ...(uploadedFiles.temp && { fileData: uploadedFiles.temp }),
       }
 
       if (editingPolicyProcedure) {
@@ -2367,8 +2272,10 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
         setPolicies((prev) => [...prev, { ...policyProcedureWithUser, id: docRef.id }])
       }
 
+      // Clear temporary uploaded file info
+      setUploadedFiles((prev) => ({ ...prev, temp: null }))
       setShowPolicyProcedureModal(false)
-      setNewPolicyProcedure({ name: "", type: "policy", status: "", date: "", fileAttached: false })
+      setNewPolicyProcedure({ name: "", type: "policy", status: "", date: "", fileAttached: false, fileData: null })
     } catch (error) {
       console.error("Error saving policy/procedure:", error)
       alert("Error saving policy/procedure. Please try again.")
@@ -2396,133 +2303,251 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
   return (
     <div
       style={{
-        backgroundColor: "#fdfcfb",
+        backgroundColor: "#faf7f2",
         padding: "20px",
         margin: "20px 0",
         borderRadius: "8px",
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
     >
-      {/* User Authentication Check */}
-      {!currentUser && (
+      <h3 style={{ color: "#4a352f", marginBottom: "20px" }}>Board Activity & Governance</h3>
+
+      {/* Governance Score Display */}
+      <div
+        style={{
+          backgroundColor: hasMinimumGovernanceScore ? "#d4edda" : "#fff3cd",
+          border: `1px solid ${hasMinimumGovernanceScore ? "#c3e6cb" : "#ffeaa7"}`,
+          padding: "15px",
+          borderRadius: "6px",
+          marginBottom: "20px",
+        }}
+      >
+        <p style={{ color: "#4a352f", margin: 0, fontWeight: "500" }}>
+          Current Governance Score: {Math.round((pisScore / 350) * 100)}% ({pisScore} / 350 points)
+        </p>
+        {/* Updated governance score display message */}
+        {!hasMinimumGovernanceScore && (
+          <p style={{ color: "#856404", margin: "10px 0 0 0", fontSize: "14px" }}>
+            You need at least 75% (262.5 points) to access board director features. You can purchase governance support
+            under Tools and Tablets.
+          </p>
+        )}
+      </div>
+
+      {/* Board Directors Question */}
+      {showBoardQuestion && (
+        <div
+          style={{
+            backgroundColor: "#fdfcfb",
+            padding: "30px",
+            borderRadius: "6px",
+            textAlign: "center",
+            border: "2px solid #e6d7c3",
+          }}
+        >
+          <h4 style={{ color: "#4a352f", marginBottom: "20px" }}>Do you have Board of Directors?</h4>
+          <div style={{ display: "flex", gap: "15px", justifyContent: "center" }}>
+            <button
+              onClick={() => handleBoardDirectorsResponse(true)}
+              style={{
+                padding: "12px 30px",
+                backgroundColor: "#7d5a50",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "16px",
+              }}
+            >
+              Yes
+            </button>
+            <button
+              onClick={() => handleBoardDirectorsResponse(false)}
+              style={{
+                padding: "12px 30px",
+                backgroundColor: "#e6d7c3",
+                color: "#4a352f",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "16px",
+              }}
+            >
+              No
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Governance Score Improvement Message */}
+      {currentUser && !hasMinimumGovernanceScore && !showBoardQuestion && hasBoardDirectors && (
         <div
           style={{
             backgroundColor: "#fff3cd",
             border: "1px solid #ffeaa7",
-            padding: "15px",
+            padding: "20px",
             borderRadius: "6px",
             marginBottom: "20px",
             textAlign: "center",
           }}
         >
-          <p style={{ color: "#856404", margin: 0 }}>Please log in to access and manage your governance data.</p>
+          <h3 style={{ color: "#856404", marginTop: 0, marginBottom: "15px" }}>Improve Your Governance Score</h3>
+          <p style={{ color: "#856404", marginBottom: "15px" }}>
+            To access board director features, you need to improve your governance score to 75% or higher. You can
+            purchase governance support under Tools and Templates.
+          </p>
+          <button
+            onClick={handleBuyGovernanceRedirect}
+            style={{
+              padding: "10px 20px",
+              backgroundColor: "#856404",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: "500",
+            }}
+          >
+            Buy Governance
+          </button>
         </div>
       )}
 
-      {/* Policy/Procedures Section - Now at the top */}
-      {currentUser && (
-        <div style={{ marginBottom: "30px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
-            <h3 style={{ color: "#5d4037", margin: 0 }}>Policy/Procedures</h3>
-            <div style={{ display: "flex", gap: "10px" }}>
-              <button
-                onClick={() => setShowPolicyProcedureModal(true)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#5d4037",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                  fontSize: "12px",
-                }}
-              >
-                Add Policy/Procedure
-              </button>
-              <input
-                type="file"
-                accept=".pdf,.doc,.docx"
-                style={{ display: "none" }}
-                id="file-upload"
-                onChange={(e) => {
-                  const file = e.target.files[0]
-                  if (file) {
-                    alert(`File "${file.name}" selected. This would be uploaded in a real implementation.`)
-                  }
-                }}
-              />
-              <button
-                onClick={() => document.getElementById("file-upload").click()}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#4CAF50",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                  fontSize: "12px",
-                }}
-              >
-                Attach File
-              </button>
-              <button
-                onClick={handleBulkPolicyRedirect}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#8b6914",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                  fontSize: "12px",
-                }}
-              >
-                Buy Policy
-              </button>
-            </div>
+      <div
+        style={{
+          backgroundColor: "#fdfcfb",
+          padding: "20px",
+          borderRadius: "6px",
+          border: "2px solid #e6d7c3",
+          marginBottom: "20px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "15px",
+          }}
+        >
+          <h4 style={{ color: "#4a352f", margin: 0 }}>Policies & Procedures</h4>
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button
+              onClick={() => {
+                setEditingPolicyProcedure(null)
+                setNewPolicyProcedure({
+                  name: "",
+                  type: "policy",
+                  status: "",
+                  date: "",
+                  fileAttached: false,
+                  fileData: null,
+                })
+                setShowPolicyProcedureModal(true)
+              }}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#7d5a50",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "12px",
+              }}
+            >
+              Add Policy/Procedure
+            </button>
+            <input
+              type="file"
+              accept=".pdf,.doc,.docx"
+              style={{ display: "none" }}
+              id="file-upload-general"
+              onChange={(e) => handleFileUpload(e)}
+            />
+            <button
+              onClick={() => document.getElementById("file-upload-general").click()}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#4CAF50",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "12px",
+              }}
+            >
+              Attach File
+            </button>
+            <button
+              onClick={handleBulkPolicyRedirect}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#a67c52",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "12px",
+              }}
+            >
+              Buy Policy
+            </button>
           </div>
-          <div
-            style={{
-              backgroundColor: "#f7f3f0",
-              padding: "15px",
-              borderRadius: "6px",
-              minHeight: "200px",
-            }}
-          >
-            {policies.length > 0 ? (
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                  color: "#5d4037",
-                }}
-              >
-                <thead>
-                  <tr style={{ borderBottom: "2px solid #d4c4b0" }}>
-                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Name</th>
-                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Type</th>
-                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Status</th>
-                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Date</th>
-                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Attach Policy/Procedure</th>
-                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {policies.map((item) => (
-                    <tr key={item.id} style={{ borderBottom: "1px solid #e8ddd4" }}>
-                      <td style={{ padding: "12px" }}>{item.name}</td>
-                      <td style={{ padding: "12px", textTransform: "capitalize" }}>{item.type}</td>
-                      <td style={{ padding: "12px" }}>{item.status}</td>
-                      <td style={{ padding: "12px" }}>{item.date}</td>
-                      <td style={{ padding: "12px" }}>
-                        {item.fileAttached ? (
-                          <span style={{ color: "#4CAF50", fontWeight: "500" }}>✓ Attached</span>
-                        ) : (
+        </div>
+        <div
+          style={{
+            backgroundColor: "#f5f0e1",
+            padding: "15px",
+            borderRadius: "6px",
+            minHeight: "200px",
+          }}
+        >
+          {policies.length > 0 ? (
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                color: "#4a352f",
+              }}
+            >
+              <thead>
+                <tr style={{ borderBottom: "2px solid #c8b6a6" }}>
+                  <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Name</th>
+                  <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Type</th>
+                  <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Status</th>
+                  <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Date</th>
+                  <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Attach Policy/Procedure</th>
+                  <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {policies.map((item) => (
+                  <tr key={item.id} style={{ borderBottom: "1px solid #e6d7c3" }}>
+                    <td style={{ padding: "12px" }}>{item.name}</td>
+                    <td style={{ padding: "12px", textTransform: "capitalize" }}>{item.type}</td>
+                    <td style={{ padding: "12px" }}>{item.status}</td>
+                    <td style={{ padding: "12px" }}>{item.date}</td>
+                    <td style={{ padding: "12px" }}>
+                      {item.fileAttached ? (
+                        <span style={{ color: "#4CAF50", fontWeight: "500" }}>
+                          ✓ {item.fileData?.name || "Attached"}
+                        </span>
+                      ) : (
+                        <>
+                          <input
+                            type="file"
+                            accept=".pdf,.doc,.docx"
+                            style={{ display: "none" }}
+                            id={`file-upload-${item.id}`}
+                            onChange={(e) => handleFileUpload(e, item.id)}
+                          />
                           <button
-                            onClick={() => document.getElementById("file-upload").click()}
+                            onClick={() => document.getElementById(`file-upload-${item.id}`).click()}
                             style={{
                               padding: "4px 8px",
                               backgroundColor: "#2196F3",
@@ -2535,15 +2560,123 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                           >
                             Attach File
                           </button>
-                        )}
+                        </>
+                      )}
+                    </td>
+                    <td style={{ padding: "12px" }}>
+                      <div style={{ display: "flex", gap: "5px" }}>
+                        <button
+                          onClick={() => handleEditPolicyProcedure(item)}
+                          style={{
+                            padding: "4px 8px",
+                            backgroundColor: "#a67c52",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontSize: "10px",
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeletePolicyProcedure(item.id)}
+                          style={{
+                            padding: "4px 8px",
+                            backgroundColor: "#F44336",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontSize: "10px",
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div style={{ textAlign: "center", padding: "40px", color: "#7d5a50" }}>
+              No policies or procedures added yet. Click "Add Policy/Procedure" to get started.
+            </div>
+          )}
+        </div>
+      </div>
+
+      {!showBoardQuestion && hasBoardDirectors && hasMinimumGovernanceScore && (
+        <>
+          <div
+            style={{
+              backgroundColor: "#fdfcfb",
+              padding: "20px",
+              borderRadius: "6px",
+              marginBottom: "20px",
+              border: "2px solid #e6d7c3",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "15px",
+              }}
+            >
+              <h4 style={{ color: "#4a352f", margin: 0 }}>Board of Directors</h4>
+              <button
+                onClick={handleAddDirector}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#7d5a50",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                  fontSize: "12px",
+                }}
+              >
+                Add Director
+              </button>
+            </div>
+
+            {directors.length > 0 ? (
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  color: "#4a352f",
+                }}
+              >
+                <thead>
+                  <tr style={{ borderBottom: "2px solid #c8b6a6" }}>
+                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Name</th>
+                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Position</th>
+                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Date Appointed</th>
+                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Committees</th>
+                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {directors.map((director) => (
+                    <tr key={director.id} style={{ borderBottom: "1px solid #e6d7c3" }}>
+                      <td style={{ padding: "12px" }}>{director.name}</td>
+                      <td style={{ padding: "12px" }}>{director.position}</td>
+                      <td style={{ padding: "12px" }}>{director.date}</td>
+                      <td style={{ padding: "12px" }}>
+                        {director.committees && director.committees.length > 0 ? director.committees.join(", ") : "-"}
                       </td>
                       <td style={{ padding: "12px" }}>
                         <div style={{ display: "flex", gap: "5px" }}>
                           <button
-                            onClick={() => handleEditPolicyProcedure(item)}
+                            onClick={() => handleEditDirector(director)}
                             style={{
                               padding: "4px 8px",
-                              backgroundColor: "#9c7c5f",
+                              backgroundColor: "#a67c52",
                               color: "white",
                               border: "none",
                               borderRadius: "4px",
@@ -2554,7 +2687,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                             Edit
                           </button>
                           <button
-                            onClick={() => handleDeletePolicyProcedure(item.id)}
+                            onClick={() => handleDeleteDirector(director.id)}
                             style={{
                               padding: "4px 8px",
                               backgroundColor: "#F44336",
@@ -2574,236 +2707,35 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                 </tbody>
               </table>
             ) : (
-              <div style={{ textAlign: "center", padding: "40px", color: "#5d4037" }}>
-                <p style={{ fontSize: "16px", marginBottom: "10px" }}>No policies/procedures added yet.</p>
-                <p style={{ fontSize: "14px", color: "#72542b", marginBottom: "15px" }}>
-                  Click "Add Policy/Procedure" to get started or "Buy Policy" for pre-made templates.
-                </p>
-                <button
-                  onClick={handleBulkPolicyRedirect}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: "#8b6914",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontWeight: "500",
-                    fontSize: "12px",
-                  }}
-                >
-                  Buy Policy
-                </button>
+              <div style={{ textAlign: "center", padding: "40px", color: "#7d5a50" }}>
+                No directors added yet. Click "Add Director" to get started.
               </div>
             )}
           </div>
-        </div>
-      )}
-
-      {/* Board Directors Question - Only show when PIS score < 350 */}
-      {showBoardQuestion && currentUser && pisScore < 350 && (
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-            textAlign: "center",
-          }}
-        >
-          <h3 style={{ color: "#5d4037", marginTop: 0 }}>Do you have board directors?</h3>
-          <div style={{ display: "flex", gap: "20px", justifyContent: "center", marginTop: "15px" }}>
-            <button
-              onClick={() => handleBoardDirectorsResponse(true)}
-              style={{
-                padding: "10px 30px",
-                backgroundColor: "#5d4037",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "500",
-              }}
-            >
-              Yes
-            </button>
-            <button
-              onClick={() => handleBoardDirectorsResponse(false)}
-              style={{
-                padding: "10px 30px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "500",
-              }}
-            >
-              No
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Board Management Section - Only show when PIS score >= 350 */}
-      {currentUser && pisScore >= 350 && (
-        <div style={{ marginBottom: "30px" }}>
-          <h3 style={{ color: "#5d4037", marginBottom: "20px" }}>Board Management</h3>
 
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))",
-              gap: "30px",
-              marginBottom: "30px",
+              backgroundColor: "#fdfcfb",
+              padding: "20px",
+              borderRadius: "6px",
+              marginBottom: "20px",
+              border: "2px solid #e6d7c3",
             }}
           >
-            {/* Board Directors Section */}
-            <div>
-              <div
-                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}
-              >
-                <h4 style={{ color: "#5d4037", margin: 0 }}>Board Directors</h4>
-                <button
-                  onClick={handleAddDirector}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: "#5d4037",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontWeight: "500",
-                    fontSize: "12px",
-                  }}
-                >
-                  Add Director
-                </button>
-              </div>
-              <div
-                style={{
-                  backgroundColor: "#f7f3f0",
-                  padding: "15px",
-                  borderRadius: "6px",
-                  minHeight: "200px",
-                }}
-              >
-                {directors.length > 0 ? (
-                  <table
-                    style={{
-                      width: "100%",
-                      borderCollapse: "collapse",
-                      color: "#5d4037",
-                    }}
-                  >
-                    <thead>
-                      <tr style={{ borderBottom: "2px solid #d4c4b0" }}>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Name</th>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Position</th>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Date</th>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Committees</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {directors.map((director) => (
-                        <tr key={director.id} style={{ borderBottom: "1px solid #e8ddd4" }}>
-                          <td style={{ padding: "12px" }}>{director.name}</td>
-                          <td style={{ padding: "12px" }}>{director.position}</td>
-                          <td style={{ padding: "12px" }}>{director.date}</td>
-                          <td style={{ padding: "12px" }}>
-                            {director.committees && director.committees.length > 0
-                              ? director.committees.join(", ")
-                              : "None"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <p style={{ color: "#5d4037", textAlign: "center", margin: "50px 0" }}>No directors added yet.</p>
-                )}
-              </div>
-            </div>
-
-            {/* Board Committees Section */}
-            <div>
-              <div
-                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}
-              >
-                <h4 style={{ color: "#5d4037", margin: 0 }}>Board Committees</h4>
-                <button
-                  onClick={() => setShowCommitteeModal(true)}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: "#5d4037",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontWeight: "500",
-                    fontSize: "12px",
-                  }}
-                >
-                  Add Committee
-                </button>
-              </div>
-              <div
-                style={{
-                  backgroundColor: "#f7f3f0",
-                  padding: "15px",
-                  borderRadius: "6px",
-                  minHeight: "200px",
-                }}
-              >
-                {committees.length > 0 ? (
-                  <table
-                    style={{
-                      width: "100%",
-                      borderCollapse: "collapse",
-                      color: "#5d4037",
-                    }}
-                  >
-                    <thead>
-                      <tr style={{ borderBottom: "2px solid #d4c4b0" }}>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Name</th>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Position</th>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Date</th>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Committees</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {committees.map((committee) => (
-                        <tr key={committee.id} style={{ borderBottom: "1px solid #e8ddd4" }}>
-                          <td style={{ padding: "12px" }}>{committee.name}</td>
-                          <td style={{ padding: "12px" }}>{committee.position}</td>
-                          <td style={{ padding: "12px" }}>{committee.date}</td>
-                          <td style={{ padding: "12px" }}>
-                            {committee.committees && committee.committees.length > 0
-                              ? committee.committees.join(", ")
-                              : "None"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <p style={{ color: "#5d4037", textAlign: "center", margin: "50px 0" }}>No committees added yet.</p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Board Meetings Section - Enhanced with calendar */}
-          <div>
             <div
-              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "15px",
+              }}
             >
-              <h4 style={{ color: "#5d4037", margin: 0 }}>Board Meetings</h4>
+              <h4 style={{ color: "#4a352f", margin: 0 }}>Meetings Held</h4>
               <button
                 onClick={handleAddMeeting}
                 style={{
                   padding: "8px 16px",
-                  backgroundColor: "#5d4037",
+                  backgroundColor: "#7d5a50",
                   color: "white",
                   border: "none",
                   borderRadius: "4px",
@@ -2815,310 +2747,76 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                 Add Meeting
               </button>
             </div>
-            <div
-              style={{
-                backgroundColor: "#f7f3f0",
-                padding: "15px",
-                borderRadius: "6px",
-                minHeight: "200px",
-              }}
-            >
-              {meetings.length > 0 ? (
-                <table
-                  style={{
-                    width: "100%",
-                    borderCollapse: "collapse",
-                    color: "#5d4037",
-                  }}
-                >
-                  <thead>
-                    <tr style={{ borderBottom: "2px solid #d4c4b0" }}>
-                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Calendar Date</th>
-                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Attendees</th>
-                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Meetings Held</th>
-                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {meetings.map((meeting) => (
-                      <tr key={meeting.id} style={{ borderBottom: "1px solid #e8ddd4" }}>
-                        <td style={{ padding: "12px" }}>
-                          <input
-                            type="date"
-                            value={meeting.date}
-                            readOnly
-                            style={{
-                              border: "none",
-                              background: "transparent",
-                              color: "#5d4037",
-                              fontWeight: "500",
-                            }}
-                          />
-                        </td>
-                        <td style={{ padding: "12px" }}>
-                          {meeting.attendees}/{meeting.totalMembers}
-                        </td>
-                        <td style={{ padding: "12px" }}>
-                          <span
-                            style={{
-                              padding: "4px 8px",
-                              backgroundColor: "#e8ddd4",
-                              borderRadius: "4px",
-                              fontSize: "12px",
-                            }}
-                          >
-                            {meeting.type}
-                          </span>
-                        </td>
-                        <td style={{ padding: "12px" }}>
-                          <div style={{ display: "flex", gap: "5px" }}>
-                            <button
-                              onClick={() => handleEditMeeting(meeting)}
-                              style={{
-                                padding: "4px 8px",
-                                backgroundColor: "#9c7c5f",
-                                color: "white",
-                                border: "none",
-                                borderRadius: "4px",
-                                cursor: "pointer",
-                                fontSize: "10px",
-                              }}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => handleDeleteMeeting(meeting.id)}
-                              style={{
-                                padding: "4px 8px",
-                                backgroundColor: "#F44336",
-                                color: "white",
-                                border: "none",
-                                borderRadius: "4px",
-                                cursor: "pointer",
-                                fontSize: "10px",
-                              }}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <p style={{ color: "#5d4037", textAlign: "center", margin: "50px 0" }}>No meetings scheduled yet.</p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Governance Score Improvement Message - Only show when PIS score < 350 and user answered "No" */}
-      {currentUser && pisScore < 350 && !showBoardQuestion && !hasBoardDirectors && (
-        <div
-          style={{
-            backgroundColor: "#fff3cd",
-            border: "1px solid #ffeaa7",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-            textAlign: "center",
-          }}
-        >
-          <h3 style={{ color: "#856404", marginTop: 0, marginBottom: "15px" }}>Improve Your Governance Score</h3>
-          <p style={{ color: "#856404", marginBottom: "15px" }}>
-            To access board director features, you need to improve your governance score to 350 or higher.
-          </p>
-          <button
-            onClick={handleBuyGovernanceRedirect}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: "#856404",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontWeight: "500",
-            }}
-          >
-            Buy Governance
-          </button>
-        </div>
-      )}
-
-      {/* All modals remain the same as in the original code... */}
-      {/* Policy/Procedure Modal */}
-      {showPolicyProcedureModal && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "30px",
-              borderRadius: "8px",
-              boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
-              width: "500px",
-              maxWidth: "90vw",
-            }}
-          >
-            <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "20px" }}>
-              {editingPolicyProcedure ? "Edit Policy/Procedure" : "Add Policy/Procedure"}
-            </h3>
-
-            <div style={{ marginBottom: "15px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#5d4037", fontWeight: "500" }}>
-                Name:
-              </label>
-              <input
-                type="text"
-                value={newPolicyProcedure.name}
-                onChange={(e) => setNewPolicyProcedure((prev) => ({ ...prev, name: e.target.value }))}
-                placeholder="Enter name"
+            {meetings.length > 0 ? (
+              <table
                 style={{
                   width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                }}
-              />
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "15px" }}>
-              <div>
-                <label style={{ display: "block", marginBottom: "8px", color: "#5d4037", fontWeight: "500" }}>
-                  Type:
-                </label>
-                <select
-                  value={newPolicyProcedure.type}
-                  onChange={(e) => setNewPolicyProcedure((prev) => ({ ...prev, type: e.target.value }))}
-                  style={{
-                    width: "100%",
-                    padding: "10px",
-                    border: "2px solid #e8ddd4",
-                    borderRadius: "4px",
-                    fontSize: "14px",
-                    boxSizing: "border-box",
-                  }}
-                >
-                  <option value="policy">Policy</option>
-                  <option value="procedure">Procedure</option>
-                </select>
-              </div>
-              <div>
-                <label style={{ display: "block", marginBottom: "8px", color: "#5d4037", fontWeight: "500" }}>
-                  Status:
-                </label>
-                <select
-                  value={newPolicyProcedure.status}
-                  onChange={(e) => setNewPolicyProcedure((prev) => ({ ...prev, status: e.target.value }))}
-                  style={{
-                    width: "100%",
-                    padding: "10px",
-                    border: "2px solid #e8ddd4",
-                    borderRadius: "4px",
-                    fontSize: "14px",
-                    boxSizing: "border-box",
-                  }}
-                >
-                  <option value="">Select Status</option>
-                  <option value="draft">Draft</option>
-                  <option value="active">Active</option>
-                  <option value="under review">Under Review</option>
-                  <option value="archived">Archived</option>
-                </select>
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "20px" }}>
-              <div>
-                <label style={{ display: "block", marginBottom: "8px", color: "#5d4037", fontWeight: "500" }}>
-                  Date:
-                </label>
-                <input
-                  type="date"
-                  value={newPolicyProcedure.date}
-                  onChange={(e) => setNewPolicyProcedure((prev) => ({ ...prev, date: e.target.value }))}
-                  style={{
-                    width: "100%",
-                    padding: "10px",
-                    border: "2px solid #e8ddd4",
-                    borderRadius: "4px",
-                    fontSize: "14px",
-                    boxSizing: "border-box",
-                  }}
-                />
-              </div>
-              <div>
-                <label style={{ display: "block", marginBottom: "8px", color: "#5d4037", fontWeight: "500" }}>
-                  File Attached:
-                </label>
-                <select
-                  value={newPolicyProcedure.fileAttached}
-                  onChange={(e) =>
-                    setNewPolicyProcedure((prev) => ({ ...prev, fileAttached: e.target.value === "true" }))
-                  }
-                  style={{
-                    width: "100%",
-                    padding: "10px",
-                    border: "2px solid #e8ddd4",
-                    borderRadius: "4px",
-                    fontSize: "14px",
-                    boxSizing: "border-box",
-                  }}
-                >
-                  <option value="false">No</option>
-                  <option value="true">Yes</option>
-                </select>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
-              <button
-                onClick={() => setShowPolicyProcedureModal(false)}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#e8ddd4",
-                  color: "#5d4037",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
+                  borderCollapse: "collapse",
+                  color: "#4a352f",
                 }}
               >
-                Cancel
-              </button>
-              <button
-                onClick={handleSavePolicyProcedure}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#5d4037",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                }}
-              >
-                {editingPolicyProcedure ? "Update Policy/Procedure" : "Add Policy/Procedure"}
-              </button>
-            </div>
+                <thead>
+                  <tr style={{ borderBottom: "2px solid #c8b6a6" }}>
+                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Date</th>
+                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Type</th>
+                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Attendance</th>
+                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Minutes</th>
+                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {meetings.map((meeting) => (
+                    <tr key={meeting.id} style={{ borderBottom: "1px solid #e6d7c3" }}>
+                      <td style={{ padding: "12px" }}>{meeting.date}</td>
+                      <td style={{ padding: "12px" }}>{meeting.type}</td>
+                      <td style={{ padding: "12px" }}>
+                        {meeting.attendees}/{meeting.totalMembers}
+                      </td>
+                      <td style={{ padding: "12px", maxWidth: "200px", wordWrap: "break-word" }}>{meeting.minutes}</td>
+                      <td style={{ padding: "12px" }}>
+                        <div style={{ display: "flex", gap: "5px" }}>
+                          <button
+                            onClick={() => handleEditMeeting(meeting)}
+                            style={{
+                              padding: "4px 8px",
+                              backgroundColor: "#a67c52",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              fontSize: "10px",
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteMeeting(meeting.id)}
+                            style={{
+                              padding: "4px 8px",
+                              backgroundColor: "#F44336",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              fontSize: "10px",
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div style={{ textAlign: "center", padding: "40px", color: "#7d5a50" }}>
+                No meetings added yet. Click "Add Meeting" to get started.
+              </div>
+            )}
           </div>
-        </div>
+        </>
       )}
 
       {/* Meeting Modal */}
@@ -3147,12 +2845,12 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
               maxWidth: "90vw",
             }}
           >
-            <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "20px" }}>
+            <h3 style={{ color: "#4a352f", marginTop: 0, marginBottom: "20px" }}>
               {editingMeeting ? "Edit Board Meeting" : "Add New Board Meeting"}
             </h3>
 
             <div style={{ marginBottom: "15px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#5d4037", fontWeight: "500" }}>
+              <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
                 Date:
               </label>
               <input
@@ -3162,7 +2860,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                 style={{
                   width: "100%",
                   padding: "10px",
-                  border: "2px solid #e8ddd4",
+                  border: "2px solid #e6d7c3",
                   borderRadius: "4px",
                   fontSize: "14px",
                   boxSizing: "border-box",
@@ -3171,7 +2869,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#5d4037", fontWeight: "500" }}>
+              <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
                 Meeting Type:
               </label>
               <input
@@ -3182,7 +2880,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                 style={{
                   width: "100%",
                   padding: "10px",
-                  border: "2px solid #e8ddd4",
+                  border: "2px solid #e6d7c3",
                   borderRadius: "4px",
                   fontSize: "14px",
                   boxSizing: "border-box",
@@ -3192,7 +2890,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "15px" }}>
               <div>
-                <label style={{ display: "block", marginBottom: "8px", color: "#5d4037", fontWeight: "500" }}>
+                <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
                   Attendees:
                 </label>
                 <input
@@ -3203,7 +2901,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                   style={{
                     width: "100%",
                     padding: "10px",
-                    border: "2px solid #e8ddd4",
+                    border: "2px solid #e6d7c3",
                     borderRadius: "4px",
                     fontSize: "14px",
                     boxSizing: "border-box",
@@ -3211,7 +2909,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                 />
               </div>
               <div>
-                <label style={{ display: "block", marginBottom: "8px", color: "#5d4037", fontWeight: "500" }}>
+                <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
                   Total Members:
                 </label>
                 <input
@@ -3222,7 +2920,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                   style={{
                     width: "100%",
                     padding: "10px",
-                    border: "2px solid #e8ddd4",
+                    border: "2px solid #e6d7c3",
                     borderRadius: "4px",
                     fontSize: "14px",
                     boxSizing: "border-box",
@@ -3232,7 +2930,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
             </div>
 
             <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#5d4037", fontWeight: "500" }}>
+              <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
                 Minutes/Notes:
               </label>
               <textarea
@@ -3243,7 +2941,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                 style={{
                   width: "100%",
                   padding: "10px",
-                  border: "2px solid #e8ddd4",
+                  border: "2px solid #e6d7c3",
                   borderRadius: "4px",
                   fontSize: "14px",
                   boxSizing: "border-box",
@@ -3257,8 +2955,8 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                 onClick={() => setShowMeetingModal(false)}
                 style={{
                   padding: "10px 20px",
-                  backgroundColor: "#e8ddd4",
-                  color: "#5d4037",
+                  backgroundColor: "#e6d7c3",
+                  color: "#4a352f",
                   border: "none",
                   borderRadius: "4px",
                   cursor: "pointer",
@@ -3271,7 +2969,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                 onClick={handleSaveMeeting}
                 style={{
                   padding: "10px 20px",
-                  backgroundColor: "#5d4037",
+                  backgroundColor: "#7d5a50",
                   color: "white",
                   border: "none",
                   borderRadius: "4px",
@@ -3312,12 +3010,12 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
               maxWidth: "90vw",
             }}
           >
-            <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "20px" }}>
+            <h3 style={{ color: "#4a352f", marginTop: 0, marginBottom: "20px" }}>
               {editingDirector ? "Edit Board Director" : "Add New Board Director"}
             </h3>
 
             <div style={{ marginBottom: "15px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#5d4037", fontWeight: "500" }}>
+              <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
                 Name:
               </label>
               <input
@@ -3328,7 +3026,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                 style={{
                   width: "100%",
                   padding: "10px",
-                  border: "2px solid #e8ddd4",
+                  border: "2px solid #e6d7c3",
                   borderRadius: "4px",
                   fontSize: "14px",
                   boxSizing: "border-box",
@@ -3337,7 +3035,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#5d4037", fontWeight: "500" }}>
+              <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
                 Position:
               </label>
               <input
@@ -3348,7 +3046,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                 style={{
                   width: "100%",
                   padding: "10px",
-                  border: "2px solid #e8ddd4",
+                  border: "2px solid #e6d7c3",
                   borderRadius: "4px",
                   fontSize: "14px",
                   boxSizing: "border-box",
@@ -3357,7 +3055,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#5d4037", fontWeight: "500" }}>
+              <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
                 Date Appointed:
               </label>
               <input
@@ -3367,7 +3065,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                 style={{
                   width: "100%",
                   padding: "10px",
-                  border: "2px solid #e8ddd4",
+                  border: "2px solid #e6d7c3",
                   borderRadius: "4px",
                   fontSize: "14px",
                   boxSizing: "border-box",
@@ -3376,7 +3074,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
             </div>
 
             <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#5d4037", fontWeight: "500" }}>
+              <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
                 Committees:
               </label>
               <select
@@ -3389,7 +3087,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                 style={{
                   width: "100%",
                   padding: "10px",
-                  border: "2px solid #e8ddd4",
+                  border: "2px solid #e6d7c3",
                   borderRadius: "4px",
                   fontSize: "14px",
                   boxSizing: "border-box",
@@ -3409,8 +3107,8 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                 onClick={() => setShowDirectorModal(false)}
                 style={{
                   padding: "10px 20px",
-                  backgroundColor: "#e8ddd4",
-                  color: "#5d4037",
+                  backgroundColor: "#e6d7c3",
+                  color: "#4a352f",
                   border: "none",
                   borderRadius: "4px",
                   cursor: "pointer",
@@ -3423,7 +3121,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                 onClick={handleSaveDirector}
                 style={{
                   padding: "10px 20px",
-                  backgroundColor: "#5d4037",
+                  backgroundColor: "#7d5a50",
                   color: "white",
                   border: "none",
                   borderRadius: "4px",
@@ -3464,12 +3162,12 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
               maxWidth: "90vw",
             }}
           >
-            <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "20px" }}>
+            <h3 style={{ color: "#4a352f", marginTop: 0, marginBottom: "20px" }}>
               {editingCommittee ? "Edit Board Committee" : "Add New Board Committee"}
             </h3>
 
             <div style={{ marginBottom: "15px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#5d4037", fontWeight: "500" }}>
+              <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
                 Name:
               </label>
               <input
@@ -3480,7 +3178,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                 style={{
                   width: "100%",
                   padding: "10px",
-                  border: "2px solid #e8ddd4",
+                  border: "2px solid #e6d7c3",
                   borderRadius: "4px",
                   fontSize: "14px",
                   boxSizing: "border-box",
@@ -3489,7 +3187,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#5d4037", fontWeight: "500" }}>
+              <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
                 Position:
               </label>
               <input
@@ -3500,7 +3198,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                 style={{
                   width: "100%",
                   padding: "10px",
-                  border: "2px solid #e8ddd4",
+                  border: "2px solid #e6d7c3",
                   borderRadius: "4px",
                   fontSize: "14px",
                   boxSizing: "border-box",
@@ -3509,7 +3207,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#5d4037", fontWeight: "500" }}>
+              <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
                 Date:
               </label>
               <input
@@ -3519,7 +3217,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                 style={{
                   width: "100%",
                   padding: "10px",
-                  border: "2px solid #e8ddd4",
+                  border: "2px solid #e6d7c3",
                   borderRadius: "4px",
                   fontSize: "14px",
                   boxSizing: "border-box",
@@ -3528,7 +3226,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
             </div>
 
             <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#5d4037", fontWeight: "500" }}>
+              <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
                 Members:
               </label>
               <select
@@ -3541,7 +3239,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                 style={{
                   width: "100%",
                   padding: "10px",
-                  border: "2px solid #e8ddd4",
+                  border: "2px solid #e6d7c3",
                   borderRadius: "4px",
                   fontSize: "14px",
                   boxSizing: "border-box",
@@ -3561,8 +3259,8 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                 onClick={() => setShowCommitteeModal(false)}
                 style={{
                   padding: "10px 20px",
-                  backgroundColor: "#e8ddd4",
-                  color: "#5d4037",
+                  backgroundColor: "#e6d7c3",
+                  color: "#4a352f",
                   border: "none",
                   borderRadius: "4px",
                   cursor: "pointer",
@@ -3575,7 +3273,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                 onClick={handleSaveCommittee}
                 style={{
                   padding: "10px 20px",
-                  backgroundColor: "#5d4037",
+                  backgroundColor: "#7d5a50",
                   color: "white",
                   border: "none",
                   borderRadius: "4px",
@@ -3590,8 +3288,178 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
         </div>
       )}
 
+      {/* Policy/Procedure Modal */}
+      {showPolicyProcedureModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "#fdfcfb",
+              padding: "30px",
+              borderRadius: "8px",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
+              width: "500px",
+              maxWidth: "90vw",
+            }}
+          >
+            <h3 style={{ color: "#4a352f", marginTop: 0, marginBottom: "20px" }}>
+              {editingPolicyProcedure ? "Edit Policy/Procedure" : "Add Policy/Procedure"}
+            </h3>
 
-      {/* ... existing modals ... */}
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
+                Name:
+              </label>
+              <input
+                type="text"
+                value={newPolicyProcedure.name}
+                onChange={(e) => setNewPolicyProcedure((prev) => ({ ...prev, name: e.target.value }))}
+                placeholder="Enter name"
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  border: "2px solid #e6d7c3",
+                  borderRadius: "4px",
+                  fontSize: "14px",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "15px" }}>
+              <div>
+                <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
+                  Type:
+                </label>
+                <select
+                  value={newPolicyProcedure.type}
+                  onChange={(e) => setNewPolicyProcedure((prev) => ({ ...prev, type: e.target.value }))}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    border: "2px solid #e6d7c3",
+                    borderRadius: "4px",
+                    fontSize: "14px",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <option value="policy">Policy</option>
+                  <option value="procedure">Procedure</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
+                  Status:
+                </label>
+                <select
+                  value={newPolicyProcedure.status}
+                  onChange={(e) => setNewPolicyProcedure((prev) => ({ ...prev, status: e.target.value }))}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    border: "2px solid #e6d7c3",
+                    borderRadius: "4px",
+                    fontSize: "14px",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <option value="">Select Status</option>
+                  <option value="draft">Draft</option>
+                  <option value="active">Active</option>
+                  <option value="under review">Under Review</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "20px" }}>
+              <div>
+                <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
+                  Date:
+                </label>
+                <input
+                  type="date"
+                  value={newPolicyProcedure.date}
+                  onChange={(e) => setNewPolicyProcedure((prev) => ({ ...prev, date: e.target.value }))}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    border: "2px solid #e6d7c3",
+                    borderRadius: "4px",
+                    fontSize: "14px",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
+                  File Attached:
+                </label>
+                <select
+                  value={newPolicyProcedure.fileAttached}
+                  onChange={(e) =>
+                    setNewPolicyProcedure((prev) => ({ ...prev, fileAttached: e.target.value === "true" }))
+                  }
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    border: "2px solid #e6d7c3",
+                    borderRadius: "4px",
+                    fontSize: "14px",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <option value="false">No</option>
+                  <option value="true">Yes</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setShowPolicyProcedureModal(false)}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#e6d7c3",
+                  color: "#4a352f",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSavePolicyProcedure}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#7d5a50",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                }}
+              >
+                {editingPolicyProcedure ? "Update Policy/Procedure" : "Add Policy/Procedure"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -3664,7 +3532,8 @@ const Strategy = () => {
     // Directly access the document using the user ID as the document ID
     const docRef = doc(db, "bigEvaluations", currentUser.uid)
 
-    const unsubscribe = onSnapshot(docRef,
+    const unsubscribe = onSnapshot(
+      docRef,
       (docSnap) => {
         try {
           if (docSnap.exists()) {
@@ -3693,7 +3562,7 @@ const Strategy = () => {
         console.error("Error in PIS score listener:", error)
         setPisScore(0)
         setIsLoadingPisScore(false)
-      }
+      },
     )
 
     return () => unsubscribe()
@@ -3786,9 +3655,7 @@ const Strategy = () => {
               }}
             >
               {isLoadingPisScore ? (
-                <p style={{ color: "#2e7d32", margin: 0, fontSize: "14px" }}>
-                  Loading PIS Score...
-                </p>
+                <p style={{ color: "#2e7d32", margin: 0, fontSize: "14px" }}>Loading PIS Score...</p>
               ) : (
                 <p style={{ color: "#2e7d32", margin: 0, fontSize: "14px" }}>
                   Current PIS Score: {pisScore} | Governance Stage: {getGovernanceStage(pisScore)}
@@ -3864,13 +3731,13 @@ const BusinessRiskTab = ({ activeSection, currentUser }) => {
   // Aggregate all risk data for the matrix
   const allRisks = []
   const categoryColors = {
-    financial: "#2196F3",
-    operational: "#4CAF50",
-    "legal-compliance": "#9C27B0",
-    insurance: "#FF5722",
-    people: "#9E9E9E",
-    "disaster-recovery": "#F44336",
-    "stakeholder-management": "#FF9800",
+    financial: "#e74c3c",
+    operational: "#3498db",
+    "legal-compliance": "#9b59b6",
+    insurance: "#f39c12",
+    people: "#1abc9c",
+    "disaster-recovery": "#e67e22",
+    "stakeholder-management": "#2ecc71",
   }
 
   Object.keys(riskData).forEach((category) => {
@@ -3899,7 +3766,7 @@ const BusinessRiskTab = ({ activeSection, currentUser }) => {
           },
         ],
         backgroundColor: risk.color,
-        borderColor: "#5d4037",
+        borderColor: "#7d5a50",
         borderWidth: 2,
         pointRadius: 15,
         pointHoverRadius: 18,
@@ -3938,14 +3805,14 @@ const BusinessRiskTab = ({ activeSection, currentUser }) => {
         title: {
           display: true,
           text: "Likelihood",
-          color: "#72542b",
+          color: "#4a352f",
           font: {
             weight: "bold",
             size: 14,
           },
         },
         grid: {
-          color: "#e8ddd4",
+          color: "#f0e6d9",
         },
         ticks: {
           stepSize: 1,
@@ -3957,14 +3824,14 @@ const BusinessRiskTab = ({ activeSection, currentUser }) => {
         title: {
           display: true,
           text: "Severity",
-          color: "#72542b",
+          color: "#4a352f",
           font: {
             weight: "bold",
             size: 14,
           },
         },
         grid: {
-          color: "#e8ddd4",
+          color: "#f0e6d9",
         },
         ticks: {
           stepSize: 1,
@@ -3976,25 +3843,26 @@ const BusinessRiskTab = ({ activeSection, currentUser }) => {
   return (
     <div
       style={{
-        backgroundColor: "#fdfcfb",
+        backgroundColor: "#faf7f2",
         padding: "20px",
         margin: "20px 0",
         borderRadius: "8px",
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
     >
-      <h3 style={{ color: "#5d4037", marginTop: 0 }}>Business Risk Overview</h3>
+      <h3 style={{ color: "#4a352f", marginTop: 0 }}>Business Risk Overview</h3>
 
       <div
         style={{
           height: "500px",
           marginBottom: "30px",
-          backgroundColor: "#f7f3f0",
+          backgroundColor: "#fdfcfb",
           padding: "20px",
           borderRadius: "6px",
+          border: "2px solid #a67c52",
         }}
       >
-        <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px" }}>Risk Matrix</h4>
+        <h4 style={{ color: "#4a352f", marginTop: 0, marginBottom: "15px" }}>Risk Matrix</h4>
         {allRisks.length > 0 ? (
           <Scatter data={createRiskMatrixData()} options={matrixOptions} />
         ) : (
@@ -4004,7 +3872,7 @@ const BusinessRiskTab = ({ activeSection, currentUser }) => {
               alignItems: "center",
               justifyContent: "center",
               height: "400px",
-              color: "#72542b",
+              color: "#7d5a50",
               fontSize: "16px",
             }}
           >
@@ -4016,13 +3884,14 @@ const BusinessRiskTab = ({ activeSection, currentUser }) => {
       {/* Risk Category Legend */}
       <div
         style={{
-          backgroundColor: "#f7f3f0",
+          backgroundColor: "#fdfcfb",
           padding: "20px",
           borderRadius: "6px",
           marginBottom: "20px",
+          border: "2px solid #a67c52",
         }}
       >
-        <h4 style={{ color: "#5d4037", margin: "0 0 15px 0" }}>Risk Categories</h4>
+        <h4 style={{ color: "#4a352f", margin: "0 0 15px 0" }}>Risk Categories</h4>
         <div
           style={{
             display: "grid",
@@ -4040,7 +3909,7 @@ const BusinessRiskTab = ({ activeSection, currentUser }) => {
                 padding: "10px",
                 backgroundColor: "#fdfcfb",
                 borderRadius: "4px",
-                border: "1px solid #e8ddd4",
+                border: "1px solid #e6d7c3",
               }}
             >
               <div
@@ -4049,12 +3918,12 @@ const BusinessRiskTab = ({ activeSection, currentUser }) => {
                   height: "16px",
                   backgroundColor: color,
                   borderRadius: "50%",
-                  border: "2px solid #5d4037",
+                  border: "2px solid #4a352f",
                 }}
               ></div>
               <span
                 style={{
-                  color: "#5d4037",
+                  color: "#4a352f",
                   fontWeight: "500",
                   textTransform: "capitalize",
                 }}
@@ -4063,7 +3932,7 @@ const BusinessRiskTab = ({ activeSection, currentUser }) => {
               </span>
               <span
                 style={{
-                  color: "#72542b",
+                  color: "#7d5a50",
                   fontSize: "12px",
                   marginLeft: "auto",
                 }}
