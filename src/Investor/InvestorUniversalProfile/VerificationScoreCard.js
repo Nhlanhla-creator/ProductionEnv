@@ -20,7 +20,8 @@ const VerificationScoreCard = ({ profileData }) => {
     }, [profileData]);
 
     const calculateVerificationScore = (profileData) => {
-        // Initialize breakdown with proper max values and weights
+        const checklist = createVerificationChecklist(profileData);
+
         const breakdown = {
             profileCompletion: { score: 0, max: 30, weight: 0.3 },
             documentation: { score: 0, max: 25, weight: 0.25 },
@@ -29,72 +30,24 @@ const VerificationScoreCard = ({ profileData }) => {
             compliance: { score: 0, max: 10, weight: 0.1 }
         };
 
-        // 1. Profile Completion (30%)
-        if (profileData?.completedSections) {
-            const completedCount = Object.values(profileData.completedSections).filter(val => val === true).length;
-            const totalSections = Object.keys(profileData.completedSections).length;
-            breakdown.profileCompletion.score = (completedCount / totalSections) * breakdown.profileCompletion.max;
-        }
+        // Profile Completion based on essentials
+        const essentialCompleted = Object.values(checklist.essentials).filter(Boolean).length;
+        const totalEssentials = Object.keys(checklist.essentials).length;
+        breakdown.profileCompletion.score = (essentialCompleted / totalEssentials) * breakdown.profileCompletion.max;
 
-        // 2. Documentation (25%)
-        let docScore = 0;
-        if (profileData?.documentUpload?.registrationDocs) docScore += 10;
-        if (profileData?.documentUpload?.fundMandate?.length > 0) docScore += 7;
-        if (profileData?.documentUpload?.idOffund?.length > 0) docScore += 5;
-        if (profileData?.entityOverview?.companyLogo) docScore += 3;
-        breakdown.documentation.score = Math.min(docScore, breakdown.documentation.max);
+        // Documentation based on supporting docs
+        const supportingCompleted = Object.values(checklist.supporting).filter(Boolean).length;
+        const totalSupporting = Object.keys(checklist.supporting).length;
+        breakdown.documentation.score = (supportingCompleted / totalSupporting) * breakdown.documentation.max;
 
-        // 3. Fund Details (20%)
-        let fundScore = 0;
-        const fund = profileData?.fundDetails?.funds?.[0];
-        if (fund) {
-            if (fund.averageDealSize) fundScore += 4;
-            if (fund.minimumTicket) fundScore += 4;
-            if (fund.maximumTicket) fundScore += 4;
-            if (fund.fundSizeCategory) fundScore += 3;
-            if (fund.fundStructure) fundScore += 3;
-            if (fund.name) fundScore += 2;
-        }
-        breakdown.fundDetails.score = Math.min(fundScore, breakdown.fundDetails.max);
-
-        // 4. Investment Activity (15%)
-        let activityScore = 0;
-        const activity = profileData?.fundManageOverview;
-        if (activity) {
-            if (activity.numberOfInvestments) activityScore += 5;
-            if (activity.portfolioCompanies) activityScore += 5;
-            if (activity.valueDeployed) activityScore += 3;
-            if (activity.yearsInOperation) activityScore += 2;
-        }
-        breakdown.investmentActivity.score = Math.min(activityScore, breakdown.investmentActivity.max);
-
-        // 5. Compliance (10%)
-        let complianceScore = 0;
-        if (profileData?.fundManageOverview?.registrationNumber) complianceScore += 3;
-        if (profileData?.fundManageOverview?.taxNumber) complianceScore += 3;
-        if (profileData?.fundManageOverview?.vatRegistrationNumbers) complianceScore += 2;
-        if (profileData?.declarationConsent?.accuracy) complianceScore += 1;
-        if (profileData?.declarationConsent?.termsConditions) complianceScore += 1;
-        breakdown.compliance.score = Math.min(complianceScore, breakdown.compliance.max);
-
-        // Calculate total score (0-100)
+        // Calculate total score
         const totalScore = Object.values(breakdown).reduce(
-            (sum, category) => sum + (category.score / category.max * category.weight * 100), 0);
-
-        // Ensure no NaN values in breakdown
-        Object.values(breakdown).forEach(category => {
-            category.score = isNaN(category.score) ? 0 : Math.round(category.score);
-        });
+            (sum, category) => sum + (category.score / category.max * category.weight * 100), 0
+        );
 
         return {
             score: Math.round(totalScore),
-            breakdown: {
-                profileCompletion: breakdown.profileCompletion,
-                documentation: breakdown.documentation,
-                fundDetails: breakdown.fundDetails,
-                investmentActivity: breakdown.investmentActivity,
-                compliance: breakdown.compliance
-            }
+            breakdown: breakdown
         };
     };
 
@@ -278,7 +231,7 @@ const VerificationScoreCard = ({ profileData }) => {
                             width: "80px",
                             height: "80px",
                             borderRadius: "50%",
-                            background: getScoreColor(verificationScore),
+                            background: tierInfo.color, // FIX: Use tierInfo.color instead of getScoreColor()
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
@@ -287,7 +240,7 @@ const VerificationScoreCard = ({ profileData }) => {
                             color: getScoreTextColor(),
                             boxShadow: '0 8px 24px rgba(0,0,0,0.1)'
                         }}>
-                            {animatedScore}%
+                            {verificationScore}% {/* FIX: Use verificationScore instead of animatedScore */}
                         </div>
                         <div>
                             <div style={{
@@ -303,7 +256,7 @@ const VerificationScoreCard = ({ profileData }) => {
                                     fontWeight: '600',
                                     color: '#4a352f'
                                 }}>
-                                    {tierInfo.name}
+                                    {tierInfo.tier} {/* FIX: Use tierInfo.tier instead of tierInfo.name */}
                                 </h4>
                             </div>
                             <p style={{
@@ -433,7 +386,7 @@ const VerificationScoreCard = ({ profileData }) => {
                         </div>
                     </div>
 
-                    
+
                     {/* Verification Info */}
                     <div style={{
                         padding: "16px",

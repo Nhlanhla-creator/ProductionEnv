@@ -408,8 +408,8 @@ const ProgramSponsorSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, o
                       borderRadius: "50%",
                     }}
                   ></div>
-                  Engage (R{plans.engage.price[billingCycle].toLocaleString()}/
-                  {billingCycle === "monthly" ? "month" : "year"})
+                  Engage {plans.engage.price[billingCycle].toLocaleString()}/
+                  {billingCycle === "monthly" ? "month" : "year"}
                 </div>
               </th>
               <th style={styles.featureTh}>
@@ -422,8 +422,8 @@ const ProgramSponsorSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, o
                       borderRadius: "50%",
                     }}
                   ></div>
-                  Partner (R{plans.partner.price[billingCycle].toLocaleString()}/
-                  {billingCycle === "monthly" ? "month" : "year"})
+                  Partner {plans.partner.price[billingCycle].toLocaleString()}/
+                  {billingCycle === "monthly" ? "month" : "year"}
                 </div>
               </th>
             </tr>
