@@ -864,13 +864,13 @@ const MySubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSidebarTogg
               <th style={styles.featureTh}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
                   <div style={{ width: "12px", height: "12px", background: colors.mediumBrown, borderRadius: "50%" }}></div>
-                  Standard (R{billingCycle === "monthly" ? "450/month" : "4,500/year"})
+                  Standard {billingCycle === "monthly" ? "" : ""}
                 </div>
               </th>
               <th style={styles.featureTh}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
                   <div style={{ width: "12px", height: "12px", background: colors.darkBrown, borderRadius: "50%" }}></div>
-                  Premium (R{billingCycle === "monthly" ? "1,200/month" : "12,000/year"})
+                  Premium {billingCycle === "monthly" ? "" : ""}
                 </div>
               </th>
             </tr>

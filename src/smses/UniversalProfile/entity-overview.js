@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react"
 import { Info, ChevronDown, ChevronUp } from "lucide-react"
+import { db, auth } from '../../firebaseConfig';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 
 // Entity types remain the same
 const entityTypes = [
@@ -214,16 +216,64 @@ function MultiSelect({ options, selected, onChange, label }) {
 }
 
 // Main component
-export default function EntityOverview() {
+export default function EntityOverview({ data = {}, updateData }) {
   const [formData, setFormData] = useState({})
+  const [isLoading, setIsLoading] = useState(true)
+
+  // Update form data and notify parent
+  const updateFormData = (newData) => {
+    setFormData(newData)
+    updateData(newData)
+  }
+
+  // Load data from Firebase
+  useEffect(() => {
+    const loadEntityOverview = async () => {
+      try {
+        setIsLoading(true)
+        const userId = auth.currentUser?.uid
+        
+        if (!userId) {
+          setIsLoading(false)
+          return
+        }
+
+        const docRef = doc(db, "universalProfiles", userId)
+        const docSnap = await getDoc(docRef)
+
+        if (docSnap.exists()) {
+          const profileData = docSnap.data()
+          if (profileData.entityOverview) {
+            updateFormData(profileData.entityOverview)
+          } else {
+            // Initialize with empty data or provided data
+            updateFormData(data)
+          }
+        } else {
+          // No existing document, initialize with provided data
+          updateFormData(data)
+        }
+      } catch (error) {
+        console.error("Error loading entity overview:", error)
+        // Fallback to provided data
+        updateFormData(data)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadEntityOverview()
+  }, [])
 
   const handleChange = (e) => {
     const { name, value } = e.target
-    setFormData({ ...formData, [name]: value })
+    const newData = { ...formData, [name]: value }
+    updateFormData(newData)
   }
 
   const handleMultiSelectChange = (field, value) => {
-    setFormData({ ...formData, [field]: value })
+    const newData = { ...formData, [field]: value }
+    updateFormData(newData)
   }
 
   const inputStyle = {
@@ -232,6 +282,15 @@ export default function EntityOverview() {
     border: '1px solid #ccc',
     borderRadius: '4px',
     fontSize: '14px'
+  }
+
+  if (isLoading) {
+    return (
+      <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
+        <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '24px' }}>Entity Overview</h2>
+        <p>Loading your information...</p>
+      </div>
+    )
   }
 
   return (

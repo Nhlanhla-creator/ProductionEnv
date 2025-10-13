@@ -5,7 +5,7 @@ import { Bar, Line } from "react-chartjs-2"
 import Sidebar from "smses/Sidebar/Sidebar"
 import Header from "../DashboardHeader/DashboardHeader"
 import { db, auth } from "../../firebaseConfig"
-import { collection, addDoc, getDocs, updateDoc, doc, query, where, setDoc } from "firebase/firestore"
+import { collection, addDoc, getDocs, updateDoc, doc, getDoc,query, where, setDoc } from "firebase/firestore"
 import { onAuthStateChanged } from "firebase/auth"
 import {
   Chart as ChartJS,
@@ -1947,7 +1947,91 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
     netProfitBudget: Array(12).fill(""),
     notes: "",
   })
-  const [localChartData, setLocalChartData] = useState({})
+  const [firebaseChartData, setFirebaseChartData] = useState({})
+  const [loading, setLoading] = useState(false)
+
+  // Load PnL data from Firebase when component mounts or user changes
+  useEffect(() => {
+    if (user) {
+      loadPnLDataFromFirebase()
+    }
+  }, [user])
+
+  // Load PnL data from Firebase
+  const loadPnLDataFromFirebase = async () => {
+    if (!user) return
+
+    setLoading(true)
+    try {
+      const pnlManualDoc = await getDoc(doc(db, "financialData", `${user.uid}_pnlManual`))
+
+      if (pnlManualDoc.exists()) {
+        const firebaseData = pnlManualDoc.data()
+        console.log("Loaded PnL data from Firebase:", firebaseData)
+
+        // Update local state with Firebase data
+        setPnlDetails(prev => ({
+          sales: firebaseData.sales?.map(String) || Array(12).fill(""),
+          cogs: firebaseData.cogs?.map(String) || Array(12).fill(""),
+          opex: firebaseData.opex?.map(String) || Array(12).fill(""),
+          grossProfit: firebaseData.grossProfit?.map(String) || Array(12).fill(""),
+          netProfit: firebaseData.netProfit?.map(String) || Array(12).fill(""),
+          salesBudget: firebaseData.salesBudget?.map(String) || Array(12).fill(""),
+          cogsBudget: firebaseData.cogsBudget?.map(String) || Array(12).fill(""),
+          opexBudget: firebaseData.opexBudget?.map(String) || Array(12).fill(""),
+          grossProfitBudget: firebaseData.grossProfitBudget?.map(String) || Array(12).fill(""),
+          netProfitBudget: firebaseData.netProfitBudget?.map(String) || Array(12).fill(""),
+          notes: firebaseData.notes || "",
+        }))
+
+        // Process the data for charts
+        processFirebaseDataForCharts(firebaseData)
+      } else {
+        console.log("No PnL data found in Firebase")
+        // Initialize with empty data
+        setFirebaseChartData({})
+      }
+    } catch (error) {
+      console.error("Error loading PnL data from Firebase:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Process Firebase data for chart display
+  const processFirebaseDataForCharts = (firebaseData) => {
+    const chartData = {
+      sales: {
+        actual: firebaseData.sales?.map(val => Number.parseFloat(val) || 0) || Array(12).fill(0),
+        budget: firebaseData.salesBudget?.map(val => Number.parseFloat(val) || 0) || Array(12).fill(0)
+      },
+      cogs: {
+        actual: firebaseData.cogs?.map(val => Number.parseFloat(val) || 0) || Array(12).fill(0),
+        budget: firebaseData.cogsBudget?.map(val => Number.parseFloat(val) || 0) || Array(12).fill(0)
+      },
+      opex: {
+        actual: firebaseData.opex?.map(val => Number.parseFloat(val) || 0) || Array(12).fill(0),
+        budget: firebaseData.opexBudget?.map(val => Number.parseFloat(val) || 0) || Array(12).fill(0)
+      },
+      grossProfit: {
+        actual: firebaseData.grossProfit?.map(val => Number.parseFloat(val) || 0) || Array(12).fill(0),
+        budget: firebaseData.grossProfitBudget?.map(val => Number.parseFloat(val) || 0) || Array(12).fill(0)
+      },
+      netProfit: {
+        actual: firebaseData.netProfit?.map(val => Number.parseFloat(val) || 0) || Array(12).fill(0),
+        budget: firebaseData.netProfitBudget?.map(val => Number.parseFloat(val) || 0) || Array(12).fill(0)
+      }
+    }
+
+    setFirebaseChartData(chartData)
+
+    // Update parent component's chart data
+    if (onUpdateChartData) {
+      Object.keys(chartData).forEach((key) => {
+        onUpdateChartData(key, chartData[key])
+      })
+    }
+  }
 
   if (activeSection !== "pnl-snapshot") return null
 
@@ -1969,119 +2053,56 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
   // Handle manual data entry
   const handleAddDetails = () => {
     setShowModal(true)
-    // If we have existing data, pre-fill the form
-    if (localChartData.pnlManual) {
-      setPnlDetails(localChartData.pnlManual)
-    }
   }
 
   const handleSavePnlDetails = async () => {
-    const updatedData = {
-      ...pnlDetails,
-      // Convert string values to numbers
-      sales: pnlDetails.sales.map(val => Number.parseFloat(val) || 0),
-      cogs: pnlDetails.cogs.map(val => Number.parseFloat(val) || 0),
-      opex: pnlDetails.opex.map(val => Number.parseFloat(val) || 0),
-      grossProfit: pnlDetails.grossProfit.map(val => Number.parseFloat(val) || 0),
-      netProfit: pnlDetails.netProfit.map(val => Number.parseFloat(val) || 0),
-      salesBudget: pnlDetails.salesBudget.map(val => Number.parseFloat(val) || 0),
-      cogsBudget: pnlDetails.cogsBudget.map(val => Number.parseFloat(val) || 0),
-      opexBudget: pnlDetails.opexBudget.map(val => Number.parseFloat(val) || 0),
-      grossProfitBudget: pnlDetails.grossProfitBudget.map(val => Number.parseFloat(val) || 0),
-      netProfitBudget: pnlDetails.netProfitBudget.map(val => Number.parseFloat(val) || 0),
+    if (!user) {
+      alert("Please log in to save P&L data")
+      return
     }
 
-    // Update chart data with manual entries
-    const manualChartData = {
-      sales: {
-        actual: updatedData.sales,
-        budget: updatedData.salesBudget.length > 0 && updatedData.salesBudget.some(val => val > 0)
-          ? updatedData.salesBudget
-          : updatedData.sales.map(val => val * 1.1)
-      },
-      cogs: {
-        actual: updatedData.cogs,
-        budget: updatedData.cogsBudget.length > 0 && updatedData.cogsBudget.some(val => val > 0)
-          ? updatedData.cogsBudget
-          : updatedData.cogs.map(val => val * 0.9)
-      },
-      opex: {
-        actual: updatedData.opex,
-        budget: updatedData.opexBudget.length > 0 && updatedData.opexBudget.some(val => val > 0)
-          ? updatedData.opexBudget
-          : updatedData.opex.map(val => val * 0.95)
-      },
-      grossProfit: {
-        actual: updatedData.grossProfit,
-        budget: updatedData.grossProfitBudget.length > 0 && updatedData.grossProfitBudget.some(val => val > 0)
-          ? updatedData.grossProfitBudget
-          : updatedData.grossProfit.map(val => val * 1.15)
-      },
-      netProfit: {
-        actual: updatedData.netProfit,
-        budget: updatedData.netProfitBudget.length > 0 && updatedData.netProfitBudget.some(val => val > 0)
-          ? updatedData.netProfitBudget
-          : updatedData.netProfit.map(val => val * 1.2)
-      },
-      pnlManual: updatedData
-    }
-
-    // Update local chart data
-    setLocalChartData(manualChartData)
-
-    // Update parent component's chart data
-    if (onUpdateChartData) {
-      Object.keys(manualChartData).forEach((key) => {
-        if (key !== 'pnlManual') {
-          onUpdateChartData(key, manualChartData[key])
-        }
-      })
-    }
-
-    // Save to Firebase if user is logged in
-    if (user) {
-      try {
-        await setDoc(doc(db, "financialData", `${user.uid}_pnlManual`), {
-          userId: user.uid,
-          chartName: "pnlManual",
-          ...updatedData,
-          lastUpdated: new Date().toISOString()
-        })
-        console.log("P&L manual data saved to Firebase")
-      } catch (error) {
-        console.error("Error saving P&L manual data:", error)
+    setLoading(true)
+    try {
+      // Prepare data for Firebase
+      const firebaseData = {
+        userId: user.uid,
+        chartName: "pnlManual",
+        // Convert string values to numbers for storage
+        sales: pnlDetails.sales.map(val => Number.parseFloat(val) || 0),
+        cogs: pnlDetails.cogs.map(val => Number.parseFloat(val) || 0),
+        opex: pnlDetails.opex.map(val => Number.parseFloat(val) || 0),
+        grossProfit: pnlDetails.grossProfit.map(val => Number.parseFloat(val) || 0),
+        netProfit: pnlDetails.netProfit.map(val => Number.parseFloat(val) || 0),
+        salesBudget: pnlDetails.salesBudget.map(val => Number.parseFloat(val) || 0),
+        cogsBudget: pnlDetails.cogsBudget.map(val => Number.parseFloat(val) || 0),
+        opexBudget: pnlDetails.opexBudget.map(val => Number.parseFloat(val) || 0),
+        grossProfitBudget: pnlDetails.grossProfitBudget.map(val => Number.parseFloat(val) || 0),
+        netProfitBudget: pnlDetails.netProfitBudget.map(val => Number.parseFloat(val) || 0),
+        notes: pnlDetails.notes,
+        lastUpdated: new Date().toISOString()
       }
-    }
 
-    setShowModal(false)
+      // Save to Firebase
+      await setDoc(doc(db, "financialData", `${user.uid}_pnlManual`), firebaseData)
+      console.log("P&L manual data saved to Firebase")
+
+      // Process the saved data for charts
+      processFirebaseDataForCharts(firebaseData)
+
+      setShowModal(false)
+    } catch (error) {
+      console.error("Error saving P&L manual data:", error)
+      alert("Error saving data. Please try again.")
+    } finally {
+      setLoading(false)
+    }
   }
 
-  // Process PnL data - prioritize manual data over uploaded data
+  // Process PnL data - prioritize Firebase data over uploaded data
   const processPnLData = () => {
-    // If we have manual data, use it
-    if (localChartData.pnlManual) {
-      return {
-        sales: {
-          actual: localChartData.pnlManual.sales,
-          budget: localChartData.sales?.budget || localChartData.pnlManual.sales.map(val => val * 1.1)
-        },
-        cogs: {
-          actual: localChartData.pnlManual.cogs,
-          budget: localChartData.cogs?.budget || localChartData.pnlManual.cogs.map(val => val * 0.9)
-        },
-        opex: {
-          actual: localChartData.pnlManual.opex,
-          budget: localChartData.opex?.budget || localChartData.pnlManual.opex.map(val => val * 0.95)
-        },
-        grossProfit: {
-          actual: localChartData.pnlManual.grossProfit,
-          budget: localChartData.grossProfit?.budget || localChartData.pnlManual.grossProfit.map(val => val * 1.15)
-        },
-        netProfit: {
-          actual: localChartData.pnlManual.netProfit,
-          budget: localChartData.netProfit?.budget || localChartData.pnlManual.netProfit.map(val => val * 1.2)
-        },
-      }
+    // If we have Firebase data, use it
+    if (Object.keys(firebaseChartData).length > 0) {
+      return firebaseChartData
     }
 
     // If we have uploaded PnL data, use it
@@ -2139,15 +2160,17 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
 
   // Check if we have any data
   const hasData = () => {
-    return localChartData.pnlManual || (pnlData && (pnlData.sales || pnlData.cogs || pnlData.opex))
+    return Object.keys(firebaseChartData).length > 0 || (pnlData && (pnlData.sales || pnlData.cogs || pnlData.opex))
   }
 
-  // Calculate variance (budget - actual)
+  // ... rest of the component remains the same (calculateVariance, createChartOptions, etc.)
+
+  // Calculate variances
   const calculateVariance = (budget, actual) => {
     return budget.map((b, i) => b - (actual[i] || 0))
   }
 
-  // Chart options
+  // Chart options (keep the existing createChartOptions function)
   const createChartOptions = (title, showNegative = false) => ({
     responsive: true,
     maintainAspectRatio: false,
@@ -2271,6 +2294,25 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
         borderRadius: "8px",
       }}
     >
+      {/* Loading Indicator */}
+      {loading && (
+        <div
+          style={{
+            position: "fixed",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            backgroundColor: "rgba(255, 255, 255, 0.9)",
+            padding: "20px",
+            borderRadius: "8px",
+            zIndex: 1000,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+          }}
+        >
+          <p style={{ margin: 0, color: "#5d4037", fontWeight: "500" }}>Loading P&L Data...</p>
+        </div>
+      )}
+
       {/* Action Button */}
       <div
         style={{
@@ -2281,23 +2323,25 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
       >
         <button
           onClick={handleAddDetails}
+          disabled={loading}
           style={{
             padding: "12px 24px",
             backgroundColor: "#5d4037",
             color: "white",
             border: "none",
             borderRadius: "6px",
-            cursor: "pointer",
+            cursor: loading ? "not-allowed" : "pointer",
             fontWeight: "600",
             fontSize: "14px",
+            opacity: loading ? 0.6 : 1,
           }}
         >
-          ➕ Add/Edit P&L Details
+          {loading ? "Loading..." : "➕ Add/Edit P&L Details"}
         </button>
       </div>
 
       {/* Data Status */}
-      {!hasData() ? (
+      {!user ? (
         <div
           style={{
             backgroundColor: "#fff3cd",
@@ -2310,7 +2354,23 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
           }}
         >
           <p style={{ margin: 0, fontWeight: "500" }}>
-            📊 Click "Add/Edit P&L Details" to enter your Profit & Loss data manually, or upload a CSV file.
+            🔐 Please log in to view and manage your P&L data.
+          </p>
+        </div>
+      ) : !hasData() ? (
+        <div
+          style={{
+            backgroundColor: "#fff3cd",
+            border: "1px solid #ffeaa7",
+            color: "#856404",
+            padding: "15px",
+            borderRadius: "6px",
+            marginBottom: "20px",
+            textAlign: "center",
+          }}
+        >
+          <p style={{ margin: 0, fontWeight: "500" }}>
+            📊 Click "Add/Edit P&L Details" to enter your Profit & Loss data.
           </p>
         </div>
       ) : (
@@ -2325,7 +2385,7 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
           }}
         >
           <p style={{ margin: 0, fontWeight: "500" }}>
-            ✅ {localChartData.pnlManual ? "Showing manually entered P&L data" : "Showing P&L data from uploaded CSV file"}
+            ✅ Showing {Object.keys(firebaseChartData).length > 0 ? "saved P&L data from Firebase" : "P&L data from uploaded CSV file"}
           </p>
         </div>
       )}

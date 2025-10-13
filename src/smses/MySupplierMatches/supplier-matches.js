@@ -126,7 +126,7 @@ export default function SupplierMatchesPage() {
 
   if (!authChecked) {
     return (
-      <div 
+      <div
         style={{
           width: '100%',
           minHeight: '100vh',
@@ -144,7 +144,7 @@ export default function SupplierMatchesPage() {
         }}
         className={styles.loadingContainer}
       >
-        <div 
+        <div
           style={{
             display: 'flex',
             justifyContent: 'center',
@@ -161,14 +161,14 @@ export default function SupplierMatchesPage() {
   }
 
   return (
-    <div 
+    <div
       style={{
         width: '100%',
         minHeight: '100vh',
         maxWidth: '100vw',
         overflowX: 'hidden',
         padding: '80px 10px 20px 280px',
-          marginLeft: '-20px',
+        marginLeft: '-20px',
         boxSizing: 'border-box',
         position: 'relative',
         backgroundImage: "url('../../assets/BiGBackround.png')",
@@ -393,7 +393,7 @@ export default function SupplierMatchesPage() {
         </div>
       )}
 
-      <div 
+      <div
         style={{
           width: '100%',
           maxWidth: '100%',
@@ -403,7 +403,7 @@ export default function SupplierMatchesPage() {
         }}
         className={styles.contentWrapper}
       >
-        <div 
+        <div
           style={{
             width: '100%',
             maxWidth: '100%',
@@ -417,24 +417,25 @@ export default function SupplierMatchesPage() {
           }}
           className={`${styles.sectionCard} ${styles.pipelineSection} ${styles.pipelineCard}`}
         >
-          <div 
+          <div
             style={{
               width: '100%',
               overflow: 'hidden' // Hide scrollbars like customer
             }}
             className={styles.sectionContent}
           >
-            <h2 style={{...headerStyle, margin: '0 0 5px 0'}}>DealFlow Pipeline</h2>
+            <h2 style={{ ...headerStyle, margin: '0 0 5px 0' }}>DealFlow Pipeline</h2>
             <SupplierFlowPipeline
               suppliers={allSuppliers}
+              filteredSuppliers={filteredSuppliers}  // Add this line - CRITICAL!
               contactedSuppliers={contactedSuppliers}
             />
           </div>
         </div>
 
-       
-         
-        <div 
+
+
+        <div
           style={{
             width: '100%',
             maxWidth: '100%',

@@ -7,7 +7,7 @@ import { getAuth } from "firebase/auth";
 import { Info } from 'lucide-react';
 import styles from "./supplierPipeline.module.css";
 
-export function SupplierFlowPipeline({ suppliers = [], contactedSuppliers = [] }) {
+export function SupplierFlowPipeline({ suppliers = [], filteredSuppliers = [], contactedSuppliers = [] }) {
   const [stages, setStages] = useState([
     {
       id: "initial",
@@ -66,6 +66,7 @@ export function SupplierFlowPipeline({ suppliers = [], contactedSuppliers = [] }
       iconColor: "#2e1b13",
     },
   ]);
+
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);

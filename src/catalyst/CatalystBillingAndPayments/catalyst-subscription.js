@@ -450,7 +450,7 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
                   <div
                     style={{ width: "12px", height: "12px", background: colors.mediumBrown, borderRadius: "50%" }}
                   ></div>
-                  Engage (R{billingCycle === "monthly" ? "2,000/month" : "20,000/year"})
+                  Engage {billingCycle === "monthly" ? "" : ""}
                 </div>
               </th>
               <th style={styles.featureTh}>
@@ -458,7 +458,7 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
                   <div
                     style={{ width: "12px", height: "12px", background: colors.darkBrown, borderRadius: "50%" }}
                   ></div>
-                  Partner (R{billingCycle === "monthly" ? "6,500/month" : "65,000/year"})
+                  Partner {billingCycle === "monthly" ? "" : ""}
                 </div>
               </th>
             </tr>
