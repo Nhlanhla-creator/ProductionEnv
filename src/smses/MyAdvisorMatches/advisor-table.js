@@ -515,121 +515,124 @@ const overlapFE = (a, b) => {
   return false;
 };
 
-  function calculateAdvisorMatch(smeProfile, advisorProfile) {
-    const supportFocus = smeProfile.advisoryNeedsAssessment?.supportFocus || []
-    const fundingStage = (smeProfile.entityOverview?.operationStage || "").toLowerCase()
-    const smeSectors = (smeProfile.entityOverview?.economicSectors || []).map((s) => s.toLowerCase())
-    const smeLocation = (smeProfile.entityOverview?.location || "").toLowerCase()
-    const smeLegal = (smeProfile.entityOverview?.legalStructure || "").toLowerCase()
-    const rawRevenue = smeProfile.financialOverview?.annualRevenue || "0"
-    const smeRevenue = Number.parseFloat(rawRevenue.replace(/[Rr\s,]/g, "").trim())
-const smeFunctionalExpertise = (smeProfile.entityOverview || [])
-    const advForm = advisorProfile.formData || {}
-    const contact = advForm.contactDetails || {}
-    const overview = advForm.personalProfessionalOverview || {}
-    const selection = advForm.selectionCriteria || {}
-const smeFE = toArr(smeProfile?.advisoryNeedsAssessment?.functionalExpertise);
-const advisorFE = [
-  ...new Set([
-    ...toArr(overview?.functionalExpertise),
-    ...toArr(selection?.functionalExpertise),
-  ]),
-];
+ function calculateAdvisorMatch(smeProfile, advisorProfile) {
+  const supportFocus = smeProfile.advisoryNeedsAssessment?.advisoryRole || []
+  const fundingStage = (smeProfile.entityOverview?.operationStage || "").toLowerCase()
+  const smeSectors = (smeProfile.entityOverview?.economicSectors || []).map((s) => s.toLowerCase())
+  const smeLocation = (smeProfile.entityOverview?.location || "").toLowerCase()
+  const smeLegal = (smeProfile.entityOverview?.legalStructure || "").toLowerCase()
+  const rawRevenue = smeProfile.financialOverview?.annualRevenue || "0"
+  const smeRevenue = Number.parseFloat(rawRevenue.replace(/[Rr\s,]/g, "").trim())
+  const smeFunctionalExpertise = (smeProfile.entityOverview || [])
+  
+  const advForm = advisorProfile.formData || {}
+  const contact = advForm.contactDetails || {}
+  const overview = advForm.personalProfessionalOverview || {}
+  const selection = advForm.selectionCriteria || {}
+  const advisorRole = advForm.selectionCriteria?.preferredAdvisorRole || []
+  
+  const smeFE = toArr(smeProfile?.advisoryNeedsAssessment?.functionalExpertise);
+  const advisorFE = [
+    ...new Set([
+      ...toArr(overview?.functionalExpertise),
+      ...toArr(selection?.functionalExpertise),
+    ]),
+  ];
 
-    // Initialize breakdown with safe defaults
-    const breakdown = {
-      stageFit: {
-        matched: false,
-        smeValue: fundingStage,
-        advisorValue: selection.smeStageFit || [],
-      },
-      skillAlignment: {
-        matched: false,
-        smeValue: supportFocus,
-        advisorValue: selection.advisorySupportType || [],
-      },
-      location: {
-        matched: false,
-        smeValue: smeLocation,
-        advisorValue: contact.country || "",
-      },
-      sector: {
-        matched: false,
-        smeValue: smeSectors,
-        advisorValue: overview.industryExperience || [],
-      },
-      compensation: {
-        matched: !!selection.compensationModel,
-        advisorValue: selection.compensationModel || "Not specified",
-      },
-      functionalExpertise: {
-        matched: false,
-         smeValue: smeFE ||[],
-        advisorValue: overview.functionalExpertise || [],
-      },
-      legalEntityFit: {
-        matched: false,
-        smeValue: smeLegal,
-        advisorValue: selection.legalEntityFit || "",
-      },
-      revenueThreshold: {
-        matched: false,
-        smeValue: smeRevenue,
-        advisorRange: selection.revenueThreshold || "Not specified",
-      },
-    }
-
-    // Calculate matches with proper null checks
-    breakdown.stageFit.matched = (breakdown.stageFit.advisorValue || [])
-      .map((s) => s?.toLowerCase() || "")
-      .includes(fundingStage)
-
-    breakdown.skillAlignment.matched = (breakdown.skillAlignment.advisorValue || []).some((type) =>
-      supportFocus.includes(type),
-    )
-
-    breakdown.location.matched = (contact.country || "").toLowerCase() === smeLocation
-
-    breakdown.sector.matched = (breakdown.sector.advisorValue || []).some((sector) =>
-      smeSectors.includes((sector || "").toLowerCase()),
-    )
-
-    breakdown.functionalExpertise.matched = overlapFE(
-  breakdown.functionalExpertise.smeValue,
-  breakdown.functionalExpertise.advisorValue,
-);
-
-    breakdown.legalEntityFit.matched = (selection.legalEntityFit || "").toLowerCase() === smeLegal
-
-    // Revenue threshold calculation
-    const revenueBands = {
-      less_than_500k: [0, 500000],
-      "500k_to_1m": [500000, 1000000],
-      less_than_1m: [0, 1000000],
-      "1m_to_5m": [1000000, 5000000],
-      "5m_to_10m": [5000000, 10000000],
-      "10m_plus": [10000000, Number.POSITIVE_INFINITY],
-    }
-
-    const threshold = (selection.revenueThreshold || "").toLowerCase()
-    const [minRev, maxRev] = revenueBands[threshold] || [0, Number.POSITIVE_INFINITY]
-    breakdown.revenueThreshold.matched = smeRevenue >= minRev && smeRevenue <= maxRev
-
-    // Calculate score
-    const score = Object.values(breakdown).filter((item) => item.matched).length
-    const total = Object.keys(breakdown).length
-    const matchScore = Math.round((score / total) * 100)
-
-    console.groupCollapsed(`🧩 Advisor Match Debug: ${contact.name || "Unnamed Advisor"}`)
-    console.log("Breakdown:", breakdown)
-    console.log("Final Score:", matchScore)
-    console.groupEnd()
-
-    return {
-      score: matchScore,
-      breakdown,
-    }
+  // Initialize breakdown with safe defaults
+  const breakdown = {
+    stageFit: {
+      matched: false,
+      smeValue: fundingStage,
+      advisorValue: toArr(selection.smeStageFit), // Ensure it's an array
+    },
+    advisoryRole: {
+      matched: false,
+      smeValue: toArr(supportFocus), // Ensure it's an array
+      advisorValue: toArr(advisorRole), // Ensure it's an array
+    },
+    location: {
+      matched: false,
+      smeValue: smeLocation,
+      advisorValue: contact.country || "",
+    },
+    sector: {
+      matched: false,
+      smeValue: smeSectors,
+      advisorValue: toArr(overview.industryExperience), // Ensure it's an array
+    },
+    compensation: {
+      matched: !!selection.compensationModel,
+      advisorValue: selection.compensationModel || "Not specified",
+    },
+    functionalExpertise: {
+      matched: false,
+      smeValue: toArr(smeFE),
+      advisorValue: toArr(overview.functionalExpertise), // Ensure it's an array
+    },
+    legalEntityFit: {
+      matched: false,
+      smeValue: smeLegal,
+      advisorValue: selection.legalEntityFit || "",
+    },
+    revenueThreshold: {
+      matched: false,
+      smeValue: smeRevenue,
+      advisorRange: selection.revenueThreshold || "Not specified",
+    },
   }
+
+  // Calculate matches with proper null checks
+  breakdown.stageFit.matched = breakdown.stageFit.advisorValue
+    .map((s) => s?.toLowerCase() || "")
+    .includes(fundingStage)
+
+  breakdown.advisoryRole.matched = breakdown.advisoryRole.advisorValue.some((type) =>
+    breakdown.advisoryRole.smeValue.includes(type)
+  )
+
+  breakdown.location.matched = (contact.country || "").toLowerCase() === smeLocation
+
+  breakdown.sector.matched = breakdown.sector.advisorValue.some((sector) =>
+    smeSectors.includes((sector || "").toLowerCase())
+  )
+
+  breakdown.functionalExpertise.matched = overlapFE(
+    breakdown.functionalExpertise.smeValue,
+    breakdown.functionalExpertise.advisorValue,
+  )
+
+  breakdown.legalEntityFit.matched = (selection.legalEntityFit || "").toLowerCase() === smeLegal
+
+  // Revenue threshold calculation
+  const revenueBands = {
+    less_than_500k: [0, 500000],
+    "500k_to_1m": [500000, 1000000],
+    less_than_1m: [0, 1000000],
+    "1m_to_5m": [1000000, 5000000],
+    "5m_to_10m": [5000000, 10000000],
+    "10m_plus": [10000000, Number.POSITIVE_INFINITY],
+  }
+
+  const threshold = (selection.revenueThreshold || "").toLowerCase()
+  const [minRev, maxRev] = revenueBands[threshold] || [0, Number.POSITIVE_INFINITY]
+  breakdown.revenueThreshold.matched = smeRevenue >= minRev && smeRevenue <= maxRev
+
+  // Calculate score
+  const score = Object.values(breakdown).filter((item) => item.matched).length
+  const total = Object.keys(breakdown).length
+  const matchScore = Math.round((score / total) * 100)
+
+  console.groupCollapsed(`🧩 Advisor Match Debug: ${contact.name || "Unnamed Advisor"}`)
+  console.log("Breakdown:", breakdown)
+  console.log("Final Score:", matchScore)
+  console.groupEnd()
+
+  return {
+    score: matchScore,
+    breakdown,
+  }
+}
 
   useEffect(() => {
   const fetchAdvisors = async () => {

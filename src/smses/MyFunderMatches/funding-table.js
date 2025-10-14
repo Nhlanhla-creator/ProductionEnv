@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
-import { Eye, Check, Filter } from "lucide-react"
+import { Eye, Check, Filter,X } from "lucide-react"
 import { createPortal } from "react-dom"
 import { db, storage } from "../../firebaseConfig"
 import {
@@ -19,7 +19,7 @@ import { getAuth } from "firebase/auth"
 import { DOCUMENT_PATHS } from "../../utils/documentUtils"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
 import get from "lodash.get"
-
+import styles from "./funding.module.css";
 const ADJACENT_INDUSTRIES = {
   ict: ["technology", "software", "digital services"],
   education: ["e-learning", "training", "edtech"],
@@ -955,68 +955,61 @@ export const FundingTable = ({ filters = {}, onInsightsData, onPrimaryMatchCount
   // Modify the handleApplyClick function to check for existing applications
   const handleApplyClick = async (funder) => {
     try {
-      const auth = getAuth()
-      const user = auth.currentUser
-      if (!user) throw new Error("User not authenticated")
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) throw new Error("User not authenticated");
 
       // Check if application already exists in either collection
-      const applicationKey = `${funder.funderId}_${funder.name}`
+      const applicationKey = `${funder.funderId}_${funder.name}`;
       if (existingApplications[applicationKey]) {
-        setNotification({
-          type: "warning",
-          message: "You've already submitted an application to this funder.",
-        })
-        return
+        setNotification({ 
+          type: "warning", 
+          message: "You've already submitted an application to this funder." 
+        });
+        return;
       }
 
       const [funderSnap, profileSnap] = await Promise.all([
         getDoc(doc(db, "MyuniversalProfiles", funder.funderId)),
-        getDoc(doc(db, "universalProfiles", user.uid)),
-      ])
+        getDoc(doc(db, "universalProfiles", user.uid))
+      ]);
 
       if (!funderSnap.exists() || !profileSnap.exists()) {
-        throw new Error("Missing funder or profile data")
+        throw new Error("Missing funder or profile data");
       }
 
-      const funderData = funderSnap.data()
-      const profile = profileSnap.data()
-      const coreDocs = funderData.formData?.applicationBrief?.coreDocuments || []
-      const docUploadMap = profile.documentUpload || {}
-      const submitted = []
+      const funderData = funderSnap.data();
+      const profile = profileSnap.data();
+      const coreDocs = funderData.formData?.applicationBrief?.coreDocuments || [];
+      const docUploadMap = profile.documentUpload || {};
+      const submitted = [];
 
       const normalize = (str) =>
-        str
-          ?.toLowerCase()
-          .replace(/[\s_-]/g, "")
-          .trim()
+        str?.toLowerCase().replace(/[\s_-]/g, "").trim();
 
       coreDocs.forEach((docLabel) => {
-        const normalizedLabel = normalize(docLabel)
+        const normalizedLabel = normalize(docLabel);
         const isSubmitted = Object.entries(docUploadMap).some(([key, urls]) => {
-          return (
-            normalize(key) === normalizedLabel &&
-            Array.isArray(urls) &&
-            urls.length > 0 &&
-            urls.some((url) => typeof url === "string" && url.startsWith("http"))
-          )
-        })
+          return normalize(key) === normalizedLabel && Array.isArray(urls) && urls.length > 0 && urls.some(url => typeof url === 'string' && url.startsWith('http'));
+        });
 
-        if (isSubmitted) submitted.push(docLabel)
-      })
+        if (isSubmitted) submitted.push(docLabel);
+      });
 
-      setProfileData(profile)
-      setSubmittedDocuments(submitted)
-      setSelectedDocs([])
+      setProfileData(profile);
+      setSubmittedDocuments(submitted);
+      setSelectedDocs([]);
       setApplyingFunder({
         ...funder,
         fullProfile: funderData.formData,
-        requiredDocuments: coreDocs,
-      })
+        requiredDocuments: coreDocs
+      });
     } catch (err) {
-      console.error("Error in handleApplyClick:", err)
-      setNotification({ type: "error", message: "Failed to load application requirements." })
+      console.error("Error in handleApplyClick:", err);
+      setNotification({ type: "error", message: "Failed to load application requirements." });
     }
-  }
+  };
+
 
   const handleUpload = async (docLabel, file) => {
     const auth = getAuth()
@@ -1101,7 +1094,7 @@ export const FundingTable = ({ filters = {}, onInsightsData, onPrimaryMatchCount
         focusArea: currentBusiness.businessDescription || "Not specified",
         documents: selectedDocs,
         createdAt: new Date().toISOString(),
-        waitingTime: "3-5 days",
+        waitingTime: "unspecified",
       }
 
       // Gather document URLs for the investor
@@ -1605,7 +1598,7 @@ export const FundingTable = ({ filters = {}, onInsightsData, onPrimaryMatchCount
     let sectorScore = 0
     if (matchedSectors.length && !hasExclusion) {
       const matchRatio = matchedSectors.length / sme.economicSectors.length
-      sectorScore = Math.min(matchRatio * 10, 10)
+      sectorScore =10 
     }
     score += sectorScore * weights.sector
     breakdown.sector = {
@@ -1670,6 +1663,8 @@ export const FundingTable = ({ filters = {}, onInsightsData, onPrimaryMatchCount
       breakdown,
     }
   }
+
+  
   const handleViewClick = async (funder) => {
     try {
       const docSnap = await getDoc(doc(db, "MyuniversalProfiles", funder.funderId))
@@ -1718,31 +1713,32 @@ export const FundingTable = ({ filters = {}, onInsightsData, onPrimaryMatchCount
   // Add this function to handle viewing investor details
   const handleViewInvestorDetails = async (funder) => {
     try {
-      setLoading(true)
-      const docRef = doc(db, "MyuniversalProfiles", funder.funderId)
-      const docSnap = await getDoc(docRef)
+      setLoading(true);
+      const docRef = doc(db, "MyuniversalProfiles", funder.funderId);
+      const docSnap = await getDoc(docRef);
 
       if (docSnap.exists()) {
-        const data = docSnap.data()
+        const data = docSnap.data();
         setModalFunder({
           ...funder,
           fullProfile: data.formData || {}, // Fallback to empty object
           matchPercentage: funder.matchPercentage,
-        })
+        });
       } else {
         setModalFunder({
           ...funder,
           fullProfile: null, // Explicitly mark as missing
-        })
+        });
       }
     } catch (err) {
-      console.error("Error loading funder profile", err)
-      setModalFunder(null) // Reset on error
-      setNotification({ type: "error", message: "Failed to load investor details" })
+      console.error("Error loading funder profile", err);
+      setModalFunder(null); // Reset on error
+      setNotification({ type: "error", message: "Failed to load investor details" });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
+
 
   const handleUpdateNextStage = async (funder) => {
     try {
@@ -1901,7 +1897,7 @@ export const FundingTable = ({ filters = {}, onInsightsData, onPrimaryMatchCount
                       <td style={tableCellStyle}>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
                           <div>
-                            <span onClick={() => handleViewInvestorDetails(funder)} style={funderNameStyle}>
+                            <span   onClick={() => handleViewInvestorDetails(funder)} style={funderNameStyle}>
                               <TruncatedText text={funder.name} maxLength={15} />
                             </span>
                           </div>
@@ -2138,6 +2134,830 @@ export const FundingTable = ({ filters = {}, onInsightsData, onPrimaryMatchCount
           </div>
         </div>
       </div>
+
+       {modalFunder && (
+        <div style={modalOverlayStyle} onClick={() => setModalFunder(null)}>
+          <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
+            {/* Modal Header */}
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "32px",
+              paddingBottom: "24px",
+              borderBottom: "3px solid #8d6e63"
+            }}>
+              <h2 style={{
+                fontSize: "32px",
+                fontWeight: "800",
+                color: "#3e2723",
+                margin: 0
+              }}>
+                {modalFunder.name} Investor Profile
+              </h2>
+              <button
+                onClick={() => setModalFunder(null)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "24px",
+                  cursor: "pointer",
+                  color: "#666",
+                  padding: "8px"
+                }}
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* General Information Section */}
+            <div style={{
+              marginBottom: "40px",
+              backgroundColor: "#fff",
+              borderRadius: "16px",
+              padding: "32px",
+              boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)",
+              border: "1px solid #e8e8e8",
+            }}>
+              <h3 style={{
+                margin: "0 0 24px 0",
+                fontSize: "24px",
+                fontWeight: "700",
+                color: "#3e2723",
+                paddingBottom: "16px",
+                borderBottom: "3px solid #8d6e63",
+              }}>
+                General Information
+              </h3>
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                gap: "24px",
+              }}>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Firm Type:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.fundManageOverview?.firmType || "N/A"}
+                  </span>
+                </div>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Legal Entity Type:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.fundManageOverview?.legalEntityType || "N/A"}
+                  </span>
+                </div>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Registered Name:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.fundManageOverview?.registeredName}
+                  </span>
+                </div>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Trading Name:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.fundManageOverview?.tradingName}
+                  </span>
+                </div>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Registration Number:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.fundManageOverview?.registrationNumber}
+                  </span>
+                </div>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Tax Number:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.fundManageOverview?.taxNumber}
+                  </span>
+                </div>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    VAT Number:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.fundManageOverview?.vatRegistrationNumbers}
+                  </span>
+                </div>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Years in Operation:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.fundManageOverview?.yearsInOperation}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Fund Management Overview Section */}
+            <div style={{
+              marginBottom: "40px",
+              backgroundColor: "#fff",
+              borderRadius: "16px",
+              padding: "32px",
+              boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)",
+              border: "1px solid #e8e8e8",
+            }}>
+              <h3 style={{
+                margin: "0 0 24px 0",
+                fontSize: "24px",
+                fontWeight: "700",
+                color: "#3e2723",
+                paddingBottom: "16px",
+                borderBottom: "3px solid #8d6e63",
+              }}>
+                Fund Management Overview
+              </h3>
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                gap: "24px",
+              }}>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Brief Description:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.fundManageOverview?.briefDescription || "N/A"}
+                  </span>
+                </div>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Investor Role:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.fundManageOverview?.investorRole}
+                  </span>
+                </div>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Number of Investments:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.fundManageOverview?.numberOfInvestments}
+                  </span>
+                </div>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Value Deployed:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.fundManageOverview?.valueDeployed}
+                  </span>
+                </div>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Number of Executives:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.fundManageOverview?.numberOfInvestmentExecutives}
+                  </span>
+                </div>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Portfolio Companies:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.fundManageOverview?.portfolioCompanies}
+                  </span>
+                </div>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Additional Services:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.fundManageOverview?.additionalServices?.join(", ")}
+                  </span>
+                </div>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Additional Support:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.fundManageOverview?.additionalSupport?.join(", ")}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Fund Details Section */}
+            {modalFunder.fullProfile?.fundDetails?.funds?.map((fund, index) => (
+              <div key={index} style={{
+                marginBottom: "40px",
+                backgroundColor: "#fff",
+                borderRadius: "16px",
+                padding: "32px",
+                boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)",
+                border: "1px solid #e8e8e8",
+              }}>
+                <h3 style={{
+                  margin: "0 0 24px 0",
+                  fontSize: "24px",
+                  fontWeight: "700",
+                  color: "#3e2723",
+                  paddingBottom: "16px",
+                  borderBottom: "3px solid #8d6e63",
+                }}>
+                  Fund Details {modalFunder.fullProfile?.fundDetails?.funds?.length > 1 ? `#${index + 1}` : ''}
+                </h3>
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                  gap: "24px",
+                }}>
+                  <div>
+                    <span style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}>
+                      Fund Name:
+                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>
+                      {fund.name}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}>
+                      Fund Size:
+                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>
+                      {fund.size}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}>
+                      Fund Structure:
+                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>
+                      {fund.fundStructure}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}>
+                      Legal Structure:
+                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>
+                      {fund.fundLegalStructure}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}>
+                      Minimum Ticket:
+                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>
+                      {fund.minimumTicket}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}>
+                      Maximum Ticket:
+                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>
+                      {fund.maximumTicket}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}>
+                      Average Deal Size:
+                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>
+                      {fund.averageDealSize}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}>
+                      Revenue Threshold:
+                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>
+                      {fund.revenueThreshold}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}>
+                      Follow-on Percentage:
+                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>
+                      {fund.followOnPercentage}%
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}>
+                      Pro Rata Rights:
+                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>
+                      {fund.proRataRights ? "Yes" : "No"}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}>
+                      Reserves for Follow-on:
+                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>
+                      {fund.reservesForFollowOn ? "Yes" : "No"}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}>
+                      Captive Fund:
+                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>
+                      {fund.captiveFund ? "Yes" : "No"}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}>
+                      LP Composition:
+                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>
+                      {fund.lpComposition}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}>
+                      Target Investor Type:
+                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>
+                      {fund.targetInvestorType}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* Investment Preferences Section */}
+            <div style={{
+              marginBottom: "40px",
+              backgroundColor: "#fff",
+              borderRadius: "16px",
+              padding: "32px",
+              boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)",
+              border: "1px solid #e8e8e8",
+            }}>
+              <h3 style={{
+                margin: "0 0 24px 0",
+                fontSize: "24px",
+                fontWeight: "700",
+                color: "#3e2723",
+                paddingBottom: "16px",
+                borderBottom: "3px solid #8d6e63",
+              }}>
+                Investment Preferences
+              </h3>
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                gap: "24px",
+              }}>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Investment Focus:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.generalInvestmentPreference?.investmentFocus || "N/A"}
+                  </span>
+                </div>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Investment Stage:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.generalInvestmentPreference?.investmentStage?.join(", ")}
+                  </span>
+                </div>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Sector Focus:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.generalInvestmentPreference?.sectorFocus?.join(", ")}
+                  </span>
+                </div>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Geographic Focus:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.generalInvestmentPreference?.geographicFocus?.join(", ")}
+                  </span>
+                </div>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Risk Appetite:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.generalInvestmentPreference?.riskAppetite}
+                  </span>
+                </div>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Legal Entity Fit:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.generalInvestmentPreference?.legalEntityFit}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Application Brief Section */}
+            <div style={{
+              marginBottom: "40px",
+              backgroundColor: "#fff",
+              borderRadius: "16px",
+              padding: "32px",
+              boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)",
+              border: "1px solid #e8e8e8",
+            }}>
+              <h3 style={{
+                margin: "0 0 24px 0",
+                fontSize: "24px",
+                fontWeight: "700",
+                color: "#3e2723",
+                paddingBottom: "16px",
+                borderBottom: "3px solid #8d6e63",
+              }}>
+                Application Process
+              </h3>
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                gap: "24px",
+              }}>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Application Window:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.applicationBrief?.applicationWindow}
+                  </span>
+                </div>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Typical Deal Closing Time:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.applicationBrief?.typicalDealClosingTime}
+                  </span>
+                </div>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Estimated Review Time:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.applicationBrief?.estimatedReviewTime}
+                  </span>
+                </div>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Overview & Objectives:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.applicationBrief?.overviewObjectives}
+                  </span>
+                </div>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Evaluation Criteria:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.applicationBrief?.evaluationCriteria}
+                  </span>
+                </div>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Impact Alignment:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.applicationBrief?.impactAlignment}
+                  </span>
+                </div>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Instructions for Applying:
+                  </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.applicationBrief?.instructionsForApplying}
+                  </span>
+                </div>
+                <div>
+                  <span style={{
+                    display: "block",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    marginBottom: "8px",
+                  }}>
+                    Required Documents:
+                  </span>
+                  <div style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.fullProfile?.applicationBrief?.coreDocuments?.length > 0 ? (
+                      <ul style={{ margin: 0, paddingLeft: "20px" }}>
+                        {modalFunder.fullProfile?.applicationBrief?.coreDocuments.map((doc, index) => (
+                          <li key={index}>{doc}</li>
+                        ))}
+                      </ul>
+                    ) : "N/A"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              marginTop: "40px",
+              paddingTop: "24px",
+              borderTop: "1px solid #e0e0e0"
+            }}>
+              <button
+                onClick={() => setModalFunder(null)}
+                style={{
+                  background: "linear-gradient(135deg, #5d4037 0%, #4e342e 100%)",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "12px",
+                  padding: "16px 32px",
+                  fontSize: "18px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                  transition: "all 0.3s ease",
+                  boxShadow: "0 4px 16px rgba(93, 64, 55, 0.3)",
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {mounted &&
         showBreakdownModal &&
@@ -2590,6 +3410,8 @@ export const FundingTable = ({ filters = {}, onInsightsData, onPrimaryMatchCount
           document.body,
         )}
 
+        
+
       {mounted &&
         showFilterModal &&
         createPortal(
@@ -2705,7 +3527,100 @@ export const FundingTable = ({ filters = {}, onInsightsData, onPrimaryMatchCount
           document.body,
         )}
 
-      {/* ... existing modal code ... */}
+          {applyingFunder && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <div className={styles.modalHeader}>
+              <h3>Application to {applyingFunder.name}</h3>
+              <button onClick={() => setApplyingFunder(null)}>✖</button>
+            </div>
+
+            <div className={styles.modalBody}>
+              <div className={styles.documentsSection}>
+                <h4>Required Documents</h4>
+                <p>Please ensure all documents are uploaded before submitting</p>
+
+                <div className={styles.documentsList}>
+                  {applyingFunder.requiredDocuments?.map((docLabel) => {
+                    const submitted = submittedDocuments.includes(docLabel);
+                    const path = DOCUMENT_PATHS[docLabel];
+                    const docUrl = profileData && get(profileData, path)?.[0];
+                    const lastUpdated = profileData && get(profileData, `${path}UpdatedAt`);
+                    const formattedDate = lastUpdated?.seconds
+                      ? new Date(lastUpdated.seconds * 1000).toLocaleDateString()
+                      : null;
+
+                    return (
+                      <div key={docLabel} className={styles.documentItem}>
+                        <div className={styles.documentStatus}>
+                          <input
+                            type="checkbox"
+                            checked={selectedDocs.includes(docLabel)}
+                            disabled={!submitted}
+                            onChange={() => toggleDocumentSelection(docLabel)}
+                            className={styles.checkbox}
+                          />
+                          <span className={styles.documentName}>
+                            {formatDocumentLabel(docLabel)}
+                          </span>
+                          {submitted && formattedDate && (
+                            <span className={styles.documentDate}>
+                              (Uploaded {formattedDate})
+                            </span>
+                          )}
+                        </div>
+
+                        {submitted ? (
+                          <a
+                            href={docUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={styles.viewLink}
+                          >
+                            <Eye size={16} /> View
+                          </a>
+                        ) : (
+                          <div className={styles.uploadContainer}>
+                            <input
+                              type="file"
+                              id={`file-upload-${docLabel}`}
+                              onChange={(e) => handleUpload(docLabel, e.target.files[0])}
+                              accept=".pdf,.doc,.docx"
+                              className={styles.fileInput}
+                            />
+                            <label
+                              htmlFor={`file-upload-${docLabel}`}
+                              className={styles.uploadButton}
+                            >
+                              Upload
+                            </label>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.modalActions}>
+              <button
+                onClick={() => submitApplication(applyingFunder)}
+                className={styles.submitButton}
+                disabled={selectedDocs.length === 0}
+              >
+                Submit Application
+              </button>
+              <button
+                onClick={() => setApplyingFunder(null)}
+                className={styles.cancelButton}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
