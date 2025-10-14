@@ -216,7 +216,7 @@ const VerificationScoreCard = ({ profileData }) => {
                         </h3>
                     </div>
 
-                    {/* Score Display */}
+                    {/* Score Display - Updated: Removed percentage from circle */}
                     <div style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -231,7 +231,7 @@ const VerificationScoreCard = ({ profileData }) => {
                             width: "80px",
                             height: "80px",
                             borderRadius: "50%",
-                            background: tierInfo.color, // FIX: Use tierInfo.color instead of getScoreColor()
+                            background: tierInfo.color,
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
@@ -240,7 +240,7 @@ const VerificationScoreCard = ({ profileData }) => {
                             color: getScoreTextColor(),
                             boxShadow: '0 8px 24px rgba(0,0,0,0.1)'
                         }}>
-                            {verificationScore}% {/* FIX: Use verificationScore instead of animatedScore */}
+                            {/* Percentage removed - now just an empty colored circle */}
                         </div>
                         <div>
                             <div style={{
@@ -256,7 +256,7 @@ const VerificationScoreCard = ({ profileData }) => {
                                     fontWeight: '600',
                                     color: '#4a352f'
                                 }}>
-                                    {tierInfo.tier} {/* FIX: Use tierInfo.tier instead of tierInfo.name */}
+                                    {tierInfo.tier}
                                 </h4>
                             </div>
                             <p style={{
@@ -269,7 +269,7 @@ const VerificationScoreCard = ({ profileData }) => {
                         </div>
                     </div>
 
-                    {/* Verification Checklist */}
+                    {/* Rest of the modal content remains the same */}
                     <div style={{ marginBottom: '24px' }}>
                         <h4 style={{
                             color: "#4a352f",
@@ -386,7 +386,6 @@ const VerificationScoreCard = ({ profileData }) => {
                         </div>
                     </div>
 
-
                     {/* Verification Info */}
                     <div style={{
                         padding: "16px",
@@ -477,141 +476,141 @@ const VerificationScoreCard = ({ profileData }) => {
     };
 
     return (
-        <>
-            <div style={{
-                background: 'linear-gradient(135deg, #faf7f2 0%, #f5f0e1 100%)',
-                borderRadius: '20px',
-                padding: '24px',
-                boxShadow: '0 20px 40px rgba(74, 53, 47, 0.1), 0 8px 16px rgba(74, 53, 47, 0.06)',
-                border: '1px solid rgba(200, 182, 166, 0.3)',
-                position: 'relative',
-                transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-                cursor: 'pointer',
-                maxWidth: '400px'
+    <>
+        <div style={{
+            background: 'linear-gradient(135deg, #faf7f2 0%, #f5f0e1 100%)',
+            borderRadius: '20px',
+            padding: '24px',
+            boxShadow: '0 20px 40px rgba(74, 53, 47, 0.1), 0 8px 16px rgba(74, 53, 47, 0.06)',
+            border: '1px solid rgba(200, 182, 166, 0.3)',
+            position: 'relative',
+            transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+            cursor: 'pointer',
+            maxWidth: '400px'
+        }}
+            onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-8px)';
+                e.currentTarget.style.boxShadow = '0 32px 64px rgba(74, 53, 47, 0.15), 0 16px 32px rgba(74, 53, 47, 0.1)';
             }}
-                onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'translateY(-8px)';
-                    e.currentTarget.style.boxShadow = '0 32px 64px rgba(74, 53, 47, 0.15), 0 16px 32px rgba(74, 53, 47, 0.1)';
-                }}
-                onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = '0 20px 40px rgba(74, 53, 47, 0.1), 0 8px 16px rgba(74, 53, 47, 0.06)';
-                }}
-                onClick={() => setShowModal(true)}>
+            onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 20px 40px rgba(74, 53, 47, 0.1), 0 8px 16px rgba(74, 53, 47, 0.06)';
+            }}
+            onClick={() => setShowModal(true)}>
 
-                {/* Background Pattern */}
+            {/* Background Pattern */}
+            <div style={{
+                position: 'absolute',
+                top: 0,
+                right: 0,
+                width: '120px',
+                height: '120px',
+                background: 'radial-gradient(circle, rgba(74, 53, 47, 0.1) 0%, transparent 70%)',
+                borderRadius: '50%',
+                transform: 'translate(40px, -40px)'
+            }} />
+
+            <div style={{ display: "flex", alignItems: "center", gap: "20px", position: 'relative', zIndex: 2 }}>
                 <div style={{
-                    position: 'absolute',
-                    top: 0,
-                    right: 0,
-                    width: '120px',
-                    height: '120px',
-                    background: 'radial-gradient(circle, rgba(74, 53, 47, 0.1) 0%, transparent 70%)',
-                    borderRadius: '50%',
-                    transform: 'translate(40px, -40px)'
-                }} />
-
-                <div style={{ display: "flex", alignItems: "center", gap: "20px", position: 'relative', zIndex: 2 }}>
+                    width: "90px",
+                    height: "90px",
+                    borderRadius: "50%",
+                    background: tierInfo.color,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "24px",
+                    fontWeight: "700",
+                    color: '#ffffff',
+                    boxShadow: '0 8px 32px rgba(74, 53, 47, 0.2)',
+                    position: 'relative',
+                    overflow: 'hidden'
+                }}>
                     <div style={{
-                        width: "90px",
-                        height: "90px",
-                        borderRadius: "50%",
-                        background: tierInfo.color,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: "24px",
-                        fontWeight: "700",
-                        color: '#ffffff',
-                        boxShadow: '0 8px 32px rgba(74, 53, 47, 0.2)',
-                        position: 'relative',
-                        overflow: 'hidden'
-                    }}>
-                        <div style={{
-                            position: 'absolute',
-                            inset: 0,
-                            background: 'conic-gradient(from 0deg, transparent, rgba(255,255,255,0.2), transparent)',
-                            borderRadius: '50%',
-                            animation: 'spin 3s linear infinite'
-                        }} />
-                        {tierInfo.status}
-                    </div>
-
-                    <div style={{ flex: 1 }}>
-                        <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            marginBottom: '8px'
-                        }}>
-                            <Shield size={20} color="#4a352f" />
-                            <h3 style={{
-                                margin: 0,
-                                fontSize: "20px",
-                                fontWeight: "600",
-                                color: "#4a352f"
-                            }}>
-                                Investor Verification
-                            </h3>
-                        </div>
-                        <p style={{
-                            margin: "0",
-                            fontSize: "14px",
-                            color: "#7d5a50",
-                            fontWeight: '500',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                        }}>
-                            <span>{tierInfo.badge}</span> {tierInfo.tier}
-                        </p>
-                        <p style={{
-                            margin: "4px 0 0 0",
-                            fontSize: "12px",
-                            color: "#7d5a50"
-                        }}>
-                            {tierInfo.description}
-                        </p>
-                    </div>
+                        position: 'absolute',
+                        inset: 0,
+                        background: 'conic-gradient(from 0deg, transparent, rgba(255,255,255,0.2), transparent)',
+                        borderRadius: '50%',
+                        animation: 'spin 3s linear infinite'
+                    }} />
+                    {/* Percentage removed - now just an empty colored circle */}
                 </div>
 
-                <button
-                    onClick={() => setShowModal(true)}
-                    style={{
-                        width: '100%',
-                        marginTop: '20px',
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: 'center',
-                        gap: "8px",
-                        padding: "12px 20px",
-                        background: 'linear-gradient(135deg, #4a352f, #7d5a50)',
-                        color: "#faf7f2",
-                        border: "none",
-                        borderRadius: "12px",
+                <div style={{ flex: 1 }}>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        marginBottom: '8px'
+                    }}>
+                        <Shield size={20} color="#4a352f" />
+                        <h3 style={{
+                            margin: 0,
+                            fontSize: "20px",
+                            fontWeight: "600",
+                            color: "#4a352f"
+                        }}>
+                            Investor Verification
+                        </h3>
+                    </div>
+                    <p style={{
+                        margin: "0",
                         fontSize: "14px",
-                        fontWeight: "600",
-                        cursor: "pointer",
-                        transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                        boxShadow: '0 4px 16px rgba(74, 53, 47, 0.3)'
-                    }}
-                    onMouseEnter={(e) => {
-                        e.target.style.transform = 'translateY(-2px)';
-                        e.target.style.boxShadow = '0 8px 24px rgba(74, 53, 47, 0.4)';
-                    }}
-                    onMouseLeave={(e) => {
-                        e.target.style.transform = 'translateY(0)';
-                        e.target.style.boxShadow = '0 4px 16px rgba(74, 53, 47, 0.3)';
-                    }}
-                >
-                    View Detailed Breakdown
-                    <ChevronDown size={16} />
-                </button>
+                        color: "#7d5a50",
+                        fontWeight: '500',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                    }}>
+                        <span>{tierInfo.badge}</span> {tierInfo.tier}
+                    </p>
+                    <p style={{
+                        margin: "4px 0 0 0",
+                        fontSize: "12px",
+                        color: "#7d5a50"
+                    }}>
+                        {tierInfo.description}
+                    </p>
+                </div>
             </div>
 
-            <VerificationModal />
-        </>
-    );
+            <button
+                onClick={() => setShowModal(true)}
+                style={{
+                    width: '100%',
+                    marginTop: '20px',
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: 'center',
+                    gap: "8px",
+                    padding: "12px 20px",
+                    background: 'linear-gradient(135deg, #4a352f, #7d5a50)',
+                    color: "#faf7f2",
+                    border: "none",
+                    borderRadius: "12px",
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                    boxShadow: '0 4px 16px rgba(74, 53, 47, 0.3)'
+                }}
+                onMouseEnter={(e) => {
+                    e.target.style.transform = 'translateY(-2px)';
+                    e.target.style.boxShadow = '0 8px 24px rgba(74, 53, 47, 0.4)';
+                }}
+                onMouseLeave={(e) => {
+                    e.target.style.transform = 'translateY(0)';
+                    e.target.style.boxShadow = '0 4px 16px rgba(74, 53, 47, 0.3)';
+                }}
+            >
+                View Detailed Breakdown
+                <ChevronDown size={16} />
+            </button>
+        </div>
+
+        <VerificationModal />
+    </>
+);
 };
 
 export default VerificationScoreCard;
