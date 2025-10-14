@@ -1646,7 +1646,7 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
                 action: "Application Received",
                 availableDates: availabilityData,
                 locationFlexibility:
-                  applicationData.locationFlexibility?.[0] || skillsInterests.locationPreference || "Not specified",
+                  applicationData.locationFlexibility || skillsInterests.locationPreference || "Not specified",
                 matchAnalysis: applicationData.matchAnalysis || null,
 
                 // Profile information

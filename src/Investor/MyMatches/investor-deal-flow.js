@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { MessageCircle, X, ChevronRight, Info, FileText } from "lucide-react";
 import styles from "./DealFlowPipeline.module.css";
 import { db } from "../../firebaseConfig";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
 export default function InvestorDealFlowPipeline({ onStageClick }) {
@@ -14,13 +14,100 @@ export default function InvestorDealFlowPipeline({ onStageClick }) {
   const [stageCounts, setStageCounts] = useState({});
   const [loading, setLoading] = useState(true);
 
+  // Add the calculateHybridScore function
+  const calculateHybridScore = (investorProfile, smeProfile) => {
+    if (!investorProfile || !smeProfile) return 0;
+
+    let totalScore = 0;
+    let maxPossibleScore = 0;
+
+    // 1. Sector Match (30% weight)
+    const investorSectors = Array.isArray(investorProfile.generalInvestmentPreference?.sectorFocus)
+      ? investorProfile.generalInvestmentPreference.sectorFocus.map(s => s?.toLowerCase().trim())
+      : [];
+    
+    const smeSectors = Array.isArray(smeProfile.entityOverview?.economicSectors)
+      ? smeProfile.entityOverview.economicSectors.map(s => s?.toLowerCase().trim())
+      : [];
+
+    const sectorMatch = investorSectors.some(invSector => 
+      smeSectors.some(smeSector => smeSector.includes(invSector) || invSector.includes(smeSector))
+    ) ? 30 : 0;
+
+    totalScore += sectorMatch;
+    maxPossibleScore += 30;
+
+    // 2. Stage Match (25% weight)
+    const investorStages = Array.isArray(investorProfile.generalInvestmentPreference?.investmentStage)
+      ? investorProfile.generalInvestmentPreference.investmentStage.map(s => s?.toLowerCase().trim())
+      : [];
+    
+    const smeStage = smeProfile.applicationOverview?.fundingStage?.toLowerCase().trim() || '';
+
+    const stageMatch = investorStages.some(invStage => 
+      smeStage.includes(invStage) || invStage.includes(smeStage)
+    ) ? 25 : 0;
+
+    totalScore += stageMatch;
+    maxPossibleScore += 25;
+
+    // 3. Ticket Size Match (25% weight)
+    const investorMinTicket = parseFloat(
+      investorProfile.fundDetails?.funds?.[0]?.minimumTicket?.replace(/[^\d.]/g, '') || 0
+    );
+    const investorMaxTicket = parseFloat(
+      investorProfile.fundDetails?.funds?.[0]?.maximumTicket?.replace(/[^\d.]/g, '') || Infinity
+    );
+    
+    const smeAmount = parseFloat(
+      smeProfile.useOfFunds?.amountRequested?.replace(/[^\d.]/g, '') || 0
+    );
+
+    let ticketScore = 0;
+    if (smeAmount >= investorMinTicket && smeAmount <= investorMaxTicket) {
+      ticketScore = 25;
+    } else if (investorMinTicket > 0 && investorMaxTicket < Infinity) {
+      // Partial score based on proximity to range
+      const range = investorMaxTicket - investorMinTicket;
+      const distance = smeAmount < investorMinTicket 
+        ? investorMinTicket - smeAmount 
+        : smeAmount - investorMaxTicket;
+      const penalty = Math.min((distance / range) * 25, 25);
+      ticketScore = Math.max(0, 25 - penalty);
+    }
+
+    totalScore += ticketScore;
+    maxPossibleScore += 25;
+
+    // 4. Instrument Match (20% weight)
+    const investorInstruments = Array.isArray(investorProfile.generalInvestmentPreference?.investmentFocusSubtype)
+      ? investorProfile.generalInvestmentPreference.investmentFocusSubtype.map(i => i?.toLowerCase().trim())
+      : [];
+    
+    const smeInstruments = Array.isArray(smeProfile.useOfFunds?.fundingInstruments)
+      ? smeProfile.useOfFunds.fundingInstruments.map(i => i?.toLowerCase().trim())
+      : [];
+
+    const instrumentMatch = investorInstruments.some(invInstrument => 
+      smeInstruments.some(smeInstrument => smeInstrument.includes(invInstrument) || invInstrument.includes(smeInstrument))
+    ) ? 20 : 0;
+
+    totalScore += instrumentMatch;
+    maxPossibleScore += 20;
+
+    // Calculate final percentage
+    const finalScore = maxPossibleScore > 0 ? (totalScore / maxPossibleScore) * 100 : 0;
+    
+    return Math.round(finalScore);
+  };
+
   const fetchStageCounts = async () => {
     const auth = getAuth();
     const user = auth.currentUser;
     if (!user) return;
 
     const counts = {
-      initial: 0,        // Total SMEs
+      initial: 0,        // High matches (>50%)
       application: 0,    // Applications received
       review: 0,         // Under Review
       approved: 0,       // Funding approved
@@ -29,26 +116,70 @@ export default function InvestorDealFlowPipeline({ onStageClick }) {
       withdrawn: 0       // Declined / Deal Declined
     };
 
-    try {
-      // 1. Count all SMEs in universalProfiles
-      const smeSnapshot = await getDocs(collection(db, "universalProfiles"));
-      counts.initial = smeSnapshot.size;
+     try {
+      // 1. Get investor profile first
+      const investorProfileRef = doc(db, "MyuniversalProfiles", user.uid);
+      const investorProfileSnap = await getDoc(investorProfileRef);
+      const investorProfile = investorProfileSnap.exists() ? investorProfileSnap.data().formData : null;
 
-      // 2. Get all investorApplications for the current investor
+      // 2. Count all SMEs in universalProfiles and calculate matches
+      const smeSnapshot = await getDocs(collection(db, "universalProfiles"));
+      
+      if (investorProfile) {
+        // Calculate matches for each SME
+        let highMatchCount = 0;
+        
+        for (const smeDoc of smeSnapshot.docs) {
+          const smeProfile = smeDoc.data();
+          const matchScore = calculateHybridScore(investorProfile, smeProfile);
+          
+          if (matchScore > 50) {
+            highMatchCount++;
+          }
+        }
+        
+        counts.initial = highMatchCount;
+      } else {
+        counts.initial = 0;
+      }
+
+      // 3. Get all investorApplications for the current investor
       const appQuery = query(collection(db, "investorApplications"), where("funderId", "==", user.uid));
       const appSnapshot = await getDocs(appQuery);
 
       counts.application = appSnapshot.size;
 
       appSnapshot.forEach((doc) => {
-        const pipelineStage = doc.data().pipelineStage?.toLowerCase();
+        const data = doc.data();
+        const pipelineStage = data.pipelineStage?.toLowerCase();
+        const status = data.status?.toLowerCase();
 
+        console.log(`App ${doc.id}:`, { 
+          pipelineStage, 
+          status,
+          stage: data.stage,
+          nextStage: data.nextStage 
+        });
+
+        // Count based on pipelineStage first, then fall back to status/stage
         if (pipelineStage === "under review") counts.review++;
-        if (pipelineStage === "funding approved") counts.approved++;
-        if (pipelineStage === "deals initiated") counts.feedback++;
-        if (pipelineStage === "deals closed") counts.deals++;
-        if (pipelineStage === "declined" || pipelineStage === "deal declined") counts.withdrawn++;
+        else if (pipelineStage === "due diligence" || pipelineStage === "diligence") counts.diligence++;
+        else if (pipelineStage === "funding approved" || pipelineStage === "approved") counts.approved++;
+        else if (pipelineStage === "termsheet" || pipelineStage === "term sheet" || pipelineStage === "terms issue") counts.feedback++;
+        else if (pipelineStage === "deal complete" || pipelineStage === "deals closed" || pipelineStage === "Deal Complete") counts.deals++;
+        else if (pipelineStage === "declined" || pipelineStage === "deal declined") counts.withdrawn++;
+        
+        // Fallback: check status and stage fields if pipelineStage is not set
+        else if (status === "under review") counts.review++;
+        else if (status === "due diligence") counts.diligence++;
+        else if (status === "approved" || data.stage === "Funding Approved") counts.approved++;
+        else if (data.stage === "Termsheet" || data.nextStage === "Termsheet") counts.feedback++;
+        else if (status === "declined" || data.stage === "Deal Declined") counts.withdrawn++;
       });
+
+      // Debug log to see what's being counted
+      console.log("Stage counts:", counts);
+      console.log("Total applications:", appSnapshot.size);
 
       setStageCounts(counts);
     } catch (err) {
@@ -65,54 +196,67 @@ export default function InvestorDealFlowPipeline({ onStageClick }) {
   const stages = [
     {
       id: "initial",
-      name: "Matching",
-
+      name: "Matches",
+      count: 0,
+      description: "SMEs with >50% match score based on your investment criteria",
       colorClass: styles.stageInitial,
       iconColor: "#8d6e63"
     },
     {
       id: "application",
-      name: "Applications",
-     
+      name: "Application",
+      count: 0,
+      description: "Applications received from SMEs",
       colorClass: styles.stageApplication,
       iconColor: "#795548"
     },
     {
       id: "review",
-      name: "Under Review",
-
+      name: "Evaluation",
+      count: 0,
+      description: "Applications under review",
       colorClass: styles.stageReview,
       iconColor: "#6d4c41"
     },
     {
-      id: "approved",
-      name: "Funding Approved",
-    
+      id: "diligence",
+      name: "Due Diligence",
+      count: 0,
+      description: "Applications in due diligence phase",
       colorClass: styles.stageApproved,
       iconColor: "#5d4037"
     },
     {
-      id: "feedback",
-      name: "Deals Initiated",
-
-      hasMessages: true,
+      id: "approved",
+      name: "Decision",
+      count: 0,
+      description: "Funding decisions made",
       colorClass: styles.stageFeedback,
       iconColor: "#4e342e"
     },
     {
-      id: "deals",
-      name: "Deals Closed",
-
+      id: "feedback",
+      name: "Terms Issue",
+      count: 0,
+      description: "Termsheets issued to SMEs",
       colorClass: styles.stageDeals,
       iconColor: "#3e2723"
     },
     {
+      id: "deals",
+      name: "Deals Closed",
+      count: 0,
+      description: "Successfully closed deals",
+      colorClass: styles.stageDeals,
+      iconColor: "#2e1b13"
+    },
+    {
       id: "withdrawn",
       name: "Withdrawn/Declined",
-   
-      showRejectionInfo: true,
+      count: 0,
+      description: "Declined or withdrawn applications",
       colorClass: styles.stageWithdrawn,
-      iconColor: "#2e1b13"
+      iconColor: "#1e0e09"
     },
   ];
 
@@ -173,8 +317,7 @@ export default function InvestorDealFlowPipeline({ onStageClick }) {
             <div
               key={stage.id}
               className={`${styles.pipelineStage} ${stage.colorClass}`}
-              onMouseEnter={() => setHoveredStage(stage.id)}
-              onMouseLeave={() => setHoveredStage(null)}
+              
               onClick={() => handleStageClick(stage)}
             >
               <div className={styles.stageCard}>
@@ -195,9 +338,11 @@ export default function InvestorDealFlowPipeline({ onStageClick }) {
               </div>
 
               {/* Tooltip for stage description */}
-              <div className={styles.stageTooltip}>
-                {stage.description}
-              </div>
+              {hoveredStage === stage.id && (
+                <div className={styles.stageTooltip}>
+                  {stage.description}
+                </div>
+              )}
             </div>
           ))}
         </div>
