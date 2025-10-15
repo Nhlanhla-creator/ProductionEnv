@@ -5,6 +5,7 @@ import { ChevronDown, RefreshCw, AlertCircle, CheckCircle, TrendingUp } from 'lu
 import { db, auth } from "../../firebaseConfig";
 import { doc, onSnapshot, updateDoc, setDoc, getDoc } from "firebase/firestore";
 import { API_KEYS } from '../../API';
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 export function PISScoreCard({ styles, profileData, onScoreUpdate ,apiKey}) {
   const [showModal, setShowModal] = useState(false);
@@ -74,47 +75,21 @@ useEffect(() => {
     }
   };
 
-  const sendMessageToChatGPT = async (message) => {
-    const API_URL = 'https://api.openai.com/v1/chat/completions';
-
-    try {
-      const response = await fetch(API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey.trim()}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o',
-          messages: [
-            {
-              role: 'system',
-              content: `You are an expert governance analyst evaluating Public Interest Scores (PIS) for businesses.
-              Calculate the PIS score based on: Employees + (Turnover/R1m) + (Liabilities/R1m) + Shareholders.
-              Then evaluate governance maturity based on the PIS level using the exact rubric provided.
-              Provide specific scores and detailed rationales for each category.`
-            },
-            {
-              role: 'user',
-              content: message,
-            },
-          ],
-          max_tokens: 2000,
-          temperature: 0.3,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data.choices[0].message.content;
-    } catch (error) {
-      console.error('ChatGPT API Error:', error);
-      throw error;
-    }
-  };
+const sendMessageToChatGPT = async (message) => {
+  try {
+    const functions = getFunctions(); // optionally: getFunctions(undefined, "us-central1")
+    const fn = httpsCallable(functions, "generateGovernanceAnalysis");
+    const resp = await fn({ prompt: message });
+    const content = resp?.data?.content;
+    if (!content) throw new Error("Empty response from analysis function.");
+    return content;
+  } catch (err) {
+    console.error("Callable error:", err);
+    throw new Error(
+      err?.message || "Failed to generate governance analysis."
+    );
+  }
+};
 
   const parseAiEvaluation = (text) => {
   const raw = text || "";

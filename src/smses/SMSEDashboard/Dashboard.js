@@ -14,7 +14,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
 import { X, ChevronRight, Info, Smile, Star, ShieldCheck, ChevronDown, ChevronUp, FileText, TrendingUp, AlertCircle, CheckCircle, Download, Calendar, Bus } from "lucide-react"
 import "./Dashboard.css"
-
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 // Add this import at the top with your other imports
 import { useApiKey } from "./callapi"
@@ -30,57 +30,18 @@ import { API_KEYS } from "../../API"
 
 // const apiKey = API_KEYS.OPENAI;
 
-const sendMessageToChatGPT = async (message, apiKey) => {
-  const API_URL = 'https://api.openai.com/v1/chat/completions';
-
+const sendMessageToChatGPT = async (message /*, apiKey not needed */) => {
   try {
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey.trim()}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an expert business analyst specializing in fundability assessment. Provide detailed, professional evaluations based on the BIG Fundability Scorecard rubric.'
-          },
-          {
-            role: 'user',
-            content: message,
-          },
-        ],
-        max_tokens: 2000,
-        temperature: 0.3,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => null);
-
-      if (response.status === 401) {
-        throw new Error('Invalid API key. Please check your OpenAI API key.');
-      } else if (response.status === 429) {
-        throw new Error('Rate limit exceeded. Please try again later.');
-      } else if (response.status === 403) {
-        throw new Error('Access denied. Please check your API key permissions.');
-      } else {
-        throw new Error(errorData?.error?.message || `HTTP error! status: ${response.status}`);
-      }
-    }
-
-    const data = await response.json();
-
-    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-      throw new Error('Invalid response format from OpenAI API');
-    }
-
-    return data.choices[0].message.content;
-  } catch (error) {
-    console.error('ChatGPT API Error:', error);
-    throw error;
+    const functions = getFunctions(); // or getFunctions(undefined, "us-central1") if you deploy there
+    const call = httpsCallable(functions, "generateSummaryText");
+    const resp = await call({ prompt: message });
+    const content = resp?.data?.content;
+    if (!content) throw new Error("Empty response from summary function.");
+    return content;
+  } catch (err) {
+    console.error("Callable error:", err);
+    // Re-throw so your existing callers show the same UI errors
+    throw new Error(err?.message || "Failed to generate summary text.");
   }
 };
 

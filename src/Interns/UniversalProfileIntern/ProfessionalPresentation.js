@@ -6,8 +6,9 @@ import styles from "../../catalyst/CatalystUniversalProfile/catalyst-universal-p
 import { db, auth } from "../../firebaseConfig"
 import { doc, onSnapshot, updateDoc, setDoc, getDoc } from "firebase/firestore"
 import { API_KEYS } from "../../API"
+import {useApiKey} from '../../smses/SMSEDashboard/callapi'
 
-const ProfessionalPresentation = ({ data, updateData, profileData, apiKey }) => {
+const ProfessionalPresentation = ({ data, updateData, profileData, }) => {
   const [formData, setFormData] = useState({
     professionalPresentation: {
       coverLetter: data?.professionalPresentation?.coverLetter || "",
@@ -15,6 +16,8 @@ const ProfessionalPresentation = ({ data, updateData, profileData, apiKey }) => 
     }
   })
 
+  const apiKey=useApiKey()
+  console.log(apiKey)
   const [wordCount, setWordCount] = useState({
     coverLetter: data?.professionalPresentation?.coverLetter 
       ? data.professionalPresentation.coverLetter.split(" ").filter((word) => word.length > 0).length 
@@ -109,7 +112,7 @@ const ProfessionalPresentation = ({ data, updateData, profileData, apiKey }) => 
         generateAiCaseStudyPrompt();
       }
     }
-  }, [profileData, hasGeneratedPrompt, aiCaseStudyPrompt, isGeneratingPrompt]);
+  }, [profileData, hasGeneratedPrompt, aiCaseStudyPrompt]);
 
   const sendMessageToChatGPT = async (message) => {
     const API_URL = "https://api.openai.com/v1/chat/completions"
