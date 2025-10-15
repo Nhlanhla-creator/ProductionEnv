@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from "react"
 import { BarChart3, MapPin, Calendar, Filter, X, Info, Eye } from "lucide-react"
-import { collection, getDocs, query, where,serverTimestamp,doc,writeBatch,updateDoc ,getDoc,addDoc } from "firebase/firestore"
+import { collection, getDocs, query, where, serverTimestamp, doc, writeBatch, updateDoc, getDoc, addDoc } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
-import { storage } from "../../firebaseConfig" // Ensure this is imported
+import { storage } from "../../firebaseConfig"
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/dist/style.css";
+import { API_KEYS } from "../../API";
+import emailjs from '@emailjs/browser';
 
 const formatLabel = (value) => {
   if (!value) return ""
@@ -26,7 +28,6 @@ const formatLabel = (value) => {
     .join(", ")
 }
 
-// Text truncation component with line limit
 const TruncatedText = ({ text, maxLines = 2, maxLength = 25 }) => {
   const [isExpanded, setIsExpanded] = useState(false)
 
@@ -85,15 +86,12 @@ const TruncatedText = ({ text, maxLines = 2, maxLength = 25 }) => {
   )
 }
 
-// Score color function
 const getScoreColor = (score) => {
-  if (score >= 80) return "#22c55e" // Green
-  if (score >= 60) return "#f59e0b" // Orange
-  return "#ef4444" // Red
+  if (score >= 80) return "#22c55e"
+  if (score >= 60) return "#f59e0b"
+  return "#ef4444"
 }
 
-
-// Status definitions with colors
 const STATUS_TYPES = {
   "New Match": {
     color: "#E3F2FD",
@@ -117,7 +115,6 @@ const STATUS_TYPES = {
   },
 }
 
-
 const getStatusStyle = (status) => {
   return STATUS_TYPES[status] || { color: "#F5F5F5", textColor: "#666666" }
 }
@@ -138,16 +135,13 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
   const [showStageModal, setShowStageModal] = useState(false)
   const [selectedAdvisorForStage, setSelectedAdvisorForStage] = useState(null)
   const [updatedStages, setUpdatedStages] = useState({})
-  
-  // ✅ Added availability management state (same as investor table)
   const [availabilities, setAvailabilities] = useState([])
   const [showCalendarModal, setShowCalendarModal] = useState(false)
   const [tempDates, setTempDates] = useState([])
   const [timeSlot, setTimeSlot] = useState({ start: "09:00", end: "17:00" })
   const [timeZone, setTimeZone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone)
-  
   const [bigScoreData, setBigScoreData] = useState({
-    pis: { score: 0, color: "#4E342E" }, // PIS first as requested
+    pis: { score: 0, color: "#4E342E" },
     compliance: { score: 0, color: "#8D6E63" },
     legitimacy: { score: 0, color: "#5D4037" },
     fundability: { score: 0, color: "#3E2723" },
@@ -168,59 +162,59 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
   })
   const [termSheetFile, setTermSheetFile] = useState(null)
 
-const modalHeaderStyle = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: "32px",
-  paddingBottom: "16px",
-  borderBottom: "2px solid #E8D5C4"
-}
+  const modalHeaderStyle = {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "32px",
+    paddingBottom: "16px",
+    borderBottom: "2px solid #E8D5C4"
+  }
 
-const modalTitleStyle = {
-  fontSize: "28px",
-  fontWeight: "800",
-  color: "#3e2723",
-  margin: 0
-}
+  const modalTitleStyle = {
+    fontSize: "28px",
+    fontWeight: "800",
+    color: "#3e2723",
+    margin: 0
+  }
 
-const modalCloseButtonStyle = {
-  background: "none",
-  border: "none",
-  fontSize: "24px",
-  cursor: "pointer",
-  color: "#666",
-  padding: "4px",
-  borderRadius: "4px",
-  transition: "color 0.2s ease"
-}
+  const modalCloseButtonStyle = {
+    background: "none",
+    border: "none",
+    fontSize: "24px",
+    cursor: "pointer",
+    color: "#666",
+    padding: "4px",
+    borderRadius: "4px",
+    transition: "color 0.2s ease"
+  }
 
-const modalBodyStyle = {
-  marginBottom: "24px",
-  maxHeight: "400px",
-  overflowY: "auto"
-}
+  const modalBodyStyle = {
+    marginBottom: "24px",
+    maxHeight: "400px",
+    overflowY: "auto"
+  }
 
-const modalActionsStyle = {
-  display: "flex",
-  justifyContent: "flex-end",
-  gap: "16px",
-  paddingTop: "16px",
-  borderTop: "1px solid #E8D5C4"
-}
+  const modalActionsStyle = {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: "16px",
+    paddingTop: "16px",
+    borderTop: "1px solid #E8D5C4"
+  }
 
-const cancelButtonStyle = {
-  padding: "12px 24px",
-  backgroundColor: "#e6d7c3",
-  color: "#4a352f",
-  border: "none",
-  borderRadius: "8px",
-  cursor: "pointer",
-  fontWeight: "600",
-  fontSize: "16px",
-  transition: "all 0.2s ease"
-}
-  // ✅ Added availability management functions (same as investor table)
+  const cancelButtonStyle = {
+    padding: "12px 24px",
+    backgroundColor: "#e6d7c3",
+    color: "#4a352f",
+    border: "none",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontWeight: "600",
+    fontSize: "16px",
+    transition: "all 0.2s ease"
+  }
+
   const loadApplicationAvailability = (application) => {
     if (application.availableDates) {
       const appAvailabilities = application.availableDates.map((avail) => ({
@@ -265,14 +259,12 @@ const cancelButtonStyle = {
           status: avail.status,
         }))
 
-        // Update AdvisorApplications collection
         const docId = `${auth.currentUser.uid}_${selectedAdvisor.id}`
         await updateDoc(doc(db, "AdvisorApplications", docId), {
           availableDates: availabilityData,
           updatedAt: new Date().toISOString(),
         })
 
-        // Also update SmeAdvisorApplications collection
         const smeDocRef = doc(db, "SmeAdvisorApplications", docId)
         await updateDoc(smeDocRef, {
           availableDates: availabilityData,
@@ -305,7 +297,6 @@ const cancelButtonStyle = {
           timeZone: avail.timeZone,
         }))
 
-        // Update both collections
         const docId = `${auth.currentUser.uid}_${selectedAdvisor.id}`
         await updateDoc(doc(db, "AdvisorApplications", docId), {
           availableDates: availabilityData,
@@ -332,7 +323,6 @@ const cancelButtonStyle = {
     return advisor.availableDates && advisor.availableDates.length > 0
   }
 
-  // Application stages for the workflow
   const applicationStages = [
     { id: "evaluation", name: "Evaluation", color: "#3b82f6" },
     { id: "due_diligence", name: "Due Diligence", color: "#8b5cf6" },
@@ -342,13 +332,12 @@ const cancelButtonStyle = {
     { id: "deal_declined", name: "Deal Declined", color: "#ef4444" },
   ]
 
-  // Function to determine which fields to show based on stage
   const getStageFields = (stageName) => {
     const baseFields = {
       showMessage: true,
       showMeeting: true,
       showTermSheet: false,
-      showAvailability: false, // ✅ Added availability field
+      showAvailability: false,
     }
 
     switch (stageName) {
@@ -361,79 +350,86 @@ const cancelButtonStyle = {
       case "Term Issue":
         return { ...baseFields, showTermSheet: true, showAvailability: true }
       case "Deal Successful":
-        return { ...baseFields, showTermSheet: true, showAvailability: false }
+        return { 
+          ...baseFields, 
+          showTermSheet: true, 
+          showAvailability: false,
+          showMeeting: false // ✅ Hide meeting for successful deal
+        }
       case "Deal Declined":
-        return { ...baseFields, showTermSheet: false, showAvailability: false }
+        return { 
+          ...baseFields, 
+          showTermSheet: false, 
+          showAvailability: false,
+          showMeeting: false // ✅ Hide meeting for declined deal
+        }
       default:
         return baseFields
     }
   }
 
- useEffect(() => {
-const fetchAdvisorApplications = async () => {
-  const user = auth.currentUser
-  if (!user) return
+  useEffect(() => {
+    const fetchAdvisorApplications = async () => {
+      const user = auth.currentUser
+      if (!user) return
 
-  try {
-    const advisorId = user.uid
-    const q = query(collection(db, "AdvisorApplications"), where("advisorId", "==", advisorId))
-    const snapshot = await getDocs(q)
-    const advisorMatches = snapshot.docs.map((doc) => {
-      const data = doc.data()
-      setBigScoreData({
-        pis: { score: data.pis || 0, color: getScoreColor(data.pis || 0) },
-        compliance: { score: data.compliance || 0, color: getScoreColor(data.compliance || 0) },
-        legitimacy: { score: data.legitimacy || 0, color: getScoreColor(data.legitimacy || 0) },
-        fundability: { score: data.fundability || 0, color: getScoreColor(data.fundability || 0) },
-        leadership: { score: data.leadership || 0, color: getScoreColor(data.leadership || 0) },
-      })
-      
-      // Include availability data from Firebase
-      const availabilityData = data.availableDates ? data.availableDates.map((avail) => ({
-        ...avail,
-        date: new Date(avail.date),
-      })) : []
+      try {
+        const advisorId = user.uid
+        const q = query(collection(db, "AdvisorApplications"), where("advisorId", "==", advisorId))
+        const snapshot = await getDocs(q)
+        const advisorMatches = snapshot.docs.map((doc) => {
+          const data = doc.data()
+          setBigScoreData({
+            pis: { score: data.pis || 0, color: getScoreColor(data.pis || 0) },
+            compliance: { score: data.compliance || 0, color: getScoreColor(data.compliance || 0) },
+            legitimacy: { score: data.legitimacy || 0, color: getScoreColor(data.legitimacy || 0) },
+            fundability: { score: data.fundability || 0, color: getScoreColor(data.fundability || 0) },
+            leadership: { score: data.leadership || 0, color: getScoreColor(data.leadership || 0) },
+          })
+          
+          const availabilityData = data.availableDates ? data.availableDates.map((avail) => ({
+            ...avail,
+            date: new Date(avail.date),
+          })) : []
 
-      return {
-        id: data.smeId,
-        name: data.smeName,
-        location: data.smeLocation,
-        sector: data.smeSector,
-        fundingStage: data.smeStage,
-        supportRequired: data.smeSupport,
-        bigScore: data.bigScore,
-        revenueBand: data.revenue || "N/A",
-        compensationModel: data.advisorCompensationModel,
-        applicationDate: data.createdAt?.toDate().toLocaleDateString() || "N/A",
-        matchPercentage: data.matchPercentage || 70,
-        matchBreakdown: data.breakdown || {}, // Add the breakdown data
-        status: data.status || "New Match",
-        pipelineStage: data.status || "New Match",
-        action: "Application Received",
-        availableDates: availabilityData,
+          return {
+            id: data.smeId,
+            name: data.smeName,
+            location: data.smeLocation,
+            sector: data.smeSector,
+            fundingStage: data.smeStage,
+            supportRequired: data.smeSupport,
+            bigScore: data.bigScore,
+            revenueBand: data.revenue || "N/A",
+            compensationModel: data.advisorCompensationModel,
+            applicationDate: data.createdAt?.toDate().toLocaleDateString() || "N/A",
+            matchPercentage: data.matchPercentage || 70,
+            matchBreakdown: data.breakdown || {},
+            status: data.status || "New Match",
+            pipelineStage: data.status || "New Match",
+            action: "Application Received",
+            availableDates: availabilityData,
+          }
+        })
+        
+        setAdvisors(advisorMatches)
+        setLoading(false)
+        
+        if (onMatchesCountChange) {
+          onMatchesCountChange(advisorMatches.length)
+        }
+      } catch (error) {
+        console.error("Failed to fetch advisor applications:", error)
+        setAdvisors([])
+        setLoading(false)
+        
+        if (onMatchesCountChange) {
+          onMatchesCountChange(0)
+        }
       }
-    })
-    
-    setAdvisors(advisorMatches)
-    setLoading(false)
-    
-    // Notify parent component of the count
-    if (onMatchesCountChange) {
-      onMatchesCountChange(advisorMatches.length)
     }
-  } catch (error) {
-    console.error("Failed to fetch advisor applications:", error)
-    setAdvisors([])
-    setLoading(false)
-    
-    // Notify parent component even on error
-    if (onMatchesCountChange) {
-      onMatchesCountChange(0)
-    }
-  }
-}
 
-fetchAdvisorApplications()
+    fetchAdvisorApplications()
   }, [onMatchesCountChange])
 
   const handleFilterChange = (key, value) => {
@@ -471,23 +467,22 @@ fetchAdvisorApplications()
     setTermSheetFile(null)
     setFormErrors({})
     
-    // ✅ Load availability data when opening stage modal
     loadApplicationAvailability(advisor)
   }
-const breakdownItemStyle = (matched, label) => ({
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  padding: '0.75rem',
-  background: matched ? '#E8F5E8' : '#FFEBEE',
-  borderRadius: '6px',
-  color: matched ? '#388E3C' : '#D32F2F',
-  fontSize: '0.875rem',
-  marginBottom: '0.5rem',
-  borderLeft: `4px solid ${matched ? '#388E3C' : '#D32F2F'}`
-})
 
-  // ✅ Added reset function for stage modal
+  const breakdownItemStyle = (matched, label) => ({
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '0.75rem',
+    background: matched ? '#E8F5E8' : '#FFEBEE',
+    borderRadius: '6px',
+    color: matched ? '#388E3C' : '#D32F2F',
+    fontSize: '0.875rem',
+    marginBottom: '0.5rem',
+    borderLeft: `4px solid ${matched ? '#388E3C' : '#D32F2F'}`
+  })
+
   const resetStageModal = () => {
     setSelectedAdvisorForStage(null)
     setShowStageModal(false)
@@ -501,7 +496,6 @@ const breakdownItemStyle = (matched, label) => ({
     setAvailabilities([])
   }
 
-  // Debug function to find actual document IDs
   const findDocumentIds = async (advisorId, smeId) => {
     const collections = ["AdvisorApplications", "AdvisoryMatches", "SmeAdvisorApplications"];
     const results = {};
@@ -510,11 +504,9 @@ const breakdownItemStyle = (matched, label) => ({
       try {
         console.log(`\n=== Checking ${collectionName} ===`);
         
-        // Get all documents in collection
         const allDocs = await getDocs(collection(db, collectionName));
         console.log(`Total documents in ${collectionName}: ${allDocs.size}`);
         
-        // Check for documents matching our criteria
         const matchingDocs = [];
         allDocs.forEach(doc => {
           const data = doc.data();
@@ -554,8 +546,9 @@ const breakdownItemStyle = (matched, label) => ({
     if (stageFields.showMessage && !message.trim()) {
       errors.message = "Please provide a message";
     }
+
+    // ✅ ONLY validate meeting fields if stage is NOT successful or declined
     if (stageFields.showMeeting) {
-     
       if (!meetingLocation.trim()) {
         errors.meetingLocation = "Please provide a meeting location";
       }
@@ -564,7 +557,6 @@ const breakdownItemStyle = (matched, label) => ({
       }
     }
 
-    // ✅ Added availability validation for stages that require it
     if (stageFields.showAvailability && !availabilities.length) {
       errors.availabilities = "Please select at least one available date";
     }
@@ -596,22 +588,22 @@ const breakdownItemStyle = (matched, label) => ({
         attachmentUrl = await getDownloadURL(snapshot.ref);
       }
 
-      // ✅ Enhanced update data with availability information
       const updateData = {
         status: nextStage,
-        pipelineStage: nextStage, // ✅ Added pipeline stage
+        pipelineStage: nextStage,
         updatedAt: serverTimestamp(),
         ...(message && { lastMessage: message }),
-        ...(stageFields.showMeeting && {
-          meetingDetails: {
-            time: meetingTime,
-            location: meetingLocation,
-            purpose: meetingPurpose
-          }
-        })
       };
 
-      // ✅ Add availability data if applicable
+      // ✅ ONLY add meeting details if stage allows meetings
+      if (stageFields.showMeeting && meetingLocation && meetingPurpose) {
+        updateData.meetingDetails = {
+          time: meetingTime,
+          location: meetingLocation,
+          purpose: meetingPurpose
+        }
+      }
+
       if (stageFields.showAvailability && availabilities.length > 0) {
         const availabilityData = availabilities.map((avail) => ({
           date: avail.date.toISOString(),
@@ -624,28 +616,18 @@ const breakdownItemStyle = (matched, label) => ({
 
       console.log("Update data:", updateData);
 
-      // Construct the document ID using the known structure: advisorId_smeId
       const documentId = `${advisorId}_${smeId}`;
       const documentsmeId = `${smeId}_${advisorId}`;
-      console.log("Constructed document ID:", documentId);
 
-      // Direct reference to the document in AdvisorApplications
       const docRef = doc(db, "AdvisorApplications", documentId);
       
-      // Check if document exists before updating
       const docSnapshot = await getDoc(docRef);
       if (!docSnapshot.exists()) {
         throw new Error(`Document with ID ${documentId} does not exist in AdvisorApplications`);
       }
 
-      console.log("Current document data:", docSnapshot.data());
-      
-      // Update the document
       await updateDoc(docRef, updateData);
-      
-      console.log("Document updated successfully in AdvisorApplications");
 
-      // Also update the corresponding document in AdvisoryMatches and SmeAdvisorApplications
       try {
         const matchesDocRef = doc(db, "AdvisoryMatches", documentsmeId);
         await updateDoc(matchesDocRef, { 
@@ -658,35 +640,28 @@ const breakdownItemStyle = (matched, label) => ({
           status: nextStage,
           ...(updateData.availableDates && { availableDates: updateData.availableDates })
         });
-        
-        console.log("Also updated status in AdvisoryMatches and SmeAdvisorApplications");
       } catch (matchError) {
         console.warn("Could not update related collections:", matchError.message);
-        // This is non-critical, so we continue
       }
 
-      // ✅ Create calendar event if meeting details are provided (same as investor table)
+      // ✅ ONLY create calendar event if stage allows meetings
       if (stageFields.showMeeting && meetingTime && meetingLocation && meetingPurpose) {
         try {
           await addDoc(collection(db, "smeCalendarEvents"), {
             smeId: smeId,
-            advisorId: advisorId, // ✅ Use advisorId instead of funderId
+            advisorId: advisorId,
             title: meetingPurpose,
             date: meetingTime,
             location: meetingLocation,
-            type: "advisory_meeting", // ✅ Different type for advisory meetings
+            type: "advisory_meeting",
             createdAt: new Date().toISOString(),
             ...(updateData.availableDates && { availableDates: updateData.availableDates })
           });
-          
-          console.log("Calendar event created successfully");
         } catch (calendarError) {
           console.error("Error creating calendar event:", calendarError);
-          // Non-critical error, continue with the process
         }
       }
 
-      // Update local state to reflect the Firebase change
       setAdvisors(prevAdvisors => 
         prevAdvisors.map(advisor => 
           advisor.id === smeId 
@@ -708,7 +683,6 @@ const breakdownItemStyle = (matched, label) => ({
         )
       );
 
-      // Update UI state
       setUpdatedStages((prev) => ({ ...prev, [smeId]: nextStage }));
       setNotification({
         type: "success",
@@ -718,15 +692,20 @@ const breakdownItemStyle = (matched, label) => ({
       setShowStageModal(false);
       resetStageModal();
       
-      // ✅ Enhanced message composition with availability info (similar to investor table)
       let subject = `Update: ${nextStage} Stage for Your Application`;
-      let content = `Dear ${selectedAdvisorForStage.name},\n\nWe are pleased to inform you that your application has progressed to the "${nextStage}" stage.\n\n${message}`;
+      let content = "";
 
+      if (nextStage === "Deal Declined") {
+        content = `Dear ${selectedAdvisorForStage.name},\n\nWe regret to inform you that your application has been moved to the "${nextStage}" stage.\n\n${message}`;
+      } else {
+        content = `Dear ${selectedAdvisorForStage.name},\n\nWe are pleased to inform you that your application has progressed to the "${nextStage}" stage.\n\n${message}`;
+      }
+
+      // ✅ ONLY add meeting details to email if stage allows meetings
       if (stageFields.showMeeting) {
         content += `\n\nMeeting Details:\n- Date: ${new Date(meetingTime).toLocaleString()}\n- Location: ${meetingLocation}\n- Purpose: ${meetingPurpose}`;
       }
 
-      // ✅ Add availability information to message (same as investor table)
       if (stageFields.showAvailability && availabilities.length > 0) {
         content += `\n\nAvailable Meeting Times:\n`;
         content += availabilities
@@ -773,12 +752,147 @@ const breakdownItemStyle = (matched, label) => ({
         addDoc(collection(db, "messages"), sentMessagePayload),
       ]);
 
+      try {
+        console.log("🔄 Using Feedback service configuration...");
+
+        const emailjsConfig = {
+          serviceId: API_KEYS.SERVICE_ID_MESSAGES,
+          templateId: API_KEYS.TEMPLATE_ID_MESSAGES,
+          publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES
+        };
+
+        console.log("📧 Using Feedback config:", emailjsConfig);
+
+        if (!window.emailjs) {
+          emailjs.init(emailjsConfig.publicKey);
+          window.emailjs = emailjs;
+        }
+
+        const user = auth.currentUser;
+        const advisorName = user?.displayName || "Advisory Team";
+        const smeName = selectedAdvisorForStage.name;
+
+        let smeEmail = null;
+        console.log("📋 Fetching SMSE email for:", smeId);
+
+        try {
+          const universalProfileRef = doc(db, "universalProfiles", smeId);
+          const universalProfileSnap = await getDoc(universalProfileRef);
+          
+          if (universalProfileSnap.exists()) {
+            const profileData = universalProfileSnap.data();
+            console.log("📄 universalProfiles data:", profileData);
+            
+            smeEmail = profileData.email || 
+                       profileData.contactDetails?.email ||
+                       profileData.contactEmail ||
+                       profileData.businessEmail ||
+                       profileData.personalEmail;
+            
+            if (smeEmail) {
+              console.log("✅ Found SMSE email:", smeEmail);
+            } else {
+              console.log("❌ No email found in universalProfiles");
+            }
+          } else {
+            console.log("❌ No document in universalProfiles for:", smeId);
+          }
+        } catch (fetchError) {
+          console.error("❌ Error fetching SMSE email:", fetchError);
+        }
+
+        if (!smeEmail) {
+          console.warn("⚠️ No SMSE email found, using fallback");
+          smeEmail = "support@bigmarketplace.africa";
+        }
+
+        console.log("📧 Final recipient email:", smeEmail);
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(smeEmail)) {
+          throw new Error(`Invalid email format: "${smeEmail}"`);
+        }
+
+        let emailMessage = "";
+
+        if (nextStage === "Deal Declined") {
+          emailMessage = `Dear ${smeName},\n\n`;
+          emailMessage += `We regret to inform you that your application has been moved to the "${nextStage}" stage.\n\n`;
+        } else {
+          emailMessage = `Dear ${smeName},\n\n`;
+          emailMessage += `We are pleased to inform you that your application has progressed to the "${nextStage}" stage.\n\n`;
+        }
+        
+        if (message) {
+          emailMessage += `Message from ${advisorName}:\n${message}\n\n`;
+        }
+
+        // ✅ ONLY add meeting details to email if stage allows meetings
+        if (stageFields.showMeeting && meetingLocation && meetingPurpose) {
+          emailMessage += `Meeting Details:\n`;
+          if (meetingTime) {
+            emailMessage += `- Date: ${new Date(meetingTime).toLocaleString()}\n`;
+          }
+          emailMessage += `- Location: ${meetingLocation}\n`;
+          emailMessage += `- Purpose: ${meetingPurpose}\n\n`;
+        }
+
+        if (stageFields.showAvailability && availabilities.length > 0) {
+          emailMessage += `Available Meeting Times:\n`;
+          availabilities.forEach((avail, idx) => {
+            const dateStr = avail.date.toLocaleDateString("en-US", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            });
+            const timeStr = avail.timeSlots?.[0]
+              ? `${avail.timeSlots[0].start} - ${avail.timeSlots[0].end} ${avail.timeZone}`
+              : "Time not specified";
+            emailMessage += `${idx + 1}. ${dateStr} (${timeStr})\n`;
+          });
+          emailMessage += `\nPlease reply with your preferred meeting time from the above options.\n\n`;
+        }
+
+        emailMessage += `Best regards,\n${advisorName}\nAdvisory Support Team\nBIG Marketplace Africa`;
+
+        const templateParams = {
+          to_email: smeEmail,
+          subject: `Application Stage Update: ${nextStage}`,
+          from_name: advisorName,
+          date: new Date().toLocaleDateString(),
+          message: emailMessage,
+          portal_url: `https://www.bigmarketplace.africa/applications/${advisorId}_${smeId}`,
+          has_attachments: termSheetFile ? "true" : "false",
+          attachments_count: termSheetFile ? "1" : "0"
+        };
+
+        console.log("📨 Sending with Feedback service...", templateParams);
+
+        const response = await window.emailjs.send(
+          emailjsConfig.serviceId,
+          emailjsConfig.templateId,
+          templateParams,
+          emailjsConfig.publicKey
+        );
+        
+        console.log("✅ Email sent successfully with Feedback service!", response);
+        
+        setNotification({
+          type: "success",
+          message: `Stage updated to ${nextStage} and notification sent successfully`
+        });
+
+      } catch (emailError) {
+        console.error("❌ Email failed:", emailError);
+        
+        setNotification({
+          type: "success", 
+          message: `Stage updated to ${nextStage} successfully`
+        });
+      }
     } catch (error) {
-      console.error("Detailed error:", {
-        message: error.message,
-        code: error.code,
-        stack: error.stack
-      });
+      console.error("Detailed error:", error);
       
       setNotification({
         type: "error",
@@ -788,7 +902,6 @@ const breakdownItemStyle = (matched, label) => ({
       setIsSubmitting(false);
     }
   };
-  
 
   const handleViewDetails = (advisor) => {
     setSelectedAdvisor(advisor)
@@ -815,7 +928,6 @@ const breakdownItemStyle = (matched, label) => ({
     setFormErrors({})
   }
 
-  // Enhanced Modal Overlay Style with animation
   const modalOverlayStyle = {
     position: "fixed",
     top: 0,
@@ -831,7 +943,6 @@ const breakdownItemStyle = (matched, label) => ({
     backdropFilter: "blur(4px)",
   }
 
-  // Enhanced Modern Modal Content Style
   const modalContentStyle = {
     backgroundColor: "#ffffff",
     borderRadius: "20px",
@@ -846,7 +957,6 @@ const breakdownItemStyle = (matched, label) => ({
     position: "relative",
   }
 
-  // Style constants
   const tableHeaderStyle = {
     background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
     color: "#FEFCFA",
@@ -980,18 +1090,18 @@ const breakdownItemStyle = (matched, label) => ({
           }}
         >
           <colgroup>
-            <col style={{ width: "8%" }} /> {/* SMSE Name */}
-            <col style={{ width: "7%" }} /> {/* Location */}
-            <col style={{ width: "9%" }} /> {/* Sector */}
-            <col style={{ width: "8%" }} /> {/* Funding Stage */}
-            <col style={{ width: "10%" }} /> {/* Support Required */}
-            <col style={{ width: "8%" }} /> {/* Revenue Band */}
-            <col style={{ width: "9%" }} /> {/* Compensation Model */}
-            <col style={{ width: "8%" }} /> {/* Application Date */}
-            <col style={{ width: "6%" }} /> {/* Match % */}
-            <col style={{ width: "7%" }} /> {/* BIG Score */}
-            <col style={{ width: "7%" }} /> {/* Status */}
-            <col style={{ width: "13%" }} /> {/* Action */}
+            <col style={{ width: "8%" }} />
+            <col style={{ width: "7%" }} />
+            <col style={{ width: "9%" }} />
+            <col style={{ width: "8%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "8%" }} />
+            <col style={{ width: "9%" }} />
+            <col style={{ width: "8%" }} />
+            <col style={{ width: "6%" }} />
+            <col style={{ width: "7%" }} />
+            <col style={{ width: "7%" }} />
+            <col style={{ width: "13%" }} />
           </colgroup>
           <thead>
             <tr>
@@ -1035,7 +1145,6 @@ const breakdownItemStyle = (matched, label) => ({
           </thead>
           <tbody>
             {advisors.length === 0 ? (
-              // Empty state row to show table structure
               <tr style={{ borderBottom: "1px solid #E8D5C4" }}>
                 <td style={{ ...tableCellStyle, color: "#ccc", textAlign: "center", padding: "2rem 0.2rem" }}>-</td>
                 <td style={{ ...tableCellStyle, color: "#ccc", textAlign: "center", padding: "2rem 0.2rem" }}>-</td>
@@ -1105,27 +1214,27 @@ const breakdownItemStyle = (matched, label) => ({
                       </div>
                     </td>
                     <td style={tableCellStyle}>
-  <div style={matchContainerStyle}>
-    <div style={progressBarStyle}>
-      <div style={{ 
-        ...progressFillStyle, 
-        width: `${advisor.matchPercentage}%` 
-      }} />
-    </div>
-    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-      <span style={matchScoreStyle}>{advisor.matchPercentage}%</span>
-      <Eye 
-        size={14} 
-        style={{ cursor: 'pointer', color: '#a67c52' }} 
-        onClick={(e) => {
-          e.stopPropagation();
-          setSelectedAdvisor(advisor);
-          setModalType("matchBreakdown");
-        }}
-      />
-    </div>
-  </div>
-</td>
+                      <div style={matchContainerStyle}>
+                        <div style={progressBarStyle}>
+                          <div style={{ 
+                            ...progressFillStyle, 
+                            width: `${advisor.matchPercentage}%` 
+                          }} />
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span style={matchScoreStyle}>{advisor.matchPercentage}%</span>
+                          <Eye 
+                            size={14} 
+                            style={{ cursor: 'pointer', color: '#a67c52' }} 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedAdvisor(advisor);
+                              setModalType("matchBreakdown");
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </td>
                     <td style={tableCellStyle}>
                       <div style={matchContainerStyle}>
                         <div style={progressBarStyle}>
@@ -1209,7 +1318,6 @@ const breakdownItemStyle = (matched, label) => ({
         </table>
       </div>
 
-      {/* Message shown when no applications */}
       {advisors.length === 0 && (
         <div
           style={{
@@ -1229,66 +1337,64 @@ const breakdownItemStyle = (matched, label) => ({
         </div>
       )}
 
-
-{selectedAdvisor && modalType === "matchBreakdown" && (
-  <div style={modalOverlayStyle} onClick={resetModal}>
-    <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
-      <div style={modalHeaderStyle}>
-        <h3 style={modalTitleStyle}>
-          Match Score Breakdown - {selectedAdvisor.name}
-        </h3>
-        <button onClick={resetModal} style={modalCloseButtonStyle}>
-          ✖
-        </button>
-      </div>
-      
-      <div style={modalBodyStyle}>
-        <div style={{ marginBottom: '1rem' }}>
-          <p style={{ color: '#5D2A0A', marginBottom: '0.5rem' }}>
-            Match score: {selectedAdvisor.matchPercentage}%
-          </p>
-          
-          {/* Match criteria breakdown */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {selectedAdvisor.matchBreakdown && Object.entries(selectedAdvisor.matchBreakdown).map(([key, criteria]) => (
-              <div key={key} style={breakdownItemStyle(criteria.matched, key)}>
-                <span style={{ fontWeight: '500' }}>{formatLabel(key)}</span>
-                <span>
-                  {criteria.matched ? (
-                    <span style={{ color: '#388E3C' }}>✓ Matched</span>
-                  ) : (
-                    <span style={{ color: '#D32F2F' }}>✗ Not matched</span>
-                  )}
-                </span>
+      {selectedAdvisor && modalType === "matchBreakdown" && (
+        <div style={modalOverlayStyle} onClick={resetModal}>
+          <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
+            <div style={modalHeaderStyle}>
+              <h3 style={modalTitleStyle}>
+                Match Score Breakdown - {selectedAdvisor.name}
+              </h3>
+              <button onClick={resetModal} style={modalCloseButtonStyle}>
+                ✖
+              </button>
+            </div>
+            
+            <div style={modalBodyStyle}>
+              <div style={{ marginBottom: '1rem' }}>
+                <p style={{ color: '#5D2A0A', marginBottom: '0.5rem' }}>
+                  Match score: {selectedAdvisor.matchPercentage}%
+                </p>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {selectedAdvisor.matchBreakdown && Object.entries(selectedAdvisor.matchBreakdown).map(([key, criteria]) => (
+                    <div key={key} style={breakdownItemStyle(criteria.matched, key)}>
+                      <span style={{ fontWeight: '500' }}>{formatLabel(key)}</span>
+                      <span>
+                        {criteria.matched ? (
+                          <span style={{ color: '#388E3C' }}>✓ Matched</span>
+                        ) : (
+                          <span style={{ color: '#D32F2F' }}>✗ Not matched</span>
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
+              
+              <div style={{ 
+                background: '#F5EBE0', 
+                padding: '1rem', 
+                borderRadius: '8px',
+                marginTop: '1rem'
+              }}>
+                <p style={{ fontSize: '0.875rem', color: '#5D2A0A' }}>
+                  This score represents how well this advisor matches your specific needs and criteria.
+                </p>
+              </div>
+            </div>
+            
+            <div style={modalActionsStyle}>
+              <button 
+                onClick={resetModal}
+                style={cancelButtonStyle}
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
-        
-        <div style={{ 
-          background: '#F5EBE0', 
-          padding: '1rem', 
-          borderRadius: '8px',
-          marginTop: '1rem'
-        }}>
-          <p style={{ fontSize: '0.875rem', color: '#5D2A0A' }}>
-            This score represents how well this advisor matches your specific needs and criteria.
-          </p>
-        </div>
-      </div>
-      
-      <div style={modalActionsStyle}>
-        <button 
-          onClick={resetModal}
-          style={cancelButtonStyle}
-        >
-          Close
-        </button>
-      </div>
-    </div>
-  </div>
-)}
-      {/* Filter Modal */}
+      )}
+
       {showFilters && (
         <div style={modalOverlayStyle} onClick={() => setShowFilters(false)}>
           <div style={{ ...modalContentStyle, maxWidth: "800px" }} onClick={(e) => e.stopPropagation()}>
@@ -1504,7 +1610,6 @@ const breakdownItemStyle = (matched, label) => ({
         </div>
       )}
 
-      {/* View Details Modal */}
       {selectedAdvisor && modalType === "view" && (
         <div style={modalOverlayStyle} onClick={resetModal}>
           <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
@@ -1629,7 +1734,6 @@ const breakdownItemStyle = (matched, label) => ({
         </div>
       )}
 
-      {/* Enhanced BIG Score Modal */}
       {selectedAdvisor && modalType === "bigScore" && (
         <div style={modalOverlayStyle} onClick={resetModal}>
           <div style={{ ...modalContentStyle, maxWidth: "1000px" }} onClick={(e) => e.stopPropagation()}>
@@ -1699,7 +1803,6 @@ const breakdownItemStyle = (matched, label) => ({
               </div>
             </div>
 
-            {/* Score breakdown sections - PIS first */}
             {Object.entries(bigScoreData).map(([key, data]) => (
               <div
                 key={key}
@@ -1877,7 +1980,6 @@ const breakdownItemStyle = (matched, label) => ({
         </div>
       )}
 
-      {/* Score Breakdown Modal */}
       {selectedAdvisor && modalType === "scoreBreakdown" && (
         <div style={modalOverlayStyle} onClick={resetModal}>
           <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
@@ -2105,190 +2207,183 @@ const breakdownItemStyle = (matched, label) => ({
       )}
 
       {showCalendarModal && (
-<div style={{ ...modalOverlayStyle, zIndex: 1100 }} onClick={() => setShowCalendarModal(false)}>
+        <div style={{ ...modalOverlayStyle, zIndex: 1100 }} onClick={() => setShowCalendarModal(false)}>
+          <div style={{ ...modalContentStyle, maxWidth: "800px" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
+              <h3 style={{ fontSize: "24px", fontWeight: "700", color: "#3e2723", margin: 0 }}>
+                Select Available Dates
+              </h3>
+              <button
+                onClick={() => setShowCalendarModal(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "24px",
+                  cursor: "pointer",
+                  color: "#666",
+                }}
+              >
+                <X size={24} />
+              </button>
+            </div>
 
+            <div style={{ marginBottom: "24px" }}>
+              <label style={{ display: "block", fontSize: "16px", fontWeight: "600", marginBottom: "8px" }}>
+                Time Zone
+              </label>
+              <select
+                value={timeZone}
+                onChange={(e) => setTimeZone(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  border: "1px solid #ddd",
+                  borderRadius: "4px",
+                }}
+              >
+                <option value="Africa/Johannesburg">South Africa Time (SAST)</option>
+                <option value="UTC">UTC</option>
+              </select>
+            </div>
 
-    <div style={{ ...modalContentStyle, maxWidth: "800px" }} onClick={(e) => e.stopPropagation()}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
-        <h3 style={{ fontSize: "24px", fontWeight: "700", color: "#3e2723", margin: 0 }}>
-          Select Available Dates
-        </h3>
-        <button
-          onClick={() => setShowCalendarModal(false)}
-          style={{
-            background: "none",
-            border: "none",
-            fontSize: "24px",
-            cursor: "pointer",
-            color: "#666",
-          }}
-        >
-          <X size={24} />
-        </button>
-      </div>
+            <div style={{ marginBottom: "24px" }}>
+              <label style={{ display: "block", fontSize: "16px", fontWeight: "600", marginBottom: "8px" }}>
+                Time Slot
+              </label>
+              <div style={{ display: "flex", gap: "16px" }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: "block", marginBottom: "4px" }}>Start Time</label>
+                  <input
+                    type="time"
+                    value={timeSlot.start}
+                    onChange={(e) => handleTimeChange("start", e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "8px",
+                      border: "1px solid #ddd",
+                      borderRadius: "4px",
+                    }}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: "block", marginBottom: "4px" }}>End Time</label>
+                  <input
+                    type="time"
+                    value={timeSlot.end}
+                    onChange={(e) => handleTimeChange("end", e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "8px",
+                      border: "1px solid #ddd",
+                      borderRadius: "4px",
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
 
-      <div style={{ marginBottom: "24px" }}>
-        <label style={{ display: "block", fontSize: "16px", fontWeight: "600", marginBottom: "8px" }}>
-          Time Zone
-        </label>
-        <select
-          value={timeZone}
-          onChange={(e) => setTimeZone(e.target.value)}
-          style={{
-            width: "100%",
-            padding: "10px",
-            border: "1px solid #ddd",
-            borderRadius: "4px",
-          }}
-        >
-          <option value="Africa/Johannesburg">South Africa Time (SAST)</option>
-          <option value="UTC">UTC</option>
-          {/* Add more time zones as needed */}
-        </select>
-      </div>
+            <div style={{ marginBottom: "24px" }}>
+              <label style={{ display: "block", fontSize: "16px", fontWeight: "600", marginBottom: "8px" }}>
+                Select Dates
+              </label>
+              <DayPicker
+                mode="multiple"
+                selected={tempDates}
+                onSelect={handleDateSelect}
+                fromDate={new Date()}
+                styles={{
+                  caption: { color: "#4a352f", fontWeight: "bold" },
+                  day_selected: { backgroundColor: "#5d4037", color: "white" },
+                }}
+              />
+            </div>
 
-      <div style={{ marginBottom: "24px" }}>
-        <label style={{ display: "block", fontSize: "16px", fontWeight: "600", marginBottom: "8px" }}>
-          Time Slot
-        </label>
-        <div style={{ display: "flex", gap: "16px" }}>
-          <div style={{ flex: 1 }}>
-            <label style={{ display: "block", marginBottom: "4px" }}>Start Time</label>
-            <input
-              type="time"
-              value={timeSlot.start}
-              onChange={(e) => handleTimeChange("start", e.target.value)}
-              style={{
-                width: "100%",
-                padding: "8px",
-                border: "1px solid #ddd",
-                borderRadius: "4px",
-              }}
-            />
-          </div>
-          <div style={{ flex: 1 }}>
-            <label style={{ display: "block", marginBottom: "4px" }}>End Time</label>
-            <input
-              type="time"
-              value={timeSlot.end}
-              onChange={(e) => handleTimeChange("end", e.target.value)}
-              style={{
-                width: "100%",
-                padding: "8px",
-                border: "1px solid #ddd",
-                borderRadius: "4px",
-              }}
-            />
+            <div style={{ marginBottom: "24px" }}>
+              <h4 style={{ fontSize: "16px", fontWeight: "600", marginBottom: "12px" }}>
+                Selected Availability
+              </h4>
+              {tempDates.length > 0 ? (
+                <div style={{ 
+                  border: "1px solid #eee", 
+                  borderRadius: "8px", 
+                  padding: "12px",
+                  maxHeight: "200px",
+                  overflowY: "auto"
+                }}>
+                  {tempDates.map((date, index) => (
+                    <div key={index} style={{ 
+                      display: "flex", 
+                      justifyContent: "space-between", 
+                      alignItems: "center",
+                      padding: "8px 0",
+                      borderBottom: "1px solid #f0f0f0"
+                    }}>
+                      <span>
+                        {date.toLocaleDateString("en-US", { 
+                          weekday: 'long', 
+                          year: 'numeric', 
+                          month: 'long', 
+                          day: 'numeric' 
+                        })}
+                        {timeSlot.start && timeSlot.end && (
+                          <span style={{ color: "#666", marginLeft: "8px" }}>
+                            {timeSlot.start} - {timeSlot.end}
+                          </span>
+                        )}
+                      </span>
+                      <button
+                        onClick={() => setTempDates(tempDates.filter((d, i) => i !== index))}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#ff4444",
+                          cursor: "pointer",
+                          padding: "4px"
+                        }}
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ color: "#666", fontStyle: "italic" }}>No dates selected yet</p>
+              )}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
+              <button
+                onClick={() => setShowCalendarModal(false)}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "transparent",
+                  color: "#666",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  cursor: "pointer"
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveSelectedDates}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#5d4037",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer"
+                }}
+                disabled={tempDates.length === 0}
+              >
+                Save Availability
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      <div style={{ marginBottom: "24px" }}>
-        <label style={{ display: "block", fontSize: "16px", fontWeight: "600", marginBottom: "8px" }}>
-          Select Dates
-        </label>
-        {/* Replace with your actual calendar component */}
- <DayPicker
-  mode="multiple"
-  selected={tempDates}
-  onSelect={handleDateSelect}
-  fromDate={new Date()}
-  styles={{
-    caption: { color: "#4a352f", fontWeight: "bold" },
-    day_selected: { backgroundColor: "#5d4037", color: "white" },
-  }}
-/>
-
-      </div>
-
-      <div style={{ marginBottom: "24px" }}>
-        <h4 style={{ fontSize: "16px", fontWeight: "600", marginBottom: "12px" }}>
-          Selected Availability
-        </h4>
-        {tempDates.length > 0 ? (
-          <div style={{ 
-            border: "1px solid #eee", 
-            borderRadius: "8px", 
-            padding: "12px",
-            maxHeight: "200px",
-            overflowY: "auto"
-          }}>
-            {tempDates.map((date, index) => (
-              <div key={index} style={{ 
-                display: "flex", 
-                justifyContent: "space-between", 
-                alignItems: "center",
-                padding: "8px 0",
-                borderBottom: "1px solid #f0f0f0"
-              }}>
-                <span>
-                  {date.toLocaleDateString("en-US", { 
-                    weekday: 'long', 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
-                  })}
-                  {timeSlot.start && timeSlot.end && (
-                    <span style={{ color: "#666", marginLeft: "8px" }}>
-                      {timeSlot.start} - {timeSlot.end}
-                    </span>
-                  )}
-                </span>
-                <button
-                  onClick={() => setTempDates(tempDates.filter((d, i) => i !== index))}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: "#ff4444",
-                    cursor: "pointer",
-                    padding: "4px"
-                  }}
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p style={{ color: "#666", fontStyle: "italic" }}>No dates selected yet</p>
-        )}
-      </div>
-
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
-        <button
-          onClick={() => setShowCalendarModal(false)}
-          style={{
-            padding: "10px 20px",
-            backgroundColor: "transparent",
-            color: "#666",
-            border: "1px solid #ddd",
-            borderRadius: "6px",
-            cursor: "pointer"
-          }}
-        >
-          Cancel
-        </button>
-        <button
-          onClick={saveSelectedDates}
-          style={{
-            padding: "10px 20px",
-            backgroundColor: "#5d4037",
-            color: "white",
-            border: "none",
-            borderRadius: "6px",
-            cursor: "pointer"
-          }}
-          disabled={tempDates.length === 0}
-        >
-          Save Availability
-        </button>
-      </div>
-    </div>
-  </div>
-)}
-
-
-      {/* Stage Action Modal - Conditional Fields Based on Selected Stage */}
       {showStageModal && selectedAdvisorForStage && (
         <div style={modalOverlayStyle} onClick={() => setShowStageModal(false)}>
           <div style={{ ...modalContentStyle, maxWidth: "600px" }} onClick={(e) => e.stopPropagation()}>
@@ -2299,7 +2394,6 @@ const breakdownItemStyle = (matched, label) => ({
               <p style={{ fontSize: "16px", color: "#666", margin: 0 }}>{selectedAdvisorForStage.name}</p>
             </div>
 
-            {/* Stage Selection */}
             <div style={{ marginBottom: "24px" }}>
               <label
                 style={{
@@ -2341,10 +2435,8 @@ const breakdownItemStyle = (matched, label) => ({
               )}
             </div>
 
-            {/* Conditional Fields Based on Selected Stage */}
             {nextStage && (
               <>
-                {/* Message - Always show */}
                 {currentStageFields.showMessage && (
                   <div style={{ marginBottom: "24px" }}>
                     <label
@@ -2384,98 +2476,97 @@ const breakdownItemStyle = (matched, label) => ({
                     )}
                   </div>
                 )}
-                 {currentStageFields.showAvailability && (
-        <div style={{ 
-          backgroundColor: "#f8f5f3", 
-          padding: "20px", 
-          borderRadius: "12px", 
-          marginBottom: "24px" 
-        }}>
-          <div style={{ 
-            display: "flex", 
-            justifyContent: "space-between", 
-            alignItems: "center",
-            marginBottom: "16px"
-          }}>
-            <h4 style={{ fontSize: "16px", fontWeight: "600", color: "#4a352f" }}>
-              Your Availability
-            </h4>
-            <button
-              onClick={() => setShowCalendarModal(true)}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#5d4037",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontSize: "14px",
-                display: "flex",
-                alignItems: "center",
-                gap: "4px"
-              }}
-            >
-              <Calendar size={14} />
-              Add Dates
-            </button>
-          </div>
-
-          {availabilities.length > 0 ? (
-            <div style={{ 
-              border: "1px solid #eee", 
-              borderRadius: "8px", 
-              maxHeight: "200px",
-              overflowY: "auto"
-            }}>
-              {availabilities.map((availability, index) => (
-                <div key={index} style={{ 
-                  display: "flex", 
-                  justifyContent: "space-between", 
-                  alignItems: "center",
-                  padding: "8px 12px",
-                  borderBottom: "1px solid #f0f0f0"
-                }}>
-                  <div>
-                    <div style={{ fontWeight: "500" }}>
-                      {availability.date.toLocaleDateString("en-US", { 
-                        weekday: 'short', 
-                        month: 'short', 
-                        day: 'numeric' 
-                      })}
+                {currentStageFields.showAvailability && (
+                  <div style={{ 
+                    backgroundColor: "#f8f5f3", 
+                    padding: "20px", 
+                    borderRadius: "12px", 
+                    marginBottom: "24px" 
+                  }}>
+                    <div style={{ 
+                      display: "flex", 
+                      justifyContent: "space-between", 
+                      alignItems: "center",
+                      marginBottom: "16px"
+                    }}>
+                      <h4 style={{ fontSize: "16px", fontWeight: "600", color: "#4a352f" }}>
+                        Your Availability
+                      </h4>
+                      <button
+                        onClick={() => setShowCalendarModal(true)}
+                        style={{
+                          padding: "6px 12px",
+                          backgroundColor: "#5d4037",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          fontSize: "14px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px"
+                        }}
+                      >
+                        <Calendar size={14} />
+                        Add Dates
+                      </button>
                     </div>
-                    {availability.timeSlots?.[0] && (
-                      <div style={{ fontSize: "12px", color: "#666" }}>
-                        {availability.timeSlots[0].start} - {availability.timeSlots[0].end} ({availability.timeZone})
+
+                    {availabilities.length > 0 ? (
+                      <div style={{ 
+                        border: "1px solid #eee", 
+                        borderRadius: "8px", 
+                        maxHeight: "200px",
+                        overflowY: "auto"
+                      }}>
+                        {availabilities.map((availability, index) => (
+                          <div key={index} style={{ 
+                            display: "flex", 
+                            justifyContent: "space-between", 
+                            alignItems: "center",
+                            padding: "8px 12px",
+                            borderBottom: "1px solid #f0f0f0"
+                          }}>
+                            <div>
+                              <div style={{ fontWeight: "500" }}>
+                                {availability.date.toLocaleDateString("en-US", { 
+                                  weekday: 'short', 
+                                  month: 'short', 
+                                  day: 'numeric' 
+                                })}
+                              </div>
+                              {availability.timeSlots?.[0] && (
+                                <div style={{ fontSize: "12px", color: "#666" }}>
+                                  {availability.timeSlots[0].start} - {availability.timeSlots[0].end} ({availability.timeZone})
+                                </div>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => removeAvailability(availability.date)}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                color: "#ff4444",
+                                cursor: "pointer",
+                                padding: "4px"
+                              }}
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        ))}
                       </div>
+                    ) : (
+                      <p style={{ color: "#666", fontStyle: "italic" }}>No availability slots added yet</p>
+                    )}
+                    {formErrors.availabilities && (
+                      <p style={{ color: "#dc2626", fontSize: "14px", marginTop: "8px" }}>
+                        {formErrors.availabilities}
+                      </p>
                     )}
                   </div>
-                  <button
-                    onClick={() => removeAvailability(availability.date)}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      color: "#ff4444",
-                      cursor: "pointer",
-                      padding: "4px"
-                    }}
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p style={{ color: "#666", fontStyle: "italic" }}>No availability slots added yet</p>
-          )}
-          {formErrors.availabilities && (
-            <p style={{ color: "#dc2626", fontSize: "14px", marginTop: "8px" }}>
-              {formErrors.availabilities}
-            </p>
-          )}
-        </div>
-      )}
+                )}
 
-                {/* Meeting Details - Show for most stages */}
                 {currentStageFields.showMeeting && (
                   <div
                     style={{ backgroundColor: "#f8f5f3", padding: "20px", borderRadius: "12px", marginBottom: "24px" }}
@@ -2485,43 +2576,6 @@ const breakdownItemStyle = (matched, label) => ({
                     </h4>
 
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
-                      {/* <div>
-                        <label
-                          style={{
-                            display: "block",
-                            fontSize: "14px",
-                            fontWeight: "600",
-                            color: "#4a352f",
-                            marginBottom: "8px",
-                          }}
-                        >
-                          Date & Time:
-                        </label>
-                        <input
-                          type="datetime-local"
-                          value={meetingTime}
-                          onChange={(e) => {
-                            setMeetingTime(e.target.value)
-                            if (e.target.value) {
-                              setFormErrors({ ...formErrors, meetingTime: "" })
-                            }
-                          }}
-                          style={{
-                            width: "100%",
-                            padding: "10px 12px",
-                            border: formErrors.meetingTime ? "2px solid #dc2626" : "2px solid #c8b6a6",
-                            borderRadius: "6px",
-                            fontSize: "14px",
-                            backgroundColor: "white",
-                          }}
-                        />
-                        {formErrors.meetingTime && (
-                          <p style={{ color: "#dc2626", fontSize: "12px", marginTop: "4px" }}>
-                            {formErrors.meetingTime}
-                          </p>
-                        )}
-                      </div> */}
-
                       <div>
                         <label
                           style={{
@@ -2601,7 +2655,6 @@ const breakdownItemStyle = (matched, label) => ({
                   </div>
                 )}
 
-                {/* Term Sheet Upload - Only show for specific stages */}
                 {currentStageFields.showTermSheet && (
                   <div style={{ marginBottom: "24px" }}>
                     <label
@@ -2638,7 +2691,6 @@ const breakdownItemStyle = (matched, label) => ({
               </>
             )}
 
-            {/* Action Buttons */}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
               <button
                 onClick={() => {
