@@ -7,6 +7,7 @@ import { db, auth } from "../../firebaseConfig"
 import { doc, onSnapshot, updateDoc, setDoc, getDoc } from "firebase/firestore"
 import { API_KEYS } from "../../API"
 import {useApiKey} from '../../smses/SMSEDashboard/callapi'
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 const ProfessionalPresentation = ({ data, updateData, profileData, }) => {
   const [formData, setFormData] = useState({
@@ -114,64 +115,17 @@ const ProfessionalPresentation = ({ data, updateData, profileData, }) => {
     }
   }, [profileData, hasGeneratedPrompt, aiCaseStudyPrompt]);
 
-  const sendMessageToChatGPT = async (message) => {
-    const API_URL = "https://api.openai.com/v1/chat/completions"
-    try {
-      const response = await fetch(API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey.trim()}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4o",
-          messages: [
-            {
-              role: "system",
-              content: `You are an expert career advisor and internship coordinator. Create highly relevant, personalized case study prompts based on student profiles.
+ // REPLACE the entire sendMessageToChatGPT with this
+const sendMessageToChatGPT = async (message /* apiKey not needed */) => {
+  const functions = getFunctions(); // add region here if you deployed elsewhere
+  const run = httpsCallable(functions, "generateCaseStudyPrompt");
+  const resp = await run({ prompt: message });
+  const content = resp?.data?.content;
+  if (!content) throw new Error("Empty response from evaluateProfessionalSkills.");
+  return content;
+};
 
-IMPORTANT FORMAT REQUIREMENTS:
-- Start with "Case Study: [Creative Title]" 
-- Provide a realistic business scenario relevant to the student's field
-- Include specific challenges and data points (like the example with 30% decline, 500 to 350 applications, etc.)
-- Set clear objectives and constraints (budget, timeline, etc.)
-- Structure it with clear sections: Current situation, Your task, and specific response requirements
-- Make it professionally formatted with bullet points and clear sections
-- Keep it engaging and challenging but achievable for a student`,
-            },
-            {
-              role: "user",
-              content: message,
-            },
-          ],
-          max_tokens: 1500,
-          temperature: 0.7,
-        }),
-      })
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null)
-        if (response.status === 401) {
-          throw new Error("Invalid API key. Please check your OpenAI API key.")
-        } else if (response.status === 429) {
-          throw new Error("Rate limit exceeded. Please try again later.")
-        } else if (response.status === 403) {
-          throw new Error("Access denied. Please check your API key permissions.")
-        } else {
-          throw new Error(errorData?.error?.message || `HTTP error! status: ${response.status}`)
-        }
-      }
-
-      const data = await response.json()
-      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-        throw new Error("Invalid response format from OpenAI API")
-      }
-      return data.choices[0].message.content
-    } catch (error) {
-      console.error("ChatGPT API Error:", error)
-      throw error
-    }
-  }
 
   const prepareDataForAiPromptGeneration = (data) => {
     const academicInfo = data?.formData?.academicOverview || {}

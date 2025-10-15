@@ -5,6 +5,7 @@ import { ChevronDown, CheckCircle, TrendingUp, AlertCircle, Briefcase, RefreshCw
 import { db, auth } from "../../firebaseConfig"
 import { doc, onSnapshot, updateDoc, setDoc, getDoc } from "firebase/firestore"
 import { API_KEYS } from "../../API"
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 export function WorkExperience({ profileData, onScoreUpdate ,apiKey}) {
   const [showModal, setShowModal] = useState(false)
@@ -27,69 +28,78 @@ export function WorkExperience({ profileData, onScoreUpdate ,apiKey}) {
     return () => (document.body.style.overflow = "")
   }, [showModal])
 
-  const saveScoreToFirebase = async (scoreData) => {
-    const userId = auth?.currentUser?.uid;
-    if (!userId) return;
+  const saveScoreToFirebase = async (scoreData, aiResult = null) => {
+  const userId = auth?.currentUser?.uid;
+  if (!userId) return;
 
-    try {
-      const aiEvalRef = doc(db, "aiWorkExperienceEvaluation", userId);
-      await setDoc(aiEvalRef, {
-        savedScore: scoreData.totalScore,
-        scoreBreakdown: scoreData.breakdown,
-        lastUpdated: new Date()
-      }, { merge: true });
-    } catch (error) {
-      console.error("Error saving score:", error);
-      setLoadError("Failed to save score. Please try again.");
-    }
-  };
+  try {
+    const aiEvalRef = doc(db, "aiWorkExperienceEvaluation", userId);
+    await setDoc(aiEvalRef, {
+      savedScore: scoreData.totalScore,
+      scoreBreakdown: scoreData.breakdown,
+      result: aiResult || aiEvaluationResult, // Save the AI result
+      lastUpdated: new Date()
+    }, { merge: true });
+  } catch (error) {
+    console.error("Error saving score:", error);
+    setLoadError("Failed to save score. Please try again.");
+  }
+};
+useEffect(() => {
+  if (profileData && aiEvaluationResult) {
+    const result = calculateWorkExperienceScore(profileData, aiEvaluationResult)
+    setWorkExperienceScore(result.totalScore)
+    setScoreBreakdown(result.breakdown)
+    if (onScoreUpdate) onScoreUpdate(result.totalScore);
+
+    // Pass the AI result when saving
+    saveScoreToFirebase(result, aiEvaluationResult);
+  }
+}, [profileData, aiEvaluationResult])
 
   useEffect(() => {
-    if (profileData && aiEvaluationResult) {
-      const result = calculateWorkExperienceScore(profileData, aiEvaluationResult)
-      setWorkExperienceScore(result.totalScore)
-      setScoreBreakdown(result.breakdown)
-      if (onScoreUpdate) onScoreUpdate(result.totalScore);
+  const unsubscribe = auth.onAuthStateChanged((user) => {
+    if (user) {
+      const loadSavedScore = async () => {
+        setIsLoadingScore(true);
+        try {
+          const aiEvalRef = doc(db, "aiWorkExperienceEvaluation", user.uid);
+          const docSnap = await getDoc(aiEvalRef);
 
-      saveScoreToFirebase(result);
-    }
-  }, [profileData, aiEvaluationResult])
-
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (user) {
-        const loadSavedScore = async () => {
-          setIsLoadingScore(true);
-          try {
-            const aiEvalRef = doc(db, "aiWorkExperienceEvaluation", user.uid);
-            const docSnap = await getDoc(aiEvalRef);
-
-            if (docSnap.exists()) {
-              const data = docSnap.data();
-              if (data.savedScore !== undefined) {
-                setWorkExperienceScore(data.savedScore);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            
+            // Restore all states in the correct order
+            if (data.result) {
+              setAiEvaluationResult(data.result);
+              // Calculate scores based on the restored AI result
+              if (profileData) {
+                const result = calculateWorkExperienceScore(profileData, data.result);
+                setWorkExperienceScore(result.totalScore);
+                setScoreBreakdown(result.breakdown);
               }
-              if (data.scoreBreakdown) {
-                setScoreBreakdown(data.scoreBreakdown);
-              }
-              if (data.result) {
-                setAiEvaluationResult(data.result);
-              }
+            } else if (data.savedScore !== undefined) {
+              setWorkExperienceScore(data.savedScore);
             }
-          } catch (error) {
-            console.error("Error loading saved score:", error);
-            setLoadError("Failed to load saved scores. Please refresh.");
-          } finally {
-            setIsLoadingScore(false);
+            
+            if (data.scoreBreakdown) {
+              setScoreBreakdown(data.scoreBreakdown);
+            }
           }
-        };
+        } catch (error) {
+          console.error("Error loading saved score:", error);
+          setLoadError("Failed to load saved scores. Please refresh.");
+        } finally {
+          setIsLoadingScore(false);
+        }
+      };
 
-        loadSavedScore();
-      }
-    });
+      loadSavedScore();
+    }
+  });
 
-    return () => unsubscribe();
-  }, []);
+  return () => unsubscribe();
+}, [profileData]); // Add profileData as dependency
 
   const parseAiEvaluationScores = (text) => {
     const categories = {
@@ -241,44 +251,15 @@ ${evaluationData}`
     }
   }
 
-  const sendMessageToChatGPT = async (message) => {
-    const API_URL = "https://api.openai.com/v1/chat/completions"
-    try {
-      const response = await fetch(API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey.trim()}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4o",
-          messages: [
-            {
-              role: "system",
-              content: "You are an expert career counselor specializing in evaluating work experience for early-career professionals.",
-            },
-            {
-              role: "user",
-              content: message,
-            },
-          ],
-          max_tokens: 2000,
-          temperature: 0.3,
-        }),
-      })
+ const sendMessageToChatGPT = async (message /* no apiKey on client */) => {
+  const functions = getFunctions(); // pass region if you deployed elsewhere
+  const run = httpsCallable(functions, "evaluateWorkExperience");
+  const resp = await run({ prompt: message });
+  const content = resp?.data?.content;
+  if (!content) throw new Error("Empty response from evaluateWorkExperience.");
+  return content;
+};
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null)
-        throw new Error(errorData?.error?.message || `HTTP error! status: ${response.status}`)
-      }
-
-      const data = await response.json()
-      return data.choices[0].message.content
-    } catch (error) {
-      console.error("ChatGPT API Error:", error)
-      throw error
-    }
-  }
 
   const prepareDataForAiEvaluation = (data) => {
     const workData = data?.formData?.experienceTrackRecord || {}

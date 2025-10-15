@@ -4,6 +4,7 @@ import { ChevronDown, CheckCircle, TrendingUp, AlertCircle, GraduationCap, Refre
 import { db, auth } from "../../firebaseConfig"
 import { doc, onSnapshot, updateDoc, setDoc, getDoc } from "firebase/firestore"
 import { API_KEYS } from "../../API"
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 export function AcademicFoundation({ styles, profileData, onScoreUpdate,apiKey }) {
   const [showModal, setShowModal] = useState(false)
@@ -26,70 +27,79 @@ export function AcademicFoundation({ styles, profileData, onScoreUpdate,apiKey }
     return () => (document.body.style.overflow = "")
   }, [showModal])
 
-  const saveScoreToFirebase = async (scoreData) => {
-    const userId = auth?.currentUser?.uid;
-    if (!userId) return;
+const saveScoreToFirebase = async (scoreData, aiResult = null) => {
+  const userId = auth?.currentUser?.uid;
+  if (!userId) return;
 
-    try {
-      const aiEvalRef = doc(db, "aiAcademicEvaluation", userId);
-      await setDoc(aiEvalRef, {
-        savedScore: scoreData.totalScore,
-        scoreBreakdown: scoreData.breakdown,
-        lastUpdated: new Date()
-      }, { merge: true });
-    } catch (error) {
-      console.error("Error saving score:", error);
-      setLoadError("Failed to save score. Please try again.");
-    }
-  };
+  try {
+    const aiEvalRef = doc(db, "aiAcademicEvaluation", userId);
+    await setDoc(aiEvalRef, {
+      savedScore: scoreData.totalScore,
+      scoreBreakdown: scoreData.breakdown,
+      result: aiResult || aiEvaluationResult, // Save the AI result
+      lastUpdated: new Date()
+    }, { merge: true });
+  } catch (error) {
+    console.error("Error saving score:", error);
+    setLoadError("Failed to save score. Please try again.");
+  }
+};
+
+useEffect(() => {
+  if (profileData && aiEvaluationResult) {
+    const result = calculateAcademicScore(profileData, aiEvaluationResult);
+    setAcademicScore(result.totalScore);
+    setScoreBreakdown(result.breakdown);
+    if (onScoreUpdate) onScoreUpdate(result.totalScore);
+
+    // Save to Firebase with AI result
+    saveScoreToFirebase(result, aiEvaluationResult);
+  }
+}, [profileData, aiEvaluationResult, onScoreUpdate]);
 
   useEffect(() => {
-    if (profileData && aiEvaluationResult) {
-      const result = calculateAcademicScore(profileData, aiEvaluationResult);
-      setAcademicScore(result.totalScore);
-      setScoreBreakdown(result.breakdown);
-      if (onScoreUpdate) onScoreUpdate(result.totalScore);
+  const unsubscribe = auth.onAuthStateChanged((user) => {
+    if (user) {
+      const loadSavedScore = async () => {
+        setIsLoadingScore(true);
+        try {
+          const aiEvalRef = doc(db, "aiAcademicEvaluation", user.uid);
+          const docSnap = await getDoc(aiEvalRef);
 
-      // Save to Firebase
-      saveScoreToFirebase(result);
-    }
-  }, [profileData, aiEvaluationResult, onScoreUpdate]);
-
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (user) {
-        const loadSavedScore = async () => {
-          setIsLoadingScore(true);
-          try {
-            const aiEvalRef = doc(db, "aiAcademicEvaluation", user.uid);
-            const docSnap = await getDoc(aiEvalRef);
-
-            if (docSnap.exists()) {
-              const data = docSnap.data();
-              if (data.savedScore !== undefined) {
-                setAcademicScore(data.savedScore);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            
+            // Restore all states in the correct order
+            if (data.result) {
+              setAiEvaluationResult(data.result);
+              // Calculate scores based on the restored AI result
+              if (profileData) {
+                const result = calculateAcademicScore(profileData, data.result);
+                setAcademicScore(result.totalScore);
+                setScoreBreakdown(result.breakdown);
               }
-              if (data.scoreBreakdown) {
-                setScoreBreakdown(data.scoreBreakdown);
-              }
-              if (data.result) {
-                setAiEvaluationResult(data.result);
-              }
+            } else if (data.savedScore !== undefined) {
+              setAcademicScore(data.savedScore);
             }
-          } catch (error) {
-            console.error("Error loading saved score:", error);
-            setLoadError("Failed to load saved scores. Please refresh.");
-          } finally {
-            setIsLoadingScore(false);
+            
+            if (data.scoreBreakdown) {
+              setScoreBreakdown(data.scoreBreakdown);
+            }
           }
-        };
+        } catch (error) {
+          console.error("Error loading saved score:", error);
+          setLoadError("Failed to load saved scores. Please refresh.");
+        } finally {
+          setIsLoadingScore(false);
+        }
+      };
 
-        loadSavedScore();
-      }
-    });
+      loadSavedScore();
+    }
+  });
 
-    return () => unsubscribe();
-  }, []);
+  return () => unsubscribe();
+}, [profileData]); // Add profileData as dependency
 
   const parseAiEvaluationScores = (text) => {
     const categories = {
@@ -170,55 +180,19 @@ export function AcademicFoundation({ styles, profileData, onScoreUpdate,apiKey }
     return () => unsubscribe()
   }, [auth?.currentUser?.uid, isEvaluating])
 
-  const sendMessageToChatGPT = async (message) => {
-    const API_URL = "https://api.openai.com/v1/chat/completions"
-    try {
-      const response = await fetch(API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey.trim()}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4o",
-          messages: [
-            {
-              role: "system",
-              content: "You are an expert academic advisor specializing in evaluating student readiness for internships. Provide detailed, professional evaluations based on the Academic Foundation Scorecard rubric.",
-            },
-            {
-              role: "user",
-              content: message,
-            },
-          ],
-          max_tokens: 2000,
-          temperature: 0.3,
-        }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null)
-        if (response.status === 401) {
-          throw new Error("Invalid API key. Please check your OpenAI API key.")
-        } else if (response.status === 429) {
-          throw new Error("Rate limit exceeded. Please try again later.")
-        } else if (response.status === 403) {
-          throw new Error("Access denied. Please check your API key permissions.")
-        } else {
-          throw new Error(errorData?.error?.message || `HTTP error! status: ${response.status}`)
-        }
-      }
-
-      const data = await response.json()
-      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-        throw new Error("Invalid response format from OpenAI API")
-      }
-      return data.choices[0].message.content
-    } catch (error) {
-      console.error("ChatGPT API Error:", error)
-      throw error
-    }
+ const sendMessageToChatGPT = async (message /*, apiKey not needed */) => {
+  try {
+    const functions = getFunctions(); // pass region if you deploy outside default: getFunctions(undefined, "us-central1")
+    const callEval = httpsCallable(functions, "generateAcademicEvaluation");
+    const resp = await callEval({ prompt: message });
+    const content = resp?.data?.content;
+    if (!content) throw new Error("Empty response from academic evaluation function.");
+    return content;
+  } catch (err) {
+    console.error("Callable error:", err);
+    throw new Error(err?.message || "Failed to run academic evaluation.");
   }
+};
 
   const runAiEvaluation = async () => {
     if (!apiKey?.trim()) {

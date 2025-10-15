@@ -212,7 +212,7 @@ const saveToFirebase = async (data, completed, section = null) => {
   const renderActiveSection = () => {
     const sectionData = formData[activeSection] || {}
     const updateData = (data) => updateFormData(activeSection, data)
-    const commonProps = { data: sectionData, updateData }
+    const commonProps = { data: sectionData, updateData,profileData: { formData } }
 
     switch (activeSection) {
       case "instructions":
