@@ -5,6 +5,7 @@ import { ChevronDown, CheckCircle, TrendingUp, AlertCircle, Brain, RefreshCw } f
 import { db, auth } from "../../firebaseConfig"
 import { doc, onSnapshot, updateDoc, setDoc, getDoc } from "firebase/firestore"
 import { API_KEYS } from "../../API"
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 export function ProfessionalSkills({ profileData, onScoreUpdate,apiKey }) {
   const [showModal, setShowModal] = useState(false)
@@ -190,56 +191,14 @@ export function ProfessionalSkills({ profileData, onScoreUpdate,apiKey }) {
     return () => unsubscribe()
   }, [auth?.currentUser?.uid, isEvaluating])
 
-  const sendMessageToChatGPT = async (message) => {
-    const API_URL = "https://api.openai.com/v1/chat/completions"
-    try {
-      const response = await fetch(API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey.trim()}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4o",
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are an expert career coach specializing in professional skills assessment. Provide detailed, professional evaluations based on the Professional Skills Scorecard rubric.",
-            },
-            {
-              role: "user",
-              content: message,
-            },
-          ],
-          max_tokens: 2000,
-          temperature: 0.3,
-        }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null)
-        if (response.status === 401) {
-          throw new Error("Invalid API key. Please check your OpenAI API key.")
-        } else if (response.status === 429) {
-          throw new Error("Rate limit exceeded. Please try again later.")
-        } else if (response.status === 403) {
-          throw new Error("Access denied. Please check your API key permissions.")
-        } else {
-          throw new Error(errorData?.error?.message || `HTTP error! status: ${response.status}`)
-        }
-      }
-
-      const data = await response.json()
-      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-        throw new Error("Invalid response format from OpenAI API")
-      }
-      return data.choices[0].message.content
-    } catch (error) {
-      console.error("ChatGPT API Error:", error)
-      throw error
-    }
-  }
+const sendMessageToChatGPT = async (message /* apiKey not needed */) => {
+  const functions = getFunctions(); // add region here if you deployed elsewhere
+  const run = httpsCallable(functions, "evaluateProfessionalSkills");
+  const resp = await run({ prompt: message });
+  const content = resp?.data?.content;
+  if (!content) throw new Error("Empty response from evaluateProfessionalSkills.");
+  return content;
+};
 
   const runAiEvaluation = async () => {
     if (!apiKey?.trim()) {
