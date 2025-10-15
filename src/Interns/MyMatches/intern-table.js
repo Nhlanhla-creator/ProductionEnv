@@ -2,9 +2,11 @@
 
 import { useState, useRef, useEffect } from "react"
 import { createPortal } from "react-dom"
-import { FileText, MessageCircle, Filter, Download, Send, FileIcon, User, Check, X,Eye } from "lucide-react"
-import { collection, getDocs, doc, getDoc,setDoc,addDoc } from "firebase/firestore"
+import { FileText, MessageCircle, Filter, Download, Send, FileIcon, User, Check, X, Eye, } from "lucide-react"
+import { collection, getDocs, doc, getDoc, setDoc, addDoc, serverTimestamp, updateDoc } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
+import emailjs from '@emailjs/browser';
+import { API_KEYS } from "../../API";
 
 // Status definitions with color scheme
 const STATUS_TYPES = {
@@ -74,7 +76,7 @@ const getStatusStyle = (status) => {
   return STATUS_TYPES[status] || { color: "#F5F5F5", textColor: "#666666" }
 }
 
-// Match calculation function (you can customize this based on your matching criteria)
+// Match calculation function
 const calculateMatchScore = (internData, sponsorData) => {
   const internProfile = internData?.formData || {};
   const sponsorIR = sponsorData?.internshipRequest || {};
@@ -318,9 +320,6 @@ const checkApplicationStatus = async (userId, sponsorId) => {
   }
 }
 
-
-
-
 const formatLabel = (value) => {
   if (!value) return ""
   return value
@@ -354,6 +353,9 @@ export function InternTable({ interns = [] }) {
   const [loading, setLoading] = useState(false)
   const [programSponsors, setProgramSponsors] = useState([])
   const [showMatchBreakdown, setShowMatchBreakdown] = useState(false);
+  const [showStageModal, setShowStageModal] = useState(false);
+  const [nextStage, setNextStage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [filters, setFilters] = useState({
     location: "",
@@ -369,14 +371,24 @@ export function InternTable({ interns = [] }) {
   const filterPanelRef = useRef(null)
   const isMountedRef = useRef(false)
 
-
-
-
-   const handleViewMatchBreakdown = (intern) => {
+  const handleViewMatchBreakdown = (intern) => {
     setSelectedIntern(intern);
     setShowMatchBreakdown(true);
   };
 
+  const handleStageAction = (intern) => {
+    setSelectedIntern(intern);
+    setShowStageModal(true);
+    setNextStage("");
+    setMessageText("");
+  };
+
+  const resetStageModal = () => {
+    setSelectedIntern(null);
+    setShowStageModal(false);
+    setNextStage("");
+    setMessageText("");
+  };
 
   useEffect(() => {
     setMounted(true)
@@ -388,9 +400,7 @@ export function InternTable({ interns = [] }) {
     }
   }, [])
 
-
-
-   const matchBreakdownSection = {
+  const matchBreakdownSection = {
     marginBottom: "1.5rem",
     padding: "1rem",
     background: "#F8F9FA",
@@ -431,7 +441,7 @@ export function InternTable({ interns = [] }) {
   }
 
   // Fetch program sponsors from Firestore
-const fetchSMes = async () => {
+  const fetchSMes = async () => {
     if (!isMountedRef.current) return
 
     setLoading(true)
@@ -552,9 +562,9 @@ const fetchSMes = async () => {
                 startDate: Application.startDate || "TBD",
                 matchPercentage: matchResult.score,
                 matchBreakdown: matchResult.breakdown,
- status: applicationStatusData.status,
+                status: applicationStatusData.status,
                 action: applicationStatusData.exists ? "Application exists" : "Send Application",
-  applicationExists: applicationStatusData.exists,
+                applicationExists: applicationStatusData.exists,
                 applicationData: applicationStatusData.data,
                 ratingRecommendation: "Not Yet Completed",
                 documents: [],
@@ -686,450 +696,876 @@ const fetchSMes = async () => {
     }
   }, [showFilters])
 
-const handleConnectClick = async (intern) => {
-  try {
-    const user = auth.currentUser;
-    if (!user) {
-      setNotification({ type: "error", message: "User not authenticated. Please log in." });
-      return;
-    }
-
-    console.log("Starting application submission for:", intern.smseName);
-    console.log("User ID:", user.uid);
-    console.log("Intern object:", intern);
-
-    // Get user profile data for more complete application
-    let userData = {};
+  const handleConnectClick = async (intern) => {
     try {
-      const userDoc = await getDoc(doc(db, "internProfiles", user.uid));
-      userData = userDoc.exists() ? userDoc.data() : {};
-      console.log("User data retrieved:", userData);
-    } catch (userError) {
-      console.warn("Could not retrieve user profile:", userError);
-    }
-
-    // Get sponsor data
-    let sponsorData = {};
-    try {
-      const sponsorDoc = await getDoc(doc(db, "internApplications", intern.originalSponsorId));
-      sponsorData = sponsorDoc.exists() ? sponsorDoc.data() : {};
-      console.log("Sponsor data retrieved:", sponsorData);
-    } catch (sponsorError) {
-      console.warn("Could not retrieve sponsor profile:", sponsorError);
-    }
-
-    // Fetch evaluation scores from internEvaluations collection
-    let evaluationScores = {
-      academic: 0,
-      bigInternScore: 0,
-      professionalPresentation: 0,
-      professionalSkills: 0,
-      workExperience: 0,
-      lastUpdated: null,
-      updatedAt: null
-    };
-
-    try {
-      const evaluationDoc = await getDoc(doc(db, "internEvaluations", user.uid));
-      if (evaluationDoc.exists()) {
-        const evalData = evaluationDoc.data();
-        console.log("Evaluation data retrieved:", evalData);
-        
-        evaluationScores = {
-          academic: evalData.scores?.academic || 0,
-          bigInternScore: evalData.scores?.bigInternScore || 0,
-          professionalPresentation: evalData.scores?.professionalPresentation || 0,
-          professionalSkills: evalData.scores?.professionalSkills || 0,
-          workExperience: evalData.scores?.workExperience || 0,
-          lastUpdated: evalData.scores?.lastUpdated || null,
-          updatedAt: evalData.scores?.updatedAt || null
-        };
-      } else {
-        console.log("No evaluation scores found for user:", user.uid);
+      const user = auth.currentUser;
+      if (!user) {
+        setNotification({ type: "error", message: "User not authenticated. Please log in." });
+        return;
       }
-    } catch (evaluationError) {
-      console.warn("Could not retrieve evaluation scores:", evaluationError);
-    }
 
-    // Build the composite ID for the application document
-    const internId = user.uid;
-    const sponsorId = intern.originalSponsorId || intern.id.split("_")[0] || intern.id;
-    const applicationDocId = `${sponsorId}_${internId}`;
+      console.log("Starting application submission for:", intern.smseName);
+      console.log("User ID:", user.uid);
+      console.log("Intern object:", intern);
 
-    console.log("Application document ID:", applicationDocId);
-    console.log("Sponsor ID:", sponsorId);
+      // Get user profile data for more complete application
+      let userData = {};
+      try {
+        const userDoc = await getDoc(doc(db, "internProfiles", user.uid));
+        userData = userDoc.exists() ? userDoc.data() : {};
+        console.log("User data retrieved:", userData);
+      } catch (userError) {
+        console.warn("Could not retrieve user profile:", userError);
+      }
 
-    // Get more detailed user information if available
-    const userFormData = userData.formData || {};
-    const userProfile = userData.entityOverview || {};
+      // Get sponsor data
+      let sponsorData = {};
+      try {
+        const sponsorDoc = await getDoc(doc(db, "internApplications", intern.originalSponsorId));
+        sponsorData = sponsorDoc.exists() ? sponsorDoc.data() : {};
+        console.log("Sponsor data retrieved:", sponsorData);
+      } catch (sponsorError) {
+        console.warn("Could not retrieve sponsor profile:", sponsorError);
+      }
 
-    // Calculate fresh match breakdown for the application
-    const matchResult = calculateMatchScore(userData, sponsorData);
-    console.log("Match result with breakdown:", matchResult);
+      // Fetch evaluation scores from internEvaluations collection
+      let evaluationScores = {
+        academic: 0,
+        bigInternScore: 0,
+        professionalPresentation: 0,
+        professionalSkills: 0,
+        workExperience: 0,
+        lastUpdated: null,
+        updatedAt: null
+      };
 
-    // Application data structure with match breakdown and evaluation scores included
-    const applicationData = {
-      // Applicant Information
-      applicantId: internId,
-      applicantName: userFormData.personalOverview?.fullName || "Anonymous",
-      applicantEmail: user.email || userFormData.personalOverview?.email || "Not provided",
+      try {
+        const evaluationDoc = await getDoc(doc(db, "internEvaluations", user.uid));
+        if (evaluationDoc.exists()) {
+          const evalData = evaluationDoc.data();
+          console.log("Evaluation data retrieved:", evalData);
+          
+          evaluationScores = {
+            academic: evalData.scores?.academic || 0,
+            bigInternScore: evalData.scores?.bigInternScore || 0,
+            professionalPresentation: evalData.scores?.professionalPresentation || 0,
+            professionalSkills: evalData.scores?.professionalSkills || 0,
+            workExperience: evalData.scores?.workExperience || 0,
+            lastUpdated: evalData.scores?.lastUpdated || null,
+            updatedAt: evalData.scores?.updatedAt || null
+          };
+        } else {
+          console.log("No evaluation scores found for user:", user.uid);
+        }
+      } catch (evaluationError) {
+        console.warn("Could not retrieve evaluation scores:", evaluationError);
+      }
 
-      // Educational Information
-      institution: userFormData.academicOverview?.institution || userProfile.organizationName || "Not Provided",
-      degree: userFormData.academicOverview?.degree || userFormData.studyLevel || "Not Provided",
-      field: userFormData.academicOverview?.fieldOfStudy || userFormData.sector || "Not Provided",
-      locationFlexibility: userFormData.academicOverview?.locationFlexibility || userFormData.locationFlexibility || "Not Provided",
-      
-      // Applicant Skills and Preferences
-      technicalSkills: userFormData.skillsInterests?.technicalSkills || [],
-      availabilityStart: userFormData.skillsInterests?.availabilityStart || "Not specified",
-      provinces: userFormData.personalOverview?.provinces || [],
-      cities: userFormData.personalOverview?.cities || [],
+      // Build the composite ID for the application document
+      const internId = user.uid;
+      const sponsorId = intern.originalSponsorId || intern.id.split("_")[0] || intern.id;
+      const applicationDocId = `${sponsorId}_${internId}`;
 
-      // Internship Details
-      sponsorId: sponsorId,
-      sponsorName: intern.smseName,
-      location: intern.location || "N/A",
-      type: "Internship",
-      role: intern.internshipRole || "N/A",
-      sector: intern.sector || "N/A",
+      console.log("Application document ID:", applicationDocId);
+      console.log("Sponsor ID:", sponsorId);
 
-      // Funding Information
-      funding: intern.stipend === "Pro-Bono" || intern.stipend === "not specified" ? "No" : "Yes",
-      fundType: intern.stipend || "not specified",
+      // Get more detailed user information if available
+      const userFormData = userData.formData || {};
+      const userProfile = userData.entityOverview || {};
 
-      // Timeline
-      startDate: intern.startDate || "TBD",
-      appliedDate: new Date().toISOString(),
+      // Calculate fresh match breakdown for the application
+      const matchResult = calculateMatchScore(userData, sponsorData);
+      console.log("Match result with breakdown:", matchResult);
 
-      // AI EVALUATION SCORES - NEW SECTION
-      aiAcademicScore: evaluationScores.academic,
-      aiProfessionalSkillsScore: evaluationScores.professionalSkills,
-      aiWorkExperienceScore: evaluationScores.workExperience,
-      aiPresentationScore: evaluationScores.professionalPresentation,
-      bigInternScore: evaluationScores.bigInternScore,
-      evaluationLastUpdated: evaluationScores.lastUpdated,
-      evaluationUpdatedAt: evaluationScores.updatedAt,
+      // Application data structure with match breakdown and evaluation scores included
+      const applicationData = {
+        // Applicant Information
+        applicantId: internId,
+        applicantName: userFormData.personalOverview?.fullName || "Anonymous",
+        applicantEmail: user.email || userFormData.personalOverview?.email || "Not provided",
 
-      // MATCH BREAKDOWN INFORMATION
-      matchAnalysis: {
-        overallScore: matchResult.score,
-        calculatedAt: new Date().toISOString(),
-        breakdown: {
-          skillsMatch: {
-            score: matchResult.breakdown.skillsMatch.score,
-            maxScore: matchResult.breakdown.skillsMatch.maxScore,
-            matched: matchResult.breakdown.skillsMatch.matched,
-            description: matchResult.breakdown.skillsMatch.description,
-            applicantSkills: matchResult.breakdown.skillsMatch.details.internSkills,
-            requiredRole: matchResult.breakdown.skillsMatch.details.sponsorRole,
-            preferredSkills: matchResult.breakdown.skillsMatch.details.sponsorSkills
+        // Educational Information
+        institution: userFormData.academicOverview?.institution || userProfile.organizationName || "Not Provided",
+        degree: userFormData.academicOverview?.degree || userFormData.studyLevel || "Not Provided",
+        field: userFormData.academicOverview?.fieldOfStudy || userFormData.sector || "Not Provided",
+        locationFlexibility: userFormData.academicOverview?.locationFlexibility || userFormData.locationFlexibility || "Not Provided",
+        
+        // Applicant Skills and Preferences
+        technicalSkills: userFormData.skillsInterests?.technicalSkills || [],
+        availabilityStart: userFormData.skillsInterests?.availabilityStart || "Not specified",
+        provinces: userFormData.personalOverview?.provinces || [],
+        cities: userFormData.personalOverview?.cities || [],
+
+        // Internship Details
+        sponsorId: sponsorId,
+        sponsorName: intern.smseName,
+        location: intern.location || "N/A",
+        type: "Internship",
+        role: intern.internshipRole || "N/A",
+        sector: intern.sector || "N/A",
+
+        // Funding Information
+        funding: intern.stipend === "Pro-Bono" || intern.stipend === "not specified" ? "No" : "Yes",
+        fundType: intern.stipend || "not specified",
+
+        // Timeline
+        startDate: intern.startDate || "TBD",
+        appliedDate: new Date().toISOString(),
+
+        // AI EVALUATION SCORES - NEW SECTION
+        aiAcademicScore: evaluationScores.academic,
+        aiProfessionalSkillsScore: evaluationScores.professionalSkills,
+        aiWorkExperienceScore: evaluationScores.workExperience,
+        aiPresentationScore: evaluationScores.professionalPresentation,
+        bigInternScore: evaluationScores.bigInternScore,
+        evaluationLastUpdated: evaluationScores.lastUpdated,
+        evaluationUpdatedAt: evaluationScores.updatedAt,
+
+        // MATCH BREAKDOWN INFORMATION
+        matchAnalysis: {
+          overallScore: matchResult.score,
+          calculatedAt: new Date().toISOString(),
+          breakdown: {
+            skillsMatch: {
+              score: matchResult.breakdown.skillsMatch.score,
+              maxScore: matchResult.breakdown.skillsMatch.maxScore,
+              matched: matchResult.breakdown.skillsMatch.matched,
+              description: matchResult.breakdown.skillsMatch.description,
+              applicantSkills: matchResult.breakdown.skillsMatch.details.internSkills,
+              requiredRole: matchResult.breakdown.skillsMatch.details.sponsorRole,
+              preferredSkills: matchResult.breakdown.skillsMatch.details.sponsorSkills
+            },
+            workModeCompatibility: {
+              score: matchResult.breakdown.workModeMatch.score,
+              maxScore: matchResult.breakdown.workModeMatch.maxScore,
+              matched: matchResult.breakdown.workModeMatch.matched,
+              description: matchResult.breakdown.workModeMatch.description,
+              applicantFlexibility: matchResult.breakdown.workModeMatch.details.internFlexibility,
+              requiredType: matchResult.breakdown.workModeMatch.details.sponsorType
+            },
+            locationCompatibility: {
+              score: matchResult.breakdown.locationMatch.score,
+              maxScore: matchResult.breakdown.locationMatch.maxScore,
+              description: matchResult.breakdown.locationMatch.description,
+              applicantProvinces: matchResult.breakdown.locationMatch.details.internProvinces,
+              applicantCities: matchResult.breakdown.locationMatch.details.internCities,
+              requiredProvince: matchResult.breakdown.locationMatch.details.sponsorProvince,
+              requiredCities: matchResult.breakdown.locationMatch.details.sponsorCities,
+              isLocationRelevant: matchResult.breakdown.locationMatch.details.isLocationRelevant
+            },
+            availabilityAlignment: {
+              score: matchResult.breakdown.availabilityMatch.score,
+              maxScore: matchResult.breakdown.availabilityMatch.maxScore,
+              matched: matchResult.breakdown.availabilityMatch.matched,
+              description: matchResult.breakdown.availabilityMatch.description,
+              applicantStartDate: matchResult.breakdown.availabilityMatch.details.internStartDate,
+              requiredStartDate: matchResult.breakdown.availabilityMatch.details.sponsorStartDate
+            },
+            profileCompleteness: {
+              score: matchResult.breakdown.additionalFactors.score,
+              maxScore: matchResult.breakdown.additionalFactors.maxScore,
+              matched: matchResult.breakdown.additionalFactors.matched,
+              description: matchResult.breakdown.additionalFactors.description,
+              hasGraduationYear: matchResult.breakdown.additionalFactors.details.hasGradYear,
+              hasInternshipType: matchResult.breakdown.additionalFactors.details.hasInternType
+            }
           },
-          workModeCompatibility: {
-            score: matchResult.breakdown.workModeMatch.score,
-            maxScore: matchResult.breakdown.workModeMatch.maxScore,
-            matched: matchResult.breakdown.workModeMatch.matched,
-            description: matchResult.breakdown.workModeMatch.description,
-            applicantFlexibility: matchResult.breakdown.workModeMatch.details.internFlexibility,
-            requiredType: matchResult.breakdown.workModeMatch.details.sponsorType
-          },
-          locationCompatibility: {
-            score: matchResult.breakdown.locationMatch.score,
-            maxScore: matchResult.breakdown.locationMatch.maxScore,
-            description: matchResult.breakdown.locationMatch.description,
-            applicantProvinces: matchResult.breakdown.locationMatch.details.internProvinces,
-            applicantCities: matchResult.breakdown.locationMatch.details.internCities,
-            requiredProvince: matchResult.breakdown.locationMatch.details.sponsorProvince,
-            requiredCities: matchResult.breakdown.locationMatch.details.sponsorCities,
-            isLocationRelevant: matchResult.breakdown.locationMatch.details.isLocationRelevant
-          },
-          availabilityAlignment: {
-            score: matchResult.breakdown.availabilityMatch.score,
-            maxScore: matchResult.breakdown.availabilityMatch.maxScore,
-            matched: matchResult.breakdown.availabilityMatch.matched,
-            description: matchResult.breakdown.availabilityMatch.description,
-            applicantStartDate: matchResult.breakdown.availabilityMatch.details.internStartDate,
-            requiredStartDate: matchResult.breakdown.availabilityMatch.details.sponsorStartDate
-          },
-          profileCompleteness: {
-            score: matchResult.breakdown.additionalFactors.score,
-            maxScore: matchResult.breakdown.additionalFactors.maxScore,
-            matched: matchResult.breakdown.additionalFactors.matched,
-            description: matchResult.breakdown.additionalFactors.description,
-            hasGraduationYear: matchResult.breakdown.additionalFactors.details.hasGradYear,
-            hasInternshipType: matchResult.breakdown.additionalFactors.details.hasInternType
+          // Summary for quick review
+          matchSummary: {
+            strongPoints: [],
+            weakPoints: [],
+            recommendations: []
           }
         },
-        // Summary for quick review
-        matchSummary: {
-          strongPoints: [],
-          weakPoints: [],
-          recommendations: []
-        }
-      },
 
-      // Status Tracking
-      status: "Applied",
-      action: intern.action || "Send Application",
-      rating: intern.ratingRecommendation || "Pending",
+        // Status Tracking
+        status: "Applied",
+        action: intern.action || "Send Application",
+        rating: intern.ratingRecommendation || "Pending",
 
-      // Metadata
-      submittedAt: new Date().toISOString(),
-      lastUpdated: new Date().toISOString(),
-      applicationVersion: "2.1" // Updated version to indicate evaluation scores inclusion
-    };
+        // Metadata
+        submittedAt: new Date().toISOString(),
+        lastUpdated: new Date().toISOString(),
+        applicationVersion: "2.1" // Updated version to indicate evaluation scores inclusion
+      };
 
-    // Generate match summary
-    const breakdown = matchResult.breakdown;
-    const strongPoints = [];
-    const weakPoints = [];
-    const recommendations = [];
+      // Generate match summary
+      const breakdown = matchResult.breakdown;
+      const strongPoints = [];
+      const weakPoints = [];
+      const recommendations = [];
 
-    // Analyze each component
-    if (breakdown.skillsMatch.matched) {
-      strongPoints.push("Skills align well with role requirements");
-    } else {
-      weakPoints.push("Skills don't match role requirements");
-      recommendations.push("Consider highlighting transferable skills or willingness to learn");
-    }
-
-    if (breakdown.workModeMatch.matched) {
-      strongPoints.push("Work mode preferences are compatible");
-    } else {
-      weakPoints.push("Work mode preferences don't align");
-      recommendations.push("Consider discussing flexibility in work arrangements");
-    }
-
-    if (breakdown.locationMatch.score >= 15) {
-      strongPoints.push("Good location compatibility");
-    } else if (breakdown.locationMatch.score > 0) {
-      strongPoints.push("Some location flexibility");
-    } else {
-      weakPoints.push("Location requirements not met");
-      recommendations.push("Discuss remote work possibilities or relocation");
-    }
-
-    if (breakdown.availabilityMatch.matched) {
-      strongPoints.push("Availability aligns with timeline");
-    } else {
-      weakPoints.push("Availability doesn't match preferred timeline");
-      recommendations.push("Discuss flexible start dates");
-    }
-
-    // Add evaluation-based insights to summary
-    if (evaluationScores.bigInternScore >= 70) {
-      strongPoints.push("High overall evaluation score");
-    } else if (evaluationScores.bigInternScore >= 50) {
-      strongPoints.push("Good evaluation score");
-    } else if (evaluationScores.bigInternScore > 0) {
-      weakPoints.push("Lower evaluation score");
-      recommendations.push("Consider highlighting achievements and growth potential");
-    }
-
-    // Add summary to application data
-    applicationData.matchAnalysis.matchSummary = {
-      strongPoints,
-      weakPoints,
-      recommendations,
-      overallAssessment: matchResult.score >= 80 ? "Excellent Match" :
-                        matchResult.score >= 60 ? "Good Match" :
-                        matchResult.score >= 40 ? "Fair Match" : "Poor Match"
-    };
-
-    // Save to Firestore with error handling
-    await setDoc(doc(db, "internshipApplications", applicationDocId), applicationData, { merge: true });
-    
-    console.log("Application successfully saved to Firestore with evaluation scores");
-
-    // Update UI state
-    setStatuses((prev) => ({ ...prev, [intern.id]: "Applied" }));
-    
-    // Dispatch notification event to the sponsor
-    const dispatchNotification = () => {
-      const notificationMessage = `New application from ${applicationData.applicantName} for ${intern.internshipRole}!`;
-      console.log('Dispatching sponsor notification:', notificationMessage);
-      
-      const event = new CustomEvent('newNotification', {
-        detail: { 
-          message: notificationMessage,
-          type: 'success',
-          timestamp: new Date().toISOString(),
-          recipientId: sponsorId // Add recipient ID for targeted notifications
-        },
-        bubbles: true,
-        cancelable: true,
-        composed: true
-      });
-
-      setTimeout(() => {
-        window.dispatchEvent(event);
-        console.log('Sponsor notification event dispatched');
-      }, 100);
-    };
-
-    dispatchNotification();
-
-    // Show success notification to applicant
-    setNotification({ 
-      type: "success", 
-      message: `Application successfully submitted to ${intern.smseName}!` 
-    });
-    setTimeout(() => setNotification(null), 4000);
-
-  } catch (error) {
-    console.error("Detailed error in handleConnectClick:", error);
-    console.error("Error code:", error.code);
-    console.error("Error message:", error.message);
-    
-    // More specific error messages
-    let errorMessage = "Failed to submit application.";
-    
-    if (error.code === 'permission-denied') {
-      errorMessage = "Permission denied. Please check your account permissions.";
-    } else if (error.code === 'unavailable') {
-      errorMessage = "Service temporarily unavailable. Please try again.";
-    } else if (error.code === 'network-request-failed') {
-      errorMessage = "Network error. Please check your internet connection.";
-    } else if (error.message.includes('auth')) {
-      errorMessage = "Authentication error. Please log in again.";
-    }
-    
-    // Dispatch error notification
-    const errorEvent = new CustomEvent('newNotification', {
-      detail: {
-        message: errorMessage,
-        type: 'error',
-        timestamp: new Date().toISOString()
+      // Analyze each component
+      if (breakdown.skillsMatch.matched) {
+        strongPoints.push("Skills align well with role requirements");
+      } else {
+        weakPoints.push("Skills don't match role requirements");
+        recommendations.push("Consider highlighting transferable skills or willingness to learn");
       }
-    });
-    window.dispatchEvent(errorEvent);
-    
-    setNotification({ type: "error", message: errorMessage });
-    setTimeout(() => setNotification(null), 5000);
-  }
-};
 
-const acceptRequest = async (intern) => {
-  try {
-    const user = auth.currentUser;
-    if (!user) {
-      setNotification({ type: "error", message: "User not authenticated. Please log in." });
+      if (breakdown.workModeMatch.matched) {
+        strongPoints.push("Work mode preferences are compatible");
+      } else {
+        weakPoints.push("Work mode preferences don't align");
+        recommendations.push("Consider discussing flexibility in work arrangements");
+      }
+
+      if (breakdown.locationMatch.score >= 15) {
+        strongPoints.push("Good location compatibility");
+      } else if (breakdown.locationMatch.score > 0) {
+        strongPoints.push("Some location flexibility");
+      } else {
+        weakPoints.push("Location requirements not met");
+        recommendations.push("Discuss remote work possibilities or relocation");
+      }
+
+      if (breakdown.availabilityMatch.matched) {
+        strongPoints.push("Availability aligns with timeline");
+      } else {
+        weakPoints.push("Availability doesn't match preferred timeline");
+        recommendations.push("Discuss flexible start dates");
+      }
+
+      // Add evaluation-based insights to summary
+      if (evaluationScores.bigInternScore >= 70) {
+        strongPoints.push("High overall evaluation score");
+      } else if (evaluationScores.bigInternScore >= 50) {
+        strongPoints.push("Good evaluation score");
+      } else if (evaluationScores.bigInternScore > 0) {
+        weakPoints.push("Lower evaluation score");
+        recommendations.push("Consider highlighting achievements and growth potential");
+      }
+
+      // Add summary to application data
+      applicationData.matchAnalysis.matchSummary = {
+        strongPoints,
+        weakPoints,
+        recommendations,
+        overallAssessment: matchResult.score >= 80 ? "Excellent Match" :
+                          matchResult.score >= 60 ? "Good Match" :
+                          matchResult.score >= 40 ? "Fair Match" : "Poor Match"
+      };
+
+      // Save to Firestore with error handling
+      await setDoc(doc(db, "internshipApplications", applicationDocId), applicationData, { merge: true });
+      
+      console.log("Application successfully saved to Firestore with evaluation scores");
+
+      // Update UI state
+      setStatuses((prev) => ({ ...prev, [intern.id]: "Applied" }));
+      
+      // Send email notification to sponsor
+      await sendApplicationEmail(intern, user, applicationData);
+
+      // Dispatch notification event to the sponsor
+      const dispatchNotification = () => {
+        const notificationMessage = `New application from ${applicationData.applicantName} for ${intern.internshipRole}!`;
+        console.log('Dispatching sponsor notification:', notificationMessage);
+        
+        const event = new CustomEvent('newNotification', {
+          detail: { 
+            message: notificationMessage,
+            type: 'success',
+            timestamp: new Date().toISOString(),
+            recipientId: sponsorId // Add recipient ID for targeted notifications
+          },
+          bubbles: true,
+          cancelable: true,
+          composed: true
+        });
+
+        setTimeout(() => {
+          window.dispatchEvent(event);
+          console.log('Sponsor notification event dispatched');
+        }, 100);
+      };
+
+      dispatchNotification();
+
+      // Show success notification to applicant
+      setNotification({ 
+        type: "success", 
+        message: `Application successfully submitted to ${intern.smseName}!` 
+      });
+      setTimeout(() => setNotification(null), 4000);
+
+    } catch (error) {
+      console.error("Detailed error in handleConnectClick:", error);
+      console.error("Error code:", error.code);
+      console.error("Error message:", error.message);
+      
+      // More specific error messages
+      let errorMessage = "Failed to submit application.";
+      
+      if (error.code === 'permission-denied') {
+        errorMessage = "Permission denied. Please check your account permissions.";
+      } else if (error.code === 'unavailable') {
+        errorMessage = "Service temporarily unavailable. Please try again.";
+      } else if (error.code === 'network-request-failed') {
+        errorMessage = "Network error. Please check your internet connection.";
+      } else if (error.message.includes('auth')) {
+        errorMessage = "Authentication error. Please log in again.";
+      }
+      
+      // Dispatch error notification
+      const errorEvent = new CustomEvent('newNotification', {
+        detail: {
+          message: errorMessage,
+          type: 'error',
+          timestamp: new Date().toISOString()
+        }
+      });
+      window.dispatchEvent(errorEvent);
+      
+      setNotification({ type: "error", message: errorMessage });
+      setTimeout(() => setNotification(null), 5000);
+    }
+  };
+
+  const sendApplicationEmail = async (intern, user, applicationData) => {
+    try {
+      console.log("🔄 Sending application email...");
+
+      const emailjsConfig = {
+        serviceId: API_KEYS.SERVICE_ID_MESSAGES,
+        templateId: API_KEYS.TEMPLATE_ID_MESSAGES,
+        publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES
+      };
+
+      console.log("📧 Using email config:", emailjsConfig);
+
+      if (!window.emailjs) {
+        emailjs.init(emailjsConfig.publicKey);
+        window.emailjs = emailjs;
+      }
+
+      const internName = user?.displayName || applicationData.applicantName || "Intern Applicant";
+      const sponsorName = intern.smseName;
+
+      // Get sponsor email
+      let sponsorEmail = null;
+      console.log("📋 Fetching sponsor email for:", intern.originalSponsorId);
+
+      try {
+        const sponsorProfileRef = doc(db, "universalProfiles", intern.originalSponsorId);
+        const sponsorProfileSnap = await getDoc(sponsorProfileRef);
+        
+        if (sponsorProfileSnap.exists()) {
+          const profileData = sponsorProfileSnap.data();
+          console.log("📄 Sponsor profile data:", profileData);
+          
+          sponsorEmail = profileData.email || 
+                         profileData.contactDetails?.email ||
+                         profileData.contactEmail ||
+                         profileData.businessEmail ||
+                         profileData.personalEmail;
+          
+          if (sponsorEmail) {
+            console.log("✅ Found sponsor email:", sponsorEmail);
+          } else {
+            console.log("❌ No email found in sponsor profile");
+          }
+        } else {
+          console.log("❌ No document found for sponsor:", intern.originalSponsorId);
+        }
+      } catch (fetchError) {
+        console.error("❌ Error fetching sponsor email:", fetchError);
+      }
+
+      if (!sponsorEmail) {
+        console.warn("⚠️ No sponsor email found, using fallback");
+        sponsorEmail = "support@bigmarketplace.africa";
+      }
+
+      console.log("📧 Final recipient email:", sponsorEmail);
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(sponsorEmail)) {
+        throw new Error(`Invalid email format: "${sponsorEmail}"`);
+      }
+
+      // Create email content
+      let emailMessage = `Dear ${sponsorName},\n\n`;
+      emailMessage += `You have received a new internship application from ${internName}.\n\n`;
+      emailMessage += `Application Details:\n`;
+      emailMessage += `- Role: ${intern.internshipRole}\n`;
+      emailMessage += `- Match Score: ${applicationData.matchAnalysis.overallScore}%\n`;
+      emailMessage += `- Institution: ${applicationData.institution}\n`;
+      emailMessage += `- Field of Study: ${applicationData.field}\n`;
+      emailMessage += `- Availability: ${applicationData.availabilityStart}\n\n`;
+      
+      emailMessage += `Match Analysis Summary:\n`;
+      emailMessage += `- Overall Assessment: ${applicationData.matchAnalysis.matchSummary.overallAssessment}\n`;
+      
+      if (applicationData.matchAnalysis.matchSummary.strongPoints.length > 0) {
+        emailMessage += `- Strong Points:\n`;
+        applicationData.matchAnalysis.matchSummary.strongPoints.forEach(point => {
+          emailMessage += `  • ${point}\n`;
+        });
+      }
+      
+      emailMessage += `\nPlease log in to your dashboard to review the full application and match breakdown.\n\n`;
+      emailMessage += `Best regards,\nBIG Marketplace Africa Internship Team`;
+
+      const templateParams = {
+        to_email: sponsorEmail,
+        subject: `New Internship Application: ${internName} for ${intern.internshipRole}`,
+        from_name: "BIG Marketplace Africa",
+        date: new Date().toLocaleDateString(),
+        message: emailMessage,
+        portal_url: `https://www.bigmarketplace.africa/applications/${intern.originalSponsorId}_${user.uid}`,
+        has_attachments: "false",
+        attachments_count: "0"
+      };
+
+      console.log("📨 Sending application email...", templateParams);
+
+      const response = await window.emailjs.send(
+        emailjsConfig.serviceId,
+        emailjsConfig.templateId,
+        templateParams,
+        emailjsConfig.publicKey
+      );
+      
+      console.log("✅ Application email sent successfully!", response);
+      
+    } catch (emailError) {
+      console.error("❌ Application email failed:", emailError);
+      // Don't throw error here - application should still be saved even if email fails
+    }
+  };
+
+  const acceptRequest = async (intern) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        setNotification({ type: "error", message: "User not authenticated. Please log in." });
+        return;
+      }
+
+      const internId = user.uid;
+      const sponsorId = intern.originalSponsorId || intern.id.split("_")[0];
+      const applicationDocId = `${sponsorId}_${internId}`;
+
+      console.log("Accepting request for application:", applicationDocId);
+
+      // Update the application status to "Accepted"
+      await setDoc(
+        doc(db, "internshipApplications", applicationDocId),
+        {
+          status: "Accepted",
+          acceptedDate: new Date().toISOString(),
+          lastUpdated: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+
+      // Update UI state
+      setStatuses((prev) => ({ ...prev, [intern.id]: "Accepted" }));
+      
+      // Send acceptance email
+      await sendAcceptanceEmail(intern, user);
+
+      // Notify the sponsor/SME
+      const dispatchNotification = () => {
+        const notificationMessage = `Your internship request has been accepted by ${user.displayName || "an intern"}!`;
+        console.log('Dispatching sponsor notification:', notificationMessage);
+        
+        const event = new CustomEvent('newNotification', {
+          detail: { 
+            message: notificationMessage,
+            type: 'success',
+            timestamp: new Date().toISOString(),
+            recipientId: sponsorId,
+            applicationId: applicationDocId
+          },
+          bubbles: true,
+          cancelable: true,
+          composed: true
+        });
+
+        setTimeout(() => {
+          window.dispatchEvent(event);
+          console.log('Sponsor notification event dispatched');
+        }, 100);
+      };
+
+      dispatchNotification();
+
+      // Show success notification to intern
+      setNotification({ 
+        type: "success", 
+        message: `Request accepted! ${intern.smseName} has been notified.` 
+      });
+      setTimeout(() => setNotification(null), 4000);
+
+    } catch (error) {
+      console.error("Error accepting request:", error);
+      
+      let errorMessage = "Failed to accept request.";
+      if (error.code === 'permission-denied') {
+        errorMessage = "Permission denied. Please check your account permissions.";
+      } else if (error.code === 'unavailable') {
+        errorMessage = "Service temporarily unavailable. Please try again.";
+      }
+      
+      setNotification({ type: "error", message: errorMessage });
+      setTimeout(() => setNotification(null), 5000);
+    }
+  };
+
+  const sendAcceptanceEmail = async (intern, user) => {
+    try {
+      console.log("🔄 Sending acceptance email...");
+
+      const emailjsConfig = {
+        serviceId: API_KEYS.SERVICE_ID_MESSAGES,
+        templateId: API_KEYS.TEMPLATE_ID_MESSAGES,
+        publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES
+      };
+
+      if (!window.emailjs) {
+        emailjs.init(emailjsConfig.publicKey);
+        window.emailjs = emailjs;
+      }
+
+      const internName = user?.displayName || "Intern";
+      const sponsorName = intern.smseName;
+
+      // Get sponsor email
+      let sponsorEmail = null;
+      try {
+        const sponsorProfileRef = doc(db, "universalProfiles", intern.originalSponsorId);
+        const sponsorProfileSnap = await getDoc(sponsorProfileRef);
+        
+        if (sponsorProfileSnap.exists()) {
+          const profileData = sponsorProfileSnap.data();
+          sponsorEmail = profileData.email || 
+                         profileData.contactDetails?.email ||
+                         profileData.contactEmail ||
+                         profileData.businessEmail ||
+                         profileData.personalEmail;
+        }
+      } catch (fetchError) {
+        console.error("Error fetching sponsor email:", fetchError);
+      }
+
+      if (!sponsorEmail) {
+        sponsorEmail = "support@bigmarketplace.africa";
+      }
+
+      const emailMessage = `Dear ${sponsorName},\n\n` +
+        `We are pleased to inform you that your internship request has been accepted by ${internName}!\n\n` +
+        `Internship Details:\n` +
+        `- Role: ${intern.internshipRole}\n` +
+        `- Intern: ${internName}\n` +
+        `- Status: Accepted\n\n` +
+        `Next Steps:\n` +
+        `1. Please log in to your dashboard to view the intern's profile\n` +
+        `2. Schedule an introductory meeting\n` +
+        `3. Discuss project details and expectations\n\n` +
+        `You can contact ${internName} directly through the messaging system in your dashboard.\n\n` +
+        `Best regards,\nBIG Marketplace Africa Internship Team`;
+
+      const templateParams = {
+        to_email: sponsorEmail,
+        subject: `Internship Request Accepted: ${internName}`,
+        from_name: "BIG Marketplace Africa",
+        date: new Date().toLocaleDateString(),
+        message: emailMessage,
+        portal_url: `https://www.bigmarketplace.africa/applications/${intern.originalSponsorId}_${user.uid}`,
+        has_attachments: "false",
+        attachments_count: "0"
+      };
+
+      console.log("📨 Sending acceptance email...");
+
+      await window.emailjs.send(
+        emailjsConfig.serviceId,
+        emailjsConfig.templateId,
+        templateParams,
+        emailjsConfig.publicKey
+      );
+      
+      console.log("✅ Acceptance email sent successfully!");
+      
+    } catch (emailError) {
+      console.error("❌ Acceptance email failed:", emailError);
+      // Don't throw error - acceptance should still proceed
+    }
+  };
+
+  const handleStageUpdate = async () => {
+    if (!nextStage) {
+      setNotification({ type: "error", message: "Please select a stage" });
       return;
     }
 
-    const internId = user.uid;
-    const sponsorId = intern.originalSponsorId || intern.id.split("_")[0];
-    const applicationDocId = `${sponsorId}_${internId}`;
-
-    console.log("Accepting request for application:", applicationDocId);
-
-    // Update the application status to "Accepted"
-    await setDoc(
-      doc(db, "internshipApplications", applicationDocId),
-      {
-        status: "Accepted",
-        acceptedDate: new Date().toISOString(),
-        lastUpdated: new Date().toISOString(),
-      },
-      { merge: true }
-    );
-
-    // Update UI state
-    setStatuses((prev) => ({ ...prev, [intern.id]: "Accepted" }));
-    
-    // Notify the sponsor/SME
-    const dispatchNotification = () => {
-      const notificationMessage = `Your internship request has been accepted by ${user.displayName || "an intern"}!`;
-      console.log('Dispatching sponsor notification:', notificationMessage);
+    setIsSubmitting(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error("User not authenticated");
       
-      const event = new CustomEvent('newNotification', {
-        detail: { 
-          message: notificationMessage,
-          type: 'success',
-          timestamp: new Date().toISOString(),
-          recipientId: sponsorId,
-          applicationId: applicationDocId
-        },
-        bubbles: true,
-        cancelable: true,
-        composed: true
+      const internId = user.uid;
+      const sponsorId = selectedIntern.originalSponsorId;
+
+      console.log("Updating status for application:", {
+        internId,
+        sponsorId,
+        nextStage
       });
 
-      setTimeout(() => {
-        window.dispatchEvent(event);
-        console.log('Sponsor notification event dispatched');
-      }, 100);
-    };
+      const updateData = {
+        status: nextStage,
+        updatedAt: serverTimestamp(),
+        ...(messageText && { lastMessage: messageText }),
+      };
 
-    dispatchNotification();
+      const applicationDocId = `${sponsorId}_${internId}`;
+      const docRef = doc(db, "internshipApplications", applicationDocId);
+      
+      const docSnapshot = await getDoc(docRef);
+      if (!docSnapshot.exists()) {
+        throw new Error(`Application document does not exist`);
+      }
 
-    // Show success notification to intern
-    setNotification({ 
-      type: "success", 
-      message: `Request accepted! ${intern.smseName} has been notified.` 
-    });
-    setTimeout(() => setNotification(null), 4000);
+      await updateDoc(docRef, updateData);
 
-  } catch (error) {
-    console.error("Error accepting request:", error);
-    
-    let errorMessage = "Failed to accept request.";
-    if (error.code === 'permission-denied') {
-      errorMessage = "Permission denied. Please check your account permissions.";
-    } else if (error.code === 'unavailable') {
-      errorMessage = "Service temporarily unavailable. Please try again.";
+      // Update UI state
+      setStatuses((prev) => ({ ...prev, [selectedIntern.id]: nextStage }));
+      
+      // Send stage update email
+      await sendStageUpdateEmail(selectedIntern, user, nextStage, messageText);
+
+      setNotification({
+        type: "success",
+        message: `Application status updated to ${nextStage} successfully`
+      });
+      
+      setShowStageModal(false);
+      resetStageModal();
+      
+    } catch (error) {
+      console.error("Error updating stage:", error);
+      setNotification({
+        type: "error",
+        message: `Failed to update status: ${error.message}`
+      });
+    } finally {
+      setIsSubmitting(false);
     }
-    
-    setNotification({ type: "error", message: errorMessage });
-    setTimeout(() => setNotification(null), 5000);
-  }
-};
-const handleSendInternMessage = async () => {
-  if (!selectedIntern || !messageText.trim()) return;
+  };
 
-  const user = auth.currentUser;
-  if (!user) {
-    setNotification({ type: "error", message: "User not authenticated" });
-    return;
-  }
+  const sendStageUpdateEmail = async (intern, user, stage, message) => {
+    try {
+      console.log("🔄 Sending stage update email...");
 
-  try {
-    const internId = user.uid;
-    const sponsorId = selectedIntern.originalSponsorId || selectedIntern.id.split("_")[0];
+      const emailjsConfig = {
+        serviceId: API_KEYS.SERVICE_ID_MESSAGES,
+        templateId: API_KEYS.TEMPLATE_ID_MESSAGES,
+        publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES
+      };
 
-    const subject = `Message regarding Internship Application at ${selectedIntern.smseName}`;
-    const content = messageText.trim();
+      if (!window.emailjs) {
+        emailjs.init(emailjsConfig.publicKey);
+        window.emailjs = emailjs;
+      }
 
-    const basePayload = {
-      to: sponsorId,
-      from: internId,
-      subject,
-      content,
-      date: new Date().toISOString(),
-      applicationId: `${sponsorId}_${internId}`,
-      read: false,
-      attachments: [],
-    };
+      const internName = user?.displayName || "Intern";
+      const sponsorName = intern.smseName;
 
-    await Promise.all([
-      addDoc(collection(db, "messages"), { ...basePayload, type: "inbox" }),
-      addDoc(collection(db, "messages"), { ...basePayload, type: "sent", read: true }),
-    ]);
+      // Get sponsor email
+      let sponsorEmail = null;
+      try {
+        const sponsorProfileRef = doc(db, "universalProfiles", intern.originalSponsorId);
+        const sponsorProfileSnap = await getDoc(sponsorProfileRef);
+        
+        if (sponsorProfileSnap.exists()) {
+          const profileData = sponsorProfileSnap.data();
+          sponsorEmail = profileData.email || 
+                         profileData.contactDetails?.email ||
+                         profileData.contactEmail ||
+                         profileData.businessEmail ||
+                         profileData.personalEmail;
+        }
+      } catch (fetchError) {
+        console.error("Error fetching sponsor email:", fetchError);
+      }
 
-    setNotification({
-      type: "success",
-      message: `Message sent to ${selectedIntern.smseName}`,
-    });
+      if (!sponsorEmail) {
+        sponsorEmail = "support@bigmarketplace.africa";
+      }
 
-    setShowMessageModal(false);
-    setMessageText("");
+      let emailMessage = `Dear ${sponsorName},\n\n`;
+      
+      if (stage === "Declined") {
+        emailMessage += `We regret to inform you that the internship application has been moved to the "${stage}" stage.\n\n`;
+      } else {
+        emailMessage += `The internship application has progressed to the "${stage}" stage.\n\n`;
+      }
+      
+      if (message) {
+        emailMessage += `Message from ${internName}:\n${message}\n\n`;
+      }
 
-  } catch (error) {
-    console.error("Error sending message:", error);
-    setNotification({ type: "error", message: "Failed to send message" });
-  }
-};
+      emailMessage += `Application Details:\n`;
+      emailMessage += `- Role: ${intern.internshipRole}\n`;
+      emailMessage += `- Intern: ${internName}\n`;
+      emailMessage += `- Current Stage: ${stage}\n\n`;
+      
+      emailMessage += `Please log in to your dashboard for more details.\n\n`;
+      emailMessage += `Best regards,\nBIG Marketplace Africa Internship Team`;
 
+      const templateParams = {
+        to_email: sponsorEmail,
+        subject: `Internship Application Update: ${stage} Stage`,
+        from_name: "BIG Marketplace Africa",
+        date: new Date().toLocaleDateString(),
+        message: emailMessage,
+        portal_url: `https://www.bigmarketplace.africa/applications/${intern.originalSponsorId}_${user.uid}`,
+        has_attachments: "false",
+        attachments_count: "0"
+      };
+
+      console.log("📨 Sending stage update email...");
+
+      await window.emailjs.send(
+        emailjsConfig.serviceId,
+        emailjsConfig.templateId,
+        templateParams,
+        emailjsConfig.publicKey
+      );
+      
+      console.log("✅ Stage update email sent successfully!");
+      
+    } catch (emailError) {
+      console.error("❌ Stage update email failed:", emailError);
+    }
+  };
+
+  const handleSendInternMessage = async () => {
+    if (!selectedIntern || !messageText.trim()) return;
+
+    const user = auth.currentUser;
+    if (!user) {
+      setNotification({ type: "error", message: "User not authenticated" });
+      return;
+    }
+
+    try {
+      const internId = user.uid;
+      const sponsorId = selectedIntern.originalSponsorId || selectedIntern.id.split("_")[0];
+
+      const subject = `Message regarding Internship Application at ${selectedIntern.smseName}`;
+      const content = messageText.trim();
+
+      const basePayload = {
+        to: sponsorId,
+        from: internId,
+        subject,
+        content,
+        date: new Date().toISOString(),
+        applicationId: `${sponsorId}_${internId}`,
+        read: false,
+        attachments: [],
+      };
+
+      await Promise.all([
+        addDoc(collection(db, "messages"), { ...basePayload, type: "inbox" }),
+        addDoc(collection(db, "messages"), { ...basePayload, type: "sent", read: true }),
+      ]);
+
+      // Send email notification for the message
+      await sendMessageEmail(selectedIntern, user, content);
+
+      setNotification({
+        type: "success",
+        message: `Message sent to ${selectedIntern.smseName}`,
+      });
+
+      setShowMessageModal(false);
+      setMessageText("");
+
+    } catch (error) {
+      console.error("Error sending message:", error);
+      setNotification({ type: "error", message: "Failed to send message" });
+    }
+  };
+
+  const sendMessageEmail = async (intern, user, message) => {
+    try {
+      console.log("🔄 Sending message email...");
+
+      const emailjsConfig = {
+        serviceId: API_KEYS.SERVICE_ID_MESSAGES,
+        templateId: API_KEYS.TEMPLATE_ID_MESSAGES,
+        publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES
+      };
+
+      if (!window.emailjs) {
+        emailjs.init(emailjsConfig.publicKey);
+        window.emailjs = emailjs;
+      }
+
+      const internName = user?.displayName || "Intern";
+      const sponsorName = intern.smseName;
+
+      // Get sponsor email
+      let sponsorEmail = null;
+      try {
+        const sponsorProfileRef = doc(db, "universalProfiles", intern.originalSponsorId);
+        const sponsorProfileSnap = await getDoc(sponsorProfileRef);
+        
+        if (sponsorProfileSnap.exists()) {
+          const profileData = sponsorProfileSnap.data();
+          sponsorEmail = profileData.email || 
+                         profileData.contactDetails?.email ||
+                         profileData.contactEmail ||
+                         profileData.businessEmail ||
+                         profileData.personalEmail;
+        }
+      } catch (fetchError) {
+        console.error("Error fetching sponsor email:", fetchError);
+      }
+
+      if (!sponsorEmail) {
+        sponsorEmail = "support@bigmarketplace.africa";
+      }
+
+      const emailMessage = `Dear ${sponsorName},\n\n` +
+        `You have received a new message from ${internName} regarding your internship opportunity.\n\n` +
+        `Message:\n"${message}"\n\n` +
+        `Internship Role: ${intern.internshipRole}\n` +
+        `Intern: ${internName}\n\n` +
+        `Please log in to your dashboard to respond to this message.\n\n` +
+        `Best regards,\nBIG Marketplace Africa Internship Team`;
+
+      const templateParams = {
+        to_email: sponsorEmail,
+        subject: `New Message from ${internName} - ${intern.internshipRole}`,
+        from_name: "BIG Marketplace Africa",
+        date: new Date().toLocaleDateString(),
+        message: emailMessage,
+        portal_url: `https://www.bigmarketplace.africa/messages`,
+        has_attachments: "false",
+        attachments_count: "0"
+      };
+
+      console.log("📨 Sending message email...");
+
+      await window.emailjs.send(
+        emailjsConfig.serviceId,
+        emailjsConfig.templateId,
+        templateParams,
+        emailjsConfig.publicKey
+      );
+      
+      console.log("✅ Message email sent successfully!");
+      
+    } catch (emailError) {
+      console.error("❌ Message email failed:", emailError);
+    }
+  };
 
   const handleViewDetails = (intern) => {
     setSelectedIntern(intern)
@@ -1158,11 +1594,11 @@ const handleSendInternMessage = async () => {
     setShowBriefModal(true)
   }
 
- const handleSendMessage = () => {
-  if (messageText.trim()) {
-    handleSendInternMessage();
-  }
-};
+  const handleSendMessage = () => {
+    if (messageText.trim()) {
+      handleSendInternMessage();
+    }
+  };
 
   const handleSaveNote = () => {
     if (noteText.trim()) {
@@ -1184,6 +1620,8 @@ const handleSendInternMessage = async () => {
     setShowMessageModal(false)
     setShowNoteModal(false)
     setShowBriefModal(false)
+    setShowMatchBreakdown(false)
+    setShowStageModal(false)
     setSelectedIntern(null)
   }
 
@@ -1200,6 +1638,7 @@ const handleSendInternMessage = async () => {
       </div>
     )
   }
+
   return (
     <>
       {/* Main content container */}
@@ -1293,25 +1732,6 @@ const handleSendInternMessage = async () => {
                   }
                 </span>
               )}
-            </button>
-            <button
-              style={{
-                background: "#5D4037",
-                color: "white",
-                border: "none",
-                padding: "0.5rem 1rem",
-                borderRadius: "6px",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-                fontSize: "0.875rem",
-                transition: "all 0.2s",
-              }}
-              onClick={handleExport}
-            >
-              <Download size={16} />
-              Export
             </button>
           </div>
         </div>
@@ -1500,7 +1920,6 @@ const handleSendInternMessage = async () => {
                           }}
                         >
                           {intern.stipend}
-                          {/* {intern.stipend === "Pro-Bono" ? "Pro-Bono" : "Paid"} */}
                         </span>
                       </td>
 
@@ -1519,10 +1938,10 @@ const handleSendInternMessage = async () => {
                             <span style={matchScoreStyle}>{intern.matchPercentage}%</span>
                           
                             <Eye
-                                                      size={14}
-                                                      style={{ cursor: "pointer", color: "#a67c52" }}
-                                                      onClick={() => handleViewMatchBreakdown(intern)}
-                                                    />
+                              size={14}
+                              style={{ cursor: "pointer", color: "#a67c52" }}
+                              onClick={() => handleViewMatchBreakdown(intern)}
+                            />
                           </div>
                         </div>
                       </td>
@@ -1545,36 +1964,36 @@ const handleSendInternMessage = async () => {
                       <td style={tableCellStyle}>
                         <div style={actionButtonsStyle}>
                          {currentStatus === "Confirmed" ? (
-  <span style={confirmedBadgeStyle}>
-    <Check size={12} /> Confirmed
-  </span>
-) : currentStatus === "Contacted" ? (
-  <span style={contactedBadgeStyle}>Contacted</span>
-) : currentStatus === "Applied" ||  currentStatus != "New Match" && currentStatus != "Requested"   ? ( // Check for both statuses
-  <span style={{
-    background: "#E3F2FD",
-    color: "#1976D2", 
-    padding: "0.3rem 0.5rem",
-    borderRadius: "3px",
-    fontSize: "0.65rem",
-    fontWeight: "500",
-    whiteSpace: "nowrap"
-  }}>
-    Application Sent
-  </span>
-) : currentStatus === "Requested" ? ( // Check for both statuses
-   <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-    <button onClick={() => acceptRequest(intern)} style={connectButtonStyle}>
-      Accept
-    </button>
-  </div>
-): (
-  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-    <button onClick={() => handleConnectClick(intern)} style={connectButtonStyle}>
-      {intern.action}
-    </button>
-  </div>
-)}
+                            <span style={confirmedBadgeStyle}>
+                              <Check size={12} /> Confirmed
+                            </span>
+                          ) : currentStatus === "Contacted" ? (
+                            <span style={contactedBadgeStyle}>Contacted</span>
+                          ) : currentStatus === "Applied" ||  currentStatus != "New Match" && currentStatus != "Requested"   ? ( // Check for both statuses
+                            <span style={{
+                              background: "#E3F2FD",
+                              color: "#1976D2", 
+                              padding: "0.3rem 0.5rem",
+                              borderRadius: "3px",
+                              fontSize: "0.65rem",
+                              fontWeight: "500",
+                              whiteSpace: "nowrap"
+                            }}>
+                              Application Sent
+                            </span>
+                          ) : currentStatus === "Requested" ? ( // Check for both statuses
+                            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                              <button onClick={() => acceptRequest(intern)} style={connectButtonStyle}>
+                                Accept
+                              </button>
+                            </div>
+                          ): (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                              <button onClick={() => handleConnectClick(intern)} style={connectButtonStyle}>
+                                {intern.action}
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </td>
 
@@ -1593,708 +2012,460 @@ const handleSendInternMessage = async () => {
         </div>
       </div>
 
-      {/* All your existing modals remain the same */}
-      {/* Brief Description Modal */}
-      {mounted &&
-        showBriefModal &&
-        selectedIntern &&
-        createPortal(
-          <div
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: "rgba(0,0,0,0.5)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000,
-            }}
-          >
-            <div
-              style={{
-                background: "white",
-                borderRadius: "12px",
-                maxWidth: "800px",
-                width: "90%",
-                maxHeight: "90vh",
-                overflowY: "auto",
-                boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-              }}
-            >
-              <div style={modalHeaderStyle}>
-                <h3 style={modalTitleStyle}>
-                  <FileText size={20} style={{ marginRight: "0.5rem" }} />
-                  {selectedIntern.briefDescription.title}
-                </h3>
-                <button onClick={closeAllModals} style={modalCloseButtonStyle}>
-                  <X size={20} />
-                </button>
-              </div>
-              <div style={modalBodyStyle}>
-                {/* Company Info */}
-                <div
-                  style={{
-                    marginBottom: "1.5rem",
-                    padding: "1rem",
-                    background: "#F8F9FA",
-                    borderRadius: "8px",
-                  }}
-                >
-                  <h4 style={{ margin: "0 0 0.5rem 0", color: "#5D4037", fontSize: "1.1rem" }}>
-                    {selectedIntern.briefDescription.company}
-                  </h4>
-                  <p style={{ margin: "0", color: "#666", fontSize: "0.9rem" }}>
-                    <strong>Duration:</strong> {selectedIntern.briefDescription.duration}
-                  </p>
-                </div>
-
-                {/* Requirements */}
-                <div style={{ marginBottom: "1.5rem" }}>
-                  <h4 style={{ color: "#5D4037", marginBottom: "0.75rem", fontSize: "1rem" }}>📋 Requirements</h4>
-                  <ul style={{ margin: "0", paddingLeft: "1.5rem", color: "#333" }}>
-                    {selectedIntern.briefDescription.requirements}
-                  </ul>
-                </div>
-
-                {/* Responsibilities */}
-                <div style={{ marginBottom: "1.5rem" }}>
-                  <h4 style={{ color: "#5D4037", marginBottom: "0.75rem", fontSize: "1rem" }}>
-                    💼 Key Responsibilities
-                  </h4>
-                  <ul style={{ margin: "0", paddingLeft: "1.5rem", color: "#333" }}>
-                    {selectedIntern.briefDescription.responsibilities}
-                  </ul>
-                </div>
-
-                {/* Benefits */}
-                <div style={{ marginBottom: "1.5rem" }}>
-                  <h4 style={{ color: "#5D4037", marginBottom: "0.75rem", fontSize: "1rem" }}>🎯 What You'll Gain</h4>
-                  <ul style={{ margin: "0", paddingLeft: "1.5rem", color: "#333" }}>
-                    {selectedIntern.briefDescription.benefits}
-                  </ul>
-                </div>
-
-                {/* Application Process */}
-                <div
-                  style={{
-                    padding: "1rem",
-                    background: "#EFEBE9",
-                    borderRadius: "8px",
-                    border: "1px solid #D7CCC8",
-                  }}
-                >
-                  <h4 style={{ color: "#5D4037", marginBottom: "0.75rem", fontSize: "1rem" }}>
-                    📝 Application Process
-                  </h4>
-                  <p style={{ margin: "0", color: "#333", lineHeight: "1.5" }}>
-                    {selectedIntern.briefDescription.applicationProcess}
-                  </p>
-                </div>
-              </div>
-              <div style={modalActionsStyle}>
-                <button
-                  style={primaryButtonStyle}
-                  onClick={() => {
-                    closeAllModals()
-                    handleConnectClick(selectedIntern)
-                  }}
-                >
-                  <Send size={16} /> Apply Now
-                </button>
-                <button
-                  style={{
-                    background: "#EFEBE9",
-                    color: "#5D4037",
-                    border: "1px solid #D7CCC8",
-                    padding: "0.5rem 1rem",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    fontSize: "0.875rem",
-                  }}
-                  onClick={() => {
-                    closeAllModals()
-                    handleMessage(selectedIntern)
-                  }}
-                >
-                  <MessageCircle size={16} /> Ask Questions
-                </button>
-                <button style={cancelButtonStyle} onClick={closeAllModals}>
-                  Close
-                </button>
-              </div>
+      {/* Stage Update Modal */}
+      {mounted && showStageModal && selectedIntern && createPortal(
+        <div style={modalOverlayStyle}>
+          <div style={{ ...modalContentStyle, maxWidth: "500px" }}>
+            <div style={modalHeaderStyle}>
+              <h3 style={modalTitleStyle}>Update Application Stage</h3>
+              <button onClick={resetStageModal} style={modalCloseButtonStyle}>
+                ✖
+              </button>
             </div>
-          </div>,
-          document.body,
-        )}
-        
-        {mounted &&
-        showMatchBreakdown &&
-        selectedIntern &&
-        createPortal(
-          <div
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: "rgba(0,0,0,0.5)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000,
-            }}
-          >
-            <div
-              style={{
-                background: "white",
-                borderRadius: "12px",
-                maxWidth: "700px",
-                width: "90%",
-                maxHeight: "85vh",
-                overflowY: "auto",
-                boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-              }}
-            >
-              <div style={modalHeaderStyle}>
-                <h3 style={modalTitleStyle}>
-                  Match Breakdown: {selectedIntern.smseName}
-                </h3>
-                <button onClick={closeAllModals} style={modalCloseButtonStyle}>
-                  ✖
-                </button>
-              </div>
-              <div style={modalBodyStyle}>
-                <div style={{ marginBottom: "1.5rem" }}>
-                  <h4 style={{ color: "#5D4037", marginBottom: "0.75rem" }}>
-                    Overall Match Score: {selectedIntern.matchPercentage}%
-                  </h4>
-                  <div style={{...progressBarStyle, width: "100%", height: "10px"}}>
-                    <div
-                      style={{
-                        ...progressFillStyle,
-                        width: `${selectedIntern.matchPercentage}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {selectedIntern.matchBreakdown && Object.entries(selectedIntern.matchBreakdown).map(([key, breakdown]) => {
-                  const titles = {
-                    skillsMatch: "Skills/Role Match",
-                    workModeMatch: "Work Mode Compatibility", 
-                    locationMatch: "Location Match",
-                    availabilityMatch: "Availability Date",
-                    additionalFactors: "Profile Completeness"
-                  };
-
-                  const getStatusColor = (score, maxScore) => {
-                    const percentage = (score / maxScore) * 100;
-                    if (percentage >= 90) return "#2E7D32";
-                    if (percentage >= 50) return "#F57F17"; 
-                    return "#C62828";
-                  };
-
-                  const getStatusText = (score, maxScore) => {
-                    if (score === maxScore) return "✓ Perfect Match";
-                    if (score > maxScore * 0.5) return "◐ Partial Match";
-                    if (score > 0) return "◒ Some Match";
-                    return "✗ No Match";
-                  };
-
-                  return (
-                    <div key={key} style={matchBreakdownSection}>
-                      <h4 style={matchBreakdownTitle}>{titles[key]}</h4>
-                      <div style={matchBreakdownItem}>
-                        <span style={matchBreakdownLabel}>Weight:</span>
-                        <span style={matchBreakdownValue}>{((breakdown.maxScore / 100) * 100).toFixed(0)}%</span>
-                      </div>
-                      <div style={matchBreakdownItem}>
-                        <span style={matchBreakdownLabel}>Score:</span>
-                        <span style={matchBreakdownValue}>{breakdown.score}/{breakdown.maxScore}</span>
-                      </div>
-                      <div style={matchBreakdownItem}>
-                        <span style={matchBreakdownLabel}>Status:</span>
-                        <span style={{ 
-                          ...matchBreakdownValue, 
-                          color: getStatusColor(breakdown.score, breakdown.maxScore)
-                        }}>
-                          {getStatusText(breakdown.score, breakdown.maxScore)}
-                        </span>
-                      </div>
-                      <p style={matchBreakdownDescription}>
-                        {breakdown.description}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-              <div style={modalActionsStyle}>
-                <button 
-                  style={primaryButtonStyle}
-                  onClick={() => {
-                    setShowMatchBreakdown(false);
-                    handleMessage(selectedIntern);
-                  }}
+            <div style={modalBodyStyle}>
+              <div style={{ marginBottom: "1rem" }}>
+                <label style={labelStyle}>Select Next Stage:</label>
+                <select
+                  value={nextStage}
+                  onChange={(e) => setNextStage(e.target.value)}
+                  style={selectStyle}
                 >
-                  <MessageCircle size={16} /> Ask Questions
-                </button>
-                <button 
-                  style={cancelButtonStyle}
-                  onClick={() => setShowMatchBreakdown(false)}
-                >
-                  Close
-                </button>
+                  <option value="">Choose a stage...</option>
+                  <option value="Shortlisted">Shortlisted</option>
+                  <option value="Contacted">Contacted</option>
+                  <option value="Confirmed">Confirmed</option>
+                  <option value="Declined">Declined</option>
+                </select>
               </div>
-            </div>
-          </div>,
-          document.body
-        )}
-
-
-      {/* Filter Modal */}
-      {mounted &&
-        showFilters &&
-        createPortal(
-          <div
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: "rgba(0,0,0,0.5)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000,
-            }}
-          >
-            <div
-              style={{
-                background: "white",
-                borderRadius: "12px",
-                maxWidth: "1000px",
-                width: "95%",
-                maxHeight: "90vh",
-                overflowY: "auto",
-                boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-              }}
-            >
-              <div style={modalHeaderStyle}>
-                <h3 style={modalTitleStyle}>Filter Interns</h3>
-                <button onClick={() => setShowFilters(false)} style={modalCloseButtonStyle}>
-                  ✖
-                </button>
-              </div>
-              <div style={modalBodyStyle}>
-                <div
-                  style={{
-                    textAlign: "center",
-                    marginBottom: "2rem",
-                    paddingBottom: "1rem",
-                    borderBottom: "2px solid #E0E0E0",
-                  }}
-                >
-                  <h1
-                    style={{
-                      fontSize: "1.5rem",
-                      fontWeight: "bold",
-                      color: "#5D4037",
-                      margin: "0 0 0.5rem 0",
-                    }}
-                  >
-                    Filter Intern Matches
-                  </h1>
-                  <p
-                    style={{
-                      fontSize: "1rem",
-                      color: "#5F6368",
-                      margin: "0",
-                    }}
-                  >
-                    Find the perfect intern candidates for your organization
-                  </p>
-                </div>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                    gap: "1.5rem",
-                    marginBottom: "2rem",
-                  }}
-                >
-                  <div
-                    style={{
-                      background: "#F8F9FA",
-                      border: "1px solid #E0E0E0",
-                      borderRadius: "8px",
-                      padding: "1.25rem",
-                    }}
-                  >
-                    <h3
-                      style={{
-                        fontSize: "1rem",
-                        fontWeight: "600",
-                        color: "#5D4037",
-                        margin: "0 0 0.75rem 0",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.5rem",
-                      }}
-                    >
-                      📍 Location
-                    </h3>
-                    <select
-                      style={{
-                        width: "100%",
-                        padding: "0.75rem",
-                        border: "1px solid #E0E0E0",
-                        borderRadius: "6px",
-                        fontSize: "0.875rem",
-                        background: "white",
-                        color: "#202124",
-                      }}
-                      value={filters.location}
-                      onChange={(e) => setFilters({ ...filters, location: e.target.value })}
-                    >
-                      <option value="">Select Location</option>
-                      {["Cape Town", "Johannesburg", "Pretoria", "Durban", "Port Elizabeth"].map((loc) => (
-                        <option key={loc} value={loc}>
-                          {loc}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div
-                    style={{
-                      background: "#F8F9FA",
-                      border: "1px solid #E0E0E0",
-                      borderRadius: "8px",
-                      padding: "1.25rem",
-                    }}
-                  >
-                    <h3
-                      style={{
-                        fontSize: "1rem",
-                        fontWeight: "600",
-                        color: "#5D4037",
-                        margin: "0 0 0.75rem 0",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.5rem",
-                      }}
-                    >
-                      🏢 Sector
-                    </h3>
-                    <select
-                      style={{
-                        width: "100%",
-                        padding: "0.75rem",
-                        border: "1px solid #E0E0E0",
-                        borderRadius: "6px",
-                        fontSize: "0.875rem",
-                        background: "white",
-                        color: "#202124",
-                      }}
-                      value={filters.sector}
-                      onChange={(e) => setFilters({ ...filters, sector: e.target.value })}
-                    >
-                      <option value="">Select Sector</option>
-                      {["Tech", "Agri", "Finance", "Healthcare", "Education"].map((sector) => (
-                        <option key={sector} value={sector}>
-                          {sector}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div
-                    style={{
-                      background: "#F8F9FA",
-                      border: "1px solid #E0E0E0",
-                      borderRadius: "8px",
-                      padding: "1.25rem",
-                    }}
-                  >
-                    <h3
-                      style={{
-                        fontSize: "1rem",
-                        fontWeight: "600",
-                        color: "#5D4037",
-                        margin: "0 0 0.75rem 0",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.5rem",
-                      }}
-                    >
-                      📈 Operation Stage
-                    </h3>
-                    <select
-                      style={{
-                        width: "100%",
-                        padding: "0.75rem",
-                        border: "1px solid #E0E0E0",
-                        borderRadius: "6px",
-                        fontSize: "0.875rem",
-                        background: "white",
-                        color: "#202124",
-                      }}
-                      value={filters.operationStage}
-                      onChange={(e) => setFilters({ ...filters, operationStage: e.target.value })}
-                    >
-                      <option value="">Select Stage</option>
-                      {["Seed", "Series A", "Series B", "Growth", "Mature"].map((stage) => (
-                        <option key={stage} value={stage}>
-                          {stage}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: "1rem",
-                    paddingTop: "1.5rem",
-                    borderTop: "1px solid #E0E0E0",
-                  }}
-                >
-                  <button
-                    style={{
-                      flex: "1",
-                      padding: "0.75rem 1.5rem",
-                      background: "#EFEBE9",
-                      color: "#5D4037",
-                      border: "1px solid #D7CCC8",
-                      borderRadius: "6px",
-                      fontSize: "0.875rem",
-                      fontWeight: "500",
-                      cursor: "pointer",
-                      transition: "all 0.2s",
-                    }}
-                    onClick={() => {
-                      setFilters({
-                        location: "",
-                        matchScore: 50,
-                        sector: "",
-                        operationStage: "",
-                        internshipRole: "",
-                        stipend: "",
-                        startDate: "",
-                        sortBy: "",
-                      })
-                    }}
-                  >
-                    Clear All Filters
-                  </button>
-                  <button
-                    style={{
-                      flex: "1",
-                      padding: "0.75rem 1.5rem",
-                      background: "#5D4037",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "6px",
-                      fontSize: "0.875rem",
-                      fontWeight: "500",
-                      cursor: "pointer",
-                      transition: "all 0.2s",
-                    }}
-                    onClick={() => setShowFilters(false)}
-                  >
-                    Apply Filters
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
-
-      {/* Detail Modal */}
-      {mounted &&
-        showModal &&
-        selectedIntern &&
-        createPortal(
-          <div
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: "rgba(0,0,0,0.5)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000,
-            }}
-          >
-            <div
-              style={{
-                background: "white",
-                borderRadius: "12px",
-                maxWidth: "700px",
-                width: "90%",
-                maxHeight: "80vh",
-                overflowY: "auto",
-                boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-              }}
-            >
-              <div style={modalHeaderStyle}>
-                <h3 style={modalTitleStyle}>
-                  <User size={20} style={{ marginRight: "0.5rem" }} />
-                  SMSE Details
-                </h3>
-                <button onClick={closeAllModals} style={modalCloseButtonStyle}>
-                  ✖
-                </button>
-              </div>
-              <div style={modalBodyStyle}>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-                    gap: "1.5rem",
-                  }}
-                >
-                  <div style={detailCardStyle}>
-                    <h4 style={detailCardTitleStyle}>
-                      <User size={16} style={{ marginRight: "0.5rem" }} />
-                      Company Information
-                    </h4>
-                    <p style={detailTextStyle}>
-                      <strong>SMSE Name:</strong> {selectedIntern.smseName}
-                    </p>
-                    <p style={detailTextStyle}>
-                      <strong>Location:</strong> {selectedIntern.location}
-                    </p>
-                    <p style={detailTextStyle}>
-                      <strong>Sector:</strong> {selectedIntern.sector}
-                    </p>
-                    <p style={detailTextStyle}>
-                      <strong>Operation Stage:</strong> {selectedIntern.operationStage}
-                    </p>
-                  </div>
-                  <div style={detailCardStyle}>
-                    <h4 style={detailCardTitleStyle}>
-                      <FileIcon size={16} style={{ marginRight: "0.5rem" }} />
-                      Internship Details
-                    </h4>
-                    <p style={detailTextStyle}>
-                      <strong>Role:</strong> {selectedIntern.internshipRole}
-                    </p>
-                    <p style={detailTextStyle}>
-                      <strong>Stipend:</strong> {selectedIntern.stipend}
-                    </p>
-                    <p style={detailTextStyle}>
-                      <strong>Start Date:</strong> {selectedIntern.startDate}
-                    </p>
-                    <p style={detailTextStyle}>
-                      <strong>Match Score:</strong> {selectedIntern.matchPercentage}%
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div style={modalActionsStyle}>
-                <button
-                  style={primaryButtonStyle}
-                  onClick={() => {
-                    closeAllModals()
-                    handleMessage(selectedIntern)
-                  }}
-                >
-                  <MessageCircle size={16} /> Send Message
-                </button>
-                <button style={cancelButtonStyle} onClick={closeAllModals}>
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
-
-      {/* Message Modal */}
-      {mounted &&
-        showMessageModal &&
-        selectedIntern &&
-        createPortal(
-          <div
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: "rgba(0,0,0,0.5)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000,
-            }}
-          >
-            <div
-              style={{
-                background: "white",
-                borderRadius: "12px",
-                maxWidth: "600px",
-                width: "90%",
-                maxHeight: "70vh",
-                overflowY: "auto",
-                boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-              }}
-            >
-              <div style={modalHeaderStyle}>
-                <h3 style={modalTitleStyle}>
-                  <MessageCircle size={20} style={{ marginRight: "0.5rem" }} />
-                  Send Message to {selectedIntern.smseName}
-                </h3>
-                <button onClick={closeAllModals} style={modalCloseButtonStyle}>
-                  ✖
-                </button>
-              </div>
-              <div style={modalBodyStyle}>
+              <div style={{ marginBottom: "1rem" }}>
+                <label style={labelStyle}>Message to Sponsor:</label>
                 <textarea
-                  style={{
-                    width: "100%",
-                    height: "200px",
-                    padding: "1rem",
-                    border: "1px solid #E0E0E0",
-                    borderRadius: "8px",
-                    fontSize: "0.875rem",
-                    fontFamily: "inherit",
-                    resize: "vertical",
-                    outline: "none",
-                  }}
-                  placeholder="Type your message here..."
                   value={messageText}
                   onChange={(e) => setMessageText(e.target.value)}
+                  style={textareaStyle}
+                  placeholder="Enter your message..."
                 />
               </div>
-              <div style={modalActionsStyle}>
+            </div>
+            <div style={modalActionsStyle}>
+              <button onClick={resetStageModal} style={cancelButtonStyle}>
+                Cancel
+              </button>
+              <button 
+                onClick={handleStageUpdate} 
+                style={primaryButtonStyle}
+                disabled={isSubmitting || !nextStage}
+              >
+                {isSubmitting ? "Updating..." : "Update Stage"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* All other modals remain the same */}
+      {/* Brief Description Modal */}
+      {mounted && showBriefModal && selectedIntern && createPortal(
+        <div style={modalOverlayStyle}>
+          <div style={modalContentStyle}>
+            <div style={modalHeaderStyle}>
+              <h3 style={modalTitleStyle}>
+                <FileText size={20} style={{ marginRight: "0.5rem" }} />
+                {selectedIntern.briefDescription.title}
+              </h3>
+              <button onClick={closeAllModals} style={modalCloseButtonStyle}>
+                <X size={20} />
+              </button>
+            </div>
+            <div style={modalBodyStyle}>
+              {/* Company Info */}
+              <div style={detailCardStyle}>
+                <h4 style={detailCardTitleStyle}>
+                  {selectedIntern.briefDescription.company}
+                </h4>
+                <p style={detailTextStyle}>
+                  <strong>Duration:</strong> {selectedIntern.briefDescription.duration}
+                </p>
+              </div>
+
+              {/* Requirements */}
+              <div style={{ marginBottom: "1.5rem" }}>
+                <h4 style={sectionTitleStyle}>📋 Requirements</h4>
+                <ul style={listStyle}>
+                  {selectedIntern.briefDescription.requirements.map((req, index) => (
+                    <li key={index}>{req}</li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Responsibilities */}
+              <div style={{ marginBottom: "1.5rem" }}>
+                <h4 style={sectionTitleStyle}>💼 Key Responsibilities</h4>
+                <ul style={listStyle}>
+                  {selectedIntern.briefDescription.responsibilities.map((resp, index) => (
+                    <li key={index}>{resp}</li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Benefits */}
+              <div style={{ marginBottom: "1.5rem" }}>
+                <h4 style={sectionTitleStyle}>🎯 What You'll Gain</h4>
+                <ul style={listStyle}>
+                  {selectedIntern.briefDescription.benefits.map((benefit, index) => (
+                    <li key={index}>{benefit}</li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Application Process */}
+              <div style={infoCardStyle}>
+                <h4 style={sectionTitleStyle}>📝 Application Process</h4>
+                <p style={detailTextStyle}>
+                  {selectedIntern.briefDescription.applicationProcess}
+                </p>
+              </div>
+            </div>
+            <div style={modalActionsStyle}>
+              <button
+                style={primaryButtonStyle}
+                onClick={() => {
+                  closeAllModals()
+                  handleConnectClick(selectedIntern)
+                }}
+              >
+                <Send size={16} /> Apply Now
+              </button>
+              <button
+                style={secondaryButtonStyle}
+                onClick={() => {
+                  closeAllModals()
+                  handleMessage(selectedIntern)
+                }}
+              >
+                <MessageCircle size={16} /> Ask Questions
+              </button>
+              <button style={cancelButtonStyle} onClick={closeAllModals}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {/* Match Breakdown Modal */}
+      {mounted && showMatchBreakdown && selectedIntern && createPortal(
+        <div style={modalOverlayStyle}>
+          <div style={{ ...modalContentStyle, maxWidth: "700px" }}>
+            <div style={modalHeaderStyle}>
+              <h3 style={modalTitleStyle}>
+                Match Breakdown: {selectedIntern.smseName}
+              </h3>
+              <button onClick={closeAllModals} style={modalCloseButtonStyle}>
+                ✖
+              </button>
+            </div>
+            <div style={modalBodyStyle}>
+              <div style={{ marginBottom: "1.5rem" }}>
+                <h4 style={sectionTitleStyle}>
+                  Overall Match Score: {selectedIntern.matchPercentage}%
+                </h4>
+                <div style={{...progressBarStyle, width: "100%", height: "10px"}}>
+                  <div
+                    style={{
+                      ...progressFillStyle,
+                      width: `${selectedIntern.matchPercentage}%`,
+                    }}
+                  />
+                </div>
+              </div>
+
+              {selectedIntern.matchBreakdown && Object.entries(selectedIntern.matchBreakdown).map(([key, breakdown]) => {
+                const titles = {
+                  skillsMatch: "Skills/Role Match",
+                  workModeMatch: "Work Mode Compatibility", 
+                  locationMatch: "Location Match",
+                  availabilityMatch: "Availability Date",
+                  additionalFactors: "Profile Completeness"
+                };
+
+                const getStatusColor = (score, maxScore) => {
+                  const percentage = (score / maxScore) * 100;
+                  if (percentage >= 90) return "#2E7D32";
+                  if (percentage >= 50) return "#F57F17"; 
+                  return "#C62828";
+                };
+
+                const getStatusText = (score, maxScore) => {
+                  if (score === maxScore) return "✓ Perfect Match";
+                  if (score > maxScore * 0.5) return "◐ Partial Match";
+                  if (score > 0) return "◒ Some Match";
+                  return "✗ No Match";
+                };
+
+                return (
+                  <div key={key} style={matchBreakdownSection}>
+                    <h4 style={matchBreakdownTitle}>{titles[key]}</h4>
+                    <div style={matchBreakdownItem}>
+                      <span style={matchBreakdownLabel}>Weight:</span>
+                      <span style={matchBreakdownValue}>{((breakdown.maxScore / 100) * 100).toFixed(0)}%</span>
+                    </div>
+                    <div style={matchBreakdownItem}>
+                      <span style={matchBreakdownLabel}>Score:</span>
+                      <span style={matchBreakdownValue}>{breakdown.score}/{breakdown.maxScore}</span>
+                    </div>
+                    <div style={matchBreakdownItem}>
+                      <span style={matchBreakdownLabel}>Status:</span>
+                      <span style={{ 
+                        ...matchBreakdownValue, 
+                        color: getStatusColor(breakdown.score, breakdown.maxScore)
+                      }}>
+                        {getStatusText(breakdown.score, breakdown.maxScore)}
+                      </span>
+                    </div>
+                    <p style={matchBreakdownDescription}>
+                      {breakdown.description}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={modalActionsStyle}>
+              <button 
+                style={primaryButtonStyle}
+                onClick={() => {
+                  setShowMatchBreakdown(false);
+                  handleMessage(selectedIntern);
+                }}
+              >
+                <MessageCircle size={16} /> Ask Questions
+              </button>
+              <button 
+                style={cancelButtonStyle}
+                onClick={() => setShowMatchBreakdown(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Filter Modal */}
+      {mounted && showFilters && createPortal(
+        <div style={modalOverlayStyle}>
+          <div style={{ ...modalContentStyle, maxWidth: "1000px" }}>
+            <div style={modalHeaderStyle}>
+              <h3 style={modalTitleStyle}>Filter Interns</h3>
+              <button onClick={() => setShowFilters(false)} style={modalCloseButtonStyle}>
+                ✖
+              </button>
+            </div>
+            <div style={modalBodyStyle}>
+              <div style={headerSectionStyle}>
+                <h1 style={mainTitleStyle}>
+                  Filter Intern Matches
+                </h1>
+                <p style={subtitleStyle}>
+                  Find the perfect intern candidates for your organization
+                </p>
+              </div>
+              <div style={filterGridStyle}>
+                <div style={filterCardStyle}>
+                  <h3 style={filterTitleStyle}>
+                    📍 Location
+                  </h3>
+                  <select
+                    style={selectStyle}
+                    value={filters.location}
+                    onChange={(e) => setFilters({ ...filters, location: e.target.value })}
+                  >
+                    <option value="">Select Location</option>
+                    {["Cape Town", "Johannesburg", "Pretoria", "Durban", "Port Elizabeth"].map((loc) => (
+                      <option key={loc} value={loc}>
+                        {loc}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div style={filterCardStyle}>
+                  <h3 style={filterTitleStyle}>
+                    🏢 Sector
+                  </h3>
+                  <select
+                    style={selectStyle}
+                    value={filters.sector}
+                    onChange={(e) => setFilters({ ...filters, sector: e.target.value })}
+                  >
+                    <option value="">Select Sector</option>
+                    {["Tech", "Agri", "Finance", "Healthcare", "Education"].map((sector) => (
+                      <option key={sector} value={sector}>
+                        {sector}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div style={filterCardStyle}>
+                  <h3 style={filterTitleStyle}>
+                    📈 Operation Stage
+                  </h3>
+                  <select
+                    style={selectStyle}
+                    value={filters.operationStage}
+                    onChange={(e) => setFilters({ ...filters, operationStage: e.target.value })}
+                  >
+                    <option value="">Select Stage</option>
+                    {["Seed", "Series A", "Series B", "Growth", "Mature"].map((stage) => (
+                      <option key={stage} value={stage}>
+                        {stage}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div style={filterActionsStyle}>
                 <button
-                  style={primaryButtonStyle}
-                  onClick={handleSendMessage}
-                  disabled={!messageText.trim()}
+                  style={clearButtonStyle}
+                  onClick={() => {
+                    setFilters({
+                      location: "",
+                      matchScore: 50,
+                      sector: "",
+                      operationStage: "",
+                      internshipRole: "",
+                      stipend: "",
+                      startDate: "",
+                      sortBy: "",
+                    })
+                  }}
                 >
-                  <Send size={16} /> Send Message
+                  Clear All Filters
                 </button>
-                <button style={cancelButtonStyle} onClick={closeAllModals}>
-                  Cancel
+                <button
+                  style={applyButtonStyle}
+                  onClick={() => setShowFilters(false)}
+                >
+                  Apply Filters
                 </button>
               </div>
             </div>
-          </div>,
-          document.body,
-        )}
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {/* Detail Modal */}
+      {mounted && showModal && selectedIntern && createPortal(
+        <div style={modalOverlayStyle}>
+          <div style={{ ...modalContentStyle, maxWidth: "700px" }}>
+            <div style={modalHeaderStyle}>
+              <h3 style={modalTitleStyle}>
+                <User size={20} style={{ marginRight: "0.5rem" }} />
+                SMSE Details
+              </h3>
+              <button onClick={closeAllModals} style={modalCloseButtonStyle}>
+                ✖
+              </button>
+            </div>
+            <div style={modalBodyStyle}>
+              <div style={detailGridStyle}>
+                <div style={detailCardStyle}>
+                  <h4 style={detailCardTitleStyle}>
+                    <User size={16} style={{ marginRight: "0.5rem" }} />
+                    Company Information
+                  </h4>
+                  <p style={detailTextStyle}>
+                    <strong>SMSE Name:</strong> {selectedIntern.smseName}
+                  </p>
+                  <p style={detailTextStyle}>
+                    <strong>Location:</strong> {selectedIntern.location}
+                  </p>
+                  <p style={detailTextStyle}>
+                    <strong>Sector:</strong> {selectedIntern.sector}
+                  </p>
+                  <p style={detailTextStyle}>
+                    <strong>Operation Stage:</strong> {selectedIntern.operationStage}
+                  </p>
+                </div>
+                <div style={detailCardStyle}>
+                  <h4 style={detailCardTitleStyle}>
+                    <FileIcon size={16} style={{ marginRight: "0.5rem" }} />
+                    Internship Details
+                  </h4>
+                  <p style={detailTextStyle}>
+                    <strong>Role:</strong> {selectedIntern.internshipRole}
+                  </p>
+                  <p style={detailTextStyle}>
+                    <strong>Stipend:</strong> {selectedIntern.stipend}
+                  </p>
+                  <p style={detailTextStyle}>
+                    <strong>Start Date:</strong> {selectedIntern.startDate}
+                  </p>
+                  <p style={detailTextStyle}>
+                    <strong>Match Score:</strong> {selectedIntern.matchPercentage}%
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div style={modalActionsStyle}>
+              <button
+                style={primaryButtonStyle}
+                onClick={() => {
+                  closeAllModals()
+                  handleMessage(selectedIntern)
+                }}
+              >
+                <MessageCircle size={16} /> Send Message
+              </button>
+              <button style={cancelButtonStyle} onClick={closeAllModals}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {/* Message Modal */}
+      {mounted && showMessageModal && selectedIntern && createPortal(
+        <div style={modalOverlayStyle}>
+          <div style={{ ...modalContentStyle, maxWidth: "600px" }}>
+            <div style={modalHeaderStyle}>
+              <h3 style={modalTitleStyle}>
+                <MessageCircle size={20} style={{ marginRight: "0.5rem" }} />
+                Send Message to {selectedIntern.smseName}
+              </h3>
+              <button onClick={closeAllModals} style={modalCloseButtonStyle}>
+                ✖
+              </button>
+            </div>
+            <div style={modalBodyStyle}>
+              <textarea
+                style={messageTextareaStyle}
+                placeholder="Type your message here..."
+                value={messageText}
+                onChange={(e) => setMessageText(e.target.value)}
+              />
+            </div>
+            <div style={modalActionsStyle}>
+              <button
+                style={primaryButtonStyle}
+                onClick={handleSendMessage}
+                disabled={!messageText.trim()}
+              >
+                <Send size={16} /> Send Message
+              </button>
+              <button style={cancelButtonStyle} onClick={closeAllModals}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
     </>
   )
 }
@@ -2407,6 +2578,30 @@ const contactedBadgeStyle = {
   whiteSpace: "nowrap",
 }
 
+// Modal Styles
+const modalOverlayStyle = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(0,0,0,0.5)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 1000,
+}
+
+const modalContentStyle = {
+  background: "white",
+  borderRadius: "12px",
+  maxWidth: "800px",
+  width: "90%",
+  maxHeight: "90vh",
+  overflowY: "auto",
+  boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
+}
+
 const modalHeaderStyle = {
   display: "flex",
   justifyContent: "space-between",
@@ -2437,6 +2632,58 @@ const modalBodyStyle = {
   padding: "1.5rem",
 }
 
+const modalActionsStyle = {
+  display: "flex",
+  justifyContent: "flex-end",
+  gap: "0.5rem",
+  padding: "1.5rem",
+  borderTop: "1px solid #E0E0E0",
+}
+
+// Button Styles
+const primaryButtonStyle = {
+  background: "#5D4037",
+  color: "white",
+  border: "none",
+  padding: "0.5rem 1rem",
+  borderRadius: "6px",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  gap: "0.5rem",
+  fontSize: "0.875rem",
+  transition: "all 0.2s",
+}
+
+const secondaryButtonStyle = {
+  background: "#EFEBE9",
+  color: "#5D4037",
+  border: "1px solid #D7CCC8",
+  padding: "0.5rem 1rem",
+  borderRadius: "6px",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  gap: "0.5rem",
+  fontSize: "0.875rem",
+}
+
+const cancelButtonStyle = {
+  background: "#F1F3F4",
+  color: "#5F6368",
+  border: "none",
+  padding: "0.5rem 1rem",
+  borderRadius: "6px",
+  cursor: "pointer",
+}
+
+// Detail Styles
+const detailGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+  gap: "1.5rem",
+}
+
 const detailCardStyle = {
   padding: "1rem",
   background: "#F8F9FA",
@@ -2459,33 +2706,144 @@ const detailTextStyle = {
   color: "#202124",
 }
 
-const modalActionsStyle = {
-  display: "flex",
-  justifyContent: "flex-end",
-  gap: "0.5rem",
-  padding: "1.5rem",
-  borderTop: "1px solid #E0E0E0",
+// Filter Styles
+const headerSectionStyle = {
+  textAlign: "center",
+  marginBottom: "2rem",
+  paddingBottom: "1rem",
+  borderBottom: "2px solid #E0E0E0",
 }
 
-const primaryButtonStyle = {
-  background: "#5D4037",
-  color: "white",
-  border: "none",
-  padding: "0.5rem 1rem",
-  borderRadius: "6px",
-  cursor: "pointer",
+const mainTitleStyle = {
+  fontSize: "1.5rem",
+  fontWeight: "bold",
+  color: "#5D4037",
+  margin: "0 0 0.5rem 0",
+}
+
+const subtitleStyle = {
+  fontSize: "1rem",
+  color: "#5F6368",
+  margin: "0",
+}
+
+const filterGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+  gap: "1.5rem",
+  marginBottom: "2rem",
+}
+
+const filterCardStyle = {
+  background: "#F8F9FA",
+  border: "1px solid #E0E0E0",
+  borderRadius: "8px",
+  padding: "1.25rem",
+}
+
+const filterTitleStyle = {
+  fontSize: "1rem",
+  fontWeight: "600",
+  color: "#5D4037",
+  margin: "0 0 0.75rem 0",
   display: "flex",
   alignItems: "center",
   gap: "0.5rem",
+}
+
+const filterActionsStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "1rem",
+  paddingTop: "1.5rem",
+  borderTop: "1px solid #E0E0E0",
+}
+
+const clearButtonStyle = {
+  flex: "1",
+  padding: "0.75rem 1.5rem",
+  background: "#EFEBE9",
+  color: "#5D4037",
+  border: "1px solid #D7CCC8",
+  borderRadius: "6px",
   fontSize: "0.875rem",
+  fontWeight: "500",
+  cursor: "pointer",
   transition: "all 0.2s",
 }
 
-const cancelButtonStyle = {
-  background: "#F1F3F4",
-  color: "#5F6368",
+const applyButtonStyle = {
+  flex: "1",
+  padding: "0.75rem 1.5rem",
+  background: "#5D4037",
+  color: "white",
   border: "none",
-  padding: "0.5rem 1rem",
   borderRadius: "6px",
+  fontSize: "0.875rem",
+  fontWeight: "500",
   cursor: "pointer",
+  transition: "all 0.2s",
+}
+
+// Form Styles
+const labelStyle = {
+  display: "block",
+  fontSize: "0.875rem",
+  fontWeight: "600",
+  color: "#5D4037",
+  marginBottom: "0.5rem",
+}
+
+const selectStyle = {
+  width: "100%",
+  padding: "0.75rem",
+  border: "1px solid #E0E0E0",
+  borderRadius: "6px",
+  fontSize: "0.875rem",
+  background: "white",
+  color: "#202124",
+}
+
+const textareaStyle = {
+  width: "100%",
+  padding: "0.75rem",
+  border: "1px solid #E0E0E0",
+  borderRadius: "6px",
+  fontSize: "0.875rem",
+  fontFamily: "inherit",
+  resize: "vertical",
+  minHeight: "100px",
+}
+
+const messageTextareaStyle = {
+  width: "100%",
+  height: "200px",
+  padding: "1rem",
+  border: "1px solid #E0E0E0",
+  borderRadius: "8px",
+  fontSize: "0.875rem",
+  fontFamily: "inherit",
+  resize: "vertical",
+  outline: "none",
+}
+
+// Section Styles
+const sectionTitleStyle = {
+  color: "#5D4037",
+  marginBottom: "0.75rem",
+  fontSize: "1rem",
+  fontWeight: "600",
+}
+
+const listStyle = {
+  margin: "0",
+  paddingLeft: "1.5rem",
+  color: "#333",
+}
+
+const infoCardStyle = {
+  padding: "1rem",
+  background: "#EFEBE9",
+  borderRadius: "8px",
+  border: "1px solid #D7CCC8",
 }
