@@ -5,7 +5,7 @@ import { Bar, Scatter } from "react-chartjs-2"
 import Sidebar from "smses/Sidebar/Sidebar"
 import Header from "../DashboardHeader/DashboardHeader"
 import { db, auth } from "../../firebaseConfig"
-import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, where, onSnapshot } from "firebase/firestore"
+import { collection, addDoc, getDocs, updateDoc, deleteDoc, getDoc, doc, setDoc, query, where, onSnapshot } from "firebase/firestore"
 import { onAuthStateChanged } from "firebase/auth"
 import {
   Chart as ChartJS,
@@ -1956,6 +1956,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
   const [directors, setDirectors] = useState([])
   const [committees, setCommittees] = useState([])
   const [uploadedFiles, setUploadedFiles] = useState({})
+  const [governanceData, setGovernanceData] = useState(null)
 
   // Modal states
   const [showMeetingModal, setShowMeetingModal] = useState(false)
@@ -1973,7 +1974,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
     status: "",
     date: "",
     fileAttached: false,
-    fileData: null, // To store file info
+    fileData: null,
   })
 
   // Edit states
@@ -1988,6 +1989,18 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
       if (!currentUser) return
 
       try {
+        // Load governance data first
+        const governanceDocRef = doc(db, "governance", currentUser.uid)
+        const governanceSnap = await getDoc(governanceDocRef)
+
+        if (governanceSnap.exists()) {
+          const data = governanceSnap.data()
+          setGovernanceData(data)
+          setHasBoardDirectors(data.hasBoardDirectors)
+          setShowBoardQuestion(!data.hasAnsweredBoardQuestion)
+        }
+
+        // Load other data
         const [meetingsSnapshot, directorsSnapshot, committeesSnapshot, policyProceduresSnapshot] = await Promise.all([
           getDocs(query(collection(db, "meetings"), where("userId", "==", currentUser.uid))),
           getDocs(query(collection(db, "directors"), where("userId", "==", currentUser.uid))),
@@ -2011,17 +2024,52 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
 
   if (activeSection !== "governance") return null
 
-  const hasMinimumGovernanceScore = pisScore >= 262.5
+  const getGovernanceStage = (score) => {
+    if (score < 100) return "Advisors"
+    if (score < 350) return "Emerging Board"
+    return "Full Board"
+  }
 
-  const handleBoardDirectorsResponse = (hasDirectors) => {
-    if (hasDirectors && !hasMinimumGovernanceScore) {
-      alert(
-        `Your governance score is ${Math.round((pisScore / 350) * 100)}%. You need at least 75% (262.5 points) to access board director features. You can purchase governance support under Tools and Tablets.`,
-      )
-      return
+  const getGovernanceRecommendation = (score) => {
+    if (score < 100) return "Advisors sufficient"
+    if (score < 350) return "Informal board recommended"
+    return "Formal board strongly recommended"
+  }
+
+  const calculateGovernanceScore = () => {
+    // This would be calculated based on actual governance metrics
+    // For now, we'll use a simple calculation based on PIS score
+    const maxPIS = 500 // Maximum expected PIS score
+    return Math.min(Math.round((pisScore / maxPIS) * 100), 100)
+  }
+
+  const governanceScore = calculateGovernanceScore()
+  const governanceStage = getGovernanceStage(pisScore)
+  const hasMinimumGovernanceScore = governanceScore >= 75
+
+  const handleBoardDirectorsResponse = async (hasDirectors) => {
+    if (!currentUser) return
+
+    try {
+      // Save the response to Firestore
+      const governanceDocRef = doc(db, "governance", currentUser.uid)
+      await setDoc(governanceDocRef, {
+        hasBoardDirectors: hasDirectors,
+        hasAnsweredBoardQuestion: true,
+        answeredAt: new Date().toISOString()
+      }, { merge: true })
+
+      setHasBoardDirectors(hasDirectors)
+      setShowBoardQuestion(false)
+
+      // If they don't have board directors but PIS is high, show advisory message
+      if (!hasDirectors && pisScore >= 350) {
+        alert(`Based on your PIS score of ${pisScore}, your business has reached the level where a formal board of directors is strongly recommended. Consider establishing a board to enhance governance and support business growth.`)
+      }
+    } catch (error) {
+      console.error("Error saving board directors response:", error)
+      alert("Error saving your response. Please try again.")
     }
-    setHasBoardDirectors(hasDirectors)
-    setShowBoardQuestion(false)
   }
 
   // Meeting handlers
@@ -2083,6 +2131,10 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
 
   // Director handlers
   const handleAddDirector = () => {
+    if (!hasMinimumGovernanceScore) {
+      alert(`Your governance score is ${governanceScore}%. You need at least 75% to access board director features. You can purchase governance support under Tools and Tablets.`)
+      return
+    }
     setEditingDirector(null)
     setNewDirector({ name: "", position: "", date: "", committees: [] })
     setShowDirectorModal(true)
@@ -2312,6 +2364,37 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
     >
       <h3 style={{ color: "#4a352f", marginBottom: "20px" }}>Board Activity & Governance</h3>
 
+      {/* PIS Score and Governance Stage Display - Only show in governance tab */}
+      <div
+        style={{
+          backgroundColor: "#e8f5e8",
+          border: "1px solid #4CAF50",
+          padding: "15px",
+          borderRadius: "6px",
+          marginBottom: "20px",
+        }}
+      >
+        <h4 style={{ color: "#2e7d32", margin: "0 0 10px 0" }}>Governance Assessment</h4>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+          <div>
+            <p style={{ color: "#2e7d32", margin: "5px 0", fontSize: "14px" }}>
+              <strong>Current PIS Score:</strong> {Math.round(pisScore)}
+            </p>
+            <p style={{ color: "#2e7d32", margin: "5px 0", fontSize: "14px" }}>
+              <strong>Governance Stage:</strong> {governanceStage}
+            </p>
+          </div>
+          <div>
+            <p style={{ color: "#2e7d32", margin: "5px 0", fontSize: "14px" }}>
+              <strong>Governance Score:</strong> {governanceScore}%
+            </p>
+            <p style={{ color: "#2e7d32", margin: "5px 0", fontSize: "14px" }}>
+              <strong>Recommendation:</strong> {getGovernanceRecommendation(pisScore)}
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Governance Score Display */}
       <div
         style={{
@@ -2322,14 +2405,12 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
           marginBottom: "20px",
         }}
       >
-        <p style={{ color: "#4a352f", margin: 0, fontWeight: "500" }}>
-          Current Governance Score: {Math.round((pisScore / 350) * 100)}% ({pisScore} / 350 points)
+        <p style={{ color: hasMinimumGovernanceScore ? "#155724" : "#856404", margin: 0, fontWeight: "500" }}>
+          Current Governance Score: {governanceScore}% ({pisScore} / 350 points)
         </p>
-        {/* Updated governance score display message */}
         {!hasMinimumGovernanceScore && (
           <p style={{ color: "#856404", margin: "10px 0 0 0", fontSize: "14px" }}>
-            You need at least 75% (262.5 points) to access board director features. You can purchase governance support
-            under Tools and Tablets.
+            You need at least 75% (262.5 points) to access board director features. You can purchase governance support under Tools and Tablets.
           </p>
         )}
       </div>
@@ -2378,6 +2459,41 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
               No
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Advisory message for high PIS without board */}
+      {!showBoardQuestion && !hasBoardDirectors && pisScore >= 350 && (
+        <div
+          style={{
+            backgroundColor: "#fff3cd",
+            border: "1px solid #ffeaa7",
+            padding: "20px",
+            borderRadius: "6px",
+            marginBottom: "20px",
+            textAlign: "center",
+          }}
+        >
+          <h4 style={{ color: "#856404", marginTop: 0, marginBottom: "15px" }}>Board of Directors Recommended</h4>
+          <p style={{ color: "#856404", marginBottom: "15px" }}>
+            Based on your PIS score of {Math.round(pisScore)}, your business has reached the Full Board Stage.
+            A formal board of directors is strongly recommended to enhance governance, provide strategic guidance,
+            and support business growth.
+          </p>
+          <button
+            onClick={() => handleBoardDirectorsResponse(true)}
+            style={{
+              padding: "10px 20px",
+              backgroundColor: "#856404",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: "500",
+            }}
+          >
+            Set Up Board Directors
+          </button>
         </div>
       )}
 
@@ -2609,6 +2725,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
 
       {!showBoardQuestion && hasBoardDirectors && hasMinimumGovernanceScore && (
         <>
+          {/* Directors Table */}
           <div
             style={{
               backgroundColor: "#fdfcfb",
@@ -2712,6 +2829,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
               </div>
             )}
           </div>
+
 
           <div
             style={{
@@ -3643,26 +3761,7 @@ const Strategy = () => {
             ))}
           </div>
 
-          {currentUser && (
-            <div
-              style={{
-                backgroundColor: "#e8f5e8",
-                border: "1px solid #4CAF50",
-                padding: "10px",
-                borderRadius: "6px",
-                marginBottom: "20px",
-                textAlign: "center",
-              }}
-            >
-              {isLoadingPisScore ? (
-                <p style={{ color: "#2e7d32", margin: 0, fontSize: "14px" }}>Loading PIS Score...</p>
-              ) : (
-                <p style={{ color: "#2e7d32", margin: 0, fontSize: "14px" }}>
-                  Current PIS Score: {pisScore} | Governance Stage: {getGovernanceStage(pisScore)}
-                </p>
-              )}
-            </div>
-          )}
+          {/* REMOVED the PIS score display from here - it was showing for all tabs */}
 
           <VisionMissionValues activeSection={activeSection} currentUser={currentUser} />
           <StrategicGoals
@@ -3679,12 +3778,17 @@ const Strategy = () => {
           />
           <BusinessRiskTab activeSection={activeSection} currentUser={currentUser} />
           <RiskManagement activeSection={activeSection} currentUser={currentUser} />
-          <BoardActivityGovernance activeSection={activeSection} currentUser={currentUser} pisScore={pisScore} />
+          <BoardActivityGovernance
+            activeSection={activeSection}
+            currentUser={currentUser}
+            pisScore={pisScore}
+          />
         </div>
       </div>
     </div>
   )
 }
+
 
 const BusinessRiskTab = ({ activeSection, currentUser }) => {
   const [riskData, setRiskData] = useState({
