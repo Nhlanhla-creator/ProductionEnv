@@ -158,6 +158,12 @@ const Sidebar = ({ companyName = "Company Name" }) => {
       route: "/profile",
     },
     {
+      id: "dashboard",
+      label: "My BIG Score",
+      icon: <BarChart size={18} />,
+      route: "/dashboard",
+    },
+    {
       id: "applications",
       label: "My Applications",
       icon: <Briefcase size={18} />,
@@ -190,18 +196,8 @@ const Sidebar = ({ companyName = "Company Name" }) => {
         },
       ],
     },
-    {
-      id: "dashboard",
-      label: "My BIG Score",
-      icon: <BarChart size={18} />,
-      route: "/dashboard",
-    },
-    {
-      id: "insights",
-      label: "BIG Insights",
-      icon: <Lightbulb size={18} />,
-      route: "/insights",
-    },
+    
+   
     {
       id: "matches",
       label: "My Matches",
@@ -299,6 +295,12 @@ const Sidebar = ({ companyName = "Company Name" }) => {
       
       
       ],
+    },
+     {
+      id: "insights",
+      label: "BIG Insights",
+      icon: <Lightbulb size={18} />,
+      route: "/insights",
     },
       {
           id: "shop-tools",

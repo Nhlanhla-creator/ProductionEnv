@@ -31,7 +31,7 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  ChartDataLabels,
+
 )
 
 // Download utility function
@@ -198,13 +198,7 @@ const LoanRepayments = ({ activeSection }) => {
         color: "#4a352f",
       },
       // Configure datalabels plugin
-      datalabels: {
-        color: "#fff",
-        font: {
-          weight: "bold",
-        },
-        formatter: (value) => value.toFixed(0),
-      },
+      
     },
     scales: {
       y: {
@@ -1926,28 +1920,29 @@ const CapTable = ({ activeSection }) => {
                     },
                   ],
                 }}
-                options={{
-                  responsive: true, // Added responsive option
-                  plugins: {
-                    legend: {
-                      position: window.innerWidth < 768 ? "bottom" : "right",
-                    },
-                    // Configure datalabels plugin for pie chart
-                    datalabels: {
-                      color: "#fff",
-                      font: {
-                        weight: "bold",
-                        size: 14,
-                      },
-                      formatter: (value, context) => {
-                        const total = context.dataset.data.reduce((sum, val) => sum + val, 0)
-                        const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0
-                        return percentage + "%"
-                      },
-                    },
-                  },
-                }}
-              />
+             options={{
+    responsive: true,
+    plugins: {
+      legend: {
+        position: window.innerWidth < 768 ? "bottom" : "right",
+      },
+      // ↓ THIS is the datalabels config (lines ~1110-1120)
+      datalabels: {
+        color: "#fff",
+        font: {
+          weight: "bold",
+          size: 14,
+        },
+        formatter: (value, context) => {
+          const total = context.dataset.data.reduce((sum, val) => sum + val, 0)
+          const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0
+          return percentage + "%"
+        },
+      },
+    },
+  }}
+   plugins={[ChartDataLabels]} 
+/>
             </div>
           </div>
           <div>
