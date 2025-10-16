@@ -5,7 +5,7 @@ import { Bar, Scatter } from "react-chartjs-2"
 import Sidebar from "smses/Sidebar/Sidebar"
 import Header from "../DashboardHeader/DashboardHeader"
 import { db, auth } from "../../firebaseConfig"
-import { collection, addDoc, getDocs, updateDoc, deleteDoc, getDoc, doc, setDoc, query, where, onSnapshot } from "firebase/firestore"
+import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, where, onSnapshot } from "firebase/firestore"
 import { onAuthStateChanged } from "firebase/auth"
 import {
   Chart as ChartJS,
@@ -1948,6 +1948,7 @@ const RiskManagement = ({ activeSection, currentUser, onNavigateToRiskCategory }
 }
 
 // Board Activity & Governance Component (Updated with PIS score logic and new structure)
+// Board Activity & Governance Component (Updated with conditional logic)
 const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) => {
   const [hasBoardDirectors, setHasBoardDirectors] = useState(null)
   const [showBoardQuestion, setShowBoardQuestion] = useState(true)
@@ -1956,7 +1957,6 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
   const [directors, setDirectors] = useState([])
   const [committees, setCommittees] = useState([])
   const [uploadedFiles, setUploadedFiles] = useState({})
-  const [governanceData, setGovernanceData] = useState(null)
 
   // Modal states
   const [showMeetingModal, setShowMeetingModal] = useState(false)
@@ -1989,18 +1989,6 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
       if (!currentUser) return
 
       try {
-        // Load governance data first
-        const governanceDocRef = doc(db, "governance", currentUser.uid)
-        const governanceSnap = await getDoc(governanceDocRef)
-
-        if (governanceSnap.exists()) {
-          const data = governanceSnap.data()
-          setGovernanceData(data)
-          setHasBoardDirectors(data.hasBoardDirectors)
-          setShowBoardQuestion(!data.hasAnsweredBoardQuestion)
-        }
-
-        // Load other data
         const [meetingsSnapshot, directorsSnapshot, committeesSnapshot, policyProceduresSnapshot] = await Promise.all([
           getDocs(query(collection(db, "meetings"), where("userId", "==", currentUser.uid))),
           getDocs(query(collection(db, "directors"), where("userId", "==", currentUser.uid))),
@@ -2024,52 +2012,12 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
 
   if (activeSection !== "governance") return null
 
-  const getGovernanceStage = (score) => {
-    if (score < 100) return "Advisors"
-    if (score < 350) return "Emerging Board"
-    return "Full Board"
-  }
+  const hasMinimumGovernanceScore = pisScore >= 262.5
+  const hasFullBoardScore = pisScore >= 350
 
-  const getGovernanceRecommendation = (score) => {
-    if (score < 100) return "Advisors sufficient"
-    if (score < 350) return "Informal board recommended"
-    return "Formal board strongly recommended"
-  }
-
-  const calculateGovernanceScore = () => {
-    // This would be calculated based on actual governance metrics
-    // For now, we'll use a simple calculation based on PIS score
-    const maxPIS = 500 // Maximum expected PIS score
-    return Math.min(Math.round((pisScore / maxPIS) * 100), 100)
-  }
-
-  const governanceScore = calculateGovernanceScore()
-  const governanceStage = getGovernanceStage(pisScore)
-  const hasMinimumGovernanceScore = governanceScore >= 75
-
-  const handleBoardDirectorsResponse = async (hasDirectors) => {
-    if (!currentUser) return
-
-    try {
-      // Save the response to Firestore
-      const governanceDocRef = doc(db, "governance", currentUser.uid)
-      await setDoc(governanceDocRef, {
-        hasBoardDirectors: hasDirectors,
-        hasAnsweredBoardQuestion: true,
-        answeredAt: new Date().toISOString()
-      }, { merge: true })
-
-      setHasBoardDirectors(hasDirectors)
-      setShowBoardQuestion(false)
-
-      // If they don't have board directors but PIS is high, show advisory message
-      if (!hasDirectors && pisScore >= 350) {
-        alert(`Based on your PIS score of ${pisScore}, your business has reached the level where a formal board of directors is strongly recommended. Consider establishing a board to enhance governance and support business growth.`)
-      }
-    } catch (error) {
-      console.error("Error saving board directors response:", error)
-      alert("Error saving your response. Please try again.")
-    }
+  const handleBoardDirectorsResponse = (hasDirectors) => {
+    setHasBoardDirectors(hasDirectors)
+    setShowBoardQuestion(false)
   }
 
   // Meeting handlers
@@ -2131,10 +2079,6 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
 
   // Director handlers
   const handleAddDirector = () => {
-    if (!hasMinimumGovernanceScore) {
-      alert(`Your governance score is ${governanceScore}%. You need at least 75% to access board director features. You can purchase governance support under Tools and Tablets.`)
-      return
-    }
     setEditingDirector(null)
     setNewDirector({ name: "", position: "", date: "", committees: [] })
     setShowDirectorModal(true)
@@ -2364,37 +2308,6 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
     >
       <h3 style={{ color: "#4a352f", marginBottom: "20px" }}>Board Activity & Governance</h3>
 
-      {/* PIS Score and Governance Stage Display - Only show in governance tab */}
-      <div
-        style={{
-          backgroundColor: "#e8f5e8",
-          border: "1px solid #4CAF50",
-          padding: "15px",
-          borderRadius: "6px",
-          marginBottom: "20px",
-        }}
-      >
-        <h4 style={{ color: "#2e7d32", margin: "0 0 10px 0" }}>Governance Assessment</h4>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
-          <div>
-            <p style={{ color: "#2e7d32", margin: "5px 0", fontSize: "14px" }}>
-              <strong>Current PIS Score:</strong> {Math.round(pisScore)}
-            </p>
-            <p style={{ color: "#2e7d32", margin: "5px 0", fontSize: "14px" }}>
-              <strong>Governance Stage:</strong> {governanceStage}
-            </p>
-          </div>
-          <div>
-            <p style={{ color: "#2e7d32", margin: "5px 0", fontSize: "14px" }}>
-              <strong>Governance Score:</strong> {governanceScore}%
-            </p>
-            <p style={{ color: "#2e7d32", margin: "5px 0", fontSize: "14px" }}>
-              <strong>Recommendation:</strong> {getGovernanceRecommendation(pisScore)}
-            </p>
-          </div>
-        </div>
-      </div>
-
       {/* Governance Score Display */}
       <div
         style={{
@@ -2405,17 +2318,18 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
           marginBottom: "20px",
         }}
       >
-        <p style={{ color: hasMinimumGovernanceScore ? "#155724" : "#856404", margin: 0, fontWeight: "500" }}>
-          Current Governance Score: {governanceScore}% ({pisScore} / 350 points)
+        <p style={{ color: "#4a352f", margin: 0, fontWeight: "500" }}>
+          Current Governance Score: {Math.round((pisScore / 350) * 100)}% ({pisScore} / 350 points)
         </p>
         {!hasMinimumGovernanceScore && (
           <p style={{ color: "#856404", margin: "10px 0 0 0", fontSize: "14px" }}>
-            You need at least 75% (262.5 points) to access board director features. You can purchase governance support under Tools and Tablets.
+            You need at least 75% (262.5 points) to access board director features. You can purchase governance support
+            under Tools and Tablets.
           </p>
         )}
       </div>
 
-      {/* Board Directors Question */}
+      {/* Board Directors Question - Only show if user hasn't answered yet */}
       {showBoardQuestion && (
         <div
           style={{
@@ -2462,43 +2376,222 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
         </div>
       )}
 
-      {/* Advisory message for high PIS without board */}
-      {!showBoardQuestion && !hasBoardDirectors && pisScore >= 350 && (
-        <div
-          style={{
-            backgroundColor: "#fff3cd",
-            border: "1px solid #ffeaa7",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-            textAlign: "center",
-          }}
-        >
-          <h4 style={{ color: "#856404", marginTop: 0, marginBottom: "15px" }}>Board of Directors Recommended</h4>
-          <p style={{ color: "#856404", marginBottom: "15px" }}>
-            Based on your PIS score of {Math.round(pisScore)}, your business has reached the Full Board Stage.
-            A formal board of directors is strongly recommended to enhance governance, provide strategic guidance,
-            and support business growth.
-          </p>
-          <button
-            onClick={() => handleBoardDirectorsResponse(true)}
+      {/* Show Board Directors if user answered "Yes" */}
+      {!showBoardQuestion && hasBoardDirectors && (
+        <>
+          <div
             style={{
-              padding: "10px 20px",
-              backgroundColor: "#856404",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontWeight: "500",
+              backgroundColor: "#fdfcfb",
+              padding: "20px",
+              borderRadius: "6px",
+              marginBottom: "20px",
+              border: "2px solid #e6d7c3",
             }}
           >
-            Set Up Board Directors
-          </button>
-        </div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "15px",
+              }}
+            >
+              <h4 style={{ color: "#4a352f", margin: 0 }}>Board of Directors</h4>
+              <button
+                onClick={handleAddDirector}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#7d5a50",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                  fontSize: "12px",
+                }}
+              >
+                Add Director
+              </button>
+            </div>
+
+            {directors.length > 0 ? (
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  color: "#4a352f",
+                }}
+              >
+                <thead>
+                  <tr style={{ borderBottom: "2px solid #c8b6a6" }}>
+                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Name</th>
+                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Position</th>
+                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Date Appointed</th>
+                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Committees</th>
+                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {directors.map((director) => (
+                    <tr key={director.id} style={{ borderBottom: "1px solid #e6d7c3" }}>
+                      <td style={{ padding: "12px" }}>{director.name}</td>
+                      <td style={{ padding: "12px" }}>{director.position}</td>
+                      <td style={{ padding: "12px" }}>{director.date}</td>
+                      <td style={{ padding: "12px" }}>
+                        {director.committees && director.committees.length > 0 ? director.committees.join(", ") : "-"}
+                      </td>
+                      <td style={{ padding: "12px" }}>
+                        <div style={{ display: "flex", gap: "5px" }}>
+                          <button
+                            onClick={() => handleEditDirector(director)}
+                            style={{
+                              padding: "4px 8px",
+                              backgroundColor: "#a67c52",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              fontSize: "10px",
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteDirector(director.id)}
+                            style={{
+                              padding: "4px 8px",
+                              backgroundColor: "#F44336",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              fontSize: "10px",
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div style={{ textAlign: "center", padding: "40px", color: "#7d5a50" }}>
+                No directors added yet. Click "Add Director" to get started.
+              </div>
+            )}
+          </div>
+
+          {/* Meetings Section for users with Board of Directors */}
+          <div
+            style={{
+              backgroundColor: "#fdfcfb",
+              padding: "20px",
+              borderRadius: "6px",
+              marginBottom: "20px",
+              border: "2px solid #e6d7c3",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "15px",
+              }}
+            >
+              <h4 style={{ color: "#4a352f", margin: 0 }}>Meetings Held</h4>
+              <button
+                onClick={handleAddMeeting}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#7d5a50",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                  fontSize: "12px",
+                }}
+              >
+                Add Meeting
+              </button>
+            </div>
+
+            {meetings.length > 0 ? (
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  color: "#4a352f",
+                }}
+              >
+                <thead>
+                  <tr style={{ borderBottom: "2px solid #c8b6a6" }}>
+                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Date</th>
+                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Type</th>
+                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Attendance</th>
+                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Minutes</th>
+                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {meetings.map((meeting) => (
+                    <tr key={meeting.id} style={{ borderBottom: "1px solid #e6d7c3" }}>
+                      <td style={{ padding: "12px" }}>{meeting.date}</td>
+                      <td style={{ padding: "12px" }}>{meeting.type}</td>
+                      <td style={{ padding: "12px" }}>
+                        {meeting.attendees}/{meeting.totalMembers}
+                      </td>
+                      <td style={{ padding: "12px", maxWidth: "200px", wordWrap: "break-word" }}>{meeting.minutes}</td>
+                      <td style={{ padding: "12px" }}>
+                        <div style={{ display: "flex", gap: "5px" }}>
+                          <button
+                            onClick={() => handleEditMeeting(meeting)}
+                            style={{
+                              padding: "4px 8px",
+                              backgroundColor: "#a67c52",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              fontSize: "10px",
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteMeeting(meeting.id)}
+                            style={{
+                              padding: "4px 8px",
+                              backgroundColor: "#F44336",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              fontSize: "10px",
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div style={{ textAlign: "center", padding: "40px", color: "#7d5a50" }}>
+                No meetings added yet. Click "Add Meeting" to get started.
+              </div>
+            )}
+          </div>
+        </>
       )}
 
-      {/* Governance Score Improvement Message */}
-      {currentUser && !hasMinimumGovernanceScore && !showBoardQuestion && hasBoardDirectors && (
+      {/* Show message if user answered "No" AND has high enough score */}
+      {!showBoardQuestion && !hasBoardDirectors && hasFullBoardScore && (
         <div
           style={{
             backgroundColor: "#fff3cd",
@@ -2509,10 +2602,12 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
             textAlign: "center",
           }}
         >
-          <h3 style={{ color: "#856404", marginTop: 0, marginBottom: "15px" }}>Improve Your Governance Score</h3>
+          <h3 style={{ color: "#856404", marginTop: 0, marginBottom: "15px" }}>
+            Consider Establishing a Board of Directors
+          </h3>
           <p style={{ color: "#856404", marginBottom: "15px" }}>
-            To access board director features, you need to improve your governance score to 75% or higher. You can
-            purchase governance support under Tools and Templates.
+            With your current governance score of {pisScore} points, your business would benefit from establishing a formal Board of Directors. 
+            A board can provide strategic guidance, improve governance, and enhance credibility with investors and stakeholders.
           </p>
           <button
             onClick={handleBuyGovernanceRedirect}
@@ -2526,11 +2621,31 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
               fontWeight: "500",
             }}
           >
-            Buy Governance
+            Learn About Board Setup
           </button>
         </div>
       )}
 
+      {/* Show message if user answered "No" but doesn't have high enough score */}
+      {!showBoardQuestion && !hasBoardDirectors && !hasFullBoardScore && (
+        <div
+          style={{
+            backgroundColor: "#f8f9fa",
+            border: "1px solid #e9ecef",
+            padding: "20px",
+            borderRadius: "6px",
+            marginBottom: "20px",
+            textAlign: "center",
+          }}
+        >
+          <p style={{ color: "#6c757d", margin: 0 }}>
+            You indicated you don't have a Board of Directors. Focus on improving your governance score to {350} points 
+            to unlock recommendations for establishing a formal board structure.
+          </p>
+        </div>
+      )}
+
+      {/* Policies & Procedures Section (always visible regardless of board status) */}
       <div
         style={{
           backgroundColor: "#fdfcfb",
@@ -2722,220 +2837,6 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
           )}
         </div>
       </div>
-
-      {!showBoardQuestion && hasBoardDirectors && hasMinimumGovernanceScore && (
-        <>
-          {/* Directors Table */}
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "20px",
-              borderRadius: "6px",
-              marginBottom: "20px",
-              border: "2px solid #e6d7c3",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "15px",
-              }}
-            >
-              <h4 style={{ color: "#4a352f", margin: 0 }}>Board of Directors</h4>
-              <button
-                onClick={handleAddDirector}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#7d5a50",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                  fontSize: "12px",
-                }}
-              >
-                Add Director
-              </button>
-            </div>
-
-            {directors.length > 0 ? (
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                  color: "#4a352f",
-                }}
-              >
-                <thead>
-                  <tr style={{ borderBottom: "2px solid #c8b6a6" }}>
-                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Name</th>
-                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Position</th>
-                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Date Appointed</th>
-                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Committees</th>
-                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {directors.map((director) => (
-                    <tr key={director.id} style={{ borderBottom: "1px solid #e6d7c3" }}>
-                      <td style={{ padding: "12px" }}>{director.name}</td>
-                      <td style={{ padding: "12px" }}>{director.position}</td>
-                      <td style={{ padding: "12px" }}>{director.date}</td>
-                      <td style={{ padding: "12px" }}>
-                        {director.committees && director.committees.length > 0 ? director.committees.join(", ") : "-"}
-                      </td>
-                      <td style={{ padding: "12px" }}>
-                        <div style={{ display: "flex", gap: "5px" }}>
-                          <button
-                            onClick={() => handleEditDirector(director)}
-                            style={{
-                              padding: "4px 8px",
-                              backgroundColor: "#a67c52",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "4px",
-                              cursor: "pointer",
-                              fontSize: "10px",
-                            }}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDeleteDirector(director.id)}
-                            style={{
-                              padding: "4px 8px",
-                              backgroundColor: "#F44336",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "4px",
-                              cursor: "pointer",
-                              fontSize: "10px",
-                            }}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div style={{ textAlign: "center", padding: "40px", color: "#7d5a50" }}>
-                No directors added yet. Click "Add Director" to get started.
-              </div>
-            )}
-          </div>
-
-
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "20px",
-              borderRadius: "6px",
-              marginBottom: "20px",
-              border: "2px solid #e6d7c3",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "15px",
-              }}
-            >
-              <h4 style={{ color: "#4a352f", margin: 0 }}>Meetings Held</h4>
-              <button
-                onClick={handleAddMeeting}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#7d5a50",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                  fontSize: "12px",
-                }}
-              >
-                Add Meeting
-              </button>
-            </div>
-
-            {meetings.length > 0 ? (
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                  color: "#4a352f",
-                }}
-              >
-                <thead>
-                  <tr style={{ borderBottom: "2px solid #c8b6a6" }}>
-                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Date</th>
-                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Type</th>
-                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Attendance</th>
-                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Minutes</th>
-                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {meetings.map((meeting) => (
-                    <tr key={meeting.id} style={{ borderBottom: "1px solid #e6d7c3" }}>
-                      <td style={{ padding: "12px" }}>{meeting.date}</td>
-                      <td style={{ padding: "12px" }}>{meeting.type}</td>
-                      <td style={{ padding: "12px" }}>
-                        {meeting.attendees}/{meeting.totalMembers}
-                      </td>
-                      <td style={{ padding: "12px", maxWidth: "200px", wordWrap: "break-word" }}>{meeting.minutes}</td>
-                      <td style={{ padding: "12px" }}>
-                        <div style={{ display: "flex", gap: "5px" }}>
-                          <button
-                            onClick={() => handleEditMeeting(meeting)}
-                            style={{
-                              padding: "4px 8px",
-                              backgroundColor: "#a67c52",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "4px",
-                              cursor: "pointer",
-                              fontSize: "10px",
-                            }}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDeleteMeeting(meeting.id)}
-                            style={{
-                              padding: "4px 8px",
-                              backgroundColor: "#F44336",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "4px",
-                              cursor: "pointer",
-                              fontSize: "10px",
-                            }}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div style={{ textAlign: "center", padding: "40px", color: "#7d5a50" }}>
-                No meetings added yet. Click "Add Meeting" to get started.
-              </div>
-            )}
-          </div>
-        </>
-      )}
 
       {/* Meeting Modal */}
       {showMeetingModal && (
@@ -3248,158 +3149,6 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                 }}
               >
                 {editingDirector ? "Update Director" : "Add Director"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Committee Modal */}
-      {showCommitteeModal && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "30px",
-              borderRadius: "8px",
-              boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
-              width: "500px",
-              maxWidth: "90vw",
-            }}
-          >
-            <h3 style={{ color: "#4a352f", marginTop: 0, marginBottom: "20px" }}>
-              {editingCommittee ? "Edit Board Committee" : "Add New Board Committee"}
-            </h3>
-
-            <div style={{ marginBottom: "15px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
-                Name:
-              </label>
-              <input
-                type="text"
-                value={newCommittee.name}
-                onChange={(e) => setNewCommittee((prev) => ({ ...prev, name: e.target.value }))}
-                placeholder="Committee Name"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e6d7c3",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: "15px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
-                Position:
-              </label>
-              <input
-                type="text"
-                value={newCommittee.position}
-                onChange={(e) => setNewCommittee((prev) => ({ ...prev, position: e.target.value }))}
-                placeholder="Committee Position"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e6d7c3",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: "15px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
-                Date:
-              </label>
-              <input
-                type="date"
-                value={newCommittee.date}
-                onChange={(e) => setNewCommittee((prev) => ({ ...prev, date: e.target.value }))}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e6d7c3",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
-                Members:
-              </label>
-              <select
-                multiple
-                value={newCommittee.committees}
-                onChange={(e) => {
-                  const selectedOptions = Array.from(e.target.selectedOptions, (option) => option.value)
-                  setNewCommittee((prev) => ({ ...prev, committees: selectedOptions }))
-                }}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e6d7c3",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                  minHeight: "100px",
-                }}
-              >
-                {directors.map((director) => (
-                  <option key={director.id} value={director.name}>
-                    {director.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
-              <button
-                onClick={() => setShowCommitteeModal(false)}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#e6d7c3",
-                  color: "#4a352f",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveCommittee}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#7d5a50",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                }}
-              >
-                {editingCommittee ? "Update Committee" : "Add Committee"}
               </button>
             </div>
           </div>
@@ -3761,7 +3510,26 @@ const Strategy = () => {
             ))}
           </div>
 
-          {/* REMOVED the PIS score display from here - it was showing for all tabs */}
+          {currentUser && (
+            <div
+              style={{
+                backgroundColor: "#e8f5e8",
+                border: "1px solid #4CAF50",
+                padding: "10px",
+                borderRadius: "6px",
+                marginBottom: "20px",
+                textAlign: "center",
+              }}
+            >
+              {isLoadingPisScore ? (
+                <p style={{ color: "#2e7d32", margin: 0, fontSize: "14px" }}>Loading PIS Score...</p>
+              ) : (
+                <p style={{ color: "#2e7d32", margin: 0, fontSize: "14px" }}>
+                  Current PIS Score: {pisScore} | Governance Stage: {getGovernanceStage(pisScore)}
+                </p>
+              )}
+            </div>
+          )}
 
           <VisionMissionValues activeSection={activeSection} currentUser={currentUser} />
           <StrategicGoals
@@ -3778,17 +3546,12 @@ const Strategy = () => {
           />
           <BusinessRiskTab activeSection={activeSection} currentUser={currentUser} />
           <RiskManagement activeSection={activeSection} currentUser={currentUser} />
-          <BoardActivityGovernance
-            activeSection={activeSection}
-            currentUser={currentUser}
-            pisScore={pisScore}
-          />
+          <BoardActivityGovernance activeSection={activeSection} currentUser={currentUser} pisScore={pisScore} />
         </div>
       </div>
     </div>
   )
 }
-
 
 const BusinessRiskTab = ({ activeSection, currentUser }) => {
   const [riskData, setRiskData] = useState({
