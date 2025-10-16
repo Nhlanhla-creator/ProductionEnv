@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Check, X, CalendarCheck2, AlertTriangle, Info, ChevronDown, BarChart3 } from "lucide-react"
+import { Check, X, CalendarCheck2, AlertTriangle, Info, ChevronDown, BarChart3,Eye } from "lucide-react"
 import styles from "./investor-funding.module.css"
 import { db } from "../../firebaseConfig"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
@@ -14,8 +14,6 @@ import "react-day-picker/dist/style.css"
 import { auth } from "../../firebaseConfig"
 import { onAuthStateChanged } from "firebase/auth"
 import { addInvestorNotification } from "../NotificationInvestor"
-import emailjs from '@emailjs/browser'
-import { API_KEYS } from "../../API"
 
 const formatLabel = (value) => {
   if (!value) return ""
@@ -59,6 +57,8 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
   const [selectedSMEForStage, setSelectedSMEForStage] = useState(null)
   const [updatedStages, setUpdatedStages] = useState({})
   const navigate = useNavigate()
+  const [showGuaranteesModal, setShowGuaranteesModal] = useState(false);
+const [selectedGuarantees, setSelectedGuarantees] = useState(null);
   const [authLoading, setAuthLoading] = useState(true)
   const [user, setUser] = useState(null)
   const [fundingAmount, setFundingAmount] = useState("")
@@ -66,6 +66,10 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
   const [amountAsked, setAmountAsked] = useState("")
   const [amountApproved, setAmountApproved] = useState("")
   const [paymentDeployment, setPaymentDeployment] = useState("")
+  const [matchBreakdowns, setMatchBreakdowns] = useState({})
+const [showMatchBreakdownModal, setShowMatchBreakdownModal] = useState(false)
+const [currentMatchBreakdown, setCurrentMatchBreakdown] = useState(null)
+const [investorProfile, setInvestorProfile] = useState(null)
   const [defaultMessages, setDefaultMessages] = useState({
     "Under Review":
       "Dear Valued Partner,\n\nWe are pleased to inform you that your funding application has progressed to our comprehensive review stage. Our investment committee will conduct a thorough evaluation of your business proposal, financial projections, and growth potential.\n\nWe appreciate your patience during this critical assessment period and will keep you informed of our progress.\n\nBest regards,\nInvestment Review Team",
@@ -83,10 +87,264 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
     legitimacy: { score: 0, color: "#5D4037" },
     fundability: { score: 0, color: "#3E2723" },
     pis: { score: 0, color: "#4E342E" },
-    leadership: { score: 0, color: "#6D4C41" },
+    leadership: { score: 0, color: "#6D4C41" }, // Add this line
     bigScore: { score: 0, color: "#5D4037" },
   })
+const formatInvestmentStage = (stage) => {
+  const stageMap = {
+    early_pre_seed: "Pre-Seed",
+    early_seed: "Seed",
+    venture_series_a: "Series A",
+    venture_series_b: "Series B",
+    late_growth_pe: "Growth",
+  }
 
+  if (Array.isArray(stage)) {
+    return stage.map((s) => stageMap[s.toLowerCase()] || s).join(", ")
+  }
+
+  if (typeof stage === "string") {
+    if (stage.includes(",")) {
+      return stage
+        .split(",")
+        .map((s) => stageMap[s.trim().toLowerCase()] || s.trim())
+        .join(", ")
+    }
+    return stageMap[stage.toLowerCase()] || stage
+  }
+
+  return "Various"
+}
+  // Add these normalization functions
+const normalizeSector = (value) => {
+  if (!value) return ""
+  const key = value.toLowerCase().replace(/[\s-]/g, "_").trim()
+  return SECTOR_SYNONYMS[key] || key
+}
+
+const INSTRUMENT_SYNONYMS = {
+  "equity": "equity",
+  "preferred_equity": "preferred_equity", 
+  "preferred": "preferred_equity",
+  "debt": "debt",
+  "loan": "debt",
+  "grant": "grant",
+  "funding": "grant",
+  "skills_training": "skills_training",
+  "training": "skills_training",
+  "mentorship": "skills_training"
+}
+
+const normalizeInstrument = (value) => {
+  if (!value) return ""
+  const key = normalizeText(value)
+  return INSTRUMENT_SYNONYMS[key] || key
+}
+const normalizeText = (str) => {
+  if (!str) return ""
+  return str.toString()
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s]/g, "") // Remove punctuation and special chars
+    .replace(/\s+/g, "_")    // Replace spaces with underscores
+}
+
+const normalizeArray = (value) => {
+  if (!value) return []
+  if (Array.isArray(value)) {
+    return value.map(item => normalizeText(item)).filter(item => item)
+  }
+  return [normalizeText(value)].filter(item => item)
+}
+
+const normalizeAmount = (value) => {
+  if (!value) return 0
+  if (typeof value === "number") return value
+
+  // More robust amount parsing
+  const cleanValue = value.toString()
+    .replace(/[^\d.]/g, "") // Keep only numbers and decimal points
+    .replace(/^\./, "0.")   // Handle .5 -> 0.5
+  
+  const amount = Number.parseFloat(cleanValue) || 0
+  return Math.round(amount * 100) / 100 // Round to 2 decimal places
+}
+const normalizeStage = (raw) => {
+  if (!raw) return ""
+  
+  const clean = raw.toString().toLowerCase().trim()
+    .replace(/\s+/g, "_")  // Replace spaces with underscores
+    .replace(/[^\w]/g, "") // Remove any non-word characters
+  
+  // Direct mapping for common stage formats
+  const stageMap = {
+    "pre_seed": "early_pre_seed",
+    "seed": "early_seed", 
+    "series_a": "venture_series_a",
+    "series_b": "venture_series_b",
+    "series_c": "venture_series_c",
+    "growth": "late_growth_pe",
+    "pe": "late_growth_pe",
+    "mbo": "late_mbo",
+    "mbi": "late_mbi",
+    "lbo": "late_lbo",
+    "early_pre_seed": "early_pre_seed",
+    "early_seed": "early_seed",
+    "venture_series_a": "venture_series_a", 
+    "venture_series_b": "venture_series_b",
+    "late_growth_pe": "late_growth_pe"
+  }
+  
+  return stageMap[clean] || clean
+}
+
+// Add the sector synonyms map (same as in SME table)
+const SECTOR_SYNONYMS = {
+  general: "generalist",
+  generalist: "generalist",
+  agri: "agriculture",
+  agriculture: "agriculture",
+  farming: "agriculture",
+  auto: "automotive",
+  automotive: "automotive",
+  cars: "automotive",
+  vehicles: "automotive",
+  banking: "banking_finance_insurance",
+  finance: "banking_finance_insurance",
+  insurance: "banking_finance_insurance",
+  financial_services: "banking_finance_insurance",
+  banking_finance_insurance: "banking_finance_insurance",
+  // Add other sectors as needed
+}
+
+const stageMap = {
+  "pre-seed": "early_pre_seed",
+  seed: "early_seed",
+  "series a": "venture_series_a",
+  "series b": "venture_series_b",
+  "series c": "venture_series_c",
+  growth: "late_growth_pe",
+  pe: "late_growth_pe",
+  mbo: "late_mbo",
+  mbi: "late_mbi",
+  lbo: "late_lbo",
+}
+
+
+// Add match calculation function
+const calculateInvestorMatchScore = (investorProfile, smeApplication) => {
+  const weights = {
+    sector: 0.5,
+    stage: 0.2,
+    ticket: 0.2,
+    type: 0.1,
+  }
+
+  let score = 0
+  const breakdown = {
+    sector: { score: 0, matched: [], investorSectors: [], smeSectors: [] },
+    stage: { score: 0, investorStages: [], smeStage: "", matched: false },
+    ticket: { score: 0, investorMin: 0, investorMax: 0, smeAmount: 0, inRange: false },
+    type: { score: 0, investorInstruments: [], smeInstruments: [], matchedInstruments: [] },
+  }
+
+  // Get investor preferences with robust normalization
+  const investorSectors = normalizeArray(investorProfile.generalInvestmentPreference?.sectorFocus)
+    .map(normalizeSector)
+  
+  const investorStages = normalizeArray(investorProfile.generalInvestmentPreference?.investmentStage)
+    .map(normalizeStage)
+  
+  const investorInstruments = normalizeArray(investorProfile.generalInvestmentPreference?.investmentFocusSubtype)
+    .map(normalizeInstrument)
+  
+  // Get investor ticket size from fund details
+  const investorMinTicket = normalizeAmount(investorProfile.fundDetails?.funds?.[0]?.minimumTicket || 0)
+  const investorMaxTicket = normalizeAmount(investorProfile.fundDetails?.funds?.[0]?.maximumTicket || Infinity)
+
+  // Get SME data with robust normalization
+  const smeSectors = normalizeArray(smeApplication.entityOverview?.economicSectors)
+    .map(normalizeSector)
+  
+  const smeStage = normalizeStage(smeApplication.applicationOverview?.fundingStage)
+  
+  const smeAmount = normalizeAmount(smeApplication.useOfFunds?.amountRequested)
+  
+  const smeInstruments = normalizeArray(smeApplication.useOfFunds?.fundingInstruments)
+    .map(normalizeInstrument)
+
+  console.log("Stage Matching Debug:", {
+    investorStages,
+    smeStage,
+    match: investorStages.includes(smeStage)
+  })
+
+  // 🌱 Sector match
+  const matchedSectors = smeSectors.filter(s => investorSectors.includes(s))
+  let sectorScore = 0
+  if (matchedSectors.length > 0) {
+    const matchRatio = matchedSectors.length / Math.max(investorSectors.length, 1)
+    sectorScore = 10
+  }
+  score += sectorScore * weights.sector
+  breakdown.sector = {
+    score: sectorScore * 10,
+    matched: matchedSectors,
+    investorSectors,
+    smeSectors,
+    weight: weights.sector,
+  }
+
+  // 🏗️ Stage match - FIXED
+  const stageMatch = investorStages.includes(smeStage) ? 10 : 0
+  score += stageMatch * weights.stage
+  breakdown.stage = {
+    score: stageMatch * 10,
+    investorStages,
+    smeStage,
+    matched: investorStages.includes(smeStage),
+    weight: weights.stage,
+  }
+
+  // 💰 Ticket match
+  let ticketScore = 0
+  if (smeAmount >= investorMinTicket && smeAmount <= investorMaxTicket) {
+    ticketScore = 10
+  } else {
+    const distance = smeAmount < investorMinTicket ? investorMinTicket - smeAmount : smeAmount - investorMaxTicket
+    const range = investorMaxTicket - investorMinTicket || 1
+    const penalty = Math.min((distance / range) * 10, 10)
+    ticketScore = Math.max(0, 10 - penalty)
+  }
+  score += ticketScore * weights.ticket
+  breakdown.ticket = {
+    score: ticketScore * 10,
+    investorMin: investorMinTicket,
+    investorMax: investorMaxTicket,
+    smeAmount,
+    inRange: smeAmount >= investorMinTicket && smeAmount <= investorMaxTicket,
+    weight: weights.ticket,
+  }
+
+  // ⚙️ Type (instrument) match
+  const matchedInstruments = investorInstruments.filter(invInst => 
+    smeInstruments.some(smeInst => smeInst === invInst)
+  )
+  const typeMatch = matchedInstruments.length > 0 ? 10 : 0
+  score += typeMatch * weights.type
+  breakdown.type = {
+    score: typeMatch * 10,
+    investorInstruments,
+    smeInstruments,
+    matchedInstruments,
+    weight: weights.type,
+  }
+
+  return {
+    score: Math.round(score * 10), // return as percentage 0-100
+    breakdown,
+  }
+}
   const loadApplicationAvailability = (application) => {
     if (application.availableDates) {
       const appAvailabilities = application.availableDates.map((avail) => ({
@@ -99,18 +357,27 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
     }
   }
 
-  useEffect(() => {
-    setLoading(true)
-    setAuthLoading(true)
+useEffect(() => {
+  setLoading(true)
+  setAuthLoading(true)
 
-    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser)
-      setAuthLoading(false)
+  const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
+    setUser(currentUser)
+    setAuthLoading(false)
 
-      if (!currentUser) {
-        setLoading(false)
-        setSmes([])
-        return
+    if (!currentUser) {
+      setLoading(false)
+      setSmes([])
+      return
+    }
+
+    try {
+      // Fetch investor profile first
+      const investorProfileRef = doc(db, "MyuniversalProfiles", currentUser.uid)
+      const investorProfileSnap = await getDoc(investorProfileRef)
+      
+      if (investorProfileSnap.exists()) {
+        setInvestorProfile(investorProfileSnap.data().formData)
       }
 
       const q = query(collection(db, "investorApplications"), where("funderId", "==", currentUser.uid))
@@ -118,26 +385,18 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
       const unsubscribeData = onSnapshot(q, async (querySnapshot) => {
         try {
           const stagesFromFirestore = {}
-          const existingSmeIds = smes.map(sme => sme.id)
           const fetchWithProfiles = await Promise.all(
             querySnapshot.docs.map(async (docSnap) => {
               const data = docSnap.data()
 
-              // Check if this is a new application by comparing with existing ones
-              const isNew = !existingSmeIds.includes(docSnap.id)
-              if (isNew && data.createdAt) {
-                const applicationDate = new Date(data.createdAt)
-                const now = new Date()
-                const isRecent = (now - applicationDate) < (24 * 60 * 60 * 1000) // Within 24 hours
-                
-                if (isRecent) {
-                  addInvestorNotification(
-                    `New application received from ${data.smeName || "an SME"}`,
-                    "new_application",
-                    docSnap.id,
-                    data.smeName || "Unknown Company"
-                  )
-                }
+              // Check if this is a new application
+              const isNew = !smes.some((sme) => sme.id === docSnap.id)
+              if (isNew) {
+                addInvestorNotification(
+                  `New application received from ${data.smeName || "an SME"}`,
+                  "new_application",
+                  docSnap.id,
+                )
               }
 
               // Convert date fields if needed
@@ -153,27 +412,40 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
                 stagesFromFirestore[docSnap.id] = data.pipelineStage
               }
 
-              // Fetch the SME profile to get the fundabilityScore
-              const fundabilityScore = null
+              // Fetch SME profile
+              let matchPercentage = 0
+              let matchBreakdown = null
+              
               try {
                 const profileRef = doc(db, "universalProfiles", data.smeId)
                 const profileSnap = await getDoc(profileRef)
-                if (profileSnap.exists()) {
+                
+                if (profileSnap.exists() && investorProfileSnap.exists()) {
                   const profileData = profileSnap.data()
-
-                  // Generate random big score for demo purposes
-                  const bigScore = Math.floor(Math.random() * 30) + 70
+                  const investorData = investorProfileSnap.data().formData
+                  
+                  // Calculate match score
+                  const matchResult = calculateInvestorMatchScore(investorData, profileData)
+                  matchPercentage = matchResult.score
+                  matchBreakdown = matchResult.breakdown
+                  
+                  // Store breakdown for modal
+                  setMatchBreakdowns(prev => ({
+                    ...prev,
+                    [docSnap.id]: matchBreakdown
+                  }))
 
                   return {
                     id: docSnap.id,
                     ...data,
                     fundabilityScore: profileData.fundabilityScore ?? null,
-                    bigScore: bigScore,
-                    smeName:
-                      profileData.entityOverview?.tradingName ||
+                    bigScore: Math.floor(Math.random() * 30) + 70,
+                    smeName: profileData.entityOverview?.tradingName ||
                       profileData.entityOverview?.registeredName ||
                       "Unnamed Business",
+                    supportRequired: formatLabel(profileData.applicationOverview?.supportFormat),
                     location: formatLabel(profileData.entityOverview?.location),
+                    gurantees: formatLabel(profileData.guarantees),
                     stage: formatLabel(profileData.applicationOverview?.fundingStage),
                     focusArea: formatLabel(profileData.entityOverview?.operationStage),
                     sector: formatLabel(profileData.entityOverview?.economicSectors?.[0]),
@@ -187,34 +459,30 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
                     pipelineStage: data.pipelineStage || null,
                     revenue: `R${Number(profileData.financialOverview?.annualRevenue || 0).toLocaleString()}`,
                     teamSize: profileData.entityOverview?.employeeCount || "N/A",
+                    matchPercentage: matchPercentage, // Add match percentage
                   }
                 }
               } catch (error) {
                 console.error("Error fetching SME profile for", data.smeId, error)
               }
 
-              // Return basic application data if profile fetch fails
+              // Fallback return if profile fetch fails
               return {
                 id: docSnap.id,
                 ...data,
-                smeName: data.smeName || "Unnamed Business",
-                location: formatLabel(data.location),
-                stage: formatLabel(data.stage),
-                fundingNeeded: data.fundingNeeded || "0",
-                applicationDate: data.applicationDate || "N/A",
-                pipelineStage: data.pipelineStage || null,
+                matchPercentage: 0,
+                // ... other fields
               }
             }),
           )
 
-          // Filter out any undefined entries and sort
-          const validProfiles = fetchWithProfiles.filter(profile => profile !== undefined)
-          validProfiles.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+          // Sort and update state
+          fetchWithProfiles.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
 
-          let filtered = validProfiles
+          let filtered = fetchWithProfiles
           if (stageFilter) {
             const normalized = stageFilter.toLowerCase()
-            filtered = validProfiles.filter((app) => (app.pipelineStage || "").toLowerCase() === normalized)
+            filtered = fetchWithProfiles.filter((app) => (app.pipelineStage || "").toLowerCase() === normalized)
           }
 
           setUpdatedStages(stagesFromFirestore)
@@ -232,10 +500,14 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
       })
 
       return () => unsubscribeData()
-    })
+    } catch (error) {
+      console.error("Error fetching investor profile:", error)
+      setLoading(false)
+    }
+  })
 
-    return () => unsubscribeAuth()
-  }, [stageFilter])
+  return () => unsubscribeAuth()
+}, [stageFilter])
 
   useEffect(() => {
     const fetchBigScores = async () => {
@@ -245,6 +517,7 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
         snapshot.forEach((doc) => {
           scores[doc.id] = doc.data() // Store the entire document data
         })
+      
         setBigScoresMap(scores)
       } catch (error) {
         console.error("Error fetching BIG Scores:", error)
@@ -257,7 +530,7 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
 
     fetchBigScores()
   }, [])
-
+  console.log(bigScoresMap)
   const handleDateSelect = (dates) => {
     setTempDates(dates || [])
   }
@@ -416,16 +689,10 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
         status: status === "Approved" ? "Accepted" : status,
         responseMessage: message,
         updatedAt: new Date().toISOString(),
+        // Add pipeline stage update
         pipelineStage: status === "Approved" ? "Under Review" : status,
       }
-
-      // Add notification for status change
-      addInvestorNotification(
-        `Application status changed to ${status} for ${selectedSME.smeName}`,
-        "status_change",
-        id,
-        selectedSME.smeName
-      )
+      addInvestorNotification(`Application status changed to ${status} for ${selectedSME.smeName}`, "status_change", id)
 
       if (status === "Approved") {
         const availabilityData = availabilities.map((avail) => ({
@@ -630,7 +897,7 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
   const handleSMENameClick = async (sme) => {
     try {
       setLoading(true)
-
+console.log(sme)
       // Fetch SME profile
       const profileRef = doc(db, "universalProfiles", sme.smeId)
       const profileSnap = await getDoc(profileRef)
@@ -646,7 +913,8 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
         setSelectedSME({
           ...sme,
           ...profileData, // Merge the application data with the full profile data
-          investorRequiredDocuments: investorData.formData?.productsServices?.requiredDocuments || [],
+          investorRequiredDocuments: sme.documentURLs || [],
+
         })
         setModalType("view")
       } else {
@@ -663,6 +931,7 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
       setLoading(false)
     }
   }
+console.log(selectedSME)
 
   const handleBigScoreClick = (sme) => {
     const bigScoreData = bigScoresMap[sme.smeId]
@@ -686,7 +955,7 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
           color: "#4E342E",
         },
         leadership: {
-          score: bigScoreData.scores.leadership || 0,
+          score: bigScoreData.scores.leadership || 0, // Add this
           color: "#6D4C41",
         },
         bigScore: {
@@ -770,6 +1039,283 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
     }
   }
 
+  // Add this modal component inside your InvestorSMETable function, before the return statement
+const GuaranteesModal = ({ guarantees, onClose }) => {
+  if (!guarantees) return null;
+
+  // Function to check if a guarantee has files
+  const hasFiles = (guaranteeKey) => {
+    const filesKey = `${guaranteeKey}Files`;
+    return guarantees[filesKey] && guarantees[filesKey].length > 0;
+  };
+
+  // Function to get guarantee value
+  const getGuaranteeValue = (guaranteeKey) => {
+    return guarantees[guaranteeKey] || 'no';
+  };
+
+  // Function to render guarantee category
+  const renderGuaranteeCategory = (title, guaranteeKeys) => (
+    <div style={{
+      marginBottom: '24px',
+      border: '1px solid #d7ccc8',
+      borderRadius: '8px',
+      overflow: 'hidden',
+    }}>
+      <h4 style={{
+        background: 'linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%)',
+        margin: 0,
+        padding: '12px 16px',
+        fontSize: '16px',
+        fontWeight: '600',
+        color: '#3e2723',
+        borderBottom: '1px solid #d7ccc8'
+      }}>
+        {title}
+      </h4>
+      <div style={{ padding: '16px', backgroundColor: '#fafafa' }}>
+        {guaranteeKeys.map((guarantee) => (
+          <div key={guarantee.key} style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '8px 0',
+            borderBottom: '1px solid #f0f0f0'
+          }}>
+            <span style={{ flex: 1, fontSize: '14px', color: '#5d4037' }}>
+              {guarantee.label}
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{
+                padding: '4px 12px',
+                borderRadius: '16px',
+                fontSize: '12px',
+                fontWeight: '600',
+                backgroundColor: getGuaranteeValue(guarantee.key) === 'yes' ? '#4caf50' : '#f44336',
+                color: 'white'
+              }}>
+                {getGuaranteeValue(guarantee.key) === 'yes' ? 'Yes' : 'No'}
+              </span>
+              {getGuaranteeValue(guarantee.key) === 'yes' && hasFiles(guarantee.key) && (
+                <span style={{
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  fontSize: '10px',
+                  backgroundColor: '#2196f3',
+                  color: 'white'
+                }}>
+                  {guarantees[`${guarantee.key}Files`].length} file(s)
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  // Define guarantee categories
+  const guaranteeCategories = [
+    {
+      title: 'Forward Contracts (Revenue Guarantees)',
+      guarantees: [
+        { key: 'signedCustomerContracts', label: 'Signed customer contracts with clear payment terms' },
+        { key: 'purchaseOrders', label: 'Purchase orders (POs) from reputable buyers' },
+        { key: 'offtakeAgreements', label: 'Offtake agreements' },
+        { key: 'subscriptionRevenue', label: 'Subscription revenue from signed clients' }
+      ]
+    },
+    {
+      title: 'Payment of Credit Guarantees',
+      guarantees: [
+        { key: 'letterOfGuarantee', label: 'Letter of guarantee or letter of credit' },
+        { key: 'thirdPartyGuarantees', label: 'Third-party payment guarantees' },
+        { key: 'factoringAgreements', label: 'Factoring agreements' },
+        { key: 'suretyBonds', label: 'Surety bonds on contracts or performance' }
+      ]
+    },
+    {
+      title: 'Government or Institutional Support',
+      guarantees: [
+        { key: 'governmentContracts', label: 'Government contracts or grants' },
+        { key: 'approvedSupplierStatus', label: 'Approved supplier status' },
+        { key: 'incubatorGuarantees', label: 'Incubator or accelerator guarantees' },
+        { key: 'exportCreditGuarantees', label: 'Export credit guarantees' }
+      ]
+    },
+    {
+      title: 'Asset-backed Guarantees',
+      guarantees: [
+        { key: 'liensCollateral', label: 'Liens, collateral, security interests' },
+        { key: 'securedAssets', label: 'Secured assets used in contract delivery' },
+        { key: 'retentionGuarantees', label: 'Retention guarantees' }
+      ]
+    },
+    {
+      title: 'Export Credit or Trade Insurance Cover',
+      guarantees: [
+        { key: 'exportCreditInsurance', label: 'Export credit or trade insurance cover' }
+      ]
+    },
+    {
+      title: 'Factoring or Receivables Finance Agreements',
+      guarantees: [
+        { key: 'receivablesFinancing', label: 'Factoring agreements or receivables-backed financing' }
+      ]
+    },
+    {
+      title: 'Personal or Third-Party Guarantees',
+      guarantees: [
+        { key: 'personalSurety', label: 'Personal surety from directors or shareholders' },
+        { key: 'corporateGuarantees', label: 'Corporate guarantees from a partner or holding company' }
+      ]
+    }
+  ];
+
+  return (
+    <div style={modalOverlayStyle} onClick={onClose}>
+      <div style={{
+        backgroundColor: '#ffffff',
+        borderRadius: '20px',
+        padding: '32px',
+        maxWidth: '800px',
+        width: '95%',
+        maxHeight: '90vh',
+        overflowY: 'auto',
+        boxShadow: '0 20px 60px rgba(62, 39, 35, 0.5)',
+        border: 'none',
+        animation: 'slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
+      }} onClick={(e) => e.stopPropagation()}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '24px',
+          paddingBottom: '16px',
+          borderBottom: '3px solid #8d6e63'
+        }}>
+          <h3 style={{
+            margin: 0,
+            fontSize: '24px',
+            fontWeight: '700',
+            color: '#3e2723'
+          }}>
+            Guarantees Breakdown
+          </h3>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'none',
+              border: 'none',
+              fontSize: '24px',
+              cursor: 'pointer',
+              color: '#5d4037',
+              padding: '4px',
+              borderRadius: '4px',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseOver={(e) => {
+              e.target.style.backgroundColor = '#f5f5f5';
+            }}
+            onMouseOut={(e) => {
+              e.target.style.backgroundColor = 'transparent';
+            }}
+          >
+            ×
+          </button>
+        </div>
+
+        <div style={{ marginBottom: '20px' }}>
+          <p style={{
+            color: '#5d4037',
+            fontSize: '14px',
+            lineHeight: '1.5',
+            margin: 0,
+            padding: '12px 16px',
+            backgroundColor: '#f3e8dc',
+            borderRadius: '8px',
+            borderLeft: '4px solid #8d6e63'
+          }}>
+            This breakdown shows all the guarantees and security instruments available to this business. 
+            Green indicators show available guarantees with document counts where applicable.
+          </p>
+        </div>
+
+        <div style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: '8px' }}>
+          {guaranteeCategories.map((category, index) => (
+            <div key={index}>
+              {renderGuaranteeCategory(category.title, category.guarantees)}
+            </div>
+          ))}
+        </div>
+
+        {/* Summary Statistics */}
+        <div style={{
+          marginTop: '24px',
+          padding: '20px',
+          backgroundColor: '#f8f5f3',
+          borderRadius: '12px',
+          border: '1px solid #8d6e63'
+        }}>
+          <h4 style={{ margin: '0 0 12px 0', color: '#3e2723', fontSize: '16px' }}>
+            Guarantees Summary
+          </h4>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '20px', fontWeight: '700', color: '#4caf50' }}>
+                {Object.keys(guarantees).filter(key => 
+                  !key.includes('Files') && guarantees[key] === 'yes'
+                ).length}
+              </div>
+              <div style={{ fontSize: '12px', color: '#5d4037' }}>Available</div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '20px', fontWeight: '700', color: '#2196f3' }}>
+                {Object.keys(guarantees).filter(key => 
+                  key.includes('Files') && guarantees[key] && guarantees[key].length > 0
+                ).length}
+              </div>
+              <div style={{ fontSize: '12px', color: '#5d4037' }}>With Documents</div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '20px', fontWeight: '700', color: '#3e2723' }}>
+                {guaranteeCategories.reduce((total, category) => total + category.guarantees.length, 0)}
+              </div>
+              <div style={{ fontSize: '12px', color: '#5d4037' }}>Total Types</div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px' }}>
+          <button
+            onClick={onClose}
+            style={{
+              backgroundColor: '#5d4037',
+              color: 'white',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '12px 24px',
+              fontSize: '16px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease'
+            }}
+            onMouseOver={(e) => {
+              e.target.style.backgroundColor = '#4e342e';
+              e.target.style.transform = 'translateY(-2px)';
+            }}
+            onMouseOut={(e) => {
+              e.target.style.backgroundColor = '#5d4037';
+              e.target.style.transform = 'translateY(0)';
+            }}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
   const handleNextStageChange = (sme) => {
     setSelectedSMEForStage(sme)
     setShowNextStageModal(true)
@@ -789,6 +1335,7 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
     loadApplicationAvailability(sme)
   }
 
+
   const deriveNextStage = (stage) => {
     switch (stage) {
       case "Under Review":
@@ -803,96 +1350,6 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
         return "Closed"
       default:
         return "Pending"
-    }
-  }
-
-  const sendEmailToSME = async (smeId, subject, emailMessage, attachmentUrl = null) => {
-    try {
-      console.log("🔄 Using EmailJS service configuration...");
-
-      const emailjsConfig = {
-        serviceId: API_KEYS.SERVICE_ID_MESSAGES,
-        templateId: API_KEYS.TEMPLATE_ID_MESSAGES,
-        publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES
-      };
-
-      console.log("📧 Using EmailJS config:", emailjsConfig);
-
-      if (!window.emailjs) {
-        emailjs.init(emailjsConfig.publicKey);
-        window.emailjs = emailjs;
-      }
-
-      const user = auth.currentUser;
-      const investorName = user?.displayName || "Investment Team";
-
-      let smeEmail = null;
-      console.log("📋 Fetching SMSE email for:", smeId);
-
-      try {
-        const universalProfileRef = doc(db, "universalProfiles", smeId);
-        const universalProfileSnap = await getDoc(universalProfileRef);
-        
-        if (universalProfileSnap.exists()) {
-          const profileData = universalProfileSnap.data();
-          console.log("📄 universalProfiles data:", profileData);
-          
-          smeEmail = profileData.email || 
-                     profileData.contactDetails?.email ||
-                     profileData.contactEmail ||
-                     profileData.businessEmail ||
-                     profileData.personalEmail;
-          
-          if (smeEmail) {
-            console.log("✅ Found SMSE email:", smeEmail);
-          } else {
-            console.log("❌ No email found in universalProfiles");
-          }
-        } else {
-          console.log("❌ No document in universalProfiles for:", smeId);
-        }
-      } catch (fetchError) {
-        console.error("❌ Error fetching SMSE email:", fetchError);
-      }
-
-      if (!smeEmail) {
-        console.warn("⚠️ No SMSE email found, using fallback");
-        smeEmail = "support@bigmarketplace.africa";
-      }
-
-      console.log("📧 Final recipient email:", smeEmail);
-
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(smeEmail)) {
-        throw new Error(`Invalid email format: "${smeEmail}"`);
-      }
-
-      const templateParams = {
-        to_email: smeEmail,
-        subject: subject,
-        from_name: investorName,
-        date: new Date().toLocaleDateString(),
-        message: emailMessage,
-        portal_url: `https://www.bigmarketplace.africa/applications/${user.uid}_${smeId}`,
-        has_attachments: attachmentUrl ? "true" : "false",
-        attachments_count: attachmentUrl ? "1" : "0"
-      };
-
-      console.log("📨 Sending with EmailJS service...", templateParams);
-
-      const response = await window.emailjs.send(
-        emailjsConfig.serviceId,
-        emailjsConfig.templateId,
-        templateParams,
-        emailjsConfig.publicKey
-      );
-      
-      console.log("✅ Email sent successfully with EmailJS service!", response);
-      return true;
-      
-    } catch (emailError) {
-      console.error("❌ Email failed:", emailError);
-      return false;
     }
   }
 
@@ -956,13 +1413,10 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
         pipelineStage: nextStage,
         updatedAt: new Date().toISOString(),
       }
-
-      // Add notification for stage change
       addInvestorNotification(
         `Application moved to ${nextStage} for ${selectedSMEForStage.smeName}`,
         "status_change",
         selectedSMEForStage.id,
-        selectedSMEForStage.smeName
       )
 
       // Funding Approved specific data
@@ -1037,38 +1491,39 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
         onDealComplete()
       }
 
-      // Compose professional message for email
-      let emailSubject = ""
-      let emailMessage = ""
+      // Compose professional message
+      let subject = ""
+      let content = ""
 
       switch (nextStage) {
         case "Under Review":
-          emailSubject = `Application Update: Under Review - ${selectedSMEForStage.smeName}`
-          emailMessage = `Dear ${selectedSMEForStage.smeName},\n\n` +
+          subject = meetingPurpose
+          content =
+            `Dear ${selectedSMEForStage.smeName},\n\n` +
             `We are pleased to inform you that your application has moved to the "Under Review" stage of our evaluation process.\n\n` +
             `${message}\n\n` +
             `Meeting Invitation:\n` +
-            `Purpose: ${meetingPurpose}\n` +
             `Location: ${meetingLocation}\n` +
             `Available Time Slots:\n` +
             availabilities
               .map((avail, idx) => {
                 const dateStr = avail.date.toLocaleDateString("en-US", {
-                  weekday: 'short',
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric',
+                  weekday: "short",
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
                 })
                 return `${idx + 1}. ${dateStr} at ${avail.timeSlots?.[0]?.start || "TBD"} - ${avail.timeSlots?.[0]?.end || "TBD"} (${avail.timeZone})`
               })
               .join("\n") +
-            `\n\nPlease reply with your preferred meeting time from the options above.\n\n` +
+            `\n\nPlease RSVP on your calendar with your preferred meeting time from the options above.\n\n` +
             `Best regards,\nInvestment Team`
           break
 
         case "Funding Approved":
-          emailSubject = `Congratulations! Funding Approved - ${selectedSMEForStage.smeName}`
-          emailMessage = `Dear ${selectedSMEForStage.smeName},\n\n` +
+          subject = `Funding Approved: ${selectedSMEForStage.smeName}`
+          content =
+            `Dear ${selectedSMEForStage.smeName},\n\n` +
             `Congratulations! Your funding application has been approved.\n\n` +
             `${message}\n\n` +
             `Funding Details:\n` +
@@ -1081,8 +1536,9 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
           break
 
         case "Termsheet":
-          emailSubject = `Termsheet Shared - ${selectedSMEForStage.smeName}`
-          emailMessage = `Dear ${selectedSMEForStage.smeName},\n\n` +
+          subject = `Termsheet Shared: ${selectedSMEForStage.smeName}`
+          content =
+            `Dear ${selectedSMEForStage.smeName},\n\n` +
             `We are pleased to share the termsheet for your consideration.\n\n` +
             `${message}\n\n` +
             `The attached document outlines the proposed terms of our investment. ` +
@@ -1091,8 +1547,9 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
           break
 
         case "Deal Complete":
-          emailSubject = `Congratulations! Deal Approved - ${selectedSMEForStage.smeName}`
-          emailMessage = `Dear ${selectedSMEForStage.smeName},\n\n` +
+          subject = `Congratulations: Deal Approved for ${selectedSMEForStage.smeName}`
+          content =
+            `Dear ${selectedSMEForStage.smeName},\n\n` +
             `We are delighted to inform you that your funding application has been approved!\n\n` +
             `${message}\n\n` +
             `Our team will be in touch shortly to finalize the next steps. ` +
@@ -1100,36 +1557,20 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
             `Best regards,\nInvestment Team`
           break
 
-        case "Deal Declined":
-          emailSubject = `Update on Your Funding Application - ${selectedSMEForStage.smeName}`
-          emailMessage = `Dear ${selectedSMEForStage.smeName},\n\n` +
-            `Thank you for presenting your business opportunity to our investment committee. ` +
-            `After careful consideration and thorough evaluation, we regret to inform you that ` +
-            `we are unable to proceed with funding at this time.\n\n` +
-            `${message}\n\n` +
-            `This decision does not reflect the quality of your business concept, and we encourage ` +
-            `you to continue pursuing your entrepreneurial goals.\n\n` +
-            `We wish you success in your future endeavors.\n\n` +
-            `Respectfully,\nInvestment Committee`
-          break
-
         default:
-          emailSubject = `Application Status Update: ${selectedSMEForStage.smeName}`
-          emailMessage = `Dear ${selectedSMEForStage.smeName},\n\n` +
+          subject = `Application Status Update: ${selectedSMEForStage.smeName}`
+          content =
+            `Dear ${selectedSMEForStage.smeName},\n\n` +
             `This is to inform you that your application status has been updated to "${nextStage}".\n\n` +
             `${message}\n\n` +
             `Best regards,\nInvestment Team`
       }
 
-      // Send email to SME
-      const emailSent = await sendEmailToSME(smeId, emailSubject, emailMessage, attachmentUrl)
-
-      // Also create internal message in the system
       const messagePayload = {
         to: smeId,
         from: user.uid,
-        subject: emailSubject,
-        content: message,
+        subject,
+        content,
         date: new Date().toISOString(),
         read: false,
         type: "inbox",
@@ -1142,18 +1583,10 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
         addDoc(collection(db, "messages"), { ...messagePayload, read: true, type: "sent" }),
       ])
 
-      if (emailSent) {
-        setNotification({
-          type: "success",
-          message: `Application moved to ${nextStage} and notification sent successfully`,
-        })
-      } else {
-        setNotification({
-          type: "success", 
-          message: `Application moved to ${nextStage} successfully (email notification failed)`
-        })
-      }
-
+      setNotification({
+        type: "success",
+        message: `Application moved to ${nextStage} successfully`,
+      })
       setTimeout(() => setNotification(null), 3000)
       setShowNextStageModal(false)
     } catch (error) {
@@ -1208,22 +1641,69 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
         return { backgroundColor: "#5d4037", color: "#ffffff" }
     }
   }
+const matchContainerStyle = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "flex-start",
+  width: "100%",
+}
 
-  // Enhanced Modal Overlay Style with animation
-  const modalOverlayStyle = {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(62, 39, 35, 0.85)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 1000,
-    animation: "fadeIn 0.3s ease-out",
-    backdropFilter: "blur(4px)",
-  }
+const progressBarStyle = {
+  width: "60%",
+  height: "6px",
+  backgroundColor: "#E2E8F0",
+  borderRadius: "3px",
+  overflow: "hidden",
+}
+
+const progressFillStyle = {
+  height: "100%",
+  borderRadius: "3px",
+  transition: "width 0.3s ease",
+}
+
+const matchScoreStyle = {
+  fontSize: "0.75rem",
+  fontWeight: "500",
+}
+
+const modalHeaderStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  padding: "1.5rem",
+  borderBottom: "1px solid #E8D5C4",
+  background: "#FEFCFA",
+}
+
+
+
+const modalCloseButtonStyle = {
+  background: "none",
+  border: "none",
+  fontSize: "1.25rem",
+  cursor: "pointer",
+  color: "#5D2A0A",
+  padding: "0.25rem",
+}
+
+const modalBodyStyle = {
+  padding: "1.5rem",
+}
+
+const modalOverlayStyle = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(0,0,0,0.5)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 1000,
+}
+
 
   // Enhanced Modern Modal Content Style
   const modalContentStyle = {
@@ -1385,15 +1865,100 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
                   <td>{formatLabel(sme.stage)}</td>
                   <td>{sme.fundingNeeded ? `R${Number(sme.fundingNeeded).toLocaleString()}` : "N/A"}</td>
                   <td>{formatLabel(sme.investmentType)}</td>
-                  <td>{sme.gurantees ? formatLabel(sme.gurantees) : "N/A"}</td>
+                  <td>
+  {sme.gurantees && sme.gurantees !== "N/A" ? (
+    <button
+      onClick={() => {
+        // Fetch the full guarantees data from the SME profile
+        const fetchGuarantees = async () => {
+          try {
+            const profileRef = doc(db, "universalProfiles", sme.smeId);
+            const profileSnap = await getDoc(profileRef);
+            if (profileSnap.exists()) {
+              const profileData = profileSnap.data();
+              setSelectedGuarantees(profileData.guarantees || {});
+              setShowGuaranteesModal(true);
+            }
+          } catch (error) {
+            console.error("Error fetching guarantees:", error);
+            setNotification({
+              type: "error",
+              message: "Failed to load guarantees data",
+            });
+          }
+        };
+        fetchGuarantees();
+      }}
+      style={{
+        color: "#5d4037",
+        textDecoration: "underline",
+        cursor: "pointer",
+        background: "none",
+        border: "none",
+        padding: 0,
+        font: "inherit",
+        fontWeight: "500",
+        display: "flex",
+        alignItems: "center",
+        gap: "4px",
+      }}
+      title="View guarantees"
+    >
+      View guarantees
+      <Info size={14} />
+    </button>
+  ) : (
+    "N/A"
+  )}
+</td>
                   <td>{sme.supportRequired ? formatLabel(sme.supportRequired) : "N/A"}</td>
                   <td>{sme.applicationDate}</td>
                   <td>
-                    <div className={styles.matchPercentage}>
-                      <div className={styles.matchBar} style={{ width: `${sme.matchPercentage}%` }}></div>
-                      <span>{sme.matchPercentage}%</span>
-                    </div>
-                  </td>
+  <div style={matchContainerStyle}>
+    <div style={progressBarStyle}>
+      <div
+        style={{
+          ...progressFillStyle,
+          width: `${sme.matchPercentage}%`,
+          background:
+            sme.matchPercentage > 75
+              ? "#48BB78"
+              : sme.matchPercentage > 50
+                ? "#F6AD55"
+                : "#F56565",
+        }}
+      />
+    </div>
+    <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "4px" }}>
+      <span
+        style={{
+          ...matchScoreStyle,
+          color:
+            sme.matchPercentage > 75
+              ? "#48BB78"
+              : sme.matchPercentage > 50
+                ? "#D69E2E"
+                : "#E53E3E",
+        }}
+      >
+        {sme.matchPercentage}%
+      </span>
+      <Eye
+        size={14}
+        style={{
+          cursor: "pointer",
+          color: "#a67c52",
+        }}
+        onClick={(e) => {
+          e.stopPropagation()
+          setCurrentMatchBreakdown(matchBreakdowns[sme.id])
+          setShowMatchBreakdownModal(true)
+        }}
+        title="View match breakdown"
+      />
+    </div>
+  </div>
+</td>
                   <td>
                     <button
                       onClick={() => handleBigScoreClick(sme)}
@@ -1439,6 +2004,7 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
                             cursor: "pointer",
                             boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
                             ...getStageColor(updatedStages[sme.id] || sme.pipelineStage),
+                            //backgroundColor: (updatedStages[sme.id] || sme.pipelineStage) === "Application Received" ? "#5d4037" : undefined,
                           }}
                         >
                           {(updatedStages[sme.id] || sme.pipelineStage) === "Application Received"
@@ -4345,6 +4911,446 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
           </div>
         </div>
       )}
+{showMatchBreakdownModal && currentMatchBreakdown && (
+  <div style={modalOverlayStyle} onClick={() => setShowMatchBreakdownModal(false)}>
+    <div
+      style={{
+        background: "white",
+        borderRadius: "12px",
+        maxWidth: "800px",
+        width: "95%",
+        maxHeight: "90vh",
+        overflowY: "auto",
+        boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
+      }}
+    >
+      <div style={modalHeaderStyle}>
+        <h3 style={modalTitleStyle}>Match Breakdown - Investment Analysis</h3>
+        <button onClick={() => setShowMatchBreakdownModal(false)} style={modalCloseButtonStyle}>
+          ✖
+        </button>
+      </div>
+      <div style={modalBodyStyle}>
+        <div
+          style={{
+            textAlign: "center",
+            marginBottom: "2rem",
+            paddingBottom: "1rem",
+            borderBottom: "2px solid #E8D5C4",
+          }}
+        >
+          <div
+            style={{
+              fontSize: "3rem",
+              fontWeight: "bold",
+              color:
+                currentMatchBreakdown.sector.score * currentMatchBreakdown.sector.weight +
+                  currentMatchBreakdown.stage.score * currentMatchBreakdown.stage.weight +
+                  currentMatchBreakdown.ticket.score * currentMatchBreakdown.ticket.weight +
+                  currentMatchBreakdown.type.score * currentMatchBreakdown.type.weight >=
+                80
+                  ? "#388E3C"
+                  : currentMatchBreakdown.sector.score * currentMatchBreakdown.sector.weight +
+                        currentMatchBreakdown.stage.score * currentMatchBreakdown.stage.weight +
+                        currentMatchBreakdown.ticket.score * currentMatchBreakdown.ticket.weight +
+                        currentMatchBreakdown.type.score * currentMatchBreakdown.type.weight >=
+                      60
+                    ? "#F57C00"
+                    : "#D32F2F",
+              marginBottom: "0.5rem",
+            }}
+          >
+            {(
+              currentMatchBreakdown.sector.score * currentMatchBreakdown.sector.weight +
+              currentMatchBreakdown.stage.score * currentMatchBreakdown.stage.weight +
+              currentMatchBreakdown.ticket.score * currentMatchBreakdown.ticket.weight +
+              currentMatchBreakdown.type.score * currentMatchBreakdown.type.weight
+            ).toFixed(1)}
+            %
+          </div>
+          <p
+            style={{
+              fontSize: "1rem",
+              color: "#8D6E63",
+              margin: "0",
+            }}
+          >
+            Overall Match Score
+          </p>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))",
+            gap: "1rem",
+            marginBottom: "2rem",
+          }}
+        >
+          {/* Sector Match */}
+          <div
+            style={{
+              background: "#FEFCFA",
+              border: "1px solid #E8D5C4",
+              borderRadius: "8px",
+              padding: "1.25rem",
+              borderLeft: `4px solid ${currentMatchBreakdown.sector.score >= 80 ? "#388E3C" : currentMatchBreakdown.sector.score >= 50 ? "#F57C00" : "#D32F2F"}`,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                marginBottom: "0.75rem",
+              }}
+            >
+              <h4
+                style={{
+                  fontSize: "0.875rem",
+                  fontWeight: "600",
+                  color: "#5D2A0A",
+                  margin: "0",
+                  lineHeight: "1.3",
+                  flex: "1",
+                }}
+              >
+                Sector Match (Weight: {currentMatchBreakdown.sector.weight * 100}%)
+              </h4>
+              <span
+                style={{
+                  fontSize: "1.25rem",
+                  fontWeight: "bold",
+                  color:
+                    currentMatchBreakdown.sector.score >= 80
+                      ? "#388E3C"
+                      : currentMatchBreakdown.sector.score >= 50
+                        ? "#F57C00"
+                        : "#D32F2F",
+                  marginLeft: "1rem",
+                }}
+              >
+                {Math.round(currentMatchBreakdown.sector.score)}%
+              </span>
+            </div>
+
+            <div
+              style={{
+                background: "#E8D5C4",
+                borderRadius: "4px",
+                height: "8px",
+                overflow: "hidden",
+                marginBottom: "0.5rem",
+              }}
+            >
+              <div
+                style={{
+                  height: "100%",
+                  background:
+                    currentMatchBreakdown.sector.score >= 80
+                      ? "#388E3C"
+                      : currentMatchBreakdown.sector.score >= 50
+                        ? "#F57C00"
+                        : "#D32F2F",
+                  width: `${currentMatchBreakdown.sector.score}%`,
+                  transition: "width 0.3s ease",
+                }}
+              />
+            </div>
+
+            <div style={{ fontSize: "0.75rem", color: "#8D6E63" }}>
+              <div>Your Sectors: {currentMatchBreakdown.sector.investorSectors.join(", ")}</div>
+              <div>SME Sectors: {currentMatchBreakdown.sector.smeSectors.join(", ")}</div>
+              <div>
+                Matched:{" "}
+                {currentMatchBreakdown.sector.matched.length > 0
+                  ? currentMatchBreakdown.sector.matched.join(", ")
+                  : "None"}
+              </div>
+            </div>
+          </div>
+
+          {/* Stage Match */}
+          <div
+            style={{
+              background: "#FEFCFA",
+              border: "1px solid #E8D5C4",
+              borderRadius: "8px",
+              padding: "1.25rem",
+              borderLeft: `4px solid ${currentMatchBreakdown.stage.score >= 80 ? "#388E3C" : currentMatchBreakdown.stage.score >= 50 ? "#F57C00" : "#D32F2F"}`,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                marginBottom: "0.75rem",
+              }}
+            >
+              <h4
+                style={{
+                  fontSize: "0.875rem",
+                  fontWeight: "600",
+                  color: "#5D2A0A",
+                  margin: "0",
+                  lineHeight: "1.3",
+                  flex: "1",
+                }}
+              >
+                Stage Match (Weight: {currentMatchBreakdown.stage.weight * 100}%)
+              </h4>
+              <span
+                style={{
+                  fontSize: "1.25rem",
+                  fontWeight: "bold",
+                  color:
+                    currentMatchBreakdown.stage.score >= 80
+                      ? "#388E3C"
+                      : currentMatchBreakdown.stage.score >= 50
+                        ? "#F57C00"
+                        : "#D32F2F",
+                  marginLeft: "1rem",
+                }}
+              >
+                {Math.round(currentMatchBreakdown.stage.score)}%
+              </span>
+            </div>
+
+            <div
+              style={{
+                background: "#E8D5C4",
+                borderRadius: "4px",
+                height: "8px",
+                overflow: "hidden",
+                marginBottom: "0.5rem",
+              }}
+            >
+              <div
+                style={{
+                  height: "100%",
+                  background:
+                    currentMatchBreakdown.stage.score >= 80
+                      ? "#388E3C"
+                      : currentMatchBreakdown.stage.score >= 50
+                        ? "#F57C00"
+                        : "#D32F2F",
+                  width: `${currentMatchBreakdown.stage.score}%`,
+                  transition: "width 0.3s ease",
+                }}
+              />
+            </div>
+
+            <div style={{ fontSize: "0.75rem", color: "#8D6E63" }}>
+              <div>Your Stages: {formatInvestmentStage(currentMatchBreakdown.stage.investorStages.join(", "))}</div>
+              <div>SME Stage: {formatInvestmentStage(currentMatchBreakdown.stage.smeStage)}</div>
+            </div>
+          </div>
+
+          {/* Ticket Size Match */}
+          <div
+            style={{
+              background: "#FEFCFA",
+              border: "1px solid #E8D5C4",
+              borderRadius: "8px",
+              padding: "1.25rem",
+              borderLeft: `4px solid ${currentMatchBreakdown.ticket.score >= 80 ? "#388E3C" : currentMatchBreakdown.ticket.score >= 50 ? "#F57C00" : "#D32F2F"}`,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                marginBottom: "0.75rem",
+              }}
+            >
+              <h4
+                style={{
+                  fontSize: "0.875rem",
+                  fontWeight: "600",
+                  color: "#5D2A0A",
+                  margin: "0",
+                  lineHeight: "1.3",
+                  flex: "1",
+                }}
+              >
+                Ticket Size Match (Weight: {currentMatchBreakdown.ticket.weight * 100}%)
+              </h4>
+              <span
+                style={{
+                  fontSize: "1.25rem",
+                  fontWeight: "bold",
+                  color:
+                    currentMatchBreakdown.ticket.score >= 80
+                      ? "#388E3C"
+                      : currentMatchBreakdown.ticket.score >= 50
+                        ? "#F57C00"
+                        : "#D32F2F",
+                  marginLeft: "1rem",
+                }}
+              >
+                {Math.round(currentMatchBreakdown.ticket.score)}%
+              </span>
+            </div>
+
+            <div
+              style={{
+                background: "#E8D5C4",
+                borderRadius: "4px",
+                height: "8px",
+                overflow: "hidden",
+                marginBottom: "0.5rem",
+              }}
+            >
+              <div
+                style={{
+                  height: "100%",
+                  background:
+                    currentMatchBreakdown.ticket.score >= 80
+                      ? "#388E3C"
+                      : currentMatchBreakdown.ticket.score >= 50
+                        ? "#F57C00"
+                        : "#D32F2F",
+                  width: `${currentMatchBreakdown.ticket.score}%`,
+                  transition: "width 0.3s ease",
+                }}
+              />
+            </div>
+
+            <div style={{ fontSize: "0.75rem", color: "#8D6E63" }}>
+              <div>
+                Your Range: R{currentMatchBreakdown.ticket.investorMin?.toLocaleString("en-ZA") || "0"} - R
+                {currentMatchBreakdown.ticket.investorMax?.toLocaleString("en-ZA") || "∞"}
+              </div>
+              <div>
+                SME Amount: R{currentMatchBreakdown.ticket.smeAmount?.toLocaleString("en-ZA") || "Not specified"}
+              </div>
+            </div>
+          </div>
+
+          {/* Instrument Match */}
+          <div
+            style={{
+              background: "#FEFCFA",
+              border: "1px solid #E8D5C4",
+              borderRadius: "8px",
+              padding: "1.25rem",
+              borderLeft: `4px solid ${currentMatchBreakdown.type.score >= 80 ? "#388E3C" : currentMatchBreakdown.type.score >= 50 ? "#F57C00" : "#D32F2F"}`,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                marginBottom: "0.75rem",
+              }}
+            >
+              <h4
+                style={{
+                  fontSize: "0.875rem",
+                  fontWeight: "600",
+                  color: "#5D2A0A",
+                  margin: "0",
+                  lineHeight: "1.3",
+                  flex: "1",
+                }}
+              >
+                Instrument Match (Weight: {currentMatchBreakdown.type.weight * 100}%)
+              </h4>
+              <span
+                style={{
+                  fontSize: "1.25rem",
+                  fontWeight: "bold",
+                  color:
+                    currentMatchBreakdown.type.score >= 80
+                      ? "#388E3C"
+                      : currentMatchBreakdown.type.score >= 50
+                        ? "#F57C00"
+                        : "#D32F2F",
+                  marginLeft: "1rem",
+                }}
+              >
+                {Math.round(currentMatchBreakdown.type.score)}%
+              </span>
+            </div>
+
+            <div
+              style={{
+                background: "#E8D5C4",
+                borderRadius: "4px",
+                height: "8px",
+                overflow: "hidden",
+                marginBottom: "0.5rem",
+              }}
+            >
+              <div
+                style={{
+                  height: "100%",
+                  background:
+                    currentMatchBreakdown.type.score >= 80
+                      ? "#388E3C"
+                      : currentMatchBreakdown.type.score >= 50
+                        ? "#F57C00"
+                        : "#D32F2F",
+                  width: `${currentMatchBreakdown.type.score}%`,
+                  transition: "width 0.3s ease",
+                }}
+              />
+            </div>
+
+            <div style={{ fontSize: "0.75rem", color: "#8D6E63" }}>
+              <div>Your Instruments: {currentMatchBreakdown.type.investorInstruments.join(", ") || "None"}</div>
+              <div>SME Instruments: {currentMatchBreakdown.type.smeInstruments.join(", ") || "None"}</div>
+              <div>
+                Matched:{" "}
+                {currentMatchBreakdown.type.matchedInstruments.length > 0
+                  ? currentMatchBreakdown.type.matchedInstruments.join(", ")
+                  : "None"}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            paddingTop: "1.5rem",
+            borderTop: "1px solid #E8D5C4",
+          }}
+        >
+          <button
+            style={{
+              padding: "0.75rem 2rem",
+              background: "#5D2A0A",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              fontSize: "0.875rem",
+              fontWeight: "500",
+              cursor: "pointer",
+              transition: "all 0.2s",
+            }}
+            onClick={() => setShowMatchBreakdownModal(false)}
+          >
+            Close Breakdown
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+      {showGuaranteesModal && (
+  <GuaranteesModal
+    guarantees={selectedGuarantees}
+    onClose={() => {
+      setShowGuaranteesModal(false);
+      setSelectedGuarantees(null);
+    }}
+  />
+)}
 
       <style jsx>{`
         @keyframes fadeIn {
@@ -4424,7 +5430,7 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
           background-color: var(--rdp-accent-color);
           color: white;
           border-color: var(--rdp-accent-color);
-          boxShadow: 0 4px 12px rgba(93, 64, 55, 0.3);
+          box-shadow: 0 4px 12px rgba(93, 64, 55, 0.3);
         }
 
         .rdp-button_selected:hover {
