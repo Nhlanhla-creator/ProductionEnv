@@ -32,7 +32,7 @@ ChartJS.register(
   Legend,
   PointElement,
   LineElement,
-  ChartDataLabels,
+
 )
 
 // Jobs Created Component
@@ -195,18 +195,7 @@ const JobsCreated = ({ activeSection, fundingData }) => {
               legend: {
                 display: false,
               },
-              datalabels: {
-                display: false,
-              },
-            },
-            scales: {
-              y: {
-                beginAtZero: true,
-                title: {
-                  display: true,
-                  text: "Number of Jobs",
-                },
-              },
+             
             },
           }}
         />
@@ -315,30 +304,31 @@ const HDIFunding = ({ activeSection, fundingData }) => {
           alignItems: "center",
         }}
       >
-        <div style={{ height: "300px" }}>
-          <Doughnut
-            data={fundingChartData}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: {
-                  position: "right",
-                },
-                datalabels: {
-                  color: "#fff",
-                  font: {
-                    weight: "bold",
-                    size: 16,
-                  },
-                  formatter: (value) => {
-                    return value.toFixed(1) + "%"
-                  },
-                },
-              },
-            }}
-          />
-        </div>
+      <div style={{ height: "300px" }}>
+  <Doughnut
+    data={fundingChartData}
+    options={{
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: "right",
+        },
+        datalabels: { // ← KEEP this configuration
+          color: "#fff",
+          font: {
+            weight: "bold",
+            size: 16,
+          },
+          formatter: (value) => {
+            return value.toFixed(1) + "%"
+          },
+        },
+      },
+    }}
+    plugins={[ChartDataLabels]} // ← ADD THIS LINE (after options)
+  />
+</div>
         <div>
           <div
             style={{

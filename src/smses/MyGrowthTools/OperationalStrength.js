@@ -31,7 +31,7 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  ChartDataLabels,
+
 )
 
 // Download Modal Component - REMOVED AS PER UPDATES
@@ -688,27 +688,7 @@ const ProductivityMeasures = ({ activeSection }) => {
               title: {
                 display: false,
               },
-              datalabels: {
-                // ADDED THIS LINE FROM UPDATES, though not explicitly marked
-                display: false,
-              },
-            },
-            scales: {
-              y: {
-                beginAtZero: true,
-                title: {
-                  display: true,
-                  text: "Index (%)",
-                  color: "#7d5a50", //
-                },
-              },
-              x: {
-                title: {
-                  display: true,
-                  text: "Months",
-                  color: "#7d5a50", //
-                },
-              },
+             
             },
           }}
         />
@@ -995,27 +975,7 @@ const UnitCost = ({ activeSection }) => {
                 title: {
                   display: false,
                 },
-                datalabels: {
-                  // ADDED THIS LINE FROM UPDATES, though not explicitly marked
-                  display: false,
-                },
-              },
-              scales: {
-                y: {
-                  beginAtZero: true,
-                  title: {
-                    display: true,
-                    text: "Amount (R)",
-                    color: "#7d5a50", //
-                  },
-                },
-                x: {
-                  title: {
-                    display: true,
-                    text: "Products",
-                    color: "#7d5a50", //
-                  },
-                },
+                
               },
             }}
           />
