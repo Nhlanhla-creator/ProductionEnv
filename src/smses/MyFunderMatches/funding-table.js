@@ -1259,10 +1259,10 @@ export const FundingTable = ({ filters = {}, onInsightsData, onPrimaryMatchCount
               maxTicket = maxTicket || ticketInfo.max || ticketInfo.maximum
             }
 
-            const instruments = generalPrefs.investmentFocusSubtype
-              ? Array.isArray(generalPrefs.investmentFocusSubtype)
-                ? generalPrefs.investmentFocusSubtype
-                : [generalPrefs.investmentFocusSubtype]
+            const instruments = generalPrefs.investmentFocus
+              ? Array.isArray(generalPrefs.investmentFocus)
+                ? generalPrefs.investmentFocus
+                : [generalPrefs.investmentFocus]
               : []
 
             const enrichedFund = {

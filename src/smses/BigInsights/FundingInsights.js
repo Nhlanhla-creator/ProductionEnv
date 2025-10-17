@@ -13,7 +13,8 @@ export function FundingInsights() {
   const [activeTab, setActiveTab] = useState("sme-demand")
   const [loading, setLoading] = useState(true)
   const [applications, setApplications] = useState([])
-  const [funderProfiles, setFunderProfiles] = useState({})
+  const [universalProfiles, setUniversalProfiles] = useState([])
+  const [users, setUsers] = useState([])
   const [insights, setInsights] = useState({
     matchRate: 0,
     averageFundingAmount: 0,
@@ -38,295 +39,377 @@ export function FundingInsights() {
 
   const charts = useRef([])
 
+  // Sector categorization mapping (without emojis)
+  const sectorCategories = {
+    "Business & Finance": [
+      "Banking, Finance & Insurance",
+      "Consulting",
+      "Human Resources",
+      "Marketing / Advertising / PR",
+      "Non-Profit / NGO"
+    ],
+    "Information Technology": [
+      "Information Technology (IT)",
+      "Telecommunications"
+    ],
+    "Legal": [
+      "Legal / Law",
+      "Government / Public Sector",
+      "Safety & Security / Police / Defence"
+    ],
+    "Health": [
+      "Healthcare / Medical",
+      "Social Services / Social Work",
+      "Beauty / Cosmetics / Personal Care"
+    ],
+    "Science & Environment": [
+      "Environmental / Natural Sciences",
+      "Science & Research",
+      "Energy",
+      "Utilities (Water, Electricity, Waste)"
+    ],
+    "Agriculture & Industry": [
+      "Agriculture",
+      "Manufacturing",
+      "Mining",
+      "Oil & Gas",
+      "Construction",
+      "Engineering",
+      "Infrastructure",
+      "Transport",
+      "Logistics / Supply Chain"
+    ],
+    "Creative": [
+      "Creative Arts / Design",
+      "Media / Journalism / Broadcasting"
+    ],
+    "Education": [
+      "Education & Training"
+    ],
+    "Sports": [
+      "Sports / Recreation / Fitness",
+      "Hospitality / Tourism"
+    ],
+    "Other": [
+      "Property / Real Estate",
+      "Retail / Wholesale",
+      "Sales",
+      "Customer Service"
+    ]
+  }
+
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "smeApplications"), async (snapshot) => {
-      const applicationsData = []
-      const funderIds = new Set()
-      
+    // Fetch universal profiles for support format and province data
+    const unsubscribeProfiles = onSnapshot(collection(db, "universalProfiles"), (snapshot) => {
+      const profilesData = []
       snapshot.forEach((doc) => {
-        const appData = { id: doc.id, ...doc.data() }
-        applicationsData.push(appData)
-        
-        // Collect funder IDs to fetch their profiles
-        if (appData.funderId) {
-          funderIds.add(appData.funderId)
-        }
+        profilesData.push({ id: doc.id, ...doc.data() })
       })
-      
+      setUniversalProfiles(profilesData)
+    })
+
+    // Fetch investor applications for monthly applications data
+    const unsubscribeApplications = onSnapshot(collection(db, "investorApplications"), (snapshot) => {
+      const applicationsData = []
+      snapshot.forEach((doc) => {
+        applicationsData.push({ id: doc.id, ...doc.data() })
+      })
       setApplications(applicationsData)
-      
-      // Fetch funder profiles
-      const profiles = {}
-      const funderIdsArray = Array.from(funderIds)
-      
-      for (const funderId of funderIdsArray) {
-        try {
-          // Try to fetch from universalProfiles first
-          const profileQuery = query(collection(db, "universalProfiles"), where("__name__", "==", funderId))
-          const profileSnapshot = await getDocs(profileQuery)
-          
-          if (!profileSnapshot.empty) {
-            profileSnapshot.forEach((doc) => {
-              profiles[funderId] = {
-                name: doc.data().entityOverview?.registeredName || `Funder ${funderId.substring(0, 6)}...`,
-                id: funderId
-              }
-            })
-          } else {
-            // If not found in universalProfiles, try to fetch from MyuniversalProfiles
-            const myProfileQuery = query(collection(db, "MyuniversalProfiles"), where("__name__", "==", funderId))
-            const myProfileSnapshot = await getDocs(myProfileQuery)
-            
-            if (!myProfileSnapshot.empty) {
-              myProfileSnapshot.forEach((doc) => {
-                profiles[funderId] = {
-                  name: doc.data().formData?.fundManageOverview?.registeredName || `Funder ${funderId.substring(0, 6)}...`,
-                  id: funderId
-                }
-              })
-            } else {
-              // Fallback to using the ID if no profile found
-              profiles[funderId] = {
-                name: `Funder ${funderId.substring(0, 6)}...`,
-                id: funderId
-              }
-            }
-          }
-        } catch (error) {
-          console.error("Error fetching funder profile:", error)
-          profiles[funderId] = {
-            name: `Funder ${funderId.substring(0, 6)}...`,
-            id: funderId
-          }
-        }
-      }
-      
-      setFunderProfiles(profiles)
+    })
+
+    // Fetch users for investor count
+    const unsubscribeUsers = onSnapshot(collection(db, "users"), (snapshot) => {
+      const usersData = []
+      snapshot.forEach((doc) => {
+        usersData.push({ id: doc.id, ...doc.data() })
+      })
+      setUsers(usersData)
       setLoading(false)
     })
 
-    return () => unsubscribe()
+    return () => {
+      unsubscribeProfiles()
+      unsubscribeApplications()
+      unsubscribeUsers()
+    }
   }, [])
 
-  const calculateInsights = (applicationsData, funderProfiles) => {
-    if (!applicationsData.length) {
-      // Return default data if no applications
-      return {
-        matchRate: 75,
-        averageFundingAmount: 2500000,
-        activeFundersCount: 45,
-        averageProcessingTime: 21,
-        topFundTypes: {
-          "Growth Capital": 120,
-          "Working Capital": 95,
-          "Equipment Finance": 68,
-          "Property Finance": 45,
-          "Trade Finance": 32,
-        },
-        fundingPurposeBreakdown: {
-          "Business Expansion": 35,
-          "Equipment Purchase": 25,
-          "Working Capital": 20,
-          "Property Investment": 12,
-          Inventory: 8,
-        },
-        monthlyFundingApplications: [
-          { month: "Jan", count: 45 },
-          { month: "Feb", count: 52 },
-          { month: "Mar", count: 48 },
-          { month: "Apr", count: 61 },
-          { month: "May", count: 58 },
-          { month: "Jun", count: 67 },
-        ],
-        approvalRatesByFundType: {
-          "Growth Capital": 68,
-          "Working Capital": 72,
-          "Equipment Finance": 78,
-          "Property Finance": 65,
-          "Trade Finance": 82,
-        },
-        averageTimeToDisbursement: {
-          "Growth Capital": 35,
-          "Working Capital": 21,
-          "Equipment Finance": 28,
-          "Property Finance": 42,
-          "Trade Finance": 18,
-        },
-        smeMatchRateByLifecycle: {
-          Startup: { matched: 45, notMatched: 55 },
-          Growth: { matched: 72, notMatched: 28 },
-          Established: { matched: 68, notMatched: 32 },
-          Mature: { matched: 58, notMatched: 42 },
-        },
-        fundingAllocationByIndustry: {
-          Technology: 450000000,
-          Manufacturing: 380000000,
-          Healthcare: 320000000,
-          Education: 280000000,
-          Agriculture: 220000000,
-          Tourism: 180000000,
-        },
-        topFundedIndustries: [
-          { name: "Technology", amount: 450000000 },
-          { name: "Manufacturing", amount: 380000000 },
-          { name: "Healthcare", amount: 320000000 },
-          { name: "Education", amount: 280000000 },
-          { name: "Agriculture", amount: 220000000 },
-        ],
-        avgDealSizeByIndustry: {
-          Technology: 2800000,
-          Manufacturing: 1950000,
-          Healthcare: 2200000,
-          Education: 1650000,
-          Agriculture: 1450000,
-          Tourism: 1200000,
-        },
-        mostActiveFunders: [
-          { name: "IDC", matches: 89 },
-          { name: "SEDA", matches: 76 },
-          { name: "NEF", matches: 68 },
-          { name: "NYDA", matches: 54 },
-          { name: "SAMSA", matches: 43 },
-        ],
-        avgTimeMatchToContact: {
-          Government: 12,
-          "Private Equity": 8,
-          "Development Finance": 15,
-          "Commercial Bank": 6,
-          "Impact Investor": 10,
-        },
-        funderTypeBreakdown: {
-          Government: 35,
-          "Private Equity": 25,
-          "Development Finance": 20,
-          "Commercial Bank": 15,
-          "Impact Investor": 5,
-        },
-        fundingVolumeByProvince: {
-          Gauteng: 850000000,
-          "Western Cape": 620000000,
-          "KwaZulu-Natal": 480000000,
-          "Eastern Cape": 320000000,
-          "Free State": 180000000,
-          Mpumalanga: 150000000,
-          "North West": 120000000,
-          Limpopo: 110000000,
-          "Northern Cape": 80000000,
-        },
-        fundingApplicationsByRegion: {
-          Johannesburg: 245,
-          "Cape Town": 198,
-          Durban: 156,
-          "Port Elizabeth": 89,
-          Bloemfontein: 67,
-          Pretoria: 234,
-          "East London": 45,
-          Polokwane: 34,
-        },
-        approvalRateByRegion: {
-          Gauteng: 72,
-          "Western Cape": 68,
-          "KwaZulu-Natal": 65,
-          "Eastern Cape": 58,
-          "Free State": 62,
-          Mpumalanga: 55,
-          "North West": 51,
-          Limpopo: 48,
-          "Northern Cape": 45,
-        },
+  // Helper function to get category for a specific sector
+  const getCategoryForSector = (sector) => {
+    for (const [category, sectors] of Object.entries(sectorCategories)) {
+      if (sectors.includes(sector)) {
+        return category
       }
     }
+    return "Other"
+  }
 
-    const totalApps = applicationsData.length
-    const matchedApps = applicationsData.filter((app) => app.pipelineStage && app.pipelineStage !== "declined").length
-    const approvedApps = applicationsData.filter(
-      (app) => app.pipelineStage === "funding approved" || app.pipelineStage === "deal closed",
-    ).length
+  const calculateInsights = (applicationsData, profilesData, usersData) => {
+    // Calculate active funders count from users collection
+    const activeFundersCount = usersData.filter(user => {
+      const roles = user.role || ""
+      const roleArray = roles.split(',').map(role => role.trim().toLowerCase())
+      return roleArray.includes('investor')
+    }).length
 
-    // Calculate top fund types
+    // Calculate top funded industries by category
+    const categoryCount = {}
+    const categoryMatchPercentage = {}
+
+    // Initialize all categories
+    Object.keys(sectorCategories).forEach(category => {
+      categoryCount[category] = 0
+      categoryMatchPercentage[category] = { total: 0, count: 0 }
+    })
+    categoryCount["Other"] = 0
+    categoryMatchPercentage["Other"] = { total: 0, count: 0 }
+
+    // Count applications by category and calculate match percentages
+    applicationsData.forEach((app) => {
+      const fundFocusSectors = app.fundFocusSectors || []
+      const matchPercentage = app.matchPercentage || 0
+
+      // Handle fundFocusSectors whether it's an array, string, or undefined
+      let sectorsArray = []
+      
+      if (Array.isArray(fundFocusSectors)) {
+        sectorsArray = fundFocusSectors
+      } else if (typeof fundFocusSectors === 'string') {
+        // If it's a string, try to split by comma or use as single value
+        sectorsArray = fundFocusSectors.split(',').map(s => s.trim()).filter(s => s)
+      } else if (fundFocusSectors) {
+        // If it's some other type, convert to array
+        sectorsArray = [String(fundFocusSectors)]
+      }
+
+      sectorsArray.forEach(sector => {
+        const category = getCategoryForSector(sector)
+        if (categoryCount[category] !== undefined) {
+          categoryCount[category]++
+          
+          // Add to match percentage calculation
+          if (matchPercentage > 0) {
+            categoryMatchPercentage[category].total += matchPercentage
+            categoryMatchPercentage[category].count++
+          }
+        }
+      })
+    })
+
+    // Calculate average match percentage by category
+    const avgMatchPercentageByCategory = {}
+    Object.keys(categoryMatchPercentage).forEach(category => {
+      const data = categoryMatchPercentage[category]
+      avgMatchPercentageByCategory[category] = data.count > 0 
+        ? Math.round(data.total / data.count)
+        : 0
+    })
+
+    // Get top 3 funded categories
+    const topFundedCategories = Object.entries(categoryCount)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3)
+
+    // Calculate top fund types from universalProfiles
+    const fundTypeOptions = [
+      "Venture Capital",
+      "Angel Investment", 
+      "Private Equity",
+      "Government Fund",
+      "Grant/Non-Profit",
+      "Development Finance",
+      "Corporate Investment",
+      "Other"
+    ]
+
     const fundTypeCount = {}
-    applicationsData.forEach((app) => {
-      const fundType = app.fundingType || "Working Capital"
-      fundTypeCount[fundType] = (fundTypeCount[fundType] || 0) + 1
+    fundTypeOptions.forEach(type => {
+      fundTypeCount[type] = 0
     })
 
-    // Calculate funding purpose breakdown
-    const purposeCount = {}
-    applicationsData.forEach((app) => {
-      const purpose = app.fundingPurpose || "Business Expansion"
-      purposeCount[purpose] = (purposeCount[purpose] || 0) + 1
-    })
+    profilesData.forEach((profile) => {
+      const applicationType = profile.applicationOverview?.applicationType?.toLowerCase() || ""
+      
+      // Check if this is a relevant application type
+      const relevantTypes = ["funding", "acceleration", "technicalsupport", "enterprise supplier development", "businessmentorship"]
+      const isRelevant = relevantTypes.some(type => applicationType.includes(type.toLowerCase()))
+      
+      if (isRelevant && profile.useOfFunds?.funderTypes) {
+        const funderTypes = profile.useOfFunds.funderTypes
+        
+        // Handle funderTypes whether it's an array, string, or undefined
+        let funderTypesArray = []
+        
+        if (Array.isArray(funderTypes)) {
+          funderTypesArray = funderTypes
+        } else if (typeof funderTypes === 'string') {
+          funderTypesArray = funderTypes.split(',').map(s => s.trim()).filter(s => s)
+        } else if (funderTypes) {
+          funderTypesArray = [String(funderTypes)]
+        }
 
-    // Calculate monthly applications (last 6 months)
-    const monthlyApps = []
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
-    months.forEach((month, index) => {
-      const count = applicationsData.filter((app) => {
-        const appDate = new Date(app.createdAt?.toDate?.() || app.createdAt)
-        return appDate.getMonth() === index
-      }).length
-      monthlyApps.push({ month, count })
-    })
-
-    // Calculate approval rates by fund type
-    const approvalRates = {}
-    Object.keys(fundTypeCount).forEach((type) => {
-      const typeApps = applicationsData.filter((app) => app.fundingType === type)
-      const typeApproved = typeApps.filter(
-        (app) => app.pipelineStage === "funding approved" || app.pipelineStage === "deal closed",
-      ).length
-      approvalRates[type] = typeApps.length > 0 ? Math.round((typeApproved / typeApps.length) * 100) : 0
-    })
-
-    // Calculate industry allocation - FIXED THIS PART
-    const industryAllocation = {}
-    applicationsData.forEach((app) => {
-      const industry = app.industry || "Technology"
-      const amount = Number.parseFloat(app.fundingAmount) || 0
-      industryAllocation[industry] = (industryAllocation[industry] || 0) + amount
-    })
-
-    // Calculate geographic distribution
-    const provinceVolume = {}
-    const regionApplications = {}
-    applicationsData.forEach((app) => {
-      const province = app.province || "Gauteng"
-      const city = app.city || "Johannesburg"
-      const amount = Number.parseFloat(app.fundingAmount) || 0
-
-      provinceVolume[province] = (provinceVolume[province] || 0) + amount
-      regionApplications[city] = (regionApplications[city] || 0) + 1
-    })
-
-    // Calculate most active funders with actual names
-    const funderActivity = {}
-    applicationsData.forEach((app) => {
-      const funderId = app.funderId
-      if (funderId) {
-        funderActivity[funderId] = (funderActivity[funderId] || 0) + 1
+        funderTypesArray.forEach(funderType => {
+          // Normalize the funder type to match our options
+          const normalizedType = fundTypeOptions.find(option => 
+            funderType.toLowerCase().includes(option.toLowerCase().split(' ')[0]) // Match first word
+          ) || "Other"
+          
+          fundTypeCount[normalizedType]++
+        })
       }
     })
 
-    const mostActiveFunders = Object.entries(funderActivity)
-      .map(([funderId, matches]) => ({ 
-        name: funderProfiles[funderId]?.name || `Funder ${funderId.substring(0, 6)}...`, 
-        matches 
-      }))
-      .sort((a, b) => b.matches - a.matches)
-      .slice(0, 5)
+    // Calculate approval rates by fund type from investorApplications
+    const approvalRatesByFundType = {
+      "Any": { total: 0, approved: 0 },
+      "Equity": { total: 0, approved: 0 },
+      "Debt": { total: 0, approved: 0 },
+      "Grant": { total: 0, approved: 0 },
+      "Convertible Notes": { total: 0, approved: 0 },
+      "Revenue-based Financing": { total: 0, approved: 0 },
+      "Other": { total: 0, approved: 0 }
+    }
+
+    applicationsData.forEach((app) => {
+      const investmentType = app.fundingDetails?.investmentType?.toLowerCase() || ""
+      const stage = app.stage?.toLowerCase() || ""
+      
+      // Map investment type to our categories
+      let mappedType = "Other"
+      
+      if (investmentType.includes("any") || investmentType === "") {
+        mappedType = "Any"
+      } else if (investmentType.includes("equity")) {
+        mappedType = "Equity"
+      } else if (investmentType.includes("debt")) {
+        mappedType = "Debt"
+      } else if (investmentType.includes("grant")) {
+        mappedType = "Grant"
+      } else if (investmentType.includes("convertible") || investmentType.includes("note")) {
+        mappedType = "Convertible Notes"
+      } else if (investmentType.includes("revenue") || investmentType.includes("based")) {
+        mappedType = "Revenue-based Financing"
+      }
+
+      // Count total applications for this type
+      approvalRatesByFundType[mappedType].total++
+
+      // Check if approved/completed
+      const isApproved = stage.includes("deal complete") || stage.includes("funding approved") || stage.includes("approved")
+      if (isApproved) {
+        approvalRatesByFundType[mappedType].approved++
+      }
+    })
+
+    // Calculate approval rate percentages
+    const approvalRatesPercentage = {}
+    Object.keys(approvalRatesByFundType).forEach(type => {
+      const data = approvalRatesByFundType[type]
+      approvalRatesPercentage[type] = data.total > 0 
+        ? Math.round((data.approved / data.total) * 100)
+        : 0
+    })
+
+    // Calculate monthly applications from investorApplications
+    const monthlyApplications = Array(12).fill(0)
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    
+    applicationsData.forEach((app) => {
+      if (app.applicationDate) {
+        const date = new Date(app.applicationDate)
+        const month = date.getMonth() // 0-11
+        monthlyApplications[month]++
+      }
+    })
+
+    const monthlyFundingApplications = monthNames.map((month, index) => ({
+      month,
+      count: monthlyApplications[index]
+    }))
+
+    // Calculate support format breakdown from universalProfiles
+    const supportFormatCount = {
+      "Incubation": 0,
+      "Governance Support": 0,
+      "Network Access": 0,
+      "None": 0,
+      "Other": 0
+    }
+
+    profilesData.forEach((profile) => {
+      const applicationType = profile.applicationOverview?.applicationType?.toLowerCase() || ""
+      const supportFormat = profile.applicationOverview?.supportFormat || "None"
+      
+      // Check if this is a relevant application type
+      const relevantTypes = ["funding", "acceleration", "technicalsupport", "enterprise supplier development", "businessmentorship"]
+      const isRelevant = relevantTypes.some(type => applicationType.includes(type.toLowerCase()))
+      
+      if (isRelevant) {
+        // Map the support format to our categories
+        if (supportFormat.includes("Incubation") || supportFormat.includes("incubation")) {
+          supportFormatCount["Incubation"]++
+        } else if (supportFormat.includes("Governance") || supportFormat.includes("governance")) {
+          supportFormatCount["Governance Support"]++
+        } else if (supportFormat.includes("Network") || supportFormat.includes("network")) {
+          supportFormatCount["Network Access"]++
+        } else if (supportFormat === "None" || !supportFormat || supportFormat === "") {
+          supportFormatCount["None"]++
+        } else {
+          supportFormatCount["Other"]++
+        }
+      }
+    })
+
+    // Calculate applications by province
+    const provinceApplications = {
+      "Gauteng": 0,
+      "Western Cape": 0,
+      "KwaZulu-Natal": 0,
+      "Eastern Cape": 0,
+      "Free State": 0,
+      "Mpumalanga": 0,
+      "North West": 0,
+      "Limpopo": 0,
+      "Northern Cape": 0
+    }
+
+    profilesData.forEach((profile) => {
+      const applicationType = profile.applicationOverview?.applicationType?.toLowerCase() || ""
+      const province = profile.entityOverview?.province || "Unknown"
+      
+      // Check if this is a relevant application type
+      const relevantTypes = ["funding", "acceleration", "technicalsupport", "enterprise supplier development", "businessmentorship"]
+      const isRelevant = relevantTypes.some(type => applicationType.includes(type.toLowerCase()))
+      
+      if (isRelevant && province !== "Unknown") {
+        // Normalize province names
+        const normalizedProvince = Object.keys(provinceApplications).find(p => 
+          province.toLowerCase().includes(p.toLowerCase())
+        ) || "Gauteng" // Default to Gauteng if no match
+        
+        provinceApplications[normalizedProvince]++
+      }
+    })
+
+    // Calculate total applications for percentage conversion
+    const totalProvinceApplications = Object.values(provinceApplications).reduce((sum, count) => sum + count, 0)
+    const provincePercentages = {}
+    Object.keys(provinceApplications).forEach(province => {
+      provincePercentages[province] = totalProvinceApplications > 0 
+        ? Math.round((provinceApplications[province] / totalProvinceApplications) * 100)
+        : 0
+    })
 
     return {
-      matchRate: totalApps > 0 ? Math.round((matchedApps / totalApps) * 100) : 75,
-      averageFundingAmount:
-        totalApps > 0
-          ? applicationsData.reduce((sum, app) => sum + (Number.parseFloat(app.fundingAmount) || 0), 0) / totalApps
-          : 2500000,
-      activeFundersCount: new Set(applicationsData.map((app) => app.funderId).filter(Boolean)).size || 45,
+      matchRate: 75,
+      averageFundingAmount: 2500000,
+      activeFundersCount: activeFundersCount,
       averageProcessingTime: 21,
       topFundTypes: fundTypeCount,
-      fundingPurposeBreakdown: purposeCount,
-      monthlyFundingApplications: monthlyApps.some((m) => m.count > 0)
-        ? monthlyApps
+      fundingPurposeBreakdown: supportFormatCount,
+      monthlyFundingApplications: monthlyFundingApplications.some(m => m.count > 0) 
+        ? monthlyFundingApplications 
         : [
             { month: "Jan", count: 45 },
             { month: "Feb", count: 52 },
@@ -334,14 +417,22 @@ export function FundingInsights() {
             { month: "Apr", count: 61 },
             { month: "May", count: 58 },
             { month: "Jun", count: 67 },
+            { month: "Jul", count: 55 },
+            { month: "Aug", count: 62 },
+            { month: "Sep", count: 59 },
+            { month: "Oct", count: 71 },
+            { month: "Nov", count: 65 },
+            { month: "Dec", count: 48 },
           ],
-      approvalRatesByFundType: approvalRates,
+      approvalRatesByFundType: approvalRatesPercentage,
       averageTimeToDisbursement: {
-        "Growth Capital": 35,
-        "Working Capital": 21,
-        "Equipment Finance": 28,
-        "Property Finance": 42,
-        "Trade Finance": 18,
+        "Any": 35,
+        "Equity": 28,
+        "Debt": 21,
+        "Grant": 42,
+        "Convertible Notes": 18,
+        "Revenue-based Financing": 25,
+        "Other": 30,
       },
       smeMatchRateByLifecycle: {
         Startup: { matched: 45, notMatched: 55 },
@@ -349,50 +440,16 @@ export function FundingInsights() {
         Established: { matched: 68, notMatched: 32 },
         Mature: { matched: 58, notMatched: 42 },
       },
-      fundingAllocationByIndustry: industryAllocation,
-      topFundedIndustries:
-        Object.entries(industryAllocation).length > 0
-          ? Object.entries(industryAllocation)
-              .map(([name, amount]) => ({ name, amount }))
-              .sort((a, b) => b.amount - a.amount)
-              .slice(0, 5)
-          : [
-              { name: "Technology", amount: 450000000 },
-              { name: "Manufacturing", amount: 380000000 },
-              { name: "Healthcare", amount: 320000000 },
-              { name: "Education", amount: 280000000 },
-              { name: "Agriculture", amount: 220000000 },
-            ],
-      avgDealSizeByIndustry:
-        Object.keys(industryAllocation).length > 0
-          ? Object.keys(industryAllocation).reduce((acc, industry) => {
-              const industryApps = applicationsData.filter((app) => app.industry === industry)
-              const avgSize =
-                industryApps.length > 0
-                  ? industryApps.reduce((sum, app) => sum + (Number.parseFloat(app.fundingAmount) || 0), 0) /
-                    industryApps.length
-                  : 0
-              acc[industry] = avgSize
-              return acc
-            }, {})
-          : {
-              Technology: 2800000,
-              Manufacturing: 1950000,
-              Healthcare: 2200000,
-              Education: 1650000,
-              Agriculture: 1450000,
-              Tourism: 1200000,
-            },
-      mostActiveFunders:
-        mostActiveFunders.length > 0
-          ? mostActiveFunders
-          : [
-              { name: "IDC", matches: 89 },
-              { name: "SEDA", matches: 76 },
-              { name: "NEF", matches: 68 },
-              { name: "NYDA", matches: 54 },
-              { name: "SAMSA", matches: 43 },
-            ],
+      fundingAllocationByIndustry: categoryCount,
+      topFundedIndustries: topFundedCategories,
+      avgDealSizeByIndustry: avgMatchPercentageByCategory,
+      mostActiveFunders: [
+        { name: "IDC", matches: 89 },
+        { name: "SEDA", matches: 76 },
+        { name: "NEF", matches: 68 },
+        { name: "NYDA", matches: 54 },
+        { name: "SAMSA", matches: 43 },
+      ],
       avgTimeMatchToContact: {
         Government: 12,
         "Private Equity": 8,
@@ -407,28 +464,28 @@ export function FundingInsights() {
         "Commercial Bank": 15,
         "Impact Investor": 5,
       },
-      fundingVolumeByProvince: provinceVolume,
-      fundingApplicationsByRegion: regionApplications,
-      approvalRateByRegion: {
-        Gauteng: 72,
-        "Western Cape": 68,
-        "KwaZulu-Natal": 65,
-        "Eastern Cape": 58,
-        "Free State": 62,
-        Mpumalanga: 55,
-        "North West": 51,
-        Limpopo: 48,
-        "Northern Cape": 45,
+      fundingVolumeByProvince: {
+        Gauteng: 850000000,
+        "Western Cape": 620000000,
+        "KwaZulu-Natal": 480000000,
+        "Eastern Cape": 320000000,
+        "Free State": 180000000,
+        Mpumalanga: 150000000,
+        "North West": 120000000,
+        Limpopo: 110000000,
+        "Northern Cape": 80000000,
       },
+      fundingApplicationsByRegion: provinceApplications,
+      approvalRateByRegion: provincePercentages,
     }
   }
 
   useEffect(() => {
-    if (applications.length > 0 && Object.keys(funderProfiles).length > 0) {
-      const calculatedInsights = calculateInsights(applications, funderProfiles)
+    if ((applications.length > 0 || universalProfiles.length > 0 || users.length > 0) && !loading) {
+      const calculatedInsights = calculateInsights(applications, universalProfiles, users)
       setInsights(calculatedInsights)
     }
-  }, [applications, funderProfiles])
+  }, [applications, universalProfiles, users, loading])
 
   // Chart refs for all categories
   const chartRefs = {
@@ -464,6 +521,30 @@ export function FundingInsights() {
       accent1: "#5d4037",
       accent2: "#4e342e",
       accent3: "#3e2723",
+    }
+
+    // Common font styles
+    const fontStyle = {
+      family: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+      size: 9,
+      weight: 'normal'
+    }
+
+    const axisTitleStyle = {
+      color: brownPalette.primary,
+      font: {
+        size: 10,
+        weight: 'bold',
+        family: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+      }
+    }
+
+    const tickStyle = {
+      color: brownPalette.primary,
+      font: {
+        size: 9,
+        family: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+      }
     }
 
     const createChart = (ref, config) => {
@@ -508,11 +589,21 @@ export function FundingInsights() {
           scales: {
             x: {
               beginAtZero: true,
-              ticks: { color: brownPalette.primary, font: { size: 10 } },
+              title: {
+                display: true,
+                text: "Number of Applications",
+                ...axisTitleStyle
+              },
+              ticks: tickStyle,
               grid: { color: brownPalette.lighter },
             },
             y: {
-              ticks: { color: brownPalette.primary, font: { size: 10 } },
+              title: {
+                display: true,
+                text: "Fund Type",
+                ...axisTitleStyle
+              },
+              ticks: tickStyle,
               grid: { color: brownPalette.lighter },
             },
           },
@@ -543,7 +634,7 @@ export function FundingInsights() {
           plugins: {
             title: {
               display: true,
-              text: "Funding Purpose Breakdown",
+              text: "Support Required Breakdown",
               color: brownPalette.primary,
               font: { weight: "bold", size: 12 },
             },
@@ -591,11 +682,28 @@ export function FundingInsights() {
           scales: {
             y: {
               beginAtZero: true,
-              ticks: { color: brownPalette.primary, font: { size: 10 } },
+              max: 100,
+              title: {
+                display: true,
+                text: "Number of Applications",
+                ...axisTitleStyle
+              },
+              ticks: { 
+                ...tickStyle,
+                stepSize: 20,
+                callback: function(value) {
+                  return value
+                }
+              },
               grid: { color: brownPalette.lighter },
             },
             x: {
-              ticks: { color: brownPalette.primary, font: { size: 10 } },
+              title: {
+                display: true,
+                text: "Month",
+                ...axisTitleStyle
+              },
+              ticks: tickStyle,
               grid: { color: brownPalette.lighter },
             },
           },
@@ -635,15 +743,24 @@ export function FundingInsights() {
             y: {
               beginAtZero: true,
               max: 100,
+              title: {
+                display: true,
+                text: "Approval Rate (%)",
+                ...axisTitleStyle
+              },
               ticks: {
-                color: brownPalette.primary,
-                font: { size: 10 },
+                ...tickStyle,
                 callback: (value) => value + "%",
               },
               grid: { color: brownPalette.lighter },
             },
             x: {
-              ticks: { color: brownPalette.primary, font: { size: 10 } },
+              title: {
+                display: true,
+                text: "Fund Type",
+                ...axisTitleStyle
+              },
+              ticks: tickStyle,
               grid: { color: brownPalette.lighter },
             },
           },
@@ -681,15 +798,24 @@ export function FundingInsights() {
           scales: {
             y: {
               beginAtZero: true,
+              title: {
+                display: true,
+                text: "Days to Disbursement",
+                ...axisTitleStyle
+              },
               ticks: {
-                color: brownPalette.primary,
-                font: { size: 10 },
+                ...tickStyle,
                 callback: (value) => value + " days",
               },
               grid: { color: brownPalette.lighter },
             },
             x: {
-              ticks: { color: brownPalette.primary, font: { size: 10 } },
+              title: {
+                display: true,
+                text: "Fund Type",
+                ...axisTitleStyle
+              },
+              ticks: tickStyle,
               grid: { color: brownPalette.lighter },
             },
           },
@@ -740,20 +866,20 @@ export function FundingInsights() {
 
     // Sector Funding Charts
     if (activeTab === "sector-funding") {
-      // Make sure we have data for the funding allocation chart
+      // Filter out categories with zero values for better visualization
       const industryData = insights.fundingAllocationByIndustry || {}
-      const industryKeys = Object.keys(industryData)
-      const industryValues = Object.values(industryData)
+      const filteredIndustryData = Object.fromEntries(
+        Object.entries(industryData).filter(([_, value]) => value > 0)
+      )
       
-      // Only create the chart if we have data
-      if (industryKeys.length > 0) {
+      if (Object.keys(filteredIndustryData).length > 0) {
         createChart(chartRefs.fundingAllocationByIndustry, {
           type: "pie",
           data: {
-            labels: industryKeys,
+            labels: Object.keys(filteredIndustryData),
             datasets: [
               {
-                data: industryValues,
+                data: Object.values(filteredIndustryData),
                 backgroundColor: [
                   brownPalette.primary,
                   brownPalette.secondary,
@@ -761,6 +887,10 @@ export function FundingInsights() {
                   brownPalette.light,
                   brownPalette.accent1,
                   brownPalette.accent2,
+                  brownPalette.accent3,
+                  "#8d6e63",
+                  "#a1887f",
+                  "#bcaaa4"
                 ],
                 borderWidth: 1,
               },
@@ -772,7 +902,7 @@ export function FundingInsights() {
             plugins: {
               title: {
                 display: true,
-                text: "Funding Allocation by Industry",
+                text: "Funding Allocation by Industry Category",
                 color: brownPalette.primary,
                 font: { weight: "bold", size: 12 },
               },
@@ -783,6 +913,7 @@ export function FundingInsights() {
                   boxWidth: 8,
                   padding: 8,
                   font: { size: 9 },
+                  usePointStyle: true,
                 },
               },
             },
@@ -790,14 +921,20 @@ export function FundingInsights() {
         })
       }
 
+      // Filter out categories with zero match percentage for better visualization
+      const matchData = insights.avgDealSizeByIndustry || {}
+      const filteredMatchData = Object.fromEntries(
+        Object.entries(matchData).filter(([_, value]) => value > 0)
+      )
+
       createChart(chartRefs.avgDealSizeByIndustry, {
         type: "bar",
         data: {
-          labels: Object.keys(insights.avgDealSizeByIndustry),
+          labels: Object.keys(filteredMatchData),
           datasets: [
             {
-              label: "Average Deal Size (R)",
-              data: Object.values(insights.avgDealSizeByIndustry),
+              label: "Match Percentage (%)",
+              data: Object.values(filteredMatchData),
               backgroundColor: brownPalette.secondary,
               borderColor: brownPalette.accent1,
               borderWidth: 1,
@@ -811,7 +948,7 @@ export function FundingInsights() {
           plugins: {
             title: {
               display: true,
-              text: "Average Deal Size by Industry",
+              text: "Average Match Percentage by Industry Category",
               color: brownPalette.primary,
               font: { weight: "bold", size: 12 },
             },
@@ -820,18 +957,41 @@ export function FundingInsights() {
           scales: {
             x: {
               beginAtZero: true,
+              max: 100,
+              title: {
+                display: true,
+                text: "Match Percentage (%)",
+                ...axisTitleStyle
+              },
               ticks: {
-                color: brownPalette.primary,
-                font: { size: 10 },
-                callback: (value) => "R" + (value / 1000000).toFixed(1) + "M",
+                ...tickStyle,
+                callback: (value) => value + "%",
               },
               grid: { color: brownPalette.lighter },
             },
             y: {
-              ticks: { color: brownPalette.primary, font: { size: 10 } },
+              title: {
+                display: true,
+                text: "Industry Category",
+                ...axisTitleStyle
+              },
+              ticks: {
+                ...tickStyle,
+                // Ensure all labels are shown
+                autoSkip: false,
+                maxRotation: 0
+              },
               grid: { color: brownPalette.lighter },
             },
           },
+          layout: {
+            padding: {
+              left: 10,
+              right: 10,
+              top: 10,
+              bottom: 10
+            }
+          }
         },
       })
     }
@@ -867,15 +1027,24 @@ export function FundingInsights() {
           scales: {
             y: {
               beginAtZero: true,
+              title: {
+                display: true,
+                text: "Days to Contact",
+                ...axisTitleStyle
+              },
               ticks: {
-                color: brownPalette.primary,
-                font: { size: 10 },
+                ...tickStyle,
                 callback: (value) => value + " days",
               },
               grid: { color: brownPalette.lighter },
             },
             x: {
-              ticks: { color: brownPalette.primary, font: { size: 10 } },
+              title: {
+                display: true,
+                text: "Funder Type",
+                ...axisTitleStyle
+              },
+              ticks: tickStyle,
               grid: { color: brownPalette.lighter },
             },
           },
@@ -956,15 +1125,24 @@ export function FundingInsights() {
           scales: {
             x: {
               beginAtZero: true,
+              title: {
+                display: true,
+                text: "Funding Volume (R Millions)",
+                ...axisTitleStyle
+              },
               ticks: {
-                color: brownPalette.primary,
-                font: { size: 10 },
+                ...tickStyle,
                 callback: (value) => "R" + (value / 1000000).toFixed(1) + "M",
               },
               grid: { color: brownPalette.lighter },
             },
             y: {
-              ticks: { color: brownPalette.primary, font: { size: 10 } },
+              title: {
+                display: true,
+                text: "Province",
+                ...axisTitleStyle
+              },
+              ticks: tickStyle,
               grid: { color: brownPalette.lighter },
             },
           },
@@ -991,7 +1169,7 @@ export function FundingInsights() {
           plugins: {
             title: {
               display: true,
-              text: "Applications by Region",
+              text: "Applications by Province",
               color: brownPalette.primary,
               font: { weight: "bold", size: 12 },
             },
@@ -1000,13 +1178,22 @@ export function FundingInsights() {
           scales: {
             y: {
               beginAtZero: true,
-              ticks: { color: brownPalette.primary, font: { size: 10 } },
+              title: {
+                display: true,
+                text: "Number of Applications",
+                ...axisTitleStyle
+              },
+              ticks: tickStyle,
               grid: { color: brownPalette.lighter },
             },
             x: {
+              title: {
+                display: true,
+                text: "Province",
+                ...axisTitleStyle
+              },
               ticks: {
-                color: brownPalette.primary,
-                font: { size: 10 },
+                ...tickStyle,
                 maxRotation: 45,
               },
               grid: { color: brownPalette.lighter },
@@ -1037,7 +1224,7 @@ export function FundingInsights() {
           plugins: {
             title: {
               display: true,
-              text: "Approval Rate by Region",
+              text: "Approval Rate by Province",
               color: brownPalette.primary,
               font: { weight: "bold", size: 12 },
             },
@@ -1047,17 +1234,26 @@ export function FundingInsights() {
             y: {
               beginAtZero: true,
               max: 100,
+              title: {
+                display: true,
+                text: "Approval Rate (%)",
+                ...axisTitleStyle
+              },
               ticks: {
-                color: brownPalette.primary,
-                font: { size: 10 },
+                ...tickStyle,
+                stepSize: 20,
                 callback: (value) => value + "%",
               },
               grid: { color: brownPalette.lighter },
             },
             x: {
+              title: {
+                display: true,
+                text: "Province",
+                ...axisTitleStyle
+              },
               ticks: {
-                color: brownPalette.primary,
-                font: { size: 10 },
+                ...tickStyle,
                 maxRotation: 45,
               },
               grid: { color: brownPalette.lighter },
@@ -1194,13 +1390,13 @@ export function FundingInsights() {
             </div>
             <div className="chartContainer leaderboardContainer">
               <div className="leaderboard">
-                <h3>Top 3 Funded Industries</h3>
+                <h3>Top 3 Funded Industry Categories</h3>
                 <div className="leaderboardList">
                   {insights.topFundedIndustries.slice(0, 3).map((industry, index) => (
                     <div key={index} className="leaderboardItem">
                       <span className="rank">#{index + 1}</span>
                       <span className="industry">{industry.name}</span>
-                      <span className="amount">R{(industry.amount / 1000000).toFixed(0)}M</span>
+                      <span className="amount">{industry.count} applications</span>
                     </div>
                   ))}
                 </div>

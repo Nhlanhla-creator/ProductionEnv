@@ -6,6 +6,8 @@ import { Check, ChevronDown, Filter, X, Eye } from "lucide-react"
 import { collection, getDocs } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
 import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore"
+import emailjs from '@emailjs/browser';
+import { API_KEYS } from "../../API"
 
 // Mock data for the table
 const mockAccelerators = []
@@ -355,6 +357,115 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
     setMounted(true)
     return () => setMounted(false)
   }, [])
+
+  // Function to send email notification to catalyst
+  const sendCatalystEmailNotification = async (catalystId, smeData, accelerator) => {
+    try {
+      console.log("🔄 Sending catalyst email notification...");
+
+      const emailjsConfig = {
+        serviceId: API_KEYS.SERVICE_ID_MESSAGES,
+        templateId: API_KEYS.TEMPLATE_ID_MESSAGES,
+        publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES
+      };
+
+      console.log("📧 Using Feedback config:", emailjsConfig);
+
+      if (!window.emailjs) {
+        emailjs.init(emailjsConfig.publicKey);
+        window.emailjs = emailjs;
+      }
+
+      // Fetch catalyst email from catalystProfiles > formData > contactDetails > businessEmail
+      let catalystEmail = null;
+      console.log("📋 Fetching catalyst email for:", catalystId);
+
+      try {
+        const catalystProfileRef = doc(db, "catalystProfiles", catalystId);
+        const catalystProfileSnap = await getDoc(catalystProfileRef);
+        
+        if (catalystProfileSnap.exists()) {
+          const profileData = catalystProfileSnap.data();
+          console.log("📄 catalystProfiles data:", profileData);
+          
+          // Get email from formData > contactDetails > businessEmail
+          catalystEmail = profileData.formData?.contactDetails?.businessEmail;
+          
+          if (catalystEmail) {
+            console.log("✅ Found catalyst email:", catalystEmail);
+          } else {
+            console.log("❌ No business email found in catalyst profile");
+            // Try alternative email fields as fallback
+            catalystEmail = profileData.formData?.contactDetails?.email ||
+                           profileData.email ||
+                           profileData.contactEmail;
+          }
+        } else {
+          console.log("❌ No document in catalystProfiles for:", catalystId);
+        }
+      } catch (fetchError) {
+        console.error("❌ Error fetching catalyst email:", fetchError);
+      }
+
+      if (!catalystEmail) {
+        console.warn("⚠️ No catalyst email found, using fallback");
+        catalystEmail = "support@bigmarketplace.africa";
+      }
+
+      console.log("📧 Final recipient email:", catalystEmail);
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(catalystEmail)) {
+        throw new Error(`Invalid email format: "${catalystEmail}"`);
+      }
+
+      const user = auth.currentUser;
+      const smeName = smeData.entityOverview?.registeredName || "An SMSE";
+      const catalystName = accelerator.name || "Catalyst";
+
+      const emailSubject = `New Application Received from ${smeName}`;
+      
+      let emailMessage = `Dear ${catalystName} Team,\n\n`;
+      emailMessage += `You have received a new application from ${smeName}.\n\n`;
+      emailMessage += `Application Details:\n`;
+      emailMessage += `- SMSE Name: ${smeName}\n`;
+      emailMessage += `- Location: ${smeData.entityOverview?.location || "Not specified"}\n`;
+      emailMessage += `- Sector: ${(smeData.entityOverview?.economicSectors || []).join(", ") || "Not specified"}\n`;
+      emailMessage += `- Funding Stage: ${smeData.entityOverview?.operationStage || "Not specified"}\n`;
+      emailMessage += `- Funding Required: ${smeData.useOfFunds?.amountRequested || "Not specified"}\n`;
+      emailMessage += `- Match Score: ${accelerator.matchPercentage || 0}%\n\n`;
+      
+      emailMessage += `You can review this application in your catalyst dashboard.\n\n`;
+      emailMessage += `Best regards,\nBIG Marketplace Africa Team`;
+
+      const templateParams = {
+        to_email: catalystEmail,
+        subject: emailSubject,
+        from_name: "BIG Marketplace Africa",
+        date: new Date().toLocaleDateString(),
+        message: emailMessage,
+        portal_url: `https://www.bigmarketplace.africa/catalyst/applications`,
+        has_attachments: "false",
+        attachments_count: "0"
+      };
+
+      console.log("📨 Sending catalyst email with Feedback service...", templateParams);
+
+      const response = await window.emailjs.send(
+        emailjsConfig.serviceId,
+        emailjsConfig.templateId,
+        templateParams,
+        emailjsConfig.publicKey
+      );
+      
+      console.log("✅ Catalyst email sent successfully!", response);
+      return true;
+      
+    } catch (emailError) {
+      console.error("❌ Catalyst email failed:", emailError);
+      return false;
+    }
+  }
 
   const fetchAccelerators = async () => {
     if (!isMountedRef.current) return
@@ -978,9 +1089,15 @@ if (instrumentMatch) {
         setDoc(doc(db, "smeCatalystApplications", appId), smeApp),
       ])
 
+      // Send email notification to catalyst
+      await sendCatalystEmailNotification(catalystId, smeData, accelerator);
+
       setStatuses((prev) => ({ ...prev, [accelerator.id]: "Sent" }))
       setPipelineStages((prev) => ({ ...prev, [accelerator.id]: pipelineStage }))
-      setNotification({ type: "success", message: `Application sent to ${accelerator.name}!` })
+      setNotification({ 
+        type: "success", 
+        message: `Application sent to ${accelerator.name} and notification email sent!` 
+      })
 
       if (onApplicationSubmitted) onApplicationSubmitted()
       setTimeout(() => setNotification(null), 3000)

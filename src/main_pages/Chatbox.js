@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { API_KEYS } from "../API.js"
 import { FaRobot } from "react-icons/fa";
+import { httpsCallable } from "firebase/functions";
+import { functions } from "../firebaseConfig"; // ensure you export `functions`
 
 const API_KEY = API_KEYS.OPENAI;
 
@@ -59,26 +61,15 @@ Only answer based on this information. If the question is outside this scope, po
     setError(null);
 
     try {
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-3.5-turbo",
-          messages: [
-            { role: "system", content: systemMessageContent },
-            { role: "user", content: userInput.trim() },
-          ],
-        }),
-      });
+    const call = httpsCallable(functions, "bigMarketplaceChat");
+  const { data } = await call({
+     prompt: newUserMessage.text,   // Optional overrides:
+     // model: "gpt-4o-mini",
+     // max_tokens: 700,
+     // temperature: 0.2,
+   });
+   const botText = (data?.content || "").trim();
 
-      const data = await res.json();
-
-      if (!res.ok) throw new Error(data.error?.message || "Unknown error");
-
-      const botText = data.choices[0].message.content.trim();
       setMessages((prev) => [...prev, { text: botText, user: false }]);
     } catch (err) {
       console.error("Chatbot error:", err);

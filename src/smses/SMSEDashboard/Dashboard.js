@@ -17,7 +17,7 @@ import "./Dashboard.css"
 import { getFunctions, httpsCallable } from "firebase/functions";
 
 // Add this import at the top with your other imports
-import { useApiKey } from "./callapi"
+
 
 import { onAuthStateChanged, getAuth } from "firebase/auth"
 import {
@@ -1404,7 +1404,7 @@ export function Dashboard() {
   const [fundabilityScore, setFundabilityScore] = useState(0)
   const [pisScore, setPisScore] = useState(0)
   
-  const apiKey = useApiKey();
+  const apiKey = API_KEYS.OPENAI
   console.log(apiKey)
   const user = auth.currentUser
   const userName = user ? user.email : "User"
