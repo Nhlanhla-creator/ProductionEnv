@@ -15,9 +15,11 @@ import {
   updateDoc,
   serverTimestamp,
 } from "firebase/firestore"
-import { db, } from "../../firebaseConfig"
+import { db } from "../../firebaseConfig"
 import { Eye, Filter } from "lucide-react"
 import { useNavigate } from "react-router-dom"
+import emailjs from '@emailjs/browser'
+import { API_KEYS } from "../../API"
 
 // Status definitions with brown color scheme
 const STATUS_TYPES = {
@@ -808,6 +810,110 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
     return { color: "#D32F2F", fontWeight: "bold" }
   }
 
+  const sendEmailNotification = async (supplier, applicationPayload) => {
+    try {
+      console.log("🔄 Using Feedback service configuration for supplier notification...");
+
+      const emailjsConfig = {
+        serviceId: API_KEYS.SERVICE_ID_MESSAGES,
+        templateId: API_KEYS.TEMPLATE_ID_MESSAGES,
+        publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES
+      };
+
+      console.log("📧 Using Feedback config:", emailjsConfig);
+
+      if (!window.emailjs) {
+        emailjs.init(emailjsConfig.publicKey);
+        window.emailjs = emailjs;
+      }
+
+      // Get supplier email from supplierApplications collection
+      let supplierEmail = null;
+      console.log("📋 Fetching supplier email for:", supplier.id);
+
+      try {
+        // Query supplierApplications collection to find the supplier's application
+        const supplierApplicationsQuery = query(
+          collection(db, "supplierApplications"),
+          where("supplierId", "==", supplier.id)
+        );
+        const supplierApplicationsSnapshot = await getDocs(supplierApplicationsQuery);
+        
+        if (!supplierApplicationsSnapshot.empty) {
+          const supplierApplication = supplierApplicationsSnapshot.docs[0].data();
+          console.log("📄 supplierApplications data:", supplierApplication);
+          
+          // Get email from customerProfileData
+          supplierEmail = supplierApplication.customerProfileData?.email;
+          
+          if (supplierEmail) {
+            console.log("✅ Found supplier email:", supplierEmail);
+          } else {
+            console.log("❌ No email found in customerProfileData");
+          }
+        } else {
+          console.log("❌ No supplier applications found for:", supplier.id);
+        }
+      } catch (fetchError) {
+        console.error("❌ Error fetching supplier email:", fetchError);
+      }
+
+      if (!supplierEmail) {
+        console.warn("⚠️ No supplier email found, using fallback");
+        supplierEmail = "support@bigmarketplace.africa";
+      }
+
+      console.log("📧 Final recipient email:", supplierEmail);
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(supplierEmail)) {
+        throw new Error(`Invalid email format: "${supplierEmail}"`);
+      }
+
+      const currentUser = getAuth().currentUser;
+      const customerName = currentUser?.displayName || "Customer";
+      const supplierName = supplier.entityOverview?.tradingName || supplier.entityOverview?.registeredName || "Supplier";
+
+      const emailMessage = `Dear ${supplierName},\n\n
+We are pleased to inform you that a customer has expressed interest in your services through the BIG Marketplace Africa.\n\n
+Application Details:
+- Customer: ${customerName}
+- Service Required: ${applicationPayload.originalRequest?.serviceRequested || "Not specified"}
+- Location: ${applicationPayload.originalRequest?.location || "Not specified"}
+- Budget Range: ${applicationPayload.originalRequest?.budgetRange?.min || "0"} - ${applicationPayload.originalRequest?.budgetRange?.max || "0"}
+- Match Score: ${applicationPayload.matchPercentage}%\n\n
+Please log into your BIG Marketplace Africa account to view the complete application details and respond to this opportunity.\n\n
+Best regards,\n
+BIG Marketplace Africa Team`;
+
+      const templateParams = {
+        to_email: supplierEmail,
+        subject: `New Customer Interest - ${applicationPayload.originalRequest?.serviceRequested || "Service Request"}`,
+        from_name: "BIG Marketplace Africa",
+        date: new Date().toLocaleDateString(),
+        message: emailMessage,
+        portal_url: `https://www.bigmarketplace.africa/supplier/applications`,
+        has_attachments: "false",
+        attachments_count: "0"
+      };
+
+      console.log("📨 Sending supplier notification with Feedback service...", templateParams);
+
+      const response = await window.emailjs.send(
+        emailjsConfig.serviceId,
+        emailjsConfig.templateId,
+        templateParams,
+        emailjsConfig.publicKey
+      );
+      
+      console.log("✅ Supplier notification email sent successfully!", response);
+      
+    } catch (emailError) {
+      console.error("❌ Supplier notification email failed:", emailError);
+      // Don't throw error here - we don't want to block the application process if email fails
+    }
+  }
+
   const handleConnectClick = async (supplier) => {
     try {
       const auth = getAuth()
@@ -956,6 +1062,9 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
         currentStage: "Contact Initiated",
         updatedAt: serverTimestamp(),
       })
+
+      // Send email notification to supplier
+      await sendEmailNotification(supplier, applicationPayload)
 
       setNotification({
         type: "success",
@@ -2361,7 +2470,7 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
   )
 }
 
-// ... rest of the styles remain the same ...
+// Styles
 const newRequestButtonStyle = {
   background: "#5D2A0A",
   color: "white",

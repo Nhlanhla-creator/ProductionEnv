@@ -7,6 +7,8 @@ import { collection, getDocs } from "firebase/firestore"
 import { db } from "../../firebaseConfig" // adjust to your Firebase setup
 import { auth } from "../../firebaseConfig"
 import { doc, setDoc, serverTimestamp, getDoc, query, where, onSnapshot } from "firebase/firestore"
+import emailjs from '@emailjs/browser';
+import { API_KEYS } from "../../API"
 
 // Mock data for the advisor table
 const mockAdvisors = []
@@ -515,124 +517,121 @@ const overlapFE = (a, b) => {
   return false;
 };
 
- function calculateAdvisorMatch(smeProfile, advisorProfile) {
-  const supportFocus = smeProfile.advisoryNeedsAssessment?.advisoryRole || []
-  const fundingStage = (smeProfile.entityOverview?.operationStage || "").toLowerCase()
-  const smeSectors = (smeProfile.entityOverview?.economicSectors || []).map((s) => s.toLowerCase())
-  const smeLocation = (smeProfile.entityOverview?.location || "").toLowerCase()
-  const smeLegal = (smeProfile.entityOverview?.legalStructure || "").toLowerCase()
-  const rawRevenue = smeProfile.financialOverview?.annualRevenue || "0"
-  const smeRevenue = Number.parseFloat(rawRevenue.replace(/[Rr\s,]/g, "").trim())
-  const smeFunctionalExpertise = (smeProfile.entityOverview || [])
-  
-  const advForm = advisorProfile.formData || {}
-  const contact = advForm.contactDetails || {}
-  const overview = advForm.personalProfessionalOverview || {}
-  const selection = advForm.selectionCriteria || {}
-  const advisorRole = advForm.selectionCriteria?.preferredAdvisorRole || []
-  
-  const smeFE = toArr(smeProfile?.advisoryNeedsAssessment?.functionalExpertise);
-  const advisorFE = [
-    ...new Set([
-      ...toArr(overview?.functionalExpertise),
-      ...toArr(selection?.functionalExpertise),
-    ]),
-  ];
+  function calculateAdvisorMatch(smeProfile, advisorProfile) {
+    const supportFocus = smeProfile.advisoryNeedsAssessment?.supportFocus || []
+    const fundingStage = (smeProfile.entityOverview?.operationStage || "").toLowerCase()
+    const smeSectors = (smeProfile.entityOverview?.economicSectors || []).map((s) => s.toLowerCase())
+    const smeLocation = (smeProfile.entityOverview?.location || "").toLowerCase()
+    const smeLegal = (smeProfile.entityOverview?.legalStructure || "").toLowerCase()
+    const rawRevenue = smeProfile.financialOverview?.annualRevenue || "0"
+    const smeRevenue = Number.parseFloat(rawRevenue.replace(/[Rr\s,]/g, "").trim())
+const smeFunctionalExpertise = (smeProfile.entityOverview || [])
+    const advForm = advisorProfile.formData || {}
+    const contact = advForm.contactDetails || {}
+    const overview = advForm.personalProfessionalOverview || {}
+    const selection = advForm.selectionCriteria || {}
+const smeFE = toArr(smeProfile?.advisoryNeedsAssessment?.functionalExpertise);
+const advisorFE = [
+  ...new Set([
+    ...toArr(overview?.functionalExpertise),
+    ...toArr(selection?.functionalExpertise),
+  ]),
+];
 
-  // Initialize breakdown with safe defaults
-  const breakdown = {
-    stageFit: {
-      matched: false,
-      smeValue: fundingStage,
-      advisorValue: toArr(selection.smeStageFit), // Ensure it's an array
-    },
-    advisoryRole: {
-      matched: false,
-      smeValue: toArr(supportFocus), // Ensure it's an array
-      advisorValue: toArr(advisorRole), // Ensure it's an array
-    },
-    location: {
-      matched: false,
-      smeValue: smeLocation,
-      advisorValue: contact.country || "",
-    },
-    sector: {
-      matched: false,
-      smeValue: smeSectors,
-      advisorValue: toArr(overview.industryExperience), // Ensure it's an array
-    },
-    compensation: {
-      matched: !!selection.compensationModel,
-      advisorValue: selection.compensationModel || "Not specified",
-    },
-    functionalExpertise: {
-      matched: false,
-      smeValue: toArr(smeFE),
-      advisorValue: toArr(overview.functionalExpertise), // Ensure it's an array
-    },
-    legalEntityFit: {
-      matched: false,
-      smeValue: smeLegal,
-      advisorValue: selection.legalEntityFit || "",
-    },
-    revenueThreshold: {
-      matched: false,
-      smeValue: smeRevenue,
-      advisorRange: selection.revenueThreshold || "Not specified",
-    },
+    // Initialize breakdown with safe defaults
+    const breakdown = {
+      stageFit: {
+        matched: false,
+        smeValue: fundingStage,
+        advisorValue: selection.smeStageFit || [],
+      },
+      skillAlignment: {
+        matched: false,
+        smeValue: supportFocus,
+        advisorValue: selection.advisorySupportType || [],
+      },
+      location: {
+        matched: false,
+        smeValue: smeLocation,
+        advisorValue: contact.country || "",
+      },
+      sector: {
+        matched: false,
+        smeValue: smeSectors,
+        advisorValue: overview.industryExperience || [],
+      },
+      compensation: {
+        matched: !!selection.compensationModel,
+        advisorValue: selection.compensationModel || "Not specified",
+      },
+      functionalExpertise: {
+        matched: false,
+         smeValue: smeFE ||[],
+        advisorValue: overview.functionalExpertise || [],
+      },
+      legalEntityFit: {
+        matched: false,
+        smeValue: smeLegal,
+        advisorValue: selection.legalEntityFit || "",
+      },
+      revenueThreshold: {
+        matched: false,
+        smeValue: smeRevenue,
+        advisorRange: selection.revenueThreshold || "Not specified",
+      },
+    }
+
+    // Calculate matches with proper null checks
+    breakdown.stageFit.matched = (breakdown.stageFit.advisorValue || [])
+      .map((s) => s?.toLowerCase() || "")
+      .includes(fundingStage)
+
+    breakdown.skillAlignment.matched = (breakdown.skillAlignment.advisorValue || []).some((type) =>
+      supportFocus.includes(type),
+    )
+
+    breakdown.location.matched = (contact.country || "").toLowerCase() === smeLocation
+
+    breakdown.sector.matched = (breakdown.sector.advisorValue || []).some((sector) =>
+      smeSectors.includes((sector || "").toLowerCase()),
+    )
+
+    breakdown.functionalExpertise.matched = overlapFE(
+  breakdown.functionalExpertise.smeValue,
+  breakdown.functionalExpertise.advisorValue,
+);
+
+    breakdown.legalEntityFit.matched = (selection.legalEntityFit || "").toLowerCase() === smeLegal
+
+    // Revenue threshold calculation
+    const revenueBands = {
+      less_than_500k: [0, 500000],
+      "500k_to_1m": [500000, 1000000],
+      less_than_1m: [0, 1000000],
+      "1m_to_5m": [1000000, 5000000],
+      "5m_to_10m": [5000000, 10000000],
+      "10m_plus": [10000000, Number.POSITIVE_INFINITY],
+    }
+
+    const threshold = (selection.revenueThreshold || "").toLowerCase()
+    const [minRev, maxRev] = revenueBands[threshold] || [0, Number.POSITIVE_INFINITY]
+    breakdown.revenueThreshold.matched = smeRevenue >= minRev && smeRevenue <= maxRev
+
+    // Calculate score
+    const score = Object.values(breakdown).filter((item) => item.matched).length
+    const total = Object.keys(breakdown).length
+    const matchScore = Math.round((score / total) * 100)
+
+    console.groupCollapsed(`🧩 Advisor Match Debug: ${contact.name || "Unnamed Advisor"}`)
+    console.log("Breakdown:", breakdown)
+    console.log("Final Score:", matchScore)
+    console.groupEnd()
+
+    return {
+      score: matchScore,
+      breakdown,
+    }
   }
-
-  // Calculate matches with proper null checks
-  breakdown.stageFit.matched = breakdown.stageFit.advisorValue
-    .map((s) => s?.toLowerCase() || "")
-    .includes(fundingStage)
-
-  breakdown.advisoryRole.matched = breakdown.advisoryRole.advisorValue.some((type) =>
-    breakdown.advisoryRole.smeValue.includes(type)
-  )
-
-  breakdown.location.matched = (contact.country || "").toLowerCase() === smeLocation
-
-  breakdown.sector.matched = breakdown.sector.advisorValue.some((sector) =>
-    smeSectors.includes((sector || "").toLowerCase())
-  )
-
-  breakdown.functionalExpertise.matched = overlapFE(
-    breakdown.functionalExpertise.smeValue,
-    breakdown.functionalExpertise.advisorValue,
-  )
-
-  breakdown.legalEntityFit.matched = (selection.legalEntityFit || "").toLowerCase() === smeLegal
-
-  // Revenue threshold calculation
-  const revenueBands = {
-    less_than_500k: [0, 500000],
-    "500k_to_1m": [500000, 1000000],
-    less_than_1m: [0, 1000000],
-    "1m_to_5m": [1000000, 5000000],
-    "5m_to_10m": [5000000, 10000000],
-    "10m_plus": [10000000, Number.POSITIVE_INFINITY],
-  }
-
-  const threshold = (selection.revenueThreshold || "").toLowerCase()
-  const [minRev, maxRev] = revenueBands[threshold] || [0, Number.POSITIVE_INFINITY]
-  breakdown.revenueThreshold.matched = smeRevenue >= minRev && smeRevenue <= maxRev
-
-  // Calculate score
-  const score = Object.values(breakdown).filter((item) => item.matched).length
-  const total = Object.keys(breakdown).length
-  const matchScore = Math.round((score / total) * 100)
-
-  console.groupCollapsed(`🧩 Advisor Match Debug: ${contact.name || "Unnamed Advisor"}`)
-  console.log("Breakdown:", breakdown)
-  console.log("Final Score:", matchScore)
-  console.groupEnd()
-
-  return {
-    score: matchScore,
-    breakdown,
-  }
-}
 
   useEffect(() => {
   const fetchAdvisors = async () => {
@@ -749,8 +748,95 @@ const overlapFE = (a, b) => {
         setDoc(doc(db, "SmeAdvisorApplications", `${smeUserId}_${advisorUserId}`), smeAppData),
       ])
 
+      // Get advisor email from advisorProfiles collection
+      let advisorEmail = null
+      try {
+        const advisorProfileRef = doc(db, "advisorProfiles", advisorUserId)
+        const advisorProfileSnap = await getDoc(advisorProfileRef)
+        
+        if (advisorProfileSnap.exists()) {
+          const advisorProfileData = advisorProfileSnap.data()
+          advisorEmail = advisorProfileData.formData?.contactDetails?.email || 
+                        advisorProfileData.userEmail ||
+                        advisorProfileData.contactEmail ||
+                        advisorProfileData.email
+          
+          console.log("Found advisor email:", advisorEmail)
+        } else {
+          console.log("No advisor profile found for:", advisorUserId)
+        }
+      } catch (emailError) {
+        console.error("Error fetching advisor email:", emailError)
+      }
+
       // Update UI status
       setStatuses((prev) => ({ ...prev, [advisor.id]: "Contacted" }))
+
+      // Send email notification to advisor
+      if (advisorEmail) {
+        try {
+          console.log("🔄 Using EmailJS service to send email to advisor...")
+
+          const emailjsConfig = {
+            serviceId: API_KEYS.SERVICE_ID_MESSAGES,
+            templateId: API_KEYS.TEMPLATE_ID_MESSAGES,
+            publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES
+          };
+
+          console.log("📧 Using EmailJS config:", emailjsConfig);
+
+          if (!window.emailjs) {
+            emailjs.init(emailjsConfig.publicKey);
+            window.emailjs = emailjs;
+          }
+
+          const smeName = smeData.entityOverview?.registeredName || "A Small Business";
+          const advisorName = advisor.name;
+
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(advisorEmail)) {
+            throw new Error(`Invalid email format: "${advisorEmail}"`);
+          }
+
+          const emailMessage = `Dear ${advisorName},\n\n
+We are excited to inform you that ${smeName} has requested to connect with you for advisory services!\n\n
+Business Details:
+- Name: ${smeName}
+- Location: ${matchData.smeLocation}
+- Sector: ${matchData.smeSector}
+- Stage: ${matchData.smeStage}
+- Support Needed: ${matchData.smeSupport}\n\n
+Your expertise in ${advisor.sectorFocus} and ${advisor.functionalExpertise} aligns well with their needs.\n\n
+Please log into your BIG Marketplace Africa account to view the full details and respond to this connection request.\n\n
+Best regards,\nBIG Marketplace Africa Team`;
+
+          const templateParams = {
+            to_email: advisorEmail,
+            subject: `New Advisory Connection Request from ${smeName}`,
+            from_name: "BIG Marketplace Africa",
+            date: new Date().toLocaleDateString(),
+            message: emailMessage,
+            portal_url: `https://www.bigmarketplace.africa/connections/${smeUserId}_${advisorUserId}`,
+            has_attachments: "false",
+            attachments_count: "0"
+          };
+
+          console.log("📨 Sending connection request email to advisor...", templateParams);
+
+          const response = await window.emailjs.send(
+            emailjsConfig.serviceId,
+            emailjsConfig.templateId,
+            templateParams,
+            emailjsConfig.publicKey
+          );
+          
+          console.log("✅ Connection request email sent successfully to advisor!", response);
+        } catch (emailError) {
+          console.error("❌ Email to advisor failed:", emailError);
+        }
+      } else {
+        console.warn("⚠️ No advisor email found, skipping email notification");
+      }
 
       // Dispatch notification event
       const dispatchNotification = () => {

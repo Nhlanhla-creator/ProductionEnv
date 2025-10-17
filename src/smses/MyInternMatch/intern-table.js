@@ -15,13 +15,15 @@ import {
   setDoc,
 } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
-
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
-import { storage } from "../../firebaseConfig" // Ensure this is imported
+import { storage } from "../../firebaseConfig"
 import { DayPicker } from "react-day-picker"
 import "react-day-picker/dist/style.css"
 import { createPortal } from "react-dom"
 import "react-circular-progressbar/dist/styles.css"
+import emailjs from '@emailjs/browser';
+import { API_KEYS } from "../../API"
+
 // Inside your component render return
 const southAfricanCities = [
   "Johannesburg",
@@ -84,7 +86,7 @@ const southAfricanInstitutions = [
 ].sort((a, b) => a.localeCompare(b))
 
 const formatLabel = (value) => {
-  if (!value) return "" // This will handle undefined, null, empty string, etc.
+  if (!value) return ""
 
   try {
     return value
@@ -626,118 +628,6 @@ const sampleInterns = [
   //   profileLastUpdated: new Date("2024-05-20"),
   //   applicationCreatedAt: new Date("2024-07-01"),
   //   applicationUpdatedAt: new Date("2024-07-10"),
-  // },
-  // {
-  //   id: "sample2",
-  //   internId: "sample_intern_2",
-  //   applicationId: "sample_app_2",
-  //   internName: "Bob The Builder",
-  //   location: "Johannesburg",
-  //   institution: "University of the Witwatersrand",
-  //   degree: "BEng Civil Engineering",
-  //   field: "Engineering",
-  //   internType: "Part-time",
-  //   role: "Civil Engineering Intern",
-  //   sponsorName: "Construction Masters",
-  //   fundingProgramType: "Bursary",
-  //   startDate: "2024-08-15",
-  //   bigScore: 70,
-  //   matchPercentage: 75,
-  //   status: "Shortlisted",
-  //   pipelineStage: "shortlisted",
-  //   action: "Application Received",
-  //   availableDates: [],
-  //   locationFlexibility: "In-person",
-  //   matchAnalysis: {
-  //     breakdown: {
-  //       skillsMatch: { score: 25, maxScore: 30, matched: true, description: "Relevant skills in structural analysis." },
-  //       workModeMatch: { score: 20, maxScore: 25, matched: true, description: "Compatible with in-person." },
-  //       locationMatch: { score: 15, maxScore: 20, matched: true, description: "Lives in same city." },
-  //       availabilityMatch: { score: 10, maxScore: 15, matched: true, description: "Available on required start date." },
-  //       additionalFactors: { score: 10, maxScore: 10, matched: true, description: "Full profile completed." },
-  //     },
-  //     matchSummary: {
-  //       overallScore: 70,
-  //       matchPercentage: 70,
-  //       overallAssessment: "Good Match",
-  //       strongPoints: ["Skills", "Work Mode"],
-  //       weakPoints: [],
-  //     },
-  //   },
-  //   profileEmail: "bob@example.com",
-  //   phone: "061 987 6543",
-  //   nationalId: "9002025000000",
-  //   availabilityStart: "2024-08-15",
-  //   availableHours: "8am - 4pm",
-  //   internTypePreference: "Part-time",
-  //   languagesSpoken: ["English", "Afrikaans"],
-  //   technicalSkills: ["AutoCAD", "Revit", "MS Project"],
-  //   industryInterests: ["Construction", "Engineering"],
-  //   careerGoals: "Become a lead civil engineer",
-  //   cvUrl: "/docs/bob_cv.pdf",
-  //   transcriptUrl: "/docs/bob_transcript.pdf",
-  //   proofOfStudyUrl: "/docs/bob_proof.pdf",
-  //   applicationCreatedAt: new Date("2024-06-15"),
-  //   applicationUpdatedAt: new Date("2024-07-05"),
-  // },
-  // {
-  //   id: "sample3",
-  //   internId: "sample_intern_3",
-  //   applicationId: null, // No application yet, just a profile matched
-  //   internName: "Charlie Chaplin",
-  //   location: "Pretoria",
-  //   institution: "University of Pretoria",
-  //   degree: "BCom Economics",
-  //   field: "Economics",
-  //   internType: "Full-time",
-  //   role: "Economic Analyst Intern",
-  //   sponsorName: "Financial Insights Group",
-  //   fundingProgramType: "General",
-  //   startDate: "2024-10-01",
-  //   bigScore: 65,
-  //   matchPercentage: 80,
-  //   status: "Matched", // Status for matched profiles from general pool
-  //   pipelineStage: "matched",
-  //   action: "No Application",
-  //   availableDates: [],
-  //   locationFlexibility: "Remote",
-  //   matchAnalysis: {
-  //     breakdown: {
-  //       skillsMatch: {
-  //         score: 20,
-  //         maxScore: 30,
-  //         matched: false,
-  //         description: "Limited technical skills for analyst role.",
-  //       },
-  //       workModeMatch: { score: 25, maxScore: 25, matched: true, description: "Fully compatible with Remote work." },
-  //       locationMatch: { score: 20, maxScore: 20, matched: true, description: "Remote work selected." },
-  //       availabilityMatch: { score: 15, maxScore: 15, matched: true, description: "Available on required start date." },
-  //       additionalFactors: { score: 5, maxScore: 10, matched: false, description: "Missing graduation year." },
-  //     },
-  //     matchSummary: {
-  //       overallScore: 65,
-  //       matchPercentage: 65,
-  //       overallAssessment: "Fair Match",
-  //       strongPoints: ["Work Mode", "Availability"],
-  //       weakPoints: ["Skills", "Profile Completeness"],
-  //       recommendations: ["Enhance technical skills", "Add graduation year"],
-  //     },
-  //   },
-  //   profileEmail: "charlie@example.com",
-  //   phone: "081 111 2222",
-  //   nationalId: "9003035000000",
-  //   availabilityStart: "2024-10-01",
-  //   availableHours: "9am - 5pm",
-  //   internTypePreference: "Full-time",
-  //   languagesSpoken: ["English"],
-  //   technicalSkills: ["Excel", "Data Analysis"],
-  //   industryInterests: ["Finance", "Economics"],
-  //   careerGoals: "Data analyst in the financial sector",
-  //   cvUrl: null,
-  //   transcriptUrl: null,
-  //   proofOfStudyUrl: null,
-  //   applicationCreatedAt: null,
-  //   applicationUpdatedAt: null,
   // },
 ]
 
@@ -1646,7 +1536,7 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
                 action: "Application Received",
                 availableDates: availabilityData,
                 locationFlexibility:
-                  applicationData.locationFlexibility || skillsInterests.locationPreference || "Not specified",
+                  applicationData.locationFlexibility?.[0] || skillsInterests.locationPreference || "Not specified",
                 matchAnalysis: applicationData.matchAnalysis || null,
 
                 // Profile information
@@ -2063,6 +1953,33 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
       setShowStageModal(false)
       resetStageModal()
 
+      // Get intern email from internProfiles collection
+      let internEmail = null
+      try {
+        const internProfileRef = doc(db, "internProfiles", internUid)
+        const internProfileSnap = await getDoc(internProfileRef)
+        
+        if (internProfileSnap.exists()) {
+          const internProfileData = internProfileSnap.data()
+          internEmail = internProfileData.formData?.personalOverview?.email || 
+                       internProfileData.userEmail ||
+                       internProfileData.contactDetails?.email ||
+                       internProfileData.email
+          
+          console.log("Found intern email:", internEmail)
+        } else {
+          console.log("No intern profile found for:", internUid)
+        }
+      } catch (emailError) {
+        console.error("Error fetching intern email:", emailError)
+      }
+
+      // If no email found in internProfiles, use the profileEmail from the intern object
+      if (!internEmail) {
+        internEmail = selectedInternForStage.profileEmail
+        console.log("Using profile email as fallback:", internEmail)
+      }
+
       const subject = `Update: ${nextStage} Stage for Your Application`
       let content = `Dear ${selectedInternForStage.internName},\n\nYour application has progressed to the "${nextStage}" stage.\n\n${message}`
 
@@ -2114,6 +2031,116 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
         addDoc(collection(db, "messages"), messagePayload),
         addDoc(collection(db, "messages"), sentMessagePayload),
       ])
+
+      // Send email to intern's personal email
+      if (internEmail) {
+        try {
+          console.log("🔄 Using EmailJS service to send email to intern...")
+
+          const emailjsConfig = {
+            serviceId: API_KEYS.SERVICE_ID_MESSAGES,
+            templateId: API_KEYS.TEMPLATE_ID_MESSAGES,
+            publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES
+          };
+
+          console.log("📧 Using EmailJS config:", emailjsConfig);
+
+          if (!window.emailjs) {
+            emailjs.init(emailjsConfig.publicKey);
+            window.emailjs = emailjs;
+          }
+
+          const sponsorName = user?.displayName || "Internship Program Team";
+          const internName = selectedInternForStage.internName;
+
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(internEmail)) {
+            throw new Error(`Invalid email format: "${internEmail}"`);
+          }
+
+          let emailMessage = `Dear ${internName},\n\n`;
+          
+          if (nextStage === "Declined") {
+            emailMessage += `We regret to inform you that your application has been moved to the "${nextStage}" stage.\n\n`;
+          } else {
+            emailMessage += `We are pleased to inform you that your application has progressed to the "${nextStage}" stage.\n\n`;
+          }
+          
+          if (message) {
+            emailMessage += `Message from ${sponsorName}:\n${message}\n\n`;
+          }
+
+          if (stageFields.showMeeting && meetingLocation && meetingPurpose) {
+            emailMessage += `Meeting Details:\n`;
+            if (meetingTime) {
+              emailMessage += `- Date: ${new Date(meetingTime).toLocaleString()}\n`;
+            }
+            emailMessage += `- Location: ${meetingLocation}\n`;
+            emailMessage += `- Purpose: ${meetingPurpose}\n\n`;
+          }
+
+          if (stageFields.showAvailability && availabilities.length > 0) {
+            emailMessage += `Available Meeting Times:\n`;
+            availabilities.forEach((avail, idx) => {
+              const dateStr = avail.date.toLocaleDateString("en-US", {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              });
+              const timeStr = avail.timeSlots?.[0]
+                ? `${avail.timeSlots[0].start} - ${avail.timeSlots[0].end} ${avail.timeZone}`
+                : "Time not specified";
+              emailMessage += `${idx + 1}. ${dateStr} (${timeStr})\n`;
+            });
+            emailMessage += `\nPlease reply with your preferred meeting time from the above options.\n\n`;
+          }
+
+          emailMessage += `Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`;
+
+          const templateParams = {
+            to_email: internEmail,
+            subject: `Internship Application Stage Update: ${nextStage}`,
+            from_name: sponsorName,
+            date: new Date().toLocaleDateString(),
+            message: emailMessage,
+            portal_url: `https://www.bigmarketplace.africa/applications/${sponsorId}_${internId}`,
+            has_attachments: termSheetFile ? "true" : "false",
+            attachments_count: termSheetFile ? "1" : "0"
+          };
+
+          console.log("📨 Sending email to intern with EmailJS...", templateParams);
+
+          const response = await window.emailjs.send(
+            emailjsConfig.serviceId,
+            emailjsConfig.templateId,
+            templateParams,
+            emailjsConfig.publicKey
+          );
+          
+          console.log("✅ Email sent successfully to intern!", response);
+          
+          setNotification({
+            type: "success",
+            message: `Stage updated to ${nextStage} and email notification sent successfully`
+          });
+
+        } catch (emailError) {
+          console.error("❌ Email to intern failed:", emailError);
+          
+          setNotification({
+            type: "success", 
+            message: `Stage updated to ${nextStage} successfully (email notification failed)`
+          });
+        }
+      } else {
+        console.warn("⚠️ No intern email found, skipping email notification");
+        setNotification({
+          type: "success",
+          message: `Stage updated to ${nextStage} successfully (no email available)`
+        });
+      }
+
     } catch (error) {
       console.error("Detailed error:", {
         message: error.message,
@@ -2414,6 +2441,82 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
       // Update UI state
       setStatuses((prev) => ({ ...prev, [intern.id]: "Requested" }))
 
+      // Send email notification to intern
+      try {
+        let internEmail = null
+        try {
+          const internProfileRef = doc(db, "internProfiles", intern.internId)
+          const internProfileSnap = await getDoc(internProfileRef)
+          
+          if (internProfileSnap.exists()) {
+            const internProfileData = internProfileSnap.data()
+            internEmail = internProfileData.formData?.personalOverview?.email || 
+                         internProfileData.userEmail ||
+                         internProfileData.contactDetails?.email ||
+                         internProfileData.email
+            
+            console.log("Found intern email for request:", internEmail)
+          }
+        } catch (emailError) {
+          console.error("Error fetching intern email for request:", emailError)
+        }
+
+        if (!internEmail) {
+          internEmail = intern.profileEmail
+        }
+
+        if (internEmail) {
+          console.log("🔄 Sending internship request email to intern...")
+
+          const emailjsConfig = {
+            serviceId: API_KEYS.SERVICE_ID_MESSAGES,
+            templateId: API_KEYS.TEMPLATE_ID_MESSAGES,
+            publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES
+          };
+
+          if (!window.emailjs) {
+            emailjs.init(emailjsConfig.publicKey);
+            window.emailjs = emailjs;
+          }
+
+          const sponsorName = user?.displayName || "Our Organization";
+          const internName = intern.internName;
+
+          const emailMessage = `Dear ${internName},\n\n
+We are excited to inform you that ${sponsorName} has requested you for an internship opportunity!\n\n
+Position: ${requestData.role}\n
+Location: ${requestData.location}\n
+Start Date: ${requestData.startDate}\n\n
+Your profile stood out to us because of your strong match with our requirements. We would like to discuss this opportunity further with you.\n\n
+Please log into your BIG Marketplace Africa account to view the full details and respond to this request.\n\n
+Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`;
+
+          const templateParams = {
+            to_email: internEmail,
+            subject: `New Internship Request from ${sponsorName}`,
+            from_name: sponsorName,
+            date: new Date().toLocaleDateString(),
+            message: emailMessage,
+            portal_url: `https://www.bigmarketplace.africa/applications/${sponsorId}_${internId}`,
+            has_attachments: "false",
+            attachments_count: "0"
+          };
+
+          console.log("📨 Sending internship request email to intern...");
+
+          const response = await window.emailjs.send(
+            emailjsConfig.serviceId,
+            emailjsConfig.templateId,
+            templateParams,
+            emailjsConfig.publicKey
+          );
+          
+          console.log("✅ Internship request email sent successfully!", response);
+        }
+      } catch (emailError) {
+        console.error("❌ Internship request email failed:", emailError);
+      }
+
       // Dispatch notification event to the intern
       const dispatchNotification = () => {
         const notificationMessage = `New internship request from ${requestData.sponsorName} for ${requestData.role}!`
@@ -2477,6 +2580,7 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
       setTimeout(() => setNotification(null), 5000)
     }
   }
+
   const handleViewDetails = (intern) => {
     setSelectedIntern(intern)
     setModalType("view")

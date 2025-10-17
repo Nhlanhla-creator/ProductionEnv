@@ -13,6 +13,9 @@ const fundingInstrumentOptions = [
   { value: "Grants", label: "Grants (Non-repayable funding)" },
   { value: "Convertible Notes", label: "Convertible Notes (Loan that can turn into shares)" },
   { value: "Revenue-based Financing", label: "Revenue-based Financing" },
+    { value: "Hybrid/Structured Instruments", label: "Hybrid/Structured Instruments" },
+  { value: "Secondary Market Strategies", label: "Secondary Market Strategies" },
+  { value: "Special Strategies", label: "Special Strategies" },
   { value: "Other", label: "Other (please specify)" },
 ]
 
