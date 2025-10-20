@@ -7,7 +7,7 @@ import { doc, onSnapshot, updateDoc, setDoc, getDoc } from "firebase/firestore"
 import { API_KEYS } from "../../API" // Make sure this path is correct
 import { getFunctions, httpsCallable } from "firebase/functions";
 
-export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate,apiKey }) {
+export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
   const [showModal, setShowModal] = useState(false)
   const [legitimacyScore, setLegitimacyScore] = useState(0)
   const [scoreBreakdown, setScoreBreakdown] = useState([])
@@ -33,83 +33,83 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate,apiKey 
     }
   }, [profileData, aiEvaluationResult])
 
-const parseAiEvaluationScores = (text) => {
-  console.log("Full AI response text:", text); // Debug log
-  
-  const categories = {
-    foundational: ["Identity Markers", "Foundational Business Identity", "foundational"],
-    digital: ["Digital Presence", "Digital Presence & Discoverability", "digital"],
-    track: ["Track Record", "Track Record Indicators", "track"],
-    thirdParty: ["Third-Party Validation", "Third-Party Validations", "third-party", "thirdparty"],
-    team: ["Leadership Visibility", "Team & Leadership", "team"],
-  }
+  const parseAiEvaluationScores = (text) => {
+    console.log("Full AI response text:", text); // Debug log
 
-  const scores = {}
-  
-  // Split text into lines for easier processing
-  const lines = text.split('\n');
-  console.log("Text lines:", lines); // Debug log
-  
-  // Then extract individual category scores
-  Object.entries(categories).forEach(([key, labels]) => {
-    let foundScore = 0
-    
-    // Try multiple label variations
-    for (const label of labels) {
-      console.log(`Looking for label: "${label}" in category: ${key}`); // Debug log
-      
-      // Most specific pattern for your AI response format: **1. Identity Markers: Score 5**
-      const exactPattern = new RegExp(`\\*\\*\\d+\\.\\s*${label}\\s*:\\s*Score\\s+(\\d+)\\*\\*`, "i")
-      
-      // Alternative patterns
-      const patterns = [
-        exactPattern,
-        new RegExp(`\\*\\*\\d+\\.\\s*${label}\\s*:\\s*Score\\s*=\\s*(\\d+)\\*\\*`, "i"), // with equals
-        new RegExp(`${label}\\s*:\\s*Score\\s+(\\d+)`, "i"), // without bold/numbers
-        new RegExp(`${label}\\s*:\\s*Score\\s*=\\s*(\\d+)`, "i"), // without bold/numbers with equals
-        new RegExp(`\\d+\\.\\s*${label}\\s*:\\s*Score\\s+(\\d+)`, "i"), // numbered without bold
-        new RegExp(`${label}[^\\d]*?(\\d+)`, "i"), // fallback: label followed by any number
-      ]
-      
-      for (let i = 0; i < patterns.length; i++) {
-        const pattern = patterns[i]
-        const match = text.match(pattern)
-        console.log(`Pattern ${i} for ${label}:`, pattern, "Match:", match); // Debug log
-        
-        if (match && match[1]) {
-          foundScore = parseInt(match[1])
-          console.log(`✓ Found score for ${key} (${label}): ${foundScore} using pattern ${i}`)
-          break
+    const categories = {
+      foundational: ["Identity Markers", "Foundational Business Identity", "foundational"],
+      digital: ["Digital Presence", "Digital Presence & Discoverability", "digital"],
+      track: ["Track Record", "Track Record Indicators", "track"],
+      thirdParty: ["Third-Party Validation", "Third-Party Validations", "third-party", "thirdparty"],
+      team: ["Leadership Visibility", "Team & Leadership", "team"],
+    }
+
+    const scores = {}
+
+    // Split text into lines for easier processing
+    const lines = text.split('\n');
+    console.log("Text lines:", lines); // Debug log
+
+    // Then extract individual category scores
+    Object.entries(categories).forEach(([key, labels]) => {
+      let foundScore = 0
+
+      // Try multiple label variations
+      for (const label of labels) {
+        console.log(`Looking for label: "${label}" in category: ${key}`); // Debug log
+
+        // Most specific pattern for your AI response format: **1. Identity Markers: Score 5**
+        const exactPattern = new RegExp(`\\*\\*\\d+\\.\\s*${label}\\s*:\\s*Score\\s+(\\d+)\\*\\*`, "i")
+
+        // Alternative patterns
+        const patterns = [
+          exactPattern,
+          new RegExp(`\\*\\*\\d+\\.\\s*${label}\\s*:\\s*Score\\s*=\\s*(\\d+)\\*\\*`, "i"), // with equals
+          new RegExp(`${label}\\s*:\\s*Score\\s+(\\d+)`, "i"), // without bold/numbers
+          new RegExp(`${label}\\s*:\\s*Score\\s*=\\s*(\\d+)`, "i"), // without bold/numbers with equals
+          new RegExp(`\\d+\\.\\s*${label}\\s*:\\s*Score\\s+(\\d+)`, "i"), // numbered without bold
+          new RegExp(`${label}[^\\d]*?(\\d+)`, "i"), // fallback: label followed by any number
+        ]
+
+        for (let i = 0; i < patterns.length; i++) {
+          const pattern = patterns[i]
+          const match = text.match(pattern)
+          console.log(`Pattern ${i} for ${label}:`, pattern, "Match:", match); // Debug log
+
+          if (match && match[1]) {
+            foundScore = parseInt(match[1])
+            console.log(`✓ Found score for ${key} (${label}): ${foundScore} using pattern ${i}`)
+            break
+          }
         }
+        if (foundScore > 0) break
       }
-      if (foundScore > 0) break
-    }
-    
-    scores[key] = Math.min(Math.max(foundScore, 0), 5) // Ensure score is between 0-5
-    console.log(`Final score for ${key}: ${scores[key]}`); // Debug log
-  })
 
-  // Extract normalized score - try multiple patterns
-  const normalizedPatterns = [
-    /Normalized Score:\s*[:=]?\s*\(?(\d+)\/\d+\)?\s*\*\s*100\s*=\s*(\d+)/i,
-    /Normalized Score:\s*[:=]?\s*(\d+)/i,
-    /\((\d+)\/\d+\)\s*\*\s*100\s*=\s*(\d+)/i, // (22/25) * 100 = 88
-    /=\s*(\d+)$/m // Just look for = followed by number at end of line
-  ]
-  
-  for (const pattern of normalizedPatterns) {
-    const match = text.match(pattern)
-    console.log("Normalized pattern:", pattern, "Match:", match); // Debug log
-    if (match) {
-      scores.normalized = parseInt(match[match.length - 1]) // Get the last captured group
-      console.log(`✓ Found normalized score: ${scores.normalized}`)
-      break
+      scores[key] = Math.min(Math.max(foundScore, 0), 5) // Ensure score is between 0-5
+      console.log(`Final score for ${key}: ${scores[key]}`); // Debug log
+    })
+
+    // Extract normalized score - try multiple patterns
+    const normalizedPatterns = [
+      /Normalized Score:\s*[:=]?\s*\(?(\d+)\/\d+\)?\s*\*\s*100\s*=\s*(\d+)/i,
+      /Normalized Score:\s*[:=]?\s*(\d+)/i,
+      /\((\d+)\/\d+\)\s*\*\s*100\s*=\s*(\d+)/i, // (22/25) * 100 = 88
+      /=\s*(\d+)$/m // Just look for = followed by number at end of line
+    ]
+
+    for (const pattern of normalizedPatterns) {
+      const match = text.match(pattern)
+      console.log("Normalized pattern:", pattern, "Match:", match); // Debug log
+      if (match) {
+        scores.normalized = parseInt(match[match.length - 1]) // Get the last captured group
+        console.log(`✓ Found normalized score: ${scores.normalized}`)
+        break
+      }
     }
+
+    console.log("Final parsed AI scores:", scores)
+    return scores
   }
-
-  console.log("Final parsed AI scores:", scores)
-  return scores
-}
   const refreshAiEvaluation = async () => {
     const userId = auth?.currentUser?.uid
     if (!userId) return
@@ -177,72 +177,72 @@ const parseAiEvaluationScores = (text) => {
   }
 
   // AI Evaluation Function
-const sendMessageToChatGPT = async (message) => {
-  try {
-    const functions = getFunctions();
-    const generateLegitimacyAnalysis = httpsCallable(functions, "generateLegitimacyAnalysis");
-    const resp = await generateLegitimacyAnalysis({
-      prompt: message,
-      // Optional passthroughs if your backend supports them:
-      // model: "gpt-4o",
-      // max_tokens: 2000,
-      // temperature: 0.3,
-    });
+  const sendMessageToChatGPT = async (message) => {
+    try {
+      const functions = getFunctions();
+      const generateLegitimacyAnalysis = httpsCallable(functions, "generateLegitimacyAnalysis");
+      const resp = await generateLegitimacyAnalysis({
+        prompt: message,
+        // Optional passthroughs if your backend supports them:
+        // model: "gpt-4o",
+        // max_tokens: 2000,
+        // temperature: 0.3,
+      });
 
-    const content = resp?.data?.content;
-    if (!content) {
-      throw new Error("Invalid response format from server");
+      const content = resp?.data?.content;
+      if (!content) {
+        throw new Error("Invalid response format from server");
+      }
+      return content;
+    } catch (error) {
+      console.error("ChatGPT API Error (via functions):", error);
+      throw error;
     }
-    return content;
-  } catch (error) {
-    console.error("ChatGPT API Error (via functions):", error);
-    throw error;
-  }
-};
+  };
 
 
   // -- Helpers: normalize social links (accepts URL or handle) --
-const SOCIAL_BASE = {
-  facebook: "https://facebook.com/",
-  x: "https://x.com/",
-  twitter: "https://twitter.com/", // fallback if you ever store 'twitter'
-  linkedin: "https://www.linkedin.com/in/",
-  instagram: "https://instagram.com/",
-  youtube: "https://youtube.com/",
-  website: "", // pass through
-}
-
-const cleanStr = (v) => (typeof v === "string" ? v.trim() : "")
-
-const normalizeSocial = (platform, value) => {
-  const v = cleanStr(value)
-  if (!v) return ""
-
-  // Return URLs as-is
-  if (/^https?:\/\//i.test(v)) return v
-
-  // Remove leading '@' for handles
-  const handle = v.replace(/^@/, "")
-
-  // Pick base URL
-  const base =
-    platform === "x"
-      ? SOCIAL_BASE.x
-      : platform === "twitter"
-      ? SOCIAL_BASE.twitter
-      : SOCIAL_BASE[platform] ?? ""
-
-  // Website gets passed through (if someone typed a bare domain, prefix https)
-  if (platform === "website") {
-    if (/^https?:\/\//i.test(handle)) return handle
-    return `https://${handle}`
+  const SOCIAL_BASE = {
+    facebook: "https://facebook.com/",
+    x: "https://x.com/",
+    twitter: "https://twitter.com/", // fallback if you ever store 'twitter'
+    linkedin: "https://www.linkedin.com/in/",
+    instagram: "https://instagram.com/",
+    youtube: "https://youtube.com/",
+    website: "", // pass through
   }
 
-  // Construct normalized URL from handle
-  return base ? `${base}${handle}` : handle
-}
+  const cleanStr = (v) => (typeof v === "string" ? v.trim() : "")
 
-const presentOrNot = (url) => (url ? url : "Not provided")
+  const normalizeSocial = (platform, value) => {
+    const v = cleanStr(value)
+    if (!v) return ""
+
+    // Return URLs as-is
+    if (/^https?:\/\//i.test(v)) return v
+
+    // Remove leading '@' for handles
+    const handle = v.replace(/^@/, "")
+
+    // Pick base URL
+    const base =
+      platform === "x"
+        ? SOCIAL_BASE.x
+        : platform === "twitter"
+          ? SOCIAL_BASE.twitter
+          : SOCIAL_BASE[platform] ?? ""
+
+    // Website gets passed through (if someone typed a bare domain, prefix https)
+    if (platform === "website") {
+      if (/^https?:\/\//i.test(handle)) return handle
+      return `https://${handle}`
+    }
+
+    // Construct normalized URL from handle
+    return base ? `${base}${handle}` : handle
+  }
+
+  const presentOrNot = (url) => (url ? url : "Not provided")
 
   useEffect(() => {
     if (!auth?.currentUser?.uid || !apiKey) return
@@ -291,7 +291,7 @@ const presentOrNot = (url) => (url ? url : "Not provided")
       }
     })
     return () => unsubscribe()
-  }, [auth?.currentUser?.uid,apiKey, isEvaluating])
+  }, [auth?.currentUser?.uid, apiKey, isEvaluating])
 
   const runAiEvaluation = async (userId) => {
     if (!apiKey?.trim()) {
@@ -338,7 +338,7 @@ Format your response with clear score indicators like 'Identity Markers: Score =
 
 Input Data:
 ${evaluationData}`
-//6. Social Proof (reviews, testimonials, media mentions)
+      //6. Social Proof (reviews, testimonials, media mentions)
       const result = await sendMessageToChatGPT(combinedMessage)
       setAiEvaluationResult(result)
       setShowDetailedAnalysis(true)
@@ -363,37 +363,37 @@ ${evaluationData}`
     evaluationData += `Proof of Address: ${data?.documents?.proofOfAddress?.length > 0 ? "Available" : "Not provided"}\n`
 
     // Digital Presence
-   // Digital Presence (canonical labels + normalized links)
-evaluationData += `\n=== DIGITAL PRESENCE ===\n`
+    // Digital Presence (canonical labels + normalized links)
+    evaluationData += `\n=== DIGITAL PRESENCE ===\n`
 
-const socialsRaw = {
-  website: data?.contactDetails?.website,
-  facebook: data?.contactDetails?.facebook,
-  x: data?.contactDetails?.x || data?.contactDetails?.twitter, // support either key
-  linkedin: data?.contactDetails?.linkedin,
-  instagram: data?.contactDetails?.instagram,
-  youtube: data?.contactDetails?.youtube,
-}
+    const socialsRaw = {
+      website: data?.contactDetails?.website,
+      facebook: data?.contactDetails?.facebook,
+      x: data?.contactDetails?.x || data?.contactDetails?.twitter, // support either key
+      linkedin: data?.contactDetails?.linkedin,
+      instagram: data?.contactDetails?.instagram,
+      youtube: data?.contactDetails?.youtube,
+    }
 
-const socialsNorm = {
-  Website: normalizeSocial("website", socialsRaw.website),
-  "LinkedIn URL": normalizeSocial("linkedin", socialsRaw.linkedin),
-  "Facebook URL": normalizeSocial("facebook", socialsRaw.facebook),
-  "Instagram URL": normalizeSocial("instagram", socialsRaw.instagram),
-  "X (Twitter) URL": normalizeSocial("x", socialsRaw.x),
-  "YouTube URL": normalizeSocial("youtube", socialsRaw.youtube),
-}
+    const socialsNorm = {
+      Website: normalizeSocial("website", socialsRaw.website),
+      "LinkedIn URL": normalizeSocial("linkedin", socialsRaw.linkedin),
+      "Facebook URL": normalizeSocial("facebook", socialsRaw.facebook),
+      "Instagram URL": normalizeSocial("instagram", socialsRaw.instagram),
+      "X (Twitter) URL": normalizeSocial("x", socialsRaw.x),
+      "YouTube URL": normalizeSocial("youtube", socialsRaw.youtube),
+    }
 
-Object.entries(socialsNorm).forEach(([label, url]) => {
-  evaluationData += `${label}: ${presentOrNot(url)}\n`
-})
+    Object.entries(socialsNorm).forEach(([label, url]) => {
+      evaluationData += `${label}: ${presentOrNot(url)}\n`
+    })
 
-// Simple count for the AI to use in scoring Digital Presence
-const socialPresentCount = Object.values(socialsNorm).filter(Boolean).length
-evaluationData += `Social Links Present (out of 6): ${socialPresentCount}\n`
+    // Simple count for the AI to use in scoring Digital Presence
+    const socialPresentCount = Object.values(socialsNorm).filter(Boolean).length
+    evaluationData += `Social Links Present (out of 6): ${socialPresentCount}\n`
 
-// Keep your visibility hint
-evaluationData += `Online Visibility: ${socialsNorm["Website"] ? "Present" : "Limited"}\n`
+    // Keep your visibility hint
+    evaluationData += `Online Visibility: ${socialsNorm["Website"] ? "Present" : "Limited"}\n`
 
     // Track Record
     evaluationData += `\n=== TRACK RECORD ===\n`
@@ -451,12 +451,12 @@ evaluationData += `Online Visibility: ${socialsNorm["Website"] ? "Present" : "Li
   }
 
   const weightingsByStage = {
-    "pre-seed": { foundational: 25, digital: 20, track: 15, thirdParty: 10, reputation: 10, team: 20 },
-    seed: { foundational: 25, digital: 20, track: 15, thirdParty: 10, reputation: 10, team: 20 },
-    seriesa: { foundational: 20, digital: 15, track: 20, thirdParty: 15, reputation: 15, team: 15 },
-    seriesb: { foundational: 15, digital: 10, track: 25, thirdParty: 20, reputation: 15, team: 15 },
-    growth: { foundational: 20, digital: 15, track: 20, thirdParty: 15, reputation: 15, team: 15 },
-    maturity: { foundational: 15, digital: 10, track: 25, thirdParty: 20, reputation: 15, team: 15 },
+    "pre-seed": { foundational: 25, digital: 20, track: 15, thirdParty: 10, team: 30 },
+    seed: { foundational: 25, digital: 20, track: 15, thirdParty: 10, team: 30 },
+    seriesa: { foundational: 20, digital: 15, track: 20, thirdParty: 15, team: 30 },
+    seriesb: { foundational: 15, digital: 10, track: 25, thirdParty: 20, team: 30 },
+    growth: { foundational: 20, digital: 15, track: 20, thirdParty: 15, team: 30 },
+    maturity: { foundational: 15, digital: 10, track: 25, thirdParty: 20, team: 30 },
   }
 
   const calculateLegitimacyScore = (data, aiEvaluationResult = "") => {
@@ -471,11 +471,10 @@ evaluationData += `Online Visibility: ${socialsNorm["Website"] ? "Present" : "Li
       digital: "Digital presence & discoverability",
       track: "Track record indicators",
       thirdParty: "Third-party validations",
-      reputation: "Reputation and social proof",
       team: "Team & leadership",
     }
 
-    const colors = ["#8D6E63", "#6D4C41", "#A67C52", "#D7CCC8", "#4E342E", "#795548"]
+    const colors = ["#8D6E63", "#6D4C41", "#A67C52", "#D7CCC8", "#4E342E"]
 
     const breakdown = Object.entries(categoryNames).map(([key, label], i) => {
       const aiRaw = aiScores?.[key] ?? 0
@@ -590,17 +589,17 @@ evaluationData += `Online Visibility: ${socialsNorm["Website"] ? "Present" : "Li
       {/* Enhanced Outside Card Design */}
       <div
         style={{
-    background: "linear-gradient(135deg, #ffffff 0%, #faf8f6 100%)",
-    borderRadius: "20px",
-    boxShadow: "0 8px 32px rgba(141, 110, 99, 0.15)",
-    border: "1px solid #e8ddd6",
-    overflow: "hidden",
-    position: "relative",
-    width: "100%", // Add this line to make it full width
-    minWidth: "210px", // Add this for minimum width
-    maxWidth: "000px", // Add this to limit maximum width (optional)
-  }}
->
+          background: "linear-gradient(135deg, #ffffff 0%, #faf8f6 100%)",
+          borderRadius: "20px",
+          boxShadow: "0 8px 32px rgba(141, 110, 99, 0.15)",
+          border: "1px solid #e8ddd6",
+          overflow: "hidden",
+          position: "relative",
+          width: "100%", // Add this line to make it full width
+          minWidth: "210px", // Add this for minimum width
+          maxWidth: "000px", // Add this to limit maximum width (optional)
+        }}
+      >
         {/* Header with gradient */}
         <div
           style={{
@@ -629,7 +628,7 @@ evaluationData += `Online Visibility: ${socialsNorm["Website"] ? "Present" : "Li
             >
               Legitimacy Score
             </h2>
-        
+
           </div>
           <p
             style={{
@@ -778,7 +777,7 @@ evaluationData += `Online Visibility: ${socialsNorm["Website"] ? "Present" : "Li
                 borderRadius: "10px",
                 background: "linear-gradient(135deg, #5d4037 0%, #4a2c20 100%)",
                 color: "white",
-                marginTop:"3px",
+                marginTop: "3px",
                 border: "none",
                 fontWeight: "600",
                 fontSize: "12px",
@@ -1130,7 +1129,7 @@ evaluationData += `Online Visibility: ${socialsNorm["Website"] ? "Present" : "Li
                       }}
                     >
                       <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>
-                        Six key assessment areas:
+                        Five key assessment areas:
                       </p>
                       <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037" }}>
                         <li style={{ marginBottom: "6px" }}>
@@ -1146,9 +1145,6 @@ evaluationData += `Online Visibility: ${socialsNorm["Website"] ? "Present" : "Li
                         <li style={{ marginBottom: "6px" }}>
                           <strong>Third-party validations:</strong> Industry certifications, accreditations, and
                           compliance certificates
-                        </li>
-                        <li style={{ marginBottom: "6px" }}>
-                          <strong>Reputation:</strong> Client testimonials, reviews, and social proof
                         </li>
                         <li style={{ marginBottom: "6px" }}>
                           <strong>Team & leadership:</strong> Professional profiles and leadership credibility
