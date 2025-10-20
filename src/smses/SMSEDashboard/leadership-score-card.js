@@ -7,7 +7,7 @@ import { doc, onSnapshot, updateDoc, setDoc, getDoc } from "firebase/firestore"
 import { API_KEYS } from "../../API" // Make sure this path is correct
 import { getFunctions, httpsCallable } from "firebase/functions";
 
-export function LeadershipScoreCard({ styles, profileData, onScoreUpdate,apiKey }) {
+export function LeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
   const [showModal, setShowModal] = useState(false)
   const [leadershipScore, setLeadershipScore] = useState(0)
   const [scoreBreakdown, setScoreBreakdown] = useState([])
@@ -19,7 +19,7 @@ export function LeadershipScoreCard({ styles, profileData, onScoreUpdate,apiKey 
   const [showDetailedAnalysis, setShowDetailedAnalysis] = useState(false)
   const [triggeredByAuto, setTriggeredByAuto] = useState(false)
 
-  
+
 
   useEffect(() => {
     document.body.style.overflow = showModal ? "hidden" : ""
@@ -35,102 +35,102 @@ export function LeadershipScoreCard({ styles, profileData, onScoreUpdate,apiKey 
     }
   }, [profileData, aiEvaluationResult])
 
-const parseAiEvaluationScores = (text) => {
-  const categories = {
-    leadership_experience: [
-      "Leadership Experience",
-      "Experience",
-      "Leadership Experience \\(Years in Operation\\)"
-    ],
-    leadership_team: [
-      "Team Management",
-      "Team Size",
-      "Board Members Count",
-      "Team"
-    ],
-    leadership_recognition: [
-      "Recognition & Education",
-      "Certifications Count",
-      "Recognition",
-      "Education"
-    ]
-  }
+  const parseAiEvaluationScores = (text) => {
+    const categories = {
+      leadership_experience: [
+        "Leadership Experience",
+        "Experience",
+        "Leadership Experience \\(Years in Operation\\)"
+      ],
+      leadership_team: [
+        "Team Management",
+        "Team Size",
+        "Board Members Count",
+        "Team"
+      ],
+      leadership_recognition: [
+        "Recognition & Education",
+        "Certifications Count",
+        "Recognition",
+        "Education"
+      ]
+    }
 
-  const cleanedText = text.replace(/\*\*(.*?)\*\*/g, "$1")
-  const scores = {}
+    const cleanedText = text.replace(/\*\*(.*?)\*\*/g, "$1")
+    const scores = {}
 
-  // Helper: extract the section body after a header containing the label
-  const findSectionBody = (label) => {
-    const sectionRe = new RegExp(
-      // start of line + optional ### or number., then label, then capture until next ###/number. or end
-      `(^|\\n)\\s*(?:#{1,6}\\s*)?\\d*\\.?\\s*${label}[^\\n]*\\n([\\s\\S]*?)(?=\\n\\s*(?:#{1,6}\\s*|\\d+\\.\\s|$))`,
-      "i"
-    )
-    const m = cleanedText.match(sectionRe)
-    return m ? m[2] : null
-  }
+    // Helper: extract the section body after a header containing the label
+    const findSectionBody = (label) => {
+      const sectionRe = new RegExp(
+        // start of line + optional ### or number., then label, then capture until next ###/number. or end
+        `(^|\\n)\\s*(?:#{1,6}\\s*)?\\d*\\.?\\s*${label}[^\\n]*\\n([\\s\\S]*?)(?=\\n\\s*(?:#{1,6}\\s*|\\d+\\.\\s|$))`,
+        "i"
+      )
+      const m = cleanedText.match(sectionRe)
+      return m ? m[2] : null
+    }
 
-  Object.entries(categories).forEach(([key, labels]) => {
-    let found = null
-    for (const label of labels) {
-      const body = findSectionBody(label)
-      if (body) {
-        // Common bullet variants inside the section
-        const scorePatterns = [
-          /Score\s*:\s*(\d(?:\.\d)?)/i,               // "- Score: 4.5"
-          /(\d(?:\.\d)?)\s*\/\s*5/i,                  // "4.5/5"
-          /(\d(?:\.\d)?)\s*out\s*of\s*5/i,            // "4 out of 5"
-          /(\d(?:\.\d)?)\s*\*\s*\d+%/i                // "4 * 50%"
+    Object.entries(categories).forEach(([key, labels]) => {
+      let found = null
+      for (const label of labels) {
+        const body = findSectionBody(label)
+        if (body) {
+          // Common bullet variants inside the section
+          const scorePatterns = [
+            /Score\s*:\s*(\d(?:\.\d)?)/i,               // "- Score: 4.5"
+            /(\d(?:\.\d)?)\s*\/\s*5/i,                  // "4.5/5"
+            /(\d(?:\.\d)?)\s*out\s*of\s*5/i,            // "4 out of 5"
+            /(\d(?:\.\d)?)\s*\*\s*\d+%/i                // "4 * 50%"
+          ]
+          for (const p of scorePatterns) {
+            const mm = body.match(p)
+            if (mm) { found = parseFloat(mm[1]); break }
+          }
+        }
+        if (found != null) break
+
+        // fallback: single-line forms with label + score on same line
+        const inlinePatterns = [
+          new RegExp(`${label}[^\\d]*(\\d(?:\\.\\d)?)\\s*(?:/\\s*5)?`, "i"),
+          new RegExp(`${label}[^\\d]*(\\d(?:\\.\\d)?)\\s*out\\s*of\\s*5`, "i"),
+          new RegExp(`${label}[^\\d]*(\\d(?:\\.\\d)?)\\s*\\*\\s*\\d+%`, "i"),
+          new RegExp(`${label}[^\\d]*Score\\s*:?\\s*(\\d(?:\\.\\d)?)`, "i"),
         ]
-        for (const p of scorePatterns) {
-          const mm = body.match(p)
+        for (const p of inlinePatterns) {
+          const mm = cleanedText.match(p)
           if (mm) { found = parseFloat(mm[1]); break }
         }
+        if (found != null) break
       }
-      if (found != null) break
+      if (found != null) scores[key] = Math.min(Math.max(found, 0), 5)
+    })
 
-      // fallback: single-line forms with label + score on same line
-      const inlinePatterns = [
-        new RegExp(`${label}[^\\d]*(\\d(?:\\.\\d)?)\\s*(?:/\\s*5)?`, "i"),
-        new RegExp(`${label}[^\\d]*(\\d(?:\\.\\d)?)\\s*out\\s*of\\s*5`, "i"),
-        new RegExp(`${label}[^\\d]*(\\d(?:\\.\\d)?)\\s*\\*\\s*\\d+%`, "i"),
-        new RegExp(`${label}[^\\d]*Score\\s*:?\\s*(\\d(?:\\.\\d)?)`, "i"),
-      ]
-      for (const p of inlinePatterns) {
-        const mm = cleanedText.match(p)
-        if (mm) { found = parseFloat(mm[1]); break }
+    // Final score (handle lines like "Total Score: 2 + 1.35 + 1 = 4.35")
+    let finalScore = null
+    const totalLine = cleanedText.match(/Total\s*Score\s*:\s*([^\n]+)/i)
+    if (totalLine) {
+      const eqNum = totalLine[1].match(/=\s*([\d.]+)/)
+      if (eqNum) {
+        finalScore = parseFloat(eqNum[1])
+      } else {
+        const nums = totalLine[1].match(/[\d.]+/g)
+        if (nums && nums.length) finalScore = parseFloat(nums[nums.length - 1])
       }
-      if (found != null) break
     }
-    if (found != null) scores[key] = Math.min(Math.max(found, 0), 5)
-  })
 
-  // Final score (handle lines like "Total Score: 2 + 1.35 + 1 = 4.35")
-  let finalScore = null
-  const totalLine = cleanedText.match(/Total\s*Score\s*:\s*([^\n]+)/i)
-  if (totalLine) {
-    const eqNum = totalLine[1].match(/=\s*([\d.]+)/)
-    if (eqNum) {
-      finalScore = parseFloat(eqNum[1])
-    } else {
-      const nums = totalLine[1].match(/[\d.]+/g)
-      if (nums && nums.length) finalScore = parseFloat(nums[nums.length - 1])
-    }
+    // Normalized to 100
+    let normalizedScore = null
+    const normPattern = cleanedText.match(/Normalized\s*(?:to|at)\s*100\s*:?[\s]*([\d.]+)/i)
+    if (normPattern) normalizedScore = parseFloat(normPattern[1])
+
+    // Band: support both "Leadership Band:" and "Band:"
+    let band = null
+    const bandPattern = cleanedText.match(/(?:Leadership\s*Band|Band)\s*:\s*([^\n]+)/i)
+    if (bandPattern) band = bandPattern[1].trim()
+
+    console.log("Parsed AI scores:", scores, { finalScore, normalizedScore, band })
+    return { scores, finalScore, normalizedScore, band }
   }
-
-  // Normalized to 100
-  let normalizedScore = null
-  const normPattern = cleanedText.match(/Normalized\s*(?:to|at)\s*100\s*:?[\s]*([\d.]+)/i)
-  if (normPattern) normalizedScore = parseFloat(normPattern[1])
-
-  // Band: support both "Leadership Band:" and "Band:"
-  let band = null
-  const bandPattern = cleanedText.match(/(?:Leadership\s*Band|Band)\s*:\s*([^\n]+)/i)
-  if (bandPattern) band = bandPattern[1].trim()
-
-  console.log("Parsed AI scores:", scores, { finalScore, normalizedScore, band })
-  return { scores, finalScore, normalizedScore, band }
-}
 
 
 
@@ -199,24 +199,24 @@ const parseAiEvaluationScores = (text) => {
     setAiEvaluationResult(result)
     setShowDetailedAnalysis(true)
   }
-  
-const sendMessageToChatGPT = async (message) => {
-  try {
-    const functions = getFunctions();
-    const generateLeadershipAnalysis = httpsCallable(functions, "generateLeadershipAnalysis");
-    const resp = await generateLeadershipAnalysis({
-      prompt: message,
-      // Optional: model: "gpt-4o", max_tokens: 2000, temperature: 0.3
-    });
 
-    const content = resp?.data?.content;
-    if (!content) throw new Error("Invalid response format from server");
-    return content;
-  } catch (error) {
-    console.error("ChatGPT API Error (via functions):", error);
-    throw error;
-  }
-};
+  const sendMessageToChatGPT = async (message) => {
+    try {
+      const functions = getFunctions();
+      const generateLeadershipAnalysis = httpsCallable(functions, "generateLeadershipAnalysis");
+      const resp = await generateLeadershipAnalysis({
+        prompt: message,
+        // Optional: model: "gpt-4o", max_tokens: 2000, temperature: 0.3
+      });
+
+      const content = resp?.data?.content;
+      if (!content) throw new Error("Invalid response format from server");
+      return content;
+    } catch (error) {
+      console.error("ChatGPT API Error (via functions):", error);
+      throw error;
+    }
+  };
 
 
   useEffect(() => {
@@ -265,7 +265,7 @@ const sendMessageToChatGPT = async (message) => {
       }
     })
     return () => unsubscribe()
-  }, [auth?.currentUser?.uid,apiKey, isEvaluating])
+  }, [auth?.currentUser?.uid, apiKey, isEvaluating])
 
   const runAiEvaluation = async (userId) => {
     if (!apiKey?.trim()) {
@@ -285,6 +285,11 @@ const sendMessageToChatGPT = async (message) => {
 
       const combinedMessage = `Evaluate the leadership strength of the following business leader using the Leadership Scorecard rubric.
 
+IMPORTANT FORMATTING REQUIREMENTS:
+- Use clear section headers with ###
+- Provide specific, actionable improvement recommendations for EACH category
+- Keep rationale concise but insightful
+
 Instructions:
 - Score each of the 3 categories below from 0 to 5 using the rubric where:
   • 0 = No evidence or very poor
@@ -294,18 +299,57 @@ Instructions:
   • 4 = Good/strong evidence
   • 5 = Excellent/outstanding
 - Provide a short rationale for each score (2-3 sentences)
+- FOR EACH CATEGORY, include a "How to Improve" section with 3-5 specific, actionable steps to increase the score
 - At the end, give a total score out of 10, normalize it to 100, and assign a leadership band:
   • 85–100: Exceptional Leader
   • 65–84: Strong Leader
   • 50–64: Developing Leader
   • <50: Needs Development
-  
+
+CRITICAL: For improvement recommendations, be SPECIFIC and ACTIONABLE. Instead of vague advice like "gain more experience," provide concrete steps like:
+- "Complete a leadership certification program within the next 6 months"
+- "Increase board members from 2 to 4 by Q3 next year"
+- "Document 3+ years of leadership experience with specific metrics"
+- "Pursue industry-specific certifications relevant to your field"
+
 Categories to evaluate (single metric per category):
 1. Leadership Experience (ONLY Years in Operation)
 2. Team Management (ONLY Board Members Count) 
 3. Recognition & Education (ONLY Certifications Count)
+
 Input Data:
-${evaluationData}`
+${evaluationData}
+
+OUTPUT FORMAT:
+### 1. Leadership Experience
+**Score:** [0-5]
+**Rationale:** [2-3 sentence explanation]
+**How to Improve:** 
+• [Specific action 1 with timeline]
+• [Specific action 2 with measurable goal]
+• [Specific action 3 with concrete steps]
+
+### 2. Team Management
+**Score:** [0-5]
+**Rationale:** [2-3 sentence explanation]
+**How to Improve:** 
+• [Specific action 1 with timeline]
+• [Specific action 2 with measurable goal]
+• [Specific action 3 with concrete steps]
+
+### 3. Recognition & Education
+**Score:** [0-5]
+**Rationale:** [2-3 sentence explanation]
+**How to Improve:** 
+• [Specific action 1 with timeline]
+• [Specific action 2 with measurable goal]
+• [Specific action 3 with concrete steps]
+
+### Overall Assessment
+**Total Score:** [X]/10
+**Normalized to 100:** [Y]%
+**Leadership Band:** [Band Name]
+**Final Analysis:** [Brief overall assessment with key recommendations]`
 
       const result = await sendMessageToChatGPT(combinedMessage)
       const userId = auth?.currentUser?.uid;
@@ -361,48 +405,48 @@ ${evaluationData}`
     return "#B71C1C" // Dark red
   }
 
-const calculateLeadershipScore = (data, aiEvaluationResult = "") => {
-  console.log("Calculating leadership score with AI result:", !!aiEvaluationResult)
-  const weightings = { experience: 40, team: 35, recognition: 25 }
+  const calculateLeadershipScore = (data, aiEvaluationResult = "") => {
+    console.log("Calculating leadership score with AI result:", !!aiEvaluationResult)
+    const weightings = { experience: 40, team: 35, recognition: 25 }
 
-  const parsed = aiEvaluationResult ? parseAiEvaluationScores(aiEvaluationResult) : null
-  const ai = parsed?.scores || parsed || {}
+    const parsed = aiEvaluationResult ? parseAiEvaluationScores(aiEvaluationResult) : null
+    const ai = parsed?.scores || parsed || {}
 
-  // map parsed keys -> breakdown keys
-  const keyMap = {
-    experience: ["leadership_experience", "experience"],
-    team: ["leadership_team", "team"],
-    recognition: ["leadership_recognition", "recognition"],
-  }
-
-  const categoryNames = {
-    experience: "Leadership experience",
-    team: "Team management",
-    recognition: "Recognition & education",
-  }
-
-  const colors = ["#8D6E63", "#6D4C41", "#A67C52"]
-
-  const breakdown = Object.entries(categoryNames).map(([key, label], i) => {
-    const raw =
-      keyMap[key].reduce((acc, k) => (ai[k] != null ? ai[k] : acc), null) ?? 0
-    const percent = (raw / 5) * 100
-    const weighted = percent * (weightings[key] / 100)
-    return {
-      name: label,
-      score: Math.round(percent),
-      weight: weightings[key],
-      weightedScore: Math.round(weighted),
-      color: colors[i],
-      rawScore: raw,
-      maxScore: 5,
+    // map parsed keys -> breakdown keys
+    const keyMap = {
+      experience: ["leadership_experience", "experience"],
+      team: ["leadership_team", "team"],
+      recognition: ["leadership_recognition", "recognition"],
     }
-  })
 
-  const totalScore = Math.round(breakdown.reduce((s, x) => s + x.weightedScore, 0))
-  console.log("Final calculated score:", totalScore)
-  return { totalScore, breakdown }
-}
+    const categoryNames = {
+      experience: "Leadership experience",
+      team: "Team management",
+      recognition: "Recognition & education",
+    }
+
+    const colors = ["#8D6E63", "#6D4C41", "#A67C52"]
+
+    const breakdown = Object.entries(categoryNames).map(([key, label], i) => {
+      const raw =
+        keyMap[key].reduce((acc, k) => (ai[k] != null ? ai[k] : acc), null) ?? 0
+      const percent = (raw / 5) * 100
+      const weighted = percent * (weightings[key] / 100)
+      return {
+        name: label,
+        score: Math.round(percent),
+        weight: weightings[key],
+        weightedScore: Math.round(weighted),
+        color: colors[i],
+        rawScore: raw,
+        maxScore: 5,
+      }
+    })
+
+    const totalScore = Math.round(breakdown.reduce((s, x) => s + x.weightedScore, 0))
+    console.log("Final calculated score:", totalScore)
+    return { totalScore, breakdown }
+  }
 
 
   // Updated score levels with new labels from the image
@@ -447,65 +491,117 @@ const calculateLeadershipScore = (data, aiEvaluationResult = "") => {
   const ScoreIcon = scoreLevel.icon
 
   const formatAiResult = (result) => {
-    const cleanedResult = result.replace(/\*\*(.*?)\*\*/g, "$1") // Remove ** formatting
+    const cleanedResult = result.replace(/\*\*(.*?)\*\*/g, "$1")
 
-    const sections = cleanedResult.split(/(?=\d+\.\s|\*\*[^*]+\*\*:|\n\n)/)
+    // Split by major sections (### headers)
+    const sections = cleanedResult.split(/(?=###\s)/g)
 
-    return sections
-      .map((section, index) => {
-        const trimmed = section.trim()
-        if (!trimmed) return null
+    return sections.map((section, index) => {
+      const trimmed = section.trim()
+      if (!trimmed) return null
 
-        const isHeader = /^\d+\.\s/.test(trimmed)
+      // Check if this is a category section with "How to Improve"
+      const isCategorySection = /^###\s+\d+\./.test(trimmed)
+
+      if (isCategorySection) {
+        // Split the category section into parts
+        const lines = trimmed.split('\n').filter(line => line.trim())
+        const header = lines[0]
+        const content = lines.slice(1).join('\n')
+
+        // Extract improvement section with special styling
+        const improvementIndex = content.toLowerCase().indexOf('how to improve')
+        let mainContent = content
+        let improvementContent = ''
+
+        if (improvementIndex !== -1) {
+          mainContent = content.substring(0, improvementIndex)
+          improvementContent = content.substring(improvementIndex)
+        }
 
         return (
-          <div key={index} style={{ marginBottom: "15px" }}>
-            {isHeader ? (
-              <div
-                style={{
-                  fontWeight: "bold",
-                  color: "#5d4037",
-                  fontSize: "16px",
-                  marginBottom: "8px",
-                  paddingBottom: "5px",
-                  borderBottom: "1px solid #e8d8cf",
-                }}
-              >
-                {trimmed.split("\n")[0]}
+          <div key={index} style={{ marginBottom: "20px", border: "1px solid #e8d8cf", borderRadius: "8px", overflow: "hidden" }}>
+            {/* Header */}
+            <div style={{ backgroundColor: "#8d6e63", color: "white", padding: "12px 16px", fontWeight: "bold" }}>
+              {header.replace('###', '').trim()}
+            </div>
+
+            {/* Main Content */}
+            <div style={{ padding: "16px", backgroundColor: "white" }}>
+              <div style={{ whiteSpace: "pre-wrap", lineHeight: "1.6", color: "#5d4037", marginBottom: improvementContent ? "15px" : "0" }}>
+                {mainContent}
               </div>
-            ) : null}
-            <div
-              style={{
-                fontSize: "14px",
-                lineHeight: "1.6",
-                color: "#6d4c41",
-                whiteSpace: "pre-wrap",
-              }}
-            >
-              {isHeader ? trimmed.split("\n").slice(1).join("\n") : trimmed}
+
+              {/* Improvement Section with Special Styling */}
+              {improvementContent && (
+                <div style={{
+                  backgroundColor: "#f8f4f0",
+                  padding: "15px",
+                  borderRadius: "6px",
+                  borderLeft: "4px solid #ff9800"
+                }}>
+                  <div style={{
+                    fontWeight: "bold",
+                    color: "#5d4037",
+                    marginBottom: "10px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px"
+                  }}>
+                    <TrendingUp size={16} />
+                    Improvement Actions
+                  </div>
+                  <div style={{
+                    whiteSpace: "pre-wrap",
+                    lineHeight: "1.6",
+                    color: "#6d4c41",
+                    fontSize: "14px"
+                  }}>
+                    {improvementContent.replace('How to Improve:', '').trim()}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )
-      })
-      .filter(Boolean)
+      }
+
+      // Regular section formatting (for overall assessment, etc.)
+      return (
+        <div key={index} style={{ marginBottom: "15px" }}>
+          <div style={{
+            fontSize: "14px",
+            lineHeight: "1.6",
+            color: "#6d4c41",
+            whiteSpace: "pre-wrap",
+            backgroundColor: "white",
+            padding: "16px",
+            borderRadius: "8px",
+            border: "1px solid #e8d8cf"
+          }}>
+            {trimmed}
+          </div>
+        </div>
+      )
+    }).filter(Boolean)
   }
 
   return (
     <>
       {/* Enhanced Outside Card Design */}
       <div
-         style={{
-    background: "linear-gradient(135deg, #ffffff 0%, #faf8f6 100%)",
-    borderRadius: "20px",
-    boxShadow: "0 8px 32px rgba(141, 110, 99, 0.15)",
-    border: "1px solid #e8ddd6",
-    overflow: "hidden",
-    position: "relative",
-    width: "100%", // Add this line to make it full width
-    minWidth: "210px", // Add this for minimum width
-    maxWidth: "000px", // Add this to limit maximum width (optional)
-  }}
->
+        style={{
+          background: "linear-gradient(135deg, #ffffff 0%, #faf8f6 100%)",
+          borderRadius: "20px",
+          boxShadow: "0 8px 32px rgba(141, 110, 99, 0.15)",
+          border: "1px solid #e8ddd6",
+          overflow: "hidden",
+          position: "relative",
+          width: "100%", // Add this line to make it full width
+          minWidth: "210px", // Add this for minimum width
+          maxWidth: "000px", // Add this to limit maximum width (optional)
+        }}
+      >
         {/* Header with gradient */}
         <div
           style={{
@@ -534,7 +630,7 @@ const calculateLeadershipScore = (data, aiEvaluationResult = "") => {
             >
               Leadership Score
             </h2>
-      
+
           </div>
           <p
             style={{
@@ -676,7 +772,7 @@ const calculateLeadershipScore = (data, aiEvaluationResult = "") => {
               background: "linear-gradient(135deg, #5d4037 0%, #4a2c20 100%)",
               color: "white",
               border: "none",
-        marginTop:"17px",
+              marginTop: "17px",
               fontWeight: "600",
               fontSize: "12px",
               cursor: "pointer",
