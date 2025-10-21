@@ -748,7 +748,7 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
 
         // Filter out suppliers with 0% match and sort by match percentage
         const relevantSuppliers = suppliersWithMatches
-          .filter(supplier => supplier.matchPercentage > 0)
+          .filter(supplier => supplier.matchPercentage > 0 && supplier.id !== currentUser?.uid)
           .sort((a, b) => b.matchPercentage - a.matchPercentage)
 
         setSuppliers(relevantSuppliers)
@@ -838,14 +838,14 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
           where("supplierId", "==", supplier.id)
         );
         const supplierApplicationsSnapshot = await getDocs(supplierApplicationsQuery);
-        
+
         if (!supplierApplicationsSnapshot.empty) {
           const supplierApplication = supplierApplicationsSnapshot.docs[0].data();
           console.log("📄 supplierApplications data:", supplierApplication);
-          
+
           // Get email from customerProfileData
           supplierEmail = supplierApplication.customerProfileData?.email;
-          
+
           if (supplierEmail) {
             console.log("✅ Found supplier email:", supplierEmail);
           } else {
@@ -905,9 +905,9 @@ BIG Marketplace Africa Team`;
         templateParams,
         emailjsConfig.publicKey
       );
-      
+
       console.log("✅ Supplier notification email sent successfully!", response);
-      
+
     } catch (emailError) {
       console.error("❌ Supplier notification email failed:", emailError);
       // Don't throw error here - we don't want to block the application process if email fails
@@ -915,6 +915,14 @@ BIG Marketplace Africa Team`;
   }
 
   const handleConnectClick = async (supplier) => {
+    if (supplier.id === currentUser?.uid) {
+      setNotification({
+        type: "error",
+        message: "You cannot contact yourself"
+      })
+      setTimeout(() => setNotification(null), 3000)
+      return
+    }
     try {
       const auth = getAuth()
       const currentUser = auth.currentUser
