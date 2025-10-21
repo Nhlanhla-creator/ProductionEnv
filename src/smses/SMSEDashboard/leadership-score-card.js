@@ -19,8 +19,6 @@ export function LeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey
   const [showDetailedAnalysis, setShowDetailedAnalysis] = useState(false)
   const [triggeredByAuto, setTriggeredByAuto] = useState(false)
 
-
-
   useEffect(() => {
     document.body.style.overflow = showModal ? "hidden" : ""
     return () => (document.body.style.overflow = "")
@@ -53,6 +51,13 @@ export function LeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey
         "Certifications Count",
         "Recognition",
         "Education"
+      ],
+      // ADDED: Team & leadership category
+      team_leadership: [
+        "Team & Leadership",
+        "Leadership Visibility",
+        "Team Leadership",
+        "Leadership Team"
       ]
     }
 
@@ -132,8 +137,6 @@ export function LeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey
     return { scores, finalScore, normalizedScore, band }
   }
 
-
-
   const refreshAiEvaluation = async () => {
     const userId = auth?.currentUser?.uid
     if (!userId) return
@@ -206,7 +209,6 @@ export function LeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey
       const generateLeadershipAnalysis = httpsCallable(functions, "generateLeadershipAnalysis");
       const resp = await generateLeadershipAnalysis({
         prompt: message,
-        // Optional: model: "gpt-4o", max_tokens: 2000, temperature: 0.3
       });
 
       const content = resp?.data?.content;
@@ -217,7 +219,6 @@ export function LeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey
       throw error;
     }
   };
-
 
   useEffect(() => {
     if (!auth?.currentUser?.uid || !apiKey) return
@@ -291,7 +292,7 @@ IMPORTANT FORMATTING REQUIREMENTS:
 - Keep rationale concise but insightful
 
 Instructions:
-- Score each of the 3 categories below from 0 to 5 using the rubric where:
+- Score each of the 4 categories below from 0 to 5 using the rubric where:
   • 0 = No evidence or very poor
   • 1 = Minimal/poor evidence  
   • 2 = Below average
@@ -300,7 +301,7 @@ Instructions:
   • 5 = Excellent/outstanding
 - Provide a short rationale for each score (2-3 sentences)
 - FOR EACH CATEGORY, include a "How to Improve" section with 3-5 specific, actionable steps to increase the score
-- At the end, give a total score out of 10, normalize it to 100, and assign a leadership band:
+- At the end, give a total score out of 20, normalize it to 100, and assign a leadership band:
   • 85–100: Exceptional Leader
   • 65–84: Strong Leader
   • 50–64: Developing Leader
@@ -312,10 +313,11 @@ CRITICAL: For improvement recommendations, be SPECIFIC and ACTIONABLE. Instead o
 - "Document 3+ years of leadership experience with specific metrics"
 - "Pursue industry-specific certifications relevant to your field"
 
-Categories to evaluate (single metric per category):
-1. Leadership Experience (ONLY Years in Operation)
-2. Team Management (ONLY Board Members Count) 
-3. Recognition & Education (ONLY Certifications Count)
+Categories to evaluate:
+1. Leadership Experience (Years in Operation)
+2. Team Management (Board Members Count) 
+3. Recognition & Education (Certifications Count)
+4. Team & Leadership (Directors with LinkedIn profiles, leadership visibility)
 
 Input Data:
 ${evaluationData}
@@ -345,8 +347,16 @@ OUTPUT FORMAT:
 • [Specific action 2 with measurable goal]
 • [Specific action 3 with concrete steps]
 
+### 4. Team & Leadership
+**Score:** [0-5]
+**Rationale:** [2-3 sentence explanation]
+**How to Improve:** 
+• [Specific action 1 with timeline]
+• [Specific action 2 with measurable goal]
+• [Specific action 3 with concrete steps]
+
 ### Overall Assessment
-**Total Score:** [X]/10
+**Total Score:** [X]/20
 **Normalized to 100:** [Y]%
 **Leadership Band:** [Band Name]
 **Final Analysis:** [Brief overall assessment with key recommendations]`
@@ -384,15 +394,21 @@ OUTPUT FORMAT:
 
     // Leadership Experience - ONLY YEARS
     evaluationData += `\n=== LEADERSHIP EXPERIENCE ===\n`
-    evaluationData += `Years of Experience: ${data?.entityOverview?.yearsInOperation || "not specified"}\n` // Using yearsInOperation
+    evaluationData += `Years of Experience: ${data?.entityOverview?.yearsInOperation || "not specified"}\n`
 
     // Team Management - ONLY BOARD MEMBERS
     evaluationData += `\n=== TEAM MANAGEMENT ===\n`
-    evaluationData += `Board Members: ${data?.ownershipManagement?.directors?.length || "not specified"}\n` // Using directors array length
+    evaluationData += `Board Members: ${data?.ownershipManagement?.directors?.length || "not specified"}\n`
 
     // Recognition & Education - ONLY CERTIFICATIONS
     evaluationData += `\n=== RECOGNITION & EDUCATION ===\n`
-    evaluationData += `Certifications: ${data?.documents?.otherCerts?.length || 0}\n` // Using otherCerts array length
+    evaluationData += `Certifications: ${data?.documents?.otherCerts?.length || 0}\n`
+
+    // ADDED: Team & Leadership section
+    evaluationData += `\n=== TEAM & LEADERSHIP ===\n`
+    evaluationData += `Directors Count: ${data?.ownershipManagement?.directors?.length || "not specified"}\n`
+    evaluationData += `Directors with LinkedIn: ${data?.ownershipManagement?.directors?.filter(d => d?.linkedin).length || 0}\n`
+    evaluationData += `Leadership Profiles Available: ${data?.ownershipManagement?.directors?.some(d => d?.linkedin) ? "Yes" : "No"}\n`
 
     return evaluationData
   }
@@ -405,9 +421,10 @@ OUTPUT FORMAT:
     return "#B71C1C" // Dark red
   }
 
+  // UPDATED WEIGHTINGS: Added team_leadership category
   const calculateLeadershipScore = (data, aiEvaluationResult = "") => {
     console.log("Calculating leadership score with AI result:", !!aiEvaluationResult)
-    const weightings = { experience: 40, team: 35, recognition: 25 }
+    const weightings = { experience: 32, team: 28, recognition: 20, team_leadership: 20 } // Updated weights
 
     const parsed = aiEvaluationResult ? parseAiEvaluationScores(aiEvaluationResult) : null
     const ai = parsed?.scores || parsed || {}
@@ -417,15 +434,17 @@ OUTPUT FORMAT:
       experience: ["leadership_experience", "experience"],
       team: ["leadership_team", "team"],
       recognition: ["leadership_recognition", "recognition"],
+      team_leadership: ["team_leadership", "team_leadership"], // ADDED
     }
 
     const categoryNames = {
       experience: "Leadership experience",
       team: "Team management",
       recognition: "Recognition & education",
+      team_leadership: "Team & leadership", // ADDED
     }
 
-    const colors = ["#8D6E63", "#6D4C41", "#A67C52"]
+    const colors = ["#8D6E63", "#6D4C41", "#A67C52", "#D7CCC8"] // Added one color
 
     const breakdown = Object.entries(categoryNames).map(([key, label], i) => {
       const raw =
@@ -447,7 +466,6 @@ OUTPUT FORMAT:
     console.log("Final calculated score:", totalScore)
     return { totalScore, breakdown }
   }
-
 
   // Updated score levels with new labels from the image
   const getScoreLevel = (score) => {
@@ -1083,20 +1101,24 @@ OUTPUT FORMAT:
                       }}
                     >
                       <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>
-                        Three key assessment areas:
+                        Four key assessment areas:
                       </p>
                       <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037" }}>
                         <li style={{ marginBottom: "6px" }}>
-                          <strong>Leadership experience (40%):</strong> Years of management experience, positions held,
+                          <strong>Leadership experience (32%):</strong> Years of management experience, positions held,
                           and business complexity managed
                         </li>
                         <li style={{ marginBottom: "6px" }}>
-                          <strong>Team management (35%):</strong> Scale of teams led, organizational structure, and
+                          <strong>Team management (28%):</strong> Scale of teams led, organizational structure, and
                           revenue management success
                         </li>
                         <li style={{ marginBottom: "6px" }}>
-                          <strong>Recognition & education (25%):</strong> Educational qualifications, certifications,
+                          <strong>Recognition & education (20%):</strong> Educational qualifications, certifications,
                           awards, and industry recognition
+                        </li>
+                        <li style={{ marginBottom: "6px" }}>
+                          <strong>Team & leadership (20%):</strong> Professional profiles, leadership visibility, and
+                          team composition credibility
                         </li>
                       </ul>
                     </div>

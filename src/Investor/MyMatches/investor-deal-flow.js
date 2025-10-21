@@ -110,7 +110,8 @@ export default function InvestorDealFlowPipeline({ onStageClick }) {
       initial: 0,        // High matches (>50%)
       application: 0,    // Applications received
       review: 0,         // Under Review
-      approved: 0,       // Funding approved
+      approved: 0,  
+      diligence: 0,     // Funding approved
       feedback: 0,       // Deals Initiated
       deals: 0,          // Deals Closed
       withdrawn: 0       // Declined / Deal Declined
@@ -163,7 +164,7 @@ export default function InvestorDealFlowPipeline({ onStageClick }) {
 
         // Count based on pipelineStage first, then fall back to status/stage
         if (pipelineStage === "under review") counts.review++;
-        else if (pipelineStage === "due diligence" || pipelineStage === "diligence") counts.diligence++;
+        else if (pipelineStage === "due diligence" || pipelineStage === "Due Diligence") counts.diligence++;
         else if (pipelineStage === "funding approved" || pipelineStage === "approved") counts.approved++;
         else if (pipelineStage === "termsheet" || pipelineStage === "term sheet" || pipelineStage === "terms issue") counts.feedback++;
         else if (pipelineStage === "deal complete" || pipelineStage === "deals closed" || pipelineStage === "Deal Complete") counts.deals++;

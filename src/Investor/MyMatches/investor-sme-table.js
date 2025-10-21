@@ -75,8 +75,9 @@ const [investorProfile, setInvestorProfile] = useState(null)
       "Dear Valued Partner,\n\nWe are pleased to inform you that your funding application has progressed to our comprehensive review stage. Our investment committee will conduct a thorough evaluation of your business proposal, financial projections, and growth potential.\n\nWe appreciate your patience during this critical assessment period and will keep you informed of our progress.\n\nBest regards,\nInvestment Review Team",
     "Funding Approved":
       "Dear Esteemed Entrepreneur,\n\nCongratulations! We are delighted to inform you that your funding application has been approved. After careful consideration of your business proposal, we are excited to support your growth journey.\n\nPlease find the funding details below for your review and confirmation.\n\nWe look forward to a successful partnership.\n\nBest regards,\nFunding Approval Team",
-    Termsheet:
+    "Termsheet":
       "Dear Esteemed Entrepreneur,\n\nFollowing our comprehensive evaluation, we are delighted to present you with our formal term sheet for your consideration. This document outlines our proposed investment terms, conditions, and partnership structure.\n\nWe believe this partnership will create significant value for both parties and look forward to your review and feedback.\n\nKindest regards,\nInvestment Committee",
+       "Due Diligence": "Dear Valued Partner,\n\nWe are pleased to inform you that your application has progressed to the Due Diligence stage. Our team will now conduct a comprehensive review of your business operations, financials, and compliance documentation.\n\nWe may reach out for additional information during this process and appreciate your cooperation.\n\nBest regards,\nDue Diligence Team",
     "Deal Complete":
       "Dear Business Partner,\n\nIt is with great pleasure that we confirm the successful completion of your funding arrangement. We are excited to embark on this partnership journey and support your business growth objectives.\n\nOur team will be in contact shortly to finalize all administrative requirements and discuss next steps for our collaboration.\n\nCongratulations on this significant milestone.\n\nWarm regards,\nPartnership Team",
     "Deal Declined":
@@ -255,7 +256,7 @@ const calculateInvestorMatchScore = (investorProfile, smeApplication) => {
   const investorStages = normalizeArray(investorProfile.generalInvestmentPreference?.investmentStage)
     .map(normalizeStage)
   
-  const investorInstruments = normalizeArray(investorProfile.generalInvestmentPreference?.investmentFocusSubtype)
+  const investorInstruments = normalizeArray(investorProfile.generalInvestmentPreference?.investmentFocus)
     .map(normalizeInstrument)
   
   // Get investor ticket size from fund details
@@ -1336,22 +1337,24 @@ const GuaranteesModal = ({ guarantees, onClose }) => {
   }
 
 
-  const deriveNextStage = (stage) => {
-    switch (stage) {
-      case "Under Review":
-        return "Funding Approved"
-      case "Funding Approved":
-        return "Termsheet"
-      case "Termsheet":
-        return "Deal Complete"
-      case "Deal Complete":
-        return "Closed"
-      case "Deal Declined":
-        return "Closed"
-      default:
-        return "Pending"
-    }
+const deriveNextStage = (stage) => {
+  switch (stage) {
+    case "Under Review":
+      return "Due Diligence"
+    case "Due Diligence":
+      return "Funding Approved"
+    case "Funding Approved":
+      return "Termsheet"
+    case "Termsheet":
+      return "Deal Complete"
+    case "Deal Complete":
+      return "Closed"
+    case "Deal Declined":
+      return "Closed"
+    default:
+      return "Pending"
   }
+}
 
   const handleUpdateNextStage = async () => {
     const errors = {}
@@ -1557,6 +1560,17 @@ const GuaranteesModal = ({ guarantees, onClose }) => {
             `Best regards,\nInvestment Team`
           break
 
+          case "Due Diligence":
+          subject = `Stage Update: Due Diligence for ${selectedSMEForStage.smeName}`
+          content =
+            `Dear ${selectedSMEForStage.smeName},\n\n` +
+            `Your funding application has been move to Due Diligence !\n\n` +
+            `${message}\n\n` +
+            `The Investor should be in touch shortly to finalize the next steps. ` +
+       
+            `Best regards,\nInvestment Team`
+          break
+
         default:
           subject = `Application Status Update: ${selectedSMEForStage.smeName}`
           content =
@@ -1629,8 +1643,11 @@ const GuaranteesModal = ({ guarantees, onClose }) => {
       case "deal successful":
         return { backgroundColor: "#2e7d32", color: "#ffffff" }
       case "deal declined":
+        
       case "closed":
         return { backgroundColor: "#d32f2f", color: "#ffffff" }
+         case "due diligence":
+      return { backgroundColor: "#FF9800", color: "#ffffff" }
       case "under review":
         return { backgroundColor: "#795548", color: "#ffffff" }
       case "funding approved":
@@ -4143,7 +4160,7 @@ const modalOverlayStyle = {
                     textAlign: "center",
                   }}
                 >
-                  Under Review
+                  Evaluation
                 </button>
                 <button
                   onClick={() => setNextStage("Funding Approved")}
@@ -4165,7 +4182,7 @@ const modalOverlayStyle = {
                     textAlign: "center",
                   }}
                 >
-                  Funding Approved
+                  Decision
                 </button>
                 <button
                   onClick={() => setNextStage("Termsheet")}
@@ -4185,8 +4202,28 @@ const modalOverlayStyle = {
                     textAlign: "center",
                   }}
                 >
-                  Termsheet
+                  Term Issue
                 </button>
+
+                <button
+  onClick={() => setNextStage("Due Diligence")}
+  style={{
+    padding: "20px 24px",
+    borderRadius: "16px",
+    border: nextStage === "Due Diligence" ? "3px solid #FF9800" : "2px solid #e0e0e0",
+    backgroundColor: nextStage === "Due Diligence" ? "#FF9800" : "#ffffff",
+    color: nextStage === "Due Diligence" ? "#ffffff" : "#3e2723",
+    fontSize: "16px",
+    fontWeight: "600",
+    cursor: "pointer",
+    transition: "all 0.3s ease",
+    boxShadow: nextStage === "Due Diligence" ? "0 8px 24px rgba(255, 152, 0, 0.4)" : "0 2px 8px rgba(0, 0, 0, 0.1)",
+    width: "100%",
+    textAlign: "center",
+  }}
+>
+  Due Diligence
+</button>
                 <button
                   onClick={() => setNextStage("Deal Complete")}
                   style={{
@@ -4207,7 +4244,7 @@ const modalOverlayStyle = {
                     textAlign: "center",
                   }}
                 >
-                  Deal Complete
+                  Deal Closed
                 </button>
                 <button
                   onClick={() => setNextStage("Deal Declined")}

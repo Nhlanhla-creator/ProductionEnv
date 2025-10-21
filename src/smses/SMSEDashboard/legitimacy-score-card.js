@@ -41,7 +41,7 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
       digital: ["Digital Presence", "Digital Presence & Discoverability", "digital"],
       track: ["Track Record", "Track Record Indicators", "track"],
       thirdParty: ["Third-Party Validation", "Third-Party Validations", "third-party", "thirdparty"],
-      team: ["Leadership Visibility", "Team & Leadership", "team"],
+      // REMOVED: team category moved to LeadershipScoreCard
     }
 
     const scores = {}
@@ -110,6 +110,7 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
     console.log("Final parsed AI scores:", scores)
     return scores
   }
+
   const refreshAiEvaluation = async () => {
     const userId = auth?.currentUser?.uid
     if (!userId) return
@@ -183,10 +184,6 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
       const generateLegitimacyAnalysis = httpsCallable(functions, "generateLegitimacyAnalysis");
       const resp = await generateLegitimacyAnalysis({
         prompt: message,
-        // Optional passthroughs if your backend supports them:
-        // model: "gpt-4o",
-        // max_tokens: 2000,
-        // temperature: 0.3,
       });
 
       const content = resp?.data?.content;
@@ -199,7 +196,6 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
       throw error;
     }
   };
-
 
   // -- Helpers: normalize social links (accepts URL or handle) --
   const SOCIAL_BASE = {
@@ -313,7 +309,7 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
       const combinedMessage = `Evaluate the legitimacy of the following business using the BIG Legitimacy Scorecard rubric.
 
 Instructions:
-- Score each of the 6 categories below from 0 to 5 using the rubric where:
+- Score each of the 4 categories below from 0 to 5 using the rubric where:
   • 0 = No evidence or very poor
   • 1 = Minimal/poor evidence  
   • 2 = Below average
@@ -321,7 +317,7 @@ Instructions:
   • 4 = Good/strong evidence
   • 5 = Excellent/outstanding
 - Provide a short rationale for each score (2-3 sentences)
-- At the end, give a total score out of 30, normalize it to 100, and assign a legitimacy band:
+- At the end, give a total score out of 20, normalize it to 100, and assign a legitimacy band:
   • 85–100: Highly Legitimate
   • 65–84: Credible but Improving
   • 50–64: Emerging Presence
@@ -332,13 +328,12 @@ Categories to evaluate:
 2. Digital Presence (Google search, online visibility, social links)
 3. Track Record (clients, years, projects, financials)
 4. Third-Party Validation (certifications, awards, memberships)
-5. Leadership Visibility (LinkedIn, bios, hiring activity)
 
 Format your response with clear score indicators like 'Identity Markers: Score = 5' for easier parsing.
 
 Input Data:
 ${evaluationData}`
-      //6. Social Proof (reviews, testimonials, media mentions)
+
       const result = await sendMessageToChatGPT(combinedMessage)
       setAiEvaluationResult(result)
       setShowDetailedAnalysis(true)
@@ -363,13 +358,12 @@ ${evaluationData}`
     evaluationData += `Proof of Address: ${data?.documents?.proofOfAddress?.length > 0 ? "Available" : "Not provided"}\n`
 
     // Digital Presence
-    // Digital Presence (canonical labels + normalized links)
     evaluationData += `\n=== DIGITAL PRESENCE ===\n`
 
     const socialsRaw = {
       website: data?.contactDetails?.website,
       facebook: data?.contactDetails?.facebook,
-      x: data?.contactDetails?.x || data?.contactDetails?.twitter, // support either key
+      x: data?.contactDetails?.x || data?.contactDetails?.twitter,
       linkedin: data?.contactDetails?.linkedin,
       instagram: data?.contactDetails?.instagram,
       youtube: data?.contactDetails?.youtube,
@@ -411,16 +405,7 @@ ${evaluationData}`
     evaluationData += `Support Letters: ${data?.documentUpload?.supportLetters?.length > 0 ? "Available" : "Not provided"}\n`
     evaluationData += `Has Mentor: ${data?.enterpriseReadiness?.hasMentor || "Not specified"}\n`
 
-    // Social Proof
-    // evaluationData += `\n=== SOCIAL PROOF ===\n`
-    // evaluationData += `Online Reviews: ${data?.onlineReviews?.length > 0 ? `${data.onlineReviews.length} reviews available` : "Not provided"}\n`
-    // evaluationData += `Client References: ${data?.documents?.clientReferences?.length > 0 ? `${data.documents?.clientReferences?.length} references` : "Not provided"}\n`
-    // evaluationData += `Press Mentions: ${data?.pressMentions?.length > 0 ? `${data.pressMentions.length} mentions` : "Not provided"}\n`
-
-    // Leadership Visibility
-    evaluationData += `\n=== LEADERSHIP VISIBILITY ===\n`
-    evaluationData += `Directors: ${data?.ownershipManagement?.directors?.length > 0 ? `${data.ownershipManagement.directors.length} directors listed` : "Not provided"}\n`
-    evaluationData += `LinkedIn Profiles: ${data?.ownershipManagement?.directors?.some((d) => d?.linkedin) ? "Available" : "Not provided"}\n`
+    // REMOVED: Leadership Visibility section moved to LeadershipScoreCard
 
     // Additional context
     evaluationData += `\n=== ADDITIONAL CONTEXT ===\n`
@@ -450,13 +435,14 @@ ${evaluationData}`
     return "maturity"
   }
 
+  // UPDATED WEIGHTINGS: Team & leadership removed, others redistributed
   const weightingsByStage = {
-    "pre-seed": { foundational: 25, digital: 20, track: 15, thirdParty: 10, team: 30 },
-    seed: { foundational: 25, digital: 20, track: 15, thirdParty: 10, team: 30 },
-    seriesa: { foundational: 20, digital: 15, track: 20, thirdParty: 15, team: 30 },
-    seriesb: { foundational: 15, digital: 10, track: 25, thirdParty: 20, team: 30 },
-    growth: { foundational: 20, digital: 15, track: 20, thirdParty: 15, team: 30 },
-    maturity: { foundational: 15, digital: 10, track: 25, thirdParty: 20, team: 30 },
+    "pre-seed": { foundational: 36, digital: 29, track: 21, thirdParty: 14 },
+    "seed": { foundational: 36, digital: 29, track: 21, thirdParty: 14 },
+    "seriesa": { foundational: 36, digital: 29, track: 21, thirdParty: 14 },
+    "seriesb": { foundational: 36, digital: 29, track: 21, thirdParty: 14 },
+    "growth": { foundational: 36, digital: 29, track: 21, thirdParty: 14 },
+    "maturity": { foundational: 36, digital: 29, track: 21, thirdParty: 14 },
   }
 
   const calculateLegitimacyScore = (data, aiEvaluationResult = "") => {
@@ -471,10 +457,10 @@ ${evaluationData}`
       digital: "Digital presence & discoverability",
       track: "Track record indicators",
       thirdParty: "Third-party validations",
-      team: "Team & leadership",
+      // REMOVED: team category
     }
 
-    const colors = ["#8D6E63", "#6D4C41", "#A67C52", "#D7CCC8", "#4E342E"]
+    const colors = ["#8D6E63", "#6D4C41", "#A67C52", "#D7CCC8"] // Removed one color
 
     const breakdown = Object.entries(categoryNames).map(([key, label], i) => {
       const aiRaw = aiScores?.[key] ?? 0
@@ -1129,25 +1115,22 @@ ${evaluationData}`
                       }}
                     >
                       <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>
-                        Five key assessment areas:
+                        Four key assessment areas:
                       </p>
                       <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037" }}>
                         <li style={{ marginBottom: "6px" }}>
-                          <strong>Foundational business identity:</strong> Professional website, business email, logo,
+                          <strong>Foundational business identity (36%):</strong> Professional website, business email, logo,
                           and company materials
                         </li>
                         <li style={{ marginBottom: "6px" }}>
-                          <strong>Digital presence:</strong> Social media presence and online discoverability
+                          <strong>Digital presence (29%):</strong> Social media presence and online discoverability
                         </li>
                         <li style={{ marginBottom: "6px" }}>
-                          <strong>Track record:</strong> Years of operation, client portfolio, and revenue history
+                          <strong>Track record (21%):</strong> Years of operation, client portfolio, and revenue history
                         </li>
                         <li style={{ marginBottom: "6px" }}>
-                          <strong>Third-party validations:</strong> Industry certifications, accreditations, and
+                          <strong>Third-party validations (14%):</strong> Industry certifications, accreditations, and
                           compliance certificates
-                        </li>
-                        <li style={{ marginBottom: "6px" }}>
-                          <strong>Team & leadership:</strong> Professional profiles and leadership credibility
                         </li>
                       </ul>
                     </div>
