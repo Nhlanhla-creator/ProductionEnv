@@ -20,7 +20,6 @@ import { useNavigate } from "react-router-dom"
 import { onAuthStateChanged } from "firebase/auth"
 import { collection, query, where, getDocs, addDoc } from "firebase/firestore"
 import { evaluateProfile } from "../../utils/profileEvaluator"
-import { useApiKey } from "smses/SMSEDashboard/callapi"
 import { API_KEYS } from "../../API"
 
 // Updated sections array with Guarantees
@@ -137,27 +136,26 @@ const FundingApplication = () => {
   const [error, setError] = useState(null)
   const [validationModal, setValidationModal] = useState({ open: false, title: "", messages: [] })
   const [popupSeen, setPopupSeen] = useState(false)
-const apiKey = API_KEYS.OPENAI;
+  const apiKey = API_KEYS.OPENAI
   // New state for popups
   const [showWelcomePopup, setShowWelcomePopup] = useState(false)
   const [showCongratulationsPopup, setShowCongratulationsPopup] = useState(false)
   const [currentOnboardingStep, setCurrentOnboardingStep] = useState(0)
-const [isApiKeyLoading, setIsApiKeyLoading] = useState(true);
+  const [isApiKeyLoading, setIsApiKeyLoading] = useState(true)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
-  
   useEffect(() => {
-  if (apiKey !=null) {
-    setIsApiKeyLoading(false);
-  }
-}, [apiKey]);
+    if (apiKey != null) {
+      setIsApiKeyLoading(false)
+    }
+  }, [apiKey])
 
   useEffect(() => {
     const checkSidebarState = () => {
       const sidebarCollapsed = document.body.classList.contains("sidebar-collapsed")
       setIsSidebarCollapsed(sidebarCollapsed)
     }
-console.log(apiKey);
+    console.log(apiKey)
     // Check initial state
     checkSidebarState()
 
@@ -831,78 +829,76 @@ console.log(apiKey);
     }
   }
 
-const renderActiveSection = () => {
-  // Prevent Enterprise Readiness from loading without API key
-  if (activeSection === "enterpriseReadiness") {
-    if (isApiKeyLoading) {
-      return (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            minHeight: "200px",
-            fontSize: "16px",
-            color: "#666",
-            width: "100%",
-            flexDirection: "column",
-            gap: "10px"
-          }}
-        >
-          <div>Loading Enterprise Readiness resources...</div>
-          <div style={{ fontSize: "14px", color: "#999" }}>
-            Preparing AI evaluation tools...
-          </div>
-        </div>
-      )
-    }
-    console.log(apiKey)
-    if (!apiKey) {
-      return (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            minHeight: "200px",
-            fontSize: "16px",
-            color: "#e74c3c",
-            width: "100%",
-            flexDirection: "column",
-            gap: "15px",
-            textAlign: "center",
-            padding: "20px"
-          }}
-        >
-          <div>⚠️ API Key Required</div>
-          <div style={{ fontSize: "14px", color: "#666", maxWidth: "400px" }}>
-            The Enterprise Readiness section requires API access for AI-powered evaluations. 
-            Please ensure your API configuration is properly set up.
-          </div>
-          <button 
-            onClick={() => window.location.reload()} 
+  const renderActiveSection = () => {
+    // Prevent Enterprise Readiness from loading without API key
+    if (activeSection === "enterpriseReadiness") {
+      if (isApiKeyLoading) {
+        return (
+          <div
             style={{
-              padding: "8px 16px",
-              backgroundColor: "#3498db",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer"
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              minHeight: "200px",
+              fontSize: "16px",
+              color: "#666",
+              width: "100%",
+              flexDirection: "column",
+              gap: "10px",
             }}
           >
-            Retry Loading
-          </button>
-        </div>
-      )
+            <div>Loading Enterprise Readiness resources...</div>
+            <div style={{ fontSize: "14px", color: "#999" }}>Preparing AI evaluation tools...</div>
+          </div>
+        )
+      }
+      console.log(apiKey)
+      if (!apiKey) {
+        return (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              minHeight: "200px",
+              fontSize: "16px",
+              color: "#e74c3c",
+              width: "100%",
+              flexDirection: "column",
+              gap: "15px",
+              textAlign: "center",
+              padding: "20px",
+            }}
+          >
+            <div>⚠️ API Key Required</div>
+            <div style={{ fontSize: "14px", color: "#666", maxWidth: "400px" }}>
+              The Enterprise Readiness section requires API access for AI-powered evaluations. Please ensure your API
+              configuration is properly set up.
+            </div>
+            <button
+              onClick={() => window.location.reload()}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#3498db",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
+            >
+              Retry Loading
+            </button>
+          </div>
+        )
+      }
     }
-  }
     switch (activeSection) {
       case "applicationOverview":
         return renderApplicationOverview(formData.applicationOverview, updateFormData)
       case "useOfFunds":
         return renderUseOfFunds(formData.useOfFunds, updateFormData)
       case "enterpriseReadiness":
-      return renderEnterpriseReadiness(formData.enterpriseReadiness, updateFormData, apiKey);
+        return renderEnterpriseReadiness(formData.enterpriseReadiness, updateFormData, apiKey)
       case "financialOverview":
         return renderFinancialOverview(formData.financialOverview, updateFormData)
       case "guarantees":
@@ -1250,41 +1246,41 @@ The BIG Fundability Team
     }
   }
 
-const handleSaveAndContinue = async () => {
-  try {
-    const isValid = sectionValidations[activeSection](formData[activeSection])
+  const handleSaveAndContinue = async () => {
+    try {
+      const isValid = sectionValidations[activeSection](formData[activeSection])
 
-    if (!isValid) {
-      const errors = []
-      errors.push(
-        `${sectionsWithGuarantees.find((s) => s.id === activeSection)?.label.replace(/\n/g, " ")} is incomplete or has invalid fields.`,
-      )
-      setValidationModal({
-        open: true,
-        title: "Please review the following:",
-        messages: errors,
-      })
-      return
-    }
+      if (!isValid) {
+        const errors = []
+        errors.push(
+          `${sectionsWithGuarantees.find((s) => s.id === activeSection)?.label.replace(/\n/g, " ")} is incomplete or has invalid fields.`,
+        )
+        setValidationModal({
+          open: true,
+          title: "Please review the following:",
+          messages: errors,
+        })
+        return
+      }
 
-    await markSectionAsCompleted(activeSection)
-    await saveDataToFirebase(activeSection)
-    
-    // Check if next section is enterprise readiness and API key isn't ready
-    const currentIndex = sectionsWithGuarantees.findIndex((section) => section.id === activeSection)
-    const nextSection = sectionsWithGuarantees[currentIndex + 1]
-    
-    if (nextSection?.id === "enterpriseReadiness" && (!apiKey || isApiKeyLoading)) {
-      alert("Please wait for API resources to load before proceeding to Enterprise Readiness section.");
-      return;
+      await markSectionAsCompleted(activeSection)
+      await saveDataToFirebase(activeSection)
+
+      // Check if next section is enterprise readiness and API key isn't ready
+      const currentIndex = sectionsWithGuarantees.findIndex((section) => section.id === activeSection)
+      const nextSection = sectionsWithGuarantees[currentIndex + 1]
+
+      if (nextSection?.id === "enterpriseReadiness" && (!apiKey || isApiKeyLoading)) {
+        alert("Please wait for API resources to load before proceeding to Enterprise Readiness section.")
+        return
+      }
+
+      navigateToNextSection()
+    } catch (err) {
+      console.error("Save error:", err)
+      alert("Failed to save. Please try again.")
     }
-    
-    navigateToNextSection()
-  } catch (err) {
-    console.error("Save error:", err)
-    alert("Failed to save. Please try again.")
   }
-}
 
   // Show loading state while fetching data
   if (isLoading) {
@@ -1345,37 +1341,37 @@ const handleSaveAndContinue = async () => {
     return <ApplicationSummary formData={formData} onEdit={handleEditApplication} />
   }
   if (isApiKeyLoading) {
-  return (
-    <div
-      style={{
-        width: "100%",
-        minHeight: "100vh",
-        maxWidth: "100vw",
-        overflowX: "hidden",
-        padding: "0",
-        margin: "0",
-        boxSizing: "border-box",
-      }}
-      className="funding-application-container"
-    >
+    return (
       <div
-        className="loading-container"
         style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          minHeight: "200px",
-          fontSize: "16px",
-          color: "#666",
           width: "100%",
-          maxWidth: "100%",
+          minHeight: "100vh",
+          maxWidth: "100vw",
+          overflowX: "hidden",
+          padding: "0",
+          margin: "0",
+          boxSizing: "border-box",
         }}
+        className="funding-application-container"
       >
-        Loading application resources...
+        <div
+          className="loading-container"
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            minHeight: "200px",
+            fontSize: "16px",
+            color: "#666",
+            width: "100%",
+            maxWidth: "100%",
+          }}
+        >
+          Loading application resources...
+        </div>
       </div>
-    </div>
-  );
-}
+    )
+  }
 
   // If application is submitted but user is coming back to edit
   if (applicationSubmitted && !showSummary) {

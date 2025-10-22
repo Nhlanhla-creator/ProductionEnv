@@ -76,38 +76,38 @@ const ShopToolsPage = () => {
 
     // Check sidebar state
     const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"));
+      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
     }
 
     // Check initial state
-    checkSidebarState();
+    checkSidebarState()
 
     // Watch for changes
-    const observer = new MutationObserver(checkSidebarState);
+    const observer = new MutationObserver(checkSidebarState)
     observer.observe(document.body, {
       attributes: true,
       attributeFilter: ["class"],
-    });
+    })
 
     return () => {
       const paystackScript = document.querySelector('script[src*="paystack"]')
       if (paystackScript && paystackScript.parentNode) {
         paystackScript.parentNode.removeChild(paystackScript)
       }
-      observer.disconnect();
+      observer.disconnect()
     }
   }, [])
 
   const getContentStyles = () => ({
     marginLeft: isSidebarCollapsed ? "80px" : "250px",
-    padding: "0 1.5rem 0 1.5rem",
+    padding: "0 1rem 0 0.5rem",
     fontFamily: "'Inter', 'Segoe UI', 'Roboto', sans-serif",
     background: colors.offWhite,
     minHeight: "100vh",
     width: isSidebarCollapsed ? "calc(100vw - 110px)" : "calc(100vw - 280px)",
     maxWidth: "none",
     transition: "all 0.3s ease",
-  });
+  })
 
   // Inline styles object with new dark brown theme
   const styles = {
@@ -118,7 +118,7 @@ const ShopToolsPage = () => {
       border: "2px solid #FFC107",
       borderRadius: "12px",
       padding: "1rem 1.5rem",
-      margin: "60px auto 2rem auto",
+      margin: "20px auto 1.5rem auto",
       width: "100%",
       maxWidth: "none",
       fontWeight: 600,
@@ -250,7 +250,7 @@ const ShopToolsPage = () => {
       background: colors.lightTan,
     },
     navTabs: {
-      margin: "2.5rem 0",
+      margin: "2.5rem 0 1.5rem 0",
       borderBottom: `2px solid ${colors.lightTan}`,
     },
     navTabsContainer: {
@@ -265,7 +265,7 @@ const ShopToolsPage = () => {
       display: "flex",
       alignItems: "center",
       gap: "0.6rem",
-      padding: "1.2rem 2.5rem",
+      padding: "1.8rem 2.5rem",
       background: colors.mediumBrown,
       color: colors.offWhite,
       border: "none",
@@ -287,13 +287,13 @@ const ShopToolsPage = () => {
     contentArea: {
       background: colors.offWhite,
       borderRadius: "0 0 1rem 1rem",
-      padding: "2.5rem",
+      padding: "2rem 2rem 2.5rem 0.5rem",
       boxShadow: "0 8px 24px rgba(0, 0, 0, 0.15)",
       border: `1px solid ${colors.lightTan}`,
       borderTop: "none",
     },
     sectionHeader: {
-      textAlign: "center",
+      textAlign: "left",
       marginBottom: "3.5rem",
     },
     sectionTitle: {
@@ -309,16 +309,17 @@ const ShopToolsPage = () => {
     sectionSubtitle: {
       fontSize: "1.25rem",
       color: colors.mediumBrown,
-      margin: "0 auto 2.5rem",
+      margin: "0 0 2.5rem 0",
       maxWidth: "700px",
       lineHeight: "1.6",
+      textAlign: "left",
     },
     sectionDivider: {
       width: "100px",
       height: "5px",
       background: `linear-gradient(90deg, ${colors.accentGold}, ${colors.lightBrown})`,
       borderRadius: "3px",
-      margin: "0 auto",
+      margin: "0",
     },
     differenceSection: {
       backgroundImage: `linear-gradient(rgba(${Number.parseInt(colors.darkBrown.slice(1, 3), 16)}, ${Number.parseInt(

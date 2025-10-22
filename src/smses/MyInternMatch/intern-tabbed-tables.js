@@ -1,6 +1,7 @@
 "use client"
 import { useState, useEffect } from "react"
-import { Eye, Trophy, Users, X, MapPin, Calendar, GraduationCap, Briefcase } from "lucide-react"
+import { Eye, X, Trophy, Calendar, FileText, Users, MapPin, GraduationCap, Briefcase } from "lucide-react"
+import InternApplication from "../../smses/InternApplication/internapplication"
 import { InternTablePage } from "./intern-table"
 import { db, auth } from "../../firebaseConfig"
 import { collection, query, where, onSnapshot, doc, getDoc } from "firebase/firestore"
@@ -48,13 +49,16 @@ const TruncatedText = ({ text, maxLength = 40 }) => {
 // Empty table row component for when there are no deals
 const EmptyTableRow = () => (
   <tr style={{ borderBottom: "1px solid #E8D5C4" }}>
-    <td colSpan="10" style={{ 
-      padding: "2rem",
-      textAlign: "center", 
-      color: "#999",
-      fontStyle: "italic",
-      borderRight: "none"
-    }}>
+    <td
+      colSpan="10"
+      style={{
+        padding: "2rem",
+        textAlign: "center",
+        color: "#999",
+        fontStyle: "italic",
+        borderRight: "none",
+      }}
+    >
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
         <Trophy size={48} style={{ color: "#ddd" }} />
         <div>
@@ -87,7 +91,7 @@ const SuccessfulInternDealsTable = () => {
     const q = query(
       collection(db, "internshipApplications"),
       where("sponsorId", "==", user.uid),
-      where("status", "in", ["Accepted", "Confirmed", "Confirmed/Term Sheet Sign","Completed"]),
+      where("status", "in", ["Accepted", "Confirmed", "Confirmed/Term Sheet Sign", "Completed"]),
     )
 
     const unsubscribe = onSnapshot(q, async (querySnapshot) => {
@@ -917,33 +921,33 @@ const InternTabbedTables = ({
   filters,
   stageFilter,
   loading,
-  activeTab = "my-matches",
+  activeTab = "application", // Changed default to "application"
   setActiveTab,
   onDealComplete,
-  profiles
+  profiles,
 }) => {
   const [localActiveTab, setLocalActiveTab] = useState(activeTab)
   const [successfulDealsCount, setSuccessfulDealsCount] = useState(0)
-  const [myMatchesCount,setMyMatchesCount] = useState(0)
-  const [profileMatchesCount,setProfileMatchesCount] = useState(0)
+  const [myMatchesCount, setMyMatchesCount] = useState(0)
+  const [profileMatchesCount, setProfileMatchesCount] = useState(0)
+
   // Use external tab control if provided, otherwise use local state
   const currentActiveTab = setActiveTab ? activeTab : localActiveTab
   const handleTabChange = setActiveTab || setLocalActiveTab
-     
 
-    useEffect(() => {
+  useEffect(() => {
     profiles(profileMatchesCount)
   }, [profileMatchesCount])
 
   useEffect(() => {
     const user = auth.currentUser
     if (!user) return
-   
+
     // Query the correct collection and status fields
     const q = query(
       collection(db, "internshipApplications"),
       where("sponsorId", "==", user.uid),
-      where("status", "in", ["Accepted", "Confirmed", "Confirmed/Term Sheet Sign","Completed"]),
+      where("status", "in", ["Accepted", "Confirmed", "Confirmed/Term Sheet Sign", "Completed"]),
     )
 
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
@@ -952,24 +956,6 @@ const InternTabbedTables = ({
 
     return () => unsubscribe()
   }, [])
-
-  //  useEffect(() => {
-  //   const user = auth.currentUser
-  //   if (!user) return
-
-  //   // Query the correct collection and status fields
-  //   const q = query(
-  //     collection(db, "internshipApplications"),
-  //     where("sponsorId", "==", user.uid),
-  //     where("status", "in",  ["New Match", "Shortlisted", "Contacted/Interview", "Confirmed", "Confirmed/Term Sheet Sign", "Accepted","Applied","Completed"]),
-  //   )
-
-  //   const unsubscribe = onSnapshot(q, (querySnapshot) => {
-  //     setMyMatchesCount(querySnapshot.docs.length)
-  //   })
-
-  //   return () => unsubscribe()
-  // }, [])
 
   const tabStyle = (isActive) => ({
     flex: 1,
@@ -987,10 +973,9 @@ const InternTabbedTables = ({
     alignItems: "center",
     justifyContent: "center",
     gap: "8px",
+    minHeight: "56px",
+    lineHeight: "1",
   })
-
-  // Calculate counts for tab badges (you can make these dynamic)
- // You can make this dynamic from props
 
   return (
     <div style={{ maxWidth: "100%", margin: "0 auto", padding: "0" }}>
@@ -1005,6 +990,28 @@ const InternTabbedTables = ({
           boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
         }}
       >
+        {/* Intern Application Tab - FIRST */}
+        <button
+          onClick={() => handleTabChange("application")}
+          style={tabStyle(currentActiveTab === "application")}
+          onMouseEnter={(e) => {
+            if (currentActiveTab !== "application") {
+              e.target.style.backgroundColor = "#8d6e63"
+              e.target.style.color = "white"
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (currentActiveTab !== "application") {
+              e.target.style.backgroundColor = "transparent"
+              e.target.style.color = "#5d4037"
+            }
+          }}
+        >
+          <FileText size={18} style={{ flexShrink: 0, display: "block" }} />
+          <span style={{ whiteSpace: "nowrap", lineHeight: "1", display: "block" }}>Intern Application</span>
+        </button>
+
+        {/* My Matches Tab - SECOND */}
         <button
           onClick={() => handleTabChange("my-matches")}
           style={tabStyle(currentActiveTab === "my-matches")}
@@ -1021,8 +1028,8 @@ const InternTabbedTables = ({
             }
           }}
         >
-          <Users size={18} />
-          My Matches
+          <Users size={18} style={{ flexShrink: 0, display: "block" }} />
+          <span style={{ whiteSpace: "nowrap", lineHeight: "1", display: "block" }}>My Matches</span>
           <span
             style={{
               backgroundColor: currentActiveTab === "my-matches" ? "rgba(255, 255, 255, 0.2)" : "rgba(93, 64, 55, 0.1)",
@@ -1036,12 +1043,14 @@ const InternTabbedTables = ({
               alignItems: "center",
               justifyContent: "center",
               marginLeft: "4px",
+              flexShrink: 0,
             }}
           >
             {myMatchesCount}
           </span>
         </button>
 
+        {/* Successful Deals Tab - THIRD */}
         <button
           onClick={() => handleTabChange("successful-deals")}
           style={tabStyle(currentActiveTab === "successful-deals")}
@@ -1058,8 +1067,8 @@ const InternTabbedTables = ({
             }
           }}
         >
-          <Trophy size={18} />
-          Successful Deals
+          <Trophy size={18} style={{ flexShrink: 0, display: "block" }} />
+          <span style={{ whiteSpace: "nowrap", lineHeight: "1", display: "block" }}>Successful Deals</span>
           <span
             style={{
               backgroundColor:
@@ -1074,6 +1083,7 @@ const InternTabbedTables = ({
               alignItems: "center",
               justifyContent: "center",
               marginLeft: "4px",
+              flexShrink: 0,
             }}
           >
             {successfulDealsCount}
@@ -1093,15 +1103,87 @@ const InternTabbedTables = ({
           borderTop: "none",
         }}
       >
-        {currentActiveTab === "my-matches" && (
-          <div>
-            <InternTablePage filters={filters} stageFilter={stageFilter} onDealComplete={onDealComplete} matchesCount={setMyMatchesCount} profileMatchesCount={setProfileMatchesCount}/>
+        {/* Intern Application Content - FIRST - FIXED ALIGNMENT */}
+        {currentActiveTab === "application" && (
+          <div style={{ 
+            width: "100%", 
+            display: "flex", 
+            justifyContent: "flex-start", 
+            alignItems: "flex-start" 
+          }}>
+            <div style={{ 
+              width: "100%", 
+              maxWidth: "100%", 
+              margin: 0, 
+              padding: 0 
+            }}>
+              <InternApplication />
+            </div>
           </div>
-
         )}
 
+        {/* My Matches Content - SECOND */}
+        {currentActiveTab === "my-matches" && (
+          <div>
+            <InternTablePage
+              filters={filters}
+              stageFilter={stageFilter}
+              onDealComplete={onDealComplete}
+              matchesCount={setMyMatchesCount}
+              profileMatchesCount={setProfileMatchesCount}
+            />
+          </div>
+        )}
+
+        {/* Successful Deals Content - THIRD */}
         {currentActiveTab === "successful-deals" && <SuccessfulInternDealsTable />}
       </div>
+
+      {/* Enhanced styling for tab transitions */}
+      <style jsx>{`
+        @keyframes fadeIn {
+          from { 
+            opacity: 0; 
+            transform: translateY(10px);
+          }
+          to { 
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        @keyframes slideUp {
+          from {
+            opacity: 0;
+            transform: translateY(30px) scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+        
+        /* Tab content animation */
+        div[style*="backgroundColor: white"] > div {
+          animation: fadeIn 0.3s ease-out;
+        }
+        
+        /* Button hover effects */
+        button:hover {
+          transform: translateY(-1px);
+        }
+        
+        /* Table row hover effects */
+        tr:hover {
+          transition: all 0.2s ease !important;
+        }
+        
+        /* Input and button focus styles */
+        button:focus {
+          outline: 2px solid #5d4037;
+          outline-offset: 2px;
+        }
+      `}</style>
     </div>
   )
 }
