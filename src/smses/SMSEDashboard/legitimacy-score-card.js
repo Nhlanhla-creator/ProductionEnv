@@ -41,7 +41,6 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
       digital: ["Digital Presence", "Digital Presence & Discoverability", "digital"],
       track: ["Track Record", "Track Record Indicators", "track"],
       thirdParty: ["Third-Party Validation", "Third-Party Validations", "third-party", "thirdparty"],
-      // REMOVED: team category moved to LeadershipScoreCard
     }
 
     const scores = {}
@@ -308,6 +307,11 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
 
       const combinedMessage = `Evaluate the legitimacy of the following business using the BIG Legitimacy Scorecard rubric.
 
+IMPORTANT FORMATTING REQUIREMENTS:
+- Use clear section headers with ###
+- Provide specific, actionable improvement recommendations for EACH category
+- Keep rationale concise but insightful
+
 Instructions:
 - Score each of the 4 categories below from 0 to 5 using the rubric where:
   • 0 = No evidence or very poor
@@ -317,22 +321,66 @@ Instructions:
   • 4 = Good/strong evidence
   • 5 = Excellent/outstanding
 - Provide a short rationale for each score (2-3 sentences)
+- FOR EACH CATEGORY, include a "How to Improve" section with 3-5 specific, actionable steps to increase the score
 - At the end, give a total score out of 20, normalize it to 100, and assign a legitimacy band:
   • 85–100: Highly Legitimate
   • 65–84: Credible but Improving
   • 50–64: Emerging Presence
   • <50: Needs Credibility Work
 
-Categories to evaluate:
-1. Identity Markers (website, domain email, registered address)
-2. Digital Presence (Google search, online visibility, social links)
-3. Track Record (clients, years, projects, financials)
-4. Third-Party Validation (certifications, awards, memberships)
+CRITICAL: For improvement recommendations, be SPECIFIC and ACTIONABLE. Instead of vague advice like "improve online presence," provide concrete steps like:
+- "Create and publish 3 case studies showcasing client success stories within the next 3 months"
+- "Register for BBBEE certification and complete the application within 6 months"
+- "Launch a professional website with company portfolio and contact information by next quarter"
+- "Establish active LinkedIn and Facebook business pages with weekly content updates"
 
-Format your response with clear score indicators like 'Identity Markers: Score = 5' for easier parsing.
+Categories to evaluate:
+1. Identity Markers (website, domain email, registered address, company logo)
+2. Digital Presence (Google search, online visibility, social links, discoverability)
+3. Track Record (clients, years in operation, projects, financials, revenue history)
+4. Third-Party Validation (certifications, awards, memberships, accreditations)
 
 Input Data:
-${evaluationData}`
+${evaluationData}
+
+OUTPUT FORMAT:
+### 1. Identity Markers
+**Score:** [0-5]
+**Rationale:** [2-3 sentence explanation]
+**How to Improve:** 
+• [Specific action 1 with timeline]
+• [Specific action 2 with measurable goal]
+• [Specific action 3 with concrete steps]
+
+### 2. Digital Presence
+**Score:** [0-5]
+**Rationale:** [2-3 sentence explanation]
+**How to Improve:** 
+• [Specific action 1 with timeline]
+• [Specific action 2 with measurable goal]
+• [Specific action 3 with concrete steps]
+
+### 3. Track Record
+**Score:** [0-5]
+**Rationale:** [2-3 sentence explanation]
+**How to Improve:** 
+• [Specific action 1 with timeline]
+• [Specific action 2 with measurable goal]
+• [Specific action 3 with concrete steps]
+
+### 4. Third-Party Validation
+**Score:** [0-5]
+**Rationale:** [2-3 sentence explanation]
+**How to Improve:** 
+• [Specific action 1 with timeline]
+• [Specific action 2 with measurable goal]
+• [Specific action 3 with concrete steps]
+
+### Overall Assessment
+**Total Score:** [X]/20
+**Normalized to 100:** [Y]%
+**Legitimacy Band:** [Band Name]
+**Final Analysis:** [Brief overall assessment with key recommendations]`
 
       const result = await sendMessageToChatGPT(combinedMessage)
       setAiEvaluationResult(result)
@@ -405,8 +453,6 @@ ${evaluationData}`
     evaluationData += `Support Letters: ${data?.documentUpload?.supportLetters?.length > 0 ? "Available" : "Not provided"}\n`
     evaluationData += `Has Mentor: ${data?.enterpriseReadiness?.hasMentor || "Not specified"}\n`
 
-    // REMOVED: Leadership Visibility section moved to LeadershipScoreCard
-
     // Additional context
     evaluationData += `\n=== ADDITIONAL CONTEXT ===\n`
     evaluationData += `Business Description: ${data?.entityOverview?.businessDescription || data?.productsServices?.companyProfile || "Not provided"}\n`
@@ -457,10 +503,9 @@ ${evaluationData}`
       digital: "Digital presence & discoverability",
       track: "Track record indicators",
       thirdParty: "Third-party validations",
-      // REMOVED: team category
     }
 
-    const colors = ["#8D6E63", "#6D4C41", "#A67C52", "#D7CCC8"] // Removed one color
+    const colors = ["#8D6E63", "#6D4C41", "#A67C52", "#D7CCC8"]
 
     const breakdown = Object.entries(categoryNames).map(([key, label], i) => {
       const aiRaw = aiScores?.[key] ?? 0
@@ -523,51 +568,101 @@ ${evaluationData}`
   const scoreLevel = getScoreLevel(legitimacyScore)
   const ScoreIcon = scoreLevel.icon
 
-  // Helper function to format AI result into sections
+  // UPDATED: Format AI result with improvement actions styling
   const formatAiResult = (result) => {
-    // First, clean up the markdown formatting
-    const cleanedResult = result.replace(/\*\*(.*?)\*\*/g, "$1") // Remove ** formatting
+    const cleanedResult = result.replace(/\*\*(.*?)\*\*/g, "$1")
 
-    const sections = cleanedResult.split(/(?=\d+\.\s|\*\*[^*]+\*\*:|\n\n)/)
+    // Split by major sections (### headers)
+    const sections = cleanedResult.split(/(?=###\s)/g)
 
-    return sections
-      .map((section, index) => {
-        const trimmed = section.trim()
-        if (!trimmed) return null
+    return sections.map((section, index) => {
+      const trimmed = section.trim()
+      if (!trimmed) return null
 
-        // Check if it's a category header
-        const isHeader = /^\d+\.\s/.test(trimmed)
+      // Check if this is a category section with "How to Improve"
+      const isCategorySection = /^###\s+\d+\./.test(trimmed)
+
+      if (isCategorySection) {
+        // Split the category section into parts
+        const lines = trimmed.split('\n').filter(line => line.trim())
+        const header = lines[0]
+        const content = lines.slice(1).join('\n')
+
+        // Extract improvement section with special styling
+        const improvementIndex = content.toLowerCase().indexOf('how to improve')
+        let mainContent = content
+        let improvementContent = ''
+
+        if (improvementIndex !== -1) {
+          mainContent = content.substring(0, improvementIndex)
+          improvementContent = content.substring(improvementIndex)
+        }
 
         return (
-          <div key={index} style={{ marginBottom: "15px" }}>
-            {isHeader ? (
-              <div
-                style={{
-                  fontWeight: "bold",
-                  color: "#5d4037",
-                  fontSize: "16px",
-                  marginBottom: "8px",
-                  paddingBottom: "5px",
-                  borderBottom: "1px solid #e8d8cf",
-                }}
-              >
-                {trimmed.split("\n")[0]}
+          <div key={index} style={{ marginBottom: "20px", border: "1px solid #e8d8cf", borderRadius: "8px", overflow: "hidden" }}>
+            {/* Header */}
+            <div style={{ backgroundColor: "#8d6e63", color: "white", padding: "12px 16px", fontWeight: "bold" }}>
+              {header.replace('###', '').trim()}
+            </div>
+
+            {/* Main Content */}
+            <div style={{ padding: "16px", backgroundColor: "white" }}>
+              <div style={{ whiteSpace: "pre-wrap", lineHeight: "1.6", color: "#5d4037", marginBottom: improvementContent ? "15px" : "0" }}>
+                {mainContent}
               </div>
-            ) : null}
-            <div
-              style={{
-                fontSize: "14px",
-                lineHeight: "1.6",
-                color: "#6d4c41",
-                whiteSpace: "pre-wrap",
-              }}
-            >
-              {isHeader ? trimmed.split("\n").slice(1).join("\n") : trimmed}
+
+              {/* Improvement Section with Special Styling */}
+              {improvementContent && (
+                <div style={{
+                  backgroundColor: "#f8f4f0",
+                  padding: "15px",
+                  borderRadius: "6px",
+                  borderLeft: "4px solid #ff9800"
+                }}>
+                  <div style={{
+                    fontWeight: "bold",
+                    color: "#5d4037",
+                    marginBottom: "10px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px"
+                  }}>
+                    <TrendingUp size={16} />
+                    Improvement Actions
+                  </div>
+                  <div style={{
+                    whiteSpace: "pre-wrap",
+                    lineHeight: "1.6",
+                    color: "#6d4c41",
+                    fontSize: "14px"
+                  }}>
+                    {improvementContent.replace('How to Improve:', '').trim()}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )
-      })
-      .filter(Boolean)
+      }
+
+      // Regular section formatting (for overall assessment, etc.)
+      return (
+        <div key={index} style={{ marginBottom: "15px" }}>
+          <div style={{
+            fontSize: "14px",
+            lineHeight: "1.6",
+            color: "#6d4c41",
+            whiteSpace: "pre-wrap",
+            backgroundColor: "white",
+            padding: "16px",
+            borderRadius: "8px",
+            border: "1px solid #e8d8cf"
+          }}>
+            {trimmed}
+          </div>
+        </div>
+      )
+    }).filter(Boolean)
   }
 
   return (
