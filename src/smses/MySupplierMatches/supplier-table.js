@@ -20,6 +20,7 @@ import { Eye, Filter } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import emailjs from '@emailjs/browser'
 import { API_KEYS } from "../../API"
+import { findSynonyms, expandSearchTerms, containsTermOrSynonyms } from '../../utils/synonyms';
 
 // Status definitions with brown color scheme
 const STATUS_TYPES = {
@@ -221,46 +222,62 @@ function convertToDays(value, unit) {
 
 // Enhanced match calculation functions
 function calculateCategoryMatch(application, supplier) {
-  const appCategories = application.productsServices?.categories || []
+  const appCategories = application.productsServices?.categories || [];
+  const appKeywords = application.keywords?.toLowerCase() || "";
+  const appPurpose = application.purpose?.toLowerCase() || "";
 
-  // Extract categories from supplier profile
-  const supplierProductCategories = supplier.productsServices?.productCategories || []
-  const supplierServiceCategories = supplier.productsServices?.serviceCategories || []
+  // Extract all descriptive text from supplier
+  const supplierText = extractSupplierDescriptiveText(supplier);
 
-  // Combine all supplier categories
-  const allSupplierCategories = [
-    ...supplierProductCategories.map(cat => typeof cat === 'string' ? cat : cat?.name || ''),
-    ...supplierServiceCategories.map(cat => typeof cat === 'string' ? cat : cat?.name || '')
-  ].filter(Boolean)
-
-  if (appCategories.length === 0 || allSupplierCategories.length === 0) {
-    return { score: 0, matches: [] }
+  if ((appCategories.length === 0 && !appKeywords && !appPurpose) || !supplierText) {
+    return { score: 0, matches: [] };
   }
 
-  let matches = 0
-  const matchedCategories = []
+  let matches = 0;
+  const matchedTerms = [];
+  const totalTerms = [];
 
+  // Check category matches with synonyms
   appCategories.forEach(appCat => {
-    const normalizedAppCat = appCat.toLowerCase().trim()
-    const foundMatch = allSupplierCategories.some(supplierCat => {
-      const normalizedSupplierCat = supplierCat.toLowerCase().trim()
-      return (
-        normalizedSupplierCat.includes(normalizedAppCat) ||
-        normalizedAppCat.includes(normalizedSupplierCat) ||
-        calculateSimilarity(normalizedAppCat, normalizedSupplierCat) > 0.7
-      )
-    })
-
-    if (foundMatch) {
-      matches++
-      matchedCategories.push(appCat)
+    totalTerms.push(appCat);
+    const expandedCategories = expandSearchTerms([appCat.toLowerCase()]);
+    
+    const hasMatch = expandedCategories.some(catTerm => 
+      supplierText.includes(catTerm)
+    );
+    
+    if (hasMatch) {
+      matches++;
+      matchedTerms.push(appCat);
     }
-  })
+  });
 
-  return {
-    score: matches / appCategories.length,
-    matches: matchedCategories
+  // Check keyword matches from application with synonyms
+  if (appKeywords || appPurpose) {
+    const combinedText = `${appKeywords} ${appPurpose}`;
+    const words = combinedText.split(/\s+/).filter(word => word.length > 3);
+    
+    words.forEach(word => {
+      totalTerms.push(word);
+      const expandedWords = expandSearchTerms([word.toLowerCase()]);
+      
+      const hasMatch = expandedWords.some(expandedWord => 
+        supplierText.includes(expandedWord)
+      );
+      
+      if (hasMatch) {
+        matches++;
+        matchedTerms.push(word);
+      }
+    });
   }
+
+  const score = totalTerms.length > 0 ? matches / totalTerms.length : 0;
+  
+  return {
+    score: Math.min(score * 1.3, 1), // Boost for semantic matches
+    matches: matchedTerms
+  };
 }
 
 function calculateLocationMatch(application, supplier) {
@@ -357,6 +374,39 @@ function calculateRatingMatch(supplier, ratingsData) {
   const supplierId = supplier?.id
   const supplierRatingData = ratingsData?.[supplierId] || { average: 0, count: 0 }
   return supplierRatingData.average / 5
+}
+
+function extractSupplierDescriptiveText(supplier) {
+  let text = "";
+
+  // Product descriptions
+  if (supplier.productsServices?.productCategories) {
+    supplier.productsServices.productCategories.forEach(category => {
+      text += ` ${category.name || ""} `;
+      if (category.products) {
+        category.products.forEach(product => {
+          text += ` ${product.name || ""} ${product.description || ""} `;
+        });
+      }
+    });
+  }
+
+  // Service descriptions
+  if (supplier.productsServices?.serviceCategories) {
+    supplier.productsServices.serviceCategories.forEach(category => {
+      text += ` ${category.name || ""} `;
+      if (category.services) {
+        category.services.forEach(service => {
+          text += ` ${service.name || ""} ${service.description || ""} `;
+        });
+      }
+    });
+  }
+
+  // Target market and other relevant fields
+  text += ` ${supplier.productsServices?.targetMarket || ""} `;
+
+  return text.toLowerCase().trim();
 }
 
 function calculateEnhancedMatchScore(application, supplier, ratingsData = null) {
