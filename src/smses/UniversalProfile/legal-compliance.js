@@ -1,5 +1,3 @@
-
-
 "use client"
 import { useEffect, useState } from "react"
 import { HelpCircle } from "lucide-react"
@@ -33,6 +31,41 @@ const uifStatusOptions = [
   { value: "Registered", label: "Registered with UIF" },
   { value: "Not yet registered", label: "Not yet registered" },
   { value: "In progress / Awaiting confirmation", label: "In progress / Awaiting confirmation" },
+]
+
+// Compliance Checklist Items
+const complianceChecklistItems = [
+  {
+    category: "Legal Templates",
+    items: [
+      { name: "Employment Contract (Basic)", id: "employmentContract" },
+      { name: "NDA (Non-Disclosure Agreement)", id: "nda" },
+      { name: "MOU (Memorandum of Understanding)", id: "mou" },
+    ]
+  },
+  {
+    category: "Policy Essentials",
+    items: [
+      { name: "Employee Code of Conduct", id: "codeOfConduct" },
+      { name: "Leave Policy", id: "leavePolicy" },
+      { name: "Disciplinary & Grievance Policy", id: "disciplinaryPolicy" },
+      { name: "Health & Safety Policy", id: "healthSafetyPolicy" },
+      { name: "Privacy & Data Protection Policy", id: "privacyPolicy" },
+    ]
+  },
+  {
+    category: "Specialised Policies",
+    items: [
+      { name: "Remote Work Policy", id: "remoteWorkPolicy" },
+      { name: "Conflict of Interest Policy", id: "conflictInterestPolicy" },
+      { name: "Intellectual Property Protection", id: "ipProtection" },
+      { name: "Social Media Use Policy", id: "socialMediaPolicy" },
+      { name: "Expense Reimbursement Policy", id: "expensePolicy" },
+      { name: "Overtime & Compensation Policy", id: "overtimePolicy" },
+      { name: "Termination Policy", id: "terminationPolicy" },
+      { name: "Performance Review Policy", id: "performancePolicy" },
+    ]
+  }
 ]
 
 // Tooltip Component
@@ -71,6 +104,7 @@ export default function LegalCompliance({ data = {}, updateData }) {
   const [formData, setFormData] = useState({})
   const [isLoading, setIsLoading] = useState(true)
   const [uploadingDocs, setUploadingDocs] = useState({});
+
   // Load data from Firebase when component mounts
   useEffect(() => {
     const loadLegalCompliance = async () => {
@@ -128,7 +162,9 @@ export default function LegalCompliance({ data = {}, updateData }) {
               hasWhistleblowingPolicy: "",
               whistleblowingPolicyDocs: [],
               ethicsTrainingFrequency: "",
-              lastEthicsTrainingDate: ""
+              lastEthicsTrainingDate: "",
+              // Compliance Checklist
+              complianceChecklist: {}
             }
             setFormData(initData)
             updateData(initData)
@@ -166,7 +202,9 @@ export default function LegalCompliance({ data = {}, updateData }) {
             hasWhistleblowingPolicy: "",
             whistleblowingPolicyDocs: [],
             ethicsTrainingFrequency: "",
-            lastEthicsTrainingDate: ""
+            lastEthicsTrainingDate: "",
+            // Compliance Checklist
+            complianceChecklist: {}
           }
           setFormData(initData)
           updateData(initData)
@@ -233,6 +271,30 @@ export default function LegalCompliance({ data = {}, updateData }) {
     setFormData(updatedData)
     updateData(updatedData)
   }
+
+  const handleChecklistChange = (itemId, checked) => {
+    const updatedChecklist = {
+      ...formData.complianceChecklist,
+      [itemId]: checked
+    }
+    
+    const updatedData = {
+      ...formData,
+      complianceChecklist: updatedChecklist
+    }
+    
+    setFormData(updatedData)
+    updateData(updatedData)
+  }
+
+  // Calculate completed checklist items
+  const getCompletedChecklistCount = () => {
+    if (!formData.complianceChecklist) return 0
+    return Object.values(formData.complianceChecklist).filter(Boolean).length
+  }
+
+  const totalChecklistItems = complianceChecklistItems.reduce((total, category) => total + category.items.length, 0)
+  const completedCount = getCompletedChecklistCount()
 
   // Show loading state while fetching data
   if (isLoading) {
@@ -434,6 +496,62 @@ export default function LegalCompliance({ data = {}, updateData }) {
         </div>
       </div>
 
+      {/* Compliance Checklist Section */}
+      <div className="mb-8">
+        <h3 className="text-xl font-semibold text-brown-700 mt-6 mb-6 border-b border-brown-200 pb-2">
+          Compliance Documents Checklist
+        </h3>
+        
+        <div className="bg-brown-50 p-4 rounded-lg border border-brown-200 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-lg font-medium text-brown-800">Your Compliance Progress</h4>
+            <span className="text-sm font-medium text-brown-700">
+              {completedCount} of {totalChecklistItems} completed
+            </span>
+          </div>
+          <div className="w-full bg-brown-200 rounded-full h-2.5">
+            <div 
+              className="bg-brown-600 h-2.5 rounded-full transition-all duration-300" 
+              style={{ width: `${(completedCount / totalChecklistItems) * 100}%` }}
+            ></div>
+          </div>
+          <p className="text-sm text-brown-600 mt-2">
+            Tick the boxes to track which compliance documents you already have in place.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {complianceChecklistItems.map((category, categoryIndex) => (
+            <div key={categoryIndex} className="bg-white border border-brown-200 rounded-lg p-4">
+              <h5 className="font-semibold text-brown-800 mb-3 text-lg">{category.category}</h5>
+              <div className="space-y-3">
+                {category.items.map((item, itemIndex) => (
+                  <div key={item.id} className="flex items-start space-x-2">
+                    <input
+                      type="checkbox"
+                      id={item.id}
+                      checked={formData.complianceChecklist?.[item.id] || false}
+                      onChange={(e) => handleChecklistChange(item.id, e.target.checked)}
+                      className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded mt-0.5 flex-shrink-0"
+                    />
+                    <label 
+                      htmlFor={item.id} 
+                      className={`text-sm leading-tight cursor-pointer select-none ${
+                        formData.complianceChecklist?.[item.id] 
+                          ? 'text-brown-800 line-through' 
+                          : 'text-brown-600'
+                      }`}
+                    >
+                      {item.name}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Policies & Controls Section */}
       <div className="mb-8">
         <h3 className="text-xl font-semibold text-brown-700 mt-6 mb-6 border-b border-brown-200 pb-2">
@@ -572,7 +690,19 @@ export default function LegalCompliance({ data = {}, updateData }) {
             </div>
 
             <div>
-
+              <FormField label="Do you have a whistleblowing policy?" required>
+                <select
+                  name="hasWhistleblowingPolicy"
+                  value={formData.hasWhistleblowingPolicy || ""}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                  required
+                >
+                  <option value="">Select</option>
+                  <option value="Yes">Yes</option>
+                  <option value="No">No</option>
+                </select>
+              </FormField>
 
               {formData.hasWhistleblowingPolicy === "Yes" && (
                 <div className="mt-4">

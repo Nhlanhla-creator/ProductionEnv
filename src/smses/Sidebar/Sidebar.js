@@ -163,39 +163,39 @@ const Sidebar = ({ companyName = "Company Name" }) => {
       icon: <BarChart size={18} />,
       route: "/dashboard",
     },
-    {
-      id: "applications",
-      label: "My Applications",
-      icon: <Briefcase size={18} />,
-      route: "/applications",
-      hasSubmenu: true,
-      subItems: [
-        {
-          id: "funding-applications",
-          label: "Funding & Support",
-          icon: <FundingIcon size={16} />,
-          route: "/applications/funding",
-        },
-        {
-          id: "product-applications",
-          label: "Products & Services",
-          icon: <ShoppingCart size={16} />,
-          route: "/applications/product",
-        },
-        {
-          id: "advisory-applications",
-          label: "Advisory/Board Member",
-          icon: <UserCheck size={16} />,
-          route: "/applications/advisory",
-        },
-        {
-          id: "intern-application",
-          label: "Intern",
-          icon: <GraduationCap size={16} />,
-          route: "/applications/intern",
-        },
-      ],
-    },
+    // {
+    //   id: "applications",
+    //   label: "My Applications",
+    //   icon: <Briefcase size={18} />,
+    //   route: "/applications",
+    //   hasSubmenu: true,
+    //   subItems: [
+    //     {
+    //       id: "funding-applications",
+    //       label: "Funding & Support",
+    //       icon: <FundingIcon size={16} />,
+    //       route: "/applications/funding",
+    //     },
+    //     {
+    //       id: "product-applications",
+    //       label: "Products & Services",
+    //       icon: <ShoppingCart size={16} />,
+    //       route: "/applications/product",
+    //     },
+    //     {
+    //       id: "advisory-applications",
+    //       label: "Advisory/Board Member",
+    //       icon: <UserCheck size={16} />,
+    //       route: "/applications/advisory",
+    //     },
+    //     {
+    //       id: "intern-application",
+    //       label: "Intern",
+    //       icon: <GraduationCap size={16} />,
+    //       route: "/applications/intern",
+    //     },
+    //   ],
+    // },
     
    
     {
@@ -302,12 +302,12 @@ const Sidebar = ({ companyName = "Company Name" }) => {
       icon: <Lightbulb size={18} />,
       route: "/insights",
     },
-      {
-          id: "shop-tools",
-          label: "My Tools and Templates",
-          icon: <Wrench size={16} />,
-          route: "/growth/shop",
-        },
+      // {
+      //     id: "shop-tools",
+      //     label: "My Tools and Templates",
+      //     icon: <Wrench size={16} />,
+      //     route: "/growth/shop",
+      //   },
     {
       id: "documents",
       label: "My Documents",

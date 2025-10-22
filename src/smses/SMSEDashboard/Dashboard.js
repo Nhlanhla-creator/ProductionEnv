@@ -10,9 +10,10 @@ import { BigScoreCard } from "./big-score"
 import { PISScoreCard } from "./pis-score"
 import { LeadershipScoreCard } from "./leadership-score-card" // New import
 import { CustomerReviewsCard } from "./customer-reviews-card"
+import ShopToolsPage from "../../smses/MyGrowthTools/shop" // Import the shop component
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
-import { X, ChevronRight, Info, Smile, Star, ShieldCheck, ChevronDown, ChevronUp, FileText, TrendingUp, AlertCircle, CheckCircle, Download, Calendar, Bus } from "lucide-react"
+import { X, ChevronRight, Info, Smile, Star, ShieldCheck, ChevronDown, ChevronUp, FileText, TrendingUp, AlertCircle, CheckCircle, Download, Calendar, Bus } from 'lucide-react'
 import "./Dashboard.css"
 import { getFunctions, httpsCallable } from "firebase/functions";
 
@@ -269,7 +270,7 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
         getDocs(query(collection(db, "aiEvaluations"), where("userId", "==", userId)))
       ]);
 
-      // Process fundability data 
+      // Process fundability data
       if (fundSnap.exists()) {
         availableData.fundability = true;
         newReportData.aiEvaluations.fundability = fundSnap.data();
@@ -469,7 +470,7 @@ Respond only with valid JSON.
 
       let newTopPriorities = [];
       try {
-        const jsonMatch = prioritiesResponse.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/) || [];
+        const jsonMatch = prioritiesResponse.match(/\`\`\`(?:json)?\s*(\{[\s\S]*?\})\s*\`\`\`/) || [];
         const cleaned = jsonMatch[1] || prioritiesResponse;
         const parsed = JSON.parse(cleaned);
 
@@ -1396,6 +1397,7 @@ export function Dashboard() {
   const [currentDashboardStep, setCurrentDashboardStep] = useState(0)
   const [authChecked, setAuthChecked] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [activeTab, setActiveTab] = useState("bigscore") // New state for tab management
 
   // Score states for BIG Score calculation - Added leadershipScore
   const [complianceScore, setComplianceScore] = useState(0)
@@ -1573,163 +1575,238 @@ export function Dashboard() {
         <main className="dashboard-main">
           <DashboardHeader userName={userName} />
 
-          {/* Top Row - Application Tracker (full width) */}
-          <section className="tracker-section" style={{ marginBottom: '20px' }}>
-            <ApplicationTracker styles={styles} userId={profileData?.id} />
+          {/* Tab Navigation */}
+          <section className="tab-navigation" style={{ marginTop: '40px', marginBottom: '30px' }}>
+            <div style={{
+              display: 'flex',
+              gap: '0',
+              background: '#ffffff',
+              borderRadius: '12px',
+              overflow: 'hidden',
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)',
+              border: '1px solid #e8ddd6'
+            }}>
+              <button
+                onClick={() => setActiveTab("bigscore")}
+                style={{
+                  flex: 1,
+                  padding: '18px 24px',
+                  background: activeTab === "bigscore" ? styles.primaryBrown : '#ffffff',
+                  color: activeTab === "bigscore" ? '#ffffff' : styles.primaryBrown,
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  fontSize: '1rem',
+                  transition: 'all 0.3s ease',
+                  borderRight: '1px solid #e8ddd6'
+                }}
+                onMouseEnter={(e) => {
+                  if (activeTab !== "bigscore") {
+                    e.target.style.background = '#f5f2f0';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (activeTab !== "bigscore") {
+                    e.target.style.background = '#ffffff';
+                  }
+                }}
+              >
+                BIG Score
+              </button>
+              <button
+                onClick={() => setActiveTab("tools")}
+                style={{
+                  flex: 1,
+                  padding: '18px 24px',
+                  background: activeTab === "tools" ? styles.primaryBrown : '#ffffff',
+                  color: activeTab === "tools" ? '#ffffff' : styles.primaryBrown,
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  fontSize: '1rem',
+                  transition: 'all 0.3s ease'
+                }}
+                onMouseEnter={(e) => {
+                  if (activeTab !== "tools") {
+                    e.target.style.background = '#f5f2f0';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (activeTab !== "tools") {
+                    e.target.style.background = '#ffffff';
+                  }
+                }}
+              >
+            Improve My BIG Score
+              </button>
+            </div>
           </section>
 
-          {/* Row 1 - BIG Score, Customer Reviews, and wider Summary Report */}
-          <section className="big-score-reviews-row" style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr 2fr', // BIG Score (1 unit), Customer Reviews (1 unit), Summary Report (2 units)
-            gap: '20px',
-            marginBottom: '20px'
-          }}>
-            <BigScoreCard
-              styles={styles}
-              profileData={profileData}
-              complianceScore={complianceScore}
-              legitimacyScore={legitimacyScore}
-              leadershipScore={leadershipScore} // Added leadershipScore prop
-              fundabilityScore={fundabilityScore}
-              pisScore={pisScore}
-              onScoreUpdate={score => console.log("Updated BIG Score:", score)}
-            />
+          {/* Conditional Content Based on Active Tab */}
+          {activeTab === "bigscore" ? (
+            <>
+              {/* Top Row - Application Tracker (full width) */}
+              <section className="tracker-section" style={{ marginBottom: '20px' }}>
+                <ApplicationTracker styles={styles} userId={profileData?.id} />
+              </section>
 
-            <CustomerReviewsCard styles={styles} />
-
-            {apiKey && (
-              <SummaryReportCard
-                styles={styles}
-                userId={profileData?.id}
-                apiKey={apiKey}
-              />
-            )}
-            {!apiKey && (
-              <section className="individual-scores-row" style={{
+              {/* Row 1 - BIG Score, Customer Reviews, and wider Summary Report */}
+              <section className="big-score-reviews-row" style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(5, 1fr)',
+                gridTemplateColumns: '1fr 1fr 2fr', // BIG Score (1 unit), Customer Reviews (1 unit), Summary Report (2 units)
                 gap: '20px',
                 marginBottom: '20px'
               }}>
+                <BigScoreCard
+                  styles={styles}
+                  profileData={profileData}
+                  complianceScore={complianceScore}
+                  legitimacyScore={legitimacyScore}
+                  leadershipScore={leadershipScore} // Added leadershipScore prop
+                  fundabilityScore={fundabilityScore}
+                  pisScore={pisScore}
+                  onScoreUpdate={score => console.log("Updated BIG Score:", score)}
+                />
 
-                <div style={{
-                  background: 'linear-gradient(135deg, #ffffff 0%, #faf8f6 100%)',
-                  borderRadius: '20px',
-                  padding: '24px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  minHeight: '200px',
-                  border: '1px solid #e8ddd6'
-                }}>
-                  <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '12px',
-                    color: '#8d6e63'
+                <CustomerReviewsCard styles={styles} />
+
+                {apiKey && (
+                  <SummaryReportCard
+                    styles={styles}
+                    userId={profileData?.id}
+                    apiKey={apiKey}
+                  />
+                )}
+                {!apiKey && (
+                  <section className="individual-scores-row" style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(5, 1fr)',
+                    gap: '20px',
+                    marginBottom: '20px'
                   }}>
-                    <div style={{
-                      width: '24px',
-                      height: '24px',
-                      border: '3px solid #d7ccc8',
-                      borderTop: '3px solid #8d6e63',
-                      borderRadius: '50%',
-                      animation: 'spin 1s linear infinite'
-                    }}></div>
-                    <span style={{ fontSize: '12px', fontWeight: '500' }}>Loading...</span>
-                  </div>
-                </div>
 
+                    <div style={{
+                      background: 'linear-gradient(135deg, #ffffff 0%, #faf8f6 100%)',
+                      borderRadius: '20px',
+                      padding: '24px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      minHeight: '200px',
+                      border: '1px solid #e8ddd6'
+                    }}>
+                      <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '12px',
+                        color: '#8d6e63'
+                      }}>
+                        <div style={{
+                          width: '24px',
+                          height: '24px',
+                          border: '3px solid #d7ccc8',
+                          borderTop: '3px solid #8d6e63',
+                          borderRadius: '50%',
+                          animation: 'spin 1s linear infinite'
+                        }}></div>
+                        <span style={{ fontSize: '12px', fontWeight: '500' }}>Loading...</span>
+                      </div>
+                    </div>
+
+                  </section>
+                )}
               </section>
-            )}
-          </section>
 
-
-
-          {apiKey && (
-            <section className="individual-scores-row" style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(5, 1fr)',
-              gap: '20px',
-              marginBottom: '20px'
-            }}>
-              <ComplianceScoreCard
-                styles={styles}
-                profileData={profileData?.formData}
-                onScoreUpdate={setComplianceScore}
-                apiKey={apiKey}
-              />
-
-              <LegitimacyScoreCard
-                styles={styles}
-                profileData={profileData?.formData}
-                onScoreUpdate={setLegitimacyScore}
-                apiKey={apiKey}
-              />
-
-              <LeadershipScoreCard
-                styles={styles}
-                profileData={profileData?.formData}
-                onScoreUpdate={setLeadershipScore}
-                apiKey={apiKey}
-              />
-
-              <PISScoreCard
-                styles={styles}
-                profileData={profileData?.formData}
-                onScoreUpdate={setPisScore}
-                apiKey={apiKey}
-              />
-
-              <FundabilityScoreCard
-                profileData={profileData?.formData}
-                userId={profileData?.id}
-                onScoreUpdate={setFundabilityScore}
-                apiKey={apiKey}
-              />
-            </section>
-          )}
-
-          {/* Loading indicator while API key is being fetched */}
-          {!apiKey && (
-            <section className="individual-scores-row" style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(5, 1fr)',
-              gap: '20px',
-              marginBottom: '20px'
-            }}>
-              {[...Array(5)].map((_, index) => (
-                <div key={index} style={{
-                  background: 'linear-gradient(135deg, #ffffff 0%, #faf8f6 100%)',
-                  borderRadius: '20px',
-                  padding: '24px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  minHeight: '200px',
-                  border: '1px solid #e8ddd6'
+              {apiKey && (
+                <section className="individual-scores-row" style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(5, 1fr)',
+                  gap: '20px',
+                  marginBottom: '20px'
                 }}>
-                  <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '12px',
-                    color: '#8d6e63'
-                  }}>
-                    <div style={{
-                      width: '24px',
-                      height: '24px',
-                      border: '3px solid #d7ccc8',
-                      borderTop: '3px solid #8d6e63',
-                      borderRadius: '50%',
-                      animation: 'spin 1s linear infinite'
-                    }}></div>
-                    <span style={{ fontSize: '12px', fontWeight: '500' }}>Loading...</span>
-                  </div>
-                </div>
-              ))}
+                  <ComplianceScoreCard
+                    styles={styles}
+                    profileData={profileData?.formData}
+                    onScoreUpdate={setComplianceScore}
+                    apiKey={apiKey}
+                  />
+
+                  <LegitimacyScoreCard
+                    styles={styles}
+                    profileData={profileData?.formData}
+                    onScoreUpdate={setLegitimacyScore}
+                    apiKey={apiKey}
+                  />
+
+                  <LeadershipScoreCard
+                    styles={styles}
+                    profileData={profileData?.formData}
+                    onScoreUpdate={setLeadershipScore}
+                    apiKey={apiKey}
+                  />
+
+                  <PISScoreCard
+                    styles={styles}
+                    profileData={profileData?.formData}
+                    onScoreUpdate={setPisScore}
+                    apiKey={apiKey}
+                  />
+
+                  <FundabilityScoreCard
+                    profileData={profileData?.formData}
+                    userId={profileData?.id}
+                    onScoreUpdate={setFundabilityScore}
+                    apiKey={apiKey}
+                  />
+                </section>
+              )}
+
+              {/* Loading indicator while API key is being fetched */}
+              {!apiKey && (
+                <section className="individual-scores-row" style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(5, 1fr)',
+                  gap: '20px',
+                  marginBottom: '20px'
+                }}>
+                  {[...Array(5)].map((_, index) => (
+                    <div key={index} style={{
+                      background: 'linear-gradient(135deg, #ffffff 0%, #faf8f6 100%)',
+                      borderRadius: '20px',
+                      padding: '24px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      minHeight: '200px',
+                      border: '1px solid #e8ddd6'
+                    }}>
+                      <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '12px',
+                        color: '#8d6e63'
+                      }}>
+                        <div style={{
+                          width: '24px',
+                          height: '24px',
+                          border: '3px solid #d7ccc8',
+                          borderTop: '3px solid #8d6e63',
+                          borderRadius: '50%',
+                          animation: 'spin 1s linear infinite'
+                        }}></div>
+                        <span style={{ fontSize: '12px', fontWeight: '500' }}>Loading...</span>
+                      </div>
+                    </div>
+                  ))}
+                </section>
+              )}
+            </>
+          ) : (
+            // Tools & Templates Tab Content
+            <section className="tools-section">
+              <ShopToolsPage />
             </section>
           )}
         </main>
