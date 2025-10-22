@@ -1240,24 +1240,29 @@ export const FundingTable = ({ filters = {}, onInsightsData, onPrimaryMatchCount
             const estimatedReviewTime = investor.formData?.applicationBrief?.equityDocuments?.estimatedReviewTime || "-"
 
             let minTicket =
-              fundProfile?.minimumTicket ||
-              fundProfile?.minTicket ||
-              fund.minimumTicket ||
-              fund.minTicket ||
-              investor.formData?.fundDetails?.minimumTicket
+  fundProfile?.minimumTicket ??
+  fundProfile?.minTicket ??
+  fund.minimumTicket ??
+  fund.minTicket ??
+  investor.formData?.fundDetails?.minimumTicket
 
-            let maxTicket =
-              fundProfile?.maximumTicket ||
-              fundProfile?.maxTicket ||
-              fund.maximumTicket ||
-              fund.maxTicket ||
-              investor.formData?.fundDetails?.maximumTicket
+let maxTicket =
+  fundProfile?.maximumTicket ??
+  fundProfile?.maxTicket ??
+  fund.maximumTicket ??
+  fund.maxTicket ??
+  investor.formData?.fundDetails?.maximumTicket
 
-            if (!minTicket || !maxTicket) {
-              const ticketInfo = fundProfile?.ticketSize || fund.ticketSize || {}
-              minTicket = minTicket || ticketInfo.min || ticketInfo.minimum
-              maxTicket = maxTicket || ticketInfo.max || ticketInfo.maximum
-            }
+if (!minTicket) {
+  const ticketInfo = fundProfile?.ticketSize || fund.ticketSize || {}
+  minTicket = ticketInfo.min || ticketInfo.minimum || 0
+}
+
+if (!maxTicket) {
+  const ticketInfo = fundProfile?.ticketSize || fund.ticketSize || {}
+  maxTicket = ticketInfo.max || ticketInfo.maximum || fund.size || 0
+}
+
 
             const instruments = generalPrefs.investmentFocus
               ? Array.isArray(generalPrefs.investmentFocus)
@@ -1305,7 +1310,7 @@ export const FundingTable = ({ filters = {}, onInsightsData, onPrimaryMatchCount
                 matchPercentage: scoreResult.score,
                 investmentType: enrichedFund.type.join(", ") || "Various",
                 targetStage: enrichedFund.stages.join(", ") || "Various",
-                ticketSize: formatTicketSize(minTicket, maxTicket),
+                ticketSize: formatTicketSize(minTicket, maxTicket) ,
                 minInvestment: minTicket,
                 maxInvestment: maxTicket,
                 sectorFocus: enrichedFund.sectorFocus.join(", ") || "Various",
