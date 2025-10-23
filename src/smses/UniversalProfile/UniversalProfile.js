@@ -12,6 +12,7 @@ import EntityOverview from "./entity-overview"
 import OwnershipManagement from "./ownership-management"
 import ContactDetails from "./contact-details"
 import LegalCompliance from "./legal-compliance"
+import FinancialOverview from "./FinancialOverview" // Import the FinancialOverview component
 import ProductsServices from "./products-services"
 import HowDidYouHear from "./how-did-you-hear"
 import Documents from "./Documents"
@@ -25,13 +26,14 @@ const sections = [
   { id: "ownershipManagement", label: "Ownership &\nManagement" },
   { id: "contactDetails", label: "Contact\nDetails" },
   { id: "legalCompliance", label: "Legal &\nCompliance" },
+  { id: "financialOverview", label: "Financial\nOverview" }, // Added Financial Overview tab
   { id: "productsServices", label: "Products &\nServices" },
   { id: "howDidYouHear", label: "How Did\nYou Hear" },
   { id: "documents", label: "Document\nUpload" },
   { id: "declarationConsent", label: "Declaration &\nConsent" },
 ]
 
-// Section validation functions - Only entityOverview and contactDetails have real validations
+// Section validation functions - Updated to include financialOverview
 const sectionValidations = {
   instructions: () => true, // Always valid
   
@@ -75,6 +77,8 @@ const sectionValidations = {
   },
 
   legalCompliance: () => true, // Always valid
+
+  financialOverview: () => true, // Always valid - add specific validation if needed
 
   productsServices: () => true, // Always valid
 
@@ -166,6 +170,7 @@ export default function UniversalProfile() {
     ownershipManagement: false,
     contactDetails: false,
     legalCompliance: false,
+    financialOverview: false, // Added financialOverview
     productsServices: false,
     howDidYouHear: false,
     documents: false,
@@ -211,6 +216,22 @@ const [validationModal, setValidationModal] = useState({
     },
     legalCompliance: {
       licenseDoc: null,
+    },
+    financialOverview: { // Added financialOverview data structure
+      generatesRevenue: "",
+      annualRevenue: "",
+      currentValuation: "",
+      hasAccountingSoftware: "",
+      accountingSoftwareDocs: [],
+      profitabilityStatus: "",
+      existingDebt: "",
+      fundraisingHistory: "",
+      booksUpToDate: "",
+      booksUpToDateDetails: "",
+      hasCreditReport: "",
+      creditReportDocs: [],
+      creditScore: "",
+      creditIssues: ""
     },
     productsServices: {
       entityType: "smse",
@@ -417,13 +438,14 @@ const [validationModal, setValidationModal] = useState({
 
       ...(isFinalSubmit || !section ? { completedSections } : {}),
     };
-    const triggerSections = ["enterpriseReadiness","documentUpload","entityOverview","legalCompliance","contactDetails"];
+    const triggerSections = ["enterpriseReadiness","documentUpload","entityOverview","legalCompliance","contactDetails","financialOverview"];
   const triggerSectionsFundability = [
   "enterpriseReadiness",
   "documentUpload",
   "entityOverview",
     "legalCompliance",
   "contactDetails",
+  "financialOverview", // Added financialOverview to fundability triggers
 ];
 
 const triggerSectionsLegitimacy = [
@@ -432,6 +454,7 @@ const triggerSectionsLegitimacy = [
   "entityOverview",
     "legalCompliance",
   "contactDetails",
+  "financialOverview", // Added financialOverview to legitimacy triggers
 ];
 
 if (section) {
@@ -599,6 +622,8 @@ const handleSaveAndContinue = async () => {
         return <ContactDetails {...commonProps} />
       case "legalCompliance":
         return <LegalCompliance {...commonProps} />
+      case "financialOverview": // Added financialOverview case
+        return <FinancialOverview {...commonProps} />
       case "productsServices":
         return <ProductsServices {...commonProps} />
       case "howDidYouHear":

@@ -5,11 +5,7 @@ export const sections = [
     label: "Request\nOverview",
     path: "request-overview"
   },
-  {
-    id: "productsServices",
-    label: "Required\nProducts/Services",
-    path: "products-services"
-  },
+
   {
     id: "matchingPreferences",
     label: "Matching\nPreferences",

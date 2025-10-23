@@ -6,7 +6,7 @@ import { CheckCircle, ChevronRight, ChevronLeft, Save, X, ArrowRight } from "luc
 import { renderApplicationOverview } from "./ApplicationOverview"
 import { renderUseOfFunds } from "./UseOfFunds"
 import { renderEnterpriseReadiness } from "./EnterpriseReadiness"
-import { renderFinancialOverview } from "./FinancialOverview"
+
 import { renderGuarantees } from "./Gurantees"
 import { renderGrowthPotential } from "./GrowthPotential"
 import { renderSocialImpact } from "./SocialImpact"
@@ -27,7 +27,7 @@ const sectionsWithGuarantees = [
   { id: "applicationOverview", label: "Application\nOverview" },
   { id: "useOfFunds", label: "Use of\nFunds" },
   { id: "enterpriseReadiness", label: "Enterprise\nReadiness" },
-  { id: "financialOverview", label: "Financial\nOverview" },
+
   { id: "guarantees", label: "Guarantees" },
   { id: "growthPotential", label: "Growth\nPotential" },
   { id: "socialImpact", label: "Social\nImpact" },
@@ -899,8 +899,7 @@ const FundingApplication = () => {
         return renderUseOfFunds(formData.useOfFunds, updateFormData)
       case "enterpriseReadiness":
         return renderEnterpriseReadiness(formData.enterpriseReadiness, updateFormData, apiKey)
-      case "financialOverview":
-        return renderFinancialOverview(formData.financialOverview, updateFormData)
+
       case "guarantees":
         return renderGuarantees(formData.guarantees, updateFormData)
       case "growthPotential":
