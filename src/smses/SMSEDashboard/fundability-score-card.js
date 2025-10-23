@@ -11,7 +11,7 @@ import { useFirebaseFunctions } from './hooks';
 import { getFunctions, httpsCallable } from "firebase/functions";
 
 
-export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate ,apiKey}) {
+export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, apiKey }) {
   const [showModal, setShowModal] = useState(false)
   const [fundabilityScore, setFundabilityScore] = useState(0)
   const [scoreBreakdown, setScoreBreakdown] = useState([])
@@ -36,9 +36,9 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate ,
       console.error('Function error:', err);
     }
   };
-  
 
-  
+
+
 
   useEffect(() => {
     document.body.style.overflow = showModal ? "hidden" : ""
@@ -93,7 +93,9 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate ,
     Object.entries(categories).forEach(([key, labels]) => {
       let foundScore = 0
       for (const label of labels) {
+        // Updated patterns to handle the new format with ### headers
         const patterns = [
+          new RegExp(`###\\s+\\d+\\.\\s*${label}[^\\d]*\\*\\*Score:\\*\\*\\s*(\\d)`, "i"),
           new RegExp(`\\*\\*${label}\\s*:\\s*(\\d)\\*\\*`, "i"),
           new RegExp(`${label}\\s*:\\s*(\\d)`, "i"),
           new RegExp(`\\d+\\.\\s*\\*\\*${label}\\s*:\\s*(\\d)\\*\\*`, "i"),
@@ -266,18 +268,18 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate ,
     }
   }
 
-const sendMessageToChatGPT = async (message) => {
-  try {
-    const result = await callFunction("generateFundabilityAnalysis", {
-      prompt: message,
-      // optional: model, max_tokens, temperature
-    });
-    return result?.content || "";
-  } catch (error) {
-    console.error("ChatGPT API Error (via functions):", error);
-    throw error;
-  }
-};
+  const sendMessageToChatGPT = async (message) => {
+    try {
+      const result = await callFunction("generateFundabilityAnalysis", {
+        prompt: message,
+        // optional: model, max_tokens, temperature
+      });
+      return result?.content || "";
+    } catch (error) {
+      console.error("ChatGPT API Error (via functions):", error);
+      throw error;
+    }
+  };
 
   const prepareDataForEvaluation = async (data) => {
     let evaluationData = ""
@@ -460,6 +462,11 @@ const sendMessageToChatGPT = async (message) => {
 
       const combinedMessage = `Evaluate the fundability of the following business using the BIG Fundability Scorecard rubric.
 
+IMPORTANT FORMATTING REQUIREMENTS:
+- Use clear section headers with ###
+- Provide specific, actionable improvement recommendations for EACH category
+- Keep rationale concise but insightful
+
 Instructions:
 - Score each of the 6 categories below from 0 to 5 using the rubric where:
   • 0 = No evidence or very poor
@@ -468,9 +475,15 @@ Instructions:
   • 3 = Average/acceptable
   • 4 = Good/strong evidence
   • 5 = Excellent/outstanding
-
 - Provide a short rationale for each score (2-3 sentences)
-- If not giving 5/5 explain why if you cant give 5/5
+- FOR EACH CATEGORY, include a "How to Improve" section with 3-5 specific, actionable steps to increase the score
+- At the end, give an overall fundability assessment and key recommendations
+
+CRITICAL: For improvement recommendations, be SPECIFIC and ACTIONABLE. Instead of vague advice like "improve financials," provide concrete steps like:
+- "Implement QuickBooks or Xero accounting software within the next 30 days"
+- "Complete audited financial statements for the previous fiscal year within 3 months"
+- "Secure 3 signed customer contracts with payment terms within 60 days"
+- "Develop a 12-month cash flow projection with monthly updates starting next month"
 
 Categories to evaluate:
 1. Financial Readiness - Accounting systems, compliance, up-to-date records
@@ -481,7 +494,59 @@ Categories to evaluate:
 6. Impact Proof - Job creation, HDG inclusion, environmental responsibility, CSR
 
 Input Data:
-${evaluationData}`
+${evaluationData}
+
+OUTPUT FORMAT:
+### 1. Financial Readiness
+**Score:** [0-5]
+**Rationale:** [2-3 sentence explanation]
+**How to Improve:** 
+• [Specific action 1 with timeline]
+• [Specific action 2 with measurable goal]
+• [Specific action 3 with concrete steps]
+
+### 2. Financial Strength
+**Score:** [0-5]
+**Rationale:** [2-3 sentence explanation]
+**How to Improve:** 
+• [Specific action 1 with timeline]
+• [Specific action 2 with measurable goal]
+• [Specific action 3 with concrete steps]
+
+### 3. Operational Strength
+**Score:** [0-5]
+**Rationale:** [2-3 sentence explanation]
+**How to Improve:** 
+• [Specific action 1 with timeline]
+• [Specific action 2 with measurable goal]
+• [Specific action 3 with concrete steps]
+
+### 4. Pitch & Business Plan
+**Score:** [0-5]
+**Rationale:** [2-3 sentence explanation]
+**How to Improve:** 
+• [Specific action 1 with timeline]
+• [Specific action 2 with measurable goal]
+• [Specific action 3 with concrete steps]
+
+### 5. Guarantees
+**Score:** [0-5]
+**Rationale:** [2-3 sentence explanation]
+**How to Improve:** 
+• [Specific action 1 with timeline]
+• [Specific action 2 with measurable goal]
+• [Specific action 3 with concrete steps]
+
+### 6. Impact Proof
+**Score:** [0-5]
+**Rationale:** [2-3 sentence explanation]
+**How to Improve:** 
+• [Specific action 1 with timeline]
+• [Specific action 2 with measurable goal]
+• [Specific action 3 with concrete steps]
+
+### Overall Assessment
+**Final Analysis:** [Brief overall assessment with key recommendations for improving fundability]`
 
       const result = await sendMessageToChatGPT(combinedMessage)
       setAiEvaluationResult(result)
@@ -521,63 +586,63 @@ ${evaluationData}`
     }
   }
 
-useEffect(() => {
-  // Wait for both auth user and API key to be available
-  if (!auth?.currentUser?.uid || !apiKey) return
-  
-  console.log("✅ Both user and API key are available, setting up Firebase listeners...")
-  
-  const docRef = doc(db, "universalProfiles", auth.currentUser.uid)
-  const aiEvalRef = doc(db, "aiFundabilityEvaluations", auth.currentUser.uid)
-  
-  const unsubscribe = onSnapshot(docRef, async (docSnap) => {
-    if (docSnap.exists()) {
-      const data = docSnap.data()
-      // ✅ Trigger Fundability AI Evaluation
-      if (data.triggerFundabilityEvaluation === true && !isEvaluating) {
-        console.log("Trigger detected: Running fundability AI evaluation...")
-        setTriggeredByAuto(true)
-        const result = await runAiEvaluation() // Now safe to use - apiKey is available
-        await updateDoc(docRef, { triggerFundabilityEvaluation: false })
-        
-        // Save result to Firestore
-        await updateDoc(aiEvalRef, {
-          result,
-          timestamp: new Date(),
-          profileSnapshot: profileData,
-        }).catch(async () => {
-          await setDoc(aiEvalRef, {
+  useEffect(() => {
+    // Wait for both auth user and API key to be available
+    if (!auth?.currentUser?.uid || !apiKey) return
+
+    console.log("✅ Both user and API key are available, setting up Firebase listeners...")
+
+    const docRef = doc(db, "universalProfiles", auth.currentUser.uid)
+    const aiEvalRef = doc(db, "aiFundabilityEvaluations", auth.currentUser.uid)
+
+    const unsubscribe = onSnapshot(docRef, async (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data()
+        // ✅ Trigger Fundability AI Evaluation
+        if (data.triggerFundabilityEvaluation === true && !isEvaluating) {
+          console.log("Trigger detected: Running fundability AI evaluation...")
+          setTriggeredByAuto(true)
+          const result = await runAiEvaluation() // Now safe to use - apiKey is available
+          await updateDoc(docRef, { triggerFundabilityEvaluation: false })
+
+          // Save result to Firestore
+          await updateDoc(aiEvalRef, {
             result,
             timestamp: new Date(),
             profileSnapshot: profileData,
+          }).catch(async () => {
+            await setDoc(aiEvalRef, {
+              result,
+              timestamp: new Date(),
+              profileSnapshot: profileData,
+            })
           })
-        })
-        
-        setAiEvaluationResult(result)
-        setShowDetailedAnalysis(true)
-      }
-    }
-    
-    // ✅ Always load saved AI result (whether trigger ran or not)
-    try {
-      const aiSnap = await getDoc(aiEvalRef)
-      if (aiSnap.exists()) {
-        const saved = aiSnap.data()
-        if (saved.result) {
-          console.log("Loading saved AI evaluation result")
-          setAiEvaluationResult(saved.result)
+
+          setAiEvaluationResult(result)
+          setShowDetailedAnalysis(true)
         }
       }
-    } catch (error) {
-      console.error("Error loading saved AI evaluation:", error)
+
+      // ✅ Always load saved AI result (whether trigger ran or not)
+      try {
+        const aiSnap = await getDoc(aiEvalRef)
+        if (aiSnap.exists()) {
+          const saved = aiSnap.data()
+          if (saved.result) {
+            console.log("Loading saved AI evaluation result")
+            setAiEvaluationResult(saved.result)
+          }
+        }
+      } catch (error) {
+        console.error("Error loading saved AI evaluation:", error)
+      }
+    })
+
+    return () => {
+      // console.log("🧹 Cleaning up Firebase listener...")
+      unsubscribe()
     }
-  })
-  
-  return () => {
-    // console.log("🧹 Cleaning up Firebase listener...")
-    unsubscribe()
-  }
-}, [auth?.currentUser?.uid, apiKey, isEvaluating]) // Monitors apiKey changes
+  }, [auth?.currentUser?.uid, apiKey, isEvaluating]) // Monitors apiKey changes
   // Updated score levels with new color scheme
   const getScoreLevel = (score) => {
     if (score > 90) return { level: "Highly fundable", color: "#1B5E20", icon: CheckCircle }
@@ -591,70 +656,122 @@ useEffect(() => {
   const ScoreIcon = scoreLevel.icon
 
   // Helper function to format AI result into sections
-  const formatAiResult = (result) => {
-    // First, clean up the markdown formatting
-    const cleanedResult = result.replace(/\*\*(.*?)\*\*/g, "$1") // Remove ** formatting
+  const formatAiResult = (text) => {
+    if (!text) return null;
 
-    const sections = cleanedResult.split(/(?=\d+\.\s|\*\*[^*]+\*\*:|\n\n)/)
+    const cleanedResult = text.replace(/\*\*(.*?)\*\*/g, "$1");
 
-    return sections
-      .map((section, index) => {
-        const trimmed = section.trim()
-        if (!trimmed) return null
+    // Split by major sections (### headers)
+    const sections = cleanedResult.split(/(?=###\s)/g);
 
-        // Check if it's a category header
-        const isHeader = /^\d+\.\s/.test(trimmed)
+    return sections.map((section, index) => {
+      const trimmed = section.trim();
+      if (!trimmed) return null;
+
+      // Check if this is a category section with "How to Improve"
+      const isCategorySection = /^###\s+\d+\./.test(trimmed);
+
+      if (isCategorySection) {
+        // Split the category section into parts
+        const lines = trimmed.split('\n').filter(line => line.trim());
+        const header = lines[0];
+        const content = lines.slice(1).join('\n');
+
+        // Extract improvement section with special styling
+        const improvementIndex = content.toLowerCase().indexOf('how to improve');
+        let mainContent = content;
+        let improvementContent = '';
+
+        if (improvementIndex !== -1) {
+          mainContent = content.substring(0, improvementIndex);
+          improvementContent = content.substring(improvementIndex);
+        }
 
         return (
-          <div key={index} style={{ marginBottom: "15px" }}>
-            {isHeader ? (
-              <div
-                style={{
-                  fontWeight: "bold",
-                  color: "#5d4037",
-                  fontSize: "16px",
-                  marginBottom: "8px",
-                  paddingBottom: "5px",
-                  borderBottom: "1px solid #e8d8cf",
-                }}
-              >
-                {trimmed.split("\n")[0]}
+          <div key={index} style={{ marginBottom: "20px", border: "1px solid #e8d8cf", borderRadius: "8px", overflow: "hidden" }}>
+            {/* Header */}
+            <div style={{ backgroundColor: "#8d6e63", color: "white", padding: "12px 16px", fontWeight: "bold" }}>
+              {header.replace('###', '').trim()}
+            </div>
+
+            {/* Main Content */}
+            <div style={{ padding: "16px", backgroundColor: "white" }}>
+              <div style={{ whiteSpace: "pre-wrap", lineHeight: "1.6", color: "#5d4037", marginBottom: improvementContent ? "15px" : "0" }}>
+                {mainContent}
               </div>
-            ) : null}
-            <div
-              style={{
-                fontSize: "14px",
-                lineHeight: "1.6",
-                color: "#6d4c41",
-                whiteSpace: "pre-wrap",
-              }}
-            >
-              {isHeader ? trimmed.split("\n").slice(1).join("\n") : trimmed}
+
+              {/* Improvement Section with Special Styling */}
+              {improvementContent && (
+                <div style={{
+                  backgroundColor: "#f8f4f0",
+                  padding: "15px",
+                  borderRadius: "6px",
+                  borderLeft: "4px solid #ff9800"
+                }}>
+                  <div style={{
+                    fontWeight: "bold",
+                    color: "#5d4037",
+                    marginBottom: "10px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px"
+                  }}>
+                    <TrendingUp size={16} />
+                    Improvement Actions
+                  </div>
+                  <div style={{
+                    whiteSpace: "pre-wrap",
+                    lineHeight: "1.6",
+                    color: "#6d4c41",
+                    fontSize: "14px"
+                  }}>
+                    {improvementContent.replace('How to Improve:', '').trim()}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        )
-      })
-      .filter(Boolean)
-  }
+        );
+      }
+
+      // Regular section formatting (for overall assessment, etc.)
+      return (
+        <div key={index} style={{ marginBottom: "15px" }}>
+          <div style={{
+            fontSize: "14px",
+            lineHeight: "1.6",
+            color: "#6d4c41",
+            whiteSpace: "pre-wrap",
+            backgroundColor: "white",
+            padding: "16px",
+            borderRadius: "8px",
+            border: "1px solid #e8d8cf"
+          }}>
+            {trimmed}
+          </div>
+        </div>
+      );
+    }).filter(Boolean);
+  };
 
   return (
     <>
       {/* Enhanced Outside Card Design */}
       <div
-     
-  style={{
-    background: "linear-gradient(135deg, #ffffff 0%, #faf8f6 100%)",
-    borderRadius: "20px",
-    boxShadow: "0 8px 32px rgba(141, 110, 99, 0.15)",
-    border: "1px solid #e8ddd6",
-    overflow: "hidden",
-    position: "relative",
-    width: "100%", // Add this line to make it full width
-    minWidth: "210px", // Add this for minimum width
-    maxWidth: "000px", // Add this to limit maximum width (optional)
-  }}
->
-   
+
+        style={{
+          background: "linear-gradient(135deg, #ffffff 0%, #faf8f6 100%)",
+          borderRadius: "20px",
+          boxShadow: "0 8px 32px rgba(141, 110, 99, 0.15)",
+          border: "1px solid #e8ddd6",
+          overflow: "hidden",
+          position: "relative",
+          width: "100%", // Add this line to make it full width
+          minWidth: "210px", // Add this for minimum width
+          maxWidth: "000px", // Add this to limit maximum width (optional)
+        }}
+      >
+
         {/* Header with gradient */}
         <div
           style={{
@@ -682,13 +799,13 @@ useEffect(() => {
                 whiteSpace: "nowrap",
               }}
             >
-         Capital Appeal Score
+              Capital Appeal Score
             </h2>
             <DollarSign size={24} style={{ opacity: 0.8 }} />
           </div>
           <p
             style={{
-               marginLeft: "-10px",
+              marginLeft: "-10px",
               margin: "0",
               fontSize: "13px",
               opacity: "0.9",
@@ -826,7 +943,7 @@ useEffect(() => {
               borderRadius: "10px",
               background: "linear-gradient(135deg, #5d4037 0%, #4a2c20 100%)",
               color: "white",
-              marginTop:"15px",
+              marginTop: "15px",
               border: "none",
               fontWeight: "600",
               fontSize: "12px",
@@ -1064,7 +1181,6 @@ useEffect(() => {
                         </>
                       )}
                     </button>
-
                     {!apiKey && (
                       <p
                         style={{
