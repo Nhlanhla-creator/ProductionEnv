@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { ChevronDown, ChevronUp, Edit, ExternalLink, FileText, FileBarChart, TrendingUp, DollarSign, Building, Users, Heart, CheckSquare } from "lucide-react"
+import FundabilityScoreCard from './FundabilityScoreCard'
 
 const ApplicationSummary = ({ formData, onEdit }) => {
   const [expandedSections, setExpandedSections] = useState({
@@ -177,15 +178,19 @@ const ApplicationSummary = ({ formData, onEdit }) => {
             <div
               className="header-grid"
               style={{
-                display: 'flex',
-                justifyContent: 'space-between',
+                display: 'grid',
+                gridTemplateColumns: 'auto 1fr auto',
+                gap: '32px',
                 alignItems: 'center',
                 position: 'relative',
                 zIndex: 2
               }}>
 
+              {/* Fundability Score */}
+              <FundabilityScoreCard applicationData={formData} />
+
               {/* Title */}
-              <div>
+              <div style={{ textAlign: 'center' }}>
                 <h1 style={{
                   background: 'linear-gradient(135deg, #4a352f, #7d5a50)',
                   WebkitBackgroundClip: 'text',
@@ -1438,32 +1443,32 @@ const ApplicationSummary = ({ formData, onEdit }) => {
             border: '1px solid rgba(200, 182, 166, 0.3)',
             boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)"
           }}>
-<button
-  onClick={() => window.location.href = "/funding-matches"}
-  style={{
-    padding: "16px 32px",
-    background: 'linear-gradient(135deg, #a67c52, #7d5a50)',
-    color: "#faf7f2",
-    border: "none",
-    borderRadius: "16px",
-    fontSize: "16px",
-    fontWeight: "600",
-    cursor: "pointer",
-    transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-    boxShadow: '0 8px 24px rgba(166, 124, 82, 0.3)',
-    minWidth: '200px'
-  }}
-  onMouseEnter={(e) => {
-    e.target.style.transform = 'translateY(-4px)';
-    e.target.style.boxShadow = '0 16px 40px rgba(166, 124, 82, 0.4)';
-  }}
-  onMouseLeave={(e) => {
-    e.target.style.transform = 'translateY(0)';
-    e.target.style.boxShadow = '0 8px 24px rgba(166, 124, 82, 0.3)';
-  }}
->
-  🚀 Go to Dashboard
-</button>
+            <button
+              onClick={() => window.location.href = "/funding-matches"}
+              style={{
+                padding: "16px 32px",
+                background: 'linear-gradient(135deg, #a67c52, #7d5a50)',
+                color: "#faf7f2",
+                border: "none",
+                borderRadius: "16px",
+                fontSize: "16px",
+                fontWeight: "600",
+                cursor: "pointer",
+                transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                boxShadow: '0 8px 24px rgba(166, 124, 82, 0.3)',
+                minWidth: '200px'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.transform = 'translateY(-4px)';
+                e.target.style.boxShadow = '0 16px 40px rgba(166, 124, 82, 0.4)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'translateY(0)';
+                e.target.style.boxShadow = '0 8px 24px rgba(166, 124, 82, 0.3)';
+              }}
+            >
+              🚀 Go to Dashboard
+            </button>
           </div>
         </div>
       </div>

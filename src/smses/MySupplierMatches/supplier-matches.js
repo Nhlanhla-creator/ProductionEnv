@@ -7,7 +7,6 @@ import { getAuth } from "firebase/auth";
 import { db } from "../../firebaseConfig";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { SupplierFlowPipeline } from "./supplier-flow-pipeline";
-
 import SupplierTabbedTables from "./supplier-tabbed-tables";
 import styles from "./supplier.module.css";
 import { X, ArrowRight } from 'lucide-react';
@@ -38,7 +37,7 @@ const onboardingSteps = [
 // Consistent header styles with underline
 const headerStyle = {
   fontSize: 'clamp(1.2rem, 3vw, 1.5rem)',
-  color: '#3e2723', // Dark brown
+  color: '#3e2723',
   fontWeight: '600',
   margin: '0 0 20px 0',
   fontFamily: 'inherit',
@@ -54,6 +53,7 @@ export default function SupplierMatchesPage() {
   const [filteredSuppliers, setFilteredSuppliers] = useState([]);
   const [currentOnboardingStep, setCurrentOnboardingStep] = useState(0);
   const [allSuppliers, setAllSuppliers] = useState([]);
+  const [defaultActiveTab, setDefaultActiveTab] = useState("my-matches"); // Set default to my-matches
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -303,7 +303,7 @@ export default function SupplierMatchesPage() {
           border-radius: 8px;
           cursor: pointer;
           font-size: clamp(0.8rem, 2vw, 0.9rem);
-          font-weight: 500;
+          fontWeight: 500;
           transition: all 0.2s;
           flex: 1;
           display: flex;
@@ -407,8 +407,8 @@ export default function SupplierMatchesPage() {
           style={{
             width: '100%',
             maxWidth: '100%',
-            padding: '5px 20px 2px 20px', // Same compact padding as customer
-            margin: '0 0 5px 0', // Same compact margin as customer
+            padding: '5px 20px 2px 20px',
+            margin: '0 0 5px 0',
             backgroundColor: 'rgba(255, 255, 255, 0.95)',
             borderRadius: '8px',
             boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
@@ -420,20 +420,18 @@ export default function SupplierMatchesPage() {
           <div
             style={{
               width: '100%',
-              overflow: 'hidden' // Hide scrollbars like customer
+              overflow: 'hidden'
             }}
             className={styles.sectionContent}
           >
             <h2 style={{ ...headerStyle, margin: '0 0 5px 0' }}>DealFlow Pipeline</h2>
             <SupplierFlowPipeline
               suppliers={allSuppliers}
-              filteredSuppliers={filteredSuppliers}  // Add this line - CRITICAL!
+              filteredSuppliers={filteredSuppliers}
               contactedSuppliers={contactedSuppliers}
             />
           </div>
         </div>
-
-
 
         <div
           style={{
@@ -452,6 +450,7 @@ export default function SupplierMatchesPage() {
           <SupplierTabbedTables
             onSupplierContacted={handleSupplierContacted}
             onSuppliersUpdate={handleSuppliersUpdate}
+            defaultActiveTab="my-matches" // Pass the default tab
           />
         </div>
       </div>

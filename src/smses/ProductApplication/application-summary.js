@@ -17,7 +17,7 @@ import {
 const ApplicationSummary = ({ data, onEdit }) => {
   const [expandedSections, setExpandedSections] = useState({
     requestOverview: false,
-    productsServices: false,
+   
     matchingPreferences: false,
     contactSubmission: false,
   })
@@ -402,127 +402,7 @@ const ApplicationSummary = ({ data, onEdit }) => {
             </div>
 
             {/* Required Products or Services */}
-            <div
-              style={{
-                background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
-                backdropFilter: "blur(20px)",
-                borderRadius: "16px",
-                overflow: "hidden",
-                border: "1px solid rgba(200, 182, 166, 0.3)",
-                boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
-                transition: "all 0.3s ease",
-              }}
-            >
-              <div
-                onClick={() => toggleSection("productsServices")}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "16px 20px",
-                  background: expandedSections.productsServices
-                    ? "linear-gradient(135deg, #7d5a50, #4a352f)"
-                    : "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
-                  cursor: "pointer",
-                  transition: "all 0.3s ease",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <Package size={20} color={expandedSections.productsServices ? "#faf7f2" : "#4a352f"} />
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: "clamp(16px, 2.5vw, 20px)",
-                      fontWeight: "700",
-                      color: expandedSections.productsServices ? "#faf7f2" : "#4a352f",
-                    }}
-                  >
-                    Required Products or Services
-                  </h2>
-                </div>
-                {expandedSections.productsServices ? (
-                  <ChevronUp size={20} color="#faf7f2" />
-                ) : (
-                  <ChevronDown size={20} color="#4a352f" />
-                )}
-              </div>
-
-              {expandedSections.productsServices && (
-                <div
-                  style={{
-                    padding: "20px",
-                    background: "linear-gradient(135deg, rgba(250, 247, 242, 0.8), rgba(240, 230, 217, 0.6))",
-                    animation: "slideDown 0.3s ease-out",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                      gap: "16px",
-                    }}
-                  >
-                    {[
-                      {
-                        label: "Product/Service Categories",
-                        value: formatArray(data?.productsServices?.categories),
-                        icon: Package,
-                      },
-                      { label: "Keywords / Specific Needs", value: data?.productsServices?.keywords, icon: FileText },
-                      {
-                        label: "Scope of Work Files",
-                        value: formatFiles(data?.productsServices?.scopeOfWorkFiles),
-                        icon: FileText,
-                      },
-                    ].map((item, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          background: "rgba(250, 247, 242, 0.8)",
-                          borderRadius: "12px",
-                          padding: "16px",
-                          border: "1px solid rgba(200, 182, 166, 0.2)",
-                          transition: "all 0.3s ease",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = "translateY(-1px)"
-                          e.currentTarget.style.boxShadow = "0 4px 16px rgba(74, 53, 47, 0.08)"
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = "translateY(0)"
-                          e.currentTarget.style.boxShadow = "none"
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                          <item.icon size={14} color="#7d5a50" />
-                          <span
-                            style={{
-                              fontSize: "12px",
-                              color: "#7d5a50",
-                              fontWeight: "600",
-                              textTransform: "uppercase",
-                              letterSpacing: "0.5px",
-                            }}
-                          >
-                            {item.label}
-                          </span>
-                        </div>
-                        <span
-                          style={{
-                            fontSize: "14px",
-                            color: "#4a352f",
-                            fontWeight: "500",
-                            lineHeight: "1.4",
-                          }}
-                        >
-                          {item.value || "Not provided"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+          
 
             {/* Matching Preferences */}
             <div

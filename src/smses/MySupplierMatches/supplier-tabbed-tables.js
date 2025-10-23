@@ -1,22 +1,11 @@
 "use client"
-import { useState, useEffect } from "react"
-import {
-  Eye,
-  RefreshCw,
-  X,
-  Calendar,
-  DollarSign,
-  BarChart3,
-  Package,
-  Award,
-  Truck,
-  Star,
-  MessageSquare,
-  Send,
-} from "lucide-react"
-import { SupplierTable } from "./supplier-table" // Import your existing SupplierTable component
+import { useState, useRef, useEffect } from "react"
+import { Eye, ChevronDown, Search, X, Trophy, TrendingUp, Calendar, DollarSign, FileText, Users, MapPin, GraduationCap, Briefcase, RefreshCw, BarChart3, Package, Star, MessageSquare, Send, Truck, Award } from "lucide-react"
+import ProductServiceApplication from "../../smses/ProductApplication/ProductApplication"
+import { SupplierTable } from "./supplier-table"
+
 import { db, auth } from "../../firebaseConfig"
-import { collection, addDoc, getDocs, query, where, doc, getDoc } from "firebase/firestore"
+import { collection, query, where, onSnapshot, doc, getDoc, updateDoc, arrayUnion, serverTimestamp, addDoc, getDocs } from "firebase/firestore"
 
 // Text truncation component
 const TruncatedText = ({ text, maxLength = 40 }) => {
@@ -58,6 +47,32 @@ const TruncatedText = ({ text, maxLength = 40 }) => {
   )
 }
 
+// Empty table row component for when there are no deals
+const EmptyTableRow = () => (
+  <tr style={{ borderBottom: "1px solid #E8D5C4" }}>
+    <td colSpan="10" style={{ 
+      padding: "2rem",
+      textAlign: "center", 
+      color: "#999",
+      fontStyle: "italic",
+      borderRight: "none"
+    }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+        <Trophy size={48} style={{ color: "#ddd" }} />
+        <div>
+          <p style={{ margin: "0 0 0.5rem 0", fontSize: "1rem", color: "#666" }}>
+            You have not engaged any suppliers, so there are no successful deals available.
+          </p>
+          <p style={{ margin: 0, fontSize: "0.9rem", color: "#999" }}>
+            You need to engage suppliers first to see your successful deals here.
+          </p>
+        </div>
+      </div>
+    </td>
+  </tr>
+)
+
+// Star Rating Component
 const StarRating = ({ rating, onRatingChange, readOnly = false, size = 24 }) => {
   const [hoverRating, setHoverRating] = useState(0)
 
@@ -82,9 +97,9 @@ const StarRating = ({ rating, onRatingChange, readOnly = false, size = 24 }) => 
   const getStarColor = (starIndex) => {
     const currentRating = hoverRating || rating
     if (starIndex <= currentRating) {
-      return "#ffd700" // Gold for filled stars
+      return "#ffd700"
     }
-    return "#e0e0e0" // Gray for empty stars
+    return "#e0e0e0"
   }
 
   return (
@@ -113,6 +128,7 @@ const StarRating = ({ rating, onRatingChange, readOnly = false, size = 24 }) => 
   )
 }
 
+// Reviews Modal Component
 const ReviewsModal = ({ supplier, isOpen, onClose, onSubmitReview }) => {
   const [newRating, setNewRating] = useState(0)
   const [newComment, setNewComment] = useState("")
@@ -143,7 +159,6 @@ const ReviewsModal = ({ supplier, isOpen, onClose, onSubmitReview }) => {
     fetchUsername()
   }, [])
 
-  // 🔹 2. Fetch supplier reviews
   useEffect(() => {
     if (!supplier) return
 
@@ -165,13 +180,11 @@ const ReviewsModal = ({ supplier, isOpen, onClose, onSubmitReview }) => {
     fetchReviews()
   }, [supplier])
 
-  // 🔹 3. Average rating calculation
   const averageRating =
     existingReviews.length > 0
       ? existingReviews.reduce((sum, review) => sum + review.rating, 0) / existingReviews.length
       : 0
 
-  // 🔹 4. Submit new review
   const handleSubmit = async () => {
     if (newRating === 0) {
       alert("Please select a rating before submitting.")
@@ -181,7 +194,6 @@ const ReviewsModal = ({ supplier, isOpen, onClose, onSubmitReview }) => {
     setIsSubmitting(true)
 
     try {
-      // Step 1: Get logged-in user
       const currentUser = auth.currentUser
       if (!currentUser) {
         alert("You must be logged in to submit a review.")
@@ -189,7 +201,6 @@ const ReviewsModal = ({ supplier, isOpen, onClose, onSubmitReview }) => {
         return
       }
 
-      // Step 2: Fetch registeredName from universalProfiles
       const userDocRef = doc(db, "universalProfiles", currentUser.uid)
       const userDocSnap = await getDoc(userDocRef)
 
@@ -201,19 +212,16 @@ const ReviewsModal = ({ supplier, isOpen, onClose, onSubmitReview }) => {
           userData.entityOverview?.registeredName || userData.registeredName || currentUser.displayName || "Anonymous"
       }
 
-      // Step 3: Use Anonymous if checkbox is checked
       const customerName = anonymousStatus ? "Anonymous" : registeredName
 
-      // Step 4: Add new review
       await addDoc(collection(db, "supplierReviews"), {
         supplierName: supplier.name,
         rating: newRating,
         comment: newComment,
         date: new Date().toISOString().split("T")[0],
-        customerName, // ✅ uses anonymous if checkbox is checked
+        customerName,
       })
 
-      // Update local state immediately
       setExistingReviews((prev) => [
         ...prev,
         {
@@ -270,7 +278,6 @@ const ReviewsModal = ({ supplier, isOpen, onClose, onSubmitReview }) => {
   return (
     <div style={modalOverlayStyle} onClick={onClose}>
       <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
         <div
           style={{
             display: "flex",
@@ -310,7 +317,6 @@ const ReviewsModal = ({ supplier, isOpen, onClose, onSubmitReview }) => {
           </button>
         </div>
 
-        {/* Average Rating Display */}
         <div
           style={{
             backgroundColor: "#f8f9fa",
@@ -339,7 +345,6 @@ const ReviewsModal = ({ supplier, isOpen, onClose, onSubmitReview }) => {
           </p>
         </div>
 
-        {/* Existing Reviews */}
         <div style={{ marginBottom: "32px" }}>
           <h3 style={{ margin: "0 0 16px 0", color: "#3e2723" }}>Customer Reviews</h3>
           <div style={{ maxHeight: "300px", overflowY: "auto" }}>
@@ -376,7 +381,6 @@ const ReviewsModal = ({ supplier, isOpen, onClose, onSubmitReview }) => {
           </div>
         </div>
 
-        {/* Add New Review Section */}
         <div
           style={{
             backgroundColor: "#fff3e0",
@@ -387,7 +391,6 @@ const ReviewsModal = ({ supplier, isOpen, onClose, onSubmitReview }) => {
         >
           <h3 style={{ margin: "0 0 16px 0", color: "#e65100" }}>Add Your Review</h3>
 
-          {/* Rating Input */}
           <div style={{ marginBottom: "16px" }}>
             <label
               style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: "600", color: "#3e2723" }}
@@ -402,7 +405,6 @@ const ReviewsModal = ({ supplier, isOpen, onClose, onSubmitReview }) => {
             )}
           </div>
 
-          {/* Comment Input */}
           <div style={{ marginBottom: "20px" }}>
             <label
               style={{
@@ -443,7 +445,6 @@ const ReviewsModal = ({ supplier, isOpen, onClose, onSubmitReview }) => {
             </label>
           </div>
 
-          {/* Submit Button */}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
             <button
               onClick={onClose}
@@ -477,17 +478,16 @@ const ReviewsModal = ({ supplier, isOpen, onClose, onSubmitReview }) => {
                 display: "flex",
                 alignItems: "center",
                 gap: "8px",
-                opacity: isSubmitting ? 0.7 : 1,
               }}
             >
               {isSubmitting ? (
                 <>
-                  <RefreshCw size={16} style={{ animation: "spin 1s linear infinite" }} />
+                  <RefreshCw size={14} style={{ animation: "spin 1s linear infinite" }} />
                   Submitting...
                 </>
               ) : (
                 <>
-                  <Send size={16} />
+                  <Send size={14} />
                   Submit Review
                 </>
               )}
@@ -495,105 +495,22 @@ const ReviewsModal = ({ supplier, isOpen, onClose, onSubmitReview }) => {
           </div>
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        
-        @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(30px) scale(0.95);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-        
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   )
 }
 
 // Successful Supplier Deals Table Component
-const SuccessfulSupplierDealsTable = ({ acceptedSuppliers, supplier }) => {
-  const [deals, setDeals] = useState([])
-  const [selectedDeal, setSelectedDeal] = useState(null)
-  const [reviewsModalOpen, setReviewsModalOpen] = useState(false)
+const SuccessfulSupplierDealsTable = ({ acceptedSuppliers }) => {
   const [selectedSupplier, setSelectedSupplier] = useState(null)
-  const [existingReviews, setExistingReviews] = useState([])
-  const [supplierReviews, setSupplierReviews] = useState([])
-  const [averageRating, setAverageRating] = useState(0)
+  const [reviewsModalOpen, setReviewsModalOpen] = useState(false)
+  const [selectedDeal, setSelectedDeal] = useState(null)
 
-  useEffect(() => {
-    if (!acceptedSuppliers || acceptedSuppliers.length === 0) {
-      setDeals([])
-      return
-    }
-
-    const fetchDealsWithRatings = async () => {
-      const transformedDeals = await Promise.all(
-        acceptedSuppliers.map(async (supplier) => {
-          const supplierName =
-            supplier.entityOverview?.tradingName || supplier.entityOverview?.registeredName || "Unknown Supplier"
-
-          // Fetch reviews for this supplier
-          const reviewsRef = collection(db, "supplierReviews")
-          const q = query(reviewsRef, where("supplierName", "==", supplierName))
-          const querySnapshot = await getDocs(q)
-          const reviews = querySnapshot.docs.map((doc) => doc.data())
-
-          // Calculate average rating
-          const avgRating =
-            reviews.length > 0 ? reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length : null // <-- use null to show "--" before data loads
-
-          return {
-            id: supplier.id,
-            supplierName,
-            dealAmount: supplier.financialOverview?.annualRevenue || "Not specified",
-            dealType: supplier.productsServices?.productCategories?.[0]?.name || "Not specified",
-            completionDate: supplier.lastActivity || new Date().toISOString().split("T")[0],
-            sector: supplier.entityOverview?.economicSectors?.[0] || "Not specified",
-            dealDuration: "Ongoing",
-            servicesDelivered: Array.isArray(supplier.productsServices?.productCategories)
-              ? supplier.productsServices.productCategories.map((cat) => cat.name).join(", ")
-              : "Various services",
-            currentStatus: "Active Contract",
-            contractValue: supplier.financialOverview?.annualRevenue || "Not specified",
-            nextRenewal: "To be determined",
-            location: supplier.entityOverview?.location || "Not specified",
-            supplierType: supplier.entityOverview?.entityType || "Not specified",
-            performanceRating: avgRating !== null ? Number.parseFloat(avgRating.toFixed(1)) : null,
-            bbbeeLevel: supplier.legalCompliance?.bbbeeLevel || "N/A",
-            deliveryMode: Array.isArray(supplier.productsServices?.deliveryModes)
-              ? supplier.productsServices.deliveryModes.join(", ")
-              : "Not specified",
-            paymentTerms: "Standard",
-          }
-        }),
-      )
-
-      setDeals(transformedDeals)
-    }
-
-    fetchDealsWithRatings()
-  }, [acceptedSuppliers])
-
-  const handleReviewsClick = (deal) => {
-    setSelectedSupplier({ id: deal.id, name: deal.supplierName })
-    setReviewsModalOpen(true)
+  const handleViewDetails = (supplier) => {
+    setSelectedDeal(supplier)
   }
 
-  const handleSubmitReview = (reviewData) => {
-    console.log("Review submitted:", reviewData)
-    // Here you would typically send the review to your backend
+  const handleSubmitReview = (supplierId, rating, comment) => {
+    console.log(`Review submitted for supplier ${supplierId}: ${rating} stars - ${comment}`)
   }
 
   const getStatusColor = (status) => {
@@ -604,28 +521,22 @@ const SuccessfulSupplierDealsTable = ({ acceptedSuppliers, supplier }) => {
         return "#2196f3"
       case "Under Review":
         return "#ff9800"
-      case "Pending Renewal":
-        return "#9c27b0"
       default:
         return "#666"
     }
   }
 
-  const getRatingColor = (score = 0) => {
-    if (score >= 4.5) return "#4caf50"
-    if (score >= 4.0) return "#8bc34a"
-    if (score >= 3.5) return "#ff9800"
-    return "#f44336"
-  }
-
-  const getBbbeeColor = (level) => {
-    const levelNum = Number.parseInt(level.replace("Level ", ""))
-    if (levelNum <= 2) return "#4caf50"
-    if (levelNum <= 4) return "#ff9800"
-    return "#f44336"
+  const formatCurrency = (amount) => {
+    if (!amount || amount === "Not specified") return "Not specified"
+    const num = parseFloat(amount.toString().replace(/[^0-9.]/g, ""))
+    return new Intl.NumberFormat("en-ZA", {
+      style: "currency",
+      currency: "ZAR",
+    }).format(num)
   }
 
   const formatDate = (dateString) => {
+    if (!dateString) return "Not specified"
     return new Date(dateString).toLocaleDateString("en-ZA", {
       year: "numeric",
       month: "short",
@@ -633,800 +544,201 @@ const SuccessfulSupplierDealsTable = ({ acceptedSuppliers, supplier }) => {
     })
   }
 
-  const formatCurrency = (amount) => {
-    return amount.replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1,")
+  if (!acceptedSuppliers || acceptedSuppliers.length === 0) {
+    return (
+      <div style={{ padding: "2rem", textAlign: "center" }}>
+        <Trophy size={48} style={{ color: "#ddd", marginBottom: "1rem" }} />
+        <p style={{ fontSize: "1rem", color: "#666" }}>
+          You have not engaged any suppliers, so there are no successful deals available.
+        </p>
+        <p style={{ fontSize: "0.9rem", color: "#999" }}>
+          You need to engage suppliers first to see your successful deals here.
+        </p>
+      </div>
+    )
   }
-
-  const handleViewDetails = (deal) => {
-    setSelectedDeal(deal)
-  }
-
-  const modalOverlayStyle = {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(62, 39, 35, 0.85)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 1000,
-    animation: "fadeIn 0.3s ease-out",
-    backdropFilter: "blur(4px)",
-  }
-
-  const modalContentStyle = {
-    backgroundColor: "#ffffff",
-    borderRadius: "20px",
-    padding: "40px",
-    maxWidth: "900px",
-    width: "95%",
-    maxHeight: "90vh",
-    overflowY: "auto",
-    boxShadow: "0 20px 60px rgba(62, 39, 19, 0.5), 0 0 0 1px rgba(141, 110, 99, 0.1)",
-    animation: "slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
-  }
-
-  const rating = selectedDeal?.performanceRating || 0
 
   return (
-    <div style={{ padding: "0" }}>
-      <div
-        style={{
-          overflowX: "auto",
-          borderRadius: "8px",
-          border: "1px solid #E8D5C4",
-          boxShadow: "0 4px 24px rgba(139, 69, 19, 0.08)",
-        }}
-      >
+    <div>
+      <div style={{ overflowX: "auto" }}>
         <table
           style={{
             width: "100%",
-            borderCollapse: "collapse",
-            background: "white",
-            fontSize: "0.875rem",
-            backgroundColor: "#FEFCFA",
-            tableLayout: "fixed",
+            borderCollapse: "separate",
+            borderSpacing: "0",
+            backgroundColor: "#fff",
+            borderRadius: "12px",
+            overflow: "hidden",
+            boxShadow: "0 0 0 1px #E8D5C4",
           }}
         >
           <thead>
-            <tr>
-              <th
-                style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "left",
-                  fontWeight: "600",
-                  fontSize: "0.70rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: "12%",
-                }}
-              >
-                Supplier Name
-              </th>
-              <th
-                style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "left",
-                  fontWeight: "600",
-                 fontSize: "0.70rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: "10%",
-                }}
-              >
-                Contract Value
-              </th>
-              <th
-                style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "left",
-                  fontWeight: "600",
-                    fontSize: "0.70rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: "9%",
-                }}
-              >
-                Deal Type
-              </th>
-              <th
-                style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "left",
-                  fontWeight: "600",
-                    fontSize: "0.70rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: "10%",
-                }}
-              >
-                Start Date
-              </th>
-              <th
-                style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "left",
-                  fontWeight: "600",
-                   fontSize: "0.70rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: "9%",
-                }}
-              >
-                Sector
-              </th>
-              <th
-                style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "left",
-                  fontWeight: "600",
-                   fontSize: "0.70rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: "8%",
-                }}
-              >
-                Duration
-              </th>
-              <th
-                style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "left",
-                  fontWeight: "600",
-                   fontSize: "0.70rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: "8%",
-                }}
-              >
-                BBBEE Level
-              </th>
-              <th
-                style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "center",
-                  fontWeight: "600",
-                   fontSize: "0.70rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: "7%",
-                }}
-              >
-                Rating
-              </th>
-              <th
-                style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "left",
-                  fontWeight: "600",
-                   fontSize: "0.70rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: "11%",
-                }}
-              >
-                Contract Status
-              </th>
-              <th
-                style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "center",
-                  fontWeight: "600",
-                   fontSize: "0.70rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "none",
-                  width: "16%",
-                }}
-              >
-                Action
-              </th>
+            <tr style={{ backgroundColor: "#5d4037" }}>
+              <th style={{ padding: "16px", color: "white", textAlign: "left", fontWeight: "600" }}>Supplier Name</th>
+              <th style={{ padding: "16px", color: "white", textAlign: "left", fontWeight: "600" }}>Deal Amount</th>
+              <th style={{ padding: "16px", color: "white", textAlign: "left", fontWeight: "600" }}>Service Type</th>
+              <th style={{ padding: "16px", color: "white", textAlign: "left", fontWeight: "600" }}>Completion Date</th>
+              <th style={{ padding: "16px", color: "white", textAlign: "left", fontWeight: "600" }}>Status</th>
+              <th style={{ padding: "16px", color: "white", textAlign: "left", fontWeight: "600" }}>Rating</th>
+              <th style={{ padding: "16px", color: "white", textAlign: "center", fontWeight: "600" }}>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {deals.length > 0 ? (
-              deals.map((deal, index) => (
-                <tr
-                  key={deal.id}
-                  style={{
-                    borderBottom: "1px solid #E8D5C4",
-                    transition: "all 0.2s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = "#f5f5f5"
-                    e.currentTarget.style.transform = "translateY(-1px)"
-                    e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.1)"
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = "white"
-                    e.currentTarget.style.transform = "translateY(0)"
-                    e.currentTarget.style.boxShadow = "none"
-                  }}
-                >
-                  <td
+            {acceptedSuppliers.map((supplier, index) => (
+              <tr
+                key={supplier.id}
+                style={{
+                  borderBottom: index < acceptedSuppliers.length - 1 ? "1px solid #E8D5C4" : "none",
+                  transition: "background-color 0.2s",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#faf7f3")}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+              >
+                <td style={{ padding: "16px", fontWeight: "500" }}>{supplier.name || "Not specified"}</td>
+                <td style={{ padding: "16px" }}>{formatCurrency(supplier.dealAmount || supplier.price)}</td>
+                <td style={{ padding: "16px" }}>
+                  <TruncatedText text={supplier.services || supplier.serviceType || "Various Services"} />
+                </td>
+                <td style={{ padding: "16px" }}>{formatDate(supplier.completionDate || supplier.updatedAt)}</td>
+                <td style={{ padding: "16px" }}>
+                  <span
                     style={{
-                      padding: "0.75rem 0.5rem",
-                      borderRight: "1px solid #E8D5C4",
-                      wordWrap: "break-word",
-                      whiteSpace: "normal",
-                      verticalAlign: "top",
+                      backgroundColor: getStatusColor(supplier.status) + "20",
+                      color: getStatusColor(supplier.status),
+                      padding: "4px 12px",
+                      borderRadius: "20px",
+                      fontSize: "12px",
+                      fontWeight: "600",
                     }}
                   >
-                    <span
+                    {supplier.status || "Active"}
+                  </span>
+                </td>
+                <td style={{ padding: "16px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <StarRating rating={supplier.rating || 4} readOnly size={18} />
+                    <span style={{ fontSize: "14px", color: "#666" }}>
+                      {supplier.rating || 4}/5
+                    </span>
+                  </div>
+                </td>
+                <td style={{ padding: "16px" }}>
+                  <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
+                    <button
+                      onClick={() => handleViewDetails(supplier)}
                       style={{
-                        color: "#a67c52",
+                        backgroundColor: "#5d4037",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "6px",
+                        padding: "8px 12px",
+                        fontSize: "13px",
                         fontWeight: "500",
-                        lineHeight: "1.3",
-                      }}
-                    >
-                      <TruncatedText text={deal.supplierName} maxLength={25} />
-                    </span>
-                    <div style={{ fontSize: "0.7rem", color: "#999", marginTop: "2px" }}>{deal.location}</div>
-                  </td>
-
-                  <td
-                    style={{
-                      padding: "0.75rem 0.5rem",
-                      borderRight: "1px solid #E8D5C4",
-                      verticalAlign: "top",
-                      fontSize: "0.860rem",
-                      color: "#5d2a0a",
-                    }}
-                  >
-                    {formatCurrency(deal.dealAmount)}
-                  </td>
-
-                  <td
-                    style={{
-                      padding: "0.75rem 0.5rem",
-                      borderRight: "1px solid #E8D5C4",
-                      verticalAlign: "top",
-                    fontSize: "0.860rem",
-                      color: "#5d2a0a",
-                    }}
-                  >
-                    <TruncatedText text={deal.dealType} maxLength={15} />
-                  </td>
-
-                  <td
-                    style={{
-                      padding: "0.75rem 0.5rem",
-                      borderRight: "1px solid #E8D5C4",
-                      verticalAlign: "top",
-                      fontSize: "13px",
-                         color:"#5d2a0a"
-                    }}
-                  >
-                    {formatDate(deal.completionDate)}
-                  </td>
-
-                  <td
-                    style={{
-                      padding: "0.75rem 0.5rem",
-                      borderRight: "1px solid #E8D5C4",
-                      verticalAlign: "top",
-                       fontSize: "13px",
-                         color:"#5d2a0a"
-                    }}
-                  >
-                    <TruncatedText text={deal.sector} maxLength={20} />
-                  </td>
-
-                  <td
-                    style={{
-                      padding: "0.75rem 0.5rem",
-                      borderRight: "1px solid #E8D5C4",
-                      verticalAlign: "top",
-                       fontSize: "13px",
-                         color:"#5d2a0a"
-                    }}
-                  >
-                    {deal.dealDuration}
-                  </td>
-
-                  <td
-                    style={{
-                      padding: "0.75rem 0.5rem",
-                      borderRight: "1px solid #E8D5C4",
-                      verticalAlign: "top",
-                    fontSize: "0.860rem",
-                      color: "#5d2a0a",
-                    }}
-                  >
-                    {deal.bbbeeLevel}
-                  </td>
-
-                  <td
-                    style={{
-                      fontSize: "14px",
-                      fontWeight: "700",
-                      padding: "0.75rem 0.5rem",
-                      borderRight: "1px solid #E8D5C4",
-                      verticalAlign: "top",
-                      textAlign: "center",
-                      color: getRatingColor(deal.performanceRating), // ✅ use averageRating
-                    }}
-                  >
-                    {deal.performanceRating > 0 ? `${deal.performanceRating}/5` : "0/5"}
-                  </td>
-
-                  <td
-                    style={{
-                      padding: "0.75rem 0.5rem",
-                      borderRight: "1px solid #E8D5C4",
-                      verticalAlign: "top",
-                    }}
-                  >
-                    <span
-                      style={{
-                        backgroundColor: getStatusColor(deal.currentStatus) + "20",
-                        color: getStatusColor(deal.currentStatus),
-                        padding: "6px 10px",
-                        borderRadius: "12px",
-                        fontSize: "12px",
-                        fontWeight: "600",
-                        display: "inline-block",
-                      }}
-                    >
-                      {deal.currentStatus}
-                    </span>
-                  </td>
-
-                  <td style={{ padding: "0.75rem 0.5rem", textAlign: "center" }}>
-                    <div
-                      style={{
+                        cursor: "pointer",
+                        transition: "all 0.2s",
                         display: "flex",
-                        flexDirection: "row",
-                        gap: "8px",
                         alignItems: "center",
-                        justifyContent: "center",
+                        gap: "4px",
                       }}
+                      onMouseEnter={(e) => (e.target.style.backgroundColor = "#4a332a")}
+                      onMouseLeave={(e) => (e.target.style.backgroundColor = "#5d4037")}
                     >
-                      <button
-                        onClick={() => setSelectedDeal(deal)}
-                        style={{
-                          backgroundColor: "#5d4037",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "8px",
-                          padding: "8px",
-                         fontSize: "0.860rem",
-                          cursor: "pointer",
-                          transition: "all 0.3s ease",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Eye size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleReviewsClick(deal)}
-                        style={{
-                          backgroundColor: "#5d4037",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "8px",
-                          padding: "6px 12px",
-                          fontSize: "0.875rem",
-                          fontWeight: "600",
-                          cursor: "pointer",
-                          transition: "all 0.3s ease",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "4px",
-                        }}
-                      >
-                        <Star size={12} />
-                        Reviews
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              // Empty state - show the table structure with no data message
-              <>
-                {/* Empty row to show table structure */}
-                <tr style={{ backgroundColor: "#f9f9f9" }}>
-                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", fontStyle: "italic" }}>
-                    Supplier Name
-                  </td>
-                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", fontStyle: "italic" }}>
-                    Contract Value
-                  </td>
-                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", fontStyle: "italic" }}>
-                    Deal Type
-                  </td>
-                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", fontStyle: "italic" }}>
-                    Start Date
-                  </td>
-                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", fontStyle: "italic" }}>
-                    Sector
-                  </td>
-                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", fontStyle: "italic" }}>
-                    Duration
-                  </td>
-                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", fontStyle: "italic" }}>
-                    BBBEE Level
-                  </td>
-                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", fontStyle: "italic", textAlign: "center" }}>
-                    Rating
-                  </td>
-                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", color: "#ccc", fontStyle: "italic" }}>
-                    Status
-                  </td>
-                  <td style={{ padding: "0.75rem 0.5rem", color: "#ccc", fontStyle: "italic", textAlign: "center" }}>
-                    Actions
-                  </td>
-                </tr>
-              </>
-            )}
+                      <Eye size={14} />
+                      View
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedSupplier(supplier)
+                        setReviewsModalOpen(true)
+                      }}
+                      style={{
+                        backgroundColor: "#a67c52",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "6px",
+                        padding: "8px 12px",
+                        fontSize: "13px",
+                        fontWeight: "500",
+                        cursor: "pointer",
+                        transition: "all 0.2s",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                      }}
+                      onMouseEnter={(e) => (e.target.style.backgroundColor = "#8d6e63")}
+                      onMouseLeave={(e) => (e.target.style.backgroundColor = "#a67c52")}
+                    >
+                      <Star size={14} />
+                      Review
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
 
-      {/* Message underneath the table */}
-      {deals.length === 0 && (
+      {selectedDeal && (
         <div
           style={{
-            textAlign: "center",
-            padding: "32px 20px",
-            backgroundColor: "#f8f9fa",
-            borderRadius: "0 0 8px 8px",
-            border: "1px solid #E8D5C4",
-            borderTop: "none",
-            color: "#666",
-            fontSize: "16px",
-            fontStyle: "italic",
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
           }}
+          onClick={() => setSelectedDeal(null)}
         >
-          <div style={{ marginBottom: "8px", fontSize: "18px", fontWeight: "600", color: "#5d4037" }}>
-            You have not applied for any customers, so there are no matches available.
-          </div>
-          <div style={{ fontSize: "14px", color: "#999" }}>
-            You need to apply first. Once you accept suppliers from the "My Matches" tab, they will appear here with their contract details.
-          </div>
-        </div>
-      )}
-
-      {/* Deal Details Modal */}
-      {selectedDeal && (
-        <div style={modalOverlayStyle} onClick={() => setSelectedDeal(null)}>
-          <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
-            {/* Modal Header */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "32px",
-                paddingBottom: "24px",
-                borderBottom: "3px solid #8d6e63",
-              }}
-            >
-              <h2
-                style={{
-                  fontSize: "28px",
-                  fontWeight: "700",
-                  color: "#3e2723",
-                  margin: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                }}
-              >
-                <Truck size={32} style={{ color: "#4caf50" }} />
-                Supplier Contract: {selectedDeal.supplierName}
-              </h2>
-              <button
-                onClick={() => setSelectedDeal(null)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontSize: "24px",
-                  cursor: "pointer",
-                  color: "#666",
-                  padding: "8px",
-                }}
-              >
-                <X size={24} />
-              </button>
-            </div>
-
-            {/* Deal Overview Cards */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-                gap: "24px",
-                marginBottom: "32px",
-              }}
-            >
-              <div
-                style={{
-                  backgroundColor: "#f8f9fa",
-                  padding: "24px",
-                  borderRadius: "12px",
-                  border: "1px solid #e9ecef",
-                }}
-              >
-                <h3
-                  style={{
-                    color: "#3e2723",
-                    marginBottom: "16px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
-                  <DollarSign size={20} />
-                  Contract Financial Details
-                </h3>
-                <div style={{ display: "grid", gap: "12px" }}>
-                  <div>
-                    <strong>Contract Value:</strong> {formatCurrency(selectedDeal.dealAmount)}
-                  </div>
-                  <div>
-                    <strong>Total Value:</strong> {selectedDeal.contractValue}
-                  </div>
-                  <div>
-                    <strong>Deal Type:</strong> {selectedDeal.dealType}
-                  </div>
-                  <div>
-                    <strong>Payment Terms:</strong> {selectedDeal.paymentTerms}
-                  </div>
-                  <div>
-                    <strong>Performance Rating:</strong>
-                    {selectedDeal.performanceRating > 0 ? `${selectedDeal.performanceRating}/5` : "0/5"}
-                  </div>
-                </div>
+          <div
+            style={{
+              backgroundColor: "white",
+              borderRadius: "16px",
+              padding: "32px",
+              maxWidth: "800px",
+              width: "90%",
+              maxHeight: "80vh",
+              overflowY: "auto",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ marginBottom: "24px", color: "#3e2723" }}>Deal Details</h2>
+            <div style={{ display: "grid", gap: "16px" }}>
+              <div>
+                <strong>Supplier Name:</strong> {selectedDeal.name}
               </div>
-
-              <div
-                style={{
-                  backgroundColor: "#f8f9fa",
-                  padding: "24px",
-                  borderRadius: "12px",
-                  border: "1px solid #e9ecef",
-                }}
-              >
-                <h3
-                  style={{
-                    color: "#3e2723",
-                    marginBottom: "16px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
-                  <Calendar size={20} />
-                  Contract Timeline
-                </h3>
-                <div style={{ display: "grid", gap: "12px" }}>
-                  <div>
-                    <strong>Start Date:</strong> {formatDate(selectedDeal.completionDate)}
-                  </div>
-                  <div>
-                    <strong>Contract Duration:</strong> {selectedDeal.dealDuration}
-                  </div>
-                  <div>
-                    <strong>Next Renewal:</strong> {selectedDeal.nextRenewal}
-                  </div>
-                  <div>
-                    <strong>Delivery Mode:</strong> {selectedDeal.deliveryMode}
-                  </div>
-                  <div>
-                    <strong>Current Status:</strong>
-                    <span
-                      style={{
-                        backgroundColor: getStatusColor(selectedDeal.currentStatus) + "20",
-                        color: getStatusColor(selectedDeal.currentStatus),
-                        padding: "4px 8px",
-                        borderRadius: "8px",
-                        fontSize: "12px",
-                        fontWeight: "600",
-                        marginLeft: "8px",
-                      }}
-                    >
-                      {selectedDeal.currentStatus}
-                    </span>
-                  </div>
-                </div>
+              <div>
+                <strong>Deal Amount:</strong> {formatCurrency(selectedDeal.dealAmount || selectedDeal.price)}
               </div>
-
-              <div
-                style={{
-                  backgroundColor: "#f8f9fa",
-                  padding: "24px",
-                  borderRadius: "12px",
-                  border: "1px solid #e9ecef",
-                }}
-              >
-                <h3
-                  style={{
-                    color: "#3e2723",
-                    marginBottom: "16px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
-                  <Award size={20} />
-                  Supplier Information
-                </h3>
-                <div style={{ display: "grid", gap: "12px" }}>
-                  <div>
-                    <strong>Sector:</strong> {selectedDeal.sector}
-                  </div>
-                  <div>
-                    <strong>Supplier Type:</strong> {selectedDeal.supplierType}
-                  </div>
-                  <div>
-                    <strong>BBBEE Level:</strong>
-                    <span
-                      style={{
-                        backgroundColor: getBbbeeColor(selectedDeal.bbbeeLevel) + "20",
-                        color: getBbbeeColor(selectedDeal.bbbeeLevel),
-                        padding: "4px 8px",
-                        borderRadius: "8px",
-                        fontSize: "12px",
-                        fontWeight: "600",
-                        marginLeft: "8px",
-                      }}
-                    >
-                      {selectedDeal.bbbeeLevel}
-                    </span>
-                  </div>
-                  <div>
-                    <strong>Location:</strong> {selectedDeal.location}
-                  </div>
-                </div>
+              <div>
+                <strong>Services:</strong> {selectedDeal.services || selectedDeal.serviceType || "Various Services"}
+              </div>
+              <div>
+                <strong>Status:</strong> {selectedDeal.status || "Active"}
+              </div>
+              <div>
+                <strong>Rating:</strong> {selectedDeal.rating || 4}/5
               </div>
             </div>
-
-            {/* Services Delivered Section */}
-            <div
+            <button
+              onClick={() => setSelectedDeal(null)}
               style={{
-                backgroundColor: "#f8f9fa",
-                padding: "24px",
-                borderRadius: "12px",
-                border: "1px solid #e9ecef",
-                marginBottom: "24px",
+                marginTop: "24px",
+                backgroundColor: "#5d4037",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                padding: "12px 24px",
+                cursor: "pointer",
               }}
             >
-              <h3
-                style={{
-                  color: "#3e2723",
-                  marginBottom: "16px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
-              >
-                <Package size={20} />
-                Services & Deliverables
-              </h3>
-              <p style={{ fontSize: "16px", color: "#333", lineHeight: "1.6", margin: 0 }}>
-                {selectedDeal.servicesDelivered}
-              </p>
-            </div>
-
-            {/* Key Metrics Summary */}
-            <div
-              style={{
-                backgroundColor: "#e8f5e9",
-                padding: "24px",
-                borderRadius: "12px",
-                border: "1px solid #4caf50",
-                marginBottom: "24px",
-              }}
-            >
-              <h3
-                style={{
-                  color: "#2e7d32",
-                  marginBottom: "16px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
-              >
-                <BarChart3 size={20} />
-                Contract Performance Summary
-              </h3>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                  gap: "16px",
-                }}
-              >
-                <div style={{ textAlign: "center" }}>
-                  <div
-                    style={{
-                      fontSize: "24px",
-                      fontWeight: "700",
-                      color: getRatingColor(rating), // ✅ use averageRating, not selectedDeal.performanceRating
-                    }}
-                  >
-                    <span>{rating > 0 ? `${rating}/5` : "0/5"}</span>
-                  </div>
-                  <div style={{ fontSize: "14px", color: "#666" }}>Performance Rating</div>
-                </div>
-
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: "24px", fontWeight: "700", color: "#2196f3" }}>
-                    {formatCurrency(selectedDeal.dealAmount)}
-                  </div>
-                  <div style={{ fontSize: "14px", color: "#666" }}>Contract Value</div>
-                </div>
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: "24px", fontWeight: "700", color: getBbbeeColor(selectedDeal.bbbeeLevel) }}>
-                    {selectedDeal.bbbeeLevel}
-                  </div>
-                  <div style={{ fontSize: "14px", color: "#666" }}>BBBEE Level</div>
-                </div>
-                <div style={{ textAlign: "center" }}>
-                  <div
-                    style={{ fontSize: "24px", fontWeight: "700", color: getStatusColor(selectedDeal.currentStatus) }}
-                  >
-                    {selectedDeal.currentStatus === "Active Contract" ? "ACTIVE" : "COMPLETED"}
-                  </div>
-                  <div style={{ fontSize: "14px", color: "#666" }}>Contract Status</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Close Button */}
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <button
-                onClick={() => setSelectedDeal(null)}
-                style={{
-                  backgroundColor: "#5d4037",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "12px",
-                  padding: "16px 32px",
-                  fontSize: "16px",
-                  fontWeight: "600",
-                  cursor: "pointer",
-                  transition: "all 0.3s ease",
-                }}
-              >
-                Close
-              </button>
-            </div>
+              Close
+            </button>
           </div>
         </div>
       )}
@@ -1444,48 +756,113 @@ const SuccessfulSupplierDealsTable = ({ acceptedSuppliers, supplier }) => {
   )
 }
 
+// Product Application Wrapper to prevent redirects
+const ProductApplicationWrapper = () => {
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  if (!isMounted) {
+    return (
+      <div style={{ 
+        display: "flex", 
+        justifyContent: "center", 
+        alignItems: "center", 
+        minHeight: "400px",
+        backgroundColor: "#f9f9f9",
+        borderRadius: "8px",
+        border: "2px dashed #e0e0e0"
+      }}>
+        <div style={{ textAlign: "center" }}>
+          <RefreshCw size={32} style={{ color: "#999", marginBottom: "16px", animation: "spin 2s linear infinite" }} />
+          <p style={{ color: "#666", margin: 0 }}>Loading Product Application...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ 
+      width: "100%", 
+      border: "2px solid #e0e0e0",
+      borderRadius: "12px",
+      overflow: "hidden",
+      boxShadow: "0 4px 12px rgba(0,0,0,0.1)"
+    }}>
+      <div style={{ 
+        backgroundColor: "#f8f9fa", 
+        padding: "16px", 
+        borderBottom: "1px solid #e0e0e0",
+        display: "flex",
+        alignItems: "center",
+        gap: "8px"
+      }}>
+        <FileText size={20} style={{ color: "#5d4037" }} />
+        <h3 style={{ margin: 0, color: "#5d4037", fontSize: "18px" }}>Product & Service Application</h3>
+      </div>
+      <div style={{ padding: "0" }}>
+        <ProductServiceApplication />
+      </div>
+    </div>
+  );
+};
+
 // Main Tabbed Component for Suppliers
-const SupplierTabbedTables = ({ onSupplierContacted, onSuppliersUpdate }) => {
-  const [activeTab, setActiveTab] = useState("my-matches")
+const SupplierTabbedTables = ({ 
+  onSupplierContacted, 
+  onSuppliersUpdate, 
+  defaultActiveTab = "my-matches"  // Changed default to "my-matches"
+}) => {
+  const [activeTab, setActiveTab] = useState(defaultActiveTab)
   const [allSuppliers, setAllSuppliers] = useState([])
   const [filteredSuppliers, setFilteredSuppliers] = useState([])
   const [acceptedSuppliers, setAcceptedSuppliers] = useState([])
 
-  // Function to handle supplier updates from the SupplierTable
+  // Reset active tab when defaultActiveTab prop changes
+  useEffect(() => {
+    console.log("Default active tab changed to:", defaultActiveTab)
+    setActiveTab(defaultActiveTab)
+  }, [defaultActiveTab])
+
+  const handleTabChange = (tab) => {
+    console.log("Changing tab to:", tab)
+    setActiveTab(tab)
+  }
+
   const handleSuppliersUpdate = (allSuppliersData, filteredSuppliersData) => {
     setAllSuppliers(allSuppliersData)
     setFilteredSuppliers(filteredSuppliersData)
 
-    // Filter suppliers with "Accepted" status
     const accepted = allSuppliersData.filter(
       (supplier) => supplier.status === "Accepted" || supplier.currentStage === "Accepted",
     )
     setAcceptedSuppliers(accepted)
+
+    // Pass data back to parent component
+    if (onSuppliersUpdate) {
+      onSuppliersUpdate(allSuppliersData, filteredSuppliersData)
+    }
   }
 
   const handleSupplierAccepted = (supplierId) => {
-    // Find the supplier that was accepted
     const acceptedSupplier = allSuppliers.find((supplier) => supplier.id === supplierId)
 
     if (acceptedSupplier) {
-      // Update the supplier's status to "Accepted"
       const updatedSupplier = {
         ...acceptedSupplier,
         status: "Accepted",
         currentStage: "Accepted",
       }
 
-      // Remove from regular suppliers list
       const updatedAllSuppliers = allSuppliers.filter((supplier) => supplier.id !== supplierId)
       const updatedFilteredSuppliers = filteredSuppliers.filter((supplier) => supplier.id !== supplierId)
 
       setAllSuppliers(updatedAllSuppliers)
       setFilteredSuppliers(updatedFilteredSuppliers)
-
-      // Add to accepted suppliers list
       setAcceptedSuppliers((prev) => [...prev, updatedSupplier])
 
-      // Notify parent component if needed
       if (onSuppliersUpdate) {
         onSuppliersUpdate(updatedAllSuppliers, updatedFilteredSuppliers)
       }
@@ -1508,14 +885,12 @@ const SupplierTabbedTables = ({ onSupplierContacted, onSuppliersUpdate }) => {
     alignItems: "center",
     justifyContent: "center",
     gap: "8px",
+    minHeight: "56px",
+    lineHeight: "1",
   })
-
-  // Calculate counts for tab badges (you can make these dynamic)
-  const myMatchesCount = 18 // You can make this dynamic from props
 
   return (
     <div style={{ maxWidth: "100%", margin: "0 auto", padding: "0" }}>
-      {/* Tab Navigation */}
       <div
         style={{
           display: "flex",
@@ -1526,8 +901,44 @@ const SupplierTabbedTables = ({ onSupplierContacted, onSuppliersUpdate }) => {
           boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
         }}
       >
-        <button onClick={() => setActiveTab("my-matches")} style={tabStyle(activeTab === "my-matches")}>
-          My Matches
+        <button
+          onClick={() => handleTabChange("application")}
+          style={tabStyle(activeTab === "application")}
+          onMouseEnter={(e) => {
+            if (activeTab !== "application") {
+              e.target.style.backgroundColor = "#8d6e63"
+              e.target.style.color = "white"
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (activeTab !== "application") {
+              e.target.style.backgroundColor = "transparent"
+              e.target.style.color = "#5d4037"
+            }
+          }}
+        >
+          <FileText size={18} style={{ flexShrink: 0, display: "block" }} />
+          <span style={{ whiteSpace: "nowrap", lineHeight: "1", display: "block" }}>Product & Service Application</span>
+        </button>
+
+        <button
+          onClick={() => handleTabChange("my-matches")}
+          style={tabStyle(activeTab === "my-matches")}
+          onMouseEnter={(e) => {
+            if (activeTab !== "my-matches") {
+              e.target.style.backgroundColor = "#8d6e63"
+              e.target.style.color = "white"
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (activeTab !== "my-matches") {
+              e.target.style.backgroundColor = "transparent"
+              e.target.style.color = "#5d4037"
+            }
+          }}
+        >
+          <Users size={18} style={{ flexShrink: 0, display: "block" }} />
+          <span style={{ whiteSpace: "nowrap", lineHeight: "1", display: "block" }}>My Matches</span>
           <span
             style={{
               backgroundColor: activeTab === "my-matches" ? "rgba(255, 255, 255, 0.2)" : "rgba(93, 64, 55, 0.1)",
@@ -1541,14 +952,31 @@ const SupplierTabbedTables = ({ onSupplierContacted, onSuppliersUpdate }) => {
               alignItems: "center",
               justifyContent: "center",
               marginLeft: "4px",
+              flexShrink: 0,
             }}
           >
             {filteredSuppliers.length}
           </span>
         </button>
 
-        <button onClick={() => setActiveTab("successful-deals")} style={tabStyle(activeTab === "successful-deals")}>
-          Successful Deals
+        <button
+          onClick={() => handleTabChange("successful-deals")}
+          style={tabStyle(activeTab === "successful-deals")}
+          onMouseEnter={(e) => {
+            if (activeTab !== "successful-deals") {
+              e.target.style.backgroundColor = "#8d6e63"
+              e.target.style.color = "white"
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (activeTab !== "successful-deals") {
+              e.target.style.backgroundColor = "transparent"
+              e.target.style.color = "#5d4037"
+            }
+          }}
+        >
+          <Trophy size={18} style={{ flexShrink: 0, display: "block" }} />
+          <span style={{ whiteSpace: "nowrap", lineHeight: "1", display: "block" }}>Successful Deals</span>
           <span
             style={{
               backgroundColor: activeTab === "successful-deals" ? "rgba(255, 255, 255, 0.2)" : "rgba(93, 64, 55, 0.1)",
@@ -1562,6 +990,7 @@ const SupplierTabbedTables = ({ onSupplierContacted, onSuppliersUpdate }) => {
               alignItems: "center",
               justifyContent: "center",
               marginLeft: "4px",
+              flexShrink: 0,
             }}
           >
             {acceptedSuppliers.length}
@@ -1569,7 +998,6 @@ const SupplierTabbedTables = ({ onSupplierContacted, onSuppliersUpdate }) => {
         </button>
       </div>
 
-      {/* Tab Content */}
       <div
         style={{
           backgroundColor: "white",
@@ -1581,18 +1009,37 @@ const SupplierTabbedTables = ({ onSupplierContacted, onSuppliersUpdate }) => {
           borderTop: "none",
         }}
       >
+        {activeTab === "application" && (
+          <div style={{ 
+            width: "100%", 
+            display: "flex", 
+            justifyContent: "flex-start", 
+            alignItems: "flex-start" 
+          }}>
+            <div style={{ 
+              width: "100%", 
+              maxWidth: "100%", 
+              margin: 0, 
+              padding: 0 
+            }}>
+              <ProductApplicationWrapper />
+            </div>
+          </div>
+        )}
+
         {activeTab === "my-matches" && (
-          <SupplierTable
-            onSupplierContacted={onSupplierContacted}
-            onSuppliersUpdate={handleSuppliersUpdate}
-            onSupplierAccepted={handleSupplierAccepted}
-          />
+          <div>
+            <SupplierTable
+              onSupplierContacted={onSupplierContacted}
+              onSuppliersUpdate={handleSuppliersUpdate}
+              onSupplierAccepted={handleSupplierAccepted}
+            />
+          </div>
         )}
 
         {activeTab === "successful-deals" && <SuccessfulSupplierDealsTable acceptedSuppliers={acceptedSuppliers} />}
       </div>
 
-      {/* Enhanced styling for tab transitions */}
       <style jsx>{`
         @keyframes fadeIn {
           from { 
@@ -1616,22 +1063,27 @@ const SupplierTabbedTables = ({ onSupplierContacted, onSuppliersUpdate }) => {
           }
         }
         
-        /* Tab content animation */
+        @keyframes spin {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
+        
         div[style*="backgroundColor: white"] > div {
           animation: fadeIn 0.3s ease-out;
         }
         
-        /* Button hover effects */
         button:hover {
           transform: translateY(-1px);
         }
         
-        /* Table row hover effects */
         tr:hover {
           transition: all 0.2s ease !important;
         }
         
-        /* Input and button focus styles */
         button:focus {
           outline: 2px solid #5d4037;
           outline-offset: 2px;
