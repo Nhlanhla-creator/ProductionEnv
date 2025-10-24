@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react";
-import { ChevronDown, RefreshCw, AlertCircle, CheckCircle, TrendingUp } from 'lucide-react';
+import { ChevronDown, RefreshCw, AlertCircle, CheckCircle, TrendingUp,Calculator } from 'lucide-react';
 import { db, auth } from "../../firebaseConfig";
 import { doc, onSnapshot, updateDoc, setDoc, getDoc } from "firebase/firestore";
 import { API_KEYS } from '../../API';
@@ -18,10 +18,38 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
   const [showAboutScore, setShowAboutScore] = useState(false);
   const [showScoreBreakdown, setShowScoreBreakdown] = useState(false);
   const [showDetailedAnalysis, setShowDetailedAnalysis] = useState(false);
+  const [showPisCalculation, setShowPisCalculation] = useState(false); // ← ADD THIS LINE
   const [governanceStage, setGovernanceStage] = useState("");
   const [governanceRecommendation, setGovernanceRecommendation] = useState("");
   const [triggeredByAuto, setTriggeredByAuto] = useState(true);
 
+  const calculatePIS = () => {
+    const employees = parseInt(profileData?.entityOverview?.employeeCount) || 0;
+
+    // Clean and parse turnover (remove 'R' and commas)
+    const turnoverRaw = profileData?.financialOverview?.annualRevenue || '0';
+    const turnover = parseFloat(turnoverRaw.toString().replace(/[R,\s]/g, '')) || 0;
+
+    // Clean and parse liabilities
+    const liabilitiesRaw = profileData?.financialOverview?.existingDebt || '0';
+    const liabilities = parseFloat(liabilitiesRaw.toString().replace(/[R,\s]/g, '')) || 0;
+
+    const shareholders = profileData?.ownershipManagement?.shareholders?.length || 1;
+
+    const turnoverComponent = turnover / 1000000;
+    const liabilitiesComponent = liabilities / 1000000;
+    const totalPIS = employees + turnoverComponent + liabilitiesComponent + shareholders;
+
+    return {
+      employees,
+      turnover,
+      liabilities,
+      shareholders,
+      turnoverComponent: parseFloat(turnoverComponent.toFixed(2)),
+      liabilitiesComponent: parseFloat(liabilitiesComponent.toFixed(2)),
+      totalPIS: parseFloat(totalPIS.toFixed(2))
+    };
+  };
 
   // Calculate policies score from compliance checklist
   const calculatePoliciesScore = () => {
@@ -45,7 +73,11 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
     // Calculate percentage (out of 17 policies)
     const policiesScore = Math.round((completedCount / policyItems.length) * 100);
 
-    return policiesScore;
+    return {
+      score: policiesScore,
+      completed: completedCount,
+      total: policyItems.length
+    };
   };
 
   // Add/remove body class to prevent scrolling when modal is open
@@ -115,19 +147,26 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
     }
   };
 
-   const parseAiEvaluation = (text) => {
+  const parseAiEvaluation = (text) => {
     const raw = text || "";
     const cleaned = raw.replace(/\*\*/g, "");
 
-    // --- PIS ---
-    let pis = 0;
+    // Calculate actual PIS from profile data
+    const pisCalculation = calculatePIS();
+    const actualPIS = pisCalculation.totalPIS;
+
+    // --- PIS --- (use calculated value as fallback)
+    let pis = actualPIS;
     const pisRegexes = [
       /PIS\s*Score\s*[:\-–—]?\s*([\d.]+)/i,
       /PIS[^=]{0,20}=\s*([\d.]+)/i,
     ];
     for (const rx of pisRegexes) {
       const m = cleaned.match(rx);
-      if (m) { pis = parseFloat(m[1]); break; }
+      if (m) {
+        pis = parseFloat(m[1]);
+        break;
+      }
     }
 
     // --- Governance Score ---
@@ -153,13 +192,13 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
     else if (/Formal board strongly recommended/i.test(cleaned)) recommendation = "Formal board strongly recommended";
 
     // --- Category breakdown with policies integration ---
-    const policiesScore = calculatePoliciesScore();
-    
+    const policiesData = calculatePoliciesScore();
+
     // Parse AI categories and combine with policies score
     const breakdown = [];
     const categoryRegex = /###\s+\d+\.\s*([^\n]+)\s*\*\*Score:\*\*\s*(\d+)\/(\d+)/g;
     const colors = ["#8D6E63", "#6D4C41", "#A67C52", "#5D4037", "#4E342E"];
-    
+
     let i = 0, match;
     while ((match = categoryRegex.exec(raw)) !== null) {
       breakdown.push({
@@ -176,22 +215,24 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
       // Calculate weights - policies gets equal weight with other categories
       const totalCategories = breakdown.length + 1; // +1 for policies
       const weightPerCategory = 100 / totalCategories;
-      
+
       // Adjust existing category weights
       breakdown.forEach(category => {
         category.weight = weightPerCategory;
         category.weightedScore = (category.score / category.max) * weightPerCategory;
       });
-      
+
       // Add policies category with same weight
       const policiesMax = 100; // Percentage-based
       breakdown.push({
         name: "Policies & Documentation",
-        score: policiesScore,
+        score: policiesData.score,
         max: policiesMax,
+        completed: policiesData.completed,
+        total: policiesData.total,
         color: colors[breakdown.length % colors.length],
         weight: weightPerCategory,
-        weightedScore: (policiesScore / policiesMax) * weightPerCategory
+        weightedScore: (policiesData.score / policiesMax) * weightPerCategory
       });
     }
 
@@ -202,6 +243,7 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
       recommendation,
       breakdown,
       analysis: raw,
+      pisCalculation: pisCalculation
     };
   };
 
@@ -229,36 +271,41 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
 
     try {
       const evaluationData = prepareDataForAiEvaluation(profileData);
-      const policiesScore = calculatePoliciesScore();
+      const policiesData = calculatePoliciesScore();
+      const pisCalc = calculatePIS();
 
       const prompt = `Evaluate the business's governance readiness using the Public Interest Score (PIS) system.
 
-IMPORTANT FORMATTING REQUIREMENTS:
-- Use clear section headers with ###
-- Provide specific, actionable improvement recommendations for EACH category
-- Keep rationale concise but insightful
-- Include Policies & Documentation as a separate category with equal weighting
+IMPORTANT: Use the exact PIS calculation provided below.
 
-1. First calculate the PIS score using EXACTLY THESE VALUES:
-   Employees: ${profileData?.entityOverview?.employeeCount || 0}
-   Annual Turnover: R${profileData?.financialOverview?.annualRevenue || 0}
-   Liabilities: ${profileData?.financialOverview?.existingDebt || 'R0'}
-   Shareholders: ${profileData?.shareholders?.length || 1}
-   
-   PIS = Employees + (Turnover/R1m) + (Liabilities/R1m) + Shareholders
+## PIS CALCULATION:
+Employees: ${pisCalc.employees}
+Annual Turnover: R ${pisCalc.turnover.toLocaleString()}
+Liabilities: R ${pisCalc.liabilities.toLocaleString()}
+Shareholders: ${pisCalc.shareholders}
 
-2. Then evaluate governance maturity based on PIS level:
-   - PIS < 100: Advisors Stage rubric
-   - PIS 100-349: Emerging Board Stage rubric
-   - PIS ≥ 350: Full Board Stage rubric
+PIS = Employees + (Turnover/R1m) + (Liabilities/R1m) + Shareholders
+PIS = ${pisCalc.employees} + (${pisCalc.turnover.toLocaleString()}/1,000,000) + (${pisCalc.liabilities.toLocaleString()}/1,000,000) + ${pisCalc.shareholders}
+PIS = ${pisCalc.employees} + ${pisCalc.turnoverComponent} + ${pisCalc.liabilitiesComponent} + ${pisCalc.shareholders}
+PIS = ${pisCalc.totalPIS}
+
+PIS Score: ${pisCalc.totalPIS}
+
+## GOVERNANCE EVALUATION:
+Based on PIS level:
+- PIS < 100: Advisors Stage rubric
+- PIS 100-349: Emerging Board Stage rubric  
+- PIS ≥ 350: Full Board Stage rubric
+
+Current Stage: ${pisCalc.totalPIS < 100 ? 'Advisors Stage' : pisCalc.totalPIS < 350 ? 'Emerging Board Stage' : 'Full Board Stage'}
 
 3. For each category in the appropriate rubric (plus Policies & Documentation):
    - Score from 0 to max points
    - Provide short rationale for the score (2-3 sentences)
-   - FOR EACH CATEGORY, include a "How to Improve" section with 3-5 specific, actionable steps to increase the score
+   - FOR EACH CATEGORY, include a "How to Improve" section with 3-5 specific, actionable steps
 
 4. POLICIES & DOCUMENTATION CATEGORY:
-   Current Policies Score: ${policiesScore}% (based on ${Object.values(profileData?.legalCompliance?.complianceChecklist || {}).filter(Boolean).length || 0}/17 completed policies)
+   Current Policies: ${policiesData.completed}/${policiesData.total} completed (${policiesData.score}%)
    - Evaluate the completeness of their policy documentation
    - Consider which essential policies are missing
    - Provide specific recommendations for policy development
@@ -269,18 +316,11 @@ IMPORTANT FORMATTING REQUIREMENTS:
    - Clear recommendation
    - Actionable improvement suggestions
 
-CRITICAL: For improvement recommendations, be SPECIFIC and ACTIONABLE. Instead of vague advice like "improve governance," provide concrete steps like:
-- "Establish quarterly board meetings starting next quarter with documented minutes"
-- "Recruit 2 independent directors with financial and industry expertise within 6 months"
-- "Implement formal financial controls and monthly reporting within 3 months"
-- "Complete BBBEE certification process and submit application within 4 months"
-- "Develop and implement missing Employee Code of Conduct within 2 months"
-
 Input Data:
 ${evaluationData}
 
 OUTPUT FORMAT:
-PIS Score: [calculated PIS]
+PIS Score: ${pisCalc.totalPIS}
 Governance Stage: [stage]
 Governance Recommendation: [recommendation]
 Governance Score: [score]%
@@ -296,7 +336,7 @@ Governance Score: [score]%
 
 ### 2. Policies & Documentation
 **Score:** [evaluate 0-100 based on policy completeness]
-**Rationale:** [2-3 sentence explanation focusing on their ${policiesScore}% completion rate]
+**Rationale:** [2-3 sentence explanation focusing on their ${policiesData.score}% completion rate]
 **How to Improve:** 
 • [Specific action 1 - prioritize missing essential policies]
 • [Specific action 2 - implementation timeline]
@@ -325,7 +365,8 @@ Governance Score: [score]%
           pisScore: parsed.pis,
           governanceScore: parsed.govScore,
           timestamp: new Date(),
-          profileSnapshot: profileData
+          profileSnapshot: profileData,
+          pisCalculation: parsed.pisCalculation
         }, { merge: true });
       }
 
@@ -342,10 +383,11 @@ Governance Score: [score]%
     let evaluationData = '=== BUSINESS DATA ===\n';
 
     // PIS Calculation Components
-    evaluationData += `Employees: ${data?.entityOverview?.employeeCount || 0}\n`;
-    evaluationData += `Annual Turnover: R${data?.financialOverview?.annualRevenue || 0}\n`;
-    evaluationData += `Liabilities: ${data?.financialOverview?.existingDebt || 'R0'}\n`;
-    evaluationData += `Shareholders: ${data?.shareholders?.length || 1}\n\n`;
+    const pisCalc = calculatePIS();
+    evaluationData += `Employees: ${pisCalc.employees}\n`;
+    evaluationData += `Annual Turnover: R ${pisCalc.turnover.toLocaleString()}\n`;
+    evaluationData += `Liabilities: R ${pisCalc.liabilities.toLocaleString()}\n`;
+    evaluationData += `Shareholders: ${pisCalc.shareholders}\n\n`;
 
     // Governance Factors
     evaluationData += '=== GOVERNANCE FACTORS ===\n';
@@ -357,19 +399,13 @@ Governance Score: [score]%
 
     // Policies Data
     evaluationData += '=== POLICIES STATUS ===\n';
-    const policiesScore = calculatePoliciesScore();
-    evaluationData += `Policies Completion: ${policiesScore}%\n`;
-    
-    if (data?.legalCompliance?.complianceChecklist) {
-      const checklist = data.legalCompliance.complianceChecklist;
-      const completedPolicies = Object.keys(checklist).filter(key => checklist[key]).length;
-      evaluationData += `Completed Policies: ${completedPolicies}/17\n`;
-    } else {
-      evaluationData += `Completed Policies: 0/17\n`;
-    }
+    const policiesData = calculatePoliciesScore();
+    evaluationData += `Policies Completion: ${policiesData.score}%\n`;
+    evaluationData += `Completed Policies: ${policiesData.completed}/${policiesData.total}\n`;
 
     return evaluationData;
   };
+
   // Load saved evaluation if exists
   useEffect(() => {
     const userId = auth?.currentUser?.uid;
@@ -821,6 +857,7 @@ Governance Score: [score]%
                 textAlign: "center"
               }}>Governance score breakdown</h3>
 
+              {/* Score Display Section */}
               <div style={{
                 textAlign: "center",
                 marginBottom: "30px",
@@ -943,7 +980,116 @@ Governance Score: [score]%
                     )}
                   </div>
                 )}
+              </div>
 
+              {/* NEW: PIS Calculation Section */}
+              <div style={{
+                marginTop: "20px",
+                border: "1px solid #d7ccc8",
+                borderRadius: "8px",
+                overflow: "hidden"
+              }}>
+                <div
+                  style={{
+                    backgroundColor: "#8d6e63",
+                    color: "white",
+                    padding: "12px 16px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    cursor: "pointer",
+                    fontWeight: "bold"
+                  }}
+                  onClick={() => setShowPisCalculation(!showPisCalculation)}
+                >
+                  <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <Calculator size={18} />
+                    PIS Calculation Breakdown
+                  </span>
+                  <ChevronDown
+                    size={20}
+                    style={{
+                      transform: showPisCalculation ? "rotate(180deg)" : "rotate(0deg)",
+                      transition: "transform 0.2s ease"
+                    }}
+                  />
+                </div>
+                {showPisCalculation && (
+                  <div style={{
+                    backgroundColor: "#f5f2f0",
+                    padding: "20px",
+                    color: "#5d4037",
+                    fontFamily: "monospace",
+                    fontSize: "14px",
+                    lineHeight: "1.6"
+                  }}>
+                    <div style={{ marginBottom: "16px" }}>
+                      <strong style={{ color: "#5d4037" }}>## PIS Calculation</strong>
+                    </div>
+
+                    {(() => {
+                      const pisCalc = calculatePIS();
+                      return (
+                        <>
+                          <div style={{ marginBottom: "8px" }}>
+                            Employees: <strong>{pisCalc.employees}</strong>
+                          </div>
+                          <div style={{ marginBottom: "8px" }}>
+                            Annual Turnover: <strong>R {pisCalc.turnover.toLocaleString()}</strong>
+                          </div>
+                          <div style={{ marginBottom: "8px" }}>
+                            Liabilities: <strong>R {pisCalc.liabilities.toLocaleString()}</strong>
+                          </div>
+                          <div style={{ marginBottom: "16px" }}>
+                            Shareholders: <strong>{pisCalc.shareholders}</strong>
+                          </div>
+
+                          <div style={{ marginBottom: "8px" }}>
+                            <strong>PIS = Employees + (Turnover/R1m) + (Liabilities/R1m) + Shareholders</strong>
+                          </div>
+                          <div style={{ marginBottom: "8px" }}>
+                            PIS = {pisCalc.employees} + ({pisCalc.turnover.toLocaleString()}/1,000,000) + ({pisCalc.liabilities.toLocaleString()}/1,000,000) + {pisCalc.shareholders}
+                          </div>
+                          <div style={{ marginBottom: "8px" }}>
+                            PIS = {pisCalc.employees} + {pisCalc.turnoverComponent} + {pisCalc.liabilitiesComponent} + {pisCalc.shareholders}
+                          </div>
+                          <div style={{ marginBottom: "16px", fontWeight: "bold", color: "#5d4037" }}>
+                            PIS = {pisCalc.totalPIS}
+                          </div>
+
+                          <div style={{
+                            backgroundColor: "#efebe9",
+                            padding: "12px",
+                            borderRadius: "6px",
+                            borderLeft: "4px solid #8d6e63"
+                          }}>
+                            <strong>PIS Score: {pisCalc.totalPIS}</strong>
+                          </div>
+
+                          <div style={{
+                            marginTop: "12px",
+                            backgroundColor: "#e8f5e8",
+                            padding: "12px",
+                            borderRadius: "6px",
+                            borderLeft: "4px solid #4caf50",
+                            fontSize: "13px"
+                          }}>
+                            <strong>Governance Stage: </strong>
+                            {pisCalc.totalPIS < 100 ? 'Advisors Stage' : pisCalc.totalPIS < 350 ? 'Emerging Board Stage' : 'Full Board Stage'}
+                            <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+                              {pisCalc.totalPIS < 100
+                                ? 'Light governance structure recommended'
+                                : pisCalc.totalPIS < 350
+                                  ? 'Informal board structure recommended'
+                                  : 'Formal board structure strongly recommended'
+                              }
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
 
               {/* About the Governance Score section */}
@@ -999,7 +1145,7 @@ Governance Score: [score]%
                       </ul>
                     </div>
                     <div style={{
-                      backgroundColor: "##efebe9",
+                      backgroundColor: "#efebe9",
                       padding: "16px",
                       borderRadius: "8px",
                       marginBottom: "16px",
@@ -1100,13 +1246,23 @@ Governance Score: [score]%
                               fontSize: "14px",
                               marginBottom: "2px"
                             }}>{item.name}</div>
-                            <div style={{
-                              fontSize: "12px",
-                              color: "#8d6e63",
-                              fontStyle: "italic"
-                            }}>
-                              {item.score}/{item.max} points
-                            </div>
+                            {item.name === "Policies & Documentation" ? (
+                              <div style={{
+                                fontSize: "12px",
+                                color: "#8d6e63",
+                                fontStyle: "italic"
+                              }}>
+                                {item.completed}/{item.total} policies • {item.score}/{item.max} points
+                              </div>
+                            ) : (
+                              <div style={{
+                                fontSize: "12px",
+                                color: "#8d6e63",
+                                fontStyle: "italic"
+                              }}>
+                                {item.score}/{item.max} points
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div style={{
@@ -1244,7 +1400,6 @@ Governance Score: [score]%
           </div>
         </div>
       )}
-
       <style jsx>{`
         .spin {
           animation: spin 1s linear infinite;
