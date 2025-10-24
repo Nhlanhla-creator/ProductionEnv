@@ -134,19 +134,19 @@ const ProfileSummary = ({ data, onEdit }) => {
   }
 `}</style>
       <div
-  className="main-container"
-  style={{
-    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    minHeight: "100vh",
-    width: "100%",
-    background: "linear-gradient(135deg, #faf7f2 0%, #f5f0e1 50%, #f0e6d9 100%)",
-    padding: "16px",
-paddingLeft: "calc(var(--sidebar-width) + 24px)", // Adds 24px breathing room // ← FIND THIS LINE AND CHANGE IT
-    paddingTop: "80px",
-    boxSizing: "border-box",
-    transition: "all 0.3s ease",
-  }}
->
+        className="main-container"
+        style={{
+          fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+          minHeight: "100vh",
+          width: "100%",
+          background: "linear-gradient(135deg, #faf7f2 0%, #f5f0e1 50%, #f0e6d9 100%)",
+          padding: "16px",
+          paddingLeft: "calc(var(--sidebar-width) + 24px)", // Adds 24px breathing room // ← FIND THIS LINE AND CHANGE IT
+          paddingTop: "80px",
+          boxSizing: "border-box",
+          transition: "all 0.3s ease",
+        }}
+      >
         <div
           style={{
             width: "100%",
@@ -1122,19 +1122,21 @@ paddingLeft: "calc(var(--sidebar-width) + 24px)", // Adds 24px breathing room //
                     animation: "slideDown 0.3s ease-out",
                   }}
                 >
+                  {/* Basic Legal Information */}
                   <div
                     style={{
                       display: "grid",
                       gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
                       gap: "16px",
+                      marginBottom: "24px",
                     }}
                   >
                     {[
                       { label: "Tax Number", value: data?.legalCompliance?.taxNumber },
-                      { label: "Tax Clearance Number", value: data?.legalCompliance?.taxClearanceNumber },
-                      { label: "Tax Clearance Expiry Date", value: data?.legalCompliance?.taxClearanceDate },
+                      { label: "PIN", value: data?.legalCompliance?.pin },
+                      { label: "PIN Expiry Date", value: data?.legalCompliance?.pinExpiryDate },
                       { label: "VAT Number", value: data?.legalCompliance?.vatNumber },
-                      { label: "RSC Number", value: data?.legalCompliance?.rscNumber },
+                      { label: "UIF Status", value: data?.legalCompliance?.uifStatus },
                       { label: "UIF Number", value: data?.legalCompliance?.uifNumber },
                       { label: "PAYE Number", value: data?.legalCompliance?.payeNumber },
                       { label: "B-BBEE Level", value: data?.legalCompliance?.bbbeeLevel },
@@ -1180,6 +1182,278 @@ paddingLeft: "calc(var(--sidebar-width) + 24px)", // Adds 24px breathing room //
                         </span>
                       </div>
                     ))}
+                  </div>
+
+                  {/* Compliance Checklist Section */}
+                  <div style={{ marginTop: "24px" }}>
+                    <h3 style={{
+                      fontSize: "18px",
+                      fontWeight: "700",
+                      color: "#4a352f",
+                      marginBottom: "16px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px"
+                    }}>
+                      <CheckSquare size={20} color="#a67c52" />
+                      Policies & Controls
+                    </h3>
+
+                    {/* Progress Summary */}
+                    {data?.legalCompliance?.complianceChecklist && (
+                      <div style={{
+                        background: "rgba(166, 124, 82, 0.1)",
+                        borderRadius: "12px",
+                        padding: "20px",
+                        border: "1px solid rgba(166, 124, 82, 0.2)",
+                        marginBottom: "24px"
+                      }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                          <span style={{ fontSize: "16px", fontWeight: "600", color: "#4a352f" }}>Completion Progress</span>
+                          <span style={{ fontSize: "16px", fontWeight: "600", color: "#7d5a50" }}>
+                            {Object.values(data.legalCompliance.complianceChecklist).filter(Boolean).length} of {Object.keys(data.legalCompliance.complianceChecklist).length} completed
+                          </span>
+                        </div>
+                        <div style={{
+                          width: "100%",
+                          background: "rgba(200, 182, 166, 0.3)",
+                          borderRadius: "8px",
+                          height: "12px",
+                          overflow: "hidden"
+                        }}>
+                          <div style={{
+                            height: "100%",
+                            background: "linear-gradient(135deg, #a67c52, #7d5a50)",
+                            width: `${(Object.values(data.legalCompliance.complianceChecklist).filter(Boolean).length / Object.keys(data.legalCompliance.complianceChecklist).length) * 100}%`,
+                            transition: "width 0.3s ease",
+                            borderRadius: "8px"
+                          }} />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Checklist Items by Category */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "20px" }}>
+                      {/* Agreements */}
+                      <div style={{
+                        background: "rgba(250, 247, 242, 0.9)",
+                        borderRadius: "12px",
+                        padding: "20px",
+                        border: "1px solid rgba(200, 182, 166, 0.3)",
+                        boxShadow: "0 4px 12px rgba(74, 53, 47, 0.05)"
+                      }}>
+                        <h4 style={{
+                          fontSize: "16px",
+                          fontWeight: "700",
+                          color: "#4a352f",
+                          marginBottom: "16px",
+                          paddingBottom: "8px",
+                          borderBottom: "2px solid rgba(166, 124, 82, 0.3)"
+                        }}>
+                          📄 Agreements
+                        </h4>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                          {[
+                            { id: "employmentContract", label: "Employment Contract (Basic)" },
+                            { id: "nda", label: "NDA (Non-Disclosure Agreement)" },
+                            { id: "mou", label: "MOU (Memorandum of Understanding)" },
+                            { id: "suppliercontract", label: "Supplier Contracts" }
+                          ].map(item => (
+                            <div key={item.id} style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "12px",
+                              padding: "8px",
+                              borderRadius: "8px",
+                              background: data?.legalCompliance?.complianceChecklist?.[item.id]
+                                ? "rgba(166, 124, 82, 0.1)"
+                                : "transparent",
+                              transition: "all 0.2s ease"
+                            }}>
+                              <div style={{
+                                width: "20px",
+                                height: "20px",
+                                borderRadius: "6px",
+                                border: `2px solid ${data?.legalCompliance?.complianceChecklist?.[item.id] ? "#a67c52" : "#c8b6a6"}`,
+                                background: data?.legalCompliance?.complianceChecklist?.[item.id]
+                                  ? "#a67c52"
+                                  : "transparent",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                flexShrink: 0
+                              }}>
+                                {data?.legalCompliance?.complianceChecklist?.[item.id] && (
+                                  <span style={{ color: "#faf7f2", fontSize: "12px", fontWeight: "bold" }}>✓</span>
+                                )}
+                              </div>
+                              <span style={{
+                                fontSize: "14px",
+                                color: data?.legalCompliance?.complianceChecklist?.[item.id] ? "#4a352f" : "#7d5a50",
+                                fontWeight: data?.legalCompliance?.complianceChecklist?.[item.id] ? "600" : "400",
+                                lineHeight: "1.4"
+                              }}>
+                                {item.label}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Policy Essentials */}
+                      <div style={{
+                        background: "rgba(250, 247, 242, 0.9)",
+                        borderRadius: "12px",
+                        padding: "20px",
+                        border: "1px solid rgba(200, 182, 166, 0.3)",
+                        boxShadow: "0 4px 12px rgba(74, 53, 47, 0.05)"
+                      }}>
+                        <h4 style={{
+                          fontSize: "16px",
+                          fontWeight: "700",
+                          color: "#4a352f",
+                          marginBottom: "16px",
+                          paddingBottom: "8px",
+                          borderBottom: "2px solid rgba(166, 124, 82, 0.3)"
+                        }}>
+                          📋 Policy Essentials
+                        </h4>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                          {[
+                            { id: "codeOfConduct", label: "Employee Code of Conduct" },
+                            { id: "leavePolicy", label: "Leave Policy" },
+                            { id: "disciplinaryPolicy", label: "Disciplinary & Grievance Policy" },
+                            { id: "healthSafetyPolicy", label: "Health & Safety Policy" },
+                            { id: "privacyPolicy", label: "Privacy & Data Protection Policy" }
+                          ].map(item => (
+                            <div key={item.id} style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "12px",
+                              padding: "8px",
+                              borderRadius: "8px",
+                              background: data?.legalCompliance?.complianceChecklist?.[item.id]
+                                ? "rgba(166, 124, 82, 0.1)"
+                                : "transparent",
+                              transition: "all 0.2s ease"
+                            }}>
+                              <div style={{
+                                width: "20px",
+                                height: "20px",
+                                borderRadius: "6px",
+                                border: `2px solid ${data?.legalCompliance?.complianceChecklist?.[item.id] ? "#a67c52" : "#c8b6a6"}`,
+                                background: data?.legalCompliance?.complianceChecklist?.[item.id]
+                                  ? "#a67c52"
+                                  : "transparent",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                flexShrink: 0
+                              }}>
+                                {data?.legalCompliance?.complianceChecklist?.[item.id] && (
+                                  <span style={{ color: "#faf7f2", fontSize: "12px", fontWeight: "bold" }}>✓</span>
+                                )}
+                              </div>
+                              <span style={{
+                                fontSize: "14px",
+                                color: data?.legalCompliance?.complianceChecklist?.[item.id] ? "#4a352f" : "#7d5a50",
+                                fontWeight: data?.legalCompliance?.complianceChecklist?.[item.id] ? "600" : "400",
+                                lineHeight: "1.4"
+                              }}>
+                                {item.label}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Specialised Policies */}
+                      <div style={{
+                        background: "rgba(250, 247, 242, 0.9)",
+                        borderRadius: "12px",
+                        padding: "20px",
+                        border: "1px solid rgba(200, 182, 166, 0.3)",
+                        boxShadow: "0 4px 12px rgba(74, 53, 47, 0.05)"
+                      }}>
+                        <h4 style={{
+                          fontSize: "16px",
+                          fontWeight: "700",
+                          color: "#4a352f",
+                          marginBottom: "16px",
+                          paddingBottom: "8px",
+                          borderBottom: "2px solid rgba(166, 124, 82, 0.3)"
+                        }}>
+                          🎯 Specialised Policies
+                        </h4>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                          {[
+                            { id: "remoteWorkPolicy", label: "Remote Work Policy" },
+                            { id: "conflictInterestPolicy", label: "Conflict of Interest Policy" },
+                            { id: "ipProtection", label: "Intellectual Property Protection" },
+                            { id: "socialMediaPolicy", label: "Social Media Use Policy" },
+                            { id: "expensePolicy", label: "Expense Reimbursement Policy" },
+                            { id: "overtimePolicy", label: "Overtime & Compensation Policy" },
+                            { id: "terminationPolicy", label: "Termination Policy" },
+                            { id: "performancePolicy", label: "Performance Review Policy" }
+                          ].map(item => (
+                            <div key={item.id} style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "12px",
+                              padding: "8px",
+                              borderRadius: "8px",
+                              background: data?.legalCompliance?.complianceChecklist?.[item.id]
+                                ? "rgba(166, 124, 82, 0.1)"
+                                : "transparent",
+                              transition: "all 0.2s ease"
+                            }}>
+                              <div style={{
+                                width: "20px",
+                                height: "20px",
+                                borderRadius: "6px",
+                                border: `2px solid ${data?.legalCompliance?.complianceChecklist?.[item.id] ? "#a67c52" : "#c8b6a6"}`,
+                                background: data?.legalCompliance?.complianceChecklist?.[item.id]
+                                  ? "#a67c52"
+                                  : "transparent",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                flexShrink: 0
+                              }}>
+                                {data?.legalCompliance?.complianceChecklist?.[item.id] && (
+                                  <span style={{ color: "#faf7f2", fontSize: "12px", fontWeight: "bold" }}>✓</span>
+                                )}
+                              </div>
+                              <span style={{
+                                fontSize: "14px",
+                                color: data?.legalCompliance?.complianceChecklist?.[item.id] ? "#4a352f" : "#7d5a50",
+                                fontWeight: data?.legalCompliance?.complianceChecklist?.[item.id] ? "600" : "400",
+                                lineHeight: "1.4"
+                              }}>
+                                {item.label}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Empty State */}
+                    {(!data?.legalCompliance?.complianceChecklist || Object.keys(data.legalCompliance.complianceChecklist).length === 0) && (
+                      <div style={{
+                        background: "rgba(200, 182, 166, 0.1)",
+                        borderRadius: "12px",
+                        padding: "40px",
+                        border: "1px solid rgba(200, 182, 166, 0.2)",
+                        textAlign: "center",
+                        color: "#7d5a50",
+                        fontStyle: "italic"
+                      }}>
+                        <CheckSquare size={32} color="#c8b6a6" style={{ marginBottom: "12px" }} />
+                        <p style={{ margin: 0, fontSize: "16px" }}>No compliance checklist data available yet.</p>
+                        <p style={{ margin: "8px 0 0 0", fontSize: "14px" }}>Visit the Legal & Compliance section to start tracking your documents.</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

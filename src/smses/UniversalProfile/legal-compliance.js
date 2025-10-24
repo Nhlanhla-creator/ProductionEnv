@@ -5,7 +5,7 @@ import FormField from "./form-field"
 import FileUpload from "./file-upload"
 import './UniversalProfile.css';
 import { db, auth } from "../../firebaseConfig"
-import { doc, getDoc } from "firebase/firestore"
+import { doc, getDoc,updateDoc } from "firebase/firestore"
 
 const bbbeeOptions = [
   { value: "1", label: "Level 1" },
@@ -36,11 +36,12 @@ const uifStatusOptions = [
 // Compliance Checklist Items
 const complianceChecklistItems = [
   {
-    category: "Legal Templates",
+    category: "Agreements",
     items: [
       { name: "Employment Contract (Basic)", id: "employmentContract" },
       { name: "NDA (Non-Disclosure Agreement)", id: "nda" },
       { name: "MOU (Memorandum of Understanding)", id: "mou" },
+      { name: "Supplier Contracts", id: "suppliercontract" }
     ]
   },
   {
@@ -82,16 +83,16 @@ const Tooltip = ({ children, content, position = "top" }) => {
       {isVisible && (
         <div
           className={`absolute z-50 px-3 py-2 text-sm text-white bg-gray-800 rounded-lg shadow-lg whitespace-nowrap max-w-xs ${position === "top"
-              ? "bottom-full left-1/2 transform -translate-x-1/2 mb-2"
-              : "top-full left-1/2 transform -translate-x-1/2 mt-2"
+            ? "bottom-full left-1/2 transform -translate-x-1/2 mb-2"
+            : "top-full left-1/2 transform -translate-x-1/2 mt-2"
             }`}
           style={{ width: "max-content", maxWidth: "300px", whiteSpace: "normal" }}
         >
           {content}
           <div
             className={`absolute w-2 h-2 bg-gray-800 transform rotate-45 ${position === "top"
-                ? "top-full left-1/2 -translate-x-1/2 -mt-1"
-                : "bottom-full left-1/2 -translate-x-1/2 -mb-1"
+              ? "top-full left-1/2 -translate-x-1/2 -mt-1"
+              : "bottom-full left-1/2 -translate-x-1/2 -mb-1"
               }`}
           />
         </div>
@@ -272,20 +273,33 @@ export default function LegalCompliance({ data = {}, updateData }) {
     updateData(updatedData)
   }
 
-  const handleChecklistChange = (itemId, checked) => {
+  const handleChecklistChange = async (itemId, checked) => {
     const updatedChecklist = {
       ...formData.complianceChecklist,
       [itemId]: checked
-    }
-    
+    };
+
     const updatedData = {
       ...formData,
       complianceChecklist: updatedChecklist
+    };
+
+    setFormData(updatedData);
+    updateData(updatedData);
+
+    // Save to Firebase immediately
+    try {
+      const userId = auth.currentUser?.uid;
+      if (userId) {
+        const docRef = doc(db, "universalProfiles", userId);
+        await updateDoc(docRef, {
+          "legalCompliance.complianceChecklist": updatedChecklist
+        });
+      }
+    } catch (error) {
+      console.error("Error saving checklist to Firebase:", error);
     }
-    
-    setFormData(updatedData)
-    updateData(updatedData)
-  }
+  };
 
   // Calculate completed checklist items
   const getCompletedChecklistCount = () => {
@@ -499,9 +513,9 @@ export default function LegalCompliance({ data = {}, updateData }) {
       {/* Compliance Checklist Section */}
       <div className="mb-8">
         <h3 className="text-xl font-semibold text-brown-700 mt-6 mb-6 border-b border-brown-200 pb-2">
-          Compliance Documents Checklist
+          Policies & Controls
         </h3>
-        
+
         <div className="bg-brown-50 p-4 rounded-lg border border-brown-200 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h4 className="text-lg font-medium text-brown-800">Your Compliance Progress</h4>
@@ -510,8 +524,8 @@ export default function LegalCompliance({ data = {}, updateData }) {
             </span>
           </div>
           <div className="w-full bg-brown-200 rounded-full h-2.5">
-            <div 
-              className="bg-brown-600 h-2.5 rounded-full transition-all duration-300" 
+            <div
+              className="bg-brown-600 h-2.5 rounded-full transition-all duration-300"
               style={{ width: `${(completedCount / totalChecklistItems) * 100}%` }}
             ></div>
           </div>
@@ -534,13 +548,12 @@ export default function LegalCompliance({ data = {}, updateData }) {
                       onChange={(e) => handleChecklistChange(item.id, e.target.checked)}
                       className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded mt-0.5 flex-shrink-0"
                     />
-                    <label 
-                      htmlFor={item.id} 
-                      className={`text-sm leading-tight cursor-pointer select-none ${
-                        formData.complianceChecklist?.[item.id] 
-                          ? 'text-brown-800 line-through' 
+                    <label
+                      htmlFor={item.id}
+                      className={`text-sm leading-tight cursor-pointer select-none ${formData.complianceChecklist?.[item.id]
+                          ? 'text-brown-800 line-through'
                           : 'text-brown-600'
-                      }`}
+                        }`}
                     >
                       {item.name}
                     </label>
@@ -555,7 +568,7 @@ export default function LegalCompliance({ data = {}, updateData }) {
       {/* Policies & Controls Section */}
       <div className="mb-8">
         <h3 className="text-xl font-semibold text-brown-700 mt-6 mb-6 border-b border-brown-200 pb-2">
-          Policies & Controls
+          Advisory
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
