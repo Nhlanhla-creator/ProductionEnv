@@ -23,6 +23,30 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
   const [triggeredByAuto, setTriggeredByAuto] = useState(true);
 
 
+  // Calculate policies score from compliance checklist
+  const calculatePoliciesScore = () => {
+    if (!profileData?.legalCompliance?.complianceChecklist) {
+      return 0;
+    }
+
+    const checklist = profileData.legalCompliance.complianceChecklist;
+
+    // Define all 17 policy items
+    const policyItems = [
+      "employmentContract", "nda", "mou", "suppliercontract",
+      "codeOfConduct", "leavePolicy", "disciplinaryPolicy", "healthSafetyPolicy", "privacyPolicy",
+      "remoteWorkPolicy", "conflictInterestPolicy", "ipProtection", "socialMediaPolicy",
+      "expensePolicy", "overtimePolicy", "terminationPolicy", "performancePolicy"
+    ];
+
+    // Count how many policies are checked (true)
+    const completedCount = policyItems.filter(item => checklist[item]).length;
+
+    // Calculate percentage (out of 17 policies)
+    const policiesScore = Math.round((completedCount / policyItems.length) * 100);
+
+    return policiesScore;
+  };
 
   // Add/remove body class to prevent scrolling when modal is open
   // ⬇️ Add this effect (after parseAiEvaluation, before other effects)
@@ -91,7 +115,7 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
     }
   };
 
-  const parseAiEvaluation = (text) => {
+   const parseAiEvaluation = (text) => {
     const raw = text || "";
     const cleaned = raw.replace(/\*\*/g, "");
 
@@ -106,8 +130,6 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
       if (m) { pis = parseFloat(m[1]); break; }
     }
 
-    // Fallback PIS calculation remains the same...
-
     // --- Governance Score ---
     let govScore = 0;
     const govRegexes = [
@@ -119,7 +141,7 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
       if (m) { govScore = Math.round(parseFloat(m[1])); break; }
     }
 
-    // --- Stage & Recommendation (keep existing logic) ---
+    // --- Stage & Recommendation ---
     let stage = "";
     if (/Advisors Stage/i.test(cleaned)) stage = "Advisors Stage";
     else if (/Emerging Board Stage/i.test(cleaned)) stage = "Emerging Board Stage";
@@ -130,10 +152,14 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
     else if (/Informal board recommended/i.test(cleaned)) recommendation = "Informal board recommended";
     else if (/Formal board strongly recommended/i.test(cleaned)) recommendation = "Formal board strongly recommended";
 
-    // --- Category breakdown - updated regex to handle new format ---
+    // --- Category breakdown with policies integration ---
+    const policiesScore = calculatePoliciesScore();
+    
+    // Parse AI categories and combine with policies score
     const breakdown = [];
     const categoryRegex = /###\s+\d+\.\s*([^\n]+)\s*\*\*Score:\*\*\s*(\d+)\/(\d+)/g;
     const colors = ["#8D6E63", "#6D4C41", "#A67C52", "#5D4037", "#4E342E"];
+    
     let i = 0, match;
     while ((match = categoryRegex.exec(raw)) !== null) {
       breakdown.push({
@@ -143,6 +169,30 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
         color: colors[i % colors.length],
       });
       i++;
+    }
+
+    // Add policies category to breakdown
+    if (breakdown.length > 0) {
+      // Calculate weights - policies gets equal weight with other categories
+      const totalCategories = breakdown.length + 1; // +1 for policies
+      const weightPerCategory = 100 / totalCategories;
+      
+      // Adjust existing category weights
+      breakdown.forEach(category => {
+        category.weight = weightPerCategory;
+        category.weightedScore = (category.score / category.max) * weightPerCategory;
+      });
+      
+      // Add policies category with same weight
+      const policiesMax = 100; // Percentage-based
+      breakdown.push({
+        name: "Policies & Documentation",
+        score: policiesScore,
+        max: policiesMax,
+        color: colors[breakdown.length % colors.length],
+        weight: weightPerCategory,
+        weightedScore: (policiesScore / policiesMax) * weightPerCategory
+      });
     }
 
     return {
@@ -179,6 +229,7 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
 
     try {
       const evaluationData = prepareDataForAiEvaluation(profileData);
+      const policiesScore = calculatePoliciesScore();
 
       const prompt = `Evaluate the business's governance readiness using the Public Interest Score (PIS) system.
 
@@ -186,6 +237,7 @@ IMPORTANT FORMATTING REQUIREMENTS:
 - Use clear section headers with ###
 - Provide specific, actionable improvement recommendations for EACH category
 - Keep rationale concise but insightful
+- Include Policies & Documentation as a separate category with equal weighting
 
 1. First calculate the PIS score using EXACTLY THESE VALUES:
    Employees: ${profileData?.entityOverview?.employeeCount || 0}
@@ -200,12 +252,18 @@ IMPORTANT FORMATTING REQUIREMENTS:
    - PIS 100-349: Emerging Board Stage rubric
    - PIS ≥ 350: Full Board Stage rubric
 
-3. For each category in the appropriate rubric:
+3. For each category in the appropriate rubric (plus Policies & Documentation):
    - Score from 0 to max points
    - Provide short rationale for the score (2-3 sentences)
    - FOR EACH CATEGORY, include a "How to Improve" section with 3-5 specific, actionable steps to increase the score
 
-4. Finally, provide:
+4. POLICIES & DOCUMENTATION CATEGORY:
+   Current Policies Score: ${policiesScore}% (based on ${Object.values(profileData?.legalCompliance?.complianceChecklist || {}).filter(Boolean).length || 0}/17 completed policies)
+   - Evaluate the completeness of their policy documentation
+   - Consider which essential policies are missing
+   - Provide specific recommendations for policy development
+
+5. Finally, provide:
    - Overall governance score (0-100%)
    - Governance stage
    - Clear recommendation
@@ -216,6 +274,7 @@ CRITICAL: For improvement recommendations, be SPECIFIC and ACTIONABLE. Instead o
 - "Recruit 2 independent directors with financial and industry expertise within 6 months"
 - "Implement formal financial controls and monthly reporting within 3 months"
 - "Complete BBBEE certification process and submit application within 4 months"
+- "Develop and implement missing Employee Code of Conduct within 2 months"
 
 Input Data:
 ${evaluationData}
@@ -235,13 +294,13 @@ Governance Score: [score]%
 • [Specific action 2 with measurable goal]
 • [Specific action 3 with concrete steps]
 
-### 2. [Category Name]
-**Score:** [score]/[max]
-**Rationale:** [2-3 sentence explanation]
+### 2. Policies & Documentation
+**Score:** [evaluate 0-100 based on policy completeness]
+**Rationale:** [2-3 sentence explanation focusing on their ${policiesScore}% completion rate]
 **How to Improve:** 
-• [Specific action 1 with timeline]
-• [Specific action 2 with measurable goal]
-• [Specific action 3 with concrete steps]
+• [Specific action 1 - prioritize missing essential policies]
+• [Specific action 2 - implementation timeline]
+• [Specific action 3 - documentation improvement]
 
 ### Overall Assessment
 **Final Analysis:** [Brief overall assessment with key recommendations]`;
@@ -296,9 +355,21 @@ Governance Score: [score]%
     evaluationData += `BB-BEE Level: ${data?.legalCompliance?.bbbeeLevel || 'Not provided'}\n`;
     evaluationData += `Board Meetings: ${data?.enterpriseReadiness?.advisorsMeetingFrequency || 'Not specified'}\n`;
 
+    // Policies Data
+    evaluationData += '=== POLICIES STATUS ===\n';
+    const policiesScore = calculatePoliciesScore();
+    evaluationData += `Policies Completion: ${policiesScore}%\n`;
+    
+    if (data?.legalCompliance?.complianceChecklist) {
+      const checklist = data.legalCompliance.complianceChecklist;
+      const completedPolicies = Object.keys(checklist).filter(key => checklist[key]).length;
+      evaluationData += `Completed Policies: ${completedPolicies}/17\n`;
+    } else {
+      evaluationData += `Completed Policies: 0/17\n`;
+    }
+
     return evaluationData;
   };
-
   // Load saved evaluation if exists
   useEffect(() => {
     const userId = auth?.currentUser?.uid;

@@ -5,9 +5,13 @@ import { useState, useEffect } from "react"
 import { CheckCircle, XCircle, Upload, FileText, Loader2 } from "lucide-react"
 import FileUpload from "./file-upload"
 import './UniversalProfile.css';
-
+import { GoogleGenAI } from "@google/genai";
 import { db, auth } from "../../firebaseConfig"
 import { doc, getDoc, updateDoc } from "firebase/firestore"
+
+const ai = new GoogleGenAI({ 
+  apiKey: "AIzaSyBV5LGcaYjT0qLWsfqpbKxo8ohz0SDkIvU"
+});
 
 const documentsList = [
   {
@@ -100,6 +104,131 @@ const documentsList = [
   }
 ]
 
+const documentValidationRules = {
+  "Company Registration Certificate": {
+  requiredElements: [
+    "Issued by CIPC/Companies Registry",
+    "Company registration number",
+    "Registered company name",
+    "Date of incorporation",
+    "Company type (Pty Ltd, CC, etc.)",
+    "Official stamp/signature"
+  ],
+  strictChecks: ["issued_by_cipc", "has_registration_number", "matches_company_name"]
+},
+  "Certified IDs of Directors & Shareholders": {
+  requiredElements: [
+    "Certification stamp/signature (Commissioner of Oaths)",
+    "Certification date within last 3 months",
+    "South African ID number (13 digits)",
+    "Photograph of ID holder",
+    "Full names matching company records",
+    "Keywords: Certified, True Copy, Commissioner of Oaths"
+  ],
+    strictChecks: ["certified_within_3_months", "has_id_numbers", "names_match_records"]
+},
+"Share Register": {
+  requiredElements: [
+    "Company name and registration number",
+    "Shareholder names and details",
+    "Number and class of shares held",
+    "Issue dates of shares",
+    "Certificate numbers",
+    "Director/company secretary signature"
+  ],
+  strictChecks: ["matches_company_records", "has_share_details", "complete_shareholder_list"]
+},
+"Proof of Address": {
+  requiredElements: [
+    "Full name and physical address",
+    "Issue date within last 3 months",
+    "Utility company/landlord details",
+    "Account number or reference",
+    "Official stamp/letterhead"
+  ],
+  strictChecks: ["recent_issue_date", "matches_applicant_name", "has_physical_address"]
+},
+  "Tax Clearance Certificate": {
+  requiredElements: [
+    "Issued by South African Revenue Service (SARS)",
+    "Tax Reference Number",
+    "Issue Date", 
+    "Expiry Date (usually 1 year from issue)",
+    "Certificate Number",
+    "Taxpayer Name and Address",
+    "SARS official stamp/signature",
+    "Clearance Status (Good Standing)"
+  ],
+  criticalChecks: ["has_tax_reference_number", "has_expiry_date", "issued_by_sars", "valid_clearance_status"]
+},
+"VAT Certificate": {
+  requiredElements: [
+    "VAT Registration Number",
+    "Business Name and Trading Name", 
+    "Business Address",
+    "Date of Registration",
+    "VAT Registration Status",
+    "Issued by SARS",
+    "VAT number format (starts with 4)"
+  ],
+  criticalChecks: ["has_vat_number", "valid_vat_format", "issued_by_sars", "has_registration_date"]
+},
+  "B-B BEE Certificate": {
+    requiredElements: [
+      "Issued by accredited verification agency",
+      "B-BBEE certificate number",
+      "B-BBEE level (1-8)",
+      "Issue and expiry dates",
+      "Company registration details",
+     "SANAS logo or accreditation number / CIPC Logo / DTIC"
+    ],
+    strictChecks: ["has_certificate_number", "shows_verification_details", "has_expiry_date"]
+  },
+  "UIF/PAYE/COIDA Certificates": {
+  requiredElements: [
+    "Certificate type clearly stated (UIF/PAYE/COIDA)",
+    "Company name and registration number",
+    "Certificate/registration number",
+    "Issue date and validity period", 
+    "Issued by Department of Labour/SARS",
+    "Compliance status (Good Standing/Registered)",
+    "Official stamp or signature"
+  ],
+  criticalChecks: ["certificate_type_clear", "has_registration_number", "valid_issue_date"]
+},
+"Industry Accreditations": {
+  requiredElements: [
+    "Accreditation/Certificate title",
+    "Issuing accreditation body",
+    "Scope/standard (e.g., ISO 9001)",
+    "Issue and expiry dates",
+    "Company name matches applicant"
+  ],
+   strictChecks: ["has_expiry_date", "issued_by_accredited_body", "matches_company_name"]
+},
+"Company Profile / Brochure": {
+  requiredElements: [
+    "Company name and logo",
+    "About Us/Company Overview section",
+    "Mission, Vision, Values statements",
+    "Management/Team information",
+    "Contact details",
+    "Services/Products description"
+  ],
+  strictChecks: ["has_company_details", "has_mission_vision", "has_contact_info"]
+},
+"Client References": {
+  requiredElements: [
+    "Reference letter heading/title",
+    "Client company name and contact details",
+    "Description of services provided",
+    "Performance/satisfaction statement",
+    "Dates of service/work period",
+    "Authorized signature and position"
+  ],
+  strictChecks:["has_client_details", "describes_services", "has_signature"]
+},
+}
 export default function Documents({ data = {}, updateData }) {
   const [formData, setFormData] = useState({})
   const [isLoading, setIsLoading] = useState(true)
@@ -194,6 +323,116 @@ export default function Documents({ data = {}, updateData }) {
     loadDocuments()
   }, [])
 
+  const createStrictPrompt = (docLabel, rules) => { 
+  return `
+VALIDATE THIS ${docLabel} DOCUMENT:
+
+REQUIRED ELEMENTS:
+${rules.requiredElements.map(item => `- ${item}`).join('\n')}
+
+VALIDATION CHECKS:
+1. Document matches ${docLabel} requirements
+2. Expiry date check (reject if expired/expiring soon)
+3. All required elements present
+
+RESPONSE FORMAT (JSON only):
+{
+  "isValid": true/false,
+  "rejectionReason": "if invalid",
+  "warnings": ["expiring_soon"],
+  "expiryDate": "YYYY-MM-DD if found"
+}
+`;
+};
+
+ const validateDocumentWithAI = async (docLabel, file) => {
+ const parseDetailedResponse = (responseText) => {
+  try {
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    
+    // ✅ Better fallback: Check what the AI actually said
+    if (responseText.toLowerCase().includes('false')) {
+      return {
+        isValid: false,
+        rejectionReason: `Please upload the correct document`,
+        warnings: []
+      };
+    }
+    
+    if (responseText.toLowerCase().includes('true')) {
+      return {
+        isValid: true,
+        rejectionReason: "",
+        warnings: []
+      };
+    }
+    
+    // ✅ If we can't parse, show the actual AI response
+    return {
+      isValid: false,
+      rejectionReason: `Validation failed: ${responseText.substring(0, 100)}...`,
+      warnings: []
+    };
+    
+  } catch (error) {
+    return {
+      isValid: false,
+      rejectionReason: "Unable to validate document format",
+      warnings: []
+    };
+  }
+};
+
+  try {
+    const rules = documentValidationRules[docLabel];
+    
+    const validationPrompt = rules ? 
+      createStrictPrompt(docLabel, rules) :
+      `Check if this document is a valid ${docLabel}. Return only "true" or "false".`;
+
+    // Convert file to base64
+    const base64Data = await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+    });
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [
+        {
+          parts: [
+            {
+              inlineData: {
+                mimeType: file.type,
+                data: base64Data,
+              }
+            },
+            {
+              text: validationPrompt
+            }
+          ]
+        }
+      ]
+    });
+
+    console.log("🔍 RAW AI RESPONSE:", response.text);
+    
+    return parseDetailedResponse(response.text); 
+    
+  } catch (error) {
+    console.error("AI validation failed:", error);
+    return {
+      isValid: false,
+      rejectionReason: "Validation service unavailable",
+      warnings: []
+    };
+  }
+};
+
   const handleFileChange = async (documentId, files) => {
   try {
     if (!auth.currentUser) {
@@ -205,6 +444,17 @@ export default function Documents({ data = {}, updateData }) {
     
     // Ensure files is always an array
     const filesArray = Array.isArray(files) ? files : [files];
+    
+    // AI VALIDATION HERE
+    for (const file of filesArray) {
+      const validationResult = await validateDocumentWithAI(documentId, file);
+      
+      if (!validationResult.isValid) {
+        alert(`Document rejected: ${validationResult.rejectionReason}`);
+        setUploadingDocs(prev => ({ ...prev, [documentId]: false }));
+        return; // Stop if any file fails validation
+      }
+    }
     
     // Update local state
     const updatedData = { ...formData, [documentId]: filesArray };
@@ -435,6 +685,7 @@ export default function Documents({ data = {}, updateData }) {
               backgroundColor: "#e0e0e0",
               borderRadius: "50%"
             }}></div>
+            
             <div style={{ flex: 1 }}>
               <div style={{
                 height: "16px",
@@ -818,7 +1069,7 @@ export default function Documents({ data = {}, updateData }) {
                       border: "none"
                     }}>
                       <Upload style={{ width: "12px", height: "12px" }} />
-                      Upload
+                      {formData[document.id]?.length > 0 ? "Update" : "Upload"}
                       <input
                         type="file"
                         accept={document.accept}
@@ -903,8 +1154,7 @@ export default function Documents({ data = {}, updateData }) {
           lineHeight: "1.5",
           margin: "0"
         }}>
-          You have uploaded <strong>{stats.required.uploaded} out of {stats.required.total}</strong> required documents 
-          and <strong>{stats.optional.uploaded} out of {stats.optional.total}</strong> optional documents. 
+          You have uploaded <strong>{stats.required.uploaded} out of {stats.required.total}</strong> required documents. 
           {stats.required.uploaded === stats.required.total 
             ? " ✅ All required documents are complete!" 
             : ` Please upload the remaining ${stats.required.total - stats.required.uploaded} required document(s).`
