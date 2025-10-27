@@ -247,7 +247,7 @@ import { AdvisorInsights } from "./advisors/AdvisorInsights/AdvisorInsights"
 import { Insights as InternInsights } from "./Interns/InternInsights/internInsights"
 import { AcceleratorInsights as CatalystInsights } from "./catalyst/CatalystInsights/catalystInsights"
 import {InvestorInsights}  from "./Investor/InvestorInsights/investorInsights"
-
+import MyCohorts from "Investor/MyCohorts/MyCohorts"
 // Initial Data States
 const initialFormData = {
   entityOverview: {},
@@ -1065,6 +1065,8 @@ function App() {
           element={<Navigate to="/program-sponsor-profile/instructions" replace />}
         />
         <Route path="/applications/intern-application" element={<Navigate to="/applications/intern" replace />} />
+
+        <Route path ="/my-cohorts" element={renderInvestorRoute(MyCohorts)} />
       </Routes>
     </Router>
   )
