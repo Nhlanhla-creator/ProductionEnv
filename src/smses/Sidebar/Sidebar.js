@@ -11,9 +11,7 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronLeft,
-  Briefcase,
   Handshake,
-  ShoppingCart,
   Wrench,
   Calendar,
   CreditCard,
@@ -33,9 +31,8 @@ import {
   PieChart,
   Layers,
   Activity,
-  Users as PeopleIcon,
+  DropletIcon as PeopleIcon,
   Globe,
-  Shield,
   Lightbulb,
 } from "lucide-react"
 import { auth } from "../../firebaseConfig"
@@ -72,6 +69,26 @@ const Sidebar = ({ companyName = "Company Name" }) => {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [userName, setUserName] = useState("User")
   const [date, setDate] = useState(new Date())
+
+  const [isInvestorView, setIsInvestorView] = useState(false)
+  const [viewingSMEId, setViewingSMEId] = useState(null)
+  const [viewingSMEName, setViewingSMEName] = useState("")
+
+  useEffect(() => {
+    const investorViewMode = sessionStorage.getItem("investorViewMode")
+    const smeId = sessionStorage.getItem("viewingSMEId")
+    const smeName = sessionStorage.getItem("viewingSMEName")
+
+    if (investorViewMode === "true" && smeId) {
+      setIsInvestorView(true)
+      setViewingSMEId(smeId)
+      setViewingSMEName(smeName || "SME")
+      console.log("Investor view mode activated for SME:", smeId)
+
+      // Auto-expand My Growth Suite for investors
+      setExpandedMenus({ "growth-tools": true })
+    }
+  }, [])
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
@@ -133,7 +150,7 @@ const Sidebar = ({ companyName = "Company Name" }) => {
   useEffect(() => {
     const path = location.pathname
     setActiveItem(path)
-    
+
     const newExpandedMenus = {}
     menuItems.forEach((item) => {
       if (item.hasSubmenu) {
@@ -196,8 +213,7 @@ const Sidebar = ({ companyName = "Company Name" }) => {
     //     },
     //   ],
     // },
-    
-   
+
     {
       id: "matches",
       label: "My Matches",
@@ -292,22 +308,20 @@ const Sidebar = ({ companyName = "Company Name" }) => {
           icon: <BarChart size={16} />,
           route: "/MarketingSales",
         },
-      
-      
       ],
     },
-     {
+    {
       id: "insights",
       label: "BIG Insights",
       icon: <Lightbulb size={18} />,
       route: "/insights",
     },
-      // {
-      //     id: "shop-tools",
-      //     label: "My Tools and Templates",
-      //     icon: <Wrench size={16} />,
-      //     route: "/growth/shop",
-      //   },
+    // {
+    //     id: "shop-tools",
+    //     label: "My Tools and Templates",
+    //     icon: <Wrench size={16} />,
+    //     route: "/growth/shop",
+    //   },
     {
       id: "documents",
       label: "My Documents",
@@ -333,26 +347,25 @@ const Sidebar = ({ companyName = "Company Name" }) => {
       route: "/billing",
       hasSubmenu: true,
       subItems: [
-         {
+        {
           id: "billing-info",
           label: "Billing Information",
           icon: <FileText size={16} />,
           route: "/billing/info",
         },
-       
+
         {
           id: "subscriptions",
           label: "Subscriptions",
           icon: <BookOpen size={16} />,
           route: "/billing/subscriptions",
         },
-         {
+        {
           id: "tool-orders",
           label: "Billing History",
           icon: <PenTool size={16} />,
           route: "/billing/growth-tools-orders",
         },
-       
       ],
     },
     {
@@ -362,6 +375,8 @@ const Sidebar = ({ companyName = "Company Name" }) => {
       route: "/settings",
     },
   ]
+
+  const filteredMenuItems = isInvestorView ? menuItems.filter((item) => item.id === "growth-tools") : menuItems
 
   const handleItemClick = (item) => {
     if (item.hasSubmenu) {
@@ -378,23 +393,23 @@ const Sidebar = ({ companyName = "Company Name" }) => {
   }
 
   const handleSubItemClick = (subItem, e) => {
-    console.log('Clicking:', subItem.label, 'Route:', subItem.route)
+    console.log("Clicking:", subItem.label, "Route:", subItem.route)
     e.stopPropagation()
-    
+
     // Set active immediately to prevent reset
     setActiveItem(subItem.route)
-    
+
     // Keep the parent menu expanded
-    const parentMenu = menuItems.find(item => 
-      item.hasSubmenu && item.subItems.some(sub => sub.route === subItem.route)
+    const parentMenu = menuItems.find(
+      (item) => item.hasSubmenu && item.subItems.some((sub) => sub.route === subItem.route),
     )
     if (parentMenu) {
-      setExpandedMenus(prev => ({
+      setExpandedMenus((prev) => ({
         ...prev,
-        [parentMenu.id]: true
+        [parentMenu.id]: true,
       }))
     }
-    
+
     navigate(subItem.route)
     if (window.innerWidth <= 768) {
       setIsCollapsed(true)
@@ -429,13 +444,16 @@ const Sidebar = ({ companyName = "Company Name" }) => {
           <span className="mobile-toggle-text">Menu</span>
         </button>
       </div>
-      <div className={`sidebar ${isCollapsed ? "collapsed" : ""}`} style={{
-        width: isCollapsed ? '70px' : '265px', // Increased from 255px to 280px
-        minWidth: isCollapsed ? '70px' : '265px'
-      }}>
+      <div
+        className={`sidebar ${isCollapsed ? "collapsed" : ""}`}
+        style={{
+          width: isCollapsed ? "70px" : "265px", // Increased from 255px to 280px
+          minWidth: isCollapsed ? "70px" : "265px",
+        }}
+      >
         {/* Header */}
         <div className="company-header">
-          <div className="logo-circle">{getCompanyInitials(userName)}</div>
+          <div className="logo-circle">{getCompanyInitials(isInvestorView ? viewingSMEName : userName)}</div>
           {!isCollapsed && (
             <div className="company-info">
               <div
@@ -448,7 +466,7 @@ const Sidebar = ({ companyName = "Company Name" }) => {
                   margin: 0,
                 }}
               >
-                {userName}
+                {isInvestorView ? viewingSMEName : userName}
               </div>
               <div className="dashboard-title">SMSE Dashboard</div>
             </div>
@@ -461,7 +479,7 @@ const Sidebar = ({ companyName = "Company Name" }) => {
         {/* Menu */}
         <div className="menu-container">
           <nav className="menu" role="navigation">
-            {menuItems.map((item, index) => (
+            {filteredMenuItems.map((item, index) => (
               <div
                 key={item.id}
                 className={`menu-item ${isMenuItemActive(item) ? "active" : ""} ${
@@ -469,9 +487,9 @@ const Sidebar = ({ companyName = "Company Name" }) => {
                 } ${item.hasSubmenu && expandedMenus[item.id] ? "expanded" : ""}`}
                 style={{
                   "--index": index,
-                  backgroundColor: isMenuItemActive(item) ? '#b89f8d' : 'transparent',
-                  borderRadius: isMenuItemActive(item) ? '8px' : '0',
-                  color: isMenuItemActive(item) ? 'white' : 'inherit'
+                  backgroundColor: isMenuItemActive(item) ? "#b89f8d" : "transparent",
+                  borderRadius: isMenuItemActive(item) ? "8px" : "0",
+                  color: isMenuItemActive(item) ? "white" : "inherit",
                 }}
                 onClick={() => handleItemClick(item)}
               >
@@ -498,9 +516,9 @@ const Sidebar = ({ companyName = "Company Name" }) => {
                         key={subItem.id}
                         className={`submenu-item ${activeItem === subItem.route ? "active" : ""}`}
                         style={{
-                          backgroundColor: activeItem === subItem.route ? '#b89f8d' : 'transparent',
-                          borderRadius: activeItem === subItem.route ? '6px' : '0',
-                          color: activeItem === subItem.route ? 'white' : 'inherit'
+                          backgroundColor: activeItem === subItem.route ? "#b89f8d" : "transparent",
+                          borderRadius: activeItem === subItem.route ? "6px" : "0",
+                          color: activeItem === subItem.route ? "white" : "inherit",
                         }}
                         onClick={(e) => handleSubItemClick(subItem, e)}
                       >

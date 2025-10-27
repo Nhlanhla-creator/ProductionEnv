@@ -5,7 +5,7 @@ import { Bar, Line } from "react-chartjs-2"
 import Sidebar from "smses/Sidebar/Sidebar"
 import Header from "../DashboardHeader/DashboardHeader"
 import { db, auth } from "../../firebaseConfig"
-import { collection, addDoc, getDocs, updateDoc, doc, getDoc,query, where, setDoc } from "firebase/firestore"
+import { collection, getDocs, doc, getDoc, query, where, setDoc } from "firebase/firestore"
 import { onAuthStateChanged } from "firebase/auth"
 import {
   Chart as ChartJS,
@@ -140,7 +140,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
       [currentMonth]: {
         ...balanceSheetDetails,
         month: currentMonth,
-      }
+      },
     }
     onUpdateBalanceSheet(updatedData)
 
@@ -151,7 +151,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
           userId: user.uid,
           chartName: "balanceSheet",
           data: updatedData,
-          lastUpdated: new Date().toISOString()
+          lastUpdated: new Date().toISOString(),
         })
         console.log("Balance sheet data saved to Firebase")
       } catch (error) {
@@ -178,11 +178,11 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
 
   // Parse CSV data and extract balance sheet values
   const parseCSVData = (csvText) => {
-    const lines = csvText.split('\n')
+    const lines = csvText.split("\n")
     const extractedData = {}
 
-    lines.forEach(line => {
-      const [key, value] = line.split(',').map(item => item.trim())
+    lines.forEach((line) => {
+      const [key, value] = line.split(",").map((item) => item.trim())
       if (!key) return // Skip empty lines
 
       // Map CSV headers to our data structure
@@ -190,75 +190,75 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
 
       switch (normalizedKey) {
         // Assets
-        case 'cash':
+        case "cash":
           extractedData.cash = value || "0"
           break
-        case 'inventory':
+        case "inventory":
           extractedData.inventory = value || "0"
           break
-        case 'prepaid expenses':
+        case "prepaid expenses":
           extractedData.prepaidExpenses = value || "0"
           break
-        case 'accounts receivable':
+        case "accounts receivable":
           extractedData.accountsReceivable = value || "0"
           break
-        case 'deposits':
+        case "deposits":
           extractedData.deposits = value || "0"
           break
-        case 'property plant & equipment':
-        case 'property plant and equipment':
-        case 'property, plant & equipment':
+        case "property plant & equipment":
+        case "property plant and equipment":
+        case "property, plant & equipment":
           extractedData.propertyPlantEquipment = value || "0"
           break
-        case 'intangible assets':
+        case "intangible assets":
           extractedData.intangibleAssets = value || "0"
           break
-        case 'accumulated depreciation':
+        case "accumulated depreciation":
           extractedData.accumulatedDepreciation = value || "0"
           break
 
         // Liabilities & Equity
-        case 'accounts payable':
+        case "accounts payable":
           extractedData.accountsPayable = value || "0"
           break
-        case 'current borrowing':
+        case "current borrowing":
           extractedData.currentBorrowing = value || "0"
           break
-        case 'non-current liabilities':
+        case "non-current liabilities":
           extractedData.nonCurrentLiabilities = value || "0"
           break
-        case 'long-term liabilities':
+        case "long-term liabilities":
           extractedData.longTermLiabilities = value || "0"
           break
-        case 'owners equity':
+        case "owners equity":
           extractedData.ownersEquity = value || "0"
           break
 
         // P&L Data - Enhanced parsing
-        case 'sales':
-        case 'sales revenue':
-        case 'revenue':
-        case 'income':
+        case "sales":
+        case "sales revenue":
+        case "revenue":
+        case "income":
           extractedData.sales = value || "0"
           break
-        case 'cogs':
-        case 'cost of goods sold':
-        case 'cost of sales':
+        case "cogs":
+        case "cost of goods sold":
+        case "cost of sales":
           extractedData.cogs = value || "0"
           break
-        case 'opex':
-        case 'operating expenses':
-        case 'expenses':
-        case 'operating costs':
+        case "opex":
+        case "operating expenses":
+        case "expenses":
+        case "operating costs":
           extractedData.opex = value || "0"
           break
-        case 'gross profit':
-        case 'grossprofit':
+        case "gross profit":
+        case "grossprofit":
           extractedData.grossProfit = value || "0"
           break
-        case 'net profit':
-        case 'netprofit':
-        case 'net income':
+        case "net profit":
+        case "netprofit":
+        case "net income":
           extractedData.netProfit = value || "0"
           break
         default:
@@ -268,10 +268,10 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
     })
 
     // Update the balance sheet details with extracted data
-    setBalanceSheetDetails(prev => ({
+    setBalanceSheetDetails((prev) => ({
       ...prev,
       ...extractedData,
-      month: currentMonth
+      month: currentMonth,
     }))
 
     // Auto-save the imported data
@@ -279,8 +279,8 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
       ...balanceSheetData,
       [currentMonth]: {
         ...extractedData,
-        month: currentMonth
-      }
+        month: currentMonth,
+      },
     }
 
     onUpdateBalanceSheet(updatedData)
@@ -332,8 +332,10 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
               fontWeight: "500",
             }}
           >
-            {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map(month => (
-              <option key={month} value={month}>{month}</option>
+            {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((month) => (
+              <option key={month} value={month}>
+                {month}
+              </option>
             ))}
           </select>
         </div>
@@ -443,14 +445,14 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
 
             <tr>
               <td style={{ paddingLeft: "20px", padding: "5px 0" }}>Accounts Receivable</td>
-              <td style={{ textAlign: "right" }}>
-                {accountsReceivable ? accountsReceivable.toLocaleString() : "-"}
-              </td>
+              <td style={{ textAlign: "right" }}>{accountsReceivable ? accountsReceivable.toLocaleString() : "-"}</td>
             </tr>
 
             <tr style={{ borderBottom: "1px solid #000" }}>
               <td style={{ fontWeight: "bold", padding: "8px 0" }}>Total Current Assets</td>
-              <td style={{ textAlign: "right", fontWeight: "bold" }}>{totalCurrentAssets ? totalCurrentAssets.toLocaleString() : "-"}</td>
+              <td style={{ textAlign: "right", fontWeight: "bold" }}>
+                {totalCurrentAssets ? totalCurrentAssets.toLocaleString() : "-"}
+              </td>
             </tr>
 
             <tr style={{ borderBottom: "1px solid #000" }}>
@@ -465,7 +467,9 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
 
             <tr>
               <td style={{ paddingLeft: "20px", padding: "5px 0" }}>Property, Plant & Equipment</td>
-              <td style={{ textAlign: "right" }}>{propertyPlantEquipment ? propertyPlantEquipment.toLocaleString() : "-"}</td>
+              <td style={{ textAlign: "right" }}>
+                {propertyPlantEquipment ? propertyPlantEquipment.toLocaleString() : "-"}
+              </td>
             </tr>
 
             <tr>
@@ -517,7 +521,9 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
 
             <tr style={{ borderBottom: "1px solid #000" }}>
               <td style={{ fontWeight: "bold", padding: "8px 0" }}>Total Current Liabilities</td>
-              <td style={{ textAlign: "right", fontWeight: "bold" }}>{totalCurrentLiabilities ? totalCurrentLiabilities.toLocaleString() : "-"}</td>
+              <td style={{ textAlign: "right", fontWeight: "bold" }}>
+                {totalCurrentLiabilities ? totalCurrentLiabilities.toLocaleString() : "-"}
+              </td>
             </tr>
 
             <tr>
@@ -541,17 +547,23 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
 
             <tr style={{ borderBottom: "1px solid #000" }}>
               <td style={{ fontWeight: "bold", padding: "8px 0" }}>Long-term Liabilities</td>
-              <td style={{ textAlign: "right", fontWeight: "bold" }}>{longTermLiabilities ? longTermLiabilities : "-"}</td>
+              <td style={{ textAlign: "right", fontWeight: "bold" }}>
+                {longTermLiabilities ? longTermLiabilities : "-"}
+              </td>
             </tr>
 
             <tr style={{ borderBottom: "1px solid #000" }}>
               <td style={{ fontWeight: "bold", padding: "8px 0" }}>Total Liabilities</td>
-              <td style={{ textAlign: "right", fontWeight: "bold" }}>{totalLiabilities ? totalLiabilities.toLocaleString() : "-"}</td>
+              <td style={{ textAlign: "right", fontWeight: "bold" }}>
+                {totalLiabilities ? totalLiabilities.toLocaleString() : "-"}
+              </td>
             </tr>
 
             <tr style={{ borderBottom: "1px solid #000" }}>
               <td style={{ fontWeight: "bold", padding: "15px 0" }}>Owners Equity</td>
-              <td style={{ textAlign: "right", fontWeight: "bold" }}>{ownersEquity ? ownersEquity.toLocaleString() : "-"}</td>
+              <td style={{ textAlign: "right", fontWeight: "bold" }}>
+                {ownersEquity ? ownersEquity.toLocaleString() : "-"}
+              </td>
             </tr>
 
             <tr style={{ borderBottom: "3px solid #000" }}>
@@ -592,7 +604,9 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
               overflowY: "auto",
             }}
           >
-            <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "20px" }}>Balance Sheet Details - {currentMonth}</h3>
+            <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "20px" }}>
+              Balance Sheet Details - {currentMonth}
+            </h3>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "20px" }}>
               {/* Assets Column */}
@@ -952,8 +966,8 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
                   }}
                 >
                   <p style={{ color: "#1e3a8a", margin: "0", fontSize: "12px", fontWeight: "500" }}>
-                    💡 <strong>Note:</strong> Enter P&L data here to populate the charts automatically.
-                    Gross Profit = Sales - COGS, Net Profit = Gross Profit - OPEX
+                    💡 <strong>Note:</strong> Enter P&L data here to populate the charts automatically. Gross Profit =
+                    Sales - COGS, Net Profit = Gross Profit - OPEX
                   </p>
                 </div>
               </div>
@@ -1042,8 +1056,19 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
                 Upload a CSV file with your balance sheet data. The CSV should have two columns: Account and Amount.
               </p>
 
-              <div style={{ textAlign: "left", backgroundColor: "white", padding: "15px", borderRadius: "4px", fontSize: "12px", fontFamily: "monospace" }}>
-                <p><strong>Expected format:</strong></p>
+              <div
+                style={{
+                  textAlign: "left",
+                  backgroundColor: "white",
+                  padding: "15px",
+                  borderRadius: "4px",
+                  fontSize: "12px",
+                  fontFamily: "monospace",
+                }}
+              >
+                <p>
+                  <strong>Expected format:</strong>
+                </p>
                 <p>Cash,100000</p>
                 <p>Inventory,50000</p>
                 <p>Accounts Receivable,75000</p>
@@ -1107,14 +1132,14 @@ const CashflowTrends = ({ activeSection, financialYearStart, chartData, balanceS
   const months = generateMonths()
 
   // Pull cashflow data from Balance Sheet cash values (convert to millions)
-  const cashflowData = months.map(month => {
+  const cashflowData = months.map((month) => {
     const balanceData = balanceSheetData?.[month]
     return balanceData ? Number.parseFloat(balanceData.cash) / 1000000 : 0
   })
 
   // Calculate burn rate: (COGS + OPEX - Sales) for each month
   // This represents net cash outflow per month
-  const burnRateData = months.map(month => {
+  const burnRateData = months.map((month) => {
     const balanceData = balanceSheetData?.[month]
     if (!balanceData) return 0
 
@@ -1130,7 +1155,8 @@ const CashflowTrends = ({ activeSection, financialYearStart, chartData, balanceS
 
   // Calculate months runway: Current cash balance / average monthly burn rate
   const currentCashBalance = cashflowData[months.indexOf(currentMonth)] || 0
-  const avgBurnRate = burnRateData.reduce((sum, rate) => sum + rate, 0) / burnRateData.filter(rate => rate > 0).length || 1
+  const avgBurnRate =
+    burnRateData.reduce((sum, rate) => sum + rate, 0) / burnRateData.filter((rate) => rate > 0).length || 1
   const runwayMonths = avgBurnRate > 0 ? Math.round(currentCashBalance / avgBurnRate) : 999
 
   const cashflowOptions = {
@@ -1221,7 +1247,6 @@ const CashflowTrends = ({ activeSection, financialYearStart, chartData, balanceS
       }}
     >
       {/* Information Panel */}
-
 
       <div
         style={{
@@ -1412,7 +1437,7 @@ const BalanceSheetHealth = ({ activeSection, financialYearStart, chartData, onUp
               userId: user.uid,
               chartName: key,
               ...data,
-              lastUpdated: new Date().toISOString()
+              lastUpdated: new Date().toISOString(),
             })
           }
         }
@@ -1420,7 +1445,7 @@ const BalanceSheetHealth = ({ activeSection, financialYearStart, chartData, onUp
           userId: user.uid,
           chartName: "balanceSheetHealth",
           ...updatedData.balanceSheetHealth,
-          lastUpdated: new Date().toISOString()
+          lastUpdated: new Date().toISOString(),
         })
         console.log("Balance sheet health data saved to Firebase")
       } catch (error) {
@@ -1970,7 +1995,7 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
         console.log("Loaded PnL data from Firebase:", firebaseData)
 
         // Update local state with Firebase data
-        setPnlDetails(prev => ({
+        setPnlDetails((prev) => ({
           sales: firebaseData.sales?.map(String) || Array(12).fill(""),
           cogs: firebaseData.cogs?.map(String) || Array(12).fill(""),
           opex: firebaseData.opex?.map(String) || Array(12).fill(""),
@@ -2002,25 +2027,25 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
   const processFirebaseDataForCharts = (firebaseData) => {
     const chartData = {
       sales: {
-        actual: firebaseData.sales?.map(val => Number.parseFloat(val) || 0) || Array(12).fill(0),
-        budget: firebaseData.salesBudget?.map(val => Number.parseFloat(val) || 0) || Array(12).fill(0)
+        actual: firebaseData.sales?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0),
+        budget: firebaseData.salesBudget?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0),
       },
       cogs: {
-        actual: firebaseData.cogs?.map(val => Number.parseFloat(val) || 0) || Array(12).fill(0),
-        budget: firebaseData.cogsBudget?.map(val => Number.parseFloat(val) || 0) || Array(12).fill(0)
+        actual: firebaseData.cogs?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0),
+        budget: firebaseData.cogsBudget?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0),
       },
       opex: {
-        actual: firebaseData.opex?.map(val => Number.parseFloat(val) || 0) || Array(12).fill(0),
-        budget: firebaseData.opexBudget?.map(val => Number.parseFloat(val) || 0) || Array(12).fill(0)
+        actual: firebaseData.opex?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0),
+        budget: firebaseData.opexBudget?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0),
       },
       grossProfit: {
-        actual: firebaseData.grossProfit?.map(val => Number.parseFloat(val) || 0) || Array(12).fill(0),
-        budget: firebaseData.grossProfitBudget?.map(val => Number.parseFloat(val) || 0) || Array(12).fill(0)
+        actual: firebaseData.grossProfit?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0),
+        budget: firebaseData.grossProfitBudget?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0),
       },
       netProfit: {
-        actual: firebaseData.netProfit?.map(val => Number.parseFloat(val) || 0) || Array(12).fill(0),
-        budget: firebaseData.netProfitBudget?.map(val => Number.parseFloat(val) || 0) || Array(12).fill(0)
-      }
+        actual: firebaseData.netProfit?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0),
+        budget: firebaseData.netProfitBudget?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0),
+      },
     }
 
     setFirebaseChartData(chartData)
@@ -2068,18 +2093,18 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
         userId: user.uid,
         chartName: "pnlManual",
         // Convert string values to numbers for storage
-        sales: pnlDetails.sales.map(val => Number.parseFloat(val) || 0),
-        cogs: pnlDetails.cogs.map(val => Number.parseFloat(val) || 0),
-        opex: pnlDetails.opex.map(val => Number.parseFloat(val) || 0),
-        grossProfit: pnlDetails.grossProfit.map(val => Number.parseFloat(val) || 0),
-        netProfit: pnlDetails.netProfit.map(val => Number.parseFloat(val) || 0),
-        salesBudget: pnlDetails.salesBudget.map(val => Number.parseFloat(val) || 0),
-        cogsBudget: pnlDetails.cogsBudget.map(val => Number.parseFloat(val) || 0),
-        opexBudget: pnlDetails.opexBudget.map(val => Number.parseFloat(val) || 0),
-        grossProfitBudget: pnlDetails.grossProfitBudget.map(val => Number.parseFloat(val) || 0),
-        netProfitBudget: pnlDetails.netProfitBudget.map(val => Number.parseFloat(val) || 0),
+        sales: pnlDetails.sales.map((val) => Number.parseFloat(val) || 0),
+        cogs: pnlDetails.cogs.map((val) => Number.parseFloat(val) || 0),
+        opex: pnlDetails.opex.map((val) => Number.parseFloat(val) || 0),
+        grossProfit: pnlDetails.grossProfit.map((val) => Number.parseFloat(val) || 0),
+        netProfit: pnlDetails.netProfit.map((val) => Number.parseFloat(val) || 0),
+        salesBudget: pnlDetails.salesBudget.map((val) => Number.parseFloat(val) || 0),
+        cogsBudget: pnlDetails.cogsBudget.map((val) => Number.parseFloat(val) || 0),
+        opexBudget: pnlDetails.opexBudget.map((val) => Number.parseFloat(val) || 0),
+        grossProfitBudget: pnlDetails.grossProfitBudget.map((val) => Number.parseFloat(val) || 0),
+        netProfitBudget: pnlDetails.netProfitBudget.map((val) => Number.parseFloat(val) || 0),
         notes: pnlDetails.notes,
-        lastUpdated: new Date().toISOString()
+        lastUpdated: new Date().toISOString(),
       }
 
       // Save to Firebase
@@ -2124,23 +2149,23 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
       return {
         sales: {
           actual: monthlyData(sales),
-          budget: monthlyData(sales * 1.1)
+          budget: monthlyData(sales * 1.1),
         },
         cogs: {
           actual: monthlyData(cogs),
-          budget: monthlyData(cogs * 0.9)
+          budget: monthlyData(cogs * 0.9),
         },
         opex: {
           actual: monthlyData(opex),
-          budget: monthlyData(opex * 0.95)
+          budget: monthlyData(opex * 0.95),
         },
         grossProfit: {
           actual: monthlyData(grossProfit),
-          budget: monthlyData(grossProfit * 1.15)
+          budget: monthlyData(grossProfit * 1.15),
         },
         netProfit: {
           actual: monthlyData(netProfit),
-          budget: monthlyData(netProfit * 1.2)
+          budget: monthlyData(netProfit * 1.2),
         },
       }
     }
@@ -2177,7 +2202,7 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
     plugins: {
       legend: {
         display: true,
-        position: 'top',
+        position: "top",
       },
       title: {
         display: true,
@@ -2191,7 +2216,7 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
       tooltip: {
         callbacks: {
           label: (context) => {
-            const datasetLabel = context.dataset.label || ''
+            const datasetLabel = context.dataset.label || ""
             const value = context.raw
             return `${datasetLabel}: R${value.toLocaleString()}`
           },
@@ -2210,9 +2235,7 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
             size: 10,
           },
           color: "#72542b",
-          callback: function (value) {
-            return 'R' + value.toLocaleString()
-          }
+          callback: (value) => "R" + value.toLocaleString(),
         },
       },
       x: {
@@ -2239,10 +2262,10 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
 
   // Calculate percentages
   const grossProfitPercent = chartData.sales.actual.map((sales, i) =>
-    sales > 0 ? (chartData.grossProfit.actual[i] / sales) * 100 : 0
+    sales > 0 ? (chartData.grossProfit.actual[i] / sales) * 100 : 0,
   )
   const netProfitPercent = chartData.sales.actual.map((sales, i) =>
-    sales > 0 ? (chartData.netProfit.actual[i] / sales) * 100 : 0
+    sales > 0 ? (chartData.netProfit.actual[i] / sales) * 100 : 0,
   )
 
   const createDataChartDatasets = (data) => [
@@ -2266,20 +2289,30 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
     {
       label: "Variance",
       data: variance,
-      backgroundColor: variance.map(v =>
-        v >= 0 ? "rgba(76, 175, 80, 0.7)" : "rgba(244, 67, 54, 0.7)"
-      ),
-      borderColor: variance.map(v => v >= 0 ? "#4caf50" : "#f44336"),
+      backgroundColor: variance.map((v) => (v >= 0 ? "rgba(76, 175, 80, 0.7)" : "rgba(244, 67, 54, 0.7)")),
+      borderColor: variance.map((v) => (v >= 0 ? "#4caf50" : "#f44336")),
       borderWidth: 1,
     },
   ]
 
   const charts = [
-    { id: 'sales', title: 'Sales Revenue', data: chartData.sales, variance: salesVariance },
-    { id: 'cogs', title: 'Cost of Goods Sold', data: chartData.cogs, variance: cogsVariance },
-    { id: 'opex', title: 'Operating Expenses', data: chartData.opex, variance: opexVariance },
-    { id: 'grossProfit', title: 'Gross Profit', data: chartData.grossProfit, variance: grossProfitVariance, showNegative: true },
-    { id: 'netProfit', title: 'Net Profit', data: chartData.netProfit, variance: netProfitVariance, showNegative: true },
+    { id: "sales", title: "Sales Revenue", data: chartData.sales, variance: salesVariance },
+    { id: "cogs", title: "Cost of Goods Sold", data: chartData.cogs, variance: cogsVariance },
+    { id: "opex", title: "Operating Expenses", data: chartData.opex, variance: opexVariance },
+    {
+      id: "grossProfit",
+      title: "Gross Profit",
+      data: chartData.grossProfit,
+      variance: grossProfitVariance,
+      showNegative: true,
+    },
+    {
+      id: "netProfit",
+      title: "Net Profit",
+      data: chartData.netProfit,
+      variance: netProfitVariance,
+      showNegative: true,
+    },
   ]
 
   // Generate month labels for the form
@@ -2353,9 +2386,7 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
             textAlign: "center",
           }}
         >
-          <p style={{ margin: 0, fontWeight: "500" }}>
-            🔐 Please log in to view and manage your P&L data.
-          </p>
+          <p style={{ margin: 0, fontWeight: "500" }}>🔐 Please log in to view and manage your P&L data.</p>
         </div>
       ) : !hasData() ? (
         <div
@@ -2385,12 +2416,14 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
           }}
         >
           <p style={{ margin: 0, fontWeight: "500" }}>
-            ✅ Showing {Object.keys(firebaseChartData).length > 0 ? "saved P&L data from Firebase" : "P&L data from uploaded CSV file"}
+            ✅ Showing{" "}
+            {Object.keys(firebaseChartData).length > 0
+              ? "saved P&L data from Firebase"
+              : "P&L data from uploaded CSV file"}
           </p>
         </div>
       )}
 
-      {/* Rest of the component remains the same... */}
       {/* Chart Controls */}
       <div
         style={{
@@ -2406,7 +2439,7 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
           {Object.entries(visibleCharts).map(([chartName, isVisible]) => (
             <button
               key={chartName}
-              onClick={() => setVisibleCharts(prev => ({ ...prev, [chartName]: !prev[chartName] }))}
+              onClick={() => setVisibleCharts((prev) => ({ ...prev, [chartName]: !prev[chartName] }))}
               style={{
                 padding: "8px 16px",
                 backgroundColor: isVisible ? "#5d4037" : "#e8ddd4",
@@ -2419,12 +2452,19 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
                 textTransform: "capitalize",
               }}
             >
-              {chartName === 'grossProfit' ? 'Gross Profit' :
-                chartName === 'netProfit' ? 'Net Profit' :
-                  chartName === 'percentage' ? 'Profit Margins' :
-                    chartName === 'sales' ? 'Sales Revenue' :
-                      chartName === 'cogs' ? 'COGS' :
-                        chartName === 'opex' ? 'OPEX' : chartName}
+              {chartName === "grossProfit"
+                ? "Gross Profit"
+                : chartName === "netProfit"
+                  ? "Net Profit"
+                  : chartName === "percentage"
+                    ? "Profit Margins"
+                    : chartName === "sales"
+                      ? "Sales Revenue"
+                      : chartName === "cogs"
+                        ? "COGS"
+                        : chartName === "opex"
+                          ? "OPEX"
+                          : chartName}
             </button>
           ))}
         </div>
@@ -2438,39 +2478,41 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
           gap: "20px",
         }}
       >
-        {charts.filter(chart => visibleCharts[chart.id]).map((chart) => (
-          <div
-            key={chart.id}
-            style={{
-              backgroundColor: "white",
-              padding: "15px",
-              borderRadius: "8px",
-              border: "1px solid #ddd",
-              height: "400px",
-              boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-            }}
-          >
-            <div style={{ height: "350px" }}>
-              {chartViewMode === "data" ? (
-                <Bar
-                  data={{
-                    labels,
-                    datasets: createDataChartDatasets(chart.data),
-                  }}
-                  options={createChartOptions(chart.title, chart.showNegative)}
-                />
-              ) : (
-                <Bar
-                  data={{
-                    labels,
-                    datasets: createVarianceChartDatasets(chart.variance, chart.title),
-                  }}
-                  options={createChartOptions(`${chart.title} - Variance`, chart.showNegative)}
-                />
-              )}
+        {charts
+          .filter((chart) => visibleCharts[chart.id])
+          .map((chart) => (
+            <div
+              key={chart.id}
+              style={{
+                backgroundColor: "white",
+                padding: "15px",
+                borderRadius: "8px",
+                border: "1px solid #ddd",
+                height: "400px",
+                boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+              }}
+            >
+              <div style={{ height: "350px" }}>
+                {chartViewMode === "data" ? (
+                  <Bar
+                    data={{
+                      labels,
+                      datasets: createDataChartDatasets(chart.data),
+                    }}
+                    options={createChartOptions(chart.title, chart.showNegative)}
+                  />
+                ) : (
+                  <Bar
+                    data={{
+                      labels,
+                      datasets: createVarianceChartDatasets(chart.variance, chart.title),
+                    }}
+                    options={createChartOptions(`${chart.title} - Variance`, chart.showNegative)}
+                  />
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
 
         {visibleCharts.percentage && (
           <div
@@ -2555,8 +2597,9 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
               }}
             >
               <p style={{ color: "#1e3a8a", margin: "0", fontSize: "14px", fontWeight: "500" }}>
-                💡 <strong>Tip:</strong> Enter actual values for each month. Budget values will be auto-calculated if left empty.
-                Based on your spreadsheet, focus on key totals like Trading Income, Cost of Sales, Gross Profit, Operating Expenses, and Net Profit.
+                💡 <strong>Tip:</strong> Enter actual values for each month. Budget values will be auto-calculated if
+                left empty. Based on your spreadsheet, focus on key totals like Trading Income, Cost of Sales, Gross
+                Profit, Operating Expenses, and Net Profit.
               </p>
             </div>
 
@@ -2570,7 +2613,15 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
                   <h5 style={{ color: "#5d4037", marginBottom: "10px" }}>Sales Revenue</h5>
                   {monthLabels.map((month, index) => (
                     <div key={index} style={{ marginBottom: "8px" }}>
-                      <label style={{ display: "block", marginBottom: "3px", color: "#5d4037", fontSize: "12px", fontWeight: "500" }}>
+                      <label
+                        style={{
+                          display: "block",
+                          marginBottom: "3px",
+                          color: "#5d4037",
+                          fontSize: "12px",
+                          fontWeight: "500",
+                        }}
+                      >
                         {month}:
                       </label>
                       <input
@@ -2579,7 +2630,7 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
                         onChange={(e) => {
                           const newSales = [...pnlDetails.sales]
                           newSales[index] = e.target.value
-                          setPnlDetails(prev => ({ ...prev, sales: newSales }))
+                          setPnlDetails((prev) => ({ ...prev, sales: newSales }))
                         }}
                         placeholder="0"
                         style={{
@@ -2600,7 +2651,15 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
                   <h5 style={{ color: "#5d4037", marginBottom: "10px" }}>Cost of Goods Sold</h5>
                   {monthLabels.map((month, index) => (
                     <div key={index} style={{ marginBottom: "8px" }}>
-                      <label style={{ display: "block", marginBottom: "3px", color: "#5d4037", fontSize: "12px", fontWeight: "500" }}>
+                      <label
+                        style={{
+                          display: "block",
+                          marginBottom: "3px",
+                          color: "#5d4037",
+                          fontSize: "12px",
+                          fontWeight: "500",
+                        }}
+                      >
                         {month}:
                       </label>
                       <input
@@ -2609,7 +2668,7 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
                         onChange={(e) => {
                           const newCogs = [...pnlDetails.cogs]
                           newCogs[index] = e.target.value
-                          setPnlDetails(prev => ({ ...prev, cogs: newCogs }))
+                          setPnlDetails((prev) => ({ ...prev, cogs: newCogs }))
                         }}
                         placeholder="0"
                         style={{
@@ -2630,7 +2689,15 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
                   <h5 style={{ color: "#5d4037", marginBottom: "10px" }}>Operating Expenses</h5>
                   {monthLabels.map((month, index) => (
                     <div key={index} style={{ marginBottom: "8px" }}>
-                      <label style={{ display: "block", marginBottom: "3px", color: "#5d4037", fontSize: "12px", fontWeight: "500" }}>
+                      <label
+                        style={{
+                          display: "block",
+                          marginBottom: "3px",
+                          color: "#5d4037",
+                          fontSize: "12px",
+                          fontWeight: "500",
+                        }}
+                      >
                         {month}:
                       </label>
                       <input
@@ -2639,7 +2706,7 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
                         onChange={(e) => {
                           const newOpex = [...pnlDetails.opex]
                           newOpex[index] = e.target.value
-                          setPnlDetails(prev => ({ ...prev, opex: newOpex }))
+                          setPnlDetails((prev) => ({ ...prev, opex: newOpex }))
                         }}
                         placeholder="0"
                         style={{
@@ -2665,7 +2732,15 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
                   <h5 style={{ color: "#5d4037", marginBottom: "10px" }}>Sales Budget</h5>
                   {monthLabels.map((month, index) => (
                     <div key={index} style={{ marginBottom: "8px" }}>
-                      <label style={{ display: "block", marginBottom: "3px", color: "#5d4037", fontSize: "12px", fontWeight: "500" }}>
+                      <label
+                        style={{
+                          display: "block",
+                          marginBottom: "3px",
+                          color: "#5d4037",
+                          fontSize: "12px",
+                          fontWeight: "500",
+                        }}
+                      >
                         {month}:
                       </label>
                       <input
@@ -2674,7 +2749,7 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
                         onChange={(e) => {
                           const newSalesBudget = [...pnlDetails.salesBudget]
                           newSalesBudget[index] = e.target.value
-                          setPnlDetails(prev => ({ ...prev, salesBudget: newSalesBudget }))
+                          setPnlDetails((prev) => ({ ...prev, salesBudget: newSalesBudget }))
                         }}
                         placeholder="Auto-calculated"
                         style={{
@@ -2695,7 +2770,15 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
                   <h5 style={{ color: "#5d4037", marginBottom: "10px" }}>COGS Budget</h5>
                   {monthLabels.map((month, index) => (
                     <div key={index} style={{ marginBottom: "8px" }}>
-                      <label style={{ display: "block", marginBottom: "3px", color: "#5d4037", fontSize: "12px", fontWeight: "500" }}>
+                      <label
+                        style={{
+                          display: "block",
+                          marginBottom: "3px",
+                          color: "#5d4037",
+                          fontSize: "12px",
+                          fontWeight: "500",
+                        }}
+                      >
                         {month}:
                       </label>
                       <input
@@ -2704,7 +2787,7 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
                         onChange={(e) => {
                           const newCogsBudget = [...pnlDetails.cogsBudget]
                           newCogsBudget[index] = e.target.value
-                          setPnlDetails(prev => ({ ...prev, cogsBudget: newCogsBudget }))
+                          setPnlDetails((prev) => ({ ...prev, cogsBudget: newCogsBudget }))
                         }}
                         placeholder="Auto-calculated"
                         style={{
@@ -2725,7 +2808,15 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
                   <h5 style={{ color: "#5d4037", marginBottom: "10px" }}>OPEX Budget</h5>
                   {monthLabels.map((month, index) => (
                     <div key={index} style={{ marginBottom: "8px" }}>
-                      <label style={{ display: "block", marginBottom: "3px", color: "#5d4037", fontSize: "12px", fontWeight: "500" }}>
+                      <label
+                        style={{
+                          display: "block",
+                          marginBottom: "3px",
+                          color: "#5d4037",
+                          fontSize: "12px",
+                          fontWeight: "500",
+                        }}
+                      >
                         {month}:
                       </label>
                       <input
@@ -2734,7 +2825,7 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
                         onChange={(e) => {
                           const newOpexBudget = [...pnlDetails.opexBudget]
                           newOpexBudget[index] = e.target.value
-                          setPnlDetails(prev => ({ ...prev, opexBudget: newOpexBudget }))
+                          setPnlDetails((prev) => ({ ...prev, opexBudget: newOpexBudget }))
                         }}
                         placeholder="Auto-calculated"
                         style={{
@@ -2755,7 +2846,7 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
                   <h5 style={{ color: "#5d4037", marginBottom: "10px" }}>Notes</h5>
                   <textarea
                     value={pnlDetails.notes}
-                    onChange={(e) => setPnlDetails(prev => ({ ...prev, notes: e.target.value }))}
+                    onChange={(e) => setPnlDetails((prev) => ({ ...prev, notes: e.target.value }))}
                     placeholder="Enter any additional notes about your P&L data..."
                     style={{
                       width: "100%",
@@ -2815,7 +2906,7 @@ const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, use
   )
 }
 
-// Main Financial Performance Component
+// Main FinancialPerformance Component
 const FinancialPerformance = () => {
   const [activeSection, setActiveSection] = useState("balance-sheet")
   const [viewMode, setViewMode] = useState("month")
@@ -2827,24 +2918,47 @@ const FinancialPerformance = () => {
   const [currentMonth, setCurrentMonth] = useState("Jan")
   const [user, setUser] = useState(null)
 
-  // Firebase authentication listener
+  const [isInvestorView, setIsInvestorView] = useState(false)
+  const [viewingSMEId, setViewingSMEId] = useState(null)
+  const [viewingSMEName, setViewingSMEName] = useState("")
+
+  useEffect(() => {
+    const investorViewMode = sessionStorage.getItem("investorViewMode")
+    const smeId = sessionStorage.getItem("viewingSMEId")
+    const smeName = sessionStorage.getItem("viewingSMEName")
+
+    if (investorViewMode === "true" && smeId) {
+      setIsInvestorView(true)
+      setViewingSMEId(smeId)
+      setViewingSMEName(smeName || "SME")
+      console.log("Investor view mode activated for SME:", smeId)
+    }
+  }, [])
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser)
-      if (currentUser) {
-        loadUserData(currentUser.uid)
+      if (isInvestorView && viewingSMEId) {
+        // In investor view, create a pseudo-user object with the SME's ID
+        setUser({ uid: viewingSMEId })
+        loadUserData(viewingSMEId)
       } else {
-        setChartData({})
-        setBalanceSheetData(null)
+        setUser(currentUser)
+        if (currentUser) {
+          loadUserData(currentUser.uid)
+        } else {
+          setChartData({})
+          setBalanceSheetData(null)
+        }
       }
     })
 
     return () => unsubscribe()
-  }, [])
+  }, [isInvestorView, viewingSMEId])
 
   // Load user-specific data from Firebase
   const loadUserData = async (userId) => {
     try {
+      console.log("Loading financial data for user ID:", userId)
       const chartRef = collection(db, "financialData")
       const q = query(chartRef, where("userId", "==", userId))
       const querySnapshot = await getDocs(q)
@@ -2929,12 +3043,63 @@ const FinancialPerformance = () => {
     setPnLData(data)
   }
 
+  const handleExitInvestorView = () => {
+    sessionStorage.removeItem("viewingSMEId")
+    sessionStorage.removeItem("viewingSMEName")
+    sessionStorage.removeItem("investorViewMode")
+    window.location.href = "/my-cohorts"
+  }
+
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
       <Sidebar />
 
       <div style={getContentStyles()}>
         <Header />
+
+        {isInvestorView && (
+          <div
+            style={{
+              backgroundColor: "#e8f5e9",
+              padding: "16px 20px",
+              margin: "50px 0 20px 0",
+              borderRadius: "8px",
+              border: "2px solid #4caf50",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <span style={{ fontSize: "20px" }}>👁️</span>
+              <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
+                Investor View: Viewing {viewingSMEName}'s Financial Performance
+              </span>
+            </div>
+            <button
+              onClick={handleExitInvestorView}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#4caf50",
+                color: "white",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "14px",
+                transition: "background-color 0.3s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = "#45a049"
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = "#4caf50"
+              }}
+            >
+              Back to My Cohorts
+            </button>
+          </div>
+        )}
 
         <div style={{ padding: "20px" }}>
           <div
@@ -3088,7 +3253,7 @@ const FinancialPerformance = () => {
             </div>
           )}
 
-          {!user && (
+          {!user && !isInvestorView && (
             <div
               style={{
                 backgroundColor: "#fdfcfb",
@@ -3101,6 +3266,22 @@ const FinancialPerformance = () => {
             >
               <p style={{ color: "#5d4037", fontSize: "16px", margin: 0 }}>
                 Please log in to view and manage your financial data.
+              </p>
+            </div>
+          )}
+          {isInvestorView && !viewingSMEId && (
+            <div
+              style={{
+                backgroundColor: "#fdfcfb",
+                padding: "20px",
+                borderRadius: "8px",
+                textAlign: "center",
+                marginBottom: "20px",
+                border: "2px solid #e8ddd4",
+              }}
+            >
+              <p style={{ color: "#5d4037", fontSize: "16px", margin: 0 }}>
+                No SME selected for investor view. Please return to your dashboard.
               </p>
             </div>
           )}
@@ -3120,6 +3301,7 @@ const FinancialPerformance = () => {
             financialYearStart={financialYearStart}
             pnlData={pnlData} // Pass PnL data instead of balanceSheetData
             user={user}
+            onUpdateChartData={handleUpdateChartData}
           />
           <CashflowTrends
             activeSection={activeSection}

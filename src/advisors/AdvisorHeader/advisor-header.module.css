@@ -1,3 +1,4 @@
+/* advisor-header.module.css */
 .header {
   position: fixed;
   top: 0;
@@ -68,6 +69,13 @@
 
 .calendar-icon {
   color: #9E6E3C;
+}
+
+.header-buttons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: 30px;
 }
 
 .header-right {
@@ -580,6 +588,10 @@
   .welcome-container {
     margin-left: 150px;
   }
+  
+  .header-buttons {
+    margin-left: 20px;
+  }
 }
 
 @media (max-width: 768px) {
@@ -599,5 +611,18 @@
   .add-role-modal {
     width: 95%;
     margin: 20px;
+  }
+  
+  .header-buttons {
+    margin-left: 15px;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 576px) {
+  .header-buttons {
+    flex-direction: column;
+    gap: 4px;
+    margin-left: 10px;
   }
 }

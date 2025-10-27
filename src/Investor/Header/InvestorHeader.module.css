@@ -1,3 +1,4 @@
+/* InvestorHeader.module.css */
 .header {
   position: fixed;
   top: 0;
@@ -70,171 +71,11 @@
   color: #9E6E3C;
 }
 
-/* Feedback Button Styles */
-.feedback-wrapper {
-  position: relative;
-  margin-left: 20px;
-}
-
-.feedback-button {
+.header-buttons {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  background: linear-gradient(135deg, #9E6E3C 0%, #B8834F 100%);
-  color: white;
-  border: none;
-  border-radius: 20px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(158, 110, 60, 0.2);
-}
-
-.feedback-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(158, 110, 60, 0.3);
-  background: linear-gradient(135deg, #8A5F35 0%, #A67745 100%);
-}
-
-.feedback-button:active {
-  transform: translateY(0);
-}
-
-/* Feedback Popup Styles */
-.feedback-popup {
-  position: absolute;
-  top: calc(100% + 12px);
-  left: 50%;
-  transform: translateX(-50%);
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-  width: 320px;
-  z-index: 1001;
-  overflow: hidden;
-  animation: fadeInUp 0.3s ease;
-  border: 1px solid rgba(158, 110, 60, 0.1);
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-}
-
-.feedback-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-  background: linear-gradient(135deg, #F8F7F3 0%, #F2EEE6 100%);
-  border-bottom: 1px solid rgba(158, 110, 60, 0.1);
-}
-
-.feedback-header h3 {
-  margin: 0;
-  font-size: 1rem;
-  color: #624635;
-  font-weight: 600;
-}
-
-.close-feedback {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #9E6E3C;
-  padding: 4px;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-}
-
-.close-feedback:hover {
-  background-color: rgba(158, 110, 60, 0.1);
-  color: #624635;
-}
-
-.feedback-content {
-  padding: 20px;
-}
-
-.feedback-content textarea {
-  width: 100%;
-  border: 2px solid #F2EEE6;
-  border-radius: 8px;
-  padding: 12px;
-  font-size: 0.9rem;
-  color: #624635;
-  resize: vertical;
-  min-height: 80px;
-  transition: border-color 0.2s ease;
-  font-family: inherit;
-}
-
-.feedback-content textarea:focus {
-  outline: none;
-  border-color: #9E6E3C;
-  box-shadow: 0 0 0 3px rgba(158, 110, 60, 0.1);
-}
-
-.feedback-content textarea:placeholder {
-  color: #AAA199;
-}
-
-.feedback-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 16px;
-}
-
-.char-count {
-  font-size: 0.75rem;
-  color: #AAA199;
-}
-
-.send-feedback-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: linear-gradient(135deg, #9E6E3C 0%, #B8834F 100%);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.send-feedback-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #8A5F35 0%, #A67745 100%);
-  transform: translateY(-1px);
-}
-
-.send-feedback-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-radius: 50%;
-  border-top-color: white;
-  animation: spin 1s ease-in-out infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
+  gap: 12px;
+  margin-left: 30px;
 }
 
 .header-right {
@@ -831,13 +672,12 @@
 }
 
 @media (max-width: 1200px) {
-  .feedback-button {
-    padding: 6px 12px;
-    font-size: 0.8rem;
-  }
-  
   .welcome-container {
     margin-left: 200px;
+  }
+  
+  .header-buttons {
+    margin-left: 20px;
   }
 }
 
@@ -854,19 +694,9 @@
     margin-left: 150px;
   }
   
-  .feedback-button span {
-    display: none;
-  }
-  
-  .feedback-button {
-    padding: 8px;
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-  }
-  
-  .feedback-popup {
-    width: 280px;
+  .header-buttons {
+    margin-left: 15px;
+    gap: 8px;
   }
 }
 
@@ -884,15 +714,21 @@
     display: none;
   }
   
-  .feedback-popup {
-    width: 260px;
-    left: auto;
-    right: 0;
-    transform: none;
+  .header-buttons {
+    margin-left: 10px;
+    gap: 6px;
   }
   
   .add-role-modal {
     width: 95%;
     margin: 20px;
+  }
+}
+
+@media (max-width: 576px) {
+  .header-buttons {
+    flex-direction: column;
+    gap: 4px;
+    margin-left: 5px;
   }
 }

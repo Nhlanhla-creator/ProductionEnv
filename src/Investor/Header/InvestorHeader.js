@@ -12,6 +12,7 @@ import { doc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import Feedback from "../../Feedback";
 import InvestorNotifications from "../NotificationInvestor";
+import BookSession from "../../main_pages/BookSession";
 
 function InvestorHeader({ companyName, profileImage, setProfileImage }) {
   const navigate = useNavigate();
@@ -377,22 +378,25 @@ const GetuserName = async () => {
           </div>
         </div>
 
-        <Feedback 
-          buttonStyle={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            background: 'none',
-            border: 'none',
-            color: '#333',
-            cursor: 'pointer',
-            padding: '8px 12px',
-            borderRadius: '4px',
-            fontSize: '14px',
-            transition: 'all 0.2s ease'
-          }}
-          title="Share your feedback"
-        />
+        <div className={styles["header-buttons"]}>
+          <Feedback 
+            buttonStyle={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: 'none',
+              border: 'none',
+              color: '#333',
+              cursor: 'pointer',
+              padding: '8px 12px',
+              borderRadius: '4px',
+              fontSize: '14px',
+              transition: 'all 0.2s ease'
+            }}
+            title="Share your feedback"
+          />
+          <BookSession />
+        </div>
       </div>
 
       <div className={styles["header-right"]}>

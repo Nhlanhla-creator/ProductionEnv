@@ -156,6 +156,7 @@ import InsightsProgram from "main_pages/ProgramSponsor/InsightsProgram"
 import HowWorksProgram from "main_pages/ProgramSponsor/HowWorksProgram"
 import BIGscoreProgram from "main_pages/ProgramSponsor/BIGscoreProgram"
 import HeaderProgram from "main_pages/ProgramSponsor/HeaderProgram"
+import BookSession from "main_pages/BookSession"
 // Auth Components
 import AuthForm from "./smses/LoginRegister"
 import LoginRegister from "./smses/LoginRegister"
@@ -747,6 +748,7 @@ function App() {
         <Route path="/FAQsProgram" element={<FAQsProgram />} />
         <Route path="/HowWorksProgram" element={<HowWorksProgram />} />
         <Route path="/HeaderProgram" element={<HeaderProgram />} />
+        <Route path="/BookSession" element={<BookSession />} />
         {/* Admin Dashboard Routes - NEW */}
         <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
         <Route path="/admin/dashboard" element={renderAdminRoute(AdminDashboard)} />

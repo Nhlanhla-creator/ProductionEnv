@@ -11,6 +11,7 @@ import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import Feedback from "../../Feedback";
 import Notifications from '../Notification';
+import BookSession from "../../main_pages/BookSession";
 
 function InternHeader({ companyName, profileImage, setProfileImage }) {
   const navigate = useNavigate();
@@ -390,22 +391,25 @@ function InternHeader({ companyName, profileImage, setProfileImage }) {
           </div>
         </div>
 
-        <Feedback 
-          buttonStyle={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            background: 'none',
-            border: 'none',
-            color: '#333',
-            cursor: 'pointer',
-            padding: '8px 12px',
-            borderRadius: '4px',
-            fontSize: '14px',
-            transition: 'all 0.2s ease'
-          }}
-          title="Share your feedback"
-        />
+        <div className={styles["header-buttons"]}>
+          <Feedback 
+            buttonStyle={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: 'none',
+              border: 'none',
+              color: '#333',
+              cursor: 'pointer',
+              padding: '8px 12px',
+              borderRadius: '4px',
+              fontSize: '14px',
+              transition: 'all 0.2s ease'
+            }}
+            title="Share your feedback"
+          />
+          <BookSession />
+        </div>
       </div>
 
       <div className={styles["header-right"]}>
@@ -756,6 +760,13 @@ function InternHeader({ companyName, profileImage, setProfileImage }) {
 
         .calendar-icon {
           color: #9E6E3C;
+        }
+
+        .header-buttons {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-left: 30px;
         }
 
         .header-right {
@@ -1261,6 +1272,10 @@ function InternHeader({ companyName, profileImage, setProfileImage }) {
           .welcome-container {
             margin-left: 200px;
           }
+          
+          .header-buttons {
+            margin-left: 20px;
+          }
         }
 
         @media (max-width: 992px) {
@@ -1274,6 +1289,11 @@ function InternHeader({ companyName, profileImage, setProfileImage }) {
           
           .welcome-container {
             margin-left: 150px;
+          }
+          
+          .header-buttons {
+            margin-left: 15px;
+            gap: 8px;
           }
         }
 
@@ -1291,10 +1311,23 @@ function InternHeader({ companyName, profileImage, setProfileImage }) {
             display: none;
           }
           
+          .header-buttons {
+            margin-left: 10px;
+            gap: 6px;
+          }
+          
           .add-role-modal {
             width: 95%;
             margin: 20px;
             max-width: none;
+          }
+        }
+
+        @media (max-width: 576px) {
+          .header-buttons {
+            flex-direction: column;
+            gap: 4px;
+            margin-left: 5px;
           }
         }
       `}</style>

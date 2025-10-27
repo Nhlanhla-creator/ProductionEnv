@@ -22,18 +22,7 @@ import {
 import ChartDataLabels from "chartjs-plugin-datalabels"
 
 // Register ChartJS components
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend,
-  PointElement,
-  LineElement,
-
-)
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend, PointElement, LineElement)
 
 // Jobs Created Component
 const JobsCreated = ({ activeSection, fundingData }) => {
@@ -195,7 +184,6 @@ const JobsCreated = ({ activeSection, fundingData }) => {
               legend: {
                 display: false,
               },
-             
             },
           }}
         />
@@ -304,31 +292,32 @@ const HDIFunding = ({ activeSection, fundingData }) => {
           alignItems: "center",
         }}
       >
-      <div style={{ height: "300px" }}>
-  <Doughnut
-    data={fundingChartData}
-    options={{
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          position: "right",
-        },
-        datalabels: { // ← KEEP this configuration
-          color: "#fff",
-          font: {
-            weight: "bold",
-            size: 16,
-          },
-          formatter: (value) => {
-            return value.toFixed(1) + "%"
-          },
-        },
-      },
-    }}
-    plugins={[ChartDataLabels]} // ← ADD THIS LINE (after options)
-  />
-</div>
+        <div style={{ height: "300px" }}>
+          <Doughnut
+            data={fundingChartData}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  position: "right",
+                },
+                datalabels: {
+                  // ← KEEP this configuration
+                  color: "#fff",
+                  font: {
+                    weight: "bold",
+                    size: 16,
+                  },
+                  formatter: (value) => {
+                    return value.toFixed(1) + "%"
+                  },
+                },
+              },
+            }}
+            plugins={[ChartDataLabels]} // ← ADD THIS LINE (after options)
+          />
+        </div>
         <div>
           <div
             style={{
@@ -665,16 +654,36 @@ const SocialImpact = () => {
   const [fundingData, setFundingData] = useState(null)
   const [loading, setLoading] = useState(true)
 
+  const [isInvestorView, setIsInvestorView] = useState(false)
+  const [viewingSMEId, setViewingSMEId] = useState(null)
+  const [viewingSMEName, setViewingSMEName] = useState("")
+
+  useEffect(() => {
+    const investorViewMode = sessionStorage.getItem("investorViewMode")
+    const smeId = sessionStorage.getItem("viewingSMEId")
+    const smeName = sessionStorage.getItem("viewingSMEName")
+
+    if (investorViewMode === "true" && smeId) {
+      setIsInvestorView(true)
+      setViewingSMEId(smeId)
+      setViewingSMEName(smeName || "SME")
+      console.log("Investor view mode activated for SME:", smeId)
+    }
+  }, [])
+
   useEffect(() => {
     const loadFundingData = async () => {
       try {
-        const userId = auth.currentUser?.uid
-        if (!userId) {
+        // Use viewingSMEId if in investor view, otherwise use current user
+        const userIdToFetch = isInvestorView && viewingSMEId ? viewingSMEId : auth.currentUser?.uid
+
+        if (!userIdToFetch) {
           setLoading(false)
           return
         }
 
-        const docRef = doc(db, "universalProfiles", userId)
+        console.log("Fetching social impact data for user ID:", userIdToFetch)
+        const docRef = doc(db, "universalProfiles", userIdToFetch)
         const docSnap = await getDoc(docRef)
 
         if (docSnap.exists()) {
@@ -689,7 +698,7 @@ const SocialImpact = () => {
     }
 
     loadFundingData()
-  }, [])
+  }, [isInvestorView, viewingSMEId])
 
   useEffect(() => {
     const checkSidebarState = () => {
@@ -752,6 +761,55 @@ const SocialImpact = () => {
 
       <div style={getContentStyles()}>
         <Header />
+
+        {isInvestorView && (
+          <div
+            style={{
+              backgroundColor: "#e8f5e9",
+              padding: "16px 20px",
+              margin: "50px 0 20px 0",
+              borderRadius: "8px",
+              border: "2px solid #4caf50",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <span style={{ fontSize: "20px" }}>👁️</span>
+              <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
+                Investor View: Viewing {viewingSMEName}'s Social Impact
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                sessionStorage.removeItem("viewingSMEId")
+                sessionStorage.removeItem("viewingSMEName")
+                sessionStorage.removeItem("investorViewMode")
+                window.location.href = "/my-cohorts"
+              }}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#4caf50",
+                color: "white",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "14px",
+                transition: "background-color 0.3s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = "#45a049"
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = "#4caf50"
+              }}
+            >
+              Back to My Cohorts
+            </button>
+          </div>
+        )}
 
         <div style={{ padding: "20px" }}>
           <div

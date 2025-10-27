@@ -1,3 +1,4 @@
+/* DashboardHeader.css */
 :root {
   --sidebar-width: 300px; 
   --sidebar-collapsed-width: 80px; 
@@ -72,6 +73,13 @@ body.sidebar-collapsed .dashboard-header,
   font-weight: 500;
   line-height: 1.2;
   margin: 0;
+}
+
+/* New header buttons container */
+.header-buttons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 /* Simplified collapsed state for header-center */
@@ -838,8 +846,8 @@ body.sidebar-collapsed .header-center,
   font-size: 1.25rem;
   font-weight: 600;
   display: flex;
-  align-items: center;
-  gap: 8px;
+    align-items: center;
+    gap: 8px;
 }
 
 .modal-close {
@@ -953,9 +961,6 @@ body.sidebar-collapsed .header-center,
   cursor: not-allowed;
   transform: none;
 }
-
-/* Remove the conflicting data-sidebar-width rule */
-/* .dashboard-header[data-sidebar-width] was causing issues */
 
 /* Enhanced responsive design with better zoom handling */
 @media (max-width: 1200px), (min-resolution: 1.1dppx) {
