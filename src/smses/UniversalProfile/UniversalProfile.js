@@ -622,8 +622,25 @@ const handleSaveAndContinue = async () => {
         return <ContactDetails {...commonProps} />
       case "legalCompliance":
         return <LegalCompliance {...commonProps} />
-      case "financialOverview": // Added financialOverview case
-        return <FinancialOverview {...commonProps} />
+     case "financialOverview": {
+  // Adapter lets FinancialOverview call either:
+  //   updateData("financialOverview", patch)  OR  updateData(patch)
+  const updateFinancial = (sectionOrPatch, maybePatch) => {
+    if (typeof sectionOrPatch === "string") {
+      // Signature from FinancialOverview: updateData("financialOverview", patch)
+      return updateFormData(sectionOrPatch, maybePatch);
+    }
+    // Signature without section: updateData(patch)
+    return updateFormData("financialOverview", sectionOrPatch);
+  };
+
+  return (
+    <FinancialOverview
+      data={formData.financialOverview || {}}
+      updateData={updateFinancial}
+    />
+  );
+}
       case "productsServices":
         return <ProductsServices {...commonProps} />
       case "howDidYouHear":
