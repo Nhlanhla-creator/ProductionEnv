@@ -36,7 +36,7 @@ ChartJS.register(
 )
 
 // Vision, Mission, Values Component
-const VisionMissionValues = ({ activeSection, currentUser }) => {
+const VisionMissionValues = ({ activeSection, currentUser, isInvestorView }) => {
   const [visionMissionData, setVisionMissionData] = useState({
     vision: "",
     mission: "",
@@ -69,6 +69,11 @@ const VisionMissionValues = ({ activeSection, currentUser }) => {
   if (activeSection !== "vision-mission-values") return null
 
   const handleSaveVisionMission = async () => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+
     if (!currentUser) {
       alert("You must be logged in to save data.")
       return
@@ -100,6 +105,11 @@ const VisionMissionValues = ({ activeSection, currentUser }) => {
   }
 
   const handleAddValue = () => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+
     if (newValue.trim()) {
       setVisionMissionData((prev) => ({
         ...prev,
@@ -111,6 +121,11 @@ const VisionMissionValues = ({ activeSection, currentUser }) => {
   }
 
   const handleRemoveValue = (index) => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+
     setVisionMissionData((prev) => ({
       ...prev,
       values: prev.values.filter((_, i) => i !== index),
@@ -167,6 +182,7 @@ const VisionMissionValues = ({ activeSection, currentUser }) => {
                 onChange={(e) => setVisionMissionData((prev) => ({ ...prev, vision: e.target.value }))}
                 placeholder="Enter your organization's vision statement..."
                 rows="6"
+                disabled={isInvestorView}
                 style={{
                   width: "100%",
                   padding: "15px",
@@ -176,6 +192,8 @@ const VisionMissionValues = ({ activeSection, currentUser }) => {
                   boxSizing: "border-box",
                   resize: "vertical",
                   fontFamily: "inherit",
+                  backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                  cursor: isInvestorView ? "not-allowed" : "text",
                 }}
               />
             </div>
@@ -193,6 +211,7 @@ const VisionMissionValues = ({ activeSection, currentUser }) => {
                 onChange={(e) => setVisionMissionData((prev) => ({ ...prev, mission: e.target.value }))}
                 placeholder="Enter your organization's mission statement..."
                 rows="6"
+                disabled={isInvestorView}
                 style={{
                   width: "100%",
                   padding: "15px",
@@ -202,6 +221,8 @@ const VisionMissionValues = ({ activeSection, currentUser }) => {
                   boxSizing: "border-box",
                   resize: "vertical",
                   fontFamily: "inherit",
+                  backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                  cursor: isInvestorView ? "not-allowed" : "text",
                 }}
               />
             </div>
@@ -212,192 +233,184 @@ const VisionMissionValues = ({ activeSection, currentUser }) => {
               backgroundColor: "#f7f3f0",
               padding: "20px",
               borderRadius: "6px",
-              marginBottom: "30px",
             }}
           >
             <div
-              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "15px",
+              }}
             >
-              <h3 style={{ color: "#5d4037", margin: 0 }}>Values</h3>
-              <button
-                onClick={() => setShowModal(true)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#5d4037",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                  fontSize: "12px",
-                }}
-              >
-                Add Value
-              </button>
+              <h3 style={{ color: "#5d4037", margin: 0 }}>Core Values</h3>
+              {!isInvestorView && (
+                <button
+                  onClick={() => setShowModal(true)}
+                  style={{
+                    padding: "8px 16px",
+                    backgroundColor: "#7d5a50",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontWeight: "500",
+                    fontSize: "12px",
+                  }}
+                >
+                  Add Value
+                </button>
+              )}
             </div>
 
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
                 gap: "15px",
-                minHeight: "100px",
               }}
             >
-              {visionMissionData.values.length > 0 ? (
-                visionMissionData.values.map((value, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      backgroundColor: "#e8ddd4",
-                      padding: "15px",
-                      borderRadius: "4px",
-                      position: "relative",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <span style={{ color: "#5d4037", fontWeight: "500" }}>{value}</span>
+              {visionMissionData.values.map((value, index) => (
+                <div
+                  key={index}
+                  style={{
+                    backgroundColor: "#fdfcfb",
+                    padding: "15px",
+                    borderRadius: "4px",
+                    border: "2px solid #e8ddd4",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <span style={{ color: "#5d4037", fontWeight: "500" }}>{value}</span>
+                  {!isInvestorView && (
                     <button
                       onClick={() => handleRemoveValue(index)}
                       style={{
-                        backgroundColor: "#F44336",
-                        color: "white",
+                        backgroundColor: "transparent",
                         border: "none",
-                        borderRadius: "50%",
-                        width: "20px",
-                        height: "20px",
+                        color: "#d32f2f",
                         cursor: "pointer",
-                        fontSize: "12px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
+                        fontSize: "18px",
+                        padding: "0 5px",
                       }}
                     >
                       ×
                     </button>
-                  </div>
-                ))
-              ) : (
-                <div
-                  style={{
-                    gridColumn: "1 / -1",
-                    textAlign: "center",
-                    color: "#72542b",
-                    padding: "40px",
-                    fontStyle: "italic",
-                  }}
-                >
-                  No values added yet. Click "Add Value" to get started.
+                  )}
                 </div>
-              )}
+              ))}
             </div>
           </div>
 
-          <div style={{ textAlign: "center" }}>
-            <button
-              onClick={handleSaveVisionMission}
-              style={{
-                padding: "12px 30px",
-                backgroundColor: "#5d4037",
-                color: "white",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "16px",
-              }}
-            >
-              Save Vision, Mission & Values
-            </button>
-          </div>
-
-          {showModal && (
-            <div
-              style={{
-                position: "fixed",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundColor: "rgba(0, 0, 0, 0.5)",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                zIndex: 1000,
-              }}
-            >
-              <div
+          {!isInvestorView && (
+            <div style={{ marginTop: "20px", textAlign: "right" }}>
+              <button
+                onClick={handleSaveVisionMission}
                 style={{
-                  backgroundColor: "#fdfcfb",
-                  padding: "30px",
-                  borderRadius: "8px",
-                  boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
-                  width: "400px",
-                  maxWidth: "90vw",
+                  padding: "12px 30px",
+                  backgroundColor: "#7d5a50",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "14px",
                 }}
               >
-                <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "20px" }}>Add New Value</h3>
-
-                <input
-                  type="text"
-                  value={newValue}
-                  onChange={(e) => setNewValue(e.target.value)}
-                  placeholder="Enter a core value..."
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    border: "2px solid #e8ddd4",
-                    borderRadius: "4px",
-                    fontSize: "14px",
-                    boxSizing: "border-box",
-                    marginBottom: "20px",
-                  }}
-                  onKeyPress={(e) => e.key === "Enter" && handleAddValue()}
-                />
-
-                <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
-                  <button
-                    onClick={() => setShowModal(false)}
-                    style={{
-                      padding: "10px 20px",
-                      backgroundColor: "#e8ddd4",
-                      color: "#5d4037",
-                      border: "none",
-                      borderRadius: "4px",
-                      cursor: "pointer",
-                      fontWeight: "500",
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleAddValue}
-                    style={{
-                      padding: "10px 20px",
-                      backgroundColor: "#5d4037",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "4px",
-                      cursor: "pointer",
-                      fontWeight: "500",
-                    }}
-                  >
-                    Add Value
-                  </button>
-                </div>
-              </div>
+                Save Changes
+              </button>
             </div>
           )}
         </>
+      )}
+
+      {/* Add Value Modal */}
+      {showModal && !isInvestorView && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "white",
+              padding: "30px",
+              borderRadius: "8px",
+              width: "90%",
+              maxWidth: "500px",
+            }}
+          >
+            <h3 style={{ color: "#5d4037", marginTop: 0 }}>Add Core Value</h3>
+            <input
+              type="text"
+              value={newValue}
+              onChange={(e) => setNewValue(e.target.value)}
+              placeholder="Enter a core value..."
+              style={{
+                width: "100%",
+                padding: "12px",
+                border: "2px solid #e8ddd4",
+                borderRadius: "4px",
+                fontSize: "14px",
+                boxSizing: "border-box",
+                marginBottom: "20px",
+              }}
+            />
+            <div
+              style={{
+                display: "flex",
+                gap: "10px",
+                justifyContent: "flex-end",
+              }}
+            >
+              <button
+                onClick={() => setShowModal(false)}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#e6d7c3",
+                  color: "#4a352f",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddValue}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#7d5a50",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                }}
+              >
+                Add Value
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
 }
 
-// Strategic Goals Charts Component with Eye Icons and Visibility Toggle
-const StrategicGoals = ({ activeSection, milestoneData, onNavigateToMilestone }) => {
+const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, currentUser, isInvestorView }) => {
   const [visibleCategories, setVisibleCategories] = useState({
     Growth: true,
     Finance: true,
@@ -405,6 +418,20 @@ const StrategicGoals = ({ activeSection, milestoneData, onNavigateToMilestone })
     People: true,
     Systems: true,
     Customers: true,
+  })
+  const [showMilestoneModal, setShowMilestoneModal] = useState(false)
+  const [editingMilestone, setEditingMilestone] = useState(null)
+  const [filterBy, setFilterBy] = useState("all")
+  const [newMilestone, setNewMilestone] = useState({
+    growthStage: "",
+    goal: "",
+    goalDescription: "",
+    milestones: [],
+    targetDate: "",
+    status: "",
+    owner: "",
+    info: "",
+    percentageCompletion: 0,
   })
 
   if (activeSection !== "strategic-goals") return null
@@ -423,7 +450,6 @@ const StrategicGoals = ({ activeSection, milestoneData, onNavigateToMilestone })
 
     if (relevantMilestones.length === 0) return 0
 
-    // Calculate average percentage completion
     const totalPercentage = relevantMilestones.reduce((sum, milestone) => {
       return sum + (milestone.percentageCompletion || 0)
     }, 0)
@@ -435,7 +461,6 @@ const StrategicGoals = ({ activeSection, milestoneData, onNavigateToMilestone })
     const goals = ["Goal 1", "Goal 2", "Goal 3", "Goal 4"]
     const completionData = goals.map((_, index) => calculateGoalCompletion(index + 1, growthStage))
 
-    // Filter out goals with no data (0% completion and no milestones)
     const goalsWithData = []
     const dataWithValues = []
 
@@ -445,14 +470,12 @@ const StrategicGoals = ({ activeSection, milestoneData, onNavigateToMilestone })
         (milestone) => milestone.goal === goal && milestone.growthStage === growthStage,
       )
 
-      // Only include goals that have milestones or completion data
       if (relevantMilestones.length > 0 || completion > 0) {
         goalsWithData.push(goal)
         dataWithValues.push(completion)
       }
     })
 
-    // If no goals have data, return empty dataset
     if (goalsWithData.length === 0) {
       return {
         labels: [],
@@ -496,10 +519,8 @@ const StrategicGoals = ({ activeSection, milestoneData, onNavigateToMilestone })
         callbacks: {
           afterLabel: (context) => {
             const goalNumber = context.dataIndex + 1
-            // Access growthStage from the dataset attribute
             const growthStage = context.chart.canvas.dataset.growthStage
 
-            // Find the actual milestone for this goal and growth stage
             const relevantMilestones = milestoneData.filter(
               (milestone) => milestone.goal === `Goal ${goalNumber}` && milestone.growthStage === growthStage,
             )
@@ -553,6 +574,146 @@ const StrategicGoals = ({ activeSection, milestoneData, onNavigateToMilestone })
     { key: "Customers", name: "Customers", color: "#a67c52" },
   ]
 
+  const growthStages = ["Growth", "Finance", "Operations", "People", "Systems", "Customers"]
+  const goals = ["Goal 1", "Goal 2", "Goal 3", "Goal 4"]
+  const statuses = ["Not Started", "In Progress", "On Track", "At Risk", "Done"]
+  const owners = ["Product Team", "Business Dev", "Legal Team", "Engineering", "Marketing", "Operations"]
+  const availableMilestones = [
+    "Market Research",
+    "Product Development",
+    "Testing Phase",
+    "Launch Preparation",
+    "Marketing Campaign",
+    "Sales Training",
+    "Partnership Development",
+    "Quality Assurance",
+    "Regulatory Approval",
+    "System Integration",
+    "User Training",
+    "Documentation",
+  ]
+
+  const filteredMilestones = milestoneData.filter((milestone) => {
+    if (filterBy === "all") return true
+    if (growthStages.includes(filterBy)) return milestone.growthStage === filterBy
+    if (statuses.includes(filterBy)) return milestone.status === filterBy
+    if (owners.includes(filterBy)) return milestone.owner === filterBy
+    if (goals.includes(filterBy)) return milestone.goal === filterBy
+    return true
+  })
+
+  const handleAddMilestone = () => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+
+    setEditingMilestone(null)
+    setNewMilestone({
+      growthStage: "",
+      goal: "",
+      goalDescription: "",
+      milestones: [],
+      targetDate: "",
+      status: "",
+      owner: "",
+      info: "",
+      percentageCompletion: 0,
+    })
+    setShowMilestoneModal(true)
+  }
+
+  const handleEditMilestone = (milestone) => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+
+    setEditingMilestone(milestone)
+    setNewMilestone({
+      ...milestone,
+      milestones: milestone.milestones || [],
+      percentageCompletion: milestone.percentageCompletion || 0,
+    })
+    setShowMilestoneModal(true)
+  }
+
+  const handleSaveMilestone = async () => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+
+    if (!currentUser) {
+      alert("You must be logged in to save milestones.")
+      return
+    }
+
+    try {
+      const milestoneWithUser = {
+        ...newMilestone,
+        userId: currentUser.uid,
+        createdAt: new Date().toISOString(),
+      }
+
+      if (editingMilestone) {
+        const milestoneRef = doc(db, "milestones", editingMilestone.id)
+        await updateDoc(milestoneRef, milestoneWithUser)
+
+        setMilestoneData((prev) =>
+          prev.map((m) => (m.id === editingMilestone.id ? { ...milestoneWithUser, id: editingMilestone.id } : m)),
+        )
+      } else {
+        const docRef = await addDoc(collection(db, "milestones"), milestoneWithUser)
+        setMilestoneData((prev) => [...prev, { ...milestoneWithUser, id: docRef.id }])
+      }
+
+      setShowMilestoneModal(false)
+      setNewMilestone({
+        growthStage: "",
+        goal: "",
+        goalDescription: "",
+        milestones: [],
+        targetDate: "",
+        status: "",
+        owner: "",
+        info: "",
+        percentageCompletion: 0,
+      })
+    } catch (error) {
+      console.error("Error saving milestone:", error)
+      alert("Error saving milestone. Please try again.")
+    }
+  }
+
+  const handleDeleteMilestone = async (milestoneId) => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+
+    if (window.confirm("Are you sure you want to delete this milestone?")) {
+      try {
+        await deleteDoc(doc(db, "milestones", milestoneId))
+        setMilestoneData((prev) => prev.filter((m) => m.id !== milestoneId))
+      } catch (error) {
+        console.error("Error deleting milestone:", error)
+        alert("Error deleting milestone. Please try again.")
+      }
+    }
+  }
+
+  const toggleMilestoneSelection = (milestone) => {
+    setNewMilestone((prev) => {
+      const milestones = prev.milestones || []
+      if (milestones.includes(milestone)) {
+        return { ...prev, milestones: milestones.filter((m) => m !== milestone) }
+      } else {
+        return { ...prev, milestones: [...milestones, milestone] }
+      }
+    })
+  }
+
   return (
     <div
       style={{
@@ -600,6 +761,7 @@ const StrategicGoals = ({ activeSection, milestoneData, onNavigateToMilestone })
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
           gap: "20px",
+          marginBottom: "40px",
         }}
       >
         {categories.map((category) => {
@@ -625,35 +787,12 @@ const StrategicGoals = ({ activeSection, milestoneData, onNavigateToMilestone })
                 }}
               >
                 <h4 style={{ color: "#4a352f", margin: 0 }}>{category.name}</h4>
-                <button
-                  onClick={() => onNavigateToMilestone(category.name)}
-                  style={{
-                    padding: "4px 8px",
-                    backgroundColor: category.color,
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontSize: "10px",
-                    fontWeight: "500",
-                  }}
-                >
-                  View Milestones
-                </button>
               </div>
 
               <div style={{ height: "200px" }}>
                 <Bar
                   data={createChartData(category.name, category.color)}
-                  options={{
-                    ...chartOptions,
-                    onClick: (event, elements) => {
-                      if (elements.length > 0) {
-                        onNavigateToMilestone(category.name)
-                      }
-                    },
-                  }}
-                  // Add a data attribute to pass the growth stage to the tooltip callback
+                  options={chartOptions}
                   data-growth-stage={category.name}
                 />
               </div>
@@ -661,415 +800,227 @@ const StrategicGoals = ({ activeSection, milestoneData, onNavigateToMilestone })
           )
         })}
       </div>
-    </div>
-  )
-}
 
-// Milestone Tracking Component with Filter
-const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, currentUser, filterStage = null }) => {
-  const [showModal, setShowModal] = useState(false)
-  const [editingMilestone, setEditingMilestone] = useState(null)
-  const [filterBy, setFilterBy] = useState(filterStage || "all")
-  const [newMilestone, setNewMilestone] = useState({
-    growthStage: "",
-    goal: "",
-    goalDescription: "",
-    milestones: [],
-    targetDate: "",
-    status: "",
-    owner: "",
-    info: "",
-    percentageCompletion: 0,
-  })
-
-  useEffect(() => {
-    if (filterStage) {
-      setFilterBy(filterStage)
-    }
-  }, [filterStage])
-
-  if (activeSection !== "milestone-tracking") return null
-
-  const growthStages = ["Growth", "Finance", "Operations", "People", "Systems", "Customers"]
-  const goals = ["Goal 1", "Goal 2", "Goal 3", "Goal 4"]
-  const statuses = ["Not Started", "In Progress", "On Track", "At Risk", "Done"]
-  const owners = ["Product Team", "Business Dev", "Legal Team", "Engineering", "Marketing", "Operations"]
-  const availableMilestones = [
-    "Market Research",
-    "Product Development",
-    "Testing Phase",
-    "Launch Preparation",
-    "Marketing Campaign",
-    "Sales Training",
-    "Partnership Development",
-    "Quality Assurance",
-    "Regulatory Approval",
-    "System Integration",
-    "User Training",
-    "Documentation",
-  ]
-
-  // Filter milestones based on selected filter
-  const filteredMilestones = milestoneData.filter((milestone) => {
-    if (filterBy === "all") return true
-
-    // Filter by specific values
-    if (growthStages.includes(filterBy)) return milestone.growthStage === filterBy
-    if (statuses.includes(filterBy)) return milestone.status === filterBy
-    if (owners.includes(filterBy)) return milestone.owner === filterBy
-    if (goals.includes(filterBy)) return milestone.goal === filterBy
-
-    return true
-  })
-
-  const handleAddMilestone = () => {
-    setEditingMilestone(null)
-    setNewMilestone({
-      growthStage: "",
-      goal: "",
-      goalDescription: "",
-      milestones: [],
-      targetDate: "",
-      status: "",
-      owner: "",
-      info: "",
-      percentageCompletion: 0,
-    })
-    setShowModal(true)
-  }
-
-  const handleEditMilestone = (milestone) => {
-    setEditingMilestone(milestone)
-    setNewMilestone({
-      ...milestone,
-      milestones: milestone.milestones || [],
-      percentageCompletion: milestone.percentageCompletion || 0,
-    })
-    setShowModal(true)
-  }
-
-  const handleSaveMilestone = async () => {
-    if (!currentUser) {
-      alert("You must be logged in to save milestones.")
-      return
-    }
-
-    try {
-      const milestoneWithUser = {
-        ...newMilestone,
-        userId: currentUser.uid,
-        createdAt: new Date().toISOString(),
-      }
-
-      if (editingMilestone) {
-        const milestoneRef = doc(db, "milestones", editingMilestone.id)
-        await updateDoc(milestoneRef, milestoneWithUser)
-
-        setMilestoneData((prev) =>
-          prev.map((m) => (m.id === editingMilestone.id ? { ...milestoneWithUser, id: editingMilestone.id } : m)),
-        )
-      } else {
-        const docRef = await addDoc(collection(db, "milestones"), milestoneWithUser)
-        setMilestoneData((prev) => [...prev, { ...milestoneWithUser, id: docRef.id }])
-      }
-
-      setShowModal(false)
-      setNewMilestone({
-        growthStage: "",
-        goal: "",
-        goalDescription: "",
-        milestones: [],
-        targetDate: "",
-        status: "",
-        owner: "",
-        info: "",
-        percentageCompletion: 0,
-      })
-    } catch (error) {
-      console.error("Error saving milestone:", error)
-      alert("Error saving milestone. Please try again.")
-    }
-  }
-
-  const handleDeleteMilestone = async (milestoneId) => {
-    if (window.confirm("Are you sure you want to delete this milestone?")) {
-      try {
-        await deleteDoc(doc(db, "milestones", milestoneId))
-        setMilestoneData((prev) => prev.filter((m) => m.id !== milestoneId))
-      } catch (error) {
-        console.error("Error deleting milestone:", error)
-        alert("Error deleting milestone. Please try again.")
-      }
-    }
-  }
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "Done":
-        return "#4CAF50"
-      case "On Track":
-        return "#2196F3"
-      case "In Progress":
-        return "#FF9800"
-      case "At Risk":
-        return "#F44336"
-      case "Not Started":
-        return "#9E9E9E"
-      default:
-        return "#9E9E9E"
-    }
-  }
-
-  const getPercentageColor = (percentage) => {
-    if (percentage < 30) return "#F44336" // Red
-    if (percentage < 70) return "#FF9800" // Orange
-    return "#4CAF50" // Green
-  }
-
-  const handleMilestoneSelection = (milestone) => {
-    const currentMilestones = newMilestone.milestones || []
-    if (currentMilestones.includes(milestone)) {
-      setNewMilestone((prev) => ({
-        ...prev,
-        milestones: currentMilestones.filter((m) => m !== milestone),
-      }))
-    } else {
-      setNewMilestone((prev) => ({
-        ...prev,
-        milestones: [...currentMilestones, milestone],
-      }))
-    }
-  }
-
-  return (
-    <div
-      style={{
-        backgroundColor: "#faf7f2",
-        padding: "20px",
-        margin: "20px 0",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
       <div
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "20px",
+          backgroundColor: "#fdfcfb",
+          padding: "20px",
+          margin: "20px 0",
+          borderRadius: "8px",
+          boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+          border: "2px solid #7d5a50",
         }}
       >
-        <h3 style={{ color: "#4a352f", margin: 0 }}>Milestone Tracking</h3>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-          <label style={{ color: "#4a352f", fontWeight: "500" }}>Filter by:</label>
-          <select
-            value={filterBy}
-            onChange={(e) => setFilterBy(e.target.value)}
-            style={{
-              padding: "8px 12px",
-              border: "2px solid #e6d7c3",
-              borderRadius: "4px",
-              fontSize: "14px",
-              color: "#4a352f",
-            }}
-          >
-            <option value="all">All</option>
-            {growthStages.map((stage) => (
-              <option key={stage} value={stage}>
-                {stage}
-              </option>
-            ))}
-            {goals.map((goal) => (
-              <option key={goal} value={goal}>
-                {goal}
-              </option>
-            ))}
-            {statuses.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-            {owners.map((owner) => (
-              <option key={owner} value={owner}>
-                {owner}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={handleAddMilestone}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: "#7d5a50",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontWeight: "500",
-            }}
-          >
-            Add Milestone
-          </button>
-        </div>
-      </div>
-
-      {filteredMilestones.length === 0 ? (
         <div
           style={{
-            textAlign: "center",
-            padding: "40px",
-            color: "#4a352f",
-            backgroundColor: "#f5f0e1",
-            borderRadius: "6px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "20px",
           }}
         >
-          <p style={{ fontSize: "16px", marginBottom: "10px" }}>
-            {filterBy === "all" ? "No milestones added yet." : `No milestones found for filter: ${filterBy}`}
-          </p>
-          <p style={{ fontSize: "14px", color: "#7d5a50" }}>
-            Click "Add Milestone" to get started with tracking your goals.
-          </p>
+          <h3 style={{ color: "#4a352f", margin: 0 }}>Milestone Tracking</h3>
+          {!isInvestorView && (
+            <button
+              onClick={handleAddMilestone}
+              style={{
+                padding: "10px 20px",
+                backgroundColor: "#7d5a50",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "14px",
+              }}
+            >
+              Add Milestone
+            </button>
+          )}
         </div>
-      ) : (
-        <div style={{ overflowX: "auto" }}>
-          <table
+
+        {!currentUser && (
+          <div
             style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              color: "#4a352f",
-              minWidth: "1100px",
+              backgroundColor: "#fff3cd",
+              border: "1px solid #ffeaa7",
+              padding: "15px",
+              borderRadius: "6px",
+              marginBottom: "20px",
+              textAlign: "center",
             }}
           >
-            <thead>
-              <tr
+            <p style={{ color: "#856404", margin: 0 }}>Please log in to access and manage milestones.</p>
+          </div>
+        )}
+
+        {currentUser && (
+          <>
+            <div style={{ marginBottom: "20px" }}>
+              <label style={{ color: "#4a352f", fontWeight: "500", marginRight: "10px" }}>Filter by:</label>
+              <select
+                value={filterBy}
+                onChange={(e) => setFilterBy(e.target.value)}
                 style={{
-                  backgroundColor: "#e6d7c3",
-                  borderBottom: "2px solid #c8b6a6",
+                  padding: "8px 12px",
+                  border: "2px solid #e8ddd4",
+                  borderRadius: "4px",
+                  fontSize: "14px",
+                  color: "#4a352f",
                 }}
               >
-                <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Growth Stage</th>
-                <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Goal</th>
-                <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Goal Description</th>
-                <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Milestones</th>
-                <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Target Date</th>
-                <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Milestone Status</th>
-                <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>% Completion</th>
-                <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Owner</th>
-                <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Info</th>
-                <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredMilestones.map((milestone) => (
-                <tr
-                  key={milestone.id}
+                <option value="all">All Milestones</option>
+                <optgroup label="Growth Stage">
+                  {growthStages.map((stage) => (
+                    <option key={stage} value={stage}>
+                      {stage}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Status">
+                  {statuses.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Owner">
+                  {owners.map((owner) => (
+                    <option key={owner} value={owner}>
+                      {owner}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Goal">
+                  {goals.map((goal) => (
+                    <option key={goal} value={goal}>
+                      {goal}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+            </div>
+
+            {filteredMilestones.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "40px", color: "#7d5a50" }}>
+                No milestones found. {!isInvestorView && 'Click "Add Milestone" to get started.'}
+              </div>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table
                   style={{
-                    borderBottom: "1px solid #e6d7c3",
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    color: "#4a352f",
+                    minWidth: "1000px",
                   }}
                 >
-                  <td style={{ padding: "12px" }}>{milestone.growthStage}</td>
-                  <td style={{ padding: "12px" }}>{milestone.goal}</td>
-                  <td style={{ padding: "12px", maxWidth: "200px", wordWrap: "break-word" }}>
-                    {milestone.goalDescription}
-                  </td>
-                  <td style={{ padding: "12px", maxWidth: "150px" }}>
-                    {milestone.milestones && milestone.milestones.length > 0 ? (
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
-                        {milestone.milestones.map((m, index) => (
+                  <thead>
+                    <tr
+                      style={{
+                        backgroundColor: "#e6d7c3",
+                        borderBottom: "2px solid #c8b6a6",
+                      }}
+                    >
+                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Growth Stage</th>
+                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Goal</th>
+                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Goal Description</th>
+                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Milestones</th>
+                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Target Date</th>
+                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Status</th>
+                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Owner</th>
+                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>% Complete</th>
+                      {!isInvestorView && (
+                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Actions</th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredMilestones.map((milestone) => (
+                      <tr
+                        key={milestone.id}
+                        style={{
+                          borderBottom: "1px solid #e6d7c3",
+                        }}
+                      >
+                        <td style={{ padding: "12px" }}>{milestone.growthStage}</td>
+                        <td style={{ padding: "12px" }}>{milestone.goal}</td>
+                        <td style={{ padding: "12px", maxWidth: "200px" }}>{milestone.goalDescription}</td>
+                        <td style={{ padding: "12px" }}>
+                          {milestone.milestones && milestone.milestones.length > 0
+                            ? milestone.milestones.join(", ")
+                            : "-"}
+                        </td>
+                        <td style={{ padding: "12px" }}>{milestone.targetDate}</td>
+                        <td style={{ padding: "12px" }}>
                           <span
-                            key={index}
                             style={{
-                              padding: "2px 6px",
-                              backgroundColor: "#e6d7c3",
+                              padding: "4px 8px",
                               borderRadius: "4px",
-                              fontSize: "10px",
+                              fontSize: "12px",
+                              fontWeight: "500",
+                              backgroundColor:
+                                milestone.status === "Done"
+                                  ? "#4CAF50"
+                                  : milestone.status === "At Risk"
+                                    ? "#F44336"
+                                    : milestone.status === "On Track"
+                                      ? "#2196F3"
+                                      : "#FFC107",
+                              color: "white",
                             }}
                           >
-                            {m}
+                            {milestone.status}
                           </span>
-                        ))}
-                      </div>
-                    ) : (
-                      "-"
-                    )}
-                  </td>
-                  <td style={{ padding: "12px" }}>{milestone.targetDate}</td>
-                  <td style={{ padding: "12px" }}>
-                    <span
-                      style={{
-                        padding: "6px 12px",
-                        borderRadius: "4px",
-                        backgroundColor: getStatusColor(milestone.status),
-                        color: "white",
-                        fontSize: "12px",
-                        fontWeight: "500",
-                        display: "inline-block",
-                        minWidth: "80px",
-                        textAlign: "center",
-                      }}
-                    >
-                      {milestone.status}
-                    </span>
-                  </td>
-                  <td style={{ padding: "12px" }}>
-                    <span
-                      style={{
-                        padding: "6px 12px",
-                        borderRadius: "4px",
-                        backgroundColor: getPercentageColor(milestone.percentageCompletion || 0),
-                        color: "white",
-                        fontSize: "12px",
-                        fontWeight: "500",
-                        display: "inline-block",
-                        minWidth: "50px",
-                        textAlign: "center",
-                      }}
-                    >
-                      {milestone.percentageCompletion || 0}%
-                    </span>
-                  </td>
-                  <td style={{ padding: "12px" }}>{milestone.owner}</td>
-                  <td style={{ padding: "12px", maxWidth: "150px", wordWrap: "break-word" }}>{milestone.info}</td>
-                  <td style={{ padding: "12px" }}>
-                    <div style={{ display: "flex", gap: "5px" }}>
-                      <button
-                        onClick={() => handleEditMilestone(milestone)}
-                        style={{
-                          padding: "4px 8px",
-                          backgroundColor: "#a67c52",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "4px",
-                          cursor: "pointer",
-                          fontSize: "10px",
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteMilestone(milestone.id)}
-                        style={{
-                          padding: "4px 8px",
-                          backgroundColor: "#F44336",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "4px",
-                          cursor: "pointer",
-                          fontSize: "10px",
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+                        </td>
+                        <td style={{ padding: "12px" }}>{milestone.owner}</td>
+                        <td style={{ padding: "12px" }}>{milestone.percentageCompletion}%</td>
+                        {!isInvestorView && (
+                          <td style={{ padding: "12px" }}>
+                            <div style={{ display: "flex", gap: "5px" }}>
+                              <button
+                                onClick={() => handleEditMilestone(milestone)}
+                                style={{
+                                  padding: "4px 8px",
+                                  backgroundColor: "#a67c52",
+                                  color: "white",
+                                  border: "none",
+                                  borderRadius: "4px",
+                                  cursor: "pointer",
+                                  fontSize: "10px",
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeleteMilestone(milestone.id)}
+                                style={{
+                                  padding: "4px 8px",
+                                  backgroundColor: "#F44336",
+                                  color: "white",
+                                  border: "none",
+                                  borderRadius: "4px",
+                                  cursor: "pointer",
+                                  fontSize: "10px",
+                                }}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+      </div>
 
-      {/* Modal for adding/editing milestones */}
-      {showModal && (
+      {/* Milestone Modal */}
+      {showMilestoneModal && !isInvestorView && (
         <div
           style={{
             position: "fixed",
@@ -1077,7 +1028,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            backgroundColor: "rgba(0,0,0,0.5)",
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
@@ -1086,48 +1037,33 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
         >
           <div
             style={{
-              backgroundColor: "#faf7f2",
+              backgroundColor: "white",
               padding: "30px",
               borderRadius: "8px",
-              boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
-              width: "600px",
-              maxWidth: "90vw",
+              width: "90%",
+              maxWidth: "700px",
               maxHeight: "90vh",
               overflowY: "auto",
             }}
           >
-            <h3
-              style={{
-                color: "#4a352f",
-                marginTop: 0,
-                marginBottom: "20px",
-              }}
-            >
+            <h3 style={{ color: "#4a352f", marginTop: 0 }}>
               {editingMilestone ? "Edit Milestone" : "Add New Milestone"}
             </h3>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "15px" }}>
               <div>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "8px",
-                    color: "#4a352f",
-                    fontWeight: "500",
-                  }}
-                >
-                  Growth Stage:
+                <label style={{ display: "block", color: "#4a352f", marginBottom: "5px", fontWeight: "500" }}>
+                  Growth Stage
                 </label>
                 <select
                   value={newMilestone.growthStage}
-                  onChange={(e) => setNewMilestone((prev) => ({ ...prev, growthStage: e.target.value }))}
+                  onChange={(e) => setNewMilestone({ ...newMilestone, growthStage: e.target.value })}
                   style={{
                     width: "100%",
                     padding: "10px",
-                    border: "2px solid #e6d7c3",
+                    border: "2px solid #e8ddd4",
                     borderRadius: "4px",
                     fontSize: "14px",
-                    boxSizing: "border-box",
                   }}
                 >
                   <option value="">Select Growth Stage</option>
@@ -1140,26 +1076,18 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
               </div>
 
               <div>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "8px",
-                    color: "#4a352f",
-                    fontWeight: "500",
-                  }}
-                >
-                  Goal:
+                <label style={{ display: "block", color: "#4a352f", marginBottom: "5px", fontWeight: "500" }}>
+                  Goal
                 </label>
                 <select
                   value={newMilestone.goal}
-                  onChange={(e) => setNewMilestone((prev) => ({ ...prev, goal: e.target.value }))}
+                  onChange={(e) => setNewMilestone({ ...newMilestone, goal: e.target.value })}
                   style={{
                     width: "100%",
                     padding: "10px",
-                    border: "2px solid #e6d7c3",
+                    border: "2px solid #e8ddd4",
                     borderRadius: "4px",
                     fontSize: "14px",
-                    boxSizing: "border-box",
                   }}
                 >
                   <option value="">Select Goal</option>
@@ -1172,26 +1100,19 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
               </div>
             </div>
 
-            <div style={{ marginBottom: "20px", marginTop: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "8px",
-                  color: "#4a352f",
-                  fontWeight: "500",
-                }}
-              >
-                Goal Description:
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", color: "#4a352f", marginBottom: "5px", fontWeight: "500" }}>
+                Goal Description
               </label>
               <textarea
                 value={newMilestone.goalDescription}
-                onChange={(e) => setNewMilestone((prev) => ({ ...prev, goalDescription: e.target.value }))}
-                placeholder="Enter goal description"
+                onChange={(e) => setNewMilestone({ ...newMilestone, goalDescription: e.target.value })}
+                placeholder="Describe the goal..."
                 rows="3"
                 style={{
                   width: "100%",
                   padding: "10px",
-                  border: "2px solid #e6d7c3",
+                  border: "2px solid #e8ddd4",
                   borderRadius: "4px",
                   fontSize: "14px",
                   boxSizing: "border-box",
@@ -1200,23 +1121,19 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
               />
             </div>
 
-            <div style={{ marginBottom: "20px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "8px",
-                  color: "#4a352f",
-                  fontWeight: "500",
-                }}
-              >
-                Milestones (select multiple):
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", color: "#4a352f", marginBottom: "5px", fontWeight: "500" }}>
+                Select Milestones
               </label>
               <div
                 style={{
-                  border: "2px solid #e6d7c3",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(2, 1fr)",
+                  gap: "10px",
+                  padding: "15px",
+                  backgroundColor: "#f7f3f0",
                   borderRadius: "4px",
-                  padding: "10px",
-                  maxHeight: "150px",
+                  maxHeight: "200px",
                   overflowY: "auto",
                 }}
               >
@@ -1224,71 +1141,57 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
                   <label
                     key={milestone}
                     style={{
-                      display: "block",
-                      marginBottom: "5px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
                       cursor: "pointer",
+                      padding: "5px",
                     }}
                   >
                     <input
                       type="checkbox"
                       checked={newMilestone.milestones?.includes(milestone) || false}
-                      onChange={() => handleMilestoneSelection(milestone)}
-                      style={{ marginRight: "8px" }}
+                      onChange={() => toggleMilestoneSelection(milestone)}
+                      style={{ cursor: "pointer" }}
                     />
-                    {milestone}
+                    <span style={{ color: "#4a352f", fontSize: "14px" }}>{milestone}</span>
                   </label>
                 ))}
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "15px" }}>
               <div>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "8px",
-                    color: "#4a352f",
-                    fontWeight: "500",
-                  }}
-                >
-                  Target Date:
+                <label style={{ display: "block", color: "#4a352f", marginBottom: "5px", fontWeight: "500" }}>
+                  Target Date
                 </label>
                 <input
                   type="date"
                   value={newMilestone.targetDate}
-                  onChange={(e) => setNewMilestone((prev) => ({ ...prev, targetDate: e.target.value }))}
+                  onChange={(e) => setNewMilestone({ ...newMilestone, targetDate: e.target.value })}
                   style={{
                     width: "100%",
                     padding: "10px",
-                    border: "2px solid #e6d7c3",
+                    border: "2px solid #e8ddd4",
                     borderRadius: "4px",
                     fontSize: "14px",
-                    boxSizing: "border-box",
                   }}
                 />
               </div>
 
               <div>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "8px",
-                    color: "#4a352f",
-                    fontWeight: "500",
-                  }}
-                >
-                  Status:
+                <label style={{ display: "block", color: "#4a352f", marginBottom: "5px", fontWeight: "500" }}>
+                  Status
                 </label>
                 <select
                   value={newMilestone.status}
-                  onChange={(e) => setNewMilestone((prev) => ({ ...prev, status: e.target.value }))}
+                  onChange={(e) => setNewMilestone({ ...newMilestone, status: e.target.value })}
                   style={{
                     width: "100%",
                     padding: "10px",
-                    border: "2px solid #e6d7c3",
+                    border: "2px solid #e8ddd4",
                     borderRadius: "4px",
                     fontSize: "14px",
-                    boxSizing: "border-box",
                   }}
                 >
                   <option value="">Select Status</option>
@@ -1301,28 +1204,20 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginTop: "15px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "15px" }}>
               <div>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "8px",
-                    color: "#4a352f",
-                    fontWeight: "500",
-                  }}
-                >
-                  Owner:
+                <label style={{ display: "block", color: "#4a352f", marginBottom: "5px", fontWeight: "500" }}>
+                  Owner
                 </label>
                 <select
                   value={newMilestone.owner}
-                  onChange={(e) => setNewMilestone((prev) => ({ ...prev, owner: e.target.value }))}
+                  onChange={(e) => setNewMilestone({ ...newMilestone, owner: e.target.value })}
                   style={{
                     width: "100%",
                     padding: "10px",
-                    border: "2px solid #e6d7c3",
+                    border: "2px solid #e8ddd4",
                     borderRadius: "4px",
                     fontSize: "14px",
-                    boxSizing: "border-box",
                   }}
                 >
                   <option value="">Select Owner</option>
@@ -1335,58 +1230,41 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
               </div>
 
               <div>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "8px",
-                    color: "#4a352f",
-                    fontWeight: "500",
-                  }}
-                >
-                  Percentage Completion:
+                <label style={{ display: "block", color: "#4a352f", marginBottom: "5px", fontWeight: "500" }}>
+                  % Completion
                 </label>
                 <input
                   type="number"
                   min="0"
                   max="100"
                   value={newMilestone.percentageCompletion}
-                  onChange={(e) => {
-                    const value = Math.min(100, Math.max(0, Number.parseInt(e.target.value) || 0))
-                    setNewMilestone((prev) => ({ ...prev, percentageCompletion: value }))
-                  }}
+                  onChange={(e) =>
+                    setNewMilestone({ ...newMilestone, percentageCompletion: Number.parseInt(e.target.value) || 0 })
+                  }
                   style={{
                     width: "100%",
                     padding: "10px",
-                    border: "2px solid #e6d7c3",
+                    border: "2px solid #e8ddd4",
                     borderRadius: "4px",
                     fontSize: "14px",
-                    boxSizing: "border-box",
                   }}
-                  placeholder="0-100"
                 />
               </div>
             </div>
 
-            <div style={{ marginBottom: "25px", marginTop: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "8px",
-                  color: "#4a352f",
-                  fontWeight: "500",
-                }}
-              >
-                Additional Info:
+            <div style={{ marginBottom: "20px" }}>
+              <label style={{ display: "block", color: "#4a352f", marginBottom: "5px", fontWeight: "500" }}>
+                Additional Info
               </label>
               <textarea
                 value={newMilestone.info}
-                onChange={(e) => setNewMilestone((prev) => ({ ...prev, info: e.target.value }))}
-                placeholder="Enter additional information"
+                onChange={(e) => setNewMilestone({ ...newMilestone, info: e.target.value })}
+                placeholder="Any additional information..."
                 rows="3"
                 style={{
                   width: "100%",
                   padding: "10px",
-                  border: "2px solid #e6d7c3",
+                  border: "2px solid #e8ddd4",
                   borderRadius: "4px",
                   fontSize: "14px",
                   boxSizing: "border-box",
@@ -1403,7 +1281,7 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
               }}
             >
               <button
-                onClick={() => setShowModal(false)}
+                onClick={() => setShowMilestoneModal(false)}
                 style={{
                   padding: "10px 20px",
                   backgroundColor: "#e6d7c3",
@@ -1438,8 +1316,8 @@ const MilestoneTracking = ({ activeSection, milestoneData, setMilestoneData, cur
   )
 }
 
-const RiskManagement = ({ activeSection, currentUser, onNavigateToRiskCategory }) => {
-  const [riskSection, setRiskSection] = useState("financial")
+const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
+  const [riskSection, setRiskSection] = useState("business-risk")
   const [riskData, setRiskData] = useState({
     financial: [],
     operational: [],
@@ -1482,6 +1360,11 @@ const RiskManagement = ({ activeSection, currentUser, onNavigateToRiskCategory }
   if (activeSection !== "risk-management") return null
 
   const saveRiskData = async (newRiskData) => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+
     if (!currentUser) return
 
     try {
@@ -1505,6 +1388,11 @@ const RiskManagement = ({ activeSection, currentUser, onNavigateToRiskCategory }
   }
 
   const addRiskItem = (category) => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+
     const newItem = {
       id: Date.now().toString(),
       risk: "",
@@ -1513,7 +1401,7 @@ const RiskManagement = ({ activeSection, currentUser, onNavigateToRiskCategory }
       severity: 1,
       likelihood: 1,
       mitigation: "",
-      mitigationStatus: "not done", // Default value
+      mitigationStatus: "not done",
     }
 
     const newRiskData = {
@@ -1526,13 +1414,17 @@ const RiskManagement = ({ activeSection, currentUser, onNavigateToRiskCategory }
   }
 
   const updateRiskItem = (category, itemId, field, value) => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+
     const newRiskData = {
       ...riskData,
       [category]: riskData[category].map((item) => (item.id === itemId ? { ...item, [field]: value } : item)),
     }
 
     setRiskData(newRiskData)
-    // Debounce save to avoid too many writes
     if (updateRiskItem.timeout) clearTimeout(updateRiskItem.timeout)
     updateRiskItem.timeout = setTimeout(() => {
       saveRiskData(newRiskData)
@@ -1540,6 +1432,11 @@ const RiskManagement = ({ activeSection, currentUser, onNavigateToRiskCategory }
   }
 
   const deleteRiskItem = (category, itemId) => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+
     if (window.confirm("Are you sure you want to delete this risk item?")) {
       const newRiskData = {
         ...riskData,
@@ -1552,24 +1449,49 @@ const RiskManagement = ({ activeSection, currentUser, onNavigateToRiskCategory }
   }
 
   const createScatterChartData = (category, color) => {
-    const data = riskData[category] || []
+    let data = []
+    const categoryMap = {} // Track which category each risk belongs to
+
+    // If we're in business-risk section, show ALL risks from ALL categories
+    if (category === "business-risk") {
+      // Collect all risks and track their original categories
+      Object.entries(riskData).forEach(([catId, risks]) => {
+        risks.forEach((risk) => {
+          data.push(risk)
+          categoryMap[risk.id] = catId // Map risk ID to its category
+        })
+      })
+    } else {
+      data = riskData[category] || []
+    }
+
     return {
       datasets: data
         .filter((item) => item.risk && item.likelihood && item.severity)
-        .map((item, index) => ({
-          label: item.risk,
-          data: [
-            {
-              x: item.likelihood,
-              y: item.severity,
-            },
-          ],
-          backgroundColor: color,
-          borderColor: "#7d5a50",
-          borderWidth: 2,
-          pointRadius: 10,
-          pointHoverRadius: 12,
-        })),
+        .map((item, index) => {
+          // For business-risk view, find the original category color
+          let dotColor = color
+          if (category === "business-risk") {
+            const originalCategory = categoryMap[item.id]
+            const categoryInfo = riskCategories.find((cat) => cat.id === originalCategory)
+            dotColor = categoryInfo ? categoryInfo.color : color
+          }
+
+          return {
+            label: item.risk,
+            data: [
+              {
+                x: item.likelihood,
+                y: item.severity,
+              },
+            ],
+            backgroundColor: dotColor,
+            borderColor: "#7d5a50",
+            borderWidth: 2,
+            pointRadius: 10,
+            pointHoverRadius: 12,
+          }
+        }),
     }
   }
 
@@ -1635,6 +1557,7 @@ const RiskManagement = ({ activeSection, currentUser, onNavigateToRiskCategory }
   }
 
   const riskCategories = [
+    { id: "business-risk", name: "Business Risk", color: "#c62828" },
     { id: "financial", name: "Financial Risk", color: "#e74c3c" },
     { id: "operational", name: "Operational Risk", color: "#3498db" },
     { id: "legal-compliance", name: "Legal & Compliance", color: "#9b59b6" },
@@ -1689,7 +1612,7 @@ const RiskManagement = ({ activeSection, currentUser, onNavigateToRiskCategory }
       {riskCategories.map((category) => {
         if (riskSection !== category.id) return null
 
-        const data = riskData[category.id] || []
+        const data = category.id === "business-risk" ? Object.values(riskData).flat() : riskData[category.id] || []
 
         return (
           <div key={category.id}>
@@ -1703,7 +1626,10 @@ const RiskManagement = ({ activeSection, currentUser, onNavigateToRiskCategory }
                 border: `2px solid ${category.color}`,
               }}
             >
-              <h4 style={{ color: "#4a352f", marginBottom: "15px" }}>{category.name} Matrix</h4>
+              <h4 style={{ color: "#4a352f", marginBottom: "15px" }}>
+                {category.name} Matrix
+                {category.id === "business-risk" && " (All Risks)"}
+              </h4>
               <div style={{ height: "300px" }}>
                 <Scatter data={createScatterChartData(category.id, category.color)} options={scatterOptions} />
               </div>
@@ -1726,27 +1652,34 @@ const RiskManagement = ({ activeSection, currentUser, onNavigateToRiskCategory }
                   marginBottom: "15px",
                 }}
               >
-                <h4 style={{ color: "#4a352f", margin: 0 }}>Risk Assessment Table</h4>
-                <button
-                  onClick={() => addRiskItem(category.id)}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: "#7d5a50",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontWeight: "500",
-                    fontSize: "12px",
-                  }}
-                >
-                  Add Risk Item
-                </button>
+                <h4 style={{ color: "#4a352f", margin: 0 }}>
+                  Risk Assessment Table
+                  {category.id === "business-risk" && " (All Risks)"}
+                </h4>
+                {!isInvestorView && category.id !== "business-risk" && (
+                  <button
+                    onClick={() => addRiskItem(category.id)}
+                    style={{
+                      padding: "8px 16px",
+                      backgroundColor: "#7d5a50",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                      fontWeight: "500",
+                      fontSize: "12px",
+                    }}
+                  >
+                    Add Risk Item
+                  </button>
+                )}
               </div>
 
               {data.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "40px", color: "#7d5a50" }}>
-                  No risk items added yet. Click "Add Risk Item" to get started.
+                  {category.id === "business-risk"
+                    ? "No risk items added yet in any category."
+                    : `No risk items added yet. ${!isInvestorView ? 'Click "Add Risk Item" to get started.' : ""}`}
                 </div>
               ) : (
                 <div style={{ overflowX: "auto" }}>
@@ -1784,157 +1717,181 @@ const RiskManagement = ({ activeSection, currentUser, onNavigateToRiskCategory }
                         <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "120px" }}>
                           Mitigation Status
                         </th>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "80px" }}>
-                          Actions
-                        </th>
+                        {!isInvestorView && category.id !== "business-risk" && (
+                          <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "80px" }}>
+                            Actions
+                          </th>
+                        )}
                       </tr>
                     </thead>
                     <tbody>
-                      {data.map((item) => (
-                        <tr
-                          key={item.id}
-                          style={{
-                            borderBottom: "1px solid #e6d7c3",
-                          }}
-                        >
-                          <td style={{ padding: "12px" }}>
-                            <input
-                              type="text"
-                              value={item.risk || ""}
-                              onChange={(e) => updateRiskItem(category.id, item.id, "risk", e.target.value)}
-                              placeholder="Risk ID"
-                              style={{
-                                width: "100%",
-                                padding: "8px",
-                                border: "1px solid #e6d7c3",
-                                borderRadius: "4px",
-                                fontSize: "12px",
-                              }}
-                            />
-                          </td>
-                          <td style={{ padding: "12px" }}>
-                            <input
-                              type="text"
-                              value={item.riskCategory || ""}
-                              onChange={(e) => updateRiskItem(category.id, item.id, "riskCategory", e.target.value)}
-                              placeholder="Category"
-                              style={{
-                                width: "100%",
-                                padding: "8px",
-                                border: "1px solid #e6d7c3",
-                                borderRadius: "4px",
-                                fontSize: "12px",
-                              }}
-                            />
-                          </td>
-                          <td style={{ padding: "12px" }}>
-                            <textarea
-                              value={item.description || ""}
-                              onChange={(e) => updateRiskItem(category.id, item.id, "description", e.target.value)}
-                              placeholder="Enter description"
-                              rows="2"
-                              style={{
-                                width: "100%",
-                                padding: "8px",
-                                border: "1px solid #e6d7c3",
-                                borderRadius: "4px",
-                                fontSize: "12px",
-                                resize: "vertical",
-                              }}
-                            />
-                          </td>
-                          <td style={{ padding: "12px" }}>
-                            <select
-                              value={item.severity || 1}
-                              onChange={(e) =>
-                                updateRiskItem(category.id, item.id, "severity", Number.parseInt(e.target.value))
-                              }
-                              style={{
-                                width: "100%",
-                                padding: "8px",
-                                border: "1px solid #e6d7c3",
-                                borderRadius: "4px",
-                                fontSize: "12px",
-                              }}
-                            >
-                              <option value={1}>1</option>
-                              <option value={2}>2</option>
-                              <option value={3}>3</option>
-                              <option value={4}>4</option>
-                              <option value={5}>5</option>
-                            </select>
-                          </td>
-                          <td style={{ padding: "12px" }}>
-                            <select
-                              value={item.likelihood || 1}
-                              onChange={(e) =>
-                                updateRiskItem(category.id, item.id, "likelihood", Number.parseInt(e.target.value))
-                              }
-                              style={{
-                                width: "100%",
-                                padding: "8px",
-                                border: "1px solid #e6d7c3",
-                                borderRadius: "4px",
-                                fontSize: "12px",
-                              }}
-                            >
-                              <option value={1}>1</option>
-                              <option value={2}>2</option>
-                              <option value={3}>3</option>
-                              <option value={4}>4</option>
-                              <option value={5}>5</option>
-                            </select>
-                          </td>
-                          <td style={{ padding: "12px" }}>
-                            <textarea
-                              value={item.mitigation || ""}
-                              onChange={(e) => updateRiskItem(category.id, item.id, "mitigation", e.target.value)}
-                              placeholder="Enter mitigation strategy"
-                              rows="2"
-                              style={{
-                                width: "100%",
-                                padding: "8px",
-                                border: "1px solid #e6d7c3",
-                                borderRadius: "4px",
-                                fontSize: "12px",
-                                resize: "vertical",
-                              }}
-                            />
-                          </td>
-                          <td style={{ padding: "12px" }}>
-                            <select
-                              value={item.mitigationStatus || "not done"}
-                              onChange={(e) => updateRiskItem(category.id, item.id, "mitigationStatus", e.target.value)}
-                              style={{
-                                width: "100%",
-                                padding: "8px",
-                                border: "1px solid #e6d7c3",
-                                borderRadius: "4px",
-                                fontSize: "12px",
-                              }}
-                            >
-                              <option value="not done">Not Done</option>
-                              <option value="done">Done</option>
-                            </select>
-                          </td>
-                          <td style={{ padding: "12px" }}>
-                            <button
-                              onClick={() => deleteRiskItem(category.id, item.id)}
-                              style={{
-                                padding: "4px 8px",
-                                backgroundColor: "#F44336",
-                                color: "white",
-                                border: "none",
-                                borderRadius: "4px",
-                                cursor: "pointer",
-                                fontSize: "10px",
-                              }}
-                            >
-                              Delete
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      {data.map((item) => {
+                        const originalCategory =
+                          category.id === "business-risk"
+                            ? Object.keys(riskData).find((key) => riskData[key].some((r) => r.id === item.id))
+                            : category.id
+
+                        return (
+                          <tr
+                            key={item.id}
+                            style={{
+                              borderBottom: "1px solid #e6d7c3",
+                            }}
+                          >
+                            <td style={{ padding: "12px" }}>
+                              <input
+                                type="text"
+                                value={item.risk}
+                                onChange={(e) => updateRiskItem(originalCategory, item.id, "risk", e.target.value)}
+                                disabled={isInvestorView || category.id === "business-risk"}
+                                style={{
+                                  width: "100%",
+                                  padding: "6px",
+                                  border: "1px solid #e8ddd4",
+                                  borderRadius: "4px",
+                                  fontSize: "12px",
+                                  backgroundColor:
+                                    isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                                  cursor: isInvestorView || category.id === "business-risk" ? "not-allowed" : "text",
+                                }}
+                              />
+                            </td>
+                            <td style={{ padding: "12px" }}>{item.riskCategory}</td>
+                            <td style={{ padding: "12px" }}>
+                              <textarea
+                                value={item.description}
+                                onChange={(e) =>
+                                  updateRiskItem(originalCategory, item.id, "description", e.target.value)
+                                }
+                                disabled={isInvestorView || category.id === "business-risk"}
+                                rows="2"
+                                style={{
+                                  width: "100%",
+                                  padding: "6px",
+                                  border: "1px solid #e8ddd4",
+                                  borderRadius: "4px",
+                                  fontSize: "12px",
+                                  resize: "vertical",
+                                  backgroundColor:
+                                    isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                                  cursor: isInvestorView || category.id === "business-risk" ? "not-allowed" : "text",
+                                }}
+                              />
+                            </td>
+                            <td style={{ padding: "12px" }}>
+                              <input
+                                type="number"
+                                min="1"
+                                max="5"
+                                value={item.severity}
+                                onChange={(e) =>
+                                  updateRiskItem(originalCategory, item.id, "severity", Number.parseInt(e.target.value))
+                                }
+                                disabled={isInvestorView || category.id === "business-risk"}
+                                style={{
+                                  width: "60px",
+                                  padding: "6px",
+                                  border: "1px solid #e8ddd4",
+                                  borderRadius: "4px",
+                                  fontSize: "12px",
+                                  backgroundColor:
+                                    isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                                  cursor: isInvestorView || category.id === "business-risk" ? "not-allowed" : "text",
+                                }}
+                              />
+                            </td>
+                            <td style={{ padding: "12px" }}>
+                              <input
+                                type="number"
+                                min="1"
+                                max="5"
+                                value={item.likelihood}
+                                onChange={(e) =>
+                                  updateRiskItem(
+                                    originalCategory,
+                                    item.id,
+                                    "likelihood",
+                                    Number.parseInt(e.target.value),
+                                  )
+                                }
+                                disabled={isInvestorView || category.id === "business-risk"}
+                                style={{
+                                  width: "60px",
+                                  padding: "6px",
+                                  border: "1px solid #e8ddd4",
+                                  borderRadius: "4px",
+                                  fontSize: "12px",
+                                  backgroundColor:
+                                    isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                                  cursor: isInvestorView || category.id === "business-risk" ? "not-allowed" : "text",
+                                }}
+                              />
+                            </td>
+                            <td style={{ padding: "12px" }}>
+                              <textarea
+                                value={item.mitigation}
+                                onChange={(e) =>
+                                  updateRiskItem(originalCategory, item.id, "mitigation", e.target.value)
+                                }
+                                disabled={isInvestorView || category.id === "business-risk"}
+                                rows="2"
+                                style={{
+                                  width: "100%",
+                                  padding: "6px",
+                                  border: "1px solid #e8ddd4",
+                                  borderRadius: "4px",
+                                  fontSize: "12px",
+                                  resize: "vertical",
+                                  backgroundColor:
+                                    isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                                  cursor: isInvestorView || category.id === "business-risk" ? "not-allowed" : "text",
+                                }}
+                              />
+                            </td>
+                            <td style={{ padding: "12px" }}>
+                              <select
+                                value={item.mitigationStatus}
+                                onChange={(e) =>
+                                  updateRiskItem(originalCategory, item.id, "mitigationStatus", e.target.value)
+                                }
+                                disabled={isInvestorView || category.id === "business-risk"}
+                                style={{
+                                  width: "100%",
+                                  padding: "6px",
+                                  border: "1px solid #e8ddd4",
+                                  borderRadius: "4px",
+                                  fontSize: "12px",
+                                  backgroundColor:
+                                    isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                                  cursor: isInvestorView || category.id === "business-risk" ? "not-allowed" : "pointer",
+                                }}
+                              >
+                                <option value="not done">Not Done</option>
+                                <option value="in progress">In Progress</option>
+                                <option value="done">Done</option>
+                              </select>
+                            </td>
+                            {!isInvestorView && category.id !== "business-risk" && (
+                              <td style={{ padding: "12px" }}>
+                                <button
+                                  onClick={() => deleteRiskItem(originalCategory, item.id)}
+                                  style={{
+                                    padding: "4px 8px",
+                                    backgroundColor: "#F44336",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: "4px",
+                                    cursor: "pointer",
+                                    fontSize: "10px",
+                                  }}
+                                >
+                                  Delete
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1947,9 +1904,7 @@ const RiskManagement = ({ activeSection, currentUser, onNavigateToRiskCategory }
   )
 }
 
-// Board Activity & Governance Component (Updated with PIS score logic and new structure)
-// Board Activity & Governance Component (Updated with conditional logic)
-const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) => {
+const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0, isInvestorView }) => {
   const [hasBoardDirectors, setHasBoardDirectors] = useState(null)
   const [showBoardQuestion, setShowBoardQuestion] = useState(true)
   const [policies, setPolicies] = useState([])
@@ -1958,13 +1913,11 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
   const [committees, setCommittees] = useState([])
   const [uploadedFiles, setUploadedFiles] = useState({})
 
-  // Modal states
   const [showMeetingModal, setShowMeetingModal] = useState(false)
   const [showDirectorModal, setShowDirectorModal] = useState(false)
   const [showCommitteeModal, setShowCommitteeModal] = useState(false)
   const [showPolicyProcedureModal, setShowPolicyProcedureModal] = useState(false)
 
-  // Form states
   const [newMeeting, setNewMeeting] = useState({ date: "", type: "", attendees: "", totalMembers: "", minutes: "" })
   const [newDirector, setNewDirector] = useState({ name: "", position: "", date: "", committees: [] })
   const [newCommittee, setNewCommittee] = useState({ name: "", position: "", date: "", committees: [] })
@@ -1977,13 +1930,11 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
     fileData: null,
   })
 
-  // Edit states
   const [editingMeeting, setEditingMeeting] = useState(null)
   const [editingDirector, setEditingDirector] = useState(null)
   const [editingCommittee, setEditingCommittee] = useState(null)
   const [editingPolicyProcedure, setEditingPolicyProcedure] = useState(null)
 
-  // Load user-specific data from Firebase on component mount
   useEffect(() => {
     const loadUserData = async () => {
       if (!currentUser) return
@@ -2016,24 +1967,40 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
   const hasFullBoardScore = pisScore >= 350
 
   const handleBoardDirectorsResponse = (hasDirectors) => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
     setHasBoardDirectors(hasDirectors)
     setShowBoardQuestion(false)
   }
 
-  // Meeting handlers
   const handleAddMeeting = () => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
     setEditingMeeting(null)
     setNewMeeting({ date: "", type: "", attendees: "", totalMembers: "", minutes: "" })
     setShowMeetingModal(true)
   }
 
   const handleEditMeeting = (meeting) => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
     setEditingMeeting(meeting)
     setNewMeeting(meeting)
     setShowMeetingModal(true)
   }
 
   const handleSaveMeeting = async () => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+
     if (!currentUser) {
       alert("You must be logged in to save meetings.")
       return
@@ -2066,6 +2033,11 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
   }
 
   const handleDeleteMeeting = async (meetingId) => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+
     if (window.confirm("Are you sure you want to delete this meeting?")) {
       try {
         await deleteDoc(doc(db, "meetings", meetingId))
@@ -2077,20 +2049,32 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
     }
   }
 
-  // Director handlers
   const handleAddDirector = () => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
     setEditingDirector(null)
     setNewDirector({ name: "", position: "", date: "", committees: [] })
     setShowDirectorModal(true)
   }
 
   const handleEditDirector = (director) => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
     setEditingDirector(director)
     setNewDirector(director)
     setShowDirectorModal(true)
   }
 
   const handleSaveDirector = async () => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+
     if (!currentUser) {
       alert("You must be logged in to save directors.")
       return
@@ -2123,6 +2107,11 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
   }
 
   const handleDeleteDirector = async (directorId) => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+
     if (window.confirm("Are you sure you want to delete this director?")) {
       try {
         await deleteDoc(doc(db, "directors", directorId))
@@ -2134,20 +2123,32 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
     }
   }
 
-  // Committee handlers
   const handleAddCommittee = () => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
     setEditingCommittee(null)
     setNewCommittee({ name: "", position: "", date: "", committees: [] })
     setShowCommitteeModal(true)
   }
 
   const handleEditCommittee = (committee) => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
     setEditingCommittee(committee)
     setNewCommittee(committee)
     setShowCommitteeModal(true)
   }
 
   const handleSaveCommittee = async () => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+
     if (!currentUser) {
       alert("You must be logged in to save committees.")
       return
@@ -2180,6 +2181,11 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
   }
 
   const handleDeleteCommittee = async (committeeId) => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+
     if (window.confirm("Are you sure you want to delete this committee?")) {
       try {
         await deleteDoc(doc(db, "committees", committeeId))
@@ -2200,13 +2206,15 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
   }
 
   const handleFileUpload = async (e, policyId = null) => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+
     const file = e.target.files[0]
     if (!file) return
 
-    // In a real implementation, you would upload to Firebase Storage
-    // For now, we'll simulate the upload
     try {
-      // Simulate file upload
       const fileData = {
         name: file.name,
         size: file.size,
@@ -2215,7 +2223,6 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
       }
 
       if (policyId) {
-        // Update specific policy
         const policyRef = doc(db, "policyProcedures", policyId)
         await updateDoc(policyRef, {
           fileAttached: true,
@@ -2226,7 +2233,6 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
           prev.map((p) => (p.id === policyId ? { ...p, fileAttached: true, fileData: fileData } : p)),
         )
       } else {
-        // Store for new policy
         setUploadedFiles((prev) => ({
           ...prev,
           temp: fileData,
@@ -2241,6 +2247,11 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
   }
 
   const handleSavePolicyProcedure = async () => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+
     if (!currentUser) {
       alert("You must be logged in to save policies/procedures.")
       return
@@ -2251,7 +2262,6 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
         ...newPolicyProcedure,
         userId: currentUser.uid,
         createdAt: new Date().toISOString(),
-        // Include fileData if it exists from a temporary upload
         ...(uploadedFiles.temp && { fileData: uploadedFiles.temp }),
       }
 
@@ -2268,7 +2278,6 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
         setPolicies((prev) => [...prev, { ...policyProcedureWithUser, id: docRef.id }])
       }
 
-      // Clear temporary uploaded file info
       setUploadedFiles((prev) => ({ ...prev, temp: null }))
       setShowPolicyProcedureModal(false)
       setNewPolicyProcedure({ name: "", type: "policy", status: "", date: "", fileAttached: false, fileData: null })
@@ -2279,6 +2288,11 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
   }
 
   const handleDeletePolicyProcedure = async (policyId) => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+
     if (window.confirm("Are you sure you want to delete this policy/procedure?")) {
       try {
         await deleteDoc(doc(db, "policyProcedures", policyId))
@@ -2291,6 +2305,10 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
   }
 
   const handleEditPolicyProcedure = (policy) => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
     setEditingPolicyProcedure(policy)
     setNewPolicyProcedure(policy)
     setShowPolicyProcedureModal(true)
@@ -2308,7 +2326,6 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
     >
       <h3 style={{ color: "#4a352f", marginBottom: "20px" }}>Board Activity & Governance</h3>
 
-      {/* Governance Score Display */}
       <div
         style={{
           backgroundColor: hasMinimumGovernanceScore ? "#d4edda" : "#fff3cd",
@@ -2329,8 +2346,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
         )}
       </div>
 
-      {/* Board Directors Question - Only show if user hasn't answered yet */}
-      {showBoardQuestion && (
+      {showBoardQuestion && !isInvestorView && (
         <div
           style={{
             backgroundColor: "#fdfcfb",
@@ -2376,7 +2392,6 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
         </div>
       )}
 
-      {/* Show Board Directors if user answered "Yes" */}
       {!showBoardQuestion && hasBoardDirectors && (
         <>
           <div
@@ -2397,21 +2412,23 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
               }}
             >
               <h4 style={{ color: "#4a352f", margin: 0 }}>Board of Directors</h4>
-              <button
-                onClick={handleAddDirector}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#7d5a50",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                  fontSize: "12px",
-                }}
-              >
-                Add Director
-              </button>
+              {!isInvestorView && (
+                <button
+                  onClick={handleAddDirector}
+                  style={{
+                    padding: "8px 16px",
+                    backgroundColor: "#7d5a50",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontWeight: "500",
+                    fontSize: "12px",
+                  }}
+                >
+                  Add Director
+                </button>
+              )}
             </div>
 
             {directors.length > 0 ? (
@@ -2428,7 +2445,9 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                     <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Position</th>
                     <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Date Appointed</th>
                     <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Committees</th>
-                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Actions</th>
+                    {!isInvestorView && (
+                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Actions</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -2440,50 +2459,51 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                       <td style={{ padding: "12px" }}>
                         {director.committees && director.committees.length > 0 ? director.committees.join(", ") : "-"}
                       </td>
-                      <td style={{ padding: "12px" }}>
-                        <div style={{ display: "flex", gap: "5px" }}>
-                          <button
-                            onClick={() => handleEditDirector(director)}
-                            style={{
-                              padding: "4px 8px",
-                              backgroundColor: "#a67c52",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "4px",
-                              cursor: "pointer",
-                              fontSize: "10px",
-                            }}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDeleteDirector(director.id)}
-                            style={{
-                              padding: "4px 8px",
-                              backgroundColor: "#F44336",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "4px",
-                              cursor: "pointer",
-                              fontSize: "10px",
-                            }}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
+                      {!isInvestorView && (
+                        <td style={{ padding: "12px" }}>
+                          <div style={{ display: "flex", gap: "5px" }}>
+                            <button
+                              onClick={() => handleEditDirector(director)}
+                              style={{
+                                padding: "4px 8px",
+                                backgroundColor: "#a67c52",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                fontSize: "10px",
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteDirector(director.id)}
+                              style={{
+                                padding: "4px 8px",
+                                backgroundColor: "#F44336",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                fontSize: "10px",
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
               </table>
             ) : (
               <div style={{ textAlign: "center", padding: "40px", color: "#7d5a50" }}>
-                No directors added yet. Click "Add Director" to get started.
+                No directors added yet. {!isInvestorView && 'Click "Add Director" to get started.'}
               </div>
             )}
           </div>
 
-          {/* Meetings Section for users with Board of Directors */}
           <div
             style={{
               backgroundColor: "#fdfcfb",
@@ -2502,21 +2522,23 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
               }}
             >
               <h4 style={{ color: "#4a352f", margin: 0 }}>Meetings Held</h4>
-              <button
-                onClick={handleAddMeeting}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#7d5a50",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                  fontSize: "12px",
-                }}
-              >
-                Add Meeting
-              </button>
+              {!isInvestorView && (
+                <button
+                  onClick={handleAddMeeting}
+                  style={{
+                    padding: "8px 16px",
+                    backgroundColor: "#7d5a50",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontWeight: "500",
+                    fontSize: "12px",
+                  }}
+                >
+                  Add Meeting
+                </button>
+              )}
             </div>
 
             {meetings.length > 0 ? (
@@ -2533,7 +2555,9 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                     <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Type</th>
                     <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Attendance</th>
                     <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Minutes</th>
-                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Actions</th>
+                    {!isInvestorView && (
+                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Actions</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -2545,52 +2569,53 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                         {meeting.attendees}/{meeting.totalMembers}
                       </td>
                       <td style={{ padding: "12px", maxWidth: "200px", wordWrap: "break-word" }}>{meeting.minutes}</td>
-                      <td style={{ padding: "12px" }}>
-                        <div style={{ display: "flex", gap: "5px" }}>
-                          <button
-                            onClick={() => handleEditMeeting(meeting)}
-                            style={{
-                              padding: "4px 8px",
-                              backgroundColor: "#a67c52",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "4px",
-                              cursor: "pointer",
-                              fontSize: "10px",
-                            }}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDeleteMeeting(meeting.id)}
-                            style={{
-                              padding: "4px 8px",
-                              backgroundColor: "#F44336",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "4px",
-                              cursor: "pointer",
-                              fontSize: "10px",
-                            }}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
+                      {!isInvestorView && (
+                        <td style={{ padding: "12px" }}>
+                          <div style={{ display: "flex", gap: "5px" }}>
+                            <button
+                              onClick={() => handleEditMeeting(meeting)}
+                              style={{
+                                padding: "4px 8px",
+                                backgroundColor: "#a67c52",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                fontSize: "10px",
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteMeeting(meeting.id)}
+                              style={{
+                                padding: "4px 8px",
+                                backgroundColor: "#F44336",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                fontSize: "10px",
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
               </table>
             ) : (
               <div style={{ textAlign: "center", padding: "40px", color: "#7d5a50" }}>
-                No meetings added yet. Click "Add Meeting" to get started.
+                No meetings added yet. {!isInvestorView && 'Click "Add Meeting" to get started.'}
               </div>
             )}
           </div>
         </>
       )}
 
-      {/* Show message if user answered "No" AND has high enough score */}
       {!showBoardQuestion && !hasBoardDirectors && hasFullBoardScore && (
         <div
           style={{
@@ -2610,24 +2635,25 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
             formal Board of Directors. A board can provide strategic guidance, improve governance, and enhance
             credibility with investors and stakeholders.
           </p>
-          <button
-            onClick={handleBuyGovernanceRedirect}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: "#856404",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontWeight: "500",
-            }}
-          >
-            Learn About Board Setup
-          </button>
+          {!isInvestorView && (
+            <button
+              onClick={handleBuyGovernanceRedirect}
+              style={{
+                padding: "10px 20px",
+                backgroundColor: "#856404",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+              }}
+            >
+              Learn About Board Setup
+            </button>
+          )}
         </div>
       )}
 
-      {/* Show message if user answered "No" but doesn't have high enough score */}
       {!showBoardQuestion && !hasBoardDirectors && !hasFullBoardScore && (
         <div
           style={{
@@ -2646,7 +2672,6 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
         </div>
       )}
 
-      {/* Policies & Procedures Section (always visible regardless of board status) */}
       <div
         style={{
           backgroundColor: "#fdfcfb",
@@ -2665,71 +2690,73 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
           }}
         >
           <h4 style={{ color: "#4a352f", margin: 0 }}>Policies & Procedures</h4>
-          <div style={{ display: "flex", gap: "10px" }}>
-            <button
-              onClick={() => {
-                setEditingPolicyProcedure(null)
-                setNewPolicyProcedure({
-                  name: "",
-                  type: "policy",
-                  status: "",
-                  date: "",
-                  fileAttached: false,
-                  fileData: null,
-                })
-                setShowPolicyProcedureModal(true)
-              }}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#7d5a50",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "500",
-                fontSize: "12px",
-              }}
-            >
-              Add Policy/Procedure
-            </button>
-            <input
-              type="file"
-              accept=".pdf,.doc,.docx"
-              style={{ display: "none" }}
-              id="file-upload-general"
-              onChange={(e) => handleFileUpload(e)}
-            />
-            <button
-              onClick={() => document.getElementById("file-upload-general").click()}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#4CAF50",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "500",
-                fontSize: "12px",
-              }}
-            >
-              Attach File
-            </button>
-            <button
-              onClick={handleBulkPolicyRedirect}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#a67c52",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "500",
-                fontSize: "12px",
-              }}
-            >
-              Buy Policy
-            </button>
-          </div>
+          {!isInvestorView && (
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                onClick={() => {
+                  setEditingPolicyProcedure(null)
+                  setNewPolicyProcedure({
+                    name: "",
+                    type: "policy",
+                    status: "",
+                    date: "",
+                    fileAttached: false,
+                    fileData: null,
+                  })
+                  setShowPolicyProcedureModal(true)
+                }}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#7d5a50",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                  fontSize: "12px",
+                }}
+              >
+                Add Policy/Procedure
+              </button>
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx"
+                style={{ display: "none" }}
+                id="file-upload-general"
+                onChange={(e) => handleFileUpload(e)}
+              />
+              <button
+                onClick={() => document.getElementById("file-upload-general").click()}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#4CAF50",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                  fontSize: "12px",
+                }}
+              >
+                Attach File
+              </button>
+              <button
+                onClick={handleBulkPolicyRedirect}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#a67c52",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                  fontSize: "12px",
+                }}
+              >
+                Buy Policy
+              </button>
+            </div>
+          )}
         </div>
         <div
           style={{
@@ -2754,7 +2781,9 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                   <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Status</th>
                   <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Date</th>
                   <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Attach Policy/Procedure</th>
-                  <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Actions</th>
+                  {!isInvestorView && (
+                    <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Actions</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -2769,7 +2798,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                         <span style={{ color: "#4CAF50", fontWeight: "500" }}>
                           ✓ {item.fileData?.name || "Attached"}
                         </span>
-                      ) : (
+                      ) : !isInvestorView ? (
                         <>
                           <input
                             type="file"
@@ -2793,371 +2822,58 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
                             Attach File
                           </button>
                         </>
+                      ) : (
+                        <span style={{ color: "#999" }}>-</span>
                       )}
                     </td>
-                    <td style={{ padding: "12px" }}>
-                      <div style={{ display: "flex", gap: "5px" }}>
-                        <button
-                          onClick={() => handleEditPolicyProcedure(item)}
-                          style={{
-                            padding: "4px 8px",
-                            backgroundColor: "#a67c52",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "4px",
-                            cursor: "pointer",
-                            fontSize: "10px",
-                          }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeletePolicyProcedure(item.id)}
-                          style={{
-                            padding: "4px 8px",
-                            backgroundColor: "#F44336",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "4px",
-                            cursor: "pointer",
-                            fontSize: "10px",
-                          }}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
+                    {!isInvestorView && (
+                      <td style={{ padding: "12px" }}>
+                        <div style={{ display: "flex", gap: "5px" }}>
+                          <button
+                            onClick={() => handleEditPolicyProcedure(item)}
+                            style={{
+                              padding: "4px 8px",
+                              backgroundColor: "#a67c52",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              fontSize: "10px",
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeletePolicyProcedure(item.id)}
+                            style={{
+                              padding: "4px 8px",
+                              backgroundColor: "#F44336",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              fontSize: "10px",
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
             </table>
           ) : (
             <div style={{ textAlign: "center", padding: "40px", color: "#7d5a50" }}>
-              No policies or procedures added yet. Click "Add Policy/Procedure" to get started.
+              No policies or procedures added yet. {!isInvestorView && 'Click "Add Policy/Procedure" to get started.'}
             </div>
           )}
         </div>
       </div>
 
-      {/* Meeting Modal */}
-      {showMeetingModal && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "30px",
-              borderRadius: "8px",
-              boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
-              width: "500px",
-              maxWidth: "90vw",
-            }}
-          >
-            <h3 style={{ color: "#4a352f", marginTop: 0, marginBottom: "20px" }}>
-              {editingMeeting ? "Edit Board Meeting" : "Add New Board Meeting"}
-            </h3>
-
-            <div style={{ marginBottom: "15px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
-                Date:
-              </label>
-              <input
-                type="date"
-                value={newMeeting.date}
-                onChange={(e) => setNewMeeting((prev) => ({ ...prev, date: e.target.value }))}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e6d7c3",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: "15px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
-                Meeting Type:
-              </label>
-              <input
-                type="text"
-                value={newMeeting.type}
-                onChange={(e) => setNewMeeting((prev) => ({ ...prev, type: e.target.value }))}
-                placeholder="e.g., Board Meeting, Committee Meeting"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e6d7c3",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                }}
-              />
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "15px" }}>
-              <div>
-                <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
-                  Attendees:
-                </label>
-                <input
-                  type="number"
-                  value={newMeeting.attendees}
-                  onChange={(e) => setNewMeeting((prev) => ({ ...prev, attendees: e.target.value }))}
-                  placeholder="Number of attendees"
-                  style={{
-                    width: "100%",
-                    padding: "10px",
-                    border: "2px solid #e6d7c3",
-                    borderRadius: "4px",
-                    fontSize: "14px",
-                    boxSizing: "border-box",
-                  }}
-                />
-              </div>
-              <div>
-                <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
-                  Total Members:
-                </label>
-                <input
-                  type="number"
-                  value={newMeeting.totalMembers}
-                  onChange={(e) => setNewMeeting((prev) => ({ ...prev, totalMembers: e.target.value }))}
-                  placeholder="Total board members"
-                  style={{
-                    width: "100%",
-                    padding: "10px",
-                    border: "2px solid #e6d7c3",
-                    borderRadius: "4px",
-                    fontSize: "14px",
-                    boxSizing: "border-box",
-                  }}
-                />
-              </div>
-            </div>
-
-            <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
-                Minutes/Notes:
-              </label>
-              <textarea
-                value={newMeeting.minutes}
-                onChange={(e) => setNewMeeting((prev) => ({ ...prev, minutes: e.target.value }))}
-                placeholder="Meeting minutes or notes"
-                rows="4"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e6d7c3",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                  resize: "vertical",
-                }}
-              />
-            </div>
-
-            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
-              <button
-                onClick={() => setShowMeetingModal(false)}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#e6d7c3",
-                  color: "#4a352f",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveMeeting}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#7d5a50",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                }}
-              >
-                {editingMeeting ? "Update Meeting" : "Add Meeting"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Director Modal */}
-      {showDirectorModal && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "30px",
-              borderRadius: "8px",
-              boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
-              width: "500px",
-              maxWidth: "90vw",
-            }}
-          >
-            <h3 style={{ color: "#4a352f", marginTop: 0, marginBottom: "20px" }}>
-              {editingDirector ? "Edit Board Director" : "Add New Board Director"}
-            </h3>
-
-            <div style={{ marginBottom: "15px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
-                Name:
-              </label>
-              <input
-                type="text"
-                value={newDirector.name}
-                onChange={(e) => setNewDirector((prev) => ({ ...prev, name: e.target.value }))}
-                placeholder="Director's Name"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e6d7c3",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: "15px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
-                Position:
-              </label>
-              <input
-                type="text"
-                value={newDirector.position}
-                onChange={(e) => setNewDirector((prev) => ({ ...prev, position: e.target.value }))}
-                placeholder="Director's Position"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e6d7c3",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: "15px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
-                Date Appointed:
-              </label>
-              <input
-                type="date"
-                value={newDirector.date}
-                onChange={(e) => setNewDirector((prev) => ({ ...prev, date: e.target.value }))}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e6d7c3",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#4a352f", fontWeight: "500" }}>
-                Committees:
-              </label>
-              <select
-                multiple
-                value={newDirector.committees}
-                onChange={(e) => {
-                  const selectedOptions = Array.from(e.target.selectedOptions, (option) => option.value)
-                  setNewDirector((prev) => ({ ...prev, committees: selectedOptions }))
-                }}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e6d7c3",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                  minHeight: "100px",
-                }}
-              >
-                {committees.map((committee) => (
-                  <option key={committee.id} value={committee.name}>
-                    {committee.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
-              <button
-                onClick={() => setShowDirectorModal(false)}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#e6d7c3",
-                  color: "#4a352f",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveDirector}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#7d5a50",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                }}
-              >
-                {editingDirector ? "Update Director" : "Add Director"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Policy/Procedure Modal */}
-      {showPolicyProcedureModal && (
+      {showPolicyProcedureModal && !isInvestorView && (
         <div
           style={{
             position: "fixed",
@@ -3165,7 +2881,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            backgroundColor: "rgba(0,0,0,0.5)",
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
@@ -3332,14 +3048,12 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
   )
 }
 
-// Main Strategy Component
 const Strategy = () => {
   const [activeSection, setActiveSection] = useState("vision-mission-values")
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [milestoneData, setMilestoneData] = useState([])
   const [currentUser, setCurrentUser] = useState(null)
   const [pisScore, setPisScore] = useState(0)
-  const [milestoneFilterStage, setMilestoneFilterStage] = useState(null)
   const [isLoadingPisScore, setIsLoadingPisScore] = useState(true)
 
   const [isInvestorView, setIsInvestorView] = useState(false)
@@ -3378,8 +3092,6 @@ const Strategy = () => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (isInvestorView && viewingSMEId) {
-        // In investor view, we don't use the logged-in user
-        // We'll create a pseudo-user object with the SME's ID
         setCurrentUser({ uid: viewingSMEId })
       } else {
         setCurrentUser(user)
@@ -3472,11 +3184,6 @@ const Strategy = () => {
     boxSizing: "border-box",
   })
 
-  const handleNavigateToMilestone = (growthStage) => {
-    setMilestoneFilterStage(growthStage)
-    setActiveSection("milestone-tracking")
-  }
-
   const handleExitInvestorView = () => {
     sessionStorage.removeItem("viewingSMEId")
     sessionStorage.removeItem("viewingSMEName")
@@ -3487,8 +3194,6 @@ const Strategy = () => {
   const sectionButtons = [
     { id: "vision-mission-values", label: "Vision, Mission, Values" },
     { id: "strategic-goals", label: "Strategic Goals" },
-    { id: "milestone-tracking", label: "Milestone Tracking" },
-    { id: "business-risk", label: "Business Risk" },
     { id: "risk-management", label: "Risk Management" },
     { id: "governance", label: "Governance" },
   ]
@@ -3516,7 +3221,7 @@ const Strategy = () => {
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
               <span style={{ fontSize: "20px" }}>👁️</span>
               <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
-                Investor View: Viewing {viewingSMEName}'s Strategy & Execution
+                Investor View: Viewing {viewingSMEName}'s Strategy & Execution (Read-Only)
               </span>
             </div>
             <button
@@ -3582,7 +3287,7 @@ const Strategy = () => {
             ))}
           </div>
 
-          {currentUser && (
+          {currentUser && activeSection === "governance" && (
             <div
               style={{
                 backgroundColor: "#e8f5e8",
@@ -3603,298 +3308,26 @@ const Strategy = () => {
             </div>
           )}
 
-          <VisionMissionValues activeSection={activeSection} currentUser={currentUser} />
-          <StrategicGoals
+          <VisionMissionValues
             activeSection={activeSection}
-            milestoneData={milestoneData}
-            onNavigateToMilestone={handleNavigateToMilestone}
+            currentUser={currentUser}
+            isInvestorView={isInvestorView}
           />
-          <MilestoneTracking
+          <StrategicGoals
             activeSection={activeSection}
             milestoneData={milestoneData}
             setMilestoneData={setMilestoneData}
             currentUser={currentUser}
-            filterStage={milestoneFilterStage}
+            isInvestorView={isInvestorView}
           />
-          <BusinessRiskTab activeSection={activeSection} currentUser={currentUser} />
-          <RiskManagement activeSection={activeSection} currentUser={currentUser} />
-          <BoardActivityGovernance activeSection={activeSection} currentUser={currentUser} pisScore={pisScore} />
+          <RiskManagement activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
+          <BoardActivityGovernance
+            activeSection={activeSection}
+            currentUser={currentUser}
+            pisScore={pisScore}
+            isInvestorView={isInvestorView}
+          />
         </div>
-      </div>
-    </div>
-  )
-}
-
-const BusinessRiskTab = ({ activeSection, currentUser }) => {
-  const [riskData, setRiskData] = useState({
-    financial: [],
-    operational: [],
-    "legal-compliance": [],
-    insurance: [],
-    people: [],
-    "disaster-recovery": [],
-    "stakeholder-management": [],
-  })
-
-  useEffect(() => {
-    const loadRiskData = async () => {
-      if (!currentUser || activeSection !== "business-risk") return
-
-      try {
-        const riskSnapshot = await getDocs(query(collection(db, "riskData"), where("userId", "==", currentUser.uid)))
-
-        if (!riskSnapshot.empty) {
-          const data = riskSnapshot.docs[0].data()
-          setRiskData(
-            data.risks || {
-              financial: [],
-              operational: [],
-              "legal-compliance": [],
-              insurance: [],
-              people: [],
-              "disaster-recovery": [],
-              "stakeholder-management": [],
-            },
-          )
-        }
-      } catch (error) {
-        console.error("Error loading risk data:", error)
-      }
-    }
-
-    loadRiskData()
-  }, [activeSection, currentUser])
-
-  if (activeSection !== "business-risk") return null
-
-  // Aggregate all risk data for the matrix
-  const allRisks = []
-  const categoryColors = {
-    financial: "#e74c3c",
-    operational: "#3498db",
-    "legal-compliance": "#9b59b6",
-    insurance: "#f39c12",
-    people: "#1abc9c",
-    "disaster-recovery": "#e67e22",
-    "stakeholder-management": "#2ecc71",
-  }
-
-  Object.keys(riskData).forEach((category) => {
-    riskData[category].forEach((risk) => {
-      if (risk.risk && risk.likelihood && risk.severity) {
-        allRisks.push({
-          ...risk,
-          category,
-          color: categoryColors[category] || "#9E9E9E",
-        })
-      }
-    })
-  })
-
-  const createRiskMatrixData = () => {
-    return {
-      datasets: allRisks.map((risk, index) => ({
-        label: risk.risk,
-        data: [
-          {
-            x: risk.likelihood,
-            y: risk.severity,
-            riskId: risk.risk,
-            description: risk.description,
-            category: risk.category,
-          },
-        ],
-        backgroundColor: risk.color,
-        borderColor: "#7d5a50",
-        borderWidth: 2,
-        pointRadius: 15,
-        pointHoverRadius: 18,
-      })),
-    }
-  }
-
-  const matrixOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: false,
-      },
-      tooltip: {
-        callbacks: {
-          title: (context) => context[0].dataset.label,
-          label: (context) => {
-            const point = context.parsed
-            const dataPoint = context.dataset.data[0]
-            return [
-              `Likelihood: ${point.x}`,
-              `Severity: ${point.y}`,
-              `Description: ${dataPoint.description || "No description"}`,
-            ]
-          },
-        },
-      },
-    },
-    scales: {
-      x: {
-        type: "linear",
-        position: "bottom",
-        min: 0,
-        max: 5,
-        title: {
-          display: true,
-          text: "Likelihood",
-          color: "#4a352f",
-          font: {
-            weight: "bold",
-            size: 14,
-          },
-        },
-        grid: {
-          color: "#f0e6d9",
-        },
-        ticks: {
-          stepSize: 1,
-        },
-      },
-      y: {
-        min: 0,
-        max: 5,
-        title: {
-          display: true,
-          text: "Severity",
-          color: "#4a352f",
-          font: {
-            weight: "bold",
-            size: 14,
-          },
-        },
-        grid: {
-          color: "#f0e6d9",
-        },
-        ticks: {
-          stepSize: 1,
-        },
-      },
-    },
-  }
-
-  return (
-    <div
-      style={{
-        backgroundColor: "#faf7f2",
-        padding: "20px",
-        margin: "20px 0",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
-      <h3 style={{ color: "#4a352f", marginTop: 0 }}>Business Risk Overview</h3>
-
-      <div
-        style={{
-          height: "500px",
-          marginBottom: "30px",
-          backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "6px",
-          border: "2px solid #a67c52",
-        }}
-      >
-        <h4 style={{ color: "#4a352f", marginTop: 0, marginBottom: "15px" }}>Risk Matrix</h4>
-        {allRisks.length > 0 ? (
-          <Scatter data={createRiskMatrixData()} options={matrixOptions} />
-        ) : (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              height: "400px",
-              color: "#7d5a50",
-              fontSize: "16px",
-            }}
-          >
-            No risk data available. Add risks in the Risk Management section to see them here.
-          </div>
-        )}
-      </div>
-
-      {/* Risk Category Legend */}
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "6px",
-          marginBottom: "20px",
-          border: "2px solid #a67c52",
-        }}
-      >
-        <h4 style={{ color: "#4a352f", margin: "0 0 15px 0" }}>Risk Categories</h4>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-            gap: "10px",
-          }}
-        >
-          {Object.entries(categoryColors).map(([category, color]) => (
-            <div
-              key={category}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
-                padding: "10px",
-                backgroundColor: "#fdfcfb",
-                borderRadius: "4px",
-                border: "1px solid #e6d7c3",
-              }}
-            >
-              <div
-                style={{
-                  width: "16px",
-                  height: "16px",
-                  backgroundColor: color,
-                  borderRadius: "50%",
-                  border: "2px solid #4a352f",
-                }}
-              ></div>
-              <span
-                style={{
-                  color: "#4a352f",
-                  fontWeight: "500",
-                  textTransform: "capitalize",
-                }}
-              >
-                {category.replace("-", " & ")}
-              </span>
-              <span
-                style={{
-                  color: "#7d5a50",
-                  fontSize: "12px",
-                  marginLeft: "auto",
-                }}
-              >
-                ({riskData[category]?.length || 0} risks)
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div
-        style={{
-          backgroundColor: "#fff3cd",
-          border: "1px solid #ffeaa7",
-          padding: "15px",
-          borderRadius: "6px",
-          textAlign: "center",
-        }}
-      >
-        <p style={{ color: "#856404", margin: 0 }}>
-          To add or edit risk data, please go to the Risk Management section.
-        </p>
       </div>
     </div>
   )
