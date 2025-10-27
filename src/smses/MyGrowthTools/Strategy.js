@@ -2606,8 +2606,9 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
             Consider Establishing a Board of Directors
           </h3>
           <p style={{ color: "#856404", marginBottom: "15px" }}>
-            With your current governance score of {pisScore} points, your business would benefit from establishing a formal Board of Directors. 
-            A board can provide strategic guidance, improve governance, and enhance credibility with investors and stakeholders.
+            With your current governance score of {pisScore} points, your business would benefit from establishing a
+            formal Board of Directors. A board can provide strategic guidance, improve governance, and enhance
+            credibility with investors and stakeholders.
           </p>
           <button
             onClick={handleBuyGovernanceRedirect}
@@ -2639,7 +2640,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0 }) =
           }}
         >
           <p style={{ color: "#6c757d", margin: 0 }}>
-            You indicated you don't have a Board of Directors. Focus on improving your governance score to {350} points 
+            You indicated you don't have a Board of Directors. Focus on improving your governance score to {350} points
             to unlock recommendations for establishing a formal board structure.
           </p>
         </div>
@@ -3341,6 +3342,23 @@ const Strategy = () => {
   const [milestoneFilterStage, setMilestoneFilterStage] = useState(null)
   const [isLoadingPisScore, setIsLoadingPisScore] = useState(true)
 
+  const [isInvestorView, setIsInvestorView] = useState(false)
+  const [viewingSMEId, setViewingSMEId] = useState(null)
+  const [viewingSMEName, setViewingSMEName] = useState("")
+
+  useEffect(() => {
+    const investorViewMode = sessionStorage.getItem("investorViewMode")
+    const smeId = sessionStorage.getItem("viewingSMEId")
+    const smeName = sessionStorage.getItem("viewingSMEName")
+
+    if (investorViewMode === "true" && smeId) {
+      setIsInvestorView(true)
+      setViewingSMEId(smeId)
+      setViewingSMEName(smeName || "SME")
+      console.log("Investor view mode activated for SME:", smeId)
+    }
+  }, [])
+
   useEffect(() => {
     const checkSidebarState = () => {
       setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
@@ -3359,11 +3377,17 @@ const Strategy = () => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user)
+      if (isInvestorView && viewingSMEId) {
+        // In investor view, we don't use the logged-in user
+        // We'll create a pseudo-user object with the SME's ID
+        setCurrentUser({ uid: viewingSMEId })
+      } else {
+        setCurrentUser(user)
+      }
     })
 
     return () => unsubscribe()
-  }, [])
+  }, [isInvestorView, viewingSMEId])
 
   useEffect(() => {
     const loadUserMilestoneData = async () => {
@@ -3385,19 +3409,19 @@ const Strategy = () => {
     loadUserMilestoneData()
   }, [currentUser])
 
-  // Combined real-time PIS score listener
   useEffect(() => {
-    if (!currentUser) {
+    const userIdToFetch = isInvestorView && viewingSMEId ? viewingSMEId : currentUser?.uid
+
+    if (!userIdToFetch) {
       setPisScore(0)
       setIsLoadingPisScore(false)
       return
     }
 
     setIsLoadingPisScore(true)
-    console.log("Fetching PIS score for user ID:", currentUser.uid)
+    console.log("Fetching PIS score for user ID:", userIdToFetch)
 
-    // Directly access the document using the user ID as the document ID
-    const docRef = doc(db, "bigEvaluations", currentUser.uid)
+    const docRef = doc(db, "bigEvaluations", userIdToFetch)
 
     const unsubscribe = onSnapshot(
       docRef,
@@ -3415,7 +3439,7 @@ const Strategy = () => {
               setPisScore(0)
             }
           } else {
-            console.warn("No bigEvaluation document found for user ID:", currentUser.uid)
+            console.warn("No bigEvaluation document found for user ID:", userIdToFetch)
             setPisScore(0)
           }
         } catch (error) {
@@ -3433,7 +3457,7 @@ const Strategy = () => {
     )
 
     return () => unsubscribe()
-  }, [currentUser])
+  }, [currentUser, isInvestorView, viewingSMEId])
 
   const getGovernanceStage = (score) => {
     if (score < 100) return "Advisors"
@@ -3442,11 +3466,8 @@ const Strategy = () => {
   }
 
   const getContentStyles = () => ({
-    width: "100%",
-    marginLeft: "0",
-    backgroundColor: "#f7f3f0",
-    minHeight: "100vh",
-    padding: `70px 20px 20px ${isSidebarCollapsed ? "100px" : "270px"}`,
+    flex: 1,
+    paddingLeft: isSidebarCollapsed ? "80px" : "250px",
     transition: "padding 0.3s ease",
     boxSizing: "border-box",
   })
@@ -3454,6 +3475,13 @@ const Strategy = () => {
   const handleNavigateToMilestone = (growthStage) => {
     setMilestoneFilterStage(growthStage)
     setActiveSection("milestone-tracking")
+  }
+
+  const handleExitInvestorView = () => {
+    sessionStorage.removeItem("viewingSMEId")
+    sessionStorage.removeItem("viewingSMEName")
+    sessionStorage.removeItem("investorViewMode")
+    window.location.href = "/my-cohorts"
   }
 
   const sectionButtons = [
@@ -3472,12 +3500,56 @@ const Strategy = () => {
       <div style={getContentStyles()}>
         <Header />
 
+        {isInvestorView && (
+          <div
+            style={{
+              backgroundColor: "#e8f5e9",
+              padding: "16px 20px",
+              margin: "90px 0 30px 0",
+              borderRadius: "8px",
+              border: "2px solid #4caf50",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <span style={{ fontSize: "20px" }}>👁️</span>
+              <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
+                Investor View: Viewing {viewingSMEName}'s Strategy & Execution
+              </span>
+            </div>
+            <button
+              onClick={handleExitInvestorView}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#4caf50",
+                color: "white",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "14px",
+                transition: "background-color 0.3s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = "#45a049"
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = "#4caf50"
+              }}
+            >
+              Back to My Cohorts
+            </button>
+          </div>
+        )}
+
         <div style={{ padding: "20px" }}>
           <div
             style={{
               display: "flex",
               gap: "10px",
-              margin: "50px 0 20px 0",
+              margin: isInvestorView ? "20px 0" : "50px 0 20px 0",
               padding: "15px",
               backgroundColor: "#fdfcfb",
               borderRadius: "8px",
