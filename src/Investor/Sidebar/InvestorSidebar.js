@@ -22,6 +22,7 @@ import {
   Package,
   PieChart,
   Lightbulb,
+  Users,
 } from "lucide-react"
 import styles from "./InvestorSidebar.module.css"
 import { auth } from "../../firebaseConfig"
@@ -30,7 +31,6 @@ import { getDoc } from "firebase/firestore"
 import { onAuthStateChanged } from "firebase/auth"
 import { doc } from "firebase/firestore"
 import NeedHelp from "../../NeedHelp2"
-
 
 function InvestorSidebar({ companyName }) {
   const navigate = useNavigate()
@@ -93,10 +93,10 @@ function InvestorSidebar({ companyName }) {
   const menuItems = [
     { id: "home", label: "Home", icon: <Home size={18} />, route: "/HomePageInvestor" },
     { id: "profile", label: "My Profile", icon: <User size={18} />, route: "/investor-profile" },
-        { id: "insights", label: "BIG Insights", icon: <Lightbulb size={18} />, route: "/investor-insights" },
+    { id: "insights", label: "BIG Insights", icon: <Lightbulb size={18} />, route: "/investor-insights" },
     { id: "matches", label: "My Matches", icon: <HeartHandshake size={18} />, route: "/investor-matches" },
-
-    { id: "investments", label: "My Investments", icon: <PieChart size={18} />, route: "/my-investments" },
+    { id: "cohorts", label: "My Cohorts", icon: <Users size={18} />, route: "/my-cohorts" },
+    { id: "portfolio", label: "My Portfolio", icon: <PieChart size={18} />, route: "/my-investments" }, // Kept original route
     { id: "documents", label: "My Documents", icon: <File size={18} />, route: "/investor-documents" },
     { id: "messages", label: "My Messages", icon: <MessageSquare size={18} />, route: "/investor-messages" },
     { id: "calendar", label: "My Calendar", icon: <Calendar size={18} />, route: "/investor-calendar" },

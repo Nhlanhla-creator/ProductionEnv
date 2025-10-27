@@ -18,21 +18,9 @@ import {
   Tooltip,
   Legend,
 } from "chart.js"
-import ChartDataLabels from "chartjs-plugin-datalabels"
 
 // Register ChartJS components
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  LineElement,
-  PointElement,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend,
-
-)
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Title, Tooltip, Legend)
 
 // Download Modal Component - REMOVED AS PER UPDATES
 // const DownloadModal = ({ isOpen, onClose, onDownload, sectionName, availableSections }) => {
@@ -688,7 +676,6 @@ const ProductivityMeasures = ({ activeSection }) => {
               title: {
                 display: false,
               },
-             
             },
           }}
         />
@@ -975,7 +962,6 @@ const UnitCost = ({ activeSection }) => {
                 title: {
                   display: false,
                 },
-                
               },
             }}
           />
@@ -2230,6 +2216,23 @@ const OperationalStrength = () => {
   const [activeSection, setActiveSection] = useState("kpi-dashboard")
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
+  const [isInvestorView, setIsInvestorView] = useState(false)
+  const [viewingSMEId, setViewingSMEId] = useState(null)
+  const [viewingSMEName, setViewingSMEName] = useState("")
+
+  useEffect(() => {
+    const investorViewMode = sessionStorage.getItem("investorViewMode")
+    const smeId = sessionStorage.getItem("viewingSMEId")
+    const smeName = sessionStorage.getItem("viewingSMEName")
+
+    if (investorViewMode === "true" && smeId) {
+      setIsInvestorView(true)
+      setViewingSMEId(smeId)
+      setViewingSMEName(smeName || "SME")
+      console.log("Investor view mode activated for SME:", smeId)
+    }
+  }, [])
+
   useEffect(() => {
     const checkSidebarState = () => {
       setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
@@ -2245,6 +2248,13 @@ const OperationalStrength = () => {
 
     return () => observer.disconnect()
   }, [])
+
+  const handleExitInvestorView = () => {
+    sessionStorage.removeItem("viewingSMEId")
+    sessionStorage.removeItem("viewingSMEName")
+    sessionStorage.removeItem("investorViewMode")
+    window.location.href = "/my-cohorts"
+  }
 
   const getContentStyles = () => ({
     width: "100%",
@@ -2271,6 +2281,51 @@ const OperationalStrength = () => {
       <Sidebar />
       <div style={getContentStyles()}>
         <Header />
+
+        {isInvestorView && (
+          <div
+            style={{
+              backgroundColor: "#e8f5e9",
+              padding: "16px 20px",
+              margin: "50px 0 20px 0",
+              borderRadius: "8px",
+              border: "2px solid #4caf50",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <span style={{ fontSize: "20px" }}>👁️</span>
+              <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
+                Investor View: Viewing {viewingSMEName}'s Operational Strength
+              </span>
+            </div>
+            <button
+              onClick={handleExitInvestorView}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#4caf50",
+                color: "white",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "14px",
+                transition: "background-color 0.3s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = "#45a049"
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = "#4caf50"
+              }}
+            >
+              Back to My Cohorts
+            </button>
+          </div>
+        )}
+
         <div style={{ padding: "20px" }}>
           <div
             style={{

@@ -15,6 +15,7 @@ import { doc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import Feedback from "../../Feedback";
 import Notifications from '../../Notifications';
+import BookSession from '../../main_pages/BookSession';
 
 // Add sidebarCollapsed as a prop
 const Header = ({ companyName, profileImage, setProfileImage, sidebarCollapsed }) => {
@@ -39,8 +40,6 @@ const Header = ({ companyName, profileImage, setProfileImage, sidebarCollapsed }
   const messagesRef = useRef(null);
   const profileRef = useRef(null);
   const modalRef = useRef(null);
-
-  // ... (keep all your existing useEffect hooks and functions as they are)
 
   useEffect(() => {
     const fetchRoles = async () => {
@@ -443,7 +442,10 @@ const Header = ({ companyName, profileImage, setProfileImage, sidebarCollapsed }
             </div>
           </div>
           
-          <Feedback />
+          <div className="header-buttons">
+            <Feedback />
+            <BookSession />
+          </div>
         </div>
 
         <div className="header-right">
@@ -631,7 +633,6 @@ const Header = ({ companyName, profileImage, setProfileImage, sidebarCollapsed }
           zIndex: 999999,
           fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
         }}>
-          {/* Your existing modal JSX */}
           <div 
             ref={modalRef}
             style={{
@@ -645,7 +646,6 @@ const Header = ({ companyName, profileImage, setProfileImage, sidebarCollapsed }
               animation: 'modalSlideIn 0.3s ease-out'
             }}
           >
-            {/* Your existing modal content */}
             <div style={{
               backgroundColor: '#8B4513',
               padding: '20px 24px',

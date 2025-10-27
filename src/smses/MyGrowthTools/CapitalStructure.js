@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react"
 import { Bar, Pie } from "react-chartjs-2"
 import { doc, getDoc, setDoc } from "firebase/firestore"
-import { db } from "../../firebaseConfig"
+import { auth, db } from "../../firebaseConfig"
+import { onAuthStateChanged } from "firebase/auth"
 import Sidebar from "smses/Sidebar/Sidebar"
 import Header from "../DashboardHeader/DashboardHeader"
 import {
@@ -21,18 +22,7 @@ import {
 import ChartDataLabels from "chartjs-plugin-datalabels"
 
 // Register ChartJS components
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  LineElement,
-  PointElement,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend,
-
-)
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Title, Tooltip, Legend)
 
 // Download utility function
 const downloadCSV = (data, filename) => {
@@ -198,7 +188,6 @@ const LoanRepayments = ({ activeSection }) => {
         color: "#4a352f",
       },
       // Configure datalabels plugin
-      
     },
     scales: {
       y: {
@@ -537,7 +526,7 @@ const LoanRepayments = ({ activeSection }) => {
 }
 
 // IRR Component
-const IRRInvestments = ({ activeSection }) => {
+const IRRInvestments = ({ activeSection, currentUser }) => {
   const [investments, setInvestments] = useState([])
   const [expandedInvestment, setExpandedInvestment] = useState(null)
   const [showEditForm, setShowEditForm] = useState(false)
@@ -545,7 +534,7 @@ const IRRInvestments = ({ activeSection }) => {
 
   const saveIRRData = async () => {
     try {
-      await setDoc(doc(db, "irr-investments", "main"), { investments })
+      await setDoc(doc(db, "irr-investments", currentUser.uid), { investments })
       setShowEditForm(false)
       alert("IRR investment data saved successfully!")
     } catch (error) {
@@ -556,7 +545,7 @@ const IRRInvestments = ({ activeSection }) => {
 
   const loadIRRData = async () => {
     try {
-      const docRef = doc(db, "irr-investments", "main")
+      const docRef = doc(db, "irr-investments", currentUser.uid)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         setInvestments(docSnap.data().investments || [])
@@ -567,8 +556,10 @@ const IRRInvestments = ({ activeSection }) => {
   }
 
   useEffect(() => {
-    loadIRRData()
-  }, [])
+    if (currentUser) {
+      loadIRRData()
+    }
+  }, [currentUser])
 
   const updateInvestment = (index, field, value) => {
     const newInvestments = [...investments]
@@ -614,21 +605,32 @@ const IRRInvestments = ({ activeSection }) => {
     }
   }
 
-  const handleDownload = () => {
-    const csvContent = [
-      ["Investment Name", "IRR %", "Initial Investment", "Duration", "Risk Rating"],
-      ...investments.map((inv) => [inv.name, inv.irr, inv.initialInvestment, inv.duration, inv.riskRating]),
-    ]
-      .map((row) => row.join(","))
-      .join("\n")
+  const handleDownload = (type) => {
+    if (type === "csv") {
+      const csvContent = [
+        ["Investment Name", "IRR %", "Initial Investment", "Duration", "Risk Rating"],
+        ...investments.map((inv) => [inv.name, inv.irr, inv.initialInvestment, inv.duration, inv.riskRating]),
+      ]
+        .map((row) => row.join(","))
+        .join("\n")
 
-    const blob = new Blob([csvContent], { type: "text/csv" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "irr-investments.csv"
-    a.click()
-    URL.revokeObjectURL(url)
+      const blob = new Blob([csvContent], { type: "text/csv" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "irr-investments.csv"
+      a.click()
+      URL.revokeObjectURL(url)
+    } else if (type === "json") {
+      const jsonContent = JSON.stringify(investments, null, 2)
+      const blob = new Blob([jsonContent], { type: "application/json" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "irr-investments.json"
+      a.click()
+      URL.revokeObjectURL(url)
+    }
     setShowDownloadOptions(false)
   }
 
@@ -977,14 +979,14 @@ const IRRInvestments = ({ activeSection }) => {
 }
 
 // Default Flags Component
-const DefaultFlags = ({ activeSection }) => {
+const DefaultFlags = ({ activeSection, currentUser }) => {
   const [flags, setFlags] = useState([])
   const [showEditForm, setShowEditForm] = useState(false)
   const [showDownloadOptions, setShowDownloadOptions] = useState(false)
 
   const saveDefaultFlagsData = async () => {
     try {
-      await setDoc(doc(db, "default-flags", "main"), { flags })
+      await setDoc(doc(db, "default-flags", currentUser.uid), { flags })
       setShowEditForm(false)
       alert("Default flags data saved successfully!")
     } catch (error) {
@@ -995,7 +997,7 @@ const DefaultFlags = ({ activeSection }) => {
 
   const loadDefaultFlagsData = async () => {
     try {
-      const docRef = doc(db, "default-flags", "main")
+      const docRef = doc(db, "default-flags", currentUser.uid)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         setFlags(docSnap.data().flags || [])
@@ -1006,8 +1008,10 @@ const DefaultFlags = ({ activeSection }) => {
   }
 
   useEffect(() => {
-    loadDefaultFlagsData()
-  }, [])
+    if (currentUser) {
+      loadDefaultFlagsData()
+    }
+  }, [currentUser])
 
   const updateFlag = (index, field, value) => {
     const newFlags = [...flags]
@@ -1048,21 +1052,32 @@ const DefaultFlags = ({ activeSection }) => {
     alert(`Action "${action}" initiated for flag ${id}`)
   }
 
-  const handleDownload = () => {
-    const csvContent = [
-      ["Flag Type", "Status", "Description", "Date Raised"],
-      ...flags.map((flag) => [flag.type, flag.status, flag.description, flag.dateRaised]),
-    ]
-      .map((row) => row.join(","))
-      .join("\n")
+  const handleDownload = (type) => {
+    if (type === "csv") {
+      const csvContent = [
+        ["Flag Type", "Status", "Description", "Date Raised"],
+        ...flags.map((flag) => [flag.type, flag.status, flag.description, flag.dateRaised]),
+      ]
+        .map((row) => row.join(","))
+        .join("\n")
 
-    const blob = new Blob([csvContent], { type: "text/csv" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "default-flags.csv"
-    a.click()
-    URL.revokeObjectURL(url)
+      const blob = new Blob([csvContent], { type: "text/csv" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "default-flags.csv"
+      a.click()
+      URL.revokeObjectURL(url)
+    } else if (type === "json") {
+      const jsonContent = JSON.stringify(flags, null, 2)
+      const blob = new Blob([jsonContent], { type: "application/json" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "default-flags.json"
+      a.click()
+      URL.revokeObjectURL(url)
+    }
     setShowDownloadOptions(false)
   }
 
@@ -1357,11 +1372,9 @@ const DefaultFlags = ({ activeSection }) => {
 }
 
 // Investment Ratios Component (keeping as is per user request)
-const InvestmentRatios = ({ activeSection }) => {
+const InvestmentRatios = ({ activeSection, currentUser }) => {
   const [expandedRatio, setExpandedRatio] = useState(null)
   const [showDownloadOptions, setShowDownloadOptions] = useState(false)
-
-  if (activeSection !== "investment-ratios") return null
 
   const ratios = [
     {
@@ -1417,23 +1430,36 @@ const InvestmentRatios = ({ activeSection }) => {
     }
   }
 
-  const handleDownload = () => {
-    const csvContent = [
-      ["Ratio Name", "Value", "Target", "Status", "Description"],
-      ...ratios.map((ratio) => [ratio.name, ratio.value, ratio.target, ratio.status, ratio.description]),
-    ]
-      .map((row) => row.join(","))
-      .join("\n")
+  const handleDownload = (type) => {
+    if (type === "csv") {
+      const csvContent = [
+        ["Ratio Name", "Value", "Target", "Status", "Description"],
+        ...ratios.map((ratio) => [ratio.name, ratio.value, ratio.target, ratio.status, ratio.description]),
+      ]
+        .map((row) => row.join(","))
+        .join("\n")
 
-    const blob = new Blob([csvContent], { type: "text/csv" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "investment-ratios.csv"
-    a.click()
-    URL.revokeObjectURL(url)
+      const blob = new Blob([csvContent], { type: "text/csv" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "investment-ratios.csv"
+      a.click()
+      URL.revokeObjectURL(url)
+    } else if (type === "json") {
+      const jsonContent = JSON.stringify(ratios, null, 2)
+      const blob = new Blob([jsonContent], { type: "application/json" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "investment-ratios.json"
+      a.click()
+      URL.revokeObjectURL(url)
+    }
     setShowDownloadOptions(false)
   }
+
+  if (activeSection !== "investment-ratios") return null
 
   return (
     <div
@@ -1614,14 +1640,14 @@ const InvestmentRatios = ({ activeSection }) => {
 }
 
 // Cap Table Component
-const CapTable = ({ activeSection }) => {
+const CapTable = ({ activeSection, currentUser }) => {
   const [investors, setInvestors] = useState([])
   const [showEditForm, setShowEditForm] = useState(false)
   const [showDownloadOptions, setShowDownloadOptions] = useState(false)
 
   const saveCapTableData = async () => {
     try {
-      await setDoc(doc(db, "cap-table", "main"), { investors })
+      await setDoc(doc(db, "cap-table", currentUser.uid), { investors })
       setShowEditForm(false)
       alert("Cap table data saved successfully!")
     } catch (error) {
@@ -1632,7 +1658,7 @@ const CapTable = ({ activeSection }) => {
 
   const loadCapTableData = async () => {
     try {
-      const docRef = doc(db, "cap-table", "main")
+      const docRef = doc(db, "cap-table", currentUser.uid)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         setInvestors(docSnap.data().investors || [])
@@ -1643,8 +1669,10 @@ const CapTable = ({ activeSection }) => {
   }
 
   useEffect(() => {
-    loadCapTableData()
-  }, [])
+    if (currentUser) {
+      loadCapTableData()
+    }
+  }, [currentUser])
 
   const updateInvestor = (index, field, value) => {
     const newInvestors = [...investors]
@@ -1661,30 +1689,41 @@ const CapTable = ({ activeSection }) => {
     setInvestors(newInvestors)
   }
 
-  const handleDownload = () => {
+  const handleDownload = (type) => {
     const totalShares = investors.reduce((sum, inv) => sum + inv.shares, 0)
     const totalValuation = investors.reduce((sum, inv) => sum + inv.valuation, 0)
 
-    const csvContent = [
-      ["Investor Name", "Shares", "Percentage", "Valuation (RM)"],
-      ...investors.map((inv) => [
-        inv.name,
-        inv.shares,
-        totalShares > 0 ? ((inv.shares / totalShares) * 100).toFixed(1) : 0,
-        inv.valuation.toFixed(1),
-      ]),
-      ["Total", totalShares, "100", totalValuation.toFixed(1)],
-    ]
-      .map((row) => row.join(","))
-      .join("\n")
+    if (type === "csv") {
+      const csvContent = [
+        ["Investor Name", "Shares", "Percentage", "Valuation (RM)"],
+        ...investors.map((inv) => [
+          inv.name,
+          inv.shares,
+          totalShares > 0 ? ((inv.shares / totalShares) * 100).toFixed(1) : 0,
+          inv.valuation.toFixed(1),
+        ]),
+        ["Total", totalShares, "100", totalValuation.toFixed(1)],
+      ]
+        .map((row) => row.join(","))
+        .join("\n")
 
-    const blob = new Blob([csvContent], { type: "text/csv" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "cap-table.csv"
-    a.click()
-    URL.revokeObjectURL(url)
+      const blob = new Blob([csvContent], { type: "text/csv" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "cap-table.csv"
+      a.click()
+      URL.revokeObjectURL(url)
+    } else if (type === "json") {
+      const jsonContent = JSON.stringify(investors, null, 2)
+      const blob = new Blob([jsonContent], { type: "application/json" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "cap-table.json"
+      a.click()
+      URL.revokeObjectURL(url)
+    }
     setShowDownloadOptions(false)
   }
 
@@ -1920,29 +1959,29 @@ const CapTable = ({ activeSection }) => {
                     },
                   ],
                 }}
-             options={{
-    responsive: true,
-    plugins: {
-      legend: {
-        position: window.innerWidth < 768 ? "bottom" : "right",
-      },
-      // ↓ THIS is the datalabels config (lines ~1110-1120)
-      datalabels: {
-        color: "#fff",
-        font: {
-          weight: "bold",
-          size: 14,
-        },
-        formatter: (value, context) => {
-          const total = context.dataset.data.reduce((sum, val) => sum + val, 0)
-          const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0
-          return percentage + "%"
-        },
-      },
-    },
-  }}
-   plugins={[ChartDataLabels]} 
-/>
+                options={{
+                  responsive: true,
+                  plugins: {
+                    legend: {
+                      position: window.innerWidth < 768 ? "bottom" : "right",
+                    },
+                    // ↓ THIS is the datalabels config (lines ~1110-1120)
+                    datalabels: {
+                      color: "#fff",
+                      font: {
+                        weight: "bold",
+                        size: 14,
+                      },
+                      formatter: (value, context) => {
+                        const total = context.dataset.data.reduce((sum, val) => sum + val, 0)
+                        const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0
+                        return percentage + "%"
+                      },
+                    },
+                  },
+                }}
+                plugins={[ChartDataLabels]}
+              />
             </div>
           </div>
           <div>
@@ -2008,14 +2047,14 @@ const CapTable = ({ activeSection }) => {
 }
 
 // Dividend History Component
-const DividendHistory = ({ activeSection }) => {
+const DividendHistory = ({ activeSection, currentUser }) => {
   const [dividends, setDividends] = useState([])
   const [showEditForm, setShowEditForm] = useState(false)
   const [showDownloadOptions, setShowDownloadOptions] = useState(false)
 
   const saveDividendData = async () => {
     try {
-      await setDoc(doc(db, "dividend-history", "main"), { dividends })
+      await setDoc(doc(db, "dividend-history", currentUser.uid), { dividends })
       setShowEditForm(false)
       alert("Dividend history data saved successfully!")
     } catch (error) {
@@ -2026,7 +2065,7 @@ const DividendHistory = ({ activeSection }) => {
 
   const loadDividendData = async () => {
     try {
-      const docRef = doc(db, "dividend-history", "main")
+      const docRef = doc(db, "dividend-history", currentUser.uid)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         setDividends(docSnap.data().dividends || [])
@@ -2037,8 +2076,10 @@ const DividendHistory = ({ activeSection }) => {
   }
 
   useEffect(() => {
-    loadDividendData()
-  }, [])
+    if (currentUser) {
+      loadDividendData()
+    }
+  }, [currentUser])
 
   const updateDividend = (index, field, value) => {
     const newDividends = [...dividends]
@@ -2061,21 +2102,32 @@ const DividendHistory = ({ activeSection }) => {
     setDividends(newDividends)
   }
 
-  const handleDownload = () => {
-    const csvContent = [
-      ["Date", "Amount (R)", "Type", "Status"],
-      ...dividends.map((div) => [div.date, div.amount.toFixed(2), div.type, div.status]),
-    ]
-      .map((row) => row.join(","))
-      .join("\n")
+  const handleDownload = (type) => {
+    if (type === "csv") {
+      const csvContent = [
+        ["Date", "Amount (R)", "Type", "Status"],
+        ...dividends.map((div) => [div.date, div.amount.toFixed(2), div.type, div.status]),
+      ]
+        .map((row) => row.join(","))
+        .join("\n")
 
-    const blob = new Blob([csvContent], { type: "text/csv" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "dividend-history.csv"
-    a.click()
-    URL.revokeObjectURL(url)
+      const blob = new Blob([csvContent], { type: "text/csv" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "dividend-history.csv"
+      a.click()
+      URL.revokeObjectURL(url)
+    } else if (type === "json") {
+      const jsonContent = JSON.stringify(dividends, null, 2)
+      const blob = new Blob([jsonContent], { type: "application/json" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "dividend-history.json"
+      a.click()
+      URL.revokeObjectURL(url)
+    }
     setShowDownloadOptions(false)
   }
 
@@ -2338,6 +2390,46 @@ const CapitalStructure = () => {
   const [activeSection, setActiveSection] = useState("cap-table")
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
+  const [isInvestorView, setIsInvestorView] = useState(false)
+  const [viewingSMEId, setViewingSMEId] = useState(null)
+  const [viewingSMEName, setViewingSMEName] = useState("")
+  const [currentUser, setCurrentUser] = useState(null)
+
+  useEffect(() => {
+    const investorViewMode = sessionStorage.getItem("investorViewMode")
+    const smeId = sessionStorage.getItem("viewingSMEId")
+    const smeName = sessionStorage.getItem("viewingSMEName")
+
+    if (investorViewMode === "true" && smeId) {
+      setIsInvestorView(true)
+      setViewingSMEId(smeId)
+      setViewingSMEName(smeName || "SME")
+      console.log("Investor view mode activated for SME:", smeId)
+    }
+  }, [])
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (isInvestorView && viewingSMEId) {
+        // In investor view, use the SME ID as the 'user' ID for data fetching
+        setCurrentUser({ uid: viewingSMEId })
+      } else {
+        // Otherwise, use the actual authenticated user
+        setCurrentUser(user)
+      }
+    })
+
+    return () => unsubscribe()
+  }, [isInvestorView, viewingSMEId])
+
+  const handleExitInvestorView = () => {
+    sessionStorage.removeItem("viewingSMEId")
+    sessionStorage.removeItem("viewingSMEName")
+    sessionStorage.removeItem("investorViewMode")
+    // Redirect to a relevant page after exiting investor view
+    window.location.href = "/my-cohorts"
+  }
+
   useEffect(() => {
     const checkSidebarState = () => {
       setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
@@ -2380,6 +2472,50 @@ const CapitalStructure = () => {
       <div style={getContentStyles()}>
         <Header />
 
+        {isInvestorView && (
+          <div
+            style={{
+              backgroundColor: "#e8f5e9",
+              padding: "16px 20px",
+              margin: "50px 0 20px 0",
+              borderRadius: "8px",
+              border: "2px solid #4caf50",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <span style={{ fontSize: "20px" }}>👁️</span>
+              <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
+                Investor View: Viewing {viewingSMEName}'s Capital Structure
+              </span>
+            </div>
+            <button
+              onClick={handleExitInvestorView}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#4caf50",
+                color: "white",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "14px",
+                transition: "background-color 0.3s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = "#45a049"
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = "#4caf50"
+              }}
+            >
+              Back to My Cohorts
+            </button>
+          </div>
+        )}
+
         <div style={{ padding: "20px" }}>
           <div
             style={{
@@ -2416,12 +2552,12 @@ const CapitalStructure = () => {
             ))}
           </div>
 
-          <CapTable activeSection={activeSection} />
-          <IRRInvestments activeSection={activeSection} />
-          <InvestmentRatios activeSection={activeSection} />
-          <DividendHistory activeSection={activeSection} />
-          <LoanRepayments activeSection={activeSection} />
-          <DefaultFlags activeSection={activeSection} />
+          <CapTable activeSection={activeSection} currentUser={currentUser} />
+          <IRRInvestments activeSection={activeSection} currentUser={currentUser} />
+          <InvestmentRatios activeSection={activeSection} currentUser={currentUser} />
+          <DividendHistory activeSection={activeSection} currentUser={currentUser} />
+          <LoanRepayments activeSection={activeSection} currentUser={currentUser} />
+          <DefaultFlags activeSection={activeSection} currentUser={currentUser} />
         </div>
       </div>
     </div>

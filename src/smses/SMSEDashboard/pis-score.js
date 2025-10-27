@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react";
-import { ChevronDown, RefreshCw, AlertCircle, CheckCircle, TrendingUp,Calculator } from 'lucide-react';
+import { ChevronDown, RefreshCw, AlertCircle, CheckCircle, TrendingUp, Calculator } from 'lucide-react';
 import { db, auth } from "../../firebaseConfig";
 import { doc, onSnapshot, updateDoc, setDoc, getDoc } from "firebase/firestore";
 import { API_KEYS } from '../../API';
@@ -191,48 +191,67 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
     else if (/Informal board recommended/i.test(cleaned)) recommendation = "Informal board recommended";
     else if (/Formal board strongly recommended/i.test(cleaned)) recommendation = "Formal board strongly recommended";
 
-    // --- Category breakdown with policies integration ---
+    // --- Category breakdown ---
     const policiesData = calculatePoliciesScore();
-
-    // Parse AI categories and combine with policies score
     const breakdown = [];
     const categoryRegex = /###\s+\d+\.\s*([^\n]+)\s*\*\*Score:\*\*\s*(\d+)\/(\d+)/g;
     const colors = ["#8D6E63", "#6D4C41", "#A67C52", "#5D4037", "#4E342E"];
 
     let i = 0, match;
+    let foundPoliciesInAI = false;
+
+    // Parse categories from AI response
     while ((match = categoryRegex.exec(raw)) !== null) {
-      breakdown.push({
-        name: match[1].trim(),
-        score: parseInt(match[2]),
-        max: parseInt(match[3]),
-        color: colors[i % colors.length],
-      });
+      const categoryName = match[1].trim();
+
+      // Check if this is the Policies & Documentation category from AI
+      if (categoryName.toLowerCase().includes("policies") || categoryName.toLowerCase().includes("documentation")) {
+        foundPoliciesInAI = true;
+
+        // Use the AI's policies score but combine with our actual policies data
+        breakdown.push({
+          name: "Policies & Documentation",
+          score: policiesData.score, // Use our calculated score instead of AI score
+          max: 100, // Use percentage-based max
+          completed: policiesData.completed,
+          total: policiesData.total,
+          color: colors[i % colors.length],
+        });
+      } else {
+        // Regular category
+        breakdown.push({
+          name: categoryName,
+          score: parseInt(match[2]),
+          max: parseInt(match[3]),
+          color: colors[i % colors.length],
+        });
+      }
       i++;
     }
 
-    // Add policies category to breakdown
-    if (breakdown.length > 0) {
-      // Calculate weights - policies gets equal weight with other categories
-      const totalCategories = breakdown.length + 1; // +1 for policies
-      const weightPerCategory = 100 / totalCategories;
-
-      // Adjust existing category weights
-      breakdown.forEach(category => {
-        category.weight = weightPerCategory;
-        category.weightedScore = (category.score / category.max) * weightPerCategory;
-      });
-
-      // Add policies category with same weight
-      const policiesMax = 100; // Percentage-based
+    // If AI didn't include Policies & Documentation, add it
+    if (!foundPoliciesInAI && breakdown.length > 0) {
       breakdown.push({
         name: "Policies & Documentation",
         score: policiesData.score,
-        max: policiesMax,
+        max: 100,
         completed: policiesData.completed,
         total: policiesData.total,
         color: colors[breakdown.length % colors.length],
-        weight: weightPerCategory,
-        weightedScore: (policiesData.score / policiesMax) * weightPerCategory
+      });
+    }
+
+    // Calculate weights for all categories
+    if (breakdown.length > 0) {
+      const weightPerCategory = 100 / breakdown.length;
+
+      breakdown.forEach(category => {
+        category.weight = weightPerCategory;
+        if (category.name === "Policies & Documentation") {
+          category.weightedScore = (category.score / category.max) * weightPerCategory;
+        } else {
+          category.weightedScore = (category.score / category.max) * weightPerCategory;
+        }
       });
     }
 
