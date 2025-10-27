@@ -176,19 +176,17 @@ const FundingApplication = () => {
     return () => observer.disconnect()
   }, [])
 
-  const getContainerStyles = () => ({
-    width: "100%",
-    minHeight: "100vh",
-    maxWidth: "100vw",
-    overflowX: "hidden",
-    padding: isSidebarCollapsed
-      ? "80px 20px 20px 80px" // Collapsed: minimal left padding
-      : "80px 10px 20px 280px", // Expanded: full sidebar width padding
-    margin: "0",
-    boxSizing: "border-box",
-    position: "relative",
-    transition: "padding 0.3s ease",
-  })
+const getContainerStyles = () => ({
+  width: "100%",
+  minHeight: "100vh",
+  maxWidth: "100vw",
+  overflowX: "hidden",
+  padding: "0", // Remove all dynamic padding
+  margin: "0",
+  boxSizing: "border-box",
+  position: "relative",
+})
+
 
   useEffect(() => {
     const fetchPopupStatus = async () => {

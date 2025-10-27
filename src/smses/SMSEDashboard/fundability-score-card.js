@@ -60,32 +60,7 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
       financialReadiness: ["Financial Readiness", "Financial System", "Accounting System"],
       financialStrength: ["Revenue Growth", "Financial Strength", "Profitability", "audited financials", "Financials"],
       operations: ["Operational Strength", "Operations", "Operating Model", "Operational Score"],
-      pitchBusinessPlan: ["Pitch", "Business Plan", "Market Analysis", "Solution Fit"],
-      guarantees: [
-        "Guarantees",
-        "Forward Contracts",
-        "Revenue Guarantees",
-        "Signed customer contracts",
-        "Purchase orders",
-        "Offtake agreements",
-        "Subscription revenue",
-        "Letter of guarantee",
-        "Third-party guarantees",
-        "Factoring agreements",
-        "Surety bonds",
-        "Government contracts",
-        "Approved supplier status",
-        "Export credit guarantees",
-        "Asset-backed Guarantees",
-        "Liens",
-        "Collateral",
-        "Secured assets",
-        "Retention guarantees",
-        "Export credit insurance",
-        "Receivables-backed financing",
-        "Personal surety",
-        "Corporate guarantees",
-      ],
+     
       impact: ["Impact", "Social Impact", "Job Creation", "HDG Impact"],
     }
 
@@ -141,54 +116,42 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
     return "maturity"
   }
 
-  const weightingsByStage = {
+    const weightingsByStage = {
     "pre-seed": {
-      financialReadiness: 15, // Basic accounting systems important
-      financialStrength: 5, // Limited revenue expected
-      operations: 20, // Operational capability crucial
-      pitchBusinessPlan: 30, // Vision and plan most important
-      guarantees: 15, // Some security helpful
-      impact: 15, // Social impact matters
+      financialReadiness: 25,
+      financialStrength: 10,
+      operations: 40,
+      impact: 25,
     },
     seed: {
-      financialReadiness: 20, // Systems becoming critical
-      financialStrength: 10, // Some revenue expected
-      operations: 20, // Proven operations needed
-      pitchBusinessPlan: 20, // Strong business case required
-      guarantees: 20, // Risk mitigation important
-      impact: 10, // Impact nice to have
+      financialReadiness: 25,
+      financialStrength: 20,
+      operations: 35,
+      impact: 20,
     },
     seriesa: {
-      financialReadiness: 25, // Professional systems required
-      financialStrength: 20, // Strong financials needed
-      operations: 10, // Operations should be proven
-      pitchBusinessPlan: 10, // Business model validated
-      guarantees: 25, // Strong guarantees critical
-      impact: 10, // Impact expected
+      financialReadiness: 25,
+      financialStrength: 35,
+      operations: 30,
+      impact: 10,
     },
     seriesb: {
-      financialReadiness: 20, // Mature financial systems
-      financialStrength: 25, // Revenue growth critical
-      operations: 15, // Scalable operations
-      pitchBusinessPlan: 15, // Clear growth strategy
-      guarantees: 15, // Some guarantees needed
-      impact: 10, // Impact demonstrated
+      financialReadiness: 20,
+      financialStrength: 40,
+      operations: 30,
+      impact: 10,
     },
     growth: {
-      financialReadiness: 20, // Professional finance function
-      financialStrength: 30, // Strong financial performance
-      operations: 20, // Efficient operations
-      pitchBusinessPlan: 10, // Proven business model
-      guarantees: 15, // Risk management
-      impact: 5, // Impact track record
+      financialReadiness: 20,
+      financialStrength: 45,
+      operations: 30,
+      impact: 5,
     },
     maturity: {
-      financialReadiness: 15, // Established systems
-      financialStrength: 35, // Financial performance key
-      operations: 20, // Optimized operations
-      pitchBusinessPlan: 5, // Business model proven
-      guarantees: 20, // Asset backing important
-      impact: 5, // ESG compliance
+      financialReadiness: 15,
+      financialStrength: 55,
+      operations: 25,
+      impact: 5,
     },
   }
 
@@ -207,8 +170,7 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
     financialReadiness: "Financial readiness",
     financialStrength: "Financial strength",
     operations: "Operational strength",
-    pitchBusinessPlan: "Pitch & business plan",
-    guarantees: "Guarantees",
+
     impact: "Impact proof",
   }
 
@@ -223,8 +185,7 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
       financialReadiness: "Financial readiness",
       financialStrength: "Financial strength",
       operations: "Operational strength",
-      pitchBusinessPlan: "Pitch & business plan",
-      guarantees: "Guarantees",
+   
       impact: "Impact proof",
     }
 
@@ -281,7 +242,7 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
     }
   };
 
-  const prepareDataForEvaluation = async (data) => {
+   const prepareDataForEvaluation = async (data) => {
     let evaluationData = ""
 
     // Financial Readiness
@@ -295,13 +256,11 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
     // Financial Strength
     evaluationData += `\n=== FINANCIAL STRENGTH ===\n`
     evaluationData += `Annual Revenue: ${data?.financialOverview?.annualRevenue || "Not provided"}\n`
-
     try {
       const userId = auth.currentUser?.uid
       const finRef = doc(db, "aiFinancialEvaluations", userId)
       const finSnap = await getDoc(finRef)
       const revenueData = finSnap.exists() ? finSnap.data() : null
-
       if (revenueData?.evaluation?.score) {
         evaluationData += `\n--- REVENUE GROWTH ANALYSIS ---\n`
         evaluationData += `Score: ${revenueData.evaluation.score} out of 5\n`
@@ -310,137 +269,46 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
     } catch (err) {
       console.error("Error loading revenue growth evaluation:", err)
     }
-
     evaluationData += `Profitability: ${data?.financialOverview?.profitabilityStatus || "No"}\n`
     evaluationData += `Financials: ${data?.enterpriseReadiness?.hasFinancials || "No"}\n`
     evaluationData += `Audited financials: ${data?.enterpriseReadiness?.hasAuditedFinancials || "No"}\n`
 
-    // Operations
-    try {
-      const userId = auth.currentUser?.uid
-      const pdQuery = query(collection(db, "aiPitchEvaluations"), where("userId", "==", userId))
-      const pdSnapshot = await getDocs(pdQuery)
-      const pitchDeckData = !pdSnapshot.empty ? pdSnapshot.docs[0].data() : null
+    // Operations (purely from profile; REMOVED any pitch-deck-based operational supplement)
+    evaluationData += `\n=== OPERATIONAL STRENGTH ===\n`
+    evaluationData += `Processes documented: ${data?.operations?.processesDocumented || "Not specified"}\n`
+    evaluationData += `Team size: ${data?.operations?.teamSize ?? "Unknown"}\n`
+    evaluationData += `Infrastructure notes: ${data?.operations?.infrastructure || "Not specified"}\n`
+    evaluationData += `Supply/Delivery capacity: ${data?.operations?.capacity || "Not specified"}\n`
 
-      if (pitchDeckData?.evaluation?.operationalScore) {
-        evaluationData += `\n--- PITCH DECK OPERATIONAL STRENGTH ---\n`
-        evaluationData += `Score: ${pitchDeckData.evaluation.operationalScore || 0} out of five\n`
-        evaluationData += `Summary: ${pitchDeckData.evaluation.operationalSummary || "No summary available"}\n`
-      }
-    } catch (err) {
-      console.error("Error loading pitch deck operational evaluation:", err)
-    }
-
-    // Pitch & Business Plan
-    evaluationData += `\n=== PITCH & BUSINESS PLAN ===\n`
-    try {
-      const userId = auth.currentUser?.uid
-      // Fetch Business Plan Evaluation
-      const bpQuery = query(collection(db, "aiEvaluations"), where("userId", "==", userId))
-      const bpSnapshot = await getDocs(bpQuery)
-      const businessPlanData = !bpSnapshot.empty ? bpSnapshot.docs[0].data() : null
-
-      // Fetch Pitch Deck Evaluation
-      const pdQuery = query(collection(db, "aiPitchEvaluations"), where("userId", "==", userId))
-      const pdSnapshot = await getDocs(pdQuery)
-      const pitchDeckData = !pdSnapshot.empty ? pdSnapshot.docs[0].data() : null
-
-      if (pitchDeckData) {
-        evaluationData += `\n--- PITCH DECK EVALUATION ---\n`
-        evaluationData += `Score: ${pitchDeckData?.evaluation?.score ?? "N/A"}/100\n`
-        evaluationData += `${pitchDeckData?.evaluation?.content ?? "No content"}\n`
-      } else {
-        evaluationData += `\n--- PITCH DECK EVALUATION ---\nNo evaluation found.\n`
-      }
-
-      if (businessPlanData) {
-        evaluationData += `\n--- BUSINESS PLAN EVALUATION ---\n`
-        evaluationData += `Score: ${businessPlanData?.evaluation?.score ?? "N/A"}/100\n`
-        evaluationData += `${businessPlanData?.evaluation?.content ?? "No content"}\n`
-      } else {
-        evaluationData += `\n--- BUSINESS PLAN EVALUATION ---\nNo evaluation found.\n`
-      }
-    } catch (err) {
-      console.error("Error loading evaluations:", err)
-      evaluationData += "\nError retrieving evaluation data.\n"
-    }
-
-    // Guarantees
-    evaluationData += `\n=== GUARANTEES ===\n`
-    // Forward Contracts
-    evaluationData += `--- Forward Contracts ---\n`
-    evaluationData += `Signed customer contracts: ${data?.guarantees?.signedCustomerContracts || "No"}\n`
-    evaluationData += `Purchase orders: ${data?.guarantees?.purchaseOrders || "No"}\n`
-    evaluationData += `Offtake agreements: ${data?.guarantees?.offtakeAgreements || "No"}\n`
-    evaluationData += `Subscription revenue: ${data?.guarantees?.subscriptionRevenue || "No"}\n`
-
-    // Payment of Credit Guarantees
-    evaluationData += `\n--- Credit Guarantees ---\n`
-    evaluationData += `Letter of guarantee: ${data?.guarantees?.letterOfGuarantee || "No"}\n`
-    evaluationData += `Third-party guarantees: ${data?.guarantees?.thirdPartyGuarantees || "No"}\n`
-    evaluationData += `Factoring agreements: ${data?.guarantees?.factoringAgreements || "No"}\n`
-    evaluationData += `Surety bonds: ${data?.guarantees?.suretyBonds || "No"}\n`
-
-    // Government or Institutional Support
-    evaluationData += `\n--- Government or Institutional Support ---\n`
-    evaluationData += `Government contracts: ${data?.guarantees?.governmentContracts || "No"}\n`
-    evaluationData += `Approved supplier status: ${data?.guarantees?.approvedSupplierStatus || "No"}\n`
-    evaluationData += `Incubator guarantees: ${data?.guarantees?.incubatorGuarantees || "No"}\n`
-    evaluationData += `Export credit guarantees: ${data?.guarantees?.exportCreditGuarantees || "No"}\n`
-
-    // Asset-backed
-    evaluationData += `\n--- Asset-backed Guarantees ---\n`
-    evaluationData += `Liens/collateral: ${data?.guarantees?.liensCollateral || "No"}\n`
-    evaluationData += `Secured assets: ${data?.guarantees?.securedAssets || "No"}\n`
-    evaluationData += `Retention guarantees: ${data?.guarantees?.retentionGuarantees || "No"}\n`
-
-    // Export Credit Insurance
-    evaluationData += `\n--- Export Insurance ---\n`
-    evaluationData += `Export credit insurance: ${data?.guarantees?.exportCreditInsurance || "No"}\n`
-
-    // Receivables Finance
-    evaluationData += `\n--- Receivables Financing ---\n`
-    evaluationData += `Receivables-backed financing: ${data?.guarantees?.receivablesFinancing || "No"}\n`
-
-    // Personal / Third-Party
-    evaluationData += `\n--- Personal / Third-Party Guarantees ---\n`
-    evaluationData += `Personal surety: ${data?.guarantees?.personalSurety || "No"}\n`
-    evaluationData += `Corporate guarantees: ${data?.guarantees?.corporateGuarantees || "No"}\n`
+    // REMOVED: PITCH & BUSINESS PLAN
+    // REMOVED: GUARANTEES
 
     // Impact Proof
     evaluationData += `\n=== IMPACT PROOF ===\n`
-    // 3.7.1 Job Creation
-    evaluationData += `\n-- 3.7.1 Job Creation --\n`
+    evaluationData += `\n-- Job Creation --\n`
     evaluationData += `Planned jobs to be created: ${data?.socialImpact?.jobsToCreate || 0}\n`
     evaluationData += `Local employees to be hired: ${data?.socialImpact?.localEmployeesHired || 0}\n`
-
-    // 3.7.2 HDG Impact (Youth, Women, Disabled)
-    evaluationData += `\n-- 3.7.2 HDG Impact (Youth, Women, Disability) --\n`
+    evaluationData += `\n-- HDG Impact (Youth, Women, Disability) --\n`
     evaluationData += `% Black ownership: ${data?.socialImpact?.blackOwnership || 0}%\n`
     evaluationData += `% Women ownership: ${data?.socialImpact?.womenOwnership || 0}%\n`
     evaluationData += `% Youth ownership: ${data?.socialImpact?.youthOwnership || 0}%\n`
     evaluationData += `% Disabled ownership: ${data?.socialImpact?.disabledOwnership || 0}%\n`
-
-    // 3.7.3 Environmental Responsibility
-    evaluationData += `\n-- 3.7.3 Environmental Responsibility --\n`
+    evaluationData += `\n-- Environmental Responsibility --\n`
     evaluationData += `Environmental impact: ${data?.socialImpact?.environmentalImpact || "Not specified"}\n`
     evaluationData += `SDG/ESD alignment: ${data?.socialImpact?.sdgAlignment || "Not specified"}\n`
-
-    // 3.7.4 CSR/CSI Investment
-    evaluationData += `\n-- 3.7.4 CSR/CSI Investment --\n`
+    evaluationData += `\n-- CSR/CSI Investment --\n`
     evaluationData += `CSI/CSR Spend: ${data?.socialImpact?.csiCsrSpend || "R 0"}\n`
     evaluationData += `Community investment amount: ${data?.socialImpact?.communityInvestmentAmount || "R 0"}\n`
     evaluationData += `Number of beneficiaries: ${data?.socialImpact?.numberOfBeneficiaries || 0}\n`
     evaluationData += `Focus areas: ${data?.socialImpact?.csrFocusAreas || "Not specified"}\n`
     evaluationData += `Investment description: ${data?.socialImpact?.socialInvestmentCommunities || "Not specified"}\n`
-
-    // 3.7.5 Local Value Creation
-    evaluationData += `\n-- 3.7.5 Local Value Creation --\n`
+    evaluationData += `\n-- Local Value Creation --\n`
     evaluationData += `Local procurement spend: ${data?.socialImpact?.localProcurementSpend || "R 0"}\n`
     evaluationData += `Strategy for local value: ${data?.socialImpact?.localValueStrategy || "Not specified"}\n`
 
     return evaluationData
   }
+
 
   const runAiEvaluation = async (userId) => {
     if (!apiKey?.trim()) {
@@ -489,9 +357,7 @@ Categories to evaluate:
 1. Financial Readiness - Accounting systems, compliance, up-to-date records
 2. Financial Strength - Revenue growth, profitability, growth metric, audited financials
 3. Operational Strength - Processes, infrastructure, operational maturity
-4. Pitch & Business Plan - Problem clarity, solution fit, market analysis, projections
-5. Guarantees - Forward contracts, asset security, government support, credit guarantees
-6. Impact Proof - Job creation, HDG inclusion, environmental responsibility, CSR
+4. Impact Proof - Job creation, HDG inclusion, environmental responsibility, CSR
 
 Input Data:
 ${evaluationData}
@@ -521,23 +387,7 @@ OUTPUT FORMAT:
 • [Specific action 2 with measurable goal]
 • [Specific action 3 with concrete steps]
 
-### 4. Pitch & Business Plan
-**Score:** [0-5]
-**Rationale:** [2-3 sentence explanation]
-**How to Improve:** 
-• [Specific action 1 with timeline]
-• [Specific action 2 with measurable goal]
-• [Specific action 3 with concrete steps]
-
-### 5. Guarantees
-**Score:** [0-5]
-**Rationale:** [2-3 sentence explanation]
-**How to Improve:** 
-• [Specific action 1 with timeline]
-• [Specific action 2 with measurable goal]
-• [Specific action 3 with concrete steps]
-
-### 6. Impact Proof
+### 4. Impact Proof
 **Score:** [0-5]
 **Rationale:** [2-3 sentence explanation]
 **How to Improve:** 
@@ -1243,7 +1093,7 @@ OUTPUT FORMAT:
                   >
                     <p style={{ marginBottom: "16px", lineHeight: "1.6" }}>
                       The Capital Appeal Score assesses how attractive a business is to potential investors and lenders. It
-                      evaluates key factors that influence funding decisions across six critical areas that determine
+                      evaluates key factors that influence funding decisions across four critical areas that determine
                       investment readiness and risk profile.
                     </p>
 
@@ -1271,14 +1121,7 @@ OUTPUT FORMAT:
                           <strong>Operational strength:</strong> Business processes, infrastructure, and operational
                           maturity
                         </li>
-                        <li style={{ marginBottom: "6px" }}>
-                          <strong>Pitch & business plan:</strong> Problem clarity, solution fit, market analysis, and
-                          projections
-                        </li>
-                        <li style={{ marginBottom: "6px" }}>
-                          <strong>Guarantees:</strong> Forward contracts, asset security, government support, and credit
-                          guarantees
-                        </li>
+                      
                         <li style={{ marginBottom: "6px" }}>
                           <strong>Impact proof:</strong> Job creation, HDG inclusion, environmental responsibility, and
                           CSR investment

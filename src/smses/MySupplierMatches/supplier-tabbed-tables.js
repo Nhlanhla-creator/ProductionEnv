@@ -1010,22 +1010,19 @@ const SupplierTabbedTables = ({
         }}
       >
         {activeTab === "application" && (
-          <div style={{ 
-            width: "100%", 
-            display: "flex", 
-            justifyContent: "flex-start", 
-            alignItems: "flex-start" 
-          }}>
-            <div style={{ 
-              width: "100%", 
-              maxWidth: "100%", 
-              margin: 0, 
-              padding: 0 
-            }}>
-              <ProductApplicationWrapper />
-            </div>
-          </div>
-        )}
+  <div style={{ width: "100%" }}>
+  
+
+    <div style={{ padding: 0 }}>
+      <ProductServiceApplication
+        embedded
+        onNavigateToMatches={() => setActiveTab("my-matches")}
+        onNavigateToDashboard={() => setActiveTab("my-matches")} // or a different tab if you prefer
+      />
+    </div>
+  </div>
+)}
+
 
         {activeTab === "my-matches" && (
           <div>

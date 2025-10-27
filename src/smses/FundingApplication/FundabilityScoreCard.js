@@ -1,57 +1,164 @@
 import { useState, useEffect } from "react"
-import { ChevronDown, ChevronUp, TrendingUp, FileText, Presentation, Shield } from 'lucide-react'
+import { ChevronDown, ChevronUp, TrendingUp, FileText, Presentation, Shield, RefreshCw, AlertCircle } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
+import { db, auth } from "../../firebaseConfig"
+import { doc, onSnapshot, updateDoc, setDoc, getDoc } from "firebase/firestore"
+import { collection, query, where, getDocs } from "firebase/firestore"
+import { useFirebaseFunctions } from '../SMSEDashboard/hooks'
 
 const FundabilityScoreCard = ({ applicationData }) => {
     const [showModal, setShowModal] = useState(false);
     const [fundabilityScore, setFundabilityScore] = useState(0);
     const [scoreBreakdown, setScoreBreakdown] = useState({});
     const [animatedScore, setAnimatedScore] = useState(0);
+    const [aiEvaluationResult, setAiEvaluationResult] = useState("")
+    const [isEvaluating, setIsEvaluating] = useState(false)
+    const [evaluationError, setEvaluationError] = useState("")
+    const [businessPlanAnalysis, setBusinessPlanAnalysis] = useState(null)
+    const [pitchDeckAnalysis, setPitchDeckAnalysis] = useState(null)
+    const [guaranteesAnalysis, setGuaranteesAnalysis] = useState(null)
 
+    const { callFunction, loading, error } = useFirebaseFunctions();
+
+    // Fetch AI evaluations for business plan, pitch deck, and guarantees
     useEffect(() => {
-        if (applicationData) {
-            const { score, breakdown } = calculateFundabilityScore(applicationData);
-            setFundabilityScore(score);
-            setScoreBreakdown(breakdown);
-        }
-    }, [applicationData]);
+        const fetchAIEvaluations = async () => {
+            if (!auth?.currentUser?.uid) return;
 
+            try {
+                const userId = auth.currentUser.uid;
+
+                // Fetch Business Plan Evaluation
+                const bpQuery = query(collection(db, "aiEvaluations"), where("userId", "==", userId))
+                const bpSnapshot = await getDocs(bpQuery)
+                if (!bpSnapshot.empty) {
+                    const bpData = bpSnapshot.docs[0].data()
+                    setBusinessPlanAnalysis({
+                        score: bpData?.evaluation?.score || 0,
+                        content: bpData?.evaluation?.content || "",
+                        timestamp: bpData.timestamp
+                    })
+                }
+
+                // Fetch Pitch Deck Evaluation
+                const pdQuery = query(collection(db, "aiPitchEvaluations"), where("userId", "==", userId))
+                const pdSnapshot = await getDocs(pdQuery)
+                if (!pdSnapshot.empty) {
+                    const pdData = pdSnapshot.docs[0].data()
+                    setPitchDeckAnalysis({
+                        score: pdData?.evaluation?.score || 0,
+                        content: pdData?.evaluation?.content || "",
+                        operationalScore: pdData?.evaluation?.operationalScore || 0,
+                        timestamp: pdData.timestamp
+                    })
+                }
+
+                // Fetch Guarantees Analysis from Fundability Evaluation
+                const fundabilityQuery = query(collection(db, "aiFundabilityEvaluations"), where("userId", "==", userId))
+                const fundabilitySnapshot = await getDocs(fundabilityQuery)
+                if (!fundabilitySnapshot.empty) {
+                    const fundabilityData = fundabilitySnapshot.docs[0].data()
+                    setGuaranteesAnalysis({
+                        result: fundabilityData?.result || "",
+                        timestamp: fundabilityData.timestamp
+                    })
+                }
+
+            } catch (error) {
+                console.error("Error fetching AI evaluations:", error)
+                setEvaluationError("Failed to load AI analysis data")
+            }
+        }
+
+        fetchAIEvaluations();
+    }, [auth?.currentUser?.uid]);
+
+    // Parse guarantees score from AI evaluation
+    const parseGuaranteesScore = (aiText) => {
+        if (!aiText) return 0;
+        
+        const guaranteePatterns = [
+            /###\s+5\.\s*Guarantees[^*]*\*\*Score:\*\*\s*(\d)/i,
+            /\*\*Guarantees\s*:\s*(\d)\*\*/i,
+            /Guarantees\s*:\s*(\d)/i,
+            /Guarantees[^\\d]*(\\d)\/5/i
+        ];
+        
+        for (const pattern of guaranteePatterns) {
+            const match = aiText.match(pattern);
+            if (match) {
+                const score = parseInt(match[1]);
+                return Math.min(Math.max(score, 0), 5);
+            }
+        }
+        return 0;
+    };
+
+    // Enhanced scoring with AI data
     const calculateFundabilityScore = (data) => {
         const breakdown = {
-            businessPlanAnalysis: { score: 0, max: 35, weight: 0.35 },
-            pitchDeckScore: { score: 0, max: 30, weight: 0.30 },
-            guarantees: { score: 0, max: 35, weight: 0.35 }
+            businessPlanAnalysis: { score: 0, max: 35, weight: 0.35, rawScore: 0, maxRaw: 5 },
+            pitchDeckScore: { score: 0, max: 30, weight: 0.30, rawScore: 0, maxRaw: 5 },
+            guarantees: { score: 0, max: 35, weight: 0.35, rawScore: 0, maxRaw: 5 }
         };
 
-        // Business Plan Analysis (35%)
+        // Business Plan Analysis (35%) - Using AI evaluation
         let businessPlanScore = 0;
-        if (data?.enterpriseReadiness?.hasBusinessPlan === "yes") businessPlanScore += 20;
-        if (data?.enterpriseReadiness?.hasMvp === "yes") businessPlanScore += 10;
-        if (data?.enterpriseReadiness?.hasTraction === "yes") businessPlanScore += 15;
-        if (data?.enterpriseReadiness?.hasPayingCustomers === "yes") businessPlanScore += 20;
-        if (data?.financialOverview?.generatesRevenue === "yes") businessPlanScore += 15;
-        if (data?.enterpriseReadiness?.hasAuditedFinancials === "yes") businessPlanScore += 20;
+        if (businessPlanAnalysis?.score) {
+            // Convert AI score (0-100) to our scale (0-5) then to percentage
+            const rawScore = (businessPlanAnalysis.score / 100) * 5;
+            businessPlanScore = (rawScore / 5) * 100;
+            breakdown.businessPlanAnalysis.rawScore = Math.round(rawScore * 10) / 10;
+        } else {
+            // Fallback to basic scoring if no AI analysis
+            if (data?.enterpriseReadiness?.hasBusinessPlan === "yes") businessPlanScore += 20;
+            if (data?.enterpriseReadiness?.hasMvp === "yes") businessPlanScore += 10;
+            if (data?.enterpriseReadiness?.hasTraction === "yes") businessPlanScore += 15;
+            if (data?.enterpriseReadiness?.hasPayingCustomers === "yes") businessPlanScore += 20;
+            if (data?.financialOverview?.generatesRevenue === "yes") businessPlanScore += 15;
+            if (data?.enterpriseReadiness?.hasAuditedFinancials === "yes") businessPlanScore += 20;
+        }
         breakdown.businessPlanAnalysis.score = Math.min(businessPlanScore, 100);
 
-        // Pitch Deck Score (30%)
+        // Pitch Deck Score (30%) - Using AI evaluation
         let pitchDeckScore = 0;
-        if (data?.enterpriseReadiness?.hasPitchDeck === "yes") pitchDeckScore += 25;
-        if (data?.growthPotential?.marketShare === "yes") pitchDeckScore += 15;
-        if (data?.growthPotential?.employment === "yes") pitchDeckScore += 20;
-        if (data?.socialImpact?.environmentalImpact && data.socialImpact.environmentalImpact !== "None specified") pitchDeckScore += 15;
-        if (data?.enterpriseReadiness?.hasMentor === "yes") pitchDeckScore += 10;
-        if (data?.enterpriseReadiness?.hasAdvisors === "yes") pitchDeckScore += 15;
+        if (pitchDeckAnalysis?.score) {
+            // Convert AI score to our scale
+            const rawScore = (pitchDeckAnalysis.score / 100) * 5;
+            pitchDeckScore = (rawScore / 5) * 100;
+            breakdown.pitchDeckScore.rawScore = Math.round(rawScore * 10) / 10;
+        } else if (pitchDeckAnalysis?.operationalScore) {
+            // Use operational score if available
+            const rawScore = pitchDeckAnalysis.operationalScore;
+            pitchDeckScore = (rawScore / 5) * 100;
+            breakdown.pitchDeckScore.rawScore = rawScore;
+        } else {
+            // Fallback to basic scoring
+            if (data?.enterpriseReadiness?.hasPitchDeck === "yes") pitchDeckScore += 25;
+            if (data?.growthPotential?.marketShare === "yes") pitchDeckScore += 15;
+            if (data?.growthPotential?.employment === "yes") pitchDeckScore += 20;
+            if (data?.socialImpact?.environmentalImpact && data.socialImpact.environmentalImpact !== "None specified") pitchDeckScore += 15;
+            if (data?.enterpriseReadiness?.hasMentor === "yes") pitchDeckScore += 10;
+            if (data?.enterpriseReadiness?.hasAdvisors === "yes") pitchDeckScore += 15;
+        }
         breakdown.pitchDeckScore.score = Math.min(pitchDeckScore, 100);
 
-        // Guarantees (35%)
+        // Guarantees (35%) - Using AI evaluation
         let guaranteesScore = 0;
-        if (data?.guarantees?.signedCustomerContracts && data.guarantees.signedCustomerContracts !== "Not provided") guaranteesScore += 25;
-        if (data?.guarantees?.purchaseOrders && data.guarantees.purchaseOrders !== "Not provided") guaranteesScore += 20;
-        if (data?.guarantees?.offtakeAgreements && data.guarantees.offtakeAgreements !== "Not provided") guaranteesScore += 20;
-        if (data?.guarantees?.letterOfGuarantee && data.guarantees.letterOfGuarantee !== "Not provided") guaranteesScore += 15;
-        if (data?.guarantees?.thirdPartyGuarantees && data.guarantees.thirdPartyGuarantees !== "Not provided") guaranteesScore += 10;
-        if (data?.guarantees?.governmentContracts && data.guarantees.governmentContracts !== "Not provided") guaranteesScore += 10;
+        if (guaranteesAnalysis?.result) {
+            const rawScore = parseGuaranteesScore(guaranteesAnalysis.result);
+            guaranteesScore = (rawScore / 5) * 100;
+            breakdown.guarantees.rawScore = rawScore;
+        } else {
+            // Fallback to basic scoring
+            if (data?.guarantees?.signedCustomerContracts && data.guarantees.signedCustomerContracts !== "Not provided") guaranteesScore += 25;
+            if (data?.guarantees?.purchaseOrders && data.guarantees.purchaseOrders !== "Not provided") guaranteesScore += 20;
+            if (data?.guarantees?.offtakeAgreements && data.guarantees.offtakeAgreements !== "Not provided") guaranteesScore += 20;
+            if (data?.guarantees?.letterOfGuarantee && data.guarantees.letterOfGuarantee !== "Not provided") guaranteesScore += 15;
+            if (data?.guarantees?.thirdPartyGuarantees && data.guarantees.thirdPartyGuarantees !== "Not provided") guaranteesScore += 10;
+            if (data?.guarantees?.governmentContracts && data.guarantees.governmentContracts !== "Not provided") guaranteesScore += 10;
+        }
         breakdown.guarantees.score = Math.min(guaranteesScore, 100);
 
         // Calculate weighted total score
@@ -66,6 +173,61 @@ const FundabilityScoreCard = ({ applicationData }) => {
             breakdown: breakdown
         };
     };
+
+    // Refresh AI evaluations
+    const refreshAIEvaluations = async () => {
+        if (!auth?.currentUser?.uid) return;
+
+        setIsEvaluating(true);
+        setEvaluationError("");
+
+        try {
+            // Trigger re-evaluation by updating the trigger flags
+            const userDocRef = doc(db, "universalProfiles", auth.currentUser.uid);
+            
+            await updateDoc(userDocRef, {
+                triggerBusinessPlanEvaluation: true,
+                triggerPitchDeckEvaluation: true,
+                triggerFundabilityEvaluation: true
+            });
+
+            // Wait a moment for evaluations to complete
+            setTimeout(() => {
+                window.location.reload(); // Simple refresh to get new data
+            }, 3000);
+
+        } catch (error) {
+            console.error("Error triggering re-evaluation:", error);
+            setEvaluationError("Failed to refresh evaluations");
+            setIsEvaluating(false);
+        }
+    };
+
+    useEffect(() => {
+        if (applicationData || businessPlanAnalysis || pitchDeckAnalysis || guaranteesAnalysis) {
+            const { score, breakdown } = calculateFundabilityScore(applicationData);
+            setFundabilityScore(score);
+            setScoreBreakdown(breakdown);
+            
+            // Animate score
+            let start = 0;
+            const duration = 1500;
+            const startTime = Date.now();
+            
+            const animate = () => {
+                const now = Date.now();
+                const progress = Math.min((now - startTime) / duration, 1);
+                const currentScore = Math.floor(progress * score);
+                setAnimatedScore(currentScore);
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                }
+            };
+            
+            animate();
+        }
+    }, [applicationData, businessPlanAnalysis, pitchDeckAnalysis, guaranteesAnalysis]);
 
     const getTierInfo = (score) => {
         if (score >= 85) return {
@@ -114,6 +276,13 @@ const FundabilityScoreCard = ({ applicationData }) => {
         return names[key] || key;
     };
 
+    const getAnalysisStatus = (analysis) => {
+        if (!analysis) return { text: "No AI analysis", color: "#F44336" };
+        if (analysis.score >= 80) return { text: "Excellent", color: "#4CAF50" };
+        if (analysis.score >= 60) return { text: "Good", color: "#FF9800" };
+        return { text: "Needs Work", color: "#F44336" };
+    };
+
     const tierInfo = getTierInfo(fundabilityScore);
 
     const FundabilityModal = () => {
@@ -143,7 +312,7 @@ const FundabilityScoreCard = ({ applicationData }) => {
                     borderRadius: "20px",
                     padding: "32px",
                     width: "90%",
-                    maxWidth: "700px",
+                    maxWidth: "800px",
                     maxHeight: "80vh",
                     overflow: "auto",
                     position: "relative",
@@ -202,6 +371,45 @@ const FundabilityScoreCard = ({ applicationData }) => {
                         </h3>
                     </div>
 
+                    {/* Refresh Button */}
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'flex-end',
+                        marginBottom: '20px'
+                    }}>
+                        <button
+                            onClick={refreshAIEvaluations}
+                            disabled={isEvaluating}
+                            style={{
+                                padding: '10px 16px',
+                                background: 'linear-gradient(135deg, #5d4037, #4a2c20)',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '8px',
+                                fontSize: '14px',
+                                fontWeight: '600',
+                                cursor: isEvaluating ? 'not-allowed' : 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                transition: 'all 0.3s ease',
+                                opacity: isEvaluating ? 0.7 : 1
+                            }}
+                        >
+                            {isEvaluating ? (
+                                <>
+                                    <RefreshCw size={16} className="spin" />
+                                    Refreshing...
+                                </>
+                            ) : (
+                                <>
+                                    <RefreshCw size={16} />
+                                    Refresh AI Analysis
+                                </>
+                            )}
+                        </button>
+                    </div>
+
                     {/* Score Display */}
                     <div style={{
                         display: 'flex',
@@ -226,7 +434,7 @@ const FundabilityScoreCard = ({ applicationData }) => {
                             color: getScoreTextColor(),
                             boxShadow: '0 8px 24px rgba(0,0,0,0.1)'
                         }}>
-                            {fundabilityScore}%
+                            {animatedScore}%
                         </div>
                         <div>
                             <div style={{
@@ -252,6 +460,89 @@ const FundabilityScoreCard = ({ applicationData }) => {
                             }}>
                                 {tierInfo.description}
                             </p>
+                        </div>
+                    </div>
+
+                    {/* AI Analysis Status */}
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                        gap: '16px',
+                        marginBottom: '24px'
+                    }}>
+                        <div style={{
+                            padding: '16px',
+                            background: 'white',
+                            borderRadius: '12px',
+                            border: `2px solid ${getAnalysisStatus(businessPlanAnalysis).color}20`,
+                            textAlign: 'center'
+                        }}>
+                            <FileText size={24} color={getAnalysisStatus(businessPlanAnalysis).color} />
+                            <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
+                                Business Plan
+                            </div>
+                            <div style={{ 
+                                fontSize: '12px', 
+                                color: getAnalysisStatus(businessPlanAnalysis).color,
+                                fontWeight: '600'
+                            }}>
+                                {getAnalysisStatus(businessPlanAnalysis).text}
+                            </div>
+                            {businessPlanAnalysis?.rawScore && (
+                                <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
+                                    Score: {businessPlanAnalysis.rawScore}/5
+                                </div>
+                            )}
+                        </div>
+
+                        <div style={{
+                            padding: '16px',
+                            background: 'white',
+                            borderRadius: '12px',
+                            border: `2px solid ${getAnalysisStatus(pitchDeckAnalysis).color}20`,
+                            textAlign: 'center'
+                        }}>
+                            <Presentation size={24} color={getAnalysisStatus(pitchDeckAnalysis).color} />
+                            <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
+                                Pitch Deck
+                            </div>
+                            <div style={{ 
+                                fontSize: '12px', 
+                                color: getAnalysisStatus(pitchDeckAnalysis).color,
+                                fontWeight: '600'
+                            }}>
+                                {getAnalysisStatus(pitchDeckAnalysis).text}
+                            </div>
+                            {pitchDeckAnalysis?.rawScore && (
+                                <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
+                                    Score: {pitchDeckAnalysis.rawScore}/5
+                                </div>
+                            )}
+                        </div>
+
+                        <div style={{
+                            padding: '16px',
+                            background: 'white',
+                            borderRadius: '12px',
+                            border: `2px solid ${getAnalysisStatus(guaranteesAnalysis).color}20`,
+                            textAlign: 'center'
+                        }}>
+                            <Shield size={24} color={getAnalysisStatus(guaranteesAnalysis).color} />
+                            <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
+                                Guarantees
+                            </div>
+                            <div style={{ 
+                                fontSize: '12px', 
+                                color: getAnalysisStatus(guaranteesAnalysis).color,
+                                fontWeight: '600'
+                            }}>
+                                {getAnalysisStatus(guaranteesAnalysis).text}
+                            </div>
+                            {scoreBreakdown.guarantees?.rawScore && (
+                                <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
+                                    Score: {scoreBreakdown.guarantees.rawScore}/5
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -310,6 +601,7 @@ const FundabilityScoreCard = ({ applicationData }) => {
                                             marginTop: '4px'
                                         }}>
                                             Weight: {Math.round(data.weight * 100)}%
+                                            {data.rawScore > 0 && ` • AI Score: ${data.rawScore}/${data.maxRaw}`}
                                         </div>
                                     </div>
                                     <div style={{
@@ -341,13 +633,31 @@ const FundabilityScoreCard = ({ applicationData }) => {
                                             minWidth: '35px',
                                             textAlign: 'right'
                                         }}>
-                                            {data.score}%
+                                            {Math.round(data.score)}%
                                         </span>
                                     </div>
                                 </div>
                             ))}
                         </div>
                     </div>
+
+                    {/* Error Display */}
+                    {evaluationError && (
+                        <div style={{
+                            padding: '12px',
+                            background: '#f8d7da',
+                            color: '#721c24',
+                            border: '1px solid #f5c6cb',
+                            borderRadius: '8px',
+                            marginBottom: '16px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px'
+                        }}>
+                            <AlertCircle size={16} />
+                            {evaluationError}
+                        </div>
+                    )}
 
                     {/* Tier Information */}
                     <div style={{
@@ -496,7 +806,7 @@ const FundabilityScoreCard = ({ applicationData }) => {
                             borderRadius: '50%',
                             animation: 'spin 3s linear infinite'
                         }} />
-                        {/* Empty circle as requested */}
+                        {animatedScore}%
                     </div>
 
                     <div style={{ flex: 1 }}>
@@ -534,6 +844,27 @@ const FundabilityScoreCard = ({ applicationData }) => {
                         }}>
                             {tierInfo.description}
                         </p>
+                        {/* AI Analysis Status Indicator */}
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            marginTop: '8px',
+                            fontSize: '11px',
+                            color: '#7d5a50'
+                        }}>
+                            <div style={{
+                                width: '6px',
+                                height: '6px',
+                                borderRadius: '50%',
+                                backgroundColor: 
+                                    businessPlanAnalysis && pitchDeckAnalysis && guaranteesAnalysis ? '#4CAF50' :
+                                    businessPlanAnalysis || pitchDeckAnalysis || guaranteesAnalysis ? '#FF9800' : '#F44336'
+                            }} />
+                            {businessPlanAnalysis && pitchDeckAnalysis && guaranteesAnalysis ? 'AI Analysis Complete' :
+                             businessPlanAnalysis || pitchDeckAnalysis || guaranteesAnalysis ? 'Partial AI Analysis' : 
+                             'AI Analysis Pending'}
+                        </div>
                     </div>
                 </div>
 
@@ -591,6 +922,9 @@ const FundabilityScoreCard = ({ applicationData }) => {
                 @keyframes spin {
                     from { transform: rotate(0deg); }
                     to { transform: rotate(360deg); }
+                }
+                .spin {
+                    animation: spin 1s linear infinite;
                 }
             `}</style>
         </>

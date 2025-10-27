@@ -109,32 +109,6 @@ const ApplicationSummary = ({ formData, onEdit }) => {
             max-height: 1000px;
           }
         }
-        
-        /* Responsive sidebar adjustments */
-        @media (max-width: 1024px) {
-          .application-summary-container {
-            padding-left: 24px !important;
-          }
-          .header-grid {
-            flex-direction: column !important;
-            align-items: flex-start !important;
-            gap: 24px !important;
-          }
-        }
-        
-        @media (max-width: 768px) {
-          .application-summary-container {
-            padding: 16px !important;
-          }
-          .header-grid {
-            gap: 16px !important;
-          }
-        }
-        
-        /* For collapsed sidebar state */
-        .sidebar-collapsed .application-summary-container {
-          padding-left: max(24px, calc(80px + 24px)) !important;
-        }
       `}</style>
 
       <div
@@ -143,8 +117,7 @@ const ApplicationSummary = ({ formData, onEdit }) => {
           fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
           minHeight: '100vh',
           background: 'linear-gradient(135deg, #faf7f2 0%, #f5f0e1 50%, #f0e6d9 100%)',
-          padding: "24px 24px 24px max(24px, calc(280px + 24px))",
-          marginTop: "60px",
+       
           transition: 'all 0.3s ease'
         }}>
         <div style={{
