@@ -19,275 +19,356 @@ import {
   Legend,
 } from "chart.js"
 
-// Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
-// Balance Sheet Component - Now Primary
-const BalanceSheet = ({ activeSection, onUpdateBalanceSheet, balanceSheetData, currentMonth, onMonthChange, user }) => {
+// P&L Snapshot Component - Now Primary (moved to first position)
+const PnLSnapshot = ({
+  activeSection,
+  viewMode,
+  financialYearStart,
+  pnlData,
+  user,
+  onUpdateChartData,
+  isInvestorView,
+}) => {
+  const [chartViewMode, setChartViewMode] = useState("data")
+  const [visibleCharts, setVisibleCharts] = useState({
+    sales: true,
+    cogs: true,
+    opex: true,
+    grossProfit: true,
+    netProfit: true,
+    ebitda: true,
+    gpMargin: true,
+    npMargin: true,
+  })
   const [showModal, setShowModal] = useState(false)
-  const [showUploadModal, setShowUploadModal] = useState(false)
-  const [balanceSheetDetails, setBalanceSheetDetails] = useState({
-    // Assets
-    cash: "",
-    inventory: "",
-    prepaidExpenses: "",
-    accountsReceivable: "",
-    deposits: "",
-    propertyPlantEquipment: "",
-    intangibleAssets: "",
-    accumulatedDepreciation: "",
-    // Liabilities
-    accountsPayable: "",
-    currentBorrowing: "",
-    nonCurrentLiabilities: "",
-    longTermLiabilities: "",
-    // Equity
-    ownersEquity: "",
-    // P&L Related Data for Charts
+  const [showVariance, setShowVariance] = useState(false)
+  const [expandedNotes, setExpandedNotes] = useState({})
+  const [pnlDetails, setPnlDetails] = useState({
+    sales: Array(12).fill(""),
+    cogs: Array(12).fill(""),
+    opex: Array(12).fill(""),
+    tax: Array(12).fill(""),
+    interestExpense: Array(12).fill(""),
+    depreciation: Array(12).fill(""),
+    salesBudget: Array(12).fill(""),
+    cogsBudget: Array(12).fill(""),
+    opexBudget: Array(12).fill(""),
+    taxBudget: Array(12).fill(""),
+    interestExpenseBudget: Array(12).fill(""),
+    depreciationBudget: Array(12).fill(""),
+    notes: "",
+  })
+  const [chartNotes, setChartNotes] = useState({
     sales: "",
     cogs: "",
     opex: "",
-    month: currentMonth,
-    notes: "",
+    grossProfit: "",
+    netProfit: "",
+    ebitda: "",
+    gpMargin: "",
+    npMargin: "",
   })
+  const [firebaseChartData, setFirebaseChartData] = useState({})
+  const [loading, setLoading] = useState(false)
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
 
-  if (activeSection !== "balance-sheet") return null
+  useEffect(() => {
+    if (user) {
+      loadPnLDataFromFirebase()
+    }
+  }, [user])
 
-  // Get current month data or use empty values
-  const currentData = balanceSheetData?.[currentMonth] || {}
+  const loadPnLDataFromFirebase = async () => {
+    if (!user) return
 
-  // Calculate totals
-  const cash = Number.parseFloat(currentData.cash) || 0
-  const inventory = Number.parseFloat(currentData.inventory) || 0
-  const prepaidExpenses = Number.parseFloat(currentData.prepaidExpenses) || 0
-  const accountsReceivable = Number.parseFloat(currentData.accountsReceivable) || 0
-  const deposits = Number.parseFloat(currentData.deposits) || 0
-  const propertyPlantEquipment = Number.parseFloat(currentData.propertyPlantEquipment) || 0
-  const intangibleAssets = Number.parseFloat(currentData.intangibleAssets) || 0
-  const accumulatedDepreciation = Number.parseFloat(currentData.accumulatedDepreciation) || 0
+    setLoading(true)
+    try {
+      const pnlManualDoc = await getDoc(doc(db, "financialData", `${user.uid}_pnlManual`))
 
-  const accountsPayable = Number.parseFloat(currentData.accountsPayable) || 0
-  const currentBorrowing = Number.parseFloat(currentData.currentBorrowing) || 0
-  const nonCurrentLiabilities = Number.parseFloat(currentData.nonCurrentLiabilities) || 0
-  const longTermLiabilities = Number.parseFloat(currentData.longTermLiabilities) || 0
-  const ownersEquity = Number.parseFloat(currentData.ownersEquity) || 0
+      if (pnlManualDoc.exists()) {
+        const firebaseData = pnlManualDoc.data()
+        console.log("Loaded PnL data from Firebase:", firebaseData)
 
-  // Calculations
-  const totalCurrentAssets = cash + inventory + prepaidExpenses + accountsReceivable
-  const totalNonCurrentAssets = propertyPlantEquipment + intangibleAssets - accumulatedDepreciation
-  const totalAssets = totalCurrentAssets + deposits + totalNonCurrentAssets
+        setPnlDetails((prev) => ({
+          sales: firebaseData.sales?.map(String) || Array(12).fill(""),
+          cogs: firebaseData.cogs?.map(String) || Array(12).fill(""),
+          opex: firebaseData.opex?.map(String) || Array(12).fill(""),
+          tax: firebaseData.tax?.map(String) || Array(12).fill(""),
+          interestExpense: firebaseData.interestExpense?.map(String) || Array(12).fill(""),
+          depreciation: firebaseData.depreciation?.map(String) || Array(12).fill(""),
+          salesBudget: firebaseData.salesBudget?.map(String) || Array(12).fill(""),
+          cogsBudget: firebaseData.cogsBudget?.map(String) || Array(12).fill(""),
+          opexBudget: firebaseData.opexBudget?.map(String) || Array(12).fill(""),
+          taxBudget: firebaseData.taxBudget?.map(String) || Array(12).fill(""),
+          interestExpenseBudget: firebaseData.interestExpenseBudget?.map(String) || Array(12).fill(""),
+          depreciationBudget: firebaseData.depreciationBudget?.map(String) || Array(12).fill(""),
+          notes: firebaseData.notes || "",
+        }))
 
-  const totalCurrentLiabilities = accountsPayable + currentBorrowing
-  const totalNonCurrentLiabilities = nonCurrentLiabilities
-  const totalLiabilities = totalCurrentLiabilities + totalNonCurrentLiabilities + longTermLiabilities
-  const totalLiabilitiesAndCapital = totalLiabilities + ownersEquity
+        if (firebaseData.chartNotes) {
+          setChartNotes(firebaseData.chartNotes)
+        }
 
-  const handleDownloadBalanceSheet = () => {
-    const csvContent = `Balance Sheet - ${currentMonth}
-Assets,Amount
-Current Assets,
-Cash,${cash}
-Inventory,${inventory}
-Prepaid Expenses,${prepaidExpenses}
-Accounts Receivable,${accountsReceivable}
-Total Current Assets,${totalCurrentAssets}
-
-Deposits,${deposits}
-
-Non-Current Assets,
-Property Plant & Equipment,${propertyPlantEquipment}
-Intangible Assets,${intangibleAssets}
-Accumulated Depreciation,${accumulatedDepreciation}
-Total Non-Current Assets,${totalNonCurrentAssets}
-
-Total Assets,${totalAssets}
-
-Liabilities and Equity,
-Current Liabilities,
-Accounts Payable,${accountsPayable}
-Current Borrowing,${currentBorrowing}
-Total Current Liabilities,${totalCurrentLiabilities}
-
-Non-Current Liabilities,${nonCurrentLiabilities}
-Long-term Liabilities,${longTermLiabilities}
-Total Liabilities,${totalLiabilities}
-
-Owners Equity,${ownersEquity}
-Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
-
-    const blob = new Blob([csvContent], { type: "text/csv" })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `balance_sheet_${currentMonth}.csv`
-    a.click()
-    window.URL.revokeObjectURL(url)
+        processFirebaseDataForCharts(firebaseData)
+      } else {
+        console.log("No PnL data found in Firebase")
+        setFirebaseChartData({})
+      }
+    } catch (error) {
+      console.error("Error loading PnL data from Firebase:", error)
+    } finally {
+      setLoading(false)
+    }
   }
+
+  const processFirebaseDataForCharts = (firebaseData) => {
+    const sales = firebaseData.sales?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0)
+    const cogs = firebaseData.cogs?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0)
+    const opex = firebaseData.opex?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0)
+    const tax = firebaseData.tax?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0)
+    const interestExpense = firebaseData.interestExpense?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0)
+    const depreciation = firebaseData.depreciation?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0)
+
+    const salesBudget = firebaseData.salesBudget?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0)
+    const cogsBudget = firebaseData.cogsBudget?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0)
+    const opexBudget = firebaseData.opexBudget?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0)
+    const taxBudget = firebaseData.taxBudget?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0)
+    const interestExpenseBudget =
+      firebaseData.interestExpenseBudget?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0)
+    const depreciationBudget =
+      firebaseData.depreciationBudget?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0)
+
+    const grossProfit = sales.map((s, i) => s - cogs[i])
+    const grossProfitBudget = salesBudget.map((s, i) => s - cogsBudget[i])
+
+    const ebitda = grossProfit.map((gp, i) => gp - opex[i])
+    const ebitdaBudget = grossProfitBudget.map((gp, i) => gp - opexBudget[i])
+
+    const netProfit = ebitda.map((e, i) => e - tax[i] - interestExpense[i] - depreciation[i])
+    const netProfitBudget = ebitdaBudget.map(
+      (e, i) => e - taxBudget[i] - interestExpenseBudget[i] - depreciationBudget[i],
+    )
+
+    const gpMargin = sales.map((s, i) => (s !== 0 ? (grossProfit[i] / s) * 100 : 0))
+    const gpMarginBudget = salesBudget.map((s, i) => (s !== 0 ? (grossProfitBudget[i] / s) * 100 : 0))
+
+    const npMargin = sales.map((s, i) => (s !== 0 ? (netProfit[i] / s) * 100 : 0))
+    const npMarginBudget = salesBudget.map((s, i) => (s !== 0 ? (netProfitBudget[i] / s) * 100 : 0))
+
+    const chartData = {
+      sales: { actual: sales, budget: salesBudget },
+      cogs: { actual: cogs, budget: cogsBudget },
+      opex: { actual: opex, budget: opexBudget },
+      grossProfit: { actual: grossProfit, budget: grossProfitBudget },
+      ebitda: { actual: ebitda, budget: ebitdaBudget },
+      netProfit: { actual: netProfit, budget: netProfitBudget },
+      gpMargin: { actual: gpMargin, budget: gpMarginBudget },
+      npMargin: { actual: npMargin, budget: npMarginBudget },
+    }
+
+    setFirebaseChartData(chartData)
+
+    if (onUpdateChartData) {
+      Object.keys(chartData).forEach((key) => {
+        onUpdateChartData(key, chartData[key])
+      })
+    }
+  }
+
+  if (activeSection !== "pnl-snapshot") return null
+
+  const generateLabels = () => {
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    const startMonthIndex = months.indexOf(financialYearStart)
+    const orderedMonths = [...months.slice(startMonthIndex), ...months.slice(0, startMonthIndex)]
+
+    if (viewMode === "month") {
+      return orderedMonths.map((month) => `${month} ${currentYear.toString().slice(-2)}`)
+    } else if (viewMode === "quarter") {
+      return ["Q1", "Q2", "Q3", "Q4"]
+    } else {
+      return ["2020", "2021", "2022", "2023", "2024", "2025"]
+    }
+  }
+
+  const aggregateDataForView = (data) => {
+    if (viewMode === "month") {
+      return data
+    } else if (viewMode === "quarter") {
+      const quarters = []
+      for (let i = 0; i < 4; i++) {
+        const sum = data.slice(i * 3, i * 3 + 3).reduce((acc, val) => acc + val, 0)
+        quarters.push(sum)
+      }
+      return quarters
+    } else {
+      return [data.reduce((acc, val) => acc + val, 0)]
+    }
+  }
+
+  const labels = generateLabels()
 
   const handleAddDetails = () => {
     setShowModal(true)
-    // Pre-fill with current data if available
-    setBalanceSheetDetails({
-      ...currentData,
-      month: currentMonth,
-      notes: balanceSheetData?.[currentMonth]?.notes || "",
-    })
   }
 
-  const handleSaveDetails = async () => {
-    const updatedData = {
-      ...balanceSheetData,
-      [currentMonth]: {
-        ...balanceSheetDetails,
-        month: currentMonth,
-      },
+  const handleSavePnlDetails = async () => {
+    if (!user) {
+      alert("Please log in to save P&L data")
+      return
     }
-    onUpdateBalanceSheet(updatedData)
 
-    // Save to Firebase if user is logged in
-    if (user) {
-      try {
-        await setDoc(doc(db, "financialData", `${user.uid}_balanceSheet`), {
-          userId: user.uid,
-          chartName: "balanceSheet",
-          data: updatedData,
-          lastUpdated: new Date().toISOString(),
-        })
-        console.log("Balance sheet data saved to Firebase")
-      } catch (error) {
-        console.error("Error saving balance sheet data:", error)
+    setLoading(true)
+    try {
+      const firebaseData = {
+        userId: user.uid,
+        chartName: "pnlManual",
+        sales: pnlDetails.sales.map((val) => Number.parseFloat(val) || 0),
+        cogs: pnlDetails.cogs.map((val) => Number.parseFloat(val) || 0),
+        opex: pnlDetails.opex.map((val) => Number.parseFloat(val) || 0),
+        tax: pnlDetails.tax.map((val) => Number.parseFloat(val) || 0),
+        interestExpense: pnlDetails.interestExpense.map((val) => Number.parseFloat(val) || 0),
+        depreciation: pnlDetails.depreciation.map((val) => Number.parseFloat(val) || 0),
+        salesBudget: pnlDetails.salesBudget.map((val) => Number.parseFloat(val) || 0),
+        cogsBudget: pnlDetails.cogsBudget.map((val) => Number.parseFloat(val) || 0),
+        opexBudget: pnlDetails.opexBudget.map((val) => Number.parseFloat(val) || 0),
+        taxBudget: pnlDetails.taxBudget.map((val) => Number.parseFloat(val) || 0),
+        interestExpenseBudget: pnlDetails.interestExpenseBudget.map((val) => Number.parseFloat(val) || 0),
+        depreciationBudget: pnlDetails.depreciationBudget.map((val) => Number.parseFloat(val) || 0),
+        notes: pnlDetails.notes,
+        chartNotes: chartNotes,
+        lastUpdated: new Date().toISOString(),
       }
-    }
 
-    setShowModal(false)
+      await setDoc(doc(db, "financialData", `${user.uid}_pnlManual`), firebaseData)
+      console.log("P&L data saved to Firebase")
+
+      processFirebaseDataForCharts(firebaseData)
+      setShowModal(false)
+    } catch (error) {
+      console.error("Error saving P&L data:", error)
+      alert("Error saving P&L data. Please try again.")
+    } finally {
+      setLoading(false)
+    }
   }
 
-  // CSV Upload Handler
-  const handleCSVUpload = (event) => {
-    const file = event.target.files[0]
-    if (!file) return
-
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      const csvText = e.target.result
-      parseCSVData(csvText)
-    }
-    reader.readAsText(file)
-    setShowUploadModal(false)
-  }
-
-  // Parse CSV data and extract balance sheet values
-  const parseCSVData = (csvText) => {
-    const lines = csvText.split("\n")
-    const extractedData = {}
-
-    lines.forEach((line) => {
-      const [key, value] = line.split(",").map((item) => item.trim())
-      if (!key) return // Skip empty lines
-
-      // Map CSV headers to our data structure
-      const normalizedKey = key.toLowerCase().trim()
-
-      switch (normalizedKey) {
-        // Assets
-        case "cash":
-          extractedData.cash = value || "0"
-          break
-        case "inventory":
-          extractedData.inventory = value || "0"
-          break
-        case "prepaid expenses":
-          extractedData.prepaidExpenses = value || "0"
-          break
-        case "accounts receivable":
-          extractedData.accountsReceivable = value || "0"
-          break
-        case "deposits":
-          extractedData.deposits = value || "0"
-          break
-        case "property plant & equipment":
-        case "property plant and equipment":
-        case "property, plant & equipment":
-          extractedData.propertyPlantEquipment = value || "0"
-          break
-        case "intangible assets":
-          extractedData.intangibleAssets = value || "0"
-          break
-        case "accumulated depreciation":
-          extractedData.accumulatedDepreciation = value || "0"
-          break
-
-        // Liabilities & Equity
-        case "accounts payable":
-          extractedData.accountsPayable = value || "0"
-          break
-        case "current borrowing":
-          extractedData.currentBorrowing = value || "0"
-          break
-        case "non-current liabilities":
-          extractedData.nonCurrentLiabilities = value || "0"
-          break
-        case "long-term liabilities":
-          extractedData.longTermLiabilities = value || "0"
-          break
-        case "owners equity":
-          extractedData.ownersEquity = value || "0"
-          break
-
-        // P&L Data - Enhanced parsing
-        case "sales":
-        case "sales revenue":
-        case "revenue":
-        case "income":
-          extractedData.sales = value || "0"
-          break
-        case "cogs":
-        case "cost of goods sold":
-        case "cost of sales":
-          extractedData.cogs = value || "0"
-          break
-        case "opex":
-        case "operating expenses":
-        case "expenses":
-        case "operating costs":
-          extractedData.opex = value || "0"
-          break
-        case "gross profit":
-        case "grossprofit":
-          extractedData.grossProfit = value || "0"
-          break
-        case "net profit":
-        case "netprofit":
-        case "net income":
-          extractedData.netProfit = value || "0"
-          break
-        default:
-          // Skip unrecognized headers
-          break
-      }
-    })
-
-    // Update the balance sheet details with extracted data
-    setBalanceSheetDetails((prev) => ({
+  const toggleChartVisibility = (chartName) => {
+    setVisibleCharts((prev) => ({
       ...prev,
-      ...extractedData,
-      month: currentMonth,
+      [chartName]: !prev[chartName],
     }))
+  }
 
-    // Auto-save the imported data
-    const updatedData = {
-      ...balanceSheetData,
-      [currentMonth]: {
-        ...extractedData,
-        month: currentMonth,
-      },
+  const toggleNotes = (chartName) => {
+    setExpandedNotes((prev) => ({
+      ...prev,
+      [chartName]: !prev[chartName],
+    }))
+  }
+
+  const updateChartNote = (chartName, note) => {
+    setChartNotes((prev) => ({
+      ...prev,
+      [chartName]: note,
+    }))
+  }
+
+  const createChartData = (chartName, label, color, isPercentage = false) => {
+    const data = firebaseChartData[chartName] || { actual: [], budget: [] }
+    const actualData = aggregateDataForView(data.actual)
+    const budgetData = aggregateDataForView(data.budget)
+    const varianceData = actualData.map((val, i) => val - budgetData[i])
+
+    if (showVariance) {
+      return {
+        labels,
+        datasets: [
+          {
+            type: "bar", // Ensure variance is displayed as bar if showVariance is true
+            label: `${label} Variance`,
+            data: varianceData,
+            backgroundColor: varianceData.map((v) => (v >= 0 ? "rgba(139, 105, 20, 0.6)" : "rgba(160, 82, 45, 0.6)")),
+            borderColor: varianceData.map((v) => (v >= 0 ? "rgb(139, 105, 20)" : "rgb(160, 82, 45)")),
+            borderWidth: 2,
+          },
+        ],
+      }
     }
 
-    onUpdateBalanceSheet(updatedData)
-
-    // Auto-close the modal after import
-    setShowModal(false)
+    return {
+      labels,
+      datasets: [
+        {
+          type: "bar",
+          label: `${label} Actual`,
+          data: actualData,
+          backgroundColor: color,
+          borderColor: color.replace("0.6", "1"),
+          borderWidth: 2,
+        },
+        {
+          type: "line",
+          label: `${label} Budget`,
+          data: budgetData,
+          borderColor: "#8b6914",
+          backgroundColor: "rgba(139, 105, 20, 0.1)",
+          borderWidth: 2,
+          tension: 0.1,
+          fill: false,
+        },
+      ],
+    }
   }
+
+  const chartOptions = (title, isPercentage = false) => ({
+    responsive: true,
+    plugins: {
+      legend: {
+        display: true,
+        position: "top",
+      },
+      title: {
+        display: true,
+        text: title,
+        color: "#5d4037",
+        font: {
+          size: 16,
+        },
+      },
+      tooltip: {
+        callbacks: {
+          label: (context) => {
+            const value = context.raw
+            return isPercentage
+              ? `${context.dataset.label}: ${value.toFixed(2)}%`
+              : `${context.dataset.label}: R${value.toFixed(2)}m`
+          },
+        },
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        title: {
+          display: true,
+          text: isPercentage ? "Percentage (%)" : "Amount (R-m)",
+          color: "#72542b",
+        },
+      },
+      x: {
+        title: {
+          display: true,
+          text: viewMode === "month" ? "Months" : viewMode === "quarter" ? "Quarters" : "Years",
+          color: "#72542b",
+        },
+      },
+    },
+  })
+
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
   return (
     <div
@@ -299,284 +380,417 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
     >
-      {/* Month Selector and Action Buttons */}
       <div
         style={{
           display: "flex",
-          gap: "15px",
-          marginBottom: "20px",
-          justifyContent: "center",
+          justifyContent: "space-between",
           alignItems: "center",
+          marginBottom: "20px",
           flexWrap: "wrap",
+          gap: "15px",
         }}
       >
-        <div>
-          <label
+        {!isInvestorView && (
+          <button
+            onClick={handleAddDetails}
             style={{
-              marginRight: "8px",
-              color: "#5d4037",
-              fontWeight: "500",
+              padding: "10px 20px",
+              backgroundColor: "#5d4037",
+              color: "#fdfcfb",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "14px",
             }}
           >
-            Select Month:
-          </label>
-          <select
-            value={currentMonth}
-            onChange={(e) => onMonthChange(e.target.value)}
+            Add P&L Details
+          </button>
+        )}
+
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <button
+            onClick={() => setShowVariance(!showVariance)}
             style={{
-              padding: "8px",
-              border: "2px solid #e8ddd4",
+              padding: "8px 16px",
+              backgroundColor: showVariance ? "#5d4037" : "#e8ddd4",
+              color: showVariance ? "#fdfcfb" : "#5d4037",
+              border: "none",
               borderRadius: "4px",
-              backgroundColor: "#fdfcfb",
-              color: "#5d4037",
+              cursor: "pointer",
               fontWeight: "500",
+              fontSize: "14px",
             }}
           >
-            {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((month) => (
-              <option key={month} value={month}>
-                {month}
-              </option>
-            ))}
-          </select>
+            {showVariance ? "Show Actual vs Budget" : "Show Variance"}
+          </button>
         </div>
 
-        <button
-          onClick={handleDownloadBalanceSheet}
-          style={{
-            padding: "12px 24px",
-            backgroundColor: "#8b6914",
-            color: "white",
-            border: "none",
-            borderRadius: "6px",
-            cursor: "pointer",
-            fontWeight: "600",
-            fontSize: "14px",
-          }}
-        >
-          📥 Download {currentMonth} Balance Sheet
-        </button>
-
-        <button
-          onClick={() => setShowUploadModal(true)}
-          style={{
-            padding: "12px 24px",
-            backgroundColor: "#5d4037",
-            color: "white",
-            border: "none",
-            borderRadius: "6px",
-            cursor: "pointer",
-            fontWeight: "600",
-            fontSize: "14px",
-          }}
-        >
-          📁 Upload CSV
-        </button>
-
-        <button
-          onClick={handleAddDetails}
-          style={{
-            padding: "12px 24px",
-            backgroundColor: "#9c7c5f",
-            color: "white",
-            border: "none",
-            borderRadius: "6px",
-            cursor: "pointer",
-            fontWeight: "600",
-            fontSize: "14px",
-          }}
-        >
-          ➕ Add/Edit Details
-        </button>
+        {!isInvestorView && (
+          <div
+            style={{
+              display: "flex",
+              gap: "10px",
+              flexWrap: "wrap",
+              padding: "10px",
+              backgroundColor: "#f7f3f0",
+              borderRadius: "6px",
+            }}
+          >
+            <span style={{ fontWeight: "600", color: "#5d4037", marginRight: "10px" }}>Chart Visibility:</span>
+            {Object.keys(visibleCharts).map((chart) => (
+              <label key={chart} style={{ display: "flex", alignItems: "center", gap: "5px", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={visibleCharts[chart]}
+                  onChange={() => toggleChartVisibility(chart)}
+                  style={{ cursor: "pointer" }}
+                />
+                <span style={{ fontSize: "14px", color: "#5d4037" }}>
+                  {chart.charAt(0).toUpperCase() + chart.slice(1).replace(/([A-Z])/g, " $1")}
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Balance Sheet Display */}
       <div
         style={{
-          backgroundColor: "white",
-          padding: "30px",
-          borderRadius: "8px",
-          border: "2px solid #5d4037",
-          fontFamily: "Arial, sans-serif",
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", // Changed to exactly 3 columns per row
+          gap: "20px",
         }}
       >
-        <div
-          style={{
-            backgroundColor: "#b89f8d",
-            color: "white",
-            padding: "10px",
-            textAlign: "right",
-            fontWeight: "bold",
-            fontSize: "18px",
-            marginBottom: "20px",
-          }}
-        >
-          {currentMonth} - Year 0
-        </div>
+        {visibleCharts.sales && (
+          <div>
+            <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
+              <Bar
+                data={createChartData("sales", "Sales Revenue", "rgba(93, 64, 55, 0.6)")}
+                options={chartOptions("Sales Revenue")}
+              />
+            </div>
+            <button
+              onClick={() => toggleNotes("sales")}
+              style={{
+                marginTop: "10px",
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontSize: "12px",
+              }}
+            >
+              {expandedNotes.sales ? "Hide Notes" : "Show Notes"}
+            </button>
+            {expandedNotes.sales && (
+              <textarea
+                value={chartNotes.sales}
+                onChange={(e) => updateChartNote("sales", e.target.value)}
+                placeholder="Add notes/comments for Sales Revenue..."
+                style={{
+                  width: "100%",
+                  marginTop: "10px",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "80px",
+                }}
+              />
+            )}
+          </div>
+        )}
 
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <tbody>
-            {/* Assets Section */}
-            <tr>
-              <td style={{ fontWeight: "bold", fontSize: "18px", padding: "10px 0", borderBottom: "1px solid #ddd" }}>
-                Assets
-              </td>
-              <td></td>
-            </tr>
+        {visibleCharts.cogs && (
+          <div>
+            <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
+              <Bar
+                data={createChartData("cogs", "Cost of Goods Sold", "rgba(139, 105, 20, 0.6)")}
+                options={chartOptions("Cost of Goods Sold")}
+              />
+            </div>
+            <button
+              onClick={() => toggleNotes("cogs")}
+              style={{
+                marginTop: "10px",
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontSize: "12px",
+              }}
+            >
+              {expandedNotes.cogs ? "Hide Notes" : "Show Notes"}
+            </button>
+            {expandedNotes.cogs && (
+              <textarea
+                value={chartNotes.cogs}
+                onChange={(e) => updateChartNote("cogs", e.target.value)}
+                placeholder="Add notes/comments for COGS..."
+                style={{
+                  width: "100%",
+                  marginTop: "10px",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "80px",
+                }}
+              />
+            )}
+          </div>
+        )}
 
-            <tr>
-              <td style={{ fontWeight: "bold", fontSize: "16px", padding: "8px 0" }}>Current Assets</td>
-              <td></td>
-            </tr>
+        {visibleCharts.opex && (
+          <div>
+            <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
+              <Bar
+                data={createChartData("opex", "Operating Expenses", "rgba(114, 84, 43, 0.6)")}
+                options={chartOptions("Operating Expenses")}
+              />
+            </div>
+            <button
+              onClick={() => toggleNotes("opex")}
+              style={{
+                marginTop: "10px",
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontSize: "12px",
+              }}
+            >
+              {expandedNotes.opex ? "Hide Notes" : "Show Notes"}
+            </button>
+            {expandedNotes.opex && (
+              <textarea
+                value={chartNotes.opex}
+                onChange={(e) => updateChartNote("opex", e.target.value)}
+                placeholder="Add notes/comments for OPEX..."
+                style={{
+                  width: "100%",
+                  marginTop: "10px",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "80px",
+                }}
+              />
+            )}
+          </div>
+        )}
 
-            <tr>
-              <td style={{ paddingLeft: "20px", padding: "5px 0" }}>Cash</td>
-              <td style={{ textAlign: "right", fontWeight: "bold" }}>{cash ? cash.toLocaleString() : "-"}</td>
-            </tr>
+        {visibleCharts.grossProfit && (
+          <div>
+            <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
+              <Bar
+                data={createChartData("grossProfit", "Gross Profit", "rgba(160, 120, 70, 0.6)")}
+                options={chartOptions("Gross Profit")}
+              />
+            </div>
+            <button
+              onClick={() => toggleNotes("grossProfit")}
+              style={{
+                marginTop: "10px",
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontSize: "12px",
+              }}
+            >
+              {expandedNotes.grossProfit ? "Hide Notes" : "Show Notes"}
+            </button>
+            {expandedNotes.grossProfit && (
+              <textarea
+                value={chartNotes.grossProfit}
+                onChange={(e) => updateChartNote("grossProfit", e.target.value)}
+                placeholder="Add notes/comments for Gross Profit..."
+                style={{
+                  width: "100%",
+                  marginTop: "10px",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "80px",
+                }}
+              />
+            )}
+          </div>
+        )}
 
-            <tr>
-              <td style={{ paddingLeft: "20px", padding: "5px 0" }}>Inventory</td>
-              <td style={{ textAlign: "right" }}>{inventory ? inventory.toLocaleString() : "-"}</td>
-            </tr>
+        {visibleCharts.ebitda && (
+          <div>
+            <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
+              <Bar
+                data={createChartData("ebitda", "EBITDA", "rgba(139, 90, 43, 0.6)")}
+                options={chartOptions("EBITDA")}
+              />
+            </div>
+            <button
+              onClick={() => toggleNotes("ebitda")}
+              style={{
+                marginTop: "10px",
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontSize: "12px",
+              }}
+            >
+              {expandedNotes.ebitda ? "Hide Notes" : "Show Notes"}
+            </button>
+            {expandedNotes.ebitda && (
+              <textarea
+                value={chartNotes.ebitda}
+                onChange={(e) => updateChartNote("ebitda", e.target.value)}
+                placeholder="Add notes/comments for EBITDA..."
+                style={{
+                  width: "100%",
+                  marginTop: "10px",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "80px",
+                }}
+              />
+            )}
+          </div>
+        )}
 
-            <tr>
-              <td style={{ paddingLeft: "20px", padding: "5px 0" }}>Prepaid Expenses</td>
-              <td style={{ textAlign: "right" }}>{prepaidExpenses ? prepaidExpenses.toLocaleString() : "-"}</td>
-            </tr>
+        {visibleCharts.netProfit && (
+          <div>
+            <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
+              <Bar
+                data={createChartData("netProfit", "Net Profit", "rgba(101, 67, 33, 0.6)")}
+                options={chartOptions("Net Profit")}
+              />
+            </div>
+            <button
+              onClick={() => toggleNotes("netProfit")}
+              style={{
+                marginTop: "10px",
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontSize: "12px",
+              }}
+            >
+              {expandedNotes.netProfit ? "Hide Notes" : "Show Notes"}
+            </button>
+            {expandedNotes.netProfit && (
+              <textarea
+                value={chartNotes.netProfit}
+                onChange={(e) => updateChartNote("netProfit", e.target.value)}
+                placeholder="Add notes/comments for Net Profit..."
+                style={{
+                  width: "100%",
+                  marginTop: "10px",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "80px",
+                }}
+              />
+            )}
+          </div>
+        )}
 
-            <tr>
-              <td style={{ paddingLeft: "20px", padding: "5px 0" }}>Accounts Receivable</td>
-              <td style={{ textAlign: "right" }}>{accountsReceivable ? accountsReceivable.toLocaleString() : "-"}</td>
-            </tr>
+        {visibleCharts.gpMargin && (
+          <div>
+            <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
+              <Bar
+                data={createChartData("gpMargin", "GP Margin", "rgba(180, 140, 90, 0.6)", true)}
+                options={chartOptions("GP Margin (%)", true)}
+              />
+            </div>
+            <button
+              onClick={() => toggleNotes("gpMargin")}
+              style={{
+                marginTop: "10px",
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontSize: "12px",
+              }}
+            >
+              {expandedNotes.gpMargin ? "Hide Notes" : "Show Notes"}
+            </button>
+            {expandedNotes.gpMargin && (
+              <textarea
+                value={chartNotes.gpMargin}
+                onChange={(e) => updateChartNote("gpMargin", e.target.value)}
+                placeholder="Add notes/comments for GP Margin..."
+                style={{
+                  width: "100%",
+                  marginTop: "10px",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "80px",
+                }}
+              />
+            )}
+          </div>
+        )}
 
-            <tr style={{ borderBottom: "1px solid #000" }}>
-              <td style={{ fontWeight: "bold", padding: "8px 0" }}>Total Current Assets</td>
-              <td style={{ textAlign: "right", fontWeight: "bold" }}>
-                {totalCurrentAssets ? totalCurrentAssets.toLocaleString() : "-"}
-              </td>
-            </tr>
-
-            <tr style={{ borderBottom: "1px solid #000" }}>
-              <td style={{ fontWeight: "bold", padding: "15px 0" }}>Deposits</td>
-              <td style={{ textAlign: "right", fontWeight: "bold" }}>{deposits ? deposits.toLocaleString() : "-"}</td>
-            </tr>
-
-            <tr>
-              <td style={{ fontWeight: "bold", fontSize: "16px", padding: "15px 0 8px 0" }}>Non-Current Assets</td>
-              <td></td>
-            </tr>
-
-            <tr>
-              <td style={{ paddingLeft: "20px", padding: "5px 0" }}>Property, Plant & Equipment</td>
-              <td style={{ textAlign: "right" }}>
-                {propertyPlantEquipment ? propertyPlantEquipment.toLocaleString() : "-"}
-              </td>
-            </tr>
-
-            <tr>
-              <td style={{ paddingLeft: "20px", padding: "5px 0" }}>Intangible Assets</td>
-              <td style={{ textAlign: "right" }}>{intangibleAssets ? intangibleAssets.toLocaleString() : "-"}</td>
-            </tr>
-
-            <tr>
-              <td style={{ paddingLeft: "20px", padding: "5px 0" }}>Accumulated Depreciation</td>
-              <td style={{ textAlign: "right" }}>
-                {accumulatedDepreciation ? `(${accumulatedDepreciation.toLocaleString()})` : "-"}
-              </td>
-            </tr>
-
-            <tr style={{ borderBottom: "1px solid #000" }}>
-              <td style={{ fontWeight: "bold", padding: "8px 0" }}>Total Non-Current Assets</td>
-              <td style={{ textAlign: "right", fontWeight: "bold" }}>
-                {totalNonCurrentAssets ? totalNonCurrentAssets.toLocaleString() : "-"}
-              </td>
-            </tr>
-
-            <tr style={{ borderBottom: "3px solid #000" }}>
-              <td style={{ fontWeight: "bold", fontSize: "16px", padding: "15px 0" }}>Total Assets</td>
-              <td style={{ textAlign: "right", fontWeight: "bold", fontSize: "16px" }}>
-                {totalAssets ? totalAssets.toLocaleString() : "-"}
-              </td>
-            </tr>
-
-            {/* Liabilities and Equity Section */}
-            <tr>
-              <td style={{ fontWeight: "bold", fontSize: "18px", padding: "20px 0 10px 0" }}>Liabilities and Equity</td>
-              <td></td>
-            </tr>
-
-            <tr>
-              <td style={{ fontWeight: "bold", fontSize: "16px", padding: "8px 0" }}>Current Liabilities</td>
-              <td></td>
-            </tr>
-
-            <tr>
-              <td style={{ paddingLeft: "20px", padding: "5px 0" }}>Accounts Payable</td>
-              <td style={{ textAlign: "right" }}>{accountsPayable ? accountsPayable.toLocaleString() : "-"}</td>
-            </tr>
-
-            <tr>
-              <td style={{ paddingLeft: "20px", padding: "5px 0" }}>Current Borrowing</td>
-              <td style={{ textAlign: "right" }}>{currentBorrowing ? currentBorrowing.toLocaleString() : "-"}</td>
-            </tr>
-
-            <tr style={{ borderBottom: "1px solid #000" }}>
-              <td style={{ fontWeight: "bold", padding: "8px 0" }}>Total Current Liabilities</td>
-              <td style={{ textAlign: "right", fontWeight: "bold" }}>
-                {totalCurrentLiabilities ? totalCurrentLiabilities.toLocaleString() : "-"}
-              </td>
-            </tr>
-
-            <tr>
-              <td style={{ fontWeight: "bold", fontSize: "16px", padding: "15px 0 8px 0" }}>Non-Current Liabilities</td>
-              <td></td>
-            </tr>
-
-            <tr>
-              <td style={{ paddingLeft: "20px", padding: "5px 0" }}>Non-current Liabilities</td>
-              <td style={{ textAlign: "right" }}>
-                {nonCurrentLiabilities ? nonCurrentLiabilities.toLocaleString() : "-"}
-              </td>
-            </tr>
-
-            <tr style={{ borderBottom: "1px solid #000" }}>
-              <td style={{ fontWeight: "bold", padding: "8px 0" }}>Total Non-Current Liabilities</td>
-              <td style={{ textAlign: "right", fontWeight: "bold" }}>
-                {totalNonCurrentLiabilities ? totalNonCurrentLiabilities.toLocaleString() : "-"}
-              </td>
-            </tr>
-
-            <tr style={{ borderBottom: "1px solid #000" }}>
-              <td style={{ fontWeight: "bold", padding: "8px 0" }}>Long-term Liabilities</td>
-              <td style={{ textAlign: "right", fontWeight: "bold" }}>
-                {longTermLiabilities ? longTermLiabilities : "-"}
-              </td>
-            </tr>
-
-            <tr style={{ borderBottom: "1px solid #000" }}>
-              <td style={{ fontWeight: "bold", padding: "8px 0" }}>Total Liabilities</td>
-              <td style={{ textAlign: "right", fontWeight: "bold" }}>
-                {totalLiabilities ? totalLiabilities.toLocaleString() : "-"}
-              </td>
-            </tr>
-
-            <tr style={{ borderBottom: "1px solid #000" }}>
-              <td style={{ fontWeight: "bold", padding: "15px 0" }}>Owners Equity</td>
-              <td style={{ textAlign: "right", fontWeight: "bold" }}>
-                {ownersEquity ? ownersEquity.toLocaleString() : "-"}
-              </td>
-            </tr>
-
-            <tr style={{ borderBottom: "3px solid #000" }}>
-              <td style={{ fontWeight: "bold", fontSize: "16px", padding: "8px 0" }}>Total Liabilities and Capital</td>
-              <td style={{ textAlign: "right", fontWeight: "bold", fontSize: "16px" }}>
-                {totalLiabilitiesAndCapital ? totalLiabilitiesAndCapital.toLocaleString() : "-"}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        {visibleCharts.npMargin && (
+          <div>
+            <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
+              <Bar
+                data={createChartData("npMargin", "NP Margin", "rgba(139, 69, 19, 0.6)", true)}
+                options={chartOptions("NP Margin (%)", true)}
+              />
+            </div>
+            <button
+              onClick={() => toggleNotes("npMargin")}
+              style={{
+                marginTop: "10px",
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontSize: "12px",
+              }}
+            >
+              {expandedNotes.npMargin ? "Hide Notes" : "Show Notes"}
+            </button>
+            {expandedNotes.npMargin && (
+              <textarea
+                value={chartNotes.npMargin}
+                onChange={(e) => updateChartNote("npMargin", e.target.value)}
+                placeholder="Add notes/comments for NP Margin..."
+                style={{
+                  width: "100%",
+                  marginTop: "10px",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "80px",
+                }}
+              />
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Modal for adding/editing details */}
       {showModal && (
         <div
           style={{
@@ -585,7 +799,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            backgroundColor: "rgba(0,0,0,0.5)",
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
@@ -594,393 +808,311 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
         >
           <div
             style={{
-              backgroundColor: "white",
+              backgroundColor: "#fdfcfb",
               padding: "30px",
               borderRadius: "8px",
-              boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
-              width: "900px",
-              maxWidth: "90vw",
+              maxWidth: "900px",
               maxHeight: "90vh",
-              overflowY: "auto",
+              overflow: "auto",
+              width: "90%",
             }}
           >
-            <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "20px" }}>
-              Balance Sheet Details - {currentMonth}
-            </h3>
+            <h3 style={{ color: "#5d4037", marginBottom: "20px" }}>Add P&L Details</h3>
+            <p style={{ color: "#72542b", marginBottom: "20px", fontSize: "14px" }}>
+              Enter data for all 12 months separated by commas. Example: 100, 120, 110, 130, 140, 135, 145, 150, 160,
+              165, 170, 180
+            </p>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "20px" }}>
-              {/* Assets Column */}
-              <div>
-                <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Assets</h4>
+            <div style={{ marginBottom: "20px" }}>
+              <h4 style={{ color: "#5d4037", marginBottom: "10px" }}>Actual Data</h4>
 
-                <div style={{ marginBottom: "15px" }}>
-                  <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "500" }}>
-                    Cash:
-                  </label>
-                  <input
-                    type="number"
-                    value={balanceSheetDetails.cash}
-                    onChange={(e) => setBalanceSheetDetails((prev) => ({ ...prev, cash: e.target.value }))}
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      border: "2px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "14px",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </div>
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Sales Revenue (12 months, comma separated):
+              </label>
+              <input
+                type="text"
+                value={pnlDetails.sales.join(", ")}
+                onChange={(e) =>
+                  setPnlDetails({
+                    ...pnlDetails,
+                    sales: e.target.value.split(",").map((v) => v.trim()),
+                  })
+                }
+                placeholder="e.g., 100, 120, 110, 130, 140, 135, 145, 150, 160, 165, 170, 180"
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
 
-                <div style={{ marginBottom: "15px" }}>
-                  <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "500" }}>
-                    Inventory:
-                  </label>
-                  <input
-                    type="number"
-                    value={balanceSheetDetails.inventory}
-                    onChange={(e) => setBalanceSheetDetails((prev) => ({ ...prev, inventory: e.target.value }))}
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      border: "2px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "14px",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </div>
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Cost of Goods Sold (12 months, comma separated):
+              </label>
+              <input
+                type="text"
+                value={pnlDetails.cogs.join(", ")}
+                onChange={(e) =>
+                  setPnlDetails({
+                    ...pnlDetails,
+                    cogs: e.target.value.split(",").map((v) => v.trim()),
+                  })
+                }
+                placeholder="e.g., 80, 85, 90, 87, 92, 88, 95, 97, 100, 102, 105, 108"
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
 
-                <div style={{ marginBottom: "15px" }}>
-                  <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "500" }}>
-                    Prepaid Expenses:
-                  </label>
-                  <input
-                    type="number"
-                    value={balanceSheetDetails.prepaidExpenses}
-                    onChange={(e) => setBalanceSheetDetails((prev) => ({ ...prev, prepaidExpenses: e.target.value }))}
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      border: "2px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "14px",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </div>
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Operating Expenses (12 months, comma separated):
+              </label>
+              <input
+                type="text"
+                value={pnlDetails.opex.join(", ")}
+                onChange={(e) =>
+                  setPnlDetails({
+                    ...pnlDetails,
+                    opex: e.target.value.split(",").map((v) => v.trim()),
+                  })
+                }
+                placeholder="e.g., 90, 93, 91, 95, 97, 93, 91, 95, 97, 95, 97, 97"
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
 
-                <div style={{ marginBottom: "15px" }}>
-                  <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "500" }}>
-                    Accounts Receivable:
-                  </label>
-                  <input
-                    type="number"
-                    value={balanceSheetDetails.accountsReceivable}
-                    onChange={(e) =>
-                      setBalanceSheetDetails((prev) => ({ ...prev, accountsReceivable: e.target.value }))
-                    }
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      border: "2px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "14px",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </div>
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Tax (12 months, comma separated):
+              </label>
+              <input
+                type="text"
+                value={pnlDetails.tax.join(", ")}
+                onChange={(e) =>
+                  setPnlDetails({
+                    ...pnlDetails,
+                    tax: e.target.value.split(",").map((v) => v.trim()),
+                  })
+                }
+                placeholder="e.g., 5, 6, 5, 7, 8, 7, 8, 9, 10, 10, 11, 12"
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
 
-                <div style={{ marginBottom: "15px" }}>
-                  <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "500" }}>
-                    Deposits:
-                  </label>
-                  <input
-                    type="number"
-                    value={balanceSheetDetails.deposits}
-                    onChange={(e) => setBalanceSheetDetails((prev) => ({ ...prev, deposits: e.target.value }))}
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      border: "2px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "14px",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </div>
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Interest Expense (12 months, comma separated):
+              </label>
+              <input
+                type="text"
+                value={pnlDetails.interestExpense.join(", ")}
+                onChange={(e) =>
+                  setPnlDetails({
+                    ...pnlDetails,
+                    interestExpense: e.target.value.split(",").map((v) => v.trim()),
+                  })
+                }
+                placeholder="e.g., 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2"
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
 
-                <div style={{ marginBottom: "15px" }}>
-                  <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "500" }}>
-                    Property, Plant & Equipment:
-                  </label>
-                  <input
-                    type="number"
-                    value={balanceSheetDetails.propertyPlantEquipment}
-                    onChange={(e) =>
-                      setBalanceSheetDetails((prev) => ({ ...prev, propertyPlantEquipment: e.target.value }))
-                    }
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      border: "2px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "14px",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </div>
-
-                <div style={{ marginBottom: "15px" }}>
-                  <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "500" }}>
-                    Intangible Assets:
-                  </label>
-                  <input
-                    type="number"
-                    value={balanceSheetDetails.intangibleAssets}
-                    onChange={(e) => setBalanceSheetDetails((prev) => ({ ...prev, intangibleAssets: e.target.value }))}
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      border: "2px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "14px",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </div>
-
-                <div style={{ marginBottom: "15px" }}>
-                  <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "500" }}>
-                    Accumulated Depreciation:
-                  </label>
-                  <input
-                    type="number"
-                    value={balanceSheetDetails.accumulatedDepreciation}
-                    onChange={(e) =>
-                      setBalanceSheetDetails((prev) => ({ ...prev, accumulatedDepreciation: e.target.value }))
-                    }
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      border: "2px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "14px",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Liabilities Column */}
-              <div>
-                <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Liabilities & Equity</h4>
-
-                <div style={{ marginBottom: "15px" }}>
-                  <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "500" }}>
-                    Accounts Payable:
-                  </label>
-                  <input
-                    type="number"
-                    value={balanceSheetDetails.accountsPayable}
-                    onChange={(e) => setBalanceSheetDetails((prev) => ({ ...prev, accountsPayable: e.target.value }))}
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      border: "2px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "14px",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </div>
-
-                <div style={{ marginBottom: "15px" }}>
-                  <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "500" }}>
-                    Current Borrowing:
-                  </label>
-                  <input
-                    type="number"
-                    value={balanceSheetDetails.currentBorrowing}
-                    onChange={(e) => setBalanceSheetDetails((prev) => ({ ...prev, currentBorrowing: e.target.value }))}
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      border: "2px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "14px",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </div>
-
-                <div style={{ marginBottom: "15px" }}>
-                  <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "500" }}>
-                    Non-Current Liabilities:
-                  </label>
-                  <input
-                    type="number"
-                    value={balanceSheetDetails.nonCurrentLiabilities}
-                    onChange={(e) =>
-                      setBalanceSheetDetails((prev) => ({ ...prev, nonCurrentLiabilities: e.target.value }))
-                    }
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      border: "2px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "14px",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </div>
-
-                <div style={{ marginBottom: "15px" }}>
-                  <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "500" }}>
-                    Long-term Liabilities:
-                  </label>
-                  <input
-                    type="number"
-                    value={balanceSheetDetails.longTermLiabilities}
-                    onChange={(e) =>
-                      setBalanceSheetDetails((prev) => ({ ...prev, longTermLiabilities: e.target.value }))
-                    }
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      border: "2px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "14px",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </div>
-
-                <div style={{ marginBottom: "15px" }}>
-                  <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "500" }}>
-                    Owners Equity:
-                  </label>
-                  <input
-                    type="number"
-                    value={balanceSheetDetails.ownersEquity}
-                    onChange={(e) => setBalanceSheetDetails((prev) => ({ ...prev, ownersEquity: e.target.value }))}
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      border: "2px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "14px",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </div>
-
-                <div style={{ marginBottom: "15px" }}>
-                  <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "500" }}>
-                    Notes:
-                  </label>
-                  <textarea
-                    value={balanceSheetDetails.notes}
-                    onChange={(e) => setBalanceSheetDetails((prev) => ({ ...prev, notes: e.target.value }))}
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      border: "2px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "14px",
-                      boxSizing: "border-box",
-                      minHeight: "60px",
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* P&L Data Column */}
-              <div>
-                <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>P&L Data for Charts</h4>
-
-                <div style={{ marginBottom: "15px" }}>
-                  <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "500" }}>
-                    Sales Revenue:
-                  </label>
-                  <input
-                    type="number"
-                    value={balanceSheetDetails.sales}
-                    onChange={(e) => setBalanceSheetDetails((prev) => ({ ...prev, sales: e.target.value }))}
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      border: "2px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "14px",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </div>
-
-                <div style={{ marginBottom: "15px" }}>
-                  <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "500" }}>
-                    Cost of Goods Sold (COGS):
-                  </label>
-                  <input
-                    type="number"
-                    value={balanceSheetDetails.cogs}
-                    onChange={(e) => setBalanceSheetDetails((prev) => ({ ...prev, cogs: e.target.value }))}
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      border: "2px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "14px",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </div>
-
-                <div style={{ marginBottom: "15px" }}>
-                  <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "500" }}>
-                    Operating Expenses (OPEX):
-                  </label>
-                  <input
-                    type="number"
-                    value={balanceSheetDetails.opex}
-                    onChange={(e) => setBalanceSheetDetails((prev) => ({ ...prev, opex: e.target.value }))}
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      border: "2px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "14px",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </div>
-
-                <div
-                  style={{
-                    backgroundColor: "#f0f8ff",
-                    padding: "15px",
-                    borderRadius: "6px",
-                    border: "1px solid #b3d9ff",
-                    marginTop: "20px",
-                  }}
-                >
-                  <p style={{ color: "#1e3a8a", margin: "0", fontSize: "12px", fontWeight: "500" }}>
-                    💡 <strong>Note:</strong> Enter P&L data here to populate the charts automatically. Gross Profit =
-                    Sales - COGS, Net Profit = Gross Profit - OPEX
-                  </p>
-                </div>
-              </div>
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Depreciation (12 months, comma separated):
+              </label>
+              <input
+                type="text"
+                value={pnlDetails.depreciation.join(", ")}
+                onChange={(e) =>
+                  setPnlDetails({
+                    ...pnlDetails,
+                    depreciation: e.target.value.split(",").map((v) => v.trim()),
+                  })
+                }
+                placeholder="e.g., 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3"
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
             </div>
 
-            <div
+            <div style={{ marginBottom: "20px" }}>
+              <h4 style={{ color: "#5d4037", marginBottom: "10px" }}>Budget Data</h4>
+
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Sales Revenue Budget (12 months, comma separated):
+              </label>
+              <input
+                type="text"
+                value={pnlDetails.salesBudget.join(", ")}
+                onChange={(e) =>
+                  setPnlDetails({
+                    ...pnlDetails,
+                    salesBudget: e.target.value.split(",").map((v) => v.trim()),
+                  })
+                }
+                placeholder="e.g., 110, 125, 115, 135, 145, 140, 150, 155, 165, 170, 175, 185"
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
+
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                COGS Budget (12 months, comma separated):
+              </label>
+              <input
+                type="text"
+                value={pnlDetails.cogsBudget.join(", ")}
+                onChange={(e) =>
+                  setPnlDetails({
+                    ...pnlDetails,
+                    cogsBudget: e.target.value.split(",").map((v) => v.trim()),
+                  })
+                }
+                placeholder="e.g., 75, 80, 85, 82, 87, 83, 90, 92, 95, 97, 100, 103"
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
+
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                OPEX Budget (12 months, comma separated):
+              </label>
+              <input
+                type="text"
+                value={pnlDetails.opexBudget.join(", ")}
+                onChange={(e) =>
+                  setPnlDetails({
+                    ...pnlDetails,
+                    opexBudget: e.target.value.split(",").map((v) => v.trim()),
+                  })
+                }
+                placeholder="e.g., 85, 88, 86, 90, 92, 88, 86, 90, 92, 90, 92, 92"
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
+
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Tax Budget (12 months, comma separated):
+              </label>
+              <input
+                type="text"
+                value={pnlDetails.taxBudget.join(", ")}
+                onChange={(e) =>
+                  setPnlDetails({
+                    ...pnlDetails,
+                    taxBudget: e.target.value.split(",").map((v) => v.trim()),
+                  })
+                }
+                placeholder="e.g., 6, 7, 6, 8, 9, 8, 9, 10, 11, 11, 12, 13"
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
+
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Interest Expense Budget (12 months, comma separated):
+              </label>
+              <input
+                type="text"
+                value={pnlDetails.interestExpenseBudget.join(", ")}
+                onChange={(e) =>
+                  setPnlDetails({
+                    ...pnlDetails,
+                    interestExpenseBudget: e.target.value.split(",").map((v) => v.trim()),
+                  })
+                }
+                placeholder="e.g., 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2"
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
+
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Depreciation Budget (12 months, comma separated):
+              </label>
+              <input
+                type="text"
+                value={pnlDetails.depreciationBudget.join(", ")}
+                onChange={(e) =>
+                  setPnlDetails({
+                    ...pnlDetails,
+                    depreciationBudget: e.target.value.split(",").map((v) => v.trim()),
+                  })
+                }
+                placeholder="e.g., 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3"
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
+            </div>
+
+            <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+              General Notes:
+            </label>
+            <textarea
+              value={pnlDetails.notes}
+              onChange={(e) => setPnlDetails({ ...pnlDetails, notes: e.target.value })}
+              placeholder="Add any additional notes..."
               style={{
-                display: "flex",
-                gap: "10px",
-                justifyContent: "flex-end",
-                marginTop: "20px",
+                width: "100%",
+                padding: "10px",
+                marginBottom: "20px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+                minHeight: "100px",
               }}
-            >
+            />
+
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
               <button
                 onClick={() => setShowModal(false)}
                 style={{
@@ -988,128 +1120,28 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
                   backgroundColor: "#e8ddd4",
                   color: "#5d4037",
                   border: "none",
-                  borderRadius: "4px",
+                  borderRadius: "6px",
                   cursor: "pointer",
-                  fontWeight: "500",
+                  fontWeight: "600",
                 }}
               >
                 Cancel
               </button>
               <button
-                onClick={handleSaveDetails}
+                onClick={handleSavePnlDetails}
+                disabled={loading}
                 style={{
                   padding: "10px 20px",
                   backgroundColor: "#5d4037",
-                  color: "white",
+                  color: "#fdfcfb",
                   border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
+                  borderRadius: "6px",
+                  cursor: loading ? "not-allowed" : "pointer",
+                  fontWeight: "600",
+                  opacity: loading ? 0.6 : 1,
                 }}
               >
-                Save Details
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* CSV Upload Modal */}
-      {showUploadModal && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: "white",
-              padding: "30px",
-              borderRadius: "8px",
-              boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
-              width: "500px",
-              maxWidth: "90vw",
-              textAlign: "center",
-            }}
-          >
-            <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "20px" }}>Upload CSV File</h3>
-
-            <div
-              style={{
-                backgroundColor: "#f0f8ff",
-                padding: "20px",
-                borderRadius: "6px",
-                marginBottom: "20px",
-                border: "2px dashed #b3d9ff",
-              }}
-            >
-              <p style={{ color: "#1e3a8a", margin: "0 0 15px 0", fontSize: "14px" }}>
-                Upload a CSV file with your balance sheet data. The CSV should have two columns: Account and Amount.
-              </p>
-
-              <div
-                style={{
-                  textAlign: "left",
-                  backgroundColor: "white",
-                  padding: "15px",
-                  borderRadius: "4px",
-                  fontSize: "12px",
-                  fontFamily: "monospace",
-                }}
-              >
-                <p>
-                  <strong>Expected format:</strong>
-                </p>
-                <p>Cash,100000</p>
-                <p>Inventory,50000</p>
-                <p>Accounts Receivable,75000</p>
-                <p>Property Plant & Equipment,200000</p>
-                <p>...</p>
-              </div>
-            </div>
-
-            <input
-              type="file"
-              accept=".csv"
-              onChange={handleCSVUpload}
-              style={{
-                marginBottom: "20px",
-                width: "100%",
-                padding: "10px",
-                border: "2px solid #e8ddd4",
-                borderRadius: "4px",
-              }}
-            />
-
-            <div
-              style={{
-                display: "flex",
-                gap: "10px",
-                justifyContent: "center",
-              }}
-            >
-              <button
-                onClick={() => setShowUploadModal(false)}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#e8ddd4",
-                  color: "#5d4037",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                }}
-              >
-                Cancel
+                {loading ? "Saving..." : "Save Details"}
               </button>
             </div>
           </div>
@@ -1119,10 +1151,10 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
   )
 }
 
-const CashflowTrends = ({ activeSection, financialYearStart, chartData, balanceSheetData, currentMonth }) => {
+// Cashflow Trends Component - Second position
+const CashflowTrends = ({ activeSection, viewMode, financialYearStart, balanceSheetData, currentMonth }) => {
   if (activeSection !== "cashflow-trends") return null
 
-  // Generate months based on financial year start
   const generateMonths = () => {
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     const startMonthIndex = months.indexOf(financialYearStart)
@@ -1130,31 +1162,60 @@ const CashflowTrends = ({ activeSection, financialYearStart, chartData, balanceS
   }
 
   const months = generateMonths()
+  const currentYear = new Date().getFullYear()
 
-  // Pull cashflow data from Balance Sheet cash values (convert to millions)
-  const cashflowData = months.map((month) => {
+  const labelsWithYear = months.map((month) => `${month} ${currentYear.toString().slice(-2)}`)
+
+  const exampleCashflowData = [1.2, 1.1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.35, 0.3, 0.25, 0.2]
+  const exampleBurnRateData = [0.1, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0.05, 0.05, 0.05, 0.05, 0.05]
+
+  const cashflowData = months.map((month, index) => {
     const balanceData = balanceSheetData?.[month]
-    return balanceData ? Number.parseFloat(balanceData.cash) / 1000000 : 0
+    return balanceData ? Number.parseFloat(balanceData.cash) / 1000000 : exampleCashflowData[index]
   })
 
-  // Calculate burn rate: (COGS + OPEX - Sales) for each month
-  // This represents net cash outflow per month
-  const burnRateData = months.map((month) => {
+  const burnRateData = months.map((month, index) => {
     const balanceData = balanceSheetData?.[month]
-    if (!balanceData) return 0
+    if (!balanceData) return exampleBurnRateData[index]
 
     const sales = Number.parseFloat(balanceData.sales) || 0
     const cogs = Number.parseFloat(balanceData.cogs) || 0
     const opex = Number.parseFloat(balanceData.opex) || 0
 
-    // Burn rate = Cash going out - Cash coming in
-    // Cash going out = COGS + OPEX, Cash coming in = Sales
-    const burnRate = (cogs + opex - sales) / 1000000 // Convert to millions
-    return Math.max(burnRate, 0) // Only show positive burn rate
+    const burnRate = (cogs + opex - sales) / 1000000
+    return Math.max(burnRate, 0)
   })
 
-  // Calculate months runway: Current cash balance / average monthly burn rate
-  const currentCashBalance = cashflowData[months.indexOf(currentMonth)] || 0
+  const aggregateDataForView = (data) => {
+    if (viewMode === "month") {
+      return data
+    } else if (viewMode === "quarter") {
+      const quarters = []
+      for (let i = 0; i < 4; i++) {
+        const sum = data.slice(i * 3, i * 3 + 3).reduce((acc, val) => acc + val, 0)
+        quarters.push(sum) // Keep as sum for quarters, division by 3 removed for consistency with P&L aggregation
+      }
+      return quarters
+    } else {
+      return [data.reduce((acc, val) => acc + val, 0)] // Keep as sum for year, division by 12 removed for consistency
+    }
+  }
+
+  const getLabelsForView = () => {
+    if (viewMode === "month") {
+      return labelsWithYear
+    } else if (viewMode === "quarter") {
+      return ["Q1", "Q2", "Q3", "Q4"]
+    } else {
+      return ["2025"]
+    }
+  }
+
+  const displayLabels = getLabelsForView()
+  const displayCashflow = aggregateDataForView(cashflowData)
+  const displayBurnRate = aggregateDataForView(burnRateData)
+
+  const currentCashBalance = cashflowData[months.indexOf(currentMonth)] || cashflowData[0]
   const avgBurnRate =
     burnRateData.reduce((sum, rate) => sum + rate, 0) / burnRateData.filter((rate) => rate > 0).length || 1
   const runwayMonths = avgBurnRate > 0 ? Math.round(currentCashBalance / avgBurnRate) : 999
@@ -1190,7 +1251,7 @@ const CashflowTrends = ({ activeSection, financialYearStart, chartData, balanceS
       x: {
         title: {
           display: true,
-          text: "Months",
+          text: viewMode === "month" ? "Months" : viewMode === "quarter" ? "Quarters" : "Year",
           color: "#72542b",
         },
       },
@@ -1229,7 +1290,7 @@ const CashflowTrends = ({ activeSection, financialYearStart, chartData, balanceS
       x: {
         title: {
           display: true,
-          text: "Months",
+          text: viewMode === "month" ? "Months" : viewMode === "quarter" ? "Quarters" : "Year",
           color: "#72542b",
         },
       },
@@ -1246,8 +1307,6 @@ const CashflowTrends = ({ activeSection, financialYearStart, chartData, balanceS
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
     >
-      {/* Information Panel */}
-
       <div
         style={{
           display: "grid",
@@ -1258,11 +1317,11 @@ const CashflowTrends = ({ activeSection, financialYearStart, chartData, balanceS
         <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
           <Line
             data={{
-              labels: months,
+              labels: displayLabels,
               datasets: [
                 {
                   label: "Cashflow",
-                  data: cashflowData,
+                  data: displayCashflow,
                   borderColor: "#5d4037",
                   backgroundColor: "rgba(93, 64, 55, 0.1)",
                   borderWidth: 2,
@@ -1277,11 +1336,11 @@ const CashflowTrends = ({ activeSection, financialYearStart, chartData, balanceS
         <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
           <Line
             data={{
-              labels: months,
+              labels: displayLabels,
               datasets: [
                 {
                   label: "Burn Rate",
-                  data: burnRateData,
+                  data: displayBurnRate,
                   borderColor: "#8b6914",
                   backgroundColor: "rgba(139, 105, 20, 0.1)",
                   borderWidth: 2,
@@ -1352,8 +1411,43 @@ const CashflowTrends = ({ activeSection, financialYearStart, chartData, balanceS
   )
 }
 
-const BalanceSheetHealth = ({ activeSection, financialYearStart, chartData, onUpdateChartData, user }) => {
+// Balance Sheet Component - Third position with sub-tabs
+const BalanceSheet = ({
+  activeSection,
+  viewMode,
+  onUpdateBalanceSheet,
+  balanceSheetData,
+  currentMonth,
+  onMonthChange,
+  user,
+  onUpdateChartData,
+  chartData,
+  isInvestorView, // Added isInvestorView prop
+}) => {
+  const [balanceSheetTab, setBalanceSheetTab] = useState("snapshot")
   const [showModal, setShowModal] = useState(false)
+  const [showUploadModal, setShowUploadModal] = useState(false)
+  const [showHealthModal, setShowHealthModal] = useState(false)
+  const [balanceSheetDetails, setBalanceSheetDetails] = useState({
+    cash: "",
+    inventory: "",
+    prepaidExpenses: "",
+    accountsReceivable: "",
+    deposits: "",
+    propertyPlantEquipment: "",
+    intangibleAssets: "",
+    accumulatedDepreciation: "",
+    accountsPayable: "",
+    currentBorrowing: "",
+    nonCurrentLiabilities: "",
+    longTermLiabilities: "",
+    ownersEquity: "",
+    sales: "",
+    cogs: "",
+    opex: "",
+    month: currentMonth,
+    notes: "",
+  })
   const [healthDetails, setHealthDetails] = useState({
     receivables: "",
     payables: "",
@@ -1365,28 +1459,155 @@ const BalanceSheetHealth = ({ activeSection, financialYearStart, chartData, onUp
     notes: "",
   })
 
-  if (activeSection !== "balance-sheet-health") return null
+  if (activeSection !== "balance-sheet") return null
 
-  // Generate months based on financial year start
-  const generateMonths = () => {
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    const startMonthIndex = months.indexOf(financialYearStart)
-    return [...months.slice(startMonthIndex), ...months.slice(0, startMonthIndex)]
+  const currentData = balanceSheetData?.[currentMonth] || {}
+
+  const cash = Number.parseFloat(currentData.cash) || 0
+  const inventory = Number.parseFloat(currentData.inventory) || 0
+  const prepaidExpenses = Number.parseFloat(currentData.prepaidExpenses) || 0
+  const accountsReceivable = Number.parseFloat(currentData.accountsReceivable) || 0
+  const deposits = Number.parseFloat(currentData.deposits) || 0
+  const propertyPlantEquipment = Number.parseFloat(currentData.propertyPlantEquipment) || 0
+  const intangibleAssets = Number.parseFloat(currentData.intangibleAssets) || 0
+  const accumulatedDepreciation = Number.parseFloat(currentData.accumulatedDepreciation) || 0
+
+  const accountsPayable = Number.parseFloat(currentData.accountsPayable) || 0
+  const currentBorrowing = Number.parseFloat(currentData.currentBorrowing) || 0
+  const nonCurrentLiabilities = Number.parseFloat(currentData.nonCurrentLiabilities) || 0
+  const longTermLiabilities = Number.parseFloat(currentData.longTermLiabilities) || 0
+  const ownersEquity = Number.parseFloat(currentData.ownersEquity) || 0
+
+  const totalCurrentAssets = cash + inventory + prepaidExpenses + accountsReceivable
+  const totalNonCurrentAssets = propertyPlantEquipment + intangibleAssets - accumulatedDepreciation
+  const totalAssets = totalCurrentAssets + deposits + totalNonCurrentAssets
+
+  const totalCurrentLiabilities = accountsPayable + currentBorrowing
+  const totalNonCurrentLiabilities = nonCurrentLiabilities
+  const totalLiabilities = totalCurrentLiabilities + totalNonCurrentLiabilities + longTermLiabilities
+  const totalLiabilitiesAndCapital = totalLiabilities + ownersEquity
+
+  const handleDownloadBalanceSheet = () => {
+    const csvContent = `Balance Sheet - ${currentMonth}
+Assets,Amount
+Current Assets,
+Cash,${cash}
+Inventory,${inventory}
+Prepaid Expenses,${prepaidExpenses}
+Accounts Receivable,${accountsReceivable}
+Total Current Assets,${totalCurrentAssets}
+
+Deposits,${deposits}
+
+Non-Current Assets,
+Property Plant & Equipment,${propertyPlantEquipment}
+Intangible Assets,${intangibleAssets}
+Accumulated Depreciation,${accumulatedDepreciation}
+Total Non-Current Assets,${totalNonCurrentAssets}
+
+Total Assets,${totalAssets}
+
+Liabilities and Equity,
+Current Liabilities,
+Accounts Payable,${accountsPayable}
+Current Borrowing,${currentBorrowing}
+Total Current Liabilities,${totalCurrentLiabilities}
+
+Non-Current Liabilities,${nonCurrentLiabilities}
+Long-term Liabilities,${longTermLiabilities}
+Total Liabilities,${totalLiabilities}
+
+Owners Equity,${ownersEquity}
+Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
+
+    const blob = new Blob([csvContent], { type: "text/csv" })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `balance_sheet_${currentMonth}.csv`
+    a.click()
+    window.URL.revokeObjectURL(url)
   }
-
-  const months = generateMonths()
-
-  // Use stored data or empty arrays for manual entry
-  const receivablesData = chartData.receivables?.actual || []
-  const payablesData = chartData.payables?.actual || []
-  const receivablesDaysData = chartData.receivablesDays?.actual || []
-  const payablesDaysData = chartData.payablesDays?.actual || []
-  const inventoryData = chartData.inventory?.actual || []
-  const inventoryDaysData = chartData.inventoryDays?.actual || []
 
   const handleAddDetails = () => {
     setShowModal(true)
-    // Pre-fill with existing data if available
+    setBalanceSheetDetails({
+      ...currentData,
+      month: currentMonth,
+      notes: balanceSheetData?.[currentMonth]?.notes || "",
+    })
+  }
+
+  const handleSaveDetails = async () => {
+    const updatedData = {
+      ...balanceSheetData,
+      [currentMonth]: {
+        ...balanceSheetDetails,
+        month: currentMonth,
+      },
+    }
+    onUpdateBalanceSheet(updatedData)
+
+    if (user) {
+      try {
+        await setDoc(doc(db, "financialData", `${user.uid}_balanceSheet`), {
+          userId: user.uid,
+          chartName: "balanceSheet",
+          data: updatedData,
+          lastUpdated: new Date().toISOString(),
+        })
+        console.log("Balance sheet data saved to Firebase")
+      } catch (error) {
+        console.error("Error saving balance sheet data:", error)
+      }
+    }
+
+    setShowModal(false)
+  }
+
+  const handleUploadBalanceSheet = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const text = event.target.result
+      const lines = text.split("\n")
+      const data = {}
+
+      lines.forEach((line) => {
+        const [key, value] = line.split(",")
+        if (key && value) {
+          const cleanKey = key.trim().toLowerCase().replace(/\s+/g, "")
+          const cleanValue = value.trim()
+          if (!isNaN(cleanValue)) {
+            data[cleanKey] = cleanValue
+          }
+        }
+      })
+
+      const updatedData = {
+        ...balanceSheetData,
+        [currentMonth]: {
+          ...balanceSheetData?.[currentMonth],
+          ...data,
+        },
+      }
+      onUpdateBalanceSheet(updatedData)
+      setShowUploadModal(false)
+    }
+    reader.readAsText(file)
+  }
+
+  const handleAddHealthDetails = () => {
+    setShowHealthModal(true)
+    const receivablesData = chartData.receivables?.actual || []
+    const payablesData = chartData.payables?.actual || []
+    const receivablesDaysData = chartData.receivablesDays?.actual || []
+    const payablesDaysData = chartData.payablesDays?.actual || []
+    const inventoryData = chartData.inventory?.actual || []
+    const inventoryDaysData = chartData.inventoryDays?.actual || []
+
     setHealthDetails({
       receivables: receivablesData.join(",") || "",
       payables: payablesData.join(",") || "",
@@ -1399,8 +1620,7 @@ const BalanceSheetHealth = ({ activeSection, financialYearStart, chartData, onUp
     })
   }
 
-  const handleSaveDetails = async () => {
-    // Convert comma-separated strings to arrays
+  const handleSaveHealthDetails = async () => {
     const parseDataArray = (dataString) => {
       const values = dataString.split(",").map((val) => Number.parseFloat(val.trim()) || 0)
       while (values.length < 12) values.push(0)
@@ -1420,7 +1640,6 @@ const BalanceSheetHealth = ({ activeSection, financialYearStart, chartData, onUp
       },
     }
 
-    // Update each chart data
     Object.keys(updatedData).forEach((key) => {
       if (key !== "balanceSheetHealth") {
         onUpdateChartData(key, updatedData[key])
@@ -1428,7 +1647,6 @@ const BalanceSheetHealth = ({ activeSection, financialYearStart, chartData, onUp
     })
     onUpdateChartData("balanceSheetHealth", updatedData.balanceSheetHealth)
 
-    // Save to Firebase if user is logged in
     if (user) {
       try {
         for (const [key, data] of Object.entries(updatedData)) {
@@ -1453,14 +1671,58 @@ const BalanceSheetHealth = ({ activeSection, financialYearStart, chartData, onUp
       }
     }
 
-    setShowModal(false)
+    setShowHealthModal(false)
   }
+
+  const generateMonths = () => {
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    return months
+  }
+
+  const months = generateMonths()
+  const currentYear = new Date().getFullYear()
+  const labelsWithYear = months.map((month) => `${month} ${currentYear.toString().slice(-2)}`)
+
+  const receivablesData = chartData.receivables?.actual || []
+  const payablesData = chartData.payables?.actual || []
+  const receivablesDaysData = chartData.receivablesDays?.actual || []
+  const payablesDaysData = chartData.payablesDays?.actual || []
+  const inventoryData = chartData.inventory?.actual || []
+  const inventoryDaysData = chartData.inventoryDays?.actual || []
+
+  const aggregateDataForView = (data) => {
+    if (viewMode === "month") {
+      return data
+    } else if (viewMode === "quarter") {
+      const quarters = []
+      for (let i = 0; i < 4; i++) {
+        const sum = data.slice(i * 3, i * 3 + 3).reduce((acc, val) => acc + val, 0)
+        quarters.push(sum / 3)
+      }
+      return quarters
+    } else {
+      return [data.reduce((acc, val) => acc + val, 0) / 12]
+    }
+  }
+
+  const getLabelsForView = () => {
+    if (viewMode === "month") {
+      return labelsWithYear
+    } else if (viewMode === "quarter") {
+      return ["Q1", "Q2", "Q3", "Q4"]
+    } else {
+      return ["2025"]
+    }
+  }
+
+  const displayLabels = getLabelsForView()
 
   const receivablesPayablesOptions = {
     responsive: true,
     plugins: {
       legend: {
-        display: false,
+        display: true,
+        position: "top",
       },
       title: {
         display: true,
@@ -1488,7 +1750,7 @@ const BalanceSheetHealth = ({ activeSection, financialYearStart, chartData, onUp
       x: {
         title: {
           display: true,
-          text: "Months",
+          text: viewMode === "month" ? "Months" : viewMode === "quarter" ? "Quarters" : "Year",
           color: "#72542b",
         },
       },
@@ -1499,7 +1761,8 @@ const BalanceSheetHealth = ({ activeSection, financialYearStart, chartData, onUp
     responsive: true,
     plugins: {
       legend: {
-        display: false,
+        display: true,
+        position: "top",
       },
       title: {
         display: true,
@@ -1522,7 +1785,7 @@ const BalanceSheetHealth = ({ activeSection, financialYearStart, chartData, onUp
       x: {
         title: {
           display: true,
-          text: "Months",
+          text: viewMode === "month" ? "Months" : viewMode === "quarter" ? "Quarters" : "Year",
           color: "#72542b",
         },
       },
@@ -1533,7 +1796,8 @@ const BalanceSheetHealth = ({ activeSection, financialYearStart, chartData, onUp
     responsive: true,
     plugins: {
       legend: {
-        display: false,
+        display: true,
+        position: "top",
       },
       title: {
         display: true,
@@ -1575,7 +1839,7 @@ const BalanceSheetHealth = ({ activeSection, financialYearStart, chartData, onUp
       x: {
         title: {
           display: true,
-          text: "Months",
+          text: viewMode === "month" ? "Months" : viewMode === "quarter" ? "Quarters" : "Year",
           color: "#72542b",
         },
       },
@@ -1595,16 +1859,16 @@ const BalanceSheetHealth = ({ activeSection, financialYearStart, chartData, onUp
       <div
         style={{
           display: "flex",
-          justifyContent: "center",
+          gap: "15px",
           marginBottom: "20px",
         }}
       >
         <button
-          onClick={handleAddDetails}
+          onClick={() => setBalanceSheetTab("snapshot")}
           style={{
-            padding: "12px 24px",
-            backgroundColor: "#5d4037",
-            color: "white",
+            padding: "10px 20px",
+            backgroundColor: balanceSheetTab === "snapshot" ? "#5d4037" : "#e8ddd4",
+            color: balanceSheetTab === "snapshot" ? "#fdfcfb" : "#5d4037",
             border: "none",
             borderRadius: "6px",
             cursor: "pointer",
@@ -1612,96 +1876,777 @@ const BalanceSheetHealth = ({ activeSection, financialYearStart, chartData, onUp
             fontSize: "14px",
           }}
         >
-          ➕ Add Details
+          BS Snapshot
+        </button>
+        <button
+          onClick={() => setBalanceSheetTab("health")}
+          style={{
+            padding: "10px 20px",
+            backgroundColor: balanceSheetTab === "health" ? "#5d4037" : "#e8ddd4",
+            color: balanceSheetTab === "health" ? "#fdfcfb" : "#5d4037",
+            border: "none",
+            borderRadius: "6px",
+            cursor: "pointer",
+            fontWeight: "600",
+            fontSize: "14px",
+          }}
+        >
+          BS Health
         </button>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr 1fr",
-          gap: "20px",
-        }}
-      >
-        <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
-          <Bar
-            data={{
-              labels: months,
-              datasets: [
-                {
-                  label: "Receivables",
-                  data: receivablesData,
-                  backgroundColor: "#9c7c5f",
-                  borderColor: "#5d4037",
-                  borderWidth: 1,
-                },
-                {
-                  label: "Payables",
-                  data: payablesData,
-                  backgroundColor: "#8b6914",
-                  borderColor: "#5d4037",
-                  borderWidth: 1,
-                },
-              ],
+      {balanceSheetTab === "snapshot" && (
+        <>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "20px",
+              flexWrap: "wrap",
+              gap: "15px",
             }}
-            options={receivablesPayablesOptions}
-          />
-        </div>
-        <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
-          <Bar
-            data={{
-              labels: months,
-              datasets: [
-                {
-                  label: "Receivables Days",
-                  data: receivablesDaysData,
-                  backgroundColor: "#b89f8d",
-                  borderColor: "#5d4037",
-                  borderWidth: 1,
-                },
-                {
-                  label: "Payables Days",
-                  data: payablesDaysData,
-                  backgroundColor: "#d4c4b0",
-                  borderColor: "#5d4037",
-                  borderWidth: 1,
-                },
-              ],
-            }}
-            options={daysOptions}
-          />
-        </div>
-        <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
-          <Bar
-            data={{
-              labels: months,
-              datasets: [
-                {
-                  label: "Inventory (R-m)",
-                  data: inventoryData,
-                  backgroundColor: "rgba(156, 124, 95, 0.7)",
-                  borderColor: "#5d4037",
-                  borderWidth: 1,
-                  yAxisID: "y",
-                },
-                {
-                  label: "Inventory Days",
-                  data: inventoryDaysData,
-                  borderColor: "#8b6914",
-                  backgroundColor: "rgba(139, 105, 20, 0.1)",
-                  borderWidth: 2,
-                  type: "line",
-                  yAxisID: "y1",
-                },
-              ],
-            }}
-            options={inventoryOptions}
-          />
-        </div>
-      </div>
+          >
+            <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+              <label style={{ color: "#5d4037", fontWeight: "600" }}>Select Month:</label>
+              <select
+                value={currentMonth}
+                onChange={(e) => onMonthChange(e.target.value)}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  backgroundColor: "#fdfcfb",
+                  color: "#5d4037",
+                  cursor: "pointer",
+                }}
+              >
+                {months.map((month) => (
+                  <option key={month} value={month}>
+                    {month}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-      {/* Modal for adding/editing details */}
-      {showModal && (
+            <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+              {!isInvestorView && (
+                <>
+                  <button
+                    onClick={handleAddDetails}
+                    style={{
+                      padding: "10px 20px",
+                      backgroundColor: "#5d4037",
+                      color: "#fdfcfb",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontWeight: "600",
+                      fontSize: "14px",
+                    }}
+                  >
+                    Add Balance Sheet Details
+                  </button>
+                  <button
+                    onClick={() => setShowUploadModal(true)}
+                    style={{
+                      padding: "10px 20px",
+                      backgroundColor: "#8b6914",
+                      color: "#fdfcfb",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontWeight: "600",
+                      fontSize: "14px",
+                    }}
+                  >
+                    Upload CSV
+                  </button>
+                  <button
+                    onClick={handleDownloadBalanceSheet}
+                    style={{
+                      padding: "10px 20px",
+                      backgroundColor: "#8b6914",
+                      color: "#fdfcfb",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontWeight: "600",
+                      fontSize: "14px",
+                    }}
+                  >
+                    Download CSV
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "30px",
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: "#f7f3f0",
+                padding: "20px",
+                borderRadius: "6px",
+              }}
+            >
+              <h3 style={{ color: "#5d4037", marginBottom: "15px" }}>Assets</h3>
+
+              <div style={{ marginBottom: "15px" }}>
+                <h4 style={{ color: "#72542b", marginBottom: "10px" }}>Current Assets</h4>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                  <span style={{ color: "#5d4037" }}>Cash</span>
+                  <span style={{ color: "#5d4037", fontWeight: "600" }}>R{cash.toLocaleString()}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                  <span style={{ color: "#5d4037" }}>Inventory</span>
+                  <span style={{ color: "#5d4037", fontWeight: "600" }}>R{inventory.toLocaleString()}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                  <span style={{ color: "#5d4037" }}>Prepaid Expenses</span>
+                  <span style={{ color: "#5d4037", fontWeight: "600" }}>R{prepaidExpenses.toLocaleString()}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                  <span style={{ color: "#5d4037" }}>Accounts Receivable</span>
+                  <span style={{ color: "#5d4037", fontWeight: "600" }}>R{accountsReceivable.toLocaleString()}</span>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginTop: "10px",
+                    paddingTop: "10px",
+                    borderTop: "2px solid #e8ddd4",
+                  }}
+                >
+                  <span style={{ color: "#5d4037", fontWeight: "700" }}>Total Current Assets</span>
+                  <span style={{ color: "#5d4037", fontWeight: "700" }}>R{totalCurrentAssets.toLocaleString()}</span>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "15px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                  <span style={{ color: "#5d4037" }}>Deposits</span>
+                  <span style={{ color: "#5d4037", fontWeight: "600" }}>R{deposits.toLocaleString()}</span>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "15px" }}>
+                <h4 style={{ color: "#72542b", marginBottom: "10px" }}>Non-Current Assets</h4>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                  <span style={{ color: "#5d4037" }}>Property, Plant & Equipment</span>
+                  <span style={{ color: "#5d4037", fontWeight: "600" }}>
+                    R{propertyPlantEquipment.toLocaleString()}
+                  </span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                  <span style={{ color: "#5d4037" }}>Intangible Assets</span>
+                  <span style={{ color: "#5d4037", fontWeight: "600" }}>R{intangibleAssets.toLocaleString()}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                  <span style={{ color: "#5d4037" }}>Accumulated Depreciation</span>
+                  <span style={{ color: "#5d4037", fontWeight: "600" }}>
+                    -R{accumulatedDepreciation.toLocaleString()}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginTop: "10px",
+                    paddingTop: "10px",
+                    borderTop: "2px solid #e8ddd4",
+                  }}
+                >
+                  <span style={{ color: "#5d4037", fontWeight: "700" }}>Total Non-Current Assets</span>
+                  <span style={{ color: "#5d4037", fontWeight: "700" }}>R{totalNonCurrentAssets.toLocaleString()}</span>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginTop: "20px",
+                  paddingTop: "15px",
+                  borderTop: "3px solid #5d4037",
+                }}
+              >
+                <span style={{ color: "#5d4037", fontWeight: "800", fontSize: "18px" }}>Total Assets</span>
+                <span style={{ color: "#5d4037", fontWeight: "800", fontSize: "18px" }}>
+                  R{totalAssets.toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            <div
+              style={{
+                backgroundColor: "#f7f3f0",
+                padding: "20px",
+                borderRadius: "6px",
+              }}
+            >
+              <h3 style={{ color: "#5d4037", marginBottom: "15px" }}>Liabilities and Equity</h3>
+
+              <div style={{ marginBottom: "15px" }}>
+                <h4 style={{ color: "#72542b", marginBottom: "10px" }}>Current Liabilities</h4>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                  <span style={{ color: "#5d4037" }}>Accounts Payable</span>
+                  <span style={{ color: "#5d4037", fontWeight: "600" }}>R{accountsPayable.toLocaleString()}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                  <span style={{ color: "#5d4037" }}>Current Borrowing</span>
+                  <span style={{ color: "#5d4037", fontWeight: "600" }}>R{currentBorrowing.toLocaleString()}</span>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginTop: "10px",
+                    paddingTop: "10px",
+                    borderTop: "2px solid #e8ddd4",
+                  }}
+                >
+                  <span style={{ color: "#5d4037", fontWeight: "700" }}>Total Current Liabilities</span>
+                  <span style={{ color: "#5d4037", fontWeight: "700" }}>
+                    R{totalCurrentLiabilities.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "15px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                  <span style={{ color: "#5d4037" }}>Non-Current Liabilities</span>
+                  <span style={{ color: "#5d4037", fontWeight: "600" }}>R{nonCurrentLiabilities.toLocaleString()}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                  <span style={{ color: "#5d4037" }}>Long-term Liabilities</span>
+                  <span style={{ color: "#5d4037", fontWeight: "600" }}>R{longTermLiabilities.toLocaleString()}</span>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginTop: "10px",
+                    paddingTop: "10px",
+                    borderTop: "2px solid #e8ddd4",
+                  }}
+                >
+                  <span style={{ color: "#5d4037", fontWeight: "700" }}>Total Liabilities</span>
+                  <span style={{ color: "#5d4037", fontWeight: "700" }}>R{totalLiabilities.toLocaleString()}</span>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "15px" }}>
+                <h4 style={{ color: "#72542b", marginBottom: "10px" }}>Equity</h4>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                  <span style={{ color: "#5d4037" }}>Owners Equity</span>
+                  <span style={{ color: "#5d4037", fontWeight: "600" }}>R{ownersEquity.toLocaleString()}</span>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginTop: "20px",
+                  paddingTop: "15px",
+                  borderTop: "3px solid #5d4037",
+                }}
+              >
+                <span style={{ color: "#5d4037", fontWeight: "800", fontSize: "18px" }}>
+                  Total Liabilities and Capital
+                </span>
+                <span style={{ color: "#5d4037", fontWeight: "800", fontSize: "18px" }}>
+                  R{totalLiabilitiesAndCapital.toLocaleString()}
+                </span>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {balanceSheetTab === "health" && (
+        <>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              marginBottom: "20px",
+            }}
+          >
+            {!isInvestorView && (
+              <button
+                onClick={handleAddHealthDetails}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                }}
+              >
+                Add Balance Sheet Health Details
+              </button>
+            )}
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: "20px",
+              justifyContent: "space-between",
+            }}
+          >
+            <div style={{ flex: 1, height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
+              <Bar
+                data={{
+                  labels: displayLabels,
+                  datasets: [
+                    {
+                      label: "Receivables",
+                      data: aggregateDataForView(receivablesData),
+                      backgroundColor: "rgba(93, 64, 55, 0.6)",
+                      borderColor: "rgb(93, 64, 55)",
+                      borderWidth: 2,
+                    },
+                    {
+                      label: "Payables",
+                      data: aggregateDataForView(payablesData),
+                      backgroundColor: "rgba(139, 105, 20, 0.6)",
+                      borderColor: "rgb(139, 105, 20)",
+                      borderWidth: 2,
+                    },
+                  ],
+                }}
+                options={receivablesPayablesOptions}
+              />
+            </div>
+
+            <div style={{ flex: 1, height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
+              <Bar
+                data={{
+                  labels: displayLabels,
+                  datasets: [
+                    {
+                      label: "Receivables Days",
+                      data: aggregateDataForView(receivablesDaysData),
+                      backgroundColor: "rgba(114, 84, 43, 0.6)",
+                      borderColor: "rgb(114, 84, 43)",
+                      borderWidth: 2,
+                    },
+                    {
+                      label: "Payables Days",
+                      data: aggregateDataForView(payablesDaysData),
+                      backgroundColor: "rgba(156, 124, 95, 0.6)",
+                      borderColor: "rgb(156, 124, 95)",
+                      borderWidth: 2,
+                    },
+                  ],
+                }}
+                options={daysOptions}
+              />
+            </div>
+
+            <div style={{ flex: 1, height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
+              <Bar
+                data={{
+                  labels: displayLabels,
+                  datasets: [
+                    {
+                      label: "Inventory",
+                      data: aggregateDataForView(inventoryData),
+                      backgroundColor: "rgba(76, 175, 80, 0.6)",
+                      borderColor: "rgb(76, 175, 80)",
+                      borderWidth: 2,
+                      yAxisID: "y",
+                    },
+                    {
+                      label: "Inventory Days",
+                      data: aggregateDataForView(inventoryDaysData),
+                      backgroundColor: "rgba(139, 105, 20, 0.6)",
+                      borderColor: "rgb(139, 105, 20)",
+                      borderWidth: 2,
+                      yAxisID: "y1",
+                    },
+                  ],
+                }}
+                options={inventoryOptions}
+              />
+            </div>
+          </div>
+        </>
+      )}
+
+      {showModal && !isInvestorView && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "#fdfcfb",
+              padding: "30px",
+              borderRadius: "8px",
+              maxWidth: "800px",
+              maxHeight: "90vh",
+              overflow: "auto",
+              width: "90%",
+            }}
+          >
+            <h3 style={{ color: "#5d4037", marginBottom: "20px" }}>Add Balance Sheet Details - {currentMonth}</h3>
+
+            <div style={{ marginBottom: "20px" }}>
+              <h4 style={{ color: "#5d4037", marginBottom: "10px" }}>Assets</h4>
+
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Cash:
+              </label>
+              <input
+                type="number"
+                value={balanceSheetDetails.cash}
+                onChange={(e) => setBalanceSheetDetails({ ...balanceSheetDetails, cash: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
+
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Inventory:
+              </label>
+              <input
+                type="number"
+                value={balanceSheetDetails.inventory}
+                onChange={(e) => setBalanceSheetDetails({ ...balanceSheetDetails, inventory: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
+
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Prepaid Expenses:
+              </label>
+              <input
+                type="number"
+                value={balanceSheetDetails.prepaidExpenses}
+                onChange={(e) => setBalanceSheetDetails({ ...balanceSheetDetails, prepaidExpenses: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
+
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Accounts Receivable:
+              </label>
+              <input
+                type="number"
+                value={balanceSheetDetails.accountsReceivable}
+                onChange={(e) => setBalanceSheetDetails({ ...balanceSheetDetails, accountsReceivable: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
+
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Deposits:
+              </label>
+              <input
+                type="number"
+                value={balanceSheetDetails.deposits}
+                onChange={(e) => setBalanceSheetDetails({ ...balanceSheetDetails, deposits: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
+
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Property, Plant & Equipment:
+              </label>
+              <input
+                type="number"
+                value={balanceSheetDetails.propertyPlantEquipment}
+                onChange={(e) =>
+                  setBalanceSheetDetails({ ...balanceSheetDetails, propertyPlantEquipment: e.target.value })
+                }
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
+
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Intangible Assets:
+              </label>
+              <input
+                type="number"
+                value={balanceSheetDetails.intangibleAssets}
+                onChange={(e) => setBalanceSheetDetails({ ...balanceSheetDetails, intangibleAssets: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
+
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Accumulated Depreciation:
+              </label>
+              <input
+                type="number"
+                value={balanceSheetDetails.accumulatedDepreciation}
+                onChange={(e) =>
+                  setBalanceSheetDetails({ ...balanceSheetDetails, accumulatedDepreciation: e.target.value })
+                }
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: "20px" }}>
+              <h4 style={{ color: "#5d4037", marginBottom: "10px" }}>Liabilities</h4>
+
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Accounts Payable:
+              </label>
+              <input
+                type="number"
+                value={balanceSheetDetails.accountsPayable}
+                onChange={(e) => setBalanceSheetDetails({ ...balanceSheetDetails, accountsPayable: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
+
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Current Borrowing:
+              </label>
+              <input
+                type="number"
+                value={balanceSheetDetails.currentBorrowing}
+                onChange={(e) => setBalanceSheetDetails({ ...balanceSheetDetails, currentBorrowing: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
+
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Non-Current Liabilities:
+              </label>
+              <input
+                type="number"
+                value={balanceSheetDetails.nonCurrentLiabilities}
+                onChange={(e) =>
+                  setBalanceSheetDetails({ ...balanceSheetDetails, nonCurrentLiabilities: e.target.value })
+                }
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
+
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Long-term Liabilities:
+              </label>
+              <input
+                type="number"
+                value={balanceSheetDetails.longTermLiabilities}
+                onChange={(e) =>
+                  setBalanceSheetDetails({ ...balanceSheetDetails, longTermLiabilities: e.target.value })
+                }
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: "20px" }}>
+              <h4 style={{ color: "#5d4037", marginBottom: "10px" }}>Equity</h4>
+
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Owners Equity:
+              </label>
+              <input
+                type="number"
+                value={balanceSheetDetails.ownersEquity}
+                onChange={(e) => setBalanceSheetDetails({ ...balanceSheetDetails, ownersEquity: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: "20px" }}>
+              <h4 style={{ color: "#5d4037", marginBottom: "10px" }}>P&L Data (for Cashflow)</h4>
+
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Sales:
+              </label>
+              <input
+                type="number"
+                value={balanceSheetDetails.sales}
+                onChange={(e) => setBalanceSheetDetails({ ...balanceSheetDetails, sales: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
+
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                COGS:
+              </label>
+              <input
+                type="number"
+                value={balanceSheetDetails.cogs}
+                onChange={(e) => setBalanceSheetDetails({ ...balanceSheetDetails, cogs: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
+
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                OPEX:
+              </label>
+              <input
+                type="number"
+                value={balanceSheetDetails.opex}
+                onChange={(e) => setBalanceSheetDetails({ ...balanceSheetDetails, opex: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
+            </div>
+
+            <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+              Notes:
+            </label>
+            <textarea
+              value={balanceSheetDetails.notes}
+              onChange={(e) => setBalanceSheetDetails({ ...balanceSheetDetails, notes: e.target.value })}
+              placeholder="Add any additional notes..."
+              style={{
+                width: "100%",
+                padding: "10px",
+                marginBottom: "20px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+                minHeight: "100px",
+              }}
+            />
+
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setShowModal(false)}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveDetails}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                }}
+              >
+                Save Details
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showUploadModal && (
         <div
           style={{
             position: "fixed",
@@ -1718,222 +2663,238 @@ const BalanceSheetHealth = ({ activeSection, financialYearStart, chartData, onUp
         >
           <div
             style={{
-              backgroundColor: "white",
+              backgroundColor: "#fdfcfb",
               padding: "30px",
               borderRadius: "8px",
-              boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
-              width: "600px",
-              maxWidth: "90vw",
-              maxHeight: "90vh",
-              overflowY: "auto",
+              maxWidth: "500px",
+              width: "90%",
             }}
           >
-            <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "20px" }}>Balance Sheet Health Details</h3>
-
-            <div
+            <h3 style={{ color: "#5d4037", marginBottom: "20px" }}>Upload Balance Sheet CSV</h3>
+            <p style={{ color: "#5d4037", marginBottom: "20px", fontSize: "14px" }}>
+              Upload a CSV file with your balance sheet data. The file should have two columns: field name and value.
+            </p>
+            <input
+              type="file"
+              accept=".csv"
+              onChange={handleUploadBalanceSheet}
               style={{
-                backgroundColor: "#f0f8ff",
-                padding: "15px",
-                borderRadius: "6px",
+                width: "100%",
+                padding: "10px",
                 marginBottom: "20px",
-                border: "1px solid #b3d9ff",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
               }}
-            >
-              <p style={{ color: "#1e3a8a", margin: "0", fontSize: "14px", fontWeight: "500" }}>
-                💡 <strong>Tip:</strong> Enter data for all 12 months separated by commas.
-              </p>
-            </div>
-
-            <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#5d4037", fontWeight: "500" }}>
-                Receivables (12 months, comma separated):
-              </label>
-              <input
-                type="text"
-                value={healthDetails.receivables}
-                onChange={(e) => setHealthDetails((prev) => ({ ...prev, receivables: e.target.value }))}
-                placeholder="e.g., 100, 120, 110, 130, 125, 140, 135, 145, 150, 155, 160, 165"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#5d4037", fontWeight: "500" }}>
-                Payables (12 months, comma separated):
-              </label>
-              <input
-                type="text"
-                value={healthDetails.payables}
-                onChange={(e) => setHealthDetails((prev) => ({ ...prev, payables: e.target.value }))}
-                placeholder="e.g., 80, 85, 90, 95, 88, 92, 87, 89, 91, 93, 95, 97"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#5d4037", fontWeight: "500" }}>
-                Receivables Days (12 months, comma separated):
-              </label>
-              <input
-                type="text"
-                value={healthDetails.receivablesDays}
-                onChange={(e) => setHealthDetails((prev) => ({ ...prev, receivablesDays: e.target.value }))}
-                placeholder="e.g., 30, 32, 28, 35, 33, 31, 29, 34, 36, 38, 40, 42"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#5d4037", fontWeight: "500" }}>
-                Payables Days (12 months, comma separated):
-              </label>
-              <input
-                type="text"
-                value={healthDetails.payablesDays}
-                onChange={(e) => setHealthDetails((prev) => ({ ...prev, payablesDays: e.target.value }))}
-                placeholder="e.g., 25, 27, 24, 28, 26, 25, 23, 29, 31, 33, 35, 37"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#5d4037", fontWeight: "500" }}>
-                Inventory (12 months, comma separated):
-              </label>
-              <input
-                type="text"
-                value={healthDetails.inventory}
-                onChange={(e) => setHealthDetails((prev) => ({ ...prev, inventory: e.target.value }))}
-                placeholder="e.g., 50, 55, 52, 58, 56, 60, 57, 59, 61, 63, 65, 67"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#5d4037", fontWeight: "500" }}>
-                Inventory Days (12 months, comma separated):
-              </label>
-              <input
-                type="text"
-                value={healthDetails.inventoryDays}
-                onChange={(e) => setHealthDetails((prev) => ({ ...prev, inventoryDays: e.target.value }))}
-                placeholder="e.g., 45, 48, 42, 50, 47, 49, 44, 51, 53, 55, 57, 59"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#5d4037", fontWeight: "500" }}>
-                Date:
-              </label>
-              <input
-                type="date"
-                value={healthDetails.date}
-                onChange={(e) => setHealthDetails((prev) => ({ ...prev, date: e.target.value }))}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: "25px" }}>
-              <label style={{ display: "block", marginBottom: "8px", color: "#5d4037", fontWeight: "500" }}>
-                Notes:
-              </label>
-              <textarea
-                value={healthDetails.notes}
-                onChange={(e) => setHealthDetails((prev) => ({ ...prev, notes: e.target.value }))}
-                placeholder="Enter any additional notes"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                  minHeight: "80px",
-                }}
-              />
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                gap: "10px",
-                justifyContent: "flex-end",
-              }}
-            >
+            />
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
               <button
-                onClick={() => setShowModal(false)}
+                onClick={() => setShowUploadModal(false)}
                 style={{
                   padding: "10px 20px",
                   backgroundColor: "#e8ddd4",
                   color: "#5d4037",
                   border: "none",
-                  borderRadius: "4px",
+                  borderRadius: "6px",
                   cursor: "pointer",
-                  fontWeight: "500",
+                  fontWeight: "600",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showHealthModal && !isInvestorView && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "#fdfcfb",
+              padding: "30px",
+              borderRadius: "8px",
+              maxWidth: "800px",
+              maxHeight: "90vh",
+              overflow: "auto",
+              width: "90%",
+            }}
+          >
+            <h3 style={{ color: "#5d4037", marginBottom: "20px" }}>Add Balance Sheet Health Details</h3>
+            <p style={{ color: "#72542b", marginBottom: "20px", fontSize: "14px" }}>
+              Tip: Enter data for all 12 months separated by commas.
+            </p>
+
+            <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+              Receivables (12 months, comma separated):
+            </label>
+            <input
+              type="text"
+              value={healthDetails.receivables}
+              onChange={(e) => setHealthDetails({ ...healthDetails, receivables: e.target.value })}
+              placeholder="e.g., 100, 120, 110, 130, 140, 135, 145, 150, 160, 165"
+              style={{
+                width: "100%",
+                padding: "10px",
+                marginBottom: "15px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+              }}
+            />
+
+            <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+              Payables (12 months, comma separated):
+            </label>
+            <input
+              type="text"
+              value={healthDetails.payables}
+              onChange={(e) => setHealthDetails({ ...healthDetails, payables: e.target.value })}
+              placeholder="e.g., 80, 85, 90, 88, 92, 87, 95, 97, 93, 95, 97, 97"
+              style={{
+                width: "100%",
+                padding: "10px",
+                marginBottom: "15px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+              }}
+            />
+
+            <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+              Receivables Days (12 months, comma separated):
+            </label>
+            <input
+              type="text"
+              value={healthDetails.receivablesDays}
+              onChange={(e) => setHealthDetails({ ...healthDetails, receivablesDays: e.target.value })}
+              placeholder="e.g., 30, 32, 28, 33, 31, 29, 34, 36, 38, 40, 42"
+              style={{
+                width: "100%",
+                padding: "10px",
+                marginBottom: "15px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+              }}
+            />
+
+            <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+              Payables Days (12 months, comma separated):
+            </label>
+            <input
+              type="text"
+              value={healthDetails.payablesDays}
+              onChange={(e) => setHealthDetails({ ...healthDetails, payablesDays: e.target.value })}
+              placeholder="e.g., 28, 27, 24, 26, 28, 23, 29, 31, 34, 35, 37"
+              style={{
+                width: "100%",
+                padding: "10px",
+                marginBottom: "15px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+              }}
+            />
+
+            <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+              Inventory (12 months, comma separated):
+            </label>
+            <input
+              type="text"
+              value={healthDetails.inventory}
+              onChange={(e) => setHealthDetails({ ...healthDetails, inventory: e.target.value })}
+              placeholder="e.g., 50, 55, 52, 58, 60, 57, 61, 63, 65, 67"
+              style={{
+                width: "100%",
+                padding: "10px",
+                marginBottom: "15px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+              }}
+            />
+
+            <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+              Inventory Days (12 months, comma separated):
+            </label>
+            <input
+              type="text"
+              value={healthDetails.inventoryDays}
+              onChange={(e) => setHealthDetails({ ...healthDetails, inventoryDays: e.target.value })}
+              placeholder="e.g., 45, 48, 42, 47, 44, 41, 53, 50, 53, 57, 59"
+              style={{
+                width: "100%",
+                padding: "10px",
+                marginBottom: "15px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+              }}
+            />
+
+            <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>Date:</label>
+            <input
+              type="date"
+              value={healthDetails.date}
+              onChange={(e) => setHealthDetails({ ...healthDetails, date: e.target.value })}
+              style={{
+                width: "100%",
+                padding: "10px",
+                marginBottom: "15px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+              }}
+            />
+
+            <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+              Notes:
+            </label>
+            <textarea
+              value={healthDetails.notes}
+              onChange={(e) => setHealthDetails({ ...healthDetails, notes: e.target.value })}
+              placeholder="Enter any additional notes"
+              style={{
+                width: "100%",
+                padding: "10px",
+                marginBottom: "20px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+                minHeight: "100px",
+              }}
+            />
+
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setShowHealthModal(false)}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontWeight: "600",
                 }}
               >
                 Cancel
               </button>
               <button
-                onClick={handleSaveDetails}
+                onClick={handleSaveHealthDetails}
                 style={{
                   padding: "10px 20px",
                   backgroundColor: "#5d4037",
-                  color: "white",
+                  color: "#fdfcfb",
                   border: "none",
-                  borderRadius: "4px",
+                  borderRadius: "6px",
                   cursor: "pointer",
-                  fontWeight: "500",
+                  fontWeight: "600",
                 }}
               >
                 Save Details
@@ -1946,975 +2907,14 @@ const BalanceSheetHealth = ({ activeSection, financialYearStart, chartData, onUp
   )
 }
 
-const PnLSnapshot = ({ activeSection, viewMode, financialYearStart, pnlData, user, onUpdateChartData }) => {
-  const [chartViewMode, setChartViewMode] = useState("data")
-  const [visibleCharts, setVisibleCharts] = useState({
-    sales: true,
-    cogs: true,
-    opex: true,
-    grossProfit: true,
-    netProfit: true,
-    percentage: true,
-  })
-  const [showModal, setShowModal] = useState(false)
-  const [pnlDetails, setPnlDetails] = useState({
-    // Monthly data for key P&L items
-    sales: Array(12).fill(""),
-    cogs: Array(12).fill(""),
-    opex: Array(12).fill(""),
-    grossProfit: Array(12).fill(""),
-    netProfit: Array(12).fill(""),
-    // Budget data
-    salesBudget: Array(12).fill(""),
-    cogsBudget: Array(12).fill(""),
-    opexBudget: Array(12).fill(""),
-    grossProfitBudget: Array(12).fill(""),
-    netProfitBudget: Array(12).fill(""),
-    notes: "",
-  })
-  const [firebaseChartData, setFirebaseChartData] = useState({})
-  const [loading, setLoading] = useState(false)
-
-  // Load PnL data from Firebase when component mounts or user changes
-  useEffect(() => {
-    if (user) {
-      loadPnLDataFromFirebase()
-    }
-  }, [user])
-
-  // Load PnL data from Firebase
-  const loadPnLDataFromFirebase = async () => {
-    if (!user) return
-
-    setLoading(true)
-    try {
-      const pnlManualDoc = await getDoc(doc(db, "financialData", `${user.uid}_pnlManual`))
-
-      if (pnlManualDoc.exists()) {
-        const firebaseData = pnlManualDoc.data()
-        console.log("Loaded PnL data from Firebase:", firebaseData)
-
-        // Update local state with Firebase data
-        setPnlDetails((prev) => ({
-          sales: firebaseData.sales?.map(String) || Array(12).fill(""),
-          cogs: firebaseData.cogs?.map(String) || Array(12).fill(""),
-          opex: firebaseData.opex?.map(String) || Array(12).fill(""),
-          grossProfit: firebaseData.grossProfit?.map(String) || Array(12).fill(""),
-          netProfit: firebaseData.netProfit?.map(String) || Array(12).fill(""),
-          salesBudget: firebaseData.salesBudget?.map(String) || Array(12).fill(""),
-          cogsBudget: firebaseData.cogsBudget?.map(String) || Array(12).fill(""),
-          opexBudget: firebaseData.opexBudget?.map(String) || Array(12).fill(""),
-          grossProfitBudget: firebaseData.grossProfitBudget?.map(String) || Array(12).fill(""),
-          netProfitBudget: firebaseData.netProfitBudget?.map(String) || Array(12).fill(""),
-          notes: firebaseData.notes || "",
-        }))
-
-        // Process the data for charts
-        processFirebaseDataForCharts(firebaseData)
-      } else {
-        console.log("No PnL data found in Firebase")
-        // Initialize with empty data
-        setFirebaseChartData({})
-      }
-    } catch (error) {
-      console.error("Error loading PnL data from Firebase:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Process Firebase data for chart display
-  const processFirebaseDataForCharts = (firebaseData) => {
-    const chartData = {
-      sales: {
-        actual: firebaseData.sales?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0),
-        budget: firebaseData.salesBudget?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0),
-      },
-      cogs: {
-        actual: firebaseData.cogs?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0),
-        budget: firebaseData.cogsBudget?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0),
-      },
-      opex: {
-        actual: firebaseData.opex?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0),
-        budget: firebaseData.opexBudget?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0),
-      },
-      grossProfit: {
-        actual: firebaseData.grossProfit?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0),
-        budget: firebaseData.grossProfitBudget?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0),
-      },
-      netProfit: {
-        actual: firebaseData.netProfit?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0),
-        budget: firebaseData.netProfitBudget?.map((val) => Number.parseFloat(val) || 0) || Array(12).fill(0),
-      },
-    }
-
-    setFirebaseChartData(chartData)
-
-    // Update parent component's chart data
-    if (onUpdateChartData) {
-      Object.keys(chartData).forEach((key) => {
-        onUpdateChartData(key, chartData[key])
-      })
-    }
-  }
-
-  if (activeSection !== "pnl-snapshot") return null
-
-  // Generate labels based on financial year start and view mode
-  const generateLabels = () => {
-    if (viewMode === "month") {
-      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-      const startMonthIndex = months.indexOf(financialYearStart)
-      return [...months.slice(startMonthIndex), ...months.slice(0, startMonthIndex)]
-    } else if (viewMode === "quarter") {
-      return ["Q1", "Q2", "Q3", "Q4"]
-    } else {
-      return ["2019", "2020", "2021", "2022", "2023", "2024"]
-    }
-  }
-
-  const labels = generateLabels()
-
-  // Handle manual data entry
-  const handleAddDetails = () => {
-    setShowModal(true)
-  }
-
-  const handleSavePnlDetails = async () => {
-    if (!user) {
-      alert("Please log in to save P&L data")
-      return
-    }
-
-    setLoading(true)
-    try {
-      // Prepare data for Firebase
-      const firebaseData = {
-        userId: user.uid,
-        chartName: "pnlManual",
-        // Convert string values to numbers for storage
-        sales: pnlDetails.sales.map((val) => Number.parseFloat(val) || 0),
-        cogs: pnlDetails.cogs.map((val) => Number.parseFloat(val) || 0),
-        opex: pnlDetails.opex.map((val) => Number.parseFloat(val) || 0),
-        grossProfit: pnlDetails.grossProfit.map((val) => Number.parseFloat(val) || 0),
-        netProfit: pnlDetails.netProfit.map((val) => Number.parseFloat(val) || 0),
-        salesBudget: pnlDetails.salesBudget.map((val) => Number.parseFloat(val) || 0),
-        cogsBudget: pnlDetails.cogsBudget.map((val) => Number.parseFloat(val) || 0),
-        opexBudget: pnlDetails.opexBudget.map((val) => Number.parseFloat(val) || 0),
-        grossProfitBudget: pnlDetails.grossProfitBudget.map((val) => Number.parseFloat(val) || 0),
-        netProfitBudget: pnlDetails.netProfitBudget.map((val) => Number.parseFloat(val) || 0),
-        notes: pnlDetails.notes,
-        lastUpdated: new Date().toISOString(),
-      }
-
-      // Save to Firebase
-      await setDoc(doc(db, "financialData", `${user.uid}_pnlManual`), firebaseData)
-      console.log("P&L manual data saved to Firebase")
-
-      // Process the saved data for charts
-      processFirebaseDataForCharts(firebaseData)
-
-      setShowModal(false)
-    } catch (error) {
-      console.error("Error saving P&L manual data:", error)
-      alert("Error saving data. Please try again.")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Process PnL data - prioritize Firebase data over uploaded data
-  const processPnLData = () => {
-    // If we have Firebase data, use it
-    if (Object.keys(firebaseChartData).length > 0) {
-      return firebaseChartData
-    }
-
-    // If we have uploaded PnL data, use it
-    if (pnlData && Object.keys(pnlData).length > 0) {
-      const sales = Number.parseFloat(pnlData.sales) || 0
-      const cogs = Number.parseFloat(pnlData.cogs) || 0
-      const opex = Number.parseFloat(pnlData.opex) || 0
-      const grossProfit = sales - cogs
-      const netProfit = grossProfit - opex
-
-      // For monthly view, spread the data across months
-      const monthlyData = (value) => {
-        return labels.map((_, index) => {
-          // Distribute annual data across months (simple equal distribution)
-          return value / 12
-        })
-      }
-
-      return {
-        sales: {
-          actual: monthlyData(sales),
-          budget: monthlyData(sales * 1.1),
-        },
-        cogs: {
-          actual: monthlyData(cogs),
-          budget: monthlyData(cogs * 0.9),
-        },
-        opex: {
-          actual: monthlyData(opex),
-          budget: monthlyData(opex * 0.95),
-        },
-        grossProfit: {
-          actual: monthlyData(grossProfit),
-          budget: monthlyData(grossProfit * 1.15),
-        },
-        netProfit: {
-          actual: monthlyData(netProfit),
-          budget: monthlyData(netProfit * 1.2),
-        },
-      }
-    }
-
-    // Default empty data
-    return {
-      sales: { actual: Array(12).fill(0), budget: Array(12).fill(0) },
-      cogs: { actual: Array(12).fill(0), budget: Array(12).fill(0) },
-      opex: { actual: Array(12).fill(0), budget: Array(12).fill(0) },
-      grossProfit: { actual: Array(12).fill(0), budget: Array(12).fill(0) },
-      netProfit: { actual: Array(12).fill(0), budget: Array(12).fill(0) },
-    }
-  }
-
-  // Calculate chart data
-  const chartData = processPnLData()
-
-  // Check if we have any data
-  const hasData = () => {
-    return Object.keys(firebaseChartData).length > 0 || (pnlData && (pnlData.sales || pnlData.cogs || pnlData.opex))
-  }
-
-  // ... rest of the component remains the same (calculateVariance, createChartOptions, etc.)
-
-  // Calculate variances
-  const calculateVariance = (budget, actual) => {
-    return budget.map((b, i) => b - (actual[i] || 0))
-  }
-
-  // Chart options (keep the existing createChartOptions function)
-  const createChartOptions = (title, showNegative = false) => ({
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: true,
-        position: "top",
-      },
-      title: {
-        display: true,
-        text: title,
-        color: "#5d4037",
-        font: {
-          size: 14,
-          weight: "bold",
-        },
-      },
-      tooltip: {
-        callbacks: {
-          label: (context) => {
-            const datasetLabel = context.dataset.label || ""
-            const value = context.raw
-            return `${datasetLabel}: R${value.toLocaleString()}`
-          },
-        },
-      },
-    },
-    scales: {
-      y: {
-        beginAtZero: !showNegative,
-        grid: {
-          display: true,
-          color: "#e0e0e0",
-        },
-        ticks: {
-          font: {
-            size: 10,
-          },
-          color: "#72542b",
-          callback: (value) => "R" + value.toLocaleString(),
-        },
-      },
-      x: {
-        grid: {
-          display: false,
-        },
-        ticks: {
-          font: {
-            size: 9,
-          },
-          maxRotation: 45,
-          color: "#72542b",
-        },
-      },
-    },
-  })
-
-  // Calculate variances
-  const salesVariance = calculateVariance(chartData.sales.budget, chartData.sales.actual)
-  const cogsVariance = calculateVariance(chartData.cogs.budget, chartData.cogs.actual)
-  const opexVariance = calculateVariance(chartData.opex.budget, chartData.opex.actual)
-  const grossProfitVariance = calculateVariance(chartData.grossProfit.budget, chartData.grossProfit.actual)
-  const netProfitVariance = calculateVariance(chartData.netProfit.budget, chartData.netProfit.actual)
-
-  // Calculate percentages
-  const grossProfitPercent = chartData.sales.actual.map((sales, i) =>
-    sales > 0 ? (chartData.grossProfit.actual[i] / sales) * 100 : 0,
-  )
-  const netProfitPercent = chartData.sales.actual.map((sales, i) =>
-    sales > 0 ? (chartData.netProfit.actual[i] / sales) * 100 : 0,
-  )
-
-  const createDataChartDatasets = (data) => [
-    {
-      label: "Budget",
-      data: data.budget,
-      backgroundColor: "rgba(139, 105, 20, 0.7)",
-      borderColor: "#8b6914",
-      borderWidth: 1,
-    },
-    {
-      label: "Actual",
-      data: data.actual,
-      backgroundColor: "rgba(93, 64, 55, 0.7)",
-      borderColor: "#5d4037",
-      borderWidth: 1,
-    },
-  ]
-
-  const createVarianceChartDatasets = (variance, title) => [
-    {
-      label: "Variance",
-      data: variance,
-      backgroundColor: variance.map((v) => (v >= 0 ? "rgba(76, 175, 80, 0.7)" : "rgba(244, 67, 54, 0.7)")),
-      borderColor: variance.map((v) => (v >= 0 ? "#4caf50" : "#f44336")),
-      borderWidth: 1,
-    },
-  ]
-
-  const charts = [
-    { id: "sales", title: "Sales Revenue", data: chartData.sales, variance: salesVariance },
-    { id: "cogs", title: "Cost of Goods Sold", data: chartData.cogs, variance: cogsVariance },
-    { id: "opex", title: "Operating Expenses", data: chartData.opex, variance: opexVariance },
-    {
-      id: "grossProfit",
-      title: "Gross Profit",
-      data: chartData.grossProfit,
-      variance: grossProfitVariance,
-      showNegative: true,
-    },
-    {
-      id: "netProfit",
-      title: "Net Profit",
-      data: chartData.netProfit,
-      variance: netProfitVariance,
-      showNegative: true,
-    },
-  ]
-
-  // Generate month labels for the form
-  const monthLabels = generateLabels()
-
-  return (
-    <div
-      style={{
-        backgroundColor: "#f8f9fa",
-        padding: "20px",
-        margin: "20px 0",
-        borderRadius: "8px",
-      }}
-    >
-      {/* Loading Indicator */}
-      {loading && (
-        <div
-          style={{
-            position: "fixed",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            backgroundColor: "rgba(255, 255, 255, 0.9)",
-            padding: "20px",
-            borderRadius: "8px",
-            zIndex: 1000,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-          }}
-        >
-          <p style={{ margin: 0, color: "#5d4037", fontWeight: "500" }}>Loading P&L Data...</p>
-        </div>
-      )}
-
-      {/* Action Button */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          marginBottom: "20px",
-        }}
-      >
-        <button
-          onClick={handleAddDetails}
-          disabled={loading}
-          style={{
-            padding: "12px 24px",
-            backgroundColor: "#5d4037",
-            color: "white",
-            border: "none",
-            borderRadius: "6px",
-            cursor: loading ? "not-allowed" : "pointer",
-            fontWeight: "600",
-            fontSize: "14px",
-            opacity: loading ? 0.6 : 1,
-          }}
-        >
-          {loading ? "Loading..." : "➕ Add/Edit P&L Details"}
-        </button>
-      </div>
-
-      {/* Data Status */}
-      {!user ? (
-        <div
-          style={{
-            backgroundColor: "#fff3cd",
-            border: "1px solid #ffeaa7",
-            color: "#856404",
-            padding: "15px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-            textAlign: "center",
-          }}
-        >
-          <p style={{ margin: 0, fontWeight: "500" }}>🔐 Please log in to view and manage your P&L data.</p>
-        </div>
-      ) : !hasData() ? (
-        <div
-          style={{
-            backgroundColor: "#fff3cd",
-            border: "1px solid #ffeaa7",
-            color: "#856404",
-            padding: "15px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-            textAlign: "center",
-          }}
-        >
-          <p style={{ margin: 0, fontWeight: "500" }}>
-            📊 Click "Add/Edit P&L Details" to enter your Profit & Loss data.
-          </p>
-        </div>
-      ) : (
-        <div
-          style={{
-            backgroundColor: "#d4edda",
-            border: "1px solid #c3e6cb",
-            color: "#155724",
-            padding: "15px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <p style={{ margin: 0, fontWeight: "500" }}>
-            ✅ Showing{" "}
-            {Object.keys(firebaseChartData).length > 0
-              ? "saved P&L data from Firebase"
-              : "P&L data from uploaded CSV file"}
-          </p>
-        </div>
-      )}
-
-      {/* Chart Controls */}
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "15px",
-          borderRadius: "8px",
-          marginBottom: "20px",
-          border: "1px solid #e8ddd4",
-        }}
-      >
-        <h4 style={{ color: "#5d4037", margin: "0 0 15px 0" }}>Chart Visibility</h4>
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-          {Object.entries(visibleCharts).map(([chartName, isVisible]) => (
-            <button
-              key={chartName}
-              onClick={() => setVisibleCharts((prev) => ({ ...prev, [chartName]: !prev[chartName] }))}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: isVisible ? "#5d4037" : "#e8ddd4",
-                color: isVisible ? "#fdfcfb" : "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "500",
-                fontSize: "12px",
-                textTransform: "capitalize",
-              }}
-            >
-              {chartName === "grossProfit"
-                ? "Gross Profit"
-                : chartName === "netProfit"
-                  ? "Net Profit"
-                  : chartName === "percentage"
-                    ? "Profit Margins"
-                    : chartName === "sales"
-                      ? "Sales Revenue"
-                      : chartName === "cogs"
-                        ? "COGS"
-                        : chartName === "opex"
-                          ? "OPEX"
-                          : chartName}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Charts Grid */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))",
-          gap: "20px",
-        }}
-      >
-        {charts
-          .filter((chart) => visibleCharts[chart.id])
-          .map((chart) => (
-            <div
-              key={chart.id}
-              style={{
-                backgroundColor: "white",
-                padding: "15px",
-                borderRadius: "8px",
-                border: "1px solid #ddd",
-                height: "400px",
-                boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-              }}
-            >
-              <div style={{ height: "350px" }}>
-                {chartViewMode === "data" ? (
-                  <Bar
-                    data={{
-                      labels,
-                      datasets: createDataChartDatasets(chart.data),
-                    }}
-                    options={createChartOptions(chart.title, chart.showNegative)}
-                  />
-                ) : (
-                  <Bar
-                    data={{
-                      labels,
-                      datasets: createVarianceChartDatasets(chart.variance, chart.title),
-                    }}
-                    options={createChartOptions(`${chart.title} - Variance`, chart.showNegative)}
-                  />
-                )}
-              </div>
-            </div>
-          ))}
-
-        {visibleCharts.percentage && (
-          <div
-            style={{
-              backgroundColor: "white",
-              padding: "15px",
-              borderRadius: "8px",
-              border: "1px solid #ddd",
-              height: "400px",
-              boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-            }}
-          >
-            <div style={{ height: "350px" }}>
-              <Line
-                data={{
-                  labels,
-                  datasets: [
-                    {
-                      label: "Gross Profit %",
-                      data: grossProfitPercent,
-                      borderColor: "#8b6914",
-                      backgroundColor: "rgba(139, 105, 20, 0.1)",
-                      borderWidth: 3,
-                      tension: 0.1,
-                      fill: false,
-                    },
-                    {
-                      label: "Net Profit %",
-                      data: netProfitPercent,
-                      borderColor: "#5d4037",
-                      backgroundColor: "rgba(93, 64, 55, 0.1)",
-                      borderWidth: 3,
-                      tension: 0.1,
-                      fill: false,
-                    },
-                  ],
-                }}
-                options={createChartOptions("Profit Margins (%)")}
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Modal for adding/editing P&L details */}
-      {showModal && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: "white",
-              padding: "30px",
-              borderRadius: "8px",
-              boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
-              width: "900px",
-              maxWidth: "90vw",
-              maxHeight: "90vh",
-              overflowY: "auto",
-            }}
-          >
-            <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "20px" }}>P&L Details - Manual Entry</h3>
-
-            <div
-              style={{
-                backgroundColor: "#f0f8ff",
-                padding: "15px",
-                borderRadius: "6px",
-                marginBottom: "20px",
-                border: "1px solid #b3d9ff",
-              }}
-            >
-              <p style={{ color: "#1e3a8a", margin: "0", fontSize: "14px", fontWeight: "500" }}>
-                💡 <strong>Tip:</strong> Enter actual values for each month. Budget values will be auto-calculated if
-                left empty. Based on your spreadsheet, focus on key totals like Trading Income, Cost of Sales, Gross
-                Profit, Operating Expenses, and Net Profit.
-              </p>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-              {/* Actual Values Column */}
-              <div>
-                <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Actual Values (R)</h4>
-
-                {/* Sales Revenue */}
-                <div style={{ marginBottom: "20px" }}>
-                  <h5 style={{ color: "#5d4037", marginBottom: "10px" }}>Sales Revenue</h5>
-                  {monthLabels.map((month, index) => (
-                    <div key={index} style={{ marginBottom: "8px" }}>
-                      <label
-                        style={{
-                          display: "block",
-                          marginBottom: "3px",
-                          color: "#5d4037",
-                          fontSize: "12px",
-                          fontWeight: "500",
-                        }}
-                      >
-                        {month}:
-                      </label>
-                      <input
-                        type="number"
-                        value={pnlDetails.sales[index] || ""}
-                        onChange={(e) => {
-                          const newSales = [...pnlDetails.sales]
-                          newSales[index] = e.target.value
-                          setPnlDetails((prev) => ({ ...prev, sales: newSales }))
-                        }}
-                        placeholder="0"
-                        style={{
-                          width: "100%",
-                          padding: "6px",
-                          border: "1px solid #e8ddd4",
-                          borderRadius: "4px",
-                          fontSize: "12px",
-                          boxSizing: "border-box",
-                        }}
-                      />
-                    </div>
-                  ))}
-                </div>
-
-                {/* Cost of Goods Sold */}
-                <div style={{ marginBottom: "20px" }}>
-                  <h5 style={{ color: "#5d4037", marginBottom: "10px" }}>Cost of Goods Sold</h5>
-                  {monthLabels.map((month, index) => (
-                    <div key={index} style={{ marginBottom: "8px" }}>
-                      <label
-                        style={{
-                          display: "block",
-                          marginBottom: "3px",
-                          color: "#5d4037",
-                          fontSize: "12px",
-                          fontWeight: "500",
-                        }}
-                      >
-                        {month}:
-                      </label>
-                      <input
-                        type="number"
-                        value={pnlDetails.cogs[index] || ""}
-                        onChange={(e) => {
-                          const newCogs = [...pnlDetails.cogs]
-                          newCogs[index] = e.target.value
-                          setPnlDetails((prev) => ({ ...prev, cogs: newCogs }))
-                        }}
-                        placeholder="0"
-                        style={{
-                          width: "100%",
-                          padding: "6px",
-                          border: "1px solid #e8ddd4",
-                          borderRadius: "4px",
-                          fontSize: "12px",
-                          boxSizing: "border-box",
-                        }}
-                      />
-                    </div>
-                  ))}
-                </div>
-
-                {/* Operating Expenses */}
-                <div style={{ marginBottom: "20px" }}>
-                  <h5 style={{ color: "#5d4037", marginBottom: "10px" }}>Operating Expenses</h5>
-                  {monthLabels.map((month, index) => (
-                    <div key={index} style={{ marginBottom: "8px" }}>
-                      <label
-                        style={{
-                          display: "block",
-                          marginBottom: "3px",
-                          color: "#5d4037",
-                          fontSize: "12px",
-                          fontWeight: "500",
-                        }}
-                      >
-                        {month}:
-                      </label>
-                      <input
-                        type="number"
-                        value={pnlDetails.opex[index] || ""}
-                        onChange={(e) => {
-                          const newOpex = [...pnlDetails.opex]
-                          newOpex[index] = e.target.value
-                          setPnlDetails((prev) => ({ ...prev, opex: newOpex }))
-                        }}
-                        placeholder="0"
-                        style={{
-                          width: "100%",
-                          padding: "6px",
-                          border: "1px solid #e8ddd4",
-                          borderRadius: "4px",
-                          fontSize: "12px",
-                          boxSizing: "border-box",
-                        }}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Budget Values Column */}
-              <div>
-                <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Budget Values (R) - Optional</h4>
-
-                {/* Sales Budget */}
-                <div style={{ marginBottom: "20px" }}>
-                  <h5 style={{ color: "#5d4037", marginBottom: "10px" }}>Sales Budget</h5>
-                  {monthLabels.map((month, index) => (
-                    <div key={index} style={{ marginBottom: "8px" }}>
-                      <label
-                        style={{
-                          display: "block",
-                          marginBottom: "3px",
-                          color: "#5d4037",
-                          fontSize: "12px",
-                          fontWeight: "500",
-                        }}
-                      >
-                        {month}:
-                      </label>
-                      <input
-                        type="number"
-                        value={pnlDetails.salesBudget[index] || ""}
-                        onChange={(e) => {
-                          const newSalesBudget = [...pnlDetails.salesBudget]
-                          newSalesBudget[index] = e.target.value
-                          setPnlDetails((prev) => ({ ...prev, salesBudget: newSalesBudget }))
-                        }}
-                        placeholder="Auto-calculated"
-                        style={{
-                          width: "100%",
-                          padding: "6px",
-                          border: "1px solid #e8ddd4",
-                          borderRadius: "4px",
-                          fontSize: "12px",
-                          boxSizing: "border-box",
-                        }}
-                      />
-                    </div>
-                  ))}
-                </div>
-
-                {/* COGS Budget */}
-                <div style={{ marginBottom: "20px" }}>
-                  <h5 style={{ color: "#5d4037", marginBottom: "10px" }}>COGS Budget</h5>
-                  {monthLabels.map((month, index) => (
-                    <div key={index} style={{ marginBottom: "8px" }}>
-                      <label
-                        style={{
-                          display: "block",
-                          marginBottom: "3px",
-                          color: "#5d4037",
-                          fontSize: "12px",
-                          fontWeight: "500",
-                        }}
-                      >
-                        {month}:
-                      </label>
-                      <input
-                        type="number"
-                        value={pnlDetails.cogsBudget[index] || ""}
-                        onChange={(e) => {
-                          const newCogsBudget = [...pnlDetails.cogsBudget]
-                          newCogsBudget[index] = e.target.value
-                          setPnlDetails((prev) => ({ ...prev, cogsBudget: newCogsBudget }))
-                        }}
-                        placeholder="Auto-calculated"
-                        style={{
-                          width: "100%",
-                          padding: "6px",
-                          border: "1px solid #e8ddd4",
-                          borderRadius: "4px",
-                          fontSize: "12px",
-                          boxSizing: "border-box",
-                        }}
-                      />
-                    </div>
-                  ))}
-                </div>
-
-                {/* OPEX Budget */}
-                <div style={{ marginBottom: "20px" }}>
-                  <h5 style={{ color: "#5d4037", marginBottom: "10px" }}>OPEX Budget</h5>
-                  {monthLabels.map((month, index) => (
-                    <div key={index} style={{ marginBottom: "8px" }}>
-                      <label
-                        style={{
-                          display: "block",
-                          marginBottom: "3px",
-                          color: "#5d4037",
-                          fontSize: "12px",
-                          fontWeight: "500",
-                        }}
-                      >
-                        {month}:
-                      </label>
-                      <input
-                        type="number"
-                        value={pnlDetails.opexBudget[index] || ""}
-                        onChange={(e) => {
-                          const newOpexBudget = [...pnlDetails.opexBudget]
-                          newOpexBudget[index] = e.target.value
-                          setPnlDetails((prev) => ({ ...prev, opexBudget: newOpexBudget }))
-                        }}
-                        placeholder="Auto-calculated"
-                        style={{
-                          width: "100%",
-                          padding: "6px",
-                          border: "1px solid #e8ddd4",
-                          borderRadius: "4px",
-                          fontSize: "12px",
-                          boxSizing: "border-box",
-                        }}
-                      />
-                    </div>
-                  ))}
-                </div>
-
-                {/* Notes */}
-                <div style={{ marginBottom: "20px" }}>
-                  <h5 style={{ color: "#5d4037", marginBottom: "10px" }}>Notes</h5>
-                  <textarea
-                    value={pnlDetails.notes}
-                    onChange={(e) => setPnlDetails((prev) => ({ ...prev, notes: e.target.value }))}
-                    placeholder="Enter any additional notes about your P&L data..."
-                    style={{
-                      width: "100%",
-                      padding: "10px",
-                      border: "1px solid #e8ddd4",
-                      borderRadius: "4px",
-                      fontSize: "14px",
-                      boxSizing: "border-box",
-                      minHeight: "80px",
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                gap: "10px",
-                justifyContent: "flex-end",
-                marginTop: "20px",
-              }}
-            >
-              <button
-                onClick={() => setShowModal(false)}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#e8ddd4",
-                  color: "#5d4037",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSavePnlDetails}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#5d4037",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                }}
-              >
-                Save P&L Details
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Main FinancialPerformance Component
 const FinancialPerformance = () => {
-  const [activeSection, setActiveSection] = useState("balance-sheet")
+  const [activeSection, setActiveSection] = useState("pnl-snapshot")
   const [viewMode, setViewMode] = useState("month")
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [financialYearStart, setFinancialYearStart] = useState("Jan")
   const [chartData, setChartData] = useState({})
   const [balanceSheetData, setBalanceSheetData] = useState(null)
-  const [pnlData, setPnLData] = useState(null) // New state for PnL data
+  const [pnlData, setPnLData] = useState(null)
   const [currentMonth, setCurrentMonth] = useState("Jan")
   const [user, setUser] = useState(null)
 
@@ -2938,7 +2938,6 @@ const FinancialPerformance = () => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (isInvestorView && viewingSMEId) {
-        // In investor view, create a pseudo-user object with the SME's ID
         setUser({ uid: viewingSMEId })
         loadUserData(viewingSMEId)
       } else {
@@ -2955,7 +2954,6 @@ const FinancialPerformance = () => {
     return () => unsubscribe()
   }, [isInvestorView, viewingSMEId])
 
-  // Load user-specific data from Firebase
   const loadUserData = async (userId) => {
     try {
       console.log("Loading financial data for user ID:", userId)
@@ -2993,10 +2991,8 @@ const FinancialPerformance = () => {
       setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
     }
 
-    // Check initial state
     checkSidebarState()
 
-    // Watch for changes
     const observer = new MutationObserver(checkSidebarState)
     observer.observe(document.body, {
       attributes: true,
@@ -3016,12 +3012,10 @@ const FinancialPerformance = () => {
     boxSizing: "border-box",
   })
 
-  // Reordered sections with Balance Sheet first
   const sectionButtons = [
-    { id: "balance-sheet", label: "Balance Sheet" },
     { id: "pnl-snapshot", label: "P&L Snapshot" },
     { id: "cashflow-trends", label: "Cashflow Trends" },
-    { id: "balance-sheet-health", label: "Balance Sheet Health" },
+    { id: "balance-sheet", label: "Balance Sheet" },
   ]
 
   const handleUpdateChartData = (chartName, data) => {
@@ -3138,184 +3132,103 @@ const FinancialPerformance = () => {
             ))}
           </div>
 
-          {activeSection === "pnl-snapshot" && (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "20px",
+              flexWrap: "wrap",
+              gap: "15px",
+            }}
+          >
             <div
               style={{
                 display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "20px",
-                flexWrap: "wrap",
                 gap: "15px",
+                alignItems: "center",
               }}
             >
-              <div
+              <button
+                onClick={() => setViewMode("month")}
                 style={{
-                  display: "flex",
-                  gap: "15px",
-                  alignItems: "center",
+                  padding: "8px 16px",
+                  backgroundColor: viewMode === "month" ? "#5d4037" : "#e8ddd4",
+                  color: viewMode === "month" ? "#fdfcfb" : "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                  fontSize: "14px",
+                  transition: "all 0.3s ease",
                 }}
               >
-                <button
-                  onClick={() => setViewMode("month")}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: viewMode === "month" ? "#5d4037" : "#e8ddd4",
-                    color: viewMode === "month" ? "#fdfcfb" : "#5d4037",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontWeight: "500",
-                    fontSize: "14px",
-                    transition: "all 0.3s ease",
-                  }}
-                >
-                  Monthly View
-                </button>
-                <button
-                  onClick={() => setViewMode("quarter")}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: viewMode === "quarter" ? "#5d4037" : "#e8ddd4",
-                    color: viewMode === "quarter" ? "#fdfcfb" : "#5d4037",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontWeight: "500",
-                    fontSize: "14px",
-                    transition: "all 0.3s ease",
-                  }}
-                >
-                  Quarterly View
-                </button>
-                <button
-                  onClick={() => setViewMode("year")}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: viewMode === "year" ? "#5d4037" : "#e8ddd4",
-                    color: viewMode === "year" ? "#fdfcfb" : "#5d4037",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontWeight: "500",
-                    fontSize: "14px",
-                    transition: "all 0.3s ease",
-                  }}
-                >
-                  Yearly View
-                </button>
-              </div>
-
-              <div
+                Monthly View
+              </button>
+              <button
+                onClick={() => setViewMode("quarter")}
                 style={{
-                  display: "flex",
-                  gap: "15px",
-                  alignItems: "center",
+                  padding: "8px 16px",
+                  backgroundColor: viewMode === "quarter" ? "#5d4037" : "#e8ddd4",
+                  color: viewMode === "quarter" ? "#fdfcfb" : "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                  fontSize: "14px",
+                  transition: "all 0.3s ease",
                 }}
               >
-                <div>
-                  <label
-                    style={{
-                      marginRight: "8px",
-                      color: "#5d4037",
-                      fontWeight: "500",
-                    }}
-                  >
-                    Financial Year Start:
-                  </label>
-                  <select
-                    value={financialYearStart}
-                    onChange={(e) => setFinancialYearStart(e.target.value)}
-                    style={{
-                      padding: "8px",
-                      border: "2px solid #e8ddd4",
-                      borderRadius: "4px",
-                      backgroundColor: "#fdfcfb",
-                      color: "#5d4037",
-                      fontWeight: "500",
-                    }}
-                  >
-                    <option value="Jan">January</option>
-                    <option value="Feb">February</option>
-                    <option value="Mar">March</option>
-                    <option value="Apr">April</option>
-                    <option value="May">May</option>
-                    <option value="Jun">June</option>
-                    <option value="Jul">July</option>
-                    <option value="Aug">August</option>
-                    <option value="Sep">September</option>
-                    <option value="Oct">October</option>
-                    <option value="Nov">November</option>
-                    <option value="Dec">December</option>
-                  </select>
-                </div>
-              </div>
+                Quarterly View
+              </button>
+              <button
+                onClick={() => setViewMode("year")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: viewMode === "year" ? "#5d4037" : "#e8ddd4",
+                  color: viewMode === "year" ? "#fdfcfb" : "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                  fontSize: "14px",
+                  transition: "all 0.3s ease",
+                }}
+              >
+                Yearly View
+              </button>
             </div>
-          )}
+          </div>
 
-          {!user && !isInvestorView && (
-            <div
-              style={{
-                backgroundColor: "#fdfcfb",
-                padding: "20px",
-                borderRadius: "8px",
-                textAlign: "center",
-                marginBottom: "20px",
-                border: "2px solid #e8ddd4",
-              }}
-            >
-              <p style={{ color: "#5d4037", fontSize: "16px", margin: 0 }}>
-                Please log in to view and manage your financial data.
-              </p>
-            </div>
-          )}
-          {isInvestorView && !viewingSMEId && (
-            <div
-              style={{
-                backgroundColor: "#fdfcfb",
-                padding: "20px",
-                borderRadius: "8px",
-                textAlign: "center",
-                marginBottom: "20px",
-                border: "2px solid #e8ddd4",
-              }}
-            >
-              <p style={{ color: "#5d4037", fontSize: "16px", margin: 0 }}>
-                No SME selected for investor view. Please return to your dashboard.
-              </p>
-            </div>
-          )}
+          <PnLSnapshot
+            activeSection={activeSection}
+            viewMode={viewMode}
+            financialYearStart={financialYearStart}
+            pnlData={pnlData}
+            user={user}
+            onUpdateChartData={handleUpdateChartData}
+            isInvestorView={isInvestorView}
+          />
+
+          <CashflowTrends
+            activeSection={activeSection}
+            viewMode={viewMode}
+            financialYearStart={financialYearStart}
+            balanceSheetData={balanceSheetData}
+            currentMonth={currentMonth}
+          />
 
           <BalanceSheet
             activeSection={activeSection}
+            viewMode={viewMode}
             onUpdateBalanceSheet={handleUpdateBalanceSheet}
             balanceSheetData={balanceSheetData}
             currentMonth={currentMonth}
             onMonthChange={handleMonthChange}
             user={user}
-            onUpdatePnLData={handleUpdatePnLData} // Add this prop
-          />
-          <PnLSnapshot
-            activeSection={activeSection}
-            viewMode={viewMode}
-            financialYearStart={financialYearStart}
-            pnlData={pnlData} // Pass PnL data instead of balanceSheetData
-            user={user}
             onUpdateChartData={handleUpdateChartData}
-          />
-          <CashflowTrends
-            activeSection={activeSection}
-            financialYearStart={financialYearStart}
             chartData={chartData}
-            balanceSheetData={balanceSheetData}
-            currentMonth={currentMonth}
-          />
-          <BalanceSheetHealth
-            activeSection={activeSection}
-            financialYearStart={financialYearStart}
-            chartData={chartData}
-            onUpdateChartData={handleUpdateChartData}
-            user={user}
+            isInvestorView={isInvestorView} // Pass isInvestorView prop
           />
         </div>
       </div>

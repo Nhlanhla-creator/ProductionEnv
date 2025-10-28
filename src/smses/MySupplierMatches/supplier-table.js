@@ -20,6 +20,7 @@ import { Eye, Filter } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import emailjs from '@emailjs/browser'
 import { API_KEYS } from "../../API"
+import SupplierDetailsModal from './SupplierDetailsModal'
 import { findSynonyms, expandSearchTerms, containsTermOrSynonyms } from '../../utils/synonyms';
 
 // Status definitions with brown color scheme
@@ -241,11 +242,11 @@ function calculateCategoryMatch(application, supplier) {
   appCategories.forEach(appCat => {
     totalTerms.push(appCat);
     const expandedCategories = expandSearchTerms([appCat.toLowerCase()]);
-    
-    const hasMatch = expandedCategories.some(catTerm => 
+
+    const hasMatch = expandedCategories.some(catTerm =>
       supplierText.includes(catTerm)
     );
-    
+
     if (hasMatch) {
       matches++;
       matchedTerms.push(appCat);
@@ -256,15 +257,15 @@ function calculateCategoryMatch(application, supplier) {
   if (appKeywords || appPurpose) {
     const combinedText = `${appKeywords} ${appPurpose}`;
     const words = combinedText.split(/\s+/).filter(word => word.length > 3);
-    
+
     words.forEach(word => {
       totalTerms.push(word);
       const expandedWords = expandSearchTerms([word.toLowerCase()]);
-      
-      const hasMatch = expandedWords.some(expandedWord => 
+
+      const hasMatch = expandedWords.some(expandedWord =>
         supplierText.includes(expandedWord)
       );
-      
+
       if (hasMatch) {
         matches++;
         matchedTerms.push(word);
@@ -273,7 +274,7 @@ function calculateCategoryMatch(application, supplier) {
   }
 
   const score = totalTerms.length > 0 ? matches / totalTerms.length : 0;
-  
+
   return {
     score: Math.min(score * 1.3, 1), // Boost for semantic matches
     matches: matchedTerms
@@ -1156,7 +1157,10 @@ BIG Marketplace Africa Team`;
   }
 
   const handleViewDetails = (supplier) => {
-    setModalContent({ type: "view", supplier })
+    setModalContent({
+      type: "supplier-details",
+      supplier
+    })
     setShowModal(true)
   }
 
@@ -1311,7 +1315,6 @@ BIG Marketplace Africa Team`;
                 <th style={tableHeaderStyle}>Supplier Name</th>
                 <th style={tableHeaderStyle}>Location</th>
                 <th style={tableHeaderStyle}>Sector Focus</th>
-                <th style={tableHeaderStyle}>Rating</th>
                 <th style={tableHeaderStyle}>BBBEE Level</th>
                 <th style={tableHeaderStyle}>Revenue</th>
                 <th style={tableHeaderStyle}>Category</th>
@@ -1351,12 +1354,6 @@ BIG Marketplace Africa Team`;
                         text={supplier.entityOverview?.economicSectors?.[0] || "Not specified"}
                         maxLength={12}
                       />
-                    </td>
-
-                    <td style={tableCellStyle}>
-                      <span style={{ fontSize: "0.75rem", color: "#5D2A0A", fontWeight: "500" }}>
-                        {supplier.rating}/5
-                      </span>
                     </td>
 
                     <td style={tableCellStyle}>
@@ -2229,9 +2226,17 @@ BIG Marketplace Africa Team`;
           document.body,
         )}
 
-      {/* Modal */}
-      {mounted &&
-        showModal &&
+      {/* Supplier Details Modal */}
+      {mounted && showModal && modalContent.type === "supplier-details" && (
+        <SupplierDetailsModal
+          supplier={modalContent.supplier}
+          isOpen={showModal}
+          onClose={() => setShowModal(false)}
+        />
+      )}
+
+      {/* Keep your existing modals for other types */}
+      {mounted && showModal && modalContent.type === "documents" && (
         createPortal(
           <div
             style={{
@@ -2259,271 +2264,224 @@ BIG Marketplace Africa Team`;
               }}
             >
               <div style={modalHeaderStyle}>
-                <h3 style={modalTitleStyle}>
-                  {modalContent.type === "view" && "Supplier Details"}
-                  {modalContent.type === "documents" && "Supplier Documents"}
-                  {modalContent.type === "message" && "Send Message"}
-                  {modalContent.type === "call" && "Call Supplier"}
-                </h3>
+                <h3 style={modalTitleStyle}>Supplier Documents</h3>
                 <button onClick={() => setShowModal(false)} style={modalCloseButtonStyle}>
                   ✖
                 </button>
               </div>
               <div style={modalBodyStyle}>
-                {modalContent.type === "view" && (
-                  <div>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-                        gap: "1rem",
-                        marginBottom: "1.5rem",
-                      }}
+                <div>
+                  <p style={{ marginBottom: "1rem", color: "#5D2A0A" }}>
+                    Documents for{" "}
+                    <strong>
+                      {modalContent.supplier?.entityOverview?.tradingName ||
+                        modalContent.supplier?.entityOverview?.registeredName}
+                    </strong>
+                    :
+                  </p>
+                  <ul
+                    style={{
+                      listStyle: "none",
+                      padding: "0",
+                      margin: "0 0 1.5rem 0",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.5rem",
+                    }}
+                  >
+                    <li
+                      style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
                     >
-                      <div style={detailCardStyle}>
-                        <p style={detailTextStyle}>
-                          <strong>Supplier:</strong>{" "}
-                          {modalContent.supplier?.entityOverview?.tradingName ||
-                            modalContent.supplier?.entityOverview?.registeredName}
-                        </p>
-                        <p style={detailTextStyle}>
-                          <strong>Service Category:</strong> {modalContent.supplier?.serviceCategory}
-                        </p>
-                        <p style={detailTextStyle}>
-                          <strong>Service Offered:</strong>{" "}
-                          {modalContent.supplier?.productsServices?.productCategories?.[0]?.name || "Not specified"}
-                        </p>
-                      </div>
-                      <div style={detailCardStyle}>
-                        <p style={detailTextStyle}>
-                          <strong>Match Score:</strong> {modalContent.supplier?.matchPercentage}%
-                        </p>
-                        <p style={detailTextStyle}>
-                          <strong>Location:</strong> {modalContent.supplier?.entityOverview?.location}
-                        </p>
-                        <p style={detailTextStyle}>
-                          <strong>BBBEE Level:</strong> {modalContent.supplier?.bbbeeLevel}
-                        </p>
-                      </div>
-                      <div style={detailCardStyle}>
-                        <p style={detailTextStyle}>
-                          <strong>Annual Revenue:</strong>{" "}
-                          {modalContent.supplier?.financialOverview?.annualRevenue || "Not specified"}
-                        </p>
-                        <p style={detailTextStyle}>
-                          <strong>Status:</strong> {modalContent.supplier?.status}
-                        </p>
-                        <p style={detailTextStyle}>
-                          <strong>Rating:</strong> {modalContent.supplier?.rating?.toFixed(1)}/5
-                        </p>
-                      </div>
-                    </div>
-
-                    <div style={{ marginBottom: "1.5rem" }}>
-                      <h4 style={{ color: "#5d4037", fontSize: "14px", margin: "0 0 8px 0" }}>Supplier Documents:</h4>
-                      <ul
-                        style={{
-                          listStyle: "none",
-                          padding: "0",
-                          margin: "0",
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: "0.5rem",
-                        }}
-                      >
-                        <li
-                          style={{
-                            padding: "0.5rem",
-                            background: "#F5EBE0",
-                            borderRadius: "4px",
-                            fontSize: "0.875rem",
-                          }}
-                        >
-                          📄 Company Profile.pdf
-                        </li>
-                        <li
-                          style={{
-                            padding: "0.5rem",
-                            background: "#F5EBE0",
-                            borderRadius: "4px",
-                            fontSize: "0.875rem",
-                          }}
-                        >
-                          📄 BBBEE Certificate.pdf
-                        </li>
-                        <li
-                          style={{
-                            padding: "0.5rem",
-                            background: "#F5EBE0",
-                            borderRadius: "4px",
-                            fontSize: "0.875rem",
-                          }}
-                        >
-                          📄 Tax Compliance.pdf
-                        </li>
-                        <li
-                          style={{
-                            padding: "0.5rem",
-                            background: "#F5EBE0",
-                            borderRadius: "4px",
-                            fontSize: "0.875rem",
-                          }}
-                        >
-                          📄 References.pdf
-                        </li>
-                      </ul>
-                    </div>
-
-                    <div style={modalActionsStyle}>
-                      <button
-                        style={primaryButtonStyle}
-                        onClick={() => {
-                          setModalContent({ type: "documents", supplier: modalContent.supplier })
-                        }}
-                      >
-                        View Documents
-                      </button>
-                      <button style={cancelButtonStyle} onClick={() => setShowModal(false)}>
-                        Close
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {modalContent.type === "documents" && (
-                  <div>
-                    <p style={{ marginBottom: "1rem", color: "#5D2A0A" }}>
-                      Documents for{" "}
-                      <strong>
-                        {modalContent.supplier?.entityOverview?.tradingName ||
-                          modalContent.supplier?.entityOverview?.registeredName}
-                      </strong>
-                      :
-                    </p>
-                    <ul
-                      style={{
-                        listStyle: "none",
-                        padding: "0",
-                        margin: "0 0 1.5rem 0",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "0.5rem",
-                      }}
+                      📄 Company Profile.pdf
+                    </li>
+                    <li
+                      style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
                     >
-                      <li
-                        style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
-                      >
-                        📄 Company Profile.pdf
-                      </li>
-                      <li
-                        style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
-                      >
-                        📄 BBBEE Certificate.pdf
-                      </li>
-                      <li
-                        style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
-                      >
-                        📄 Tax Compliance.pdf
-                      </li>
-                      <li
-                        style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
-                      >
-                        📄 References.pdf
-                      </li>
-                      <li
-                        style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
-                      >
-                        📄 Service Portfolio.pdf
-                      </li>
-                      <li
-                        style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
-                      >
-                        📄 Case Studies.pdf
-                      </li>
-                    </ul>
-                    <div style={modalActionsStyle}>
-                      <button style={primaryButtonStyle}>Download All</button>
-                      <button style={cancelButtonStyle} onClick={() => setShowModal(false)}>
-                        Close
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {modalContent.type === "message" && (
-                  <div>
-                    <p style={{ marginBottom: "1rem", color: "#5D2A0A" }}>
-                      Send a message to{" "}
-                      <strong>
-                        {modalContent.supplier?.entityOverview?.tradingName ||
-                          modalContent.supplier?.entityOverview?.registeredName}
-                      </strong>
-                      :
-                    </p>
-                    <textarea
-                      style={{
-                        width: "100%",
-                        minHeight: "120px",
-                        padding: "0.75rem",
-                        border: "1px solid #E8D5C4",
-                        borderRadius: "6px",
-                        fontSize: "0.875rem",
-                        fontFamily: "inherit",
-                        resize: "vertical",
-                        background: "#FEFCFA",
-                        marginBottom: "1.5rem",
-                      }}
-                      placeholder="Type your message here..."
-                      rows={4}
-                    />
-                    <div style={modalActionsStyle}>
-                      <button style={primaryButtonStyle}>Send Message</button>
-                      <button style={cancelButtonStyle} onClick={() => setShowModal(false)}>
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {modalContent.type === "call" && (
-                  <div>
-                    <p style={{ marginBottom: "1rem", color: "#5D2A0A" }}>
-                      Call{" "}
-                      <strong>
-                        {modalContent.supplier?.entityOverview?.tradingName ||
-                          modalContent.supplier?.entityOverview?.registeredName}
-                      </strong>
-                      :
-                    </p>
-                    <div
-                      style={{
-                        padding: "1rem",
-                        background: "#F5EBE0",
-                        borderRadius: "8px",
-                        marginBottom: "1.5rem",
-                        border: "1px solid #E8D5C4",
-                      }}
+                      📄 BBBEE Certificate.pdf
+                    </li>
+                    <li
+                      style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
                     >
-                      <p style={{ margin: "0.25rem 0", color: "#5D2A0A" }}>Primary Contact: John Smith</p>
-                      <p style={{ margin: "0.25rem 0", color: "#5D2A0A" }}>Phone: +27 12 345 6789</p>
-                      <p style={{ margin: "0.25rem 0", color: "#5D2A0A" }}>
-                        Email: contact@
-                        {(modalContent.supplier?.entityOverview?.tradingName || "supplier")
-                          .toLowerCase()
-                          .replace(/\s/g, "")}
-                        .com
-                      </p>
-                    </div>
-                    <div style={modalActionsStyle}>
-                      <button style={primaryButtonStyle}>Dial Now</button>
-                      <button style={cancelButtonStyle} onClick={() => setShowModal(false)}>
-                        Cancel
-                      </button>
-                    </div>
+                      📄 Tax Compliance.pdf
+                    </li>
+                    <li
+                      style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
+                    >
+                      📄 References.pdf
+                    </li>
+                    <li
+                      style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
+                    >
+                      📄 Service Portfolio.pdf
+                    </li>
+                    <li
+                      style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
+                    >
+                      📄 Case Studies.pdf
+                    </li>
+                  </ul>
+                  <div style={modalActionsStyle}>
+                    <button style={primaryButtonStyle}>Download All</button>
+                    <button style={cancelButtonStyle} onClick={() => setShowModal(false)}>
+                      Close
+                    </button>
                   </div>
-                )}
+                </div>
               </div>
             </div>
           </div>,
-          document.body,
-        )}
+          document.body
+        )
+      )}
+
+      {mounted && showModal && modalContent.type === "message" && (
+        createPortal(
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(0,0,0,0.5)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1000,
+            }}
+          >
+            <div
+              style={{
+                background: "white",
+                borderRadius: "12px",
+                maxWidth: "600px",
+                width: "90%",
+                maxHeight: "80vh",
+                overflowY: "auto",
+                boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
+              }}
+            >
+              <div style={modalHeaderStyle}>
+                <h3 style={modalTitleStyle}>Send Message</h3>
+                <button onClick={() => setShowModal(false)} style={modalCloseButtonStyle}>
+                  ✖
+                </button>
+              </div>
+              <div style={modalBodyStyle}>
+                <div>
+                  <p style={{ marginBottom: "1rem", color: "#5D2A0A" }}>
+                    Send a message to{" "}
+                    <strong>
+                      {modalContent.supplier?.entityOverview?.tradingName ||
+                        modalContent.supplier?.entityOverview?.registeredName}
+                    </strong>
+                    :
+                  </p>
+                  <textarea
+                    style={{
+                      width: "100%",
+                      minHeight: "120px",
+                      padding: "0.75rem",
+                      border: "1px solid #E8D5C4",
+                      borderRadius: "6px",
+                      fontSize: "0.875rem",
+                      fontFamily: "inherit",
+                      resize: "vertical",
+                      background: "#FEFCFA",
+                      marginBottom: "1.5rem",
+                    }}
+                    placeholder="Type your message here..."
+                    rows={4}
+                  />
+                  <div style={modalActionsStyle}>
+                    <button style={primaryButtonStyle}>Send Message</button>
+                    <button style={cancelButtonStyle} onClick={() => setShowModal(false)}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )
+      )}
+
+      {mounted && showModal && modalContent.type === "call" && (
+        createPortal(
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(0,0,0,0.5)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1000,
+            }}
+          >
+            <div
+              style={{
+                background: "white",
+                borderRadius: "12px",
+                maxWidth: "600px",
+                width: "90%",
+                maxHeight: "80vh",
+                overflowY: "auto",
+                boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
+              }}
+            >
+              <div style={modalHeaderStyle}>
+                <h3 style={modalTitleStyle}>Call Supplier</h3>
+                <button onClick={() => setShowModal(false)} style={modalCloseButtonStyle}>
+                  ✖
+                </button>
+              </div>
+              <div style={modalBodyStyle}>
+                <div>
+                  <p style={{ marginBottom: "1rem", color: "#5D2A0A" }}>
+                    Call{" "}
+                    <strong>
+                      {modalContent.supplier?.entityOverview?.tradingName ||
+                        modalContent.supplier?.entityOverview?.registeredName}
+                    </strong>
+                    :
+                  </p>
+                  <div
+                    style={{
+                      padding: "1rem",
+                      background: "#F5EBE0",
+                      borderRadius: "8px",
+                      marginBottom: "1.5rem",
+                      border: "1px solid #E8D5C4",
+                    }}
+                  >
+                    <p style={{ margin: "0.25rem 0", color: "#5D2A0A" }}>Primary Contact: John Smith</p>
+                    <p style={{ margin: "0.25rem 0", color: "#5D2A0A" }}>Phone: +27 12 345 6789</p>
+                    <p style={{ margin: "0.25rem 0", color: "#5D2A0A" }}>
+                      Email: contact@
+                      {(modalContent.supplier?.entityOverview?.tradingName || "supplier")
+                        .toLowerCase()
+                        .replace(/\s/g, "")}
+                      .com
+                    </p>
+                  </div>
+                  <div style={modalActionsStyle}>
+                    <button style={primaryButtonStyle}>Dial Now</button>
+                    <button style={cancelButtonStyle} onClick={() => setShowModal(false)}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )
+      )}
     </>
   )
 }

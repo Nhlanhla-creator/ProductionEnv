@@ -86,9 +86,278 @@ const africanCountries = [
   { value: "Angola", label: "Angola" },
   { value: "Benin", label: "Benin" },
   { value: "Botswana", label: "Botswana" },
+  { value: "Burkina Faso", label: "Burkina Faso" },
+  { value: "Burundi", label: "Burundi" },
+  { value: "Cabo Verde", label: "Cabo Verde" },
+  { value: "Cameroon", label: "Cameroon" },
+  { value: "Central African Republic", label: "Central African Republic" },
+  { value: "Chad", label: "Chad" },
+  { value: "Comoros", label: "Comoros" },
+  { value: "Congo", label: "Congo" },
+  { value: "Côte d'Ivoire", label: "Côte d'Ivoire" },
+  { value: "Djibouti", label: "Djibouti" },
+  { value: "DR Congo", label: "DR Congo" },
+  { value: "Egypt", label: "Egypt" },
+  { value: "Equatorial Guinea", label: "Equatorial Guinea" },
+  { value: "Eritrea", label: "Eritrea" },
+  { value: "Eswatini", label: "Eswatini" },
+  { value: "Ethiopia", label: "Ethiopia" },
+  { value: "Gabon", label: "Gabon" },
+  { value: "Gambia", label: "Gambia" },
+  { value: "Ghana", label: "Ghana" },
+  { value: "Guinea", label: "Guinea" },
+  { value: "Guinea-Bissau", label: "Guinea-Bissau" },
+  { value: "Kenya", label: "Kenya" },
+  { value: "Lesotho", label: "Lesotho" },
+  { value: "Liberia", label: "Liberia" },
+  { value: "Libya", label: "Libya" },
+  { value: "Madagascar", label: "Madagascar" },
+  { value: "Malawi", label: "Malawi" },
+  { value: "Mali", label: "Mali" },
+  { value: "Mauritania", label: "Mauritania" },
+  { value: "Mauritius", label: "Mauritius" },
+  { value: "Morocco", label: "Morocco" },
+  { value: "Mozambique", label: "Mozambique" },
+  { value: "Namibia", label: "Namibia" },
+  { value: "Niger", label: "Niger" },
+  { value: "Nigeria", label: "Nigeria" },
+  { value: "Rwanda", label: "Rwanda" },
+  { value: "São Tomé and Príncipe", label: "São Tomé and Príncipe" },
+  { value: "Senegal", label: "Senegal" },
+  { value: "Seychelles", label: "Seychelles" },
+  { value: "Sierra Leone", label: "Sierra Leone" },
+  { value: "Somalia", label: "Somalia" },
   { value: "South Africa", label: "South Africa" },
+  { value: "South Sudan", label: "South Sudan" },
+  { value: "Sudan", label: "Sudan" },
+  { value: "Tanzania", label: "Tanzania" },
+  { value: "Togo", label: "Togo" },
+  { value: "Tunisia", label: "Tunisia" },
+  { value: "Uganda", label: "Uganda" },
+  { value: "Zambia", label: "Zambia" },
   { value: "Zimbabwe", label: "Zimbabwe" },
 ]
+
+// City mapping for each country
+const citiesByCountry = {
+  "Algeria": [
+    "Algiers", "Oran", "Constantine", "Annaba", "Batna",
+    "Sétif", "Sidi Bel Abbès", "Biskra", "Tébessa", "El Oued"
+  ],
+  "Angola": [
+    "Luanda", "Huambo", "Lobito", "Benguela", "Lubango",
+    "Kuito", "Malanje", "Namibe", "Soyo", "Cabinda"
+  ],
+  "Benin": [
+    "Porto-Novo", "Cotonou", "Parakou", "Djougou", "Bohicon",
+    "Kandi", "Lokossa", "Ouidah", "Abomey", "Natitingou"
+  ],
+  "Botswana": [
+    "Gaborone", "Francistown", "Molepolole", "Maun", "Serowe",
+    "Selibe Phikwe", "Kanye", "Mochudi", "Mahalapye", "Palapye"
+  ],
+  "Burkina Faso": [
+    "Ouagadougou", "Bobo-Dioulasso", "Koudougou", "Banfora", "Ouahigouya",
+    "Dedougou", "Fada N'gourma", "Kaya", "Tenkodogo", "Houndé"
+  ],
+  "Burundi": [
+    "Gitega", "Bujumbura", "Muyinga", "Ngozi", "Ruyigi",
+    "Kayanza", "Makamba", "Bururi", "Cibitoke", "Rutana"
+  ],
+  "Cabo Verde": [
+    "Praia", "Mindelo", "Santa Maria", "Assomada", "Pedra Badejo",
+    "São Filipe", "Tarrafal", "Vila do Maio", "Porto Novo", "Ponta do Sol"
+  ],
+  "Cameroon": [
+    "Yaoundé", "Douala", "Garoua", "Bamenda", "Bafoussam",
+    "Maroua", "Ngaoundéré", "Bertoua", "Kumba", "Nkongsamba"
+  ],
+  "Central African Republic": [
+    "Bangui", "Bimbo", "Mbaïki", "Berbérati", "Carnot",
+    "Bambari", "Bouar", "Bossangoa", "Bria", "Bangassou"
+  ],
+  "Chad": [
+    "N'Djamena", "Moundou", "Sarh", "Abéché", "Kélo",
+    "Koumra", "Pala", "Am Timan", "Bongor", "Mongo"
+  ],
+  "Comoros": [
+    "Moroni", "Mutsamudu", "Fomboni", "Domoni", "Ouani",
+    "Sima", "Mitsamiouli", "Adda-Douéni", "Koni-Djodjo", "Tsimbeo"
+  ],
+  "Congo": [
+    "Brazzaville", "Pointe-Noire", "Dolisie", "Nkayi", "Owando",
+    "Ouesso", "Impfondo", "Sibiti", "Loandjili", "Madingou"
+  ],
+  "Côte d'Ivoire": [
+    "Abidjan", "Yamoussoukro", "Bouaké", "Daloa", "San-Pédro",
+    "Korhogo", "Man", "Divo", "Gagnoa", "Anyama"
+  ],
+  "Djibouti": [
+    "Djibouti", "Ali Sabieh", "Tadjourah", "Obock", "Dikhil",
+    "Arta", "Holhol", "Loyada", "Randa", "Balho"
+  ],
+  "DR Congo": [
+    "Kinshasa", "Lubumbashi", "Mbuji-Mayi", "Kananga", "Kisangani",
+    "Goma", "Bukavu", "Kolwezi", "Likasi", "Tshikapa"
+  ],
+  "Egypt": [
+    "Cairo", "Alexandria", "Giza", "Shubra El-Kheima", "Port Said",
+    "Suez", "Luxor", "Mansoura", "Tanta", "Asyut"
+  ],
+  "Equatorial Guinea": [
+    "Malabo", "Bata", "Ebebiyin", "Aconibe", "Añisoc",
+    "Luba", "Evinayong", "Mongomo", "Mengomeyén", "Rebola"
+  ],
+  "Eritrea": [
+    "Asmara", "Keren", "Massawa", "Assab", "Mendefera",
+    "Barentu", "Adi Keyh", "Adi Quala", "Dekemhare", "Ak'ordat"
+  ],
+  "Eswatini": [
+    "Mbabane", "Manzini", "Lobamba", "Siteki", "Malkerns",
+    "Nhlangano", "Piggs Peak", "Big Bend", "Hluti", "Simunye"
+  ],
+  "Ethiopia": [
+    "Addis Ababa", "Dire Dawa", "Mekelle", "Gondar", "Bahir Dar",
+    "Hawassa", "Dessie", "Jimma", "Jijiga", "Shashamane"
+  ],
+  "Gabon": [
+    "Libreville", "Port-Gentil", "Franceville", "Oyem", "Moanda",
+    "Mouila", "Lambaréné", "Tchibanga", "Koulamoutou", "Makokou"
+  ],
+  "Gambia": [
+    "Banjul", "Serekunda", "Brikama", "Bakau", "Farafenni",
+    "Lamin", "Sukuta", "Basse Santa Su", "Gunjur", "Soma"
+  ],
+  "Ghana": [
+    "Accra", "Kumasi", "Tamale", "Takoradi", "Ashaiman",
+    "Tema", "Teshie", "Cape Coast", "Obuasi", "Koforidua"
+  ],
+  "Guinea": [
+    "Conakry", "Nzérékoré", "Kankan", "Kindia", "Labé",
+    "Siguiri", "Kamsar", "Kissidougou", "Guéckédou", "Boké"
+  ],
+  "Guinea-Bissau": [
+    "Bissau", "Gabú", "Bafatá", "Canchungo", "Bissorã",
+    "Bolama", "Cacheu", "Catió", "Bubaque", "Farim"
+  ],
+  "Kenya": [
+    "Nairobi", "Mombasa", "Kisumu", "Nakuru", "Eldoret",
+    "Thika", "Malindi", "Kitale", "Garissa", "Kakamega"
+  ],
+  "Lesotho": [
+    "Maseru", "Mafeteng", "Leribe", "Maputsoe", "Mohale's Hoek",
+    "Qacha's Nek", "Quthing", "Butha-Buthe", "Mokhotlong", "Thaba-Tseka"
+  ],
+  "Liberia": [
+    "Monrovia", "Gbarnga", "Kakata", "Bensonville", "Harper",
+    "Voinjama", "Buchanan", "Zwedru", "New Yekepa", "Ganta"
+  ],
+  "Libya": [
+    "Tripoli", "Benghazi", "Misrata", "Bayda", "Zawiya",
+    "Ajdabiya", "Tobruk", "Sabha", "Sirte", "Derna"
+  ],
+  "Madagascar": [
+    "Antananarivo", "Toamasina", "Antsirabe", "Fianarantsoa", "Mahajanga",
+    "Toliara", "Antsiranana", "Ambovombe", "Antanifotsy", "Ambanja"
+  ],
+  "Malawi": [
+    "Lilongwe", "Blantyre", "Mzuzu", "Zomba", "Kasungu",
+    "Mangochi", "Karonga", "Salima", "Liwonde", "Dedza"
+  ],
+  "Mali": [
+    "Bamako", "Sikasso", "Mopti", "Koutiala", "Kayes",
+    "Ségou", "Gao", "Kati", "San", "Tombouctou"
+  ],
+  "Mauritania": [
+    "Nouakchott", "Nouadhibou", "Néma", "Kaédi", "Rosso",
+    "Zouérat", "Kiffa", "Atar", "Sélibaby", "Aleg"
+  ],
+  "Mauritius": [
+    "Port Louis", "Beau Bassin-Rose Hill", "Vacoas-Phoenix", "Curepipe", "Quatre Bornes",
+    "Triolet", "Goodlands", "Centre de Flacq", "Mahebourg", "Saint Pierre"
+  ],
+  "Morocco": [
+    "Casablanca", "Rabat", "Fes", "Marrakech", "Agadir",
+    "Tangier", "Meknes", "Oujda", "Kenitra", "Tetouan"
+  ],
+  "Mozambique": [
+    "Maputo", "Matola", "Nampula", "Beira", "Chimoio",
+    "Nacala", "Quelimane", "Tete", "Lichinga", "Pemba"
+  ],
+  "Namibia": [
+    "Windhoek", "Rundu", "Walvis Bay", "Oshakati", "Swakopmund",
+    "Katima Mulilo", "Grootfontein", "Rehoboth", "Otjiwarongo", "Ondangwa"
+  ],
+  "Niger": [
+    "Niamey", "Zinder", "Maradi", "Agadez", "Tahoua",
+    "Dosso", "Diffa", "Arlit", "Tillabéri", "Ayorou"
+  ],
+  "Nigeria": [
+    "Lagos", "Kano", "Ibadan", "Abuja", "Port Harcourt",
+    "Benin City", "Kaduna", "Maiduguri", "Zaria", "Aba"
+  ],
+  "Rwanda": [
+    "Kigali", "Butare", "Gitarama", "Ruhengeri", "Gisenyi",
+    "Byumba", "Cyangugu", "Kibungo", "Kibuye", "Rwamagana"
+  ],
+  "São Tomé and Príncipe": [
+    "São Tomé", "Santo António", "Trindade", "Neves", "Santana",
+    "Guadalupe", "Santo Amaro", "São João dos Angolares", "Porto Alegre", "Ribeira Afonso"
+  ],
+  "Senegal": [
+    "Dakar", "Touba", "Thiès", "Kaolack", "Saint-Louis",
+    "Ziguinchor", "Mbour", "Diourbel", "Tambacounda", "Rufisque"
+  ],
+  "Seychelles": [
+    "Victoria", "Anse Boileau", "Beau Vallon", "Cascade", "Takamaka",
+    "Anse Royale", "Bel Ombre", "Grand Anse", "La Digue", "Baie Lazare"
+  ],
+  "Sierra Leone": [
+    "Freetown", "Bo", "Kenema", "Makeni", "Koidu",
+    "Lunsar", "Port Loko", "Waterloo", "Kabala", "Magburaka"
+  ],
+  "Somalia": [
+    "Mogadishu", "Hargeisa", "Bosaso", "Kismayo", "Merca",
+    "Jamame", "Beledweyne", "Baidoa", "Burao", "Galkayo"
+  ],
+  "South Africa": [
+    "Johannesburg", "Cape Town", "Durban", "Pretoria", "Port Elizabeth",
+    "Bloemfontein", "East London", "Nelspruit", "Polokwane", "Kimberley",
+    "Pietermaritzburg", "Rustenburg", "George", "Middelburg", "Witbank"
+  ],
+  "South Sudan": [
+    "Juba", "Malakal", "Wau", "Yei", "Bor",
+    "Yambio", "Aweil", "Rumbek", "Torit", "Bentiu"
+  ],
+  "Sudan": [
+    "Khartoum", "Omdurman", "Port Sudan", "Kassala", "El-Obeid",
+    "Nyala", "Wad Madani", "El Fasher", "Kosti", "El Gadarif"
+  ],
+  "Tanzania": [
+    "Dar es Salaam", "Dodoma", "Mwanza", "Arusha", "Mbeya",
+    "Morogoro", "Tanga", "Zanzibar City", "Kigoma", "Tabora"
+  ],
+  "Togo": [
+    "Lomé", "Sokodé", "Kara", "Atakpamé", "Kpalimé",
+    "Bassar", "Tsévié", "Aného", "Sansanné-Mango", "Dapaong"
+  ],
+  "Tunisia": [
+    "Tunis", "Sfax", "Sousse", "Kairouan", "Bizerte",
+    "Gabès", "Ariana", "Gafsa", "Monastir", "Ben Arous"
+  ],
+  "Uganda": [
+    "Kampala", "Gulu", "Lira", "Mbarara", "Jinja",
+    "Mbale", "Mukono", "Kasese", "Masaka", "Entebbe"
+  ],
+  "Zambia": [
+    "Lusaka", "Kitwe", "Ndola", "Kabwe", "Chingola",
+    "Mufulira", "Livingstone", "Luanshya", "Kasama", "Chipata"
+  ],
+  "Zimbabwe": [
+    "Harare", "Bulawayo", "Chitungwiza", "Mutare", "Gweru",
+    "Kwekwe", "Kadoma", "Masvingo", "Chinhoyi", "Marondera"
+  ]
+}
 
 // Simple FormField component
 function FormField({ label, required, tooltip, children }) {
@@ -268,6 +537,12 @@ export default function EntityOverview({ data = {}, updateData }) {
   const handleChange = (e) => {
     const { name, value } = e.target
     const newData = { ...formData, [name]: value }
+    
+    // If country changes, clear city selection
+    if (name === "location") {
+      newData.city = ""
+    }
+    
     updateFormData(newData)
   }
 
@@ -446,7 +721,7 @@ export default function EntityOverview({ data = {}, updateData }) {
             />
           </FormField>
 
-          <FormField label="Location" required>
+          <FormField label="Country" required>
             <select
               name="location"
               value={formData.location || ""}
@@ -462,6 +737,26 @@ export default function EntityOverview({ data = {}, updateData }) {
               ))}
             </select>
           </FormField>
+
+          {/* City dropdown - shows when country is selected */}
+          {formData.location && citiesByCountry[formData.location] && (
+            <FormField label="City" required>
+              <select
+                name="city"
+                value={formData.city || ""}
+                onChange={handleChange}
+                style={inputStyle}
+                required
+              >
+                <option value="">Select City</option>
+                {citiesByCountry[formData.location].map((city) => (
+                  <option key={city} value={city}>
+                    {city}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+          )}
 
           {formData.location === "South Africa" && (
             <FormField label="Province" required>

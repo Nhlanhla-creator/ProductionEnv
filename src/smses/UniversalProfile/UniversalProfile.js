@@ -12,6 +12,7 @@ import EntityOverview from "./entity-overview"
 import OwnershipManagement from "./ownership-management"
 import ContactDetails from "./contact-details"
 import LegalCompliance from "./legal-compliance"
+import Governance from "./governance" // Import the Governance component
 import FinancialOverview from "./FinancialOverview" // Import the FinancialOverview component
 import ProductsServices from "./products-services"
 import HowDidYouHear from "./how-did-you-hear"
@@ -23,11 +24,13 @@ import { onAuthStateChanged } from "firebase/auth";
 const sections = [
   { id: "instructions", label: "Instructions" },
   { id: "entityOverview", label: "Entity\nOverview" },
+    { id: "productsServices", label: "Products &\nServices" },
   { id: "ownershipManagement", label: "Ownership &\nManagement" },
   { id: "contactDetails", label: "Contact\nDetails" },
   { id: "legalCompliance", label: "Legal &\nCompliance" },
-  { id: "financialOverview", label: "Financial\nOverview" }, // Added Financial Overview tab
-  { id: "productsServices", label: "Products &\nServices" },
+  { id: "financialOverview", label: "Financial\nOverview" },
+  { id: "governance", label: "Governance" }, // Added Governance tab
+
   { id: "howDidYouHear", label: "How Did\nYou Hear" },
   { id: "documents", label: "Document\nUpload" },
   { id: "declarationConsent", label: "Declaration &\nConsent" },
@@ -79,6 +82,8 @@ const sectionValidations = {
   legalCompliance: () => true, // Always valid
 
   financialOverview: () => true, // Always valid - add specific validation if needed
+
+  governance: () => true, // Always valid
 
   productsServices: () => true, // Always valid
 
@@ -438,12 +443,13 @@ const [validationModal, setValidationModal] = useState({
 
       ...(isFinalSubmit || !section ? { completedSections } : {}),
     };
-    const triggerSections = ["enterpriseReadiness","documentUpload","entityOverview","legalCompliance","contactDetails","financialOverview"];
+    const triggerSections = ["enterpriseReadiness","documentUpload","entityOverview","legalCompliance","governance","contactDetails","financialOverview"];
   const triggerSectionsFundability = [
   "enterpriseReadiness",
   "documentUpload",
   "entityOverview",
     "legalCompliance",
+  "governance",
   "contactDetails",
   "financialOverview", // Added financialOverview to fundability triggers
 ];
@@ -453,6 +459,7 @@ const triggerSectionsLegitimacy = [
   "documentUpload",
   "entityOverview",
     "legalCompliance",
+  "governance",
   "contactDetails",
   "financialOverview", // Added financialOverview to legitimacy triggers
 ];
@@ -622,7 +629,7 @@ const handleSaveAndContinue = async () => {
         return <ContactDetails {...commonProps} />
       case "legalCompliance":
         return <LegalCompliance {...commonProps} />
-     case "financialOverview": {
+      case "financialOverview": {
   // Adapter lets FinancialOverview call either:
   //   updateData("financialOverview", patch)  OR  updateData(patch)
   const updateFinancial = (sectionOrPatch, maybePatch) => {
@@ -641,6 +648,8 @@ const handleSaveAndContinue = async () => {
     />
   );
 }
+      case "governance":
+        return <Governance data={formData.governance || {}} updateData={(section, data) => updateFormData(section, data)} />
       case "productsServices":
         return <ProductsServices {...commonProps} />
       case "howDidYouHear":
