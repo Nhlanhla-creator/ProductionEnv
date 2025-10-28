@@ -25,12 +25,13 @@
   padding-left: 10px;
 }
 
-/* Horizontal scrolling tabs */
+/* Horizontal scrolling tabs - FIXED alignment to match section purpose */
 .categories-scroll-container {
   width: 100%;
   overflow-x: auto;
   padding-bottom: 10px;
   margin-bottom: 25px;
+  padding: 0 10px;
 }
 
 .categories-scroll-container::-webkit-scrollbar {
@@ -45,7 +46,7 @@
 .categories-grid {
   display: inline-flex;
   gap: 12px;
-  padding: 5px 10px;
+  padding: 5px 0;
   white-space: nowrap;
 }
 
@@ -86,9 +87,72 @@
 /* Section content */
 .section-content {
   width: 100%;
+  min-height: 600px;
 }
 
-/* Section Purpose */
+/* Section Header - FIXED alignment */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  gap: 20px;
+  padding: 0 10px;
+}
+
+.section-controls {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex-shrink: 0;
+}
+
+/* Time View Controls */
+.time-view-controls {
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 10px;
+}
+
+.time-view-selector {
+  display: flex;
+  gap: 8px;
+  background: #f5f5f5;
+  padding: 8px 12px;
+  border-radius: 8px;
+  align-items: center;
+}
+
+.time-view-label {
+  font-size: 12px;
+  color: #666;
+  font-weight: 500;
+  margin-right: 8px;
+}
+
+.time-view-btn {
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #666;
+}
+
+.time-view-btn.active {
+  background-color: #7d5a36;
+  color: white;
+}
+
+.time-view-btn:hover:not(.active) {
+  background-color: #e0e0e0;
+}
+
+/* Section Purpose - FIXED alignment */
 .section-purpose {
   background: white;
   border-radius: 8px;
@@ -96,6 +160,8 @@
   margin-bottom: 20px;
   border-left: 4px solid #7d5a36;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  flex: 1;
+  margin-left: 0;
 }
 
 .purpose-text {
@@ -104,24 +170,182 @@
   line-height: 1.4;
 }
 
-/* Grid layouts */
-.kpi-grid-overview {
+/* Download Section Button */
+.download-section-btn {
+  background: #7d5a36;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+  font-size: 14px;
+}
+
+.download-section-btn:hover {
+  background: #5e3f26;
+  transform: translateY(-2px);
+}
+
+/* Download Options */
+.download-options {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.download-options-content {
+  background: white;
+  padding: 30px;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  max-width: 400px;
+  width: 90%;
+}
+
+.download-options-content h4 {
+  margin: 0 0 20px 0;
+  color: #5e3f26;
+  font-size: 18px;
+  text-align: center;
+}
+
+.download-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.download-options-list button {
+  padding: 12px 20px;
+  border: 2px solid #7d5a36;
+  background: white;
+  color: #7d5a36;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  text-align: left;
+}
+
+.download-options-list button:hover {
+  background: #7d5a36;
+  color: white;
+}
+
+.close-download {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #666;
+  background: white;
+  color: #666;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.close-download:hover {
+  background: #666;
+  color: white;
+}
+
+/* 4x4 Grid Layout for Portfolio Overview - FIXED consistent sizing */
+.charts-grid-4x4 {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 0 10px;
+}
+
+.top-row,
+.bottom-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 20px;
 }
 
-.composition-charts-grid,
-.performance-charts-grid,
-.esg-charts-grid,
-.pipeline-charts-grid,
-.exit-charts-grid,
-.funder-charts-grid,
-.insights-charts-grid,
-.data-integrity-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: 20px;
+.bottom-full {
+  grid-column: 1 / -1;
+}
+
+/* Chart Header */
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.breakdown-icon-btn,
+.info-icon-btn {
+  background: none;
+  border: none;
+  color: #7d5a36;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.breakdown-icon-btn:hover,
+.info-icon-btn:hover {
+  background: #f0f0f0;
+  transform: scale(1.1);
+}
+
+.breakdown-icon-btn.active {
+  background: #7d5a36;
+  color: white;
+}
+
+/* Chart containers - FIXED consistent sizing */
+.chart-container {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  height: 420px; /* Fixed consistent height for all charts */
+  position: relative;
+  overflow: hidden;
+}
+
+.chart-container:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+}
+
+.chart-container.full-width {
+  grid-column: 1 / -1;
+  height: 450px;
+}
+
+.chart-area {
+  flex-grow: 1;
+  min-height: 240px;
+  position: relative;
+  margin-bottom: 10px;
 }
 
 /* Chart Title - Consistent across all charts */
@@ -132,37 +356,11 @@
   font-weight: 600;
   padding-bottom: 10px;
   border-bottom: 1px solid #ede4d8;
-  min-height: 40px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   line-height: 1.3;
-}
-
-/* Chart containers */
-.chart-container {
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-  display: flex;
-  flex-direction: column;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.chart-container:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
-}
-
-.chart-container.full-width {
-  grid-column: 1 / -1;
-}
-
-.chart-area {
-  flex-grow: 1;
-  min-height: 240px;
-  position: relative;
-  margin-bottom: 10px;
+  min-height: 40px;
 }
 
 /* Visual Description */
@@ -174,174 +372,360 @@
   font-style: italic;
 }
 
-/* Stat Cards */
-.stat-card {
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-  display: flex;
-  flex-direction: column;
-}
-
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
-}
-
-.stat-card.simple {
-  text-align: center;
-}
-
-.stat-header {
+/* Chart Summary */
+.chart-summary {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 10px;
+  align-items: center;
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #f0f0f0;
 }
 
-.stat-title {
-  font-size: 14px;
-  color: #666;
-  font-weight: 500;
-  flex: 1;
-}
-
-.stat-value {
-  font-size: 24px;
-  font-weight: 700;
+.current-value {
+  font-weight: 600;
   color: #5e3f26;
-  margin-bottom: 10px;
 }
 
-.stat-value-large {
+.target-value {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: #666;
+}
+
+/* Trend Icons */
+.trend-icon {
+  font-size: 14px;
+}
+
+.trend-icon.up {
+  color: #4CAF50;
+}
+
+.trend-icon.down {
+  color: #f44336;
+}
+
+/* NEW: BIG Score Infographic */
+.big-score-infographic {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  height: 100%;
+}
+
+.big-score-main {
+  text-align: center;
+  padding: 15px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 8px;
+  border: 2px solid #7d5a36;
+}
+
+.big-score-value {
   font-size: 32px;
   font-weight: 700;
   color: #5e3f26;
   margin-bottom: 5px;
 }
 
-.stat-unit {
+.big-score-label {
   font-size: 14px;
   color: #666;
-}
-
-.stat-target {
-  font-size: 12px;
-  color: #666;
-  margin-bottom: 8px;
-}
-
-.stat-trend {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
   font-weight: 500;
-  margin-top: 8px;
-}
-
-.stat-trend.up {
-  color: #4CAF50;
-}
-
-.stat-trend.down {
-  color: #f44336;
-}
-
-/* View Toggle */
-.view-toggle-container {
-  margin-top: 10px;
-  display: flex;
-  justify-content: center;
-}
-
-.view-toggle {
-  display: flex;
-  gap: 4px;
-  background: #f5f5f5;
-  padding: 4px;
-  border-radius: 6px;
-}
-
-.toggle-btn {
-  padding: 6px 12px;
-  border: none;
-  background: transparent;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.toggle-btn.active {
-  background-color: #7d5a36;
-  color: white;
-}
-
-/* Sparkline */
-.sparkline-container {
-  margin: 10px 0;
-  flex: 1;
-  display: flex;
-  align-items: center;
-}
-
-.sparkline {
-  width: 100%;
-  background: #f8f9fa;
-  border-radius: 4px;
-  padding: 5px;
-}
-
-/* Mini Barchart */
-.barchart-container {
-  margin: 10px 0;
-}
-
-.mini-barchart {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  height: 40px;
   margin-bottom: 5px;
 }
 
-.bar {
-  flex: 1;
-  min-width: 8px;
-  border-radius: 2px 2px 0 0;
-  transition: all 0.3s ease;
+.big-score-target {
+  font-size: 12px;
+  color: #7d5a36;
+  font-weight: 500;
 }
 
-.bar:hover {
-  opacity: 0.8;
+.big-score-components {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.barchart-labels {
+.score-component {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.component-header {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+}
+
+.component-name {
+  font-size: 12px;
+  color: #5e3f26;
+  font-weight: 500;
+}
+
+.component-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: #7d5a36;
+}
+
+.component-bar {
+  height: 8px;
+  background: #f0f0f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.component-progress {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+/* NEW: Enhanced Funding Ready Infographic */
+.funding-ready-infographic {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  height: 100%;
+}
+
+.readiness-main {
+  text-align: center;
+  padding: 15px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 8px;
+  border: 2px solid #7d5a36;
+}
+
+.readiness-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: #5e3f26;
+  margin-bottom: 5px;
+}
+
+.readiness-label {
+  font-size: 14px;
+  color: #666;
+  font-weight: 500;
+  margin-bottom: 5px;
+}
+
+.readiness-target {
+  font-size: 12px;
+  color: #7d5a36;
+  font-weight: 500;
+}
+
+.readiness-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.readiness-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border-left: 3px solid #7d5a36;
+}
+
+.readiness-stage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stage-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.stage-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: #5e3f26;
+}
+
+.readiness-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.stage-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: #7d5a36;
+}
+
+.stage-percentage {
+  font-size: 10px;
+  color: #666;
+}
+
+.readiness-gap {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  background: #fff3e0;
+  border-radius: 6px;
+  border: 1px solid #ffb74d;
+}
+
+.gap-label {
+  font-size: 12px;
+  color: #5e3f26;
+  font-weight: 500;
+}
+
+.gap-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f57c00;
+}
+
+/* NEW: SME Graduation Infographic */
+.graduation-infographic {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  height: 100%;
+}
+
+.graduation-main {
+  text-align: center;
+  padding: 15px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 8px;
+  border: 2px solid #7d5a36;
+}
+
+.graduation-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: #5e3f26;
+  margin-bottom: 5px;
+}
+
+.graduation-label {
+  font-size: 14px;
+  color: #666;
+  font-weight: 500;
+  margin-bottom: 5px;
+}
+
+.graduation-subtitle {
+  font-size: 12px;
+  color: #7d5a36;
+  font-weight: 500;
+}
+
+.graduation-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.timeline-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.timeline-marker {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.marker-value {
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.timeline-content {
+  flex: 1;
+}
+
+.timeline-stage {
+  font-size: 12px;
+  font-weight: 600;
+  color: #5e3f26;
+  margin-bottom: 2px;
+}
+
+.timeline-count {
+  font-size: 11px;
+  color: #7d5a36;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.timeline-description {
+  font-size: 10px;
+  color: #666;
+}
+
+.graduation-impact {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.impact-item {
+  text-align: center;
+  padding: 8px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+}
+
+.impact-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: #5e3f26;
+  margin-bottom: 2px;
+}
+
+.impact-label {
   font-size: 10px;
   color: #666;
 }
 
 /* Gauge and Progress Ring */
-.gauge-card,
-.progress-ring-container {
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-  text-align: center;
-}
-
 .gauge-wrapper,
 .progress-ring-wrapper {
   display: flex;
   justify-content: center;
+  align-items: center;
   margin: 15px 0;
+  height: 140px;
+}
+
+.progress-ring-wrapper.enhanced {
+  height: 160px;
 }
 
 .gauge-target,
@@ -349,6 +733,10 @@
   font-size: 12px;
   color: #666;
   margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
 }
 
 .progress-label {
@@ -356,6 +744,212 @@
   color: #5e3f26;
   font-weight: 500;
   margin-top: 8px;
+}
+
+/* Enhanced Follow-on Funding Details */
+.follow-on-details {
+  margin-top: 15px;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.metric-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.metric-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 0;
+  font-size: 11px;
+}
+
+.metric-label {
+  color: #666;
+}
+
+.metric-value {
+  font-weight: 600;
+  color: #5e3f26;
+}
+
+/* NEW: Cost per SME Infographic */
+.cost-infographic {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  height: 100%;
+}
+
+.cost-main-metric {
+  text-align: center;
+  padding: 15px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 8px;
+  border: 2px solid #7d5a36;
+}
+
+.cost-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #5e3f26;
+  margin-bottom: 5px;
+}
+
+.cost-label {
+  font-size: 14px;
+  color: #666;
+  font-weight: 500;
+}
+
+.cost-breakdown {
+  display: flex;
+  gap: 15px;
+  flex: 1;
+}
+
+.breakdown-chart {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.breakdown-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.breakdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border-left: 3px solid #7d5a36;
+}
+
+.breakdown-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.breakdown-label {
+  flex: 1;
+  font-size: 12px;
+  color: #5e3f26;
+  font-weight: 500;
+}
+
+.breakdown-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: #7d5a36;
+}
+
+/* NEW: Catalyst Engagement Details */
+.engagement-details {
+  margin-top: 15px;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.engagement-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 8px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+}
+
+.metric-label {
+  font-size: 10px;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.metric-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: #5e3f26;
+}
+
+.metric-value.positive {
+  color: #4CAF50;
+}
+
+/* Breakdown Details - FIXED to not stretch chart */
+.breakdown-details {
+  margin-top: 15px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border-left: 3px solid #7d5a36;
+  position: relative;
+  z-index: 2;
+}
+
+.breakdown-details h4 {
+  margin: 0 0 10px 0;
+  color: #5e3f26;
+  font-size: 14px;
+}
+
+.breakdown-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.breakdown-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.breakdown-label {
+  font-size: 12px;
+  color: #666;
+}
+
+.breakdown-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: #5e3f26;
+}
+
+/* Grid layouts for other sections */
+.composition-charts-grid,
+.performance-charts-grid,
+.esg-charts-grid,
+.exit-charts-grid,
+.funder-charts-grid,
+.insights-charts-grid,
+.data-integrity-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 20px;
+  padding: 0 10px;
 }
 
 /* Funnel Chart */
@@ -404,49 +998,6 @@
   text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
 }
 
-/* Audit Trail */
-.audit-trail-card {
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  gap: 15px;
-}
-
-.download-btn {
-  background: #7d5a36;
-  color: white;
-  border: none;
-  padding: 12px 24px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: all 0.3s ease;
-}
-
-.download-btn:hover {
-  background: #5e3f26;
-  transform: translateY(-2px);
-}
-
-.download-icon {
-  font-size: 16px;
-}
-
-.timestamp {
-  font-size: 12px;
-  color: #666;
-  font-style: italic;
-}
-
 /* Trend Alert Cards */
 .trend-alerts-grid {
   display: grid;
@@ -461,6 +1012,10 @@
   padding: 15px;
   border-left: 4px solid #4CAF50;
   transition: all 0.3s ease;
+  height: 120px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .trend-alert-card.negative {
@@ -527,6 +1082,7 @@
 .table-container {
   overflow-x: auto;
   margin-top: 10px;
+  height: 300px;
 }
 
 .data-table {
@@ -602,14 +1158,41 @@
   min-height: 300px;
 }
 
-/* Responsive adjustments */
+/* Enhanced responsive design */
 @media (max-width: 1200px) {
   .investments-container {
     margin-left: 200px;
   }
   
-  .kpi-grid-overview {
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  .top-row,
+  .bottom-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .section-header {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .section-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .chart-container {
+    height: 400px;
+  }
+  
+  .cost-breakdown {
+    flex-direction: column;
+  }
+  
+  .engagement-metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .graduation-impact {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
@@ -617,7 +1200,6 @@
   .composition-charts-grid,
   .performance-charts-grid,
   .esg-charts-grid,
-  .pipeline-charts-grid,
   .exit-charts-grid,
   .funder-charts-grid,
   .insights-charts-grid,
@@ -626,7 +1208,7 @@
   }
   
   .chart-container {
-    height: 320px;
+    height: 380px;
   }
   
   .categories-grid {
@@ -636,6 +1218,14 @@
   .category-btn {
     padding: 10px 16px;
     font-size: 13px;
+  }
+  
+  .engagement-metrics {
+    grid-template-columns: 1fr;
+  }
+  
+  .graduation-impact {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -658,12 +1248,38 @@
     font-size: 14px;
   }
   
-  .kpi-grid-overview {
+  .top-row,
+  .bottom-row {
     grid-template-columns: 1fr;
   }
   
   .trend-alerts-grid {
     grid-template-columns: 1fr;
+  }
+  
+  .section-controls {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .time-view-controls {
+    justify-content: flex-start;
+  }
+  
+  .download-section-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .chart-container {
+    height: 350px;
+    padding: 15px;
+  }
+  
+  .big-score-components,
+  .readiness-breakdown,
+  .graduation-timeline {
+    gap: 8px;
   }
 }
 
@@ -674,7 +1290,7 @@
   
   .chart-container {
     padding: 15px;
-    height: 280px;
+    height: 320px;
   }
   
   .categories-scroll-container {
@@ -682,11 +1298,7 @@
   }
   
   .categories-grid {
-    padding: 3px 5px;
-  }
-  
-  .stat-value-large {
-    font-size: 28px;
+    padding: 3px 0;
   }
   
   .data-table {
@@ -714,5 +1326,73 @@
     font-size: 10px;
     padding: 3px 6px;
     min-width: 50px;
+  }
+  
+  .chart-summary {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  
+  .section-purpose,
+  .time-view-controls,
+  .charts-grid-4x4,
+  .composition-charts-grid,
+  .performance-charts-grid,
+  .esg-charts-grid {
+    padding: 0 5px;
+  }
+  
+  .cost-value,
+  .big-score-value,
+  .readiness-value,
+  .graduation-value {
+    font-size: 24px;
+  }
+  
+  .graduation-impact {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Categories grid spacing */
+.categories-scroll-container {
+  margin-bottom: 15px;
+}
+
+.categories-scroll-container:last-of-type {
+  margin-bottom: 25px;
+}
+
+/* Ensure all content areas have consistent padding */
+.portfolio-overview,
+.portfolio-composition,
+.pipeline-opportunities,
+.exit-liquidity,
+.funder-efficiency,
+.insights-ai,
+.performance-risk,
+.esg-impact,
+.data-integrity {
+  width: 100%;
+}
+
+/* Fix for PDF generation to ensure all content is visible */
+@media print {
+  .investments-container {
+    margin: 0;
+    padding: 0;
+  }
+  
+  .section-content {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  
+  .chart-container {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    height: auto;
+    min-height: 300px;
   }
 }

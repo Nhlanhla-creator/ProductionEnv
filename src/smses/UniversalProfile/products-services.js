@@ -1,9 +1,11 @@
 "use client"
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, Eye, EyeOff } from 'lucide-react'
+import { useState } from 'react'
 import FormField from "./form-field"
 import FileUpload from "./file-upload"
 import './UniversalProfile.css';
 import {deliveryModes} from '../ProductApplication/applicationOptions'
+
 // Updated category options for Products and Services
 const categoryOptions = [
   { value: "Agriculture", label: "Agriculture" },
@@ -83,6 +85,8 @@ const industryOptions = [
 ]
 
 export default function ProductsServices({ data = {}, updateData }) {
+  const [showExplanation, setShowExplanation] = useState(false)
+
   const handleChange = (e) => {
     const { name, value } = e.target
     updateData({ [name]: value })
@@ -93,13 +97,13 @@ export default function ProductsServices({ data = {}, updateData }) {
   }
 
   const handleCheckboxChange = (name, value) => {
-  const currentValues = data[name] || []
-  const newValues = currentValues.includes(value)
-    ? currentValues.filter((v) => v !== value)
-    : [...currentValues, value]
+    const currentValues = data[name] || []
+    const newValues = currentValues.includes(value)
+      ? currentValues.filter((v) => v !== value)
+      : [...currentValues, value]
 
-  updateData({ [name]: newValues })
-}
+    updateData({ [name]: newValues })
+  }
 
   const handleOfferingTypeChange = (e) => {
     const value = e.target.value
@@ -220,11 +224,49 @@ export default function ProductsServices({ data = {}, updateData }) {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-brown-800 mb-6">Products, Services & Offerings</h2>
+      {/* Header with Eye Icon */}
+      <div className="flex items-center gap-2 mb-6">
+        <h2 className="text-2xl font-bold text-brown-800">Products & Services</h2>
+        <button
+          type="button"
+          onClick={() => setShowExplanation(!showExplanation)}
+          className="p-1 hover:bg-brown-100 rounded-md transition-colors inline-flex items-center justify-center"
+          title={showExplanation ? "Hide explanation" : "Show explanation"}
+          style={{ verticalAlign: 'middle' }}
+        >
+          {showExplanation ? (
+            <EyeOff className="w-3.5 h-3.5 text-brown-700" strokeWidth={2.5} />
+          ) : (
+            <Eye className="w-3.5 h-3.5 text-brown-700" strokeWidth={2.5} />
+          )}
+        </button>
+      </div>
 
-      {/* Offering Type Selection */}
-      <div className="mb-8">
-        <FormField label="What does your business offer?" >
+      {/* Explanation Box */}
+      {showExplanation && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
+          <h3 className="text-lg font-semibold text-blue-800 mb-4">
+            📋 Products & Services Section - Guidance
+          </h3>
+          <p className="text-blue-700 mb-4">
+            This section helps us <strong>match your business with the right funders, corporates, and service providers</strong>. 
+            Please provide clear and structured information about what your company offers.
+          </p>
+          <ul className="list-disc list-inside space-y-2 text-blue-700">
+            <li>Select whether you offer products, services, or both</li>
+            <li>Organize your offerings into categories</li>
+            <li>Provide clear descriptions for each item</li>
+            <li>Include delivery standards and target market information</li>
+          </ul>
+        </div>
+      )}
+
+      {/* Section 1: Add Product or Service */}
+      <div className="mb-8 p-6 bg-brown-50 rounded-lg border-2 border-brown-200">
+        <h3 className="text-xl font-semibold text-brown-800 mb-4">Section 1: Add Product or Service</h3>
+        
+        {/* Offering Type Selection */}
+        <FormField label="What does your business offer?" required>
           <div className="space-y-3">
             <label className="flex items-center">
               <input
@@ -264,455 +306,356 @@ export default function ProductsServices({ data = {}, updateData }) {
             </label>
           </div>
         </FormField>
-      </div>
-<FormField label="Preferred Delivery Mode" >
-  <div className="checkbox-group">
-    {deliveryModes.map(mode => (
-      <label key={mode} className="checkbox-item">
-        <input
-          type="checkbox"
-          checked={(data.deliveryModes || []).includes(mode)}
-          onChange={() => handleCheckboxChange('deliveryModes', mode)}
-        />
-        {mode}
-      </label>
-    ))}
-  </div>
-        </FormField>
 
-        {/* Add this after the delivery modes section */}
-<FormField label="Lead Time" >
-  <div className="space-y-4">
-    <div className="grid grid-cols-2 gap-4">
-      <div>
-        <label className="block text-sm font-medium text-brown-700 mb-1">
-          Minimum Time
-        </label>
-        <div className="flex">
-          <input
-            type="number"
-            name="minLeadTime"
-            value={data.minLeadTime || ""}
-            onChange={handleChange}
-            placeholder="e.g., 2"
-            min="0"
-            className="w-full px-3 py-2 border border-brown-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-          />
-          <select
-            name="minLeadTimeUnit"
-            value={data.minLeadTimeUnit || "days"}
-            onChange={handleChange}
-            className="px-3 py-2 border border-brown-300 border-l-0 rounded-r-md focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white"
-          >
-            <option value="hours">Hours</option>
-            <option value="days">Days</option>
-            <option value="weeks">Weeks</option>
-            <option value="months">Months</option>
-          </select>
-        </div>
-      </div>
-      
-      <div>
-        <label className="block text-sm font-medium text-brown-700 mb-1">
-          Maximum Time
-        </label>
-        <div className="flex">
-          <input
-            type="number"
-            name="maxLeadTime"
-            value={data.maxLeadTime || ""}
-            onChange={handleChange}
-            placeholder="e.g., 5"
-            min="0"
-            className="w-full px-3 py-2 border border-brown-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-          />
-          <select
-            name="maxLeadTimeUnit"
-            value={data.maxLeadTimeUnit || "days"}
-            onChange={handleChange}
-            className="px-3 py-2 border border-brown-300 border-l-0 rounded-r-md focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white"
-          >
-            <option value="hours">Hours</option>
-            <option value="days">Days</option>
-            <option value="weeks">Weeks</option>
-            <option value="months">Months</option>
-          </select>
-        </div>
-      </div>
-    </div>
-    
-    {/* Display summary */}
-    {(data.minLeadTime || data.maxLeadTime) && (
-      <div className="bg-blue-50 p-3 rounded-md">
-        <p className="text-sm text-blue-700">
-          <strong>Delivery timeframe:</strong> {
-            data.minLeadTime && data.maxLeadTime 
-              ? `${data.minLeadTime} ${data.minLeadTimeUnit} - ${data.maxLeadTime} ${data.maxLeadTimeUnit}`
-              : data.minLeadTime
-                ? `Minimum ${data.minLeadTime} ${data.minLeadTimeUnit}`
-                : `Maximum ${data.maxLeadTime} ${data.maxLeadTimeUnit}`
-          }
-        </p>
-      </div>
-    )}
-  </div>
-</FormField>
-      {/* Show guidance only after selection */}
-      {data.offeringType && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
-          <h3 className="text-lg font-semibold text-blue-800 mb-4">
-            🛠️ {showProducts && showServices ? 'Product & Service' : showProducts ? 'Product' : 'Service'} Description – Guidance for Completion
-          </h3>
-          <p className="text-blue-700 mb-4">
-            To help us <strong>match your business with the right funders, corporates, and service providers</strong>, 
-            please provide clear and structured information about what your company offers. Accurate descriptions 
-            improve your chances of being shortlisted.
-          </p>
-          <p className="text-blue-700 mb-4">
-            You may list <strong>multiple {showProducts && showServices ? 'products and services' : showProducts ? 'products' : 'services'}</strong>, each with its own category.
-          </p>
-
-          <div className="space-y-4">
-            {showProducts && (
-              <>
-                <div>
-                  <h4 className="font-semibold text-blue-800 mb-2">
-                    📦 1. Product Category (e.g. "Food and hospitality", "Technology", "Clothing and Textiles")
-                  </h4>
-                  <p className="text-blue-700 mb-2">
-                    Select from our predefined categories that best describe the <strong>broad grouping</strong> your product(s) fall under.
-                  </p>
-                  <p className="text-blue-700 mb-1"><strong>Available Categories:</strong></p>
-                  <ul className="text-blue-700 text-sm list-disc list-inside ml-4">
-                    <li>Agriculture</li>
-                    <li>Technology</li>
-                    <li>Food and hospitality</li>
-                    <li>Beauty & Fitness</li>
-                    <li>Clothing and Textiles</li>
-                    <li>Construction</li>
-                    <li>And many more...</li>
-                  </ul>
-                </div>
-
-                <div>
-                  <h4 className="font-semibold text-blue-800 mb-2">
-                    📝 2. List of Products (under that category)
-                  </h4>
-                  <p className="text-blue-700 mb-2">
-                    List your actual products or product types. Be specific where possible.
-                  </p>
-                  <p className="text-blue-700 mb-1"><strong>Examples (under Food and hospitality):</strong></p>
-                  <ul className="text-blue-700 text-sm list-disc list-inside ml-4">
-                    <li>Organic Spice Blends</li>
-                    <li>Artisan Bread Products</li>
-                    <li>Catering Equipment</li>
-                    <li>Restaurant Management Software</li>
-                  </ul>
-                </div>
-              </>
-            )}
-
-            {showServices && (
-              <>
-                <div>
-                  <h4 className="font-semibold text-blue-800 mb-2">
-                    🛎️ {showProducts ? '3' : '1'}. Service Category (e.g. "Marketing", "Business and Professional Services", "Technology")
-                  </h4>
-                  <p className="text-blue-700 mb-2">
-                    Select from our predefined categories that best describe the <strong>type of services</strong> you offer.
-                  </p>
-                  <p className="text-blue-700 mb-1"><strong>Available Categories:</strong></p>
-                  <ul className="text-blue-700 text-sm list-disc list-inside ml-4">
-                    <li>Business and Professional Services</li>
-                    <li>Marketing</li>
-                    <li>Technology</li>
-                    <li>Financial services</li>
-                    <li>Education</li>
-                    <li>Logistics</li>
-                    <li>And many more...</li>
-                  </ul>
-                </div>
-
-                <div>
-                  <h4 className="font-semibold text-blue-800 mb-2">
-                    📋 {showProducts ? '4' : '2'}. List of Services (under that category)
-                  </h4>
-                  <p className="text-blue-700 mb-2">
-                    Detail the services you provide within that category. Be clear and include niche specialties where applicable.
-                  </p>
-                  <p className="text-blue-700 mb-1"><strong>Examples (under Technology):</strong></p>
-                  <ul className="text-blue-700 text-sm list-disc list-inside ml-4">
-                    <li>Website Development</li>
-                    <li>Mobile App Development</li>
-                    <li>IT Support & Maintenance</li>
-                    <li>Cloud Solutions</li>
-                    <li>Cybersecurity Consulting</li>
-                  </ul>
-                </div>
-              </>
-            )}
-
-            <div className="bg-blue-100 p-4 rounded-md">
-              <h4 className="font-semibold text-blue-800 mb-2">🔍 Why It Matters</h4>
-              <p className="text-blue-700 mb-2">We use your descriptions to:</p>
-              <ul className="text-blue-700 text-sm list-disc list-inside ml-4">
-                <li>Match you with <strong>corporates or buyers</strong> looking for your type of offering</li>
-                <li>Connect you to <strong>relevant funding opportunities</strong></li>
-                <li>Recommend <strong>service providers</strong> to support your growth</li>
-              </ul>
-              <p className="text-blue-700 mt-2">
-                Please be detailed, honest, and professional — what you write here determines <strong>who sees you and what opportunities open up</strong>.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Target Market Section - Show only after offering type is selected */}
-      {data.offeringType && (
-        <div className="mb-8">
-          <FormField label="Target Market" >
-            <textarea
-              name="targetMarket"
-              value={data.targetMarket || ""}
-              onChange={handleChange}
-              rows={3}
-              placeholder="Describe your primary customers or market segments (e.g., SMEs in manufacturing, individual consumers aged 25-45, government departments, etc.)"
-              className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-              required
-            />
-          </FormField>
-        </div>
-      )}
-
-      {/* Products and Services Section - Show only relevant sections */}
-      {data.offeringType && (
-        <div className="bg-brown-50 p-6 rounded-lg mb-8">
-          {/* Products Section */}
-          {showProducts && (
-            <div className="mb-6">
-              <div className="flex justify-between items-center mb-4">
-                <h4 className="text-md font-medium text-brown-700">Product Categories & Products</h4>
-                <button
-                  type="button"
-                  onClick={addProductCategory}
-                  className="flex items-center px-3 py-1 bg-brown-100 text-brown-700 rounded-md hover:bg-brown-200"
-                >
-                  <Plus className="w-4 h-4 mr-1" /> Add Category
-                </button>
-              </div>
-
-              {(data.productCategories || []).map((category, categoryIndex) => (
-                <div key={categoryIndex} className="mb-4 p-4 bg-white rounded-md border border-brown-200">
-                  <div className="flex justify-between items-center mb-2">
-                    <FormField label="Category Name" className="flex-1 mr-4 mb-0">
-                      <select
-                        value={category.name || ""}
-                        onChange={(e) => updateProductCategory(categoryIndex, "name", e.target.value)}
-                        className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-                        required
-                      >
-                        <option value="">Select Category</option>
-                        {categoryOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </FormField>
-                    <button
-                      type="button"
-                      onClick={() => removeProductCategory(categoryIndex)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <div className="ml-4 mt-2">
-                    <div className="flex justify-between items-center mb-2">
-                      <h5 className="text-sm font-medium text-brown-600">Products</h5>
-                      <button
-                        type="button"
-                        onClick={() => addProduct(categoryIndex)}
-                        className="flex items-center px-2 py-1 text-xs bg-brown-100 text-brown-700 rounded-md hover:bg-brown-200"
-                      >
-                        <Plus className="w-3 h-3 mr-1" /> Add Product
-                      </button>
-                    </div>
-
-                    {(category.products || []).map((product, productIndex) => (
-                      <div key={productIndex} className="flex items-start mb-2">
-                        <div className="flex-1 mr-2">
-                          <input
-                            type="text"
-                            value={product.name || ""}
-                            onChange={(e) => updateProduct(categoryIndex, productIndex, "name", e.target.value)}
-                            placeholder="Product Name"
-                            className="w-full px-3 py-2 text-sm border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-                          />
-                        </div>
-                        <div className="flex-1 mr-2">
-                          <input
-                            type="text"
-                            value={product.description || ""}
-                            onChange={(e) => updateProduct(categoryIndex, productIndex, "description", e.target.value)}
-                            placeholder="Brief Description"
-                            className="w-full px-3 py-2 text-sm border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeProduct(categoryIndex, productIndex)}
-                          className="text-red-500 hover:text-red-700 mt-2"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Services Section */}
-          {showServices && (
-            <div className="mb-6">
-              <div className="flex justify-between items-center mb-4">
-                <h4 className="text-md font-medium text-brown-700">Service Categories & Services</h4>
-                <button
-                  type="button"
-                  onClick={addServiceCategory}
-                  className="flex items-center px-3 py-1 bg-brown-100 text-brown-700 rounded-md hover:bg-brown-200"
-                >
-                  <Plus className="w-4 h-4 mr-1" /> Add Category
-                </button>
-              </div>
-
-              {(data.serviceCategories || []).map((category, categoryIndex) => (
-                <div key={categoryIndex} className="mb-4 p-4 bg-white rounded-md border border-brown-200">
-                  <div className="flex justify-between items-center mb-2">
-                    <FormField label="Category Name" required className="flex-1 mr-4 mb-0">
-                      <select
-                        value={category.name || ""}
-                        onChange={(e) => updateServiceCategory(categoryIndex, "name", e.target.value)}
-                        className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-                        required
-                      >
-                        <option value="">Select Category</option>
-                        {categoryOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </FormField>
-                    <button
-                      type="button"
-                      onClick={() => removeServiceCategory(categoryIndex)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <div className="ml-4 mt-2">
-                    <div className="flex justify-between items-center mb-2">
-                      <h5 className="text-sm font-medium text-brown-600">Services</h5>
-                      <button
-                        type="button"
-                        onClick={() => addService(categoryIndex)}
-                        className="flex items-center px-2 py-1 text-xs bg-brown-100 text-brown-700 rounded-md hover:bg-brown-200"
-                      >
-                        <Plus className="w-3 h-3 mr-1" /> Add Service
-                      </button>
-                    </div>
-
-                    {(category.services || []).map((service, serviceIndex) => (
-                      <div key={serviceIndex} className="flex items-start mb-2">
-                        <div className="flex-1 mr-2">
-                          <input
-                            type="text"
-                            value={service.name || ""}
-                            onChange={(e) => updateService(categoryIndex, serviceIndex, "name", e.target.value)}
-                            placeholder="Service Name"
-                            className="w-full px-3 py-2 text-sm border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-                          />
-                        </div>
-                        <div className="flex-1 mr-2">
-                          <input
-                            type="text"
-                            value={service.description || ""}
-                            onChange={(e) => updateService(categoryIndex, serviceIndex, "description", e.target.value)}
-                            placeholder="Brief Description"
-                            className="w-full px-3 py-2 text-sm border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeService(categoryIndex, serviceIndex)}
-                          className="text-red-500 hover:text-red-700 mt-2"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Key Clients Section */}
-          <div className="mb-6">
+        {/* Product Categories */}
+        {showProducts && (
+          <div className="mt-6">
             <div className="flex justify-between items-center mb-4">
-              <h4 className="text-md font-medium text-brown-700">Key Clients/Customers (optional)</h4>
+              <h4 className="text-lg font-semibold text-brown-700">Product Categories</h4>
               <button
                 type="button"
-                onClick={addClient}
-                className="flex items-center px-3 py-1 bg-brown-100 text-brown-700 rounded-md hover:bg-brown-200"
+                onClick={addProductCategory}
+                className="flex items-center gap-2 px-4 py-2 bg-brown-600 text-white rounded-md hover:bg-brown-700 transition-colors"
               >
-                <Plus className="w-4 h-4 mr-1" /> Add Client
+                <Plus className="w-4 h-4" />
+                Add Category
               </button>
             </div>
 
-            {(data.keyClients || []).map((client, index) => (
-              <div key={index} className="flex items-center mb-2">
-                <div className="flex-1 mr-2">
-                  <input
-                    type="text"
-                    value={client.name || ""}
-                    onChange={(e) => updateClient(index, "name", e.target.value)}
-                    placeholder="Client Name"
-                    className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-                  />
-                </div>
-                <div className="flex-1 mr-2">
-                  <select
-                    value={client.industry || ""}
-                    onChange={(e) => updateClient(index, "industry", e.target.value)}
-                    className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+            {(data.productCategories || []).map((category, categoryIndex) => (
+              <div key={categoryIndex} className="mb-6 p-4 bg-white rounded-lg border border-brown-200">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-brown-700 mb-2">
+                      Category Name *
+                    </label>
+                    <select
+                      value={category.name}
+                      onChange={(e) => updateProductCategory(categoryIndex, "name", e.target.value)}
+                      className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                      required
+                    >
+                      <option value="">Select a category</option>
+                      {categoryOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeProductCategory(categoryIndex)}
+                    className="ml-4 p-1.5 text-red-600 hover:bg-red-50 rounded-md transition-colors"
                   >
-                    <option value="">Select Industry</option>
-                    {industryOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-                <button type="button" onClick={() => removeClient(index)} className="text-red-500 hover:text-red-700">
-                  <Trash2 className="w-4 h-4" />
-                </button>
+
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <label className="text-sm font-medium text-brown-700">Products</label>
+                    <button
+                      type="button"
+                      onClick={() => addProduct(categoryIndex)}
+                      className="flex items-center gap-1 px-3 py-1 text-sm bg-brown-100 text-brown-700 rounded-md hover:bg-brown-200 transition-colors"
+                    >
+                      <Plus className="w-3 h-3" />
+                      Add Product
+                    </button>
+                  </div>
+
+                  {(category.products || []).map((product, productIndex) => (
+                    <div key={productIndex} className="flex gap-3 items-start p-3 bg-brown-50 rounded-md">
+                      <div className="flex-1 grid grid-cols-2 gap-3">
+                        <input
+                          type="text"
+                          value={product.name}
+                          onChange={(e) => updateProduct(categoryIndex, productIndex, "name", e.target.value)}
+                          placeholder="Product name"
+                          className="px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                          required
+                        />
+                        <input
+                          type="text"
+                          value={product.description}
+                          onChange={(e) => updateProduct(categoryIndex, productIndex, "description", e.target.value)}
+                          placeholder="Brief description"
+                          className="px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                          required
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeProduct(categoryIndex, productIndex)}
+                        className="p-1.5 text-red-600 hover:bg-red-100 rounded-md transition-colors"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
 
-      <div className="mt-8 flex justify-end">
-     
+        {/* Service Categories */}
+        {showServices && (
+          <div className="mt-6">
+            <div className="flex justify-between items-center mb-4">
+              <h4 className="text-lg font-semibold text-brown-700">Service Categories</h4>
+              <button
+                type="button"
+                onClick={addServiceCategory}
+                className="flex items-center gap-2 px-4 py-2 bg-brown-600 text-white rounded-md hover:bg-brown-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Add Category
+              </button>
+            </div>
+
+            {(data.serviceCategories || []).map((category, categoryIndex) => (
+              <div key={categoryIndex} className="mb-6 p-4 bg-white rounded-lg border border-brown-200">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-brown-700 mb-2">
+                      Category Name *
+                    </label>
+                    <select
+                      value={category.name}
+                      onChange={(e) => updateServiceCategory(categoryIndex, "name", e.target.value)}
+                      className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                      required
+                    >
+                      <option value="">Select a category</option>
+                      {categoryOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeServiceCategory(categoryIndex)}
+                    className="ml-4 p-1.5 text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <label className="text-sm font-medium text-brown-700">Services</label>
+                    <button
+                      type="button"
+                      onClick={() => addService(categoryIndex)}
+                      className="flex items-center gap-1 px-3 py-1 text-sm bg-brown-100 text-brown-700 rounded-md hover:bg-brown-200 transition-colors"
+                    >
+                      <Plus className="w-3 h-3" />
+                      Add Service
+                    </button>
+                  </div>
+
+                  {(category.services || []).map((service, serviceIndex) => (
+                    <div key={serviceIndex} className="flex gap-3 items-start p-3 bg-brown-50 rounded-md">
+                      <div className="flex-1 grid grid-cols-2 gap-3">
+                        <input
+                          type="text"
+                          value={service.name}
+                          onChange={(e) => updateService(categoryIndex, serviceIndex, "name", e.target.value)}
+                          placeholder="Service name"
+                          className="px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                          required
+                        />
+                        <input
+                          type="text"
+                          value={service.description}
+                          onChange={(e) => updateService(categoryIndex, serviceIndex, "description", e.target.value)}
+                          placeholder="Brief description"
+                          className="px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                          required
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeService(categoryIndex, serviceIndex)}
+                        className="p-1.5 text-red-600 hover:bg-red-100 rounded-md transition-colors"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Section 2: Delivery Standards */}
+      <div className="mb-8 p-6 bg-brown-50 rounded-lg border-2 border-brown-200">
+        <h3 className="text-xl font-semibold text-brown-800 mb-4">Section 2: Delivery Standards</h3>
+        
+        <FormField label="Preferred Delivery Mode" required>
+          <div className="checkbox-group">
+            {deliveryModes.map(mode => (
+              <label key={mode} className="checkbox-item">
+                <input
+                  type="checkbox"
+                  checked={(data.deliveryModes || []).includes(mode)}
+                  onChange={() => handleCheckboxChange('deliveryModes', mode)}
+                />
+                {mode}
+              </label>
+            ))}
+          </div>
+        </FormField>
+
+        <FormField label="Lead Time" required>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-brown-700 mb-1">
+                  Minimum Time
+                </label>
+                <div className="flex">
+                  <input
+                    type="number"
+                    name="minLeadTime"
+                    value={data.minLeadTime || ""}
+                    onChange={handleChange}
+                    placeholder="e.g., 2"
+                    min="0"
+                    className="w-full px-3 py-2 border border-brown-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                  />
+                  <select
+                    name="minLeadTimeUnit"
+                    value={data.minLeadTimeUnit || "days"}
+                    onChange={handleChange}
+                    className="px-3 py-2 border border-brown-300 border-l-0 rounded-r-md focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white"
+                  >
+                    <option value="hours">Hours</option>
+                    <option value="days">Days</option>
+                    <option value="weeks">Weeks</option>
+                    <option value="months">Months</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-brown-700 mb-1">
+                  Maximum Time
+                </label>
+                <div className="flex">
+                  <input
+                    type="number"
+                    name="maxLeadTime"
+                    value={data.maxLeadTime || ""}
+                    onChange={handleChange}
+                    placeholder="e.g., 5"
+                    min="0"
+                    className="w-full px-3 py-2 border border-brown-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                  />
+                  <select
+                    name="maxLeadTimeUnit"
+                    value={data.maxLeadTimeUnit || "days"}
+                    onChange={handleChange}
+                    className="px-3 py-2 border border-brown-300 border-l-0 rounded-r-md focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white"
+                  >
+                    <option value="hours">Hours</option>
+                    <option value="days">Days</option>
+                    <option value="weeks">Weeks</option>
+                    <option value="months">Months</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            
+            {/* Display summary */}
+            {(data.minLeadTime || data.maxLeadTime) && (
+              <div className="bg-blue-50 p-3 rounded-md">
+                <p className="text-sm text-blue-700">
+                  <strong>Delivery timeframe:</strong> {
+                    data.minLeadTime && data.maxLeadTime 
+                      ? `${data.minLeadTime} ${data.minLeadTimeUnit} - ${data.maxLeadTime} ${data.maxLeadTimeUnit}`
+                      : data.minLeadTime
+                        ? `Minimum ${data.minLeadTime} ${data.minLeadTimeUnit}`
+                        : `Maximum ${data.maxLeadTime} ${data.maxLeadTimeUnit}`
+                  }
+                </p>
+              </div>
+            )}
+          </div>
+        </FormField>
+      </div>
+      {/* Section 3: Target Market */}
+      <div className="mb-8 p-6 bg-brown-50 rounded-lg border-2 border-brown-200">
+        <h3 className="text-xl font-semibold text-brown-800 mb-4">Section 3: Target Market</h3>
+        
+        <FormField label="Target Market" required>
+          <textarea
+            name="targetMarket"
+            value={data.targetMarket || ""}
+            onChange={handleChange}
+            rows={4}
+            placeholder="e.g., NGO Contracts and youth development programs, Corporate / IAD departments seeking online training delivery, Government departments, education and youth development, NGOs and foundations involved in educational access"
+            className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+            required
+          />
+        </FormField>
+      </div>
+      {/* Section 4: Key Clients/Customers */}
+      <div className="mb-8 p-6 bg-brown-50 rounded-lg border-2 border-brown-200">
+        <h3 className="text-xl font-semibold text-brown-800 mb-4">Section 4: Key Clients/Customers (Optional)</h3>
+        
+        <div className="flex justify-between items-center mb-4">
+          <p className="text-sm text-brown-600">List your notable clients or customers</p>
+          <button
+            type="button"
+            onClick={addClient}
+            className="flex items-center gap-2 px-4 py-2 bg-brown-600 text-white rounded-md hover:bg-brown-700 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add Client
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          {(data.keyClients || []).map((client, index) => (
+            <div key={index} className="flex gap-3 items-start p-3 bg-white rounded-md border border-brown-200">
+              <div className="flex-1 grid grid-cols-2 gap-3">
+                <input
+                  type="text"
+                  value={client.name}
+                  onChange={(e) => updateClient(index, "name", e.target.value)}
+                  placeholder="Client/Customer name"
+                  className="px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                />
+                <select
+                  value={client.industry}
+                  onChange={(e) => updateClient(index, "industry", e.target.value)}
+                  className="px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                >
+                  <option value="">Select industry</option>
+                  {industryOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={() => removeClient(index)}
+                className="p-1.5 text-red-600 hover:bg-red-50 rounded-md transition-colors"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )

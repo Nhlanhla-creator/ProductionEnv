@@ -14,6 +14,9 @@ import {
   Package,
   MessageCircle,
   CheckSquare,
+  Linkedin,
+  DollarSign,
+  FileCheck,
 } from "lucide-react"
 
 const ProfileSummary = ({ data, onEdit }) => {
@@ -22,6 +25,8 @@ const ProfileSummary = ({ data, onEdit }) => {
     ownershipManagement: false,
     contactDetails: false,
     legalCompliance: false,
+    financialOverview: false,
+    governance: false,
     productsServices: false,
     howDidYouHear: false,
     declarationConsent: false,
@@ -73,6 +78,43 @@ const ProfileSummary = ({ data, onEdit }) => {
         <FileText size={16} />
         <span>{label}</span>
         <ExternalLink size={14} />
+      </div>
+    )
+  }
+
+  const renderLinkedInLink = (url) => {
+    if (!url) return "Not provided"
+
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "6px",
+          padding: "6px 10px",
+          background: "linear-gradient(135deg, #0077b5, #005582)",
+          color: "#ffffff",
+          borderRadius: "6px",
+          textDecoration: "none",
+          fontSize: "12px",
+          fontWeight: "500",
+          transition: "all 0.3s ease",
+          cursor: "pointer",
+          maxWidth: "fit-content",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = "translateY(-1px)"
+          e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 119, 181, 0.3)"
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = "translateY(0)"
+          e.currentTarget.style.boxShadow = "none"
+        }}
+        onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+      >
+        <Linkedin size={14} />
+        <span>LinkedIn</span>
+        <ExternalLink size={11} />
       </div>
     )
   }
@@ -333,6 +375,7 @@ const ProfileSummary = ({ data, onEdit }) => {
                       { label: "Operation Stage", value: formatLabel(data?.entityOverview?.operationStage) },
                       { label: "Target Market", value: data?.entityOverview?.targetMarket },
                       { label: "Location", value: formatLabel(data?.entityOverview?.location) },
+                      { label: "City", value: data?.entityOverview?.city || "Not provided" },
                       ...(data?.entityOverview?.location === "south_africa"
                         ? [{ label: "Province", value: data?.entityOverview?.province }]
                         : []),
@@ -601,6 +644,7 @@ const ProfileSummary = ({ data, onEdit }) => {
                                 "Name",
                                 "ID/Reg No.",
                                 "Country",
+                                "LinkedIn Profile",
                                 "% Shareholding",
                                 "Race",
                                 "Gender",
@@ -637,6 +681,11 @@ const ProfileSummary = ({ data, onEdit }) => {
                                 </td>
                                 <td style={{ padding: "10px 6px", color: "#4a352f", fontSize: "13px" }}>
                                   {shareholder.country || "Not provided"}
+                                </td>
+                                <td style={{ padding: "10px 6px", color: "#4a352f", fontSize: "13px" }}>
+                                  {shareholder.linkedin
+                                    ? renderLinkedInLink(shareholder.linkedin)
+                                    : "Not provided"}
                                 </td>
                                 <td
                                   style={{ padding: "10px 6px", color: "#4a352f", fontWeight: "600", fontSize: "13px" }}
@@ -710,6 +759,8 @@ const ProfileSummary = ({ data, onEdit }) => {
                                 "ID",
                                 "Position",
                                 "Nationality",
+                                "CV Upload",
+                                "LinkedIn Profile",
                                 "Exec/Non-Exec",
                                 "Race",
                                 "Gender",
@@ -749,6 +800,16 @@ const ProfileSummary = ({ data, onEdit }) => {
                                 </td>
                                 <td style={{ padding: "10px 6px", color: "#4a352f", fontSize: "13px" }}>
                                   {director.nationality || "Not provided"}
+                                </td>
+                                <td style={{ padding: "10px 6px", color: "#4a352f", fontSize: "13px" }}>
+                                  {director.cv && director.cv.url
+                                    ? renderDocumentLink(director.cv.url, "View CV")
+                                    : "No CV uploaded"}
+                                </td>
+                                <td style={{ padding: "10px 6px", color: "#4a352f", fontSize: "13px" }}>
+                                  {director.linkedin
+                                    ? renderLinkedInLink(director.linkedin)
+                                    : "Not provided"}
                                 </td>
                                 <td style={{ padding: "10px 6px", color: "#4a352f", fontSize: "13px" }}>
                                   {director.execType || "Not provided"}
@@ -1133,16 +1194,12 @@ const ProfileSummary = ({ data, onEdit }) => {
                   >
                     {[
                       { label: "Tax Number", value: data?.legalCompliance?.taxNumber },
-                      { label: "PIN", value: data?.legalCompliance?.pin },
-                      { label: "PIN Expiry Date", value: data?.legalCompliance?.pinExpiryDate },
-                      { label: "VAT Number", value: data?.legalCompliance?.vatNumber },
+                      { label: "PAYE Number", value: data?.legalCompliance?.payeNumber },
                       { label: "UIF Status", value: data?.legalCompliance?.uifStatus },
                       { label: "UIF Number", value: data?.legalCompliance?.uifNumber },
-                      { label: "PAYE Number", value: data?.legalCompliance?.payeNumber },
-                      { label: "B-BBEE Level", value: data?.legalCompliance?.bbbeeLevel },
-                      { label: "B-BBEE Certificate Renewal Date", value: data?.legalCompliance?.bbbeeCertRenewalDate },
-                      { label: "CIPC Returns Status", value: data?.legalCompliance?.cipcStatus },
                       { label: "COIDA Number", value: data?.legalCompliance?.coidaNumber },
+                      { label: "VAT Number", value: data?.legalCompliance?.vatNumber },
+                      { label: "B-BBEE Level", value: data?.legalCompliance?.bbbeeLevel },
                       {
                         label: "Industry Accreditations",
                         value: data?.legalCompliance?.industryAccreditations || "None",
@@ -1184,276 +1241,922 @@ const ProfileSummary = ({ data, onEdit }) => {
                     ))}
                   </div>
 
-                  {/* Compliance Checklist Section */}
-                  <div style={{ marginTop: "24px" }}>
-                    <h3 style={{
-                      fontSize: "18px",
+                </div>
+              )}
+            </div>
+
+            <div
+              style={{
+                background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
+                backdropFilter: "blur(20px)",
+                borderRadius: "16px",
+                overflow: "hidden",
+                border: "1px solid rgba(200, 182, 166, 0.3)",
+                boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
+                transition: "all 0.3s ease",
+              }}
+            >
+              <div
+                onClick={() => toggleSection("financialOverview")}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "16px 20px",
+                  background: expandedSections.financialOverview
+                    ? "linear-gradient(135deg, #7d5a50, #4a352f)"
+                    : "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
+                  cursor: "pointer",
+                  transition: "all 0.3s ease",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <DollarSign size={20} color={expandedSections.financialOverview ? "#faf7f2" : "#4a352f"} />
+                  <h2
+                    style={{
+                      margin: 0,
+                      fontSize: "clamp(16px, 2.5vw, 20px)",
+                      fontWeight: "700",
+                      color: expandedSections.financialOverview ? "#faf7f2" : "#4a352f",
+                    }}
+                  >
+                    Financial Overview
+                  </h2>
+                </div>
+                {expandedSections.financialOverview ? (
+                  <ChevronUp size={20} color="#faf7f2" />
+                ) : (
+                  <ChevronDown size={20} color="#4a352f" />
+                )}
+              </div>
+
+              {expandedSections.financialOverview && (
+                <div
+                  style={{
+                    padding: "20px",
+                    background: "linear-gradient(135deg, rgba(250, 247, 242, 0.8), rgba(240, 230, 217, 0.6))",
+                    animation: "slideDown 0.3s ease-out",
+                  }}
+                >
+                  {/* Revenue & Valuation */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                      gap: "16px",
+                      marginBottom: "20px",
+                    }}
+                  >
+                    {[
+                      { label: "Generates Revenue", value: data?.financialOverview?.generatesRevenue === "yes" ? "Yes" : "No" },
+                      { label: "Annual Revenue", value: data?.financialOverview?.annualRevenue || "Not provided" },
+                      { label: "Current Valuation", value: data?.financialOverview?.currentValuation || "Not provided" },
+                      { label: "Profitability Status", value: data?.financialOverview?.profitabilityStatus || "Not provided" },
+                      { label: "Existing Debt", value: data?.financialOverview?.existingDebt || "None" },
+                    ].map((item, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          background: "rgba(250, 247, 242, 0.8)",
+                          borderRadius: "12px",
+                          padding: "16px",
+                          border: "1px solid rgba(200, 182, 166, 0.2)",
+                        }}
+                      >
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: "12px",
+                            color: "#7d5a50",
+                            marginBottom: "6px",
+                            fontWeight: "600",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.5px",
+                          }}
+                        >
+                          {item.label}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: "14px",
+                            color: "#4a352f",
+                            fontWeight: "500",
+                          }}
+                        >
+                          {item.value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Accounting Software */}
+                  <h3
+                    style={{
+                      fontSize: "16px",
                       fontWeight: "700",
                       color: "#4a352f",
                       marginBottom: "16px",
                       display: "flex",
                       alignItems: "center",
-                      gap: "8px"
-                    }}>
-                      <CheckSquare size={20} color="#a67c52" />
-                      Policies & Controls
-                    </h3>
-
-                    {/* Progress Summary */}
-                    {data?.legalCompliance?.complianceChecklist && (
-                      <div style={{
-                        background: "rgba(166, 124, 82, 0.1)",
+                      gap: "8px",
+                    }}
+                  >
+                    <FileText size={18} color="#a67c52" />
+                    Accounting & Documentation
+                  </h3>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                      gap: "16px",
+                      marginBottom: "20px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        background: "rgba(250, 247, 242, 0.8)",
                         borderRadius: "12px",
-                        padding: "20px",
-                        border: "1px solid rgba(166, 124, 82, 0.2)",
-                        marginBottom: "24px"
-                      }}>
+                        padding: "16px",
+                        border: "1px solid rgba(200, 182, 166, 0.2)",
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: "12px",
+                          color: "#7d5a50",
+                          marginBottom: "6px",
+                          fontWeight: "600",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                        }}
+                      >
+                        Accounting Software
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "14px",
+                          color: "#4a352f",
+                          fontWeight: "500",
+                        }}
+                      >
+                        {data?.financialOverview?.hasAccountingSoftware === "yes" ? "Yes" : "No"}
+                      </span>
+                      {data?.financialOverview?.hasAccountingSoftware === "yes" && data?.financialOverview?.accountingSoftwareDocs && (
+                        <div style={{ marginTop: "8px" }}>
+                          {renderDocumentLink(data.financialOverview.accountingSoftwareDocs[0]?.url, "View Reports")}
+                        </div>
+                      )}
+                    </div>
+
+                    <div
+                      style={{
+                        background: "rgba(250, 247, 242, 0.8)",
+                        borderRadius: "12px",
+                        padding: "16px",
+                        border: "1px solid rgba(200, 182, 166, 0.2)",
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: "12px",
+                          color: "#7d5a50",
+                          marginBottom: "6px",
+                          fontWeight: "600",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                        }}
+                      >
+                        Books Up to Date
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "14px",
+                          color: "#4a352f",
+                          fontWeight: "500",
+                        }}
+                      >
+                        {data?.financialOverview?.booksUpToDate === "yes" ? "Yes" : "No"}
+                      </span>
+                      {data?.financialOverview?.booksUpToDate === "no" && data?.financialOverview?.booksUpToDateDetails && (
+                        <div style={{ marginTop: "8px", fontSize: "13px", color: "#7d5a50" }}>
+                          {data.financialOverview.booksUpToDateDetails}
+                        </div>
+                      )}
+                    </div>
+
+                    <div
+                      style={{
+                        background: "rgba(250, 247, 242, 0.8)",
+                        borderRadius: "12px",
+                        padding: "16px",
+                        border: "1px solid rgba(200, 182, 166, 0.2)",
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: "12px",
+                          color: "#7d5a50",
+                          marginBottom: "6px",
+                          fontWeight: "600",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                        }}
+                      >
+                        Financials Audited
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "14px",
+                          color: "#4a352f",
+                          fontWeight: "500",
+                        }}
+                      >
+                        {data?.financialOverview?.financialsAudited === "yes" ? "Yes" : "No"}
+                      </span>
+                      {data?.financialOverview?.financialsAudited === "yes" && data?.financialOverview?.auditedFinancialsDocs && (
+                        <div style={{ marginTop: "8px" }}>
+                          {renderDocumentLink(data.financialOverview.auditedFinancialsDocs[0]?.url, "View Audited Financials")}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Credit Information */}
+                  <h3
+                    style={{
+                      fontSize: "16px",
+                      fontWeight: "700",
+                      color: "#4a352f",
+                      marginBottom: "16px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                    }}
+                  >
+                    <Shield size={18} color="#a67c52" />
+                    Credit Information
+                  </h3>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                      gap: "16px",
+                      marginBottom: "20px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        background: "rgba(250, 247, 242, 0.8)",
+                        borderRadius: "12px",
+                        padding: "16px",
+                        border: "1px solid rgba(200, 182, 166, 0.2)",
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: "12px",
+                          color: "#7d5a50",
+                          marginBottom: "6px",
+                          fontWeight: "600",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                        }}
+                      >
+                        Credit Report
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "14px",
+                          color: "#4a352f",
+                          fontWeight: "500",
+                        }}
+                      >
+                        {data?.financialOverview?.hasCreditReport === "yes" ? "Available" : "Not Available"}
+                      </span>
+                      {data?.financialOverview?.hasCreditReport === "yes" && data?.financialOverview?.creditReportDocs && (
+                        <div style={{ marginTop: "8px" }}>
+                          {renderDocumentLink(data.financialOverview.creditReportDocs[0]?.url, "View Credit Report")}
+                        </div>
+                      )}
+                    </div>
+
+                    <div
+                      style={{
+                        background: "rgba(250, 247, 242, 0.8)",
+                        borderRadius: "12px",
+                        padding: "16px",
+                        border: "1px solid rgba(200, 182, 166, 0.2)",
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: "12px",
+                          color: "#7d5a50",
+                          marginBottom: "6px",
+                          fontWeight: "600",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                        }}
+                      >
+                        Credit Score
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "14px",
+                          color: "#4a352f",
+                          fontWeight: "500",
+                        }}
+                      >
+                        {data?.financialOverview?.creditScore || "Not provided"}
+                      </span>
+                    </div>
+
+                    <div
+                      style={{
+                        background: "rgba(250, 247, 242, 0.8)",
+                        borderRadius: "12px",
+                        padding: "16px",
+                        border: "1px solid rgba(200, 182, 166, 0.2)",
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: "12px",
+                          color: "#7d5a50",
+                          marginBottom: "6px",
+                          fontWeight: "600",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                        }}
+                      >
+                        Credit Issues
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "14px",
+                          color: "#4a352f",
+                          fontWeight: "500",
+                        }}
+                      >
+                        {data?.financialOverview?.creditIssues || "None reported"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Additional Information */}
+                  {(data?.financialOverview?.fundraisingHistory || data?.financialOverview?.additionalFinancialNotes) && (
+                    <>
+                      <h3
+                        style={{
+                          fontSize: "16px",
+                          fontWeight: "700",
+                          color: "#4a352f",
+                          marginBottom: "16px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                        }}
+                      >
+                        <FileText size={18} color="#a67c52" />
+                        Additional Information
+                      </h3>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                          gap: "16px",
+                        }}
+                      >
+                        {data?.financialOverview?.fundraisingHistory && (
+                          <div
+                            style={{
+                              background: "rgba(250, 247, 242, 0.8)",
+                              borderRadius: "12px",
+                              padding: "16px",
+                              border: "1px solid rgba(200, 182, 166, 0.2)",
+                            }}
+                          >
+                            <span
+                              style={{
+                                display: "block",
+                                fontSize: "12px",
+                                color: "#7d5a50",
+                                marginBottom: "6px",
+                                fontWeight: "600",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.5px",
+                              }}
+                            >
+                              Fundraising History
+                            </span>
+                            <span
+                              style={{
+                                fontSize: "14px",
+                                color: "#4a352f",
+                                fontWeight: "500",
+                              }}
+                            >
+                              {data.financialOverview.fundraisingHistory}
+                            </span>
+                          </div>
+                        )}
+
+                        {data?.financialOverview?.additionalFinancialNotes && (
+                          <div
+                            style={{
+                              background: "rgba(250, 247, 242, 0.8)",
+                              borderRadius: "12px",
+                              padding: "16px",
+                              border: "1px solid rgba(200, 182, 166, 0.2)",
+                            }}
+                          >
+                            <span
+                              style={{
+                                display: "block",
+                                fontSize: "12px",
+                                color: "#7d5a50",
+                                marginBottom: "6px",
+                                fontWeight: "600",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.5px",
+                              }}
+                            >
+                              Additional Notes
+                            </span>
+                            <span
+                              style={{
+                                fontSize: "14px",
+                                color: "#4a352f",
+                                fontWeight: "500",
+                              }}
+                            >
+                              {data.financialOverview.additionalFinancialNotes}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div
+              style={{
+                background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
+                backdropFilter: "blur(20px)",
+                borderRadius: "16px",
+                overflow: "hidden",
+                border: "1px solid rgba(200, 182, 166, 0.3)",
+                boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
+                transition: "all 0.3s ease",
+              }}
+            >
+              <div
+                onClick={() => toggleSection("governance")}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "16px 20px",
+                  background: expandedSections.governance
+                    ? "linear-gradient(135deg, #7d5a50, #4a352f)"
+                    : "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
+                  cursor: "pointer",
+                  transition: "all 0.3s ease",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <FileCheck size={20} color={expandedSections.governance ? "#faf7f2" : "#4a352f"} />
+                  <h2
+                    style={{
+                      margin: 0,
+                      fontSize: "clamp(16px, 2.5vw, 20px)",
+                      fontWeight: "700",
+                      color: expandedSections.governance ? "#faf7f2" : "#4a352f",
+                    }}
+                  >
+                    Governance
+                  </h2>
+                </div>
+                {expandedSections.governance ? (
+                  <ChevronUp size={20} color="#faf7f2" />
+                ) : (
+                  <ChevronDown size={20} color="#4a352f" />
+                )}
+              </div>
+
+              {expandedSections.governance && (
+                <div
+                  style={{
+                    padding: "20px",
+                    background: "linear-gradient(135deg, rgba(250, 247, 242, 0.8), rgba(240, 230, 217, 0.6))",
+                    animation: "slideDown 0.3s ease-out",
+                  }}
+                >
+                  {/* Policies & Controls Checklist */}
+                  <h3
+                    style={{
+                      fontSize: "16px",
+                      fontWeight: "700",
+                      color: "#4a352f",
+                      marginBottom: "16px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                    }}
+                  >
+                    <CheckSquare size={18} color="#a67c52" />
+                    Policies & Controls Progress
+                  </h3>
+
+                  {data?.governance?.governanceChecklist && Object.keys(data.governance.governanceChecklist).length > 0 ? (
+                    <>
+                      {/* Progress Summary */}
+                      <div
+                        style={{
+                          background: "rgba(166, 124, 82, 0.1)",
+                          borderRadius: "12px",
+                          padding: "20px",
+                          border: "1px solid rgba(166, 124, 82, 0.2)",
+                          marginBottom: "20px",
+                        }}
+                      >
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
                           <span style={{ fontSize: "16px", fontWeight: "600", color: "#4a352f" }}>Completion Progress</span>
                           <span style={{ fontSize: "16px", fontWeight: "600", color: "#7d5a50" }}>
-                            {Object.values(data.legalCompliance.complianceChecklist).filter(Boolean).length} of {Object.keys(data.legalCompliance.complianceChecklist).length} completed
+                            {Object.values(data.governance.governanceChecklist).filter(Boolean).length} completed
                           </span>
                         </div>
-                        <div style={{
-                          width: "100%",
-                          background: "rgba(200, 182, 166, 0.3)",
-                          borderRadius: "8px",
-                          height: "12px",
-                          overflow: "hidden"
-                        }}>
-                          <div style={{
-                            height: "100%",
-                            background: "linear-gradient(135deg, #a67c52, #7d5a50)",
-                            width: `${(Object.values(data.legalCompliance.complianceChecklist).filter(Boolean).length / Object.keys(data.legalCompliance.complianceChecklist).length) * 100}%`,
-                            transition: "width 0.3s ease",
-                            borderRadius: "8px"
-                          }} />
+                        <div
+                          style={{
+                            width: "100%",
+                            background: "rgba(200, 182, 166, 0.3)",
+                            borderRadius: "8px",
+                            height: "12px",
+                            overflow: "hidden",
+                          }}
+                        >
+                          <div
+                            style={{
+                              height: "100%",
+                              background: "linear-gradient(135deg, #a67c52, #7d5a50)",
+                              width: `${(Object.values(data.governance.governanceChecklist).filter(Boolean).length / Object.keys(data.governance.governanceChecklist).length) * 100}%`,
+                              transition: "width 0.3s ease",
+                              borderRadius: "8px",
+                            }}
+                          />
                         </div>
                       </div>
-                    )}
 
-                    {/* Checklist Items by Category */}
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "20px" }}>
-                      {/* Agreements */}
-                      <div style={{
-                        background: "rgba(250, 247, 242, 0.9)",
-                        borderRadius: "12px",
-                        padding: "20px",
-                        border: "1px solid rgba(200, 182, 166, 0.3)",
-                        boxShadow: "0 4px 12px rgba(74, 53, 47, 0.05)"
-                      }}>
-                        <h4 style={{
-                          fontSize: "16px",
-                          fontWeight: "700",
-                          color: "#4a352f",
-                          marginBottom: "16px",
-                          paddingBottom: "8px",
-                          borderBottom: "2px solid rgba(166, 124, 82, 0.3)"
-                        }}>
-                          📄 Agreements
-                        </h4>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                          {[
-                            { id: "employmentContract", label: "Employment Contract (Basic)" },
-                            { id: "nda", label: "NDA (Non-Disclosure Agreement)" },
-                            { id: "mou", label: "MOU (Memorandum of Understanding)" },
-                            { id: "suppliercontract", label: "Supplier Contracts" }
-                          ].map(item => (
-                            <div key={item.id} style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "12px",
-                              padding: "8px",
-                              borderRadius: "8px",
-                              background: data?.legalCompliance?.complianceChecklist?.[item.id]
-                                ? "rgba(166, 124, 82, 0.1)"
-                                : "transparent",
-                              transition: "all 0.2s ease"
-                            }}>
-                              <div style={{
-                                width: "20px",
-                                height: "20px",
-                                borderRadius: "6px",
-                                border: `2px solid ${data?.legalCompliance?.complianceChecklist?.[item.id] ? "#a67c52" : "#c8b6a6"}`,
-                                background: data?.legalCompliance?.complianceChecklist?.[item.id]
-                                  ? "#a67c52"
-                                  : "transparent",
+                      {/* Completed Items List */}
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                          gap: "12px",
+                          marginBottom: "24px",
+                        }}
+                      >
+                        {Object.entries(data.governance.governanceChecklist)
+                          .filter(([key, value]) => value === true)
+                          .map(([key, value], index) => (
+                            <div
+                              key={index}
+                              style={{
+                                background: "rgba(166, 124, 82, 0.1)",
+                                borderRadius: "8px",
+                                padding: "12px",
+                                border: "1px solid rgba(166, 124, 82, 0.2)",
                                 display: "flex",
                                 alignItems: "center",
-                                justifyContent: "center",
-                                flexShrink: 0
-                              }}>
-                                {data?.legalCompliance?.complianceChecklist?.[item.id] && (
-                                  <span style={{ color: "#faf7f2", fontSize: "12px", fontWeight: "bold" }}>✓</span>
-                                )}
-                              </div>
-                              <span style={{
-                                fontSize: "14px",
-                                color: data?.legalCompliance?.complianceChecklist?.[item.id] ? "#4a352f" : "#7d5a50",
-                                fontWeight: data?.legalCompliance?.complianceChecklist?.[item.id] ? "600" : "400",
-                                lineHeight: "1.4"
-                              }}>
-                                {item.label}
+                                gap: "8px",
+                              }}
+                            >
+                              <CheckSquare size={16} color="#a67c52" />
+                              <span style={{ fontSize: "13px", color: "#4a352f", fontWeight: "500" }}>
+                                {key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase())}
                               </span>
                             </div>
                           ))}
-                        </div>
                       </div>
-
-                      {/* Policy Essentials */}
-                      <div style={{
-                        background: "rgba(250, 247, 242, 0.9)",
-                        borderRadius: "12px",
-                        padding: "20px",
-                        border: "1px solid rgba(200, 182, 166, 0.3)",
-                        boxShadow: "0 4px 12px rgba(74, 53, 47, 0.05)"
-                      }}>
-                        <h4 style={{
-                          fontSize: "16px",
-                          fontWeight: "700",
-                          color: "#4a352f",
-                          marginBottom: "16px",
-                          paddingBottom: "8px",
-                          borderBottom: "2px solid rgba(166, 124, 82, 0.3)"
-                        }}>
-                          📋 Policy Essentials
-                        </h4>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                          {[
-                            { id: "codeOfConduct", label: "Employee Code of Conduct" },
-                            { id: "leavePolicy", label: "Leave Policy" },
-                            { id: "disciplinaryPolicy", label: "Disciplinary & Grievance Policy" },
-                            { id: "healthSafetyPolicy", label: "Health & Safety Policy" },
-                            { id: "privacyPolicy", label: "Privacy & Data Protection Policy" }
-                          ].map(item => (
-                            <div key={item.id} style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "12px",
-                              padding: "8px",
-                              borderRadius: "8px",
-                              background: data?.legalCompliance?.complianceChecklist?.[item.id]
-                                ? "rgba(166, 124, 82, 0.1)"
-                                : "transparent",
-                              transition: "all 0.2s ease"
-                            }}>
-                              <div style={{
-                                width: "20px",
-                                height: "20px",
-                                borderRadius: "6px",
-                                border: `2px solid ${data?.legalCompliance?.complianceChecklist?.[item.id] ? "#a67c52" : "#c8b6a6"}`,
-                                background: data?.legalCompliance?.complianceChecklist?.[item.id]
-                                  ? "#a67c52"
-                                  : "transparent",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                flexShrink: 0
-                              }}>
-                                {data?.legalCompliance?.complianceChecklist?.[item.id] && (
-                                  <span style={{ color: "#faf7f2", fontSize: "12px", fontWeight: "bold" }}>✓</span>
-                                )}
-                              </div>
-                              <span style={{
-                                fontSize: "14px",
-                                color: data?.legalCompliance?.complianceChecklist?.[item.id] ? "#4a352f" : "#7d5a50",
-                                fontWeight: data?.legalCompliance?.complianceChecklist?.[item.id] ? "600" : "400",
-                                lineHeight: "1.4"
-                              }}>
-                                {item.label}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Specialised Policies */}
-                      <div style={{
-                        background: "rgba(250, 247, 242, 0.9)",
-                        borderRadius: "12px",
-                        padding: "20px",
-                        border: "1px solid rgba(200, 182, 166, 0.3)",
-                        boxShadow: "0 4px 12px rgba(74, 53, 47, 0.05)"
-                      }}>
-                        <h4 style={{
-                          fontSize: "16px",
-                          fontWeight: "700",
-                          color: "#4a352f",
-                          marginBottom: "16px",
-                          paddingBottom: "8px",
-                          borderBottom: "2px solid rgba(166, 124, 82, 0.3)"
-                        }}>
-                          🎯 Specialised Policies
-                        </h4>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                          {[
-                            { id: "remoteWorkPolicy", label: "Remote Work Policy" },
-                            { id: "conflictInterestPolicy", label: "Conflict of Interest Policy" },
-                            { id: "ipProtection", label: "Intellectual Property Protection" },
-                            { id: "socialMediaPolicy", label: "Social Media Use Policy" },
-                            { id: "expensePolicy", label: "Expense Reimbursement Policy" },
-                            { id: "overtimePolicy", label: "Overtime & Compensation Policy" },
-                            { id: "terminationPolicy", label: "Termination Policy" },
-                            { id: "performancePolicy", label: "Performance Review Policy" }
-                          ].map(item => (
-                            <div key={item.id} style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "12px",
-                              padding: "8px",
-                              borderRadius: "8px",
-                              background: data?.legalCompliance?.complianceChecklist?.[item.id]
-                                ? "rgba(166, 124, 82, 0.1)"
-                                : "transparent",
-                              transition: "all 0.2s ease"
-                            }}>
-                              <div style={{
-                                width: "20px",
-                                height: "20px",
-                                borderRadius: "6px",
-                                border: `2px solid ${data?.legalCompliance?.complianceChecklist?.[item.id] ? "#a67c52" : "#c8b6a6"}`,
-                                background: data?.legalCompliance?.complianceChecklist?.[item.id]
-                                  ? "#a67c52"
-                                  : "transparent",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                flexShrink: 0
-                              }}>
-                                {data?.legalCompliance?.complianceChecklist?.[item.id] && (
-                                  <span style={{ color: "#faf7f2", fontSize: "12px", fontWeight: "bold" }}>✓</span>
-                                )}
-                              </div>
-                              <span style={{
-                                fontSize: "14px",
-                                color: data?.legalCompliance?.complianceChecklist?.[item.id] ? "#4a352f" : "#7d5a50",
-                                fontWeight: data?.legalCompliance?.complianceChecklist?.[item.id] ? "600" : "400",
-                                lineHeight: "1.4"
-                              }}>
-                                {item.label}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Empty State */}
-                    {(!data?.legalCompliance?.complianceChecklist || Object.keys(data.legalCompliance.complianceChecklist).length === 0) && (
-                      <div style={{
+                    </>
+                  ) : (
+                    <div
+                      style={{
                         background: "rgba(200, 182, 166, 0.1)",
                         borderRadius: "12px",
-                        padding: "40px",
+                        padding: "24px",
                         border: "1px solid rgba(200, 182, 166, 0.2)",
                         textAlign: "center",
                         color: "#7d5a50",
-                        fontStyle: "italic"
-                      }}>
-                        <CheckSquare size={32} color="#c8b6a6" style={{ marginBottom: "12px" }} />
-                        <p style={{ margin: 0, fontSize: "16px" }}>No compliance checklist data available yet.</p>
-                        <p style={{ margin: "8px 0 0 0", fontSize: "14px" }}>Visit the Legal & Compliance section to start tracking your documents.</p>
-                      </div>
-                    )}
+                        marginBottom: "24px",
+                      }}
+                    >
+                      <p style={{ margin: 0, fontSize: "14px" }}>No policies & controls checklist completed yet.</p>
+                    </div>
+                  )}
+
+                  {/* Advisory Section */}
+                  <h3
+                    style={{
+                      fontSize: "16px",
+                      fontWeight: "700",
+                      color: "#4a352f",
+                      marginBottom: "16px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                    }}
+                  >
+                    <FileText size={18} color="#a67c52" />
+                    Advisory Structure
+                  </h3>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                      gap: "16px",
+                      marginBottom: "24px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        background: "rgba(250, 247, 242, 0.8)",
+                        borderRadius: "12px",
+                        padding: "16px",
+                        border: "1px solid rgba(200, 182, 166, 0.2)",
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: "12px",
+                          color: "#7d5a50",
+                          marginBottom: "6px",
+                          fontWeight: "600",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                        }}
+                      >
+                        Advisory Structure
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "14px",
+                          color: "#4a352f",
+                          fontWeight: "500",
+                        }}
+                      >
+                        {data?.governance?.hasAdvisoryStructure || "Not specified"}
+                      </span>
+                      {data?.governance?.hasAdvisoryStructure === "Yes" && data?.governance?.advisoryStructureDocs && data.governance.advisoryStructureDocs.length > 0 && (
+                        <div style={{ marginTop: "8px" }}>
+                          {renderDocumentLink(data.governance.advisoryStructureDocs[0]?.url, "View Documents")}
+                        </div>
+                      )}
+                    </div>
+
+                    <div
+                      style={{
+                        background: "rgba(250, 247, 242, 0.8)",
+                        borderRadius: "12px",
+                        padding: "16px",
+                        border: "1px solid rgba(200, 182, 166, 0.2)",
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: "12px",
+                          color: "#7d5a50",
+                          marginBottom: "6px",
+                          fontWeight: "600",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                        }}
+                      >
+                        Policy & Controls
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "14px",
+                          color: "#4a352f",
+                          fontWeight: "500",
+                        }}
+                      >
+                        {data?.governance?.hasPolicyControls || "Not specified"}
+                      </span>
+                      {data?.governance?.hasPolicyControls === "Yes" && data?.governance?.policyControlsDocs && data.governance.policyControlsDocs.length > 0 && (
+                        <div style={{ marginTop: "8px" }}>
+                          {renderDocumentLink(data.governance.policyControlsDocs[0]?.url, "View Documents")}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Conflict Resolution / Ethics Section */}
+                  <h3
+                    style={{
+                      fontSize: "16px",
+                      fontWeight: "700",
+                      color: "#4a352f",
+                      marginBottom: "16px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                    }}
+                  >
+                    <Shield size={18} color="#a67c52" />
+                    Ethics & Conflict Resolution
+                  </h3>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                      gap: "16px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        background: "rgba(250, 247, 242, 0.8)",
+                        borderRadius: "12px",
+                        padding: "16px",
+                        border: "1px solid rgba(200, 182, 166, 0.2)",
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: "12px",
+                          color: "#7d5a50",
+                          marginBottom: "6px",
+                          fontWeight: "600",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                        }}
+                      >
+                        Ethics Policy
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "14px",
+                          color: "#4a352f",
+                          fontWeight: "500",
+                        }}
+                      >
+                        {data?.governance?.hasEthicsPolicy || "Not specified"}
+                      </span>
+                      {data?.governance?.hasEthicsPolicy === "Yes" && data?.governance?.ethicsPolicyDocs && data.governance.ethicsPolicyDocs.length > 0 && (
+                        <div style={{ marginTop: "8px" }}>
+                          {renderDocumentLink(data.governance.ethicsPolicyDocs[0]?.url, "View Policy")}
+                        </div>
+                      )}
+                    </div>
+
+                    <div
+                      style={{
+                        background: "rgba(250, 247, 242, 0.8)",
+                        borderRadius: "12px",
+                        padding: "16px",
+                        border: "1px solid rgba(200, 182, 166, 0.2)",
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: "12px",
+                          color: "#7d5a50",
+                          marginBottom: "6px",
+                          fontWeight: "600",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                        }}
+                      >
+                        Conflict Resolution
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "14px",
+                          color: "#4a352f",
+                          fontWeight: "500",
+                        }}
+                      >
+                        {data?.governance?.hasConflictResolution || "Not specified"}
+                      </span>
+                      {data?.governance?.hasConflictResolution === "Yes" && data?.governance?.conflictResolutionDocs && data.governance.conflictResolutionDocs.length > 0 && (
+                        <div style={{ marginTop: "8px" }}>
+                          {renderDocumentLink(data.governance.conflictResolutionDocs[0]?.url, "View Procedures")}
+                        </div>
+                      )}
+                    </div>
+
+                    <div
+                      style={{
+                        background: "rgba(250, 247, 242, 0.8)",
+                        borderRadius: "12px",
+                        padding: "16px",
+                        border: "1px solid rgba(200, 182, 166, 0.2)",
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: "12px",
+                          color: "#7d5a50",
+                          marginBottom: "6px",
+                          fontWeight: "600",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                        }}
+                      >
+                        Whistleblowing Policy
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "14px",
+                          color: "#4a352f",
+                          fontWeight: "500",
+                        }}
+                      >
+                        {data?.governance?.hasWhistleblowingPolicy || "Not specified"}
+                      </span>
+                      {data?.governance?.hasWhistleblowingPolicy === "Yes" && data?.governance?.whistleblowingPolicyDocs && data.governance.whistleblowingPolicyDocs.length > 0 && (
+                        <div style={{ marginTop: "8px" }}>
+                          {renderDocumentLink(data.governance.whistleblowingPolicyDocs[0]?.url, "View Policy")}
+                        </div>
+                      )}
+                    </div>
+
+                    <div
+                      style={{
+                        background: "rgba(250, 247, 242, 0.8)",
+                        borderRadius: "12px",
+                        padding: "16px",
+                        border: "1px solid rgba(200, 182, 166, 0.2)",
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: "12px",
+                          color: "#7d5a50",
+                          marginBottom: "6px",
+                          fontWeight: "600",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                        }}
+                      >
+                        Ethics Training Frequency
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "14px",
+                          color: "#4a352f",
+                          fontWeight: "500",
+                        }}
+                      >
+                        {data?.governance?.ethicsTrainingFrequency || "Not specified"}
+                      </span>
+                    </div>
+
+                    <div
+                      style={{
+                        background: "rgba(250, 247, 242, 0.8)",
+                        borderRadius: "12px",
+                        padding: "16px",
+                        border: "1px solid rgba(200, 182, 166, 0.2)",
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: "12px",
+                          color: "#7d5a50",
+                          marginBottom: "6px",
+                          fontWeight: "600",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                        }}
+                      >
+                        Last Ethics Training
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "14px",
+                          color: "#4a352f",
+                          fontWeight: "500",
+                        }}
+                      >
+                        {data?.governance?.lastEthicsTrainingDate || "Not specified"}
+                      </span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1512,40 +2215,6 @@ const ProfileSummary = ({ data, onEdit }) => {
                     animation: "slideDown 0.3s ease-out",
                   }}
                 >
-                  <div
-                    style={{
-                      background: "rgba(166, 124, 82, 0.1)",
-                      borderRadius: "12px",
-                      padding: "16px",
-                      border: "1px solid rgba(166, 124, 82, 0.2)",
-                      marginBottom: "16px",
-                    }}
-                  >
-                    <span
-                      style={{
-                        display: "block",
-                        fontSize: "12px",
-                        color: "#7d5a50",
-                        marginBottom: "8px",
-                        fontWeight: "700",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.5px",
-                      }}
-                    >
-                      Entity Type
-                    </span>
-                    <p
-                      style={{
-                        fontSize: "16px",
-                        color: "#4a352f",
-                        margin: 0,
-                        fontWeight: "600",
-                      }}
-                    >
-                      {data?.productsServices?.entityType || "Not provided"}
-                    </p>
-                  </div>
-
                   {/* Product Categories */}
                   <div style={{ marginBottom: "16px" }}>
                     <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
