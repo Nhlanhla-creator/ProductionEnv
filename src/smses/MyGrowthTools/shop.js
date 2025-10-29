@@ -99,12 +99,12 @@ const ShopToolsPage = () => {
   }, [])
 
   const getContentStyles = () => ({
-    marginLeft: isSidebarCollapsed ? "80px" : "250px",
+    // marginLeft: isSidebarCollapsed ? "80px" : "250px",
     padding: "0 1rem 0 0.5rem",
     fontFamily: "'Inter', 'Segoe UI', 'Roboto', sans-serif",
     background: colors.offWhite,
     minHeight: "100vh",
-    width: isSidebarCollapsed ? "calc(100vw - 110px)" : "calc(100vw - 280px)",
+    // width: isSidebarCollapsed ? "calc(100vw - 110px)" : "calc(100vw - 280px)",
     maxWidth: "none",
     transition: "all 0.3s ease",
   })
