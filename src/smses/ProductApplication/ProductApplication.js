@@ -7,7 +7,6 @@ import { sections } from "./applicationOptions"
 import RequestOverview from "./RequestOverview"
 import ProductsServices from "./ProductsServices"
 import MatchingPreferences from "./MatchingPreferences"
-import ContactSubmission from "./ContactSubmission"
 import ApplicationSummary from "./application-summary"
 import "./ProductApplication.css"
 import { doc, setDoc } from "firebase/firestore"
@@ -17,16 +16,16 @@ import { auth, db, storage } from "../../firebaseConfig"
 // Onboarding steps for the welcome popup
 const onboardingSteps = [
   { title: "Welcome to Products/Services Application", content: "This application will help us understand your product and service needs so we can match you with the right providers.", icon: "🛍️" },
-  { title: "Step 1: Request Overview", content: "Start by providing basic information about what you're looking for and your budget requirements.", icon: "📝" },
-  { title: "Step 2: Products & Services", content: "Specify the categories and details of the products or services you need.", icon: "📦" },
-  { title: "Step 3: Submit & Match", content: "Complete your preferences and contact information to help us find the best match for your needs.", icon: "✅" },
+  { title: "Step 1: Matching Preferences", content: "Start by specifying your preferences for B-BBEE level, ownership type, and sector experience.", icon: "🎯" },
+  { title: "Step 2: Request Overview", content: "Provide basic information about what you're looking for and your budget requirements.", icon: "📝" },
+  { title: "Step 3: Products & Services", content: "Specify the categories and details of the products or services you need.", icon: "📦" },
 ]
 
 /**
  * New props for embedded use:
  * - embedded: boolean (default false)
  * - onNavigateToMatches: () => void  (parent switches to "My Matches" tab)
- * - onNavigateToDashboard: () => void (parent decides what “dashboard” means in-tab)
+ * - onNavigateToDashboard: () => void (parent decides what "dashboard" means in-tab)
  * - initialSectionId: string (optional — start at a specific section)
  */
 const ProductApplication = ({
@@ -76,6 +75,12 @@ const ProductApplication = ({
     const parsedData = saved ? JSON.parse(saved) : {}
 
     return {
+      matchingPreferences: {
+        bbeeLevel: "",
+        ownershipPrefs: [],
+        sectorExperience: "",
+        ...(parsedData.matchingPreferences || {}),
+      },
       requestOverview: {
         purpose: "",
         engagementType: "",
@@ -93,22 +98,6 @@ const ProductApplication = ({
         keywords: "",
         scopeOfWorkFiles: [],
         ...(parsedData.productsServices || {}),
-      },
-      matchingPreferences: {
-        bbeeLevel: "",
-        ownershipPrefs: [],
-        sectorExperience: "",
-        ...(parsedData.matchingPreferences || {}),
-      },
-      contactSubmission: {
-        contactName: "",
-        contactRole: "",
-        businessName: "",
-        email: "",
-        phone: "",
-        responseMethod: "",
-        declaration: false,
-        ...(parsedData.contactSubmission || {}),
       },
     }
   })
@@ -149,43 +138,11 @@ const ProductApplication = ({
     localStorage.setItem(getUserSpecificKey("applicationSubmitted"), applicationSubmitted.toString())
   }, [applicationSubmitted])
 
-  // URL sync — DISABLED in embedded mode
-  // useEffect(() => {
-  //   if (embedded) return
-  //   const section = sections.find((s) => s.id === activeSection)
-  //   if (section && !showSummary && urlSection) {
-  //     navigate(`/applications/product/${section.path}`, { replace: true })
-  //   }
-  // }, [activeSection, navigate, showSummary, urlSection, embedded])
-
-  // React to URL changes — DISABLED in embedded mode
-  // useEffect(() => {
-  //   if (embedded) return
-  //   if (urlSection) {
-  //     const section = sections.find((s) => s.path === urlSection)
-  //     if (section) {
-  //       setActiveSection(section.id)
-  //       setShowSummary(false)
-  //     }
-  //   } else {
-  //     const userId = auth.currentUser?.uid
-  //     if (userId) {
-  //       const saved = localStorage.getItem(`applicationSubmitted_${userId}`)
-  //       if (saved === "true") setShowSummary(true)
-  //       else {
-  //         setActiveSection(sections[0].id)
-  //         navigate(`/applications/product/${sections[0].path}`, { replace: true })
-  //       }
-  //     }
-  //   }
-  // }, [urlSection, navigate, embedded])
-
   const goToSection = (sectionId) => {
     const section = sections.find((s) => s.id === sectionId)
     if (!section) return
     setActiveSection(section.id)
     setShowSummary(false)
-    // if (!embedded) navigate(`/applications/product/${section.path}`, { replace: true })
     window.scrollTo(0, 0)
   }
 
@@ -355,19 +312,21 @@ const ProductApplication = ({
 
   const renderActiveSection = () => {
     const sectionData = formData[activeSection] || {}
-    const sectionProps = { data: sectionData, updateData: (newData) => updateFormData(activeSection, newData) }
+    const sectionProps = { 
+      data: sectionData, 
+      updateData: (newData) => updateFormData(activeSection, newData),
+      onSubmit: activeSection === "matchingPreferences" ? submitApplication : undefined
+    }
 
     switch (activeSection) {
+      case "matchingPreferences":
+        return <MatchingPreferences {...sectionProps} />
       case "requestOverview":
         return <RequestOverview {...sectionProps} />
       case "productsServices":
         return <ProductsServices {...sectionProps} />
-      case "matchingPreferences":
-        return <MatchingPreferences {...sectionProps} />
-      case "contactSubmission":
-        return <ContactSubmission {...sectionProps} />
       default:
-        return <RequestOverview {...sectionProps} />
+        return <MatchingPreferences {...sectionProps} />
     }
   }
 
@@ -497,29 +456,26 @@ const ProductApplication = ({
       <div className="content-card" style={{ width: "100%", maxWidth: "100%", padding: 20, margin: "0 auto", backgroundColor: "white", borderRadius: 8, boxShadow: "0 2px 4px rgba(0,0,0,0.1)", boxSizing: "border-box", overflow: "hidden" }}>
         <div style={{ width: "100%", overflowX: "auto" }}>{renderActiveSection()}</div>
 
-        {/* Navigation Buttons */}
-        <div className="action-buttons" style={{ display: "flex", gap: 10, justifyContent: "space-between", alignItems: "center", marginTop: 30, padding: "20px 0", borderTop: "1px solid #eee", flexWrap: "wrap", width: "100%" }}>
-          {activeSection !== sections[0].id && (
-            <button type="button" onClick={goToPreviousSection} className="btn btn-secondary" style={{ display: "flex", alignItems: "center", gap: 5, padding: "10px 15px", fontSize: "clamp(0.8rem, 2vw, 1rem)", minWidth: 100, justifyContent: "center" }}>
-              <ChevronLeft size={16} /> Previous
-            </button>
-          )}
+        {/* Navigation Buttons - Only show if NOT on Matching Preferences (first section) */}
+        {activeSection !== "matchingPreferences" && (
+          <div className="action-buttons" style={{ display: "flex", gap: 10, justifyContent: "space-between", alignItems: "center", marginTop: 30, padding: "20px 0", borderTop: "1px solid #eee", flexWrap: "wrap", width: "100%" }}>
+            {activeSection !== sections[0].id && (
+              <button type="button" onClick={goToPreviousSection} className="btn btn-secondary" style={{ display: "flex", alignItems: "center", gap: 5, padding: "10px 15px", fontSize: "clamp(0.8rem, 2vw, 1rem)", minWidth: 100, justifyContent: "center" }}>
+                <ChevronLeft size={16} /> Previous
+              </button>
+            )}
 
-          <button type="button" onClick={handleSaveSection} className="btn btn-secondary" style={{ display: "flex", alignItems: "center", gap: 5, padding: "10px 15px", fontSize: "clamp(0.8rem, 2vw, 1rem)", minWidth: 100, justifyContent: "center" }}>
-            <Save size={16} /> Save
-          </button>
+            <button type="button" onClick={handleSaveSection} className="btn btn-secondary" style={{ display: "flex", alignItems: "center", gap: 5, padding: "10px 15px", fontSize: "clamp(0.8rem, 2vw, 1rem)", minWidth: 100, justifyContent: "center" }}>
+              <Save size={16} /> Save
+            </button>
 
-          {activeSection !== sections[sections.length - 1].id ? (
-            <button type="button" onClick={handleSaveAndContinue} className="btn btn-primary" style={{ display: "flex", alignItems: "center", gap: 5, padding: "10px 15px", fontSize: "clamp(0.8rem, 2vw, 1rem)", minWidth: 140, justifyContent: "center" }}>
-              Save & Continue <ChevronRight size={16} />
-            </button>
-          ) : (
-            <button type="button" onClick={submitApplication} className="btn btn-primary" disabled={!formData.contactSubmission?.declaration}
-              style={{ display: "flex", alignItems: "center", gap: 5, padding: "10px 15px", fontSize: "clamp(0.8rem, 2vw, 1rem)", minWidth: 140, justifyContent: "center", opacity: !formData.contactSubmission?.declaration ? 0.6 : 1 }}>
-              Submit Application
-            </button>
-          )}
-        </div>
+            {activeSection !== sections[sections.length - 1].id && (
+              <button type="button" onClick={handleSaveAndContinue} className="btn btn-primary" style={{ display: "flex", alignItems: "center", gap: 5, padding: "10px 15px", fontSize: "clamp(0.8rem, 2vw, 1rem)", minWidth: 140, justifyContent: "center" }}>
+                Save & Continue <ChevronRight size={16} />
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

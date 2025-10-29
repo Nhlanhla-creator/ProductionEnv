@@ -16,10 +16,8 @@ import {
 
 const ApplicationSummary = ({ data, onEdit }) => {
   const [expandedSections, setExpandedSections] = useState({
-    requestOverview: false,
-   
     matchingPreferences: false,
-    contactSubmission: false,
+    requestOverview: false,
   })
 
   const toggleSection = (section) => {
@@ -44,11 +42,13 @@ const ApplicationSummary = ({ data, onEdit }) => {
 
   const formatCurrency = (value) => {
     if (!value) return "R 0"
+    // Remove existing 'R ' prefix if present
+    const cleanValue = value.toString().replace(/R\s?/g, '').replace(/,/g, '');
     return new Intl.NumberFormat("en-ZA", {
       style: "currency",
       currency: "ZAR",
       minimumFractionDigits: 0,
-    }).format(value)
+    }).format(cleanValue)
   }
 
   const handleEdit = () => {
@@ -202,6 +202,151 @@ const ApplicationSummary = ({ data, onEdit }) => {
               gap: "16px",
             }}
           >
+            {/* Matching Preferences */}
+            <div
+              style={{
+                background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
+                backdropFilter: "blur(20px)",
+                borderRadius: "16px",
+                overflow: "hidden",
+                border: "1px solid rgba(200, 182, 166, 0.3)",
+                boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
+                transition: "all 0.3s ease",
+              }}
+            >
+              <div
+                onClick={() => toggleSection("matchingPreferences")}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "16px 20px",
+                  background: expandedSections.matchingPreferences
+                    ? "linear-gradient(135deg, #a67c52, #7d5a50)"
+                    : "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
+                  cursor: "pointer",
+                  transition: "all 0.3s ease",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <Users size={20} color={expandedSections.matchingPreferences ? "#faf7f2" : "#4a352f"} />
+                  <h2
+                    style={{
+                      margin: 0,
+                      fontSize: "clamp(16px, 2.5vw, 20px)",
+                      fontWeight: "700",
+                      color: expandedSections.matchingPreferences ? "#faf7f2" : "#4a352f",
+                    }}
+                  >
+                    Matching Preferences
+                  </h2>
+                </div>
+                {expandedSections.matchingPreferences ? (
+                  <ChevronUp size={20} color="#faf7f2" />
+                ) : (
+                  <ChevronDown size={20} color="#4a352f" />
+                )}
+              </div>
+
+              {expandedSections.matchingPreferences && (
+                <div
+                  style={{
+                    padding: "20px",
+                    background: "linear-gradient(135deg, rgba(250, 247, 242, 0.8), rgba(240, 230, 217, 0.6))",
+                    animation: "slideDown 0.3s ease-out",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                      gap: "16px",
+                    }}
+                  >
+                    {[
+                      { label: "Preferred B-BBEE Level", value: data?.matchingPreferences?.bbeeLevel, icon: FileText },
+                      {
+                        label: "Ownership Preferences",
+                        value: formatArray(data?.matchingPreferences?.ownershipPrefs),
+                        icon: Users,
+                      },
+                      {
+                        label: "Sector Experience Required",
+                        value: data?.matchingPreferences?.sectorExperience,
+                        icon: Package,
+                      },
+                      { label: "Type of Engagement", value: data?.matchingPreferences?.engagementType, icon: Users },
+                      {
+                        label: "Preferred Delivery Mode",
+                        value: formatArray(data?.matchingPreferences?.deliveryModes),
+                        icon: Package,
+                      },
+                      { label: "Start Date", value: data?.matchingPreferences?.startDate, icon: Calendar },
+                      { label: "End Date", value: data?.matchingPreferences?.endDate, icon: Calendar },
+                      { label: "Location", value: data?.matchingPreferences?.location, icon: MapPin },
+                      {
+                        label: "Budget Range",
+                        value: `${formatCurrency(data?.matchingPreferences?.minBudget)} to ${formatCurrency(data?.matchingPreferences?.maxBudget)}`,
+                        icon: DollarSign,
+                      },
+                      {
+                        label: "Linked to ESD/CSR Program",
+                        value:
+                          data?.matchingPreferences?.esdProgram === null
+                            ? "Not specified"
+                            : formatBoolean(data?.matchingPreferences?.esdProgram),
+                        icon: FileText,
+                      },
+                    ].map((item, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          background: "rgba(250, 247, 242, 0.8)",
+                          borderRadius: "12px",
+                          padding: "16px",
+                          border: "1px solid rgba(200, 182, 166, 0.2)",
+                          transition: "all 0.3s ease",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = "translateY(-1px)"
+                          e.currentTarget.style.boxShadow = "0 4px 16px rgba(74, 53, 47, 0.08)"
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = "translateY(0)"
+                          e.currentTarget.style.boxShadow = "none"
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                          <item.icon size={14} color="#a67c52" />
+                          <span
+                            style={{
+                              fontSize: "12px",
+                              color: "#7d5a50",
+                              fontWeight: "600",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.5px",
+                            }}
+                          >
+                            {item.label}
+                          </span>
+                        </div>
+                        <span
+                          style={{
+                            fontSize: "14px",
+                            color: "#4a352f",
+                            fontWeight: "500",
+                            lineHeight: "1.4",
+                          }}
+                        >
+                          {item.value || "Not specified"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Request Overview */}
             <div
               style={{
@@ -222,7 +367,7 @@ const ApplicationSummary = ({ data, onEdit }) => {
                   alignItems: "center",
                   padding: "16px 20px",
                   background: expandedSections.requestOverview
-                    ? "linear-gradient(135deg, #a67c52, #7d5a50)"
+                    ? "linear-gradient(135deg, #c8b6a6, #a67c52)"
                     : "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
                   cursor: "pointer",
                   transition: "all 0.3s ease",
@@ -310,153 +455,17 @@ const ApplicationSummary = ({ data, onEdit }) => {
                     }}
                   >
                     {[
-                      { label: "Type of Engagement", value: data?.requestOverview?.engagementType, icon: Users },
+                      { label: "Product/Service Categories", value: formatArray(data?.requestOverview?.categories), icon: Package },
                       {
-                        label: "Preferred Delivery Mode",
-                        value: formatArray(data?.requestOverview?.deliveryModes),
+                        label: "Specific Subcategories",
+                        value: formatArray(data?.requestOverview?.subcategories),
                         icon: Package,
                       },
-                      { label: "Start Date", value: data?.requestOverview?.startDate, icon: Calendar },
-                      { label: "End Date", value: data?.requestOverview?.endDate, icon: Calendar },
-                      { label: "Location", value: data?.requestOverview?.location, icon: MapPin },
+                      { label: "Keywords / Specific Needs", value: data?.requestOverview?.keywords, icon: FileText },
                       {
-                        label: "Budget Range",
-                        value: `${formatCurrency(data?.requestOverview?.minBudget)} to ${formatCurrency(data?.requestOverview?.maxBudget)}`,
-                        icon: DollarSign,
-                      },
-                      {
-                        label: "Linked to ESD/CSR Program",
-                        value:
-                          data?.requestOverview?.esdProgram === null
-                            ? "Not specified"
-                            : formatBoolean(data?.requestOverview?.esdProgram),
+                        label: "Scope of Work Files",
+                        value: formatFiles(data?.requestOverview?.scopeOfWorkFiles),
                         icon: FileText,
-                      },
-                    ].map((item, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          background: "rgba(250, 247, 242, 0.8)",
-                          borderRadius: "12px",
-                          padding: "16px",
-                          border: "1px solid rgba(200, 182, 166, 0.2)",
-                          transition: "all 0.3s ease",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = "translateY(-1px)"
-                          e.currentTarget.style.boxShadow = "0 4px 16px rgba(74, 53, 47, 0.08)"
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = "translateY(0)"
-                          e.currentTarget.style.boxShadow = "none"
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                          <item.icon size={14} color="#a67c52" />
-                          <span
-                            style={{
-                              fontSize: "12px",
-                              color: "#7d5a50",
-                              fontWeight: "600",
-                              textTransform: "uppercase",
-                              letterSpacing: "0.5px",
-                            }}
-                          >
-                            {item.label}
-                          </span>
-                        </div>
-                        <span
-                          style={{
-                            fontSize: "14px",
-                            color: "#4a352f",
-                            fontWeight: "500",
-                            lineHeight: "1.4",
-                          }}
-                        >
-                          {item.value || "Not provided"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Required Products or Services */}
-          
-
-            {/* Matching Preferences */}
-            <div
-              style={{
-                background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
-                backdropFilter: "blur(20px)",
-                borderRadius: "16px",
-                overflow: "hidden",
-                border: "1px solid rgba(200, 182, 166, 0.3)",
-                boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
-                transition: "all 0.3s ease",
-              }}
-            >
-              <div
-                onClick={() => toggleSection("matchingPreferences")}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "16px 20px",
-                  background: expandedSections.matchingPreferences
-                    ? "linear-gradient(135deg, #c8b6a6, #a67c52)"
-                    : "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
-                  cursor: "pointer",
-                  transition: "all 0.3s ease",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <Users size={20} color={expandedSections.matchingPreferences ? "#faf7f2" : "#4a352f"} />
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: "clamp(16px, 2.5vw, 20px)",
-                      fontWeight: "700",
-                      color: expandedSections.matchingPreferences ? "#faf7f2" : "#4a352f",
-                    }}
-                  >
-                    Matching Preferences
-                  </h2>
-                </div>
-                {expandedSections.matchingPreferences ? (
-                  <ChevronUp size={20} color="#faf7f2" />
-                ) : (
-                  <ChevronDown size={20} color="#4a352f" />
-                )}
-              </div>
-
-              {expandedSections.matchingPreferences && (
-                <div
-                  style={{
-                    padding: "20px",
-                    background: "linear-gradient(135deg, rgba(250, 247, 242, 0.8), rgba(240, 230, 217, 0.6))",
-                    animation: "slideDown 0.3s ease-out",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                      gap: "16px",
-                    }}
-                  >
-                    {[
-                      { label: "Preferred B-BBEE Level", value: data?.matchingPreferences?.bbeeLevel, icon: FileText },
-                      {
-                        label: "Ownership Preferences",
-                        value: formatArray(data?.matchingPreferences?.ownershipPrefs),
-                        icon: Users,
-                      },
-                      {
-                        label: "Sector Experience Required",
-                        value: data?.matchingPreferences?.sectorExperience,
-                        icon: Package,
                       },
                     ].map((item, i) => (
                       <div
@@ -479,133 +488,6 @@ const ApplicationSummary = ({ data, onEdit }) => {
                       >
                         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
                           <item.icon size={14} color="#c8b6a6" />
-                          <span
-                            style={{
-                              fontSize: "12px",
-                              color: "#7d5a50",
-                              fontWeight: "600",
-                              textTransform: "uppercase",
-                              letterSpacing: "0.5px",
-                            }}
-                          >
-                            {item.label}
-                          </span>
-                        </div>
-                        <span
-                          style={{
-                            fontSize: "14px",
-                            color: "#4a352f",
-                            fontWeight: "500",
-                            lineHeight: "1.4",
-                          }}
-                        >
-                          {item.value || "Not specified"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Contact & Submission */}
-            <div
-              style={{
-                background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
-                backdropFilter: "blur(20px)",
-                borderRadius: "16px",
-                overflow: "hidden",
-                border: "1px solid rgba(200, 182, 166, 0.3)",
-                boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
-                transition: "all 0.3s ease",
-              }}
-            >
-              <div
-                onClick={() => toggleSection("contactSubmission")}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "16px 20px",
-                  background: expandedSections.contactSubmission
-                    ? "linear-gradient(135deg, #a67c52, #7d5a50)"
-                    : "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
-                  cursor: "pointer",
-                  transition: "all 0.3s ease",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <Mail size={20} color={expandedSections.contactSubmission ? "#faf7f2" : "#4a352f"} />
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: "clamp(16px, 2.5vw, 20px)",
-                      fontWeight: "700",
-                      color: expandedSections.contactSubmission ? "#faf7f2" : "#4a352f",
-                    }}
-                  >
-                    Contact & Submission
-                  </h2>
-                </div>
-                {expandedSections.contactSubmission ? (
-                  <ChevronUp size={20} color="#faf7f2" />
-                ) : (
-                  <ChevronDown size={20} color="#4a352f" />
-                )}
-              </div>
-
-              {expandedSections.contactSubmission && (
-                <div
-                  style={{
-                    padding: "20px",
-                    background: "linear-gradient(135deg, rgba(250, 247, 242, 0.8), rgba(240, 230, 217, 0.6))",
-                    animation: "slideDown 0.3s ease-out",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                      gap: "16px",
-                    }}
-                  >
-                    {[
-                      { label: "Contact Person Name", value: data?.contactSubmission?.contactName, icon: Users },
-                      { label: "Role", value: data?.contactSubmission?.contactRole, icon: FileText },
-                      { label: "Business Name", value: data?.contactSubmission?.businessName, icon: Package },
-                      { label: "Email", value: data?.contactSubmission?.email, icon: Mail },
-                      { label: "Phone Number", value: data?.contactSubmission?.phone, icon: Mail },
-                      {
-                        label: "Preferred Response Method",
-                        value: data?.contactSubmission?.responseMethod,
-                        icon: Mail,
-                      },
-                      {
-                        label: "Declaration",
-                        value: formatBoolean(data?.contactSubmission?.declaration),
-                        icon: FileText,
-                      },
-                    ].map((item, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          background: "rgba(250, 247, 242, 0.8)",
-                          borderRadius: "12px",
-                          padding: "16px",
-                          border: "1px solid rgba(200, 182, 166, 0.2)",
-                          transition: "all 0.3s ease",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = "translateY(-1px)"
-                          e.currentTarget.style.boxShadow = "0 4px 16px rgba(74, 53, 47, 0.08)"
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = "translateY(0)"
-                          e.currentTarget.style.boxShadow = "none"
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                          <item.icon size={14} color="#a67c52" />
                           <span
                             style={{
                               fontSize: "12px",

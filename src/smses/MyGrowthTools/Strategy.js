@@ -410,6 +410,464 @@ const VisionMissionValues = ({ activeSection, currentUser, isInvestorView }) => 
   )
 }
 
+// Business Model Canvas Component
+const BusinessModelCanvas = ({ activeSection, currentUser, isInvestorView }) => {
+  const [canvasData, setCanvasData] = useState({
+    keyPartners: "",
+    keyActivities: "",
+    keyResources: "",
+    valuePropositions: "",
+    customerRelationships: "",
+    channels: "",
+    customerSegments: "",
+    costStructure: "",
+    revenueStreams: "",
+  })
+
+  useEffect(() => {
+    const loadCanvasData = async () => {
+      if (!currentUser || activeSection !== "business-model-canvas") return
+
+      try {
+        const canvasSnapshot = await getDocs(
+          query(collection(db, "businessModelCanvas"), where("userId", "==", currentUser.uid)),
+        )
+
+        if (!canvasSnapshot.empty) {
+          const data = canvasSnapshot.docs[0].data()
+          setCanvasData(data)
+        }
+      } catch (error) {
+        console.error("Error loading canvas data:", error)
+      }
+    }
+
+    loadCanvasData()
+  }, [activeSection, currentUser])
+
+  if (activeSection !== "business-model-canvas") return null
+
+  const handleSaveCanvas = async () => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+
+    if (!currentUser) {
+      alert("You must be logged in to save data.")
+      return
+    }
+
+    try {
+      const dataWithUser = {
+        ...canvasData,
+        userId: currentUser.uid,
+        updatedAt: new Date().toISOString(),
+      }
+
+      const existingSnapshot = await getDocs(
+        query(collection(db, "businessModelCanvas"), where("userId", "==", currentUser.uid)),
+      )
+
+      if (existingSnapshot.empty) {
+        await addDoc(collection(db, "businessModelCanvas"), dataWithUser)
+      } else {
+        const docRef = doc(db, "businessModelCanvas", existingSnapshot.docs[0].id)
+        await updateDoc(docRef, dataWithUser)
+      }
+
+      alert("Business Model Canvas saved successfully!")
+    } catch (error) {
+      console.error("Error saving canvas data:", error)
+      alert("Error saving data. Please try again.")
+    }
+  }
+
+  const sections = [
+    { key: "keyPartners", label: "Key Partners" },
+    { key: "keyActivities", label: "Key Activities" },
+    { key: "keyResources", label: "Key Resources" },
+    { key: "valuePropositions", label: "Value Propositions" },
+    { key: "customerRelationships", label: "Customer Relationships" },
+    { key: "channels", label: "Channels" },
+    { key: "customerSegments", label: "Customer Segments" },
+    { key: "costStructure", label: "Cost Structure" },
+    { key: "revenueStreams", label: "Revenue Streams" },
+  ]
+
+  return (
+    <div
+      style={{
+        backgroundColor: "#fdfcfb",
+        padding: "20px",
+        margin: "20px 0",
+        borderRadius: "8px",
+        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+      }}
+    >
+      {!currentUser && (
+        <div
+          style={{
+            backgroundColor: "#fff3cd",
+            border: "1px solid #ffeaa7",
+            padding: "15px",
+            borderRadius: "6px",
+            marginBottom: "20px",
+            textAlign: "center",
+          }}
+        >
+          <p style={{ color: "#856404", margin: 0 }}>Please log in to access and manage your Business Model Canvas.</p>
+        </div>
+      )}
+
+      {currentUser && (
+        <>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(5, 1fr)",
+              gridTemplateRows: "auto auto",
+              gap: "15px",
+              marginBottom: "20px",
+            }}
+          >
+            {/* Key Partners */}
+            <div
+              style={{
+                gridColumn: "1",
+                gridRow: "1 / 3",
+                backgroundColor: "white",
+                padding: "15px",
+                borderRadius: "6px",
+                border: "2px solid #e8ddd4",
+              }}
+            >
+              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>Key Partners</h4>
+              <textarea
+                value={canvasData.keyPartners}
+                onChange={(e) => setCanvasData((prev) => ({ ...prev, keyPartners: e.target.value }))}
+                placeholder="Who are your key partners?"
+                rows="10"
+                disabled={isInvestorView}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  border: "1px solid #e8ddd4",
+                  borderRadius: "4px",
+                  fontSize: "12px",
+                  boxSizing: "border-box",
+                  resize: "vertical",
+                  fontFamily: "inherit",
+                  backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                  cursor: isInvestorView ? "not-allowed" : "text",
+                }}
+              />
+            </div>
+
+            {/* Key Activities */}
+            <div
+              style={{
+                gridColumn: "2",
+                gridRow: "1",
+                backgroundColor: "white",
+                padding: "15px",
+                borderRadius: "6px",
+                border: "2px solid #e8ddd4",
+              }}
+            >
+              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>Key Activities</h4>
+              <textarea
+                value={canvasData.keyActivities}
+                onChange={(e) => setCanvasData((prev) => ({ ...prev, keyActivities: e.target.value }))}
+                placeholder="What key activities do you perform?"
+                rows="4"
+                disabled={isInvestorView}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  border: "1px solid #e8ddd4",
+                  borderRadius: "4px",
+                  fontSize: "12px",
+                  boxSizing: "border-box",
+                  resize: "vertical",
+                  fontFamily: "inherit",
+                  backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                  cursor: isInvestorView ? "not-allowed" : "text",
+                }}
+              />
+            </div>
+
+            {/* Value Propositions */}
+            <div
+              style={{
+                gridColumn: "3",
+                gridRow: "1 / 3",
+                backgroundColor: "white",
+                padding: "15px",
+                borderRadius: "6px",
+                border: "2px solid #e8ddd4",
+              }}
+            >
+              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>
+                Value Propositions
+              </h4>
+              <textarea
+                value={canvasData.valuePropositions}
+                onChange={(e) => setCanvasData((prev) => ({ ...prev, valuePropositions: e.target.value }))}
+                placeholder="What value do you deliver?"
+                rows="10"
+                disabled={isInvestorView}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  border: "1px solid #e8ddd4",
+                  borderRadius: "4px",
+                  fontSize: "12px",
+                  boxSizing: "border-box",
+                  resize: "vertical",
+                  fontFamily: "inherit",
+                  backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                  cursor: isInvestorView ? "not-allowed" : "text",
+                }}
+              />
+            </div>
+
+            {/* Customer Relationships */}
+            <div
+              style={{
+                gridColumn: "4",
+                gridRow: "1",
+                backgroundColor: "white",
+                padding: "15px",
+                borderRadius: "6px",
+                border: "2px solid #e8ddd4",
+              }}
+            >
+              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>
+                Customer Relationships
+              </h4>
+              <textarea
+                value={canvasData.customerRelationships}
+                onChange={(e) => setCanvasData((prev) => ({ ...prev, customerRelationships: e.target.value }))}
+                placeholder="What relationships do you have with customers?"
+                rows="4"
+                disabled={isInvestorView}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  border: "1px solid #e8ddd4",
+                  borderRadius: "4px",
+                  fontSize: "12px",
+                  boxSizing: "border-box",
+                  resize: "vertical",
+                  fontFamily: "inherit",
+                  backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                  cursor: isInvestorView ? "not-allowed" : "text",
+                }}
+              />
+            </div>
+
+            {/* Customer Segments */}
+            <div
+              style={{
+                gridColumn: "5",
+                gridRow: "1 / 3",
+                backgroundColor: "white",
+                padding: "15px",
+                borderRadius: "6px",
+                border: "2px solid #e8ddd4",
+              }}
+            >
+              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>
+                Customer Segments
+              </h4>
+              <textarea
+                value={canvasData.customerSegments}
+                onChange={(e) => setCanvasData((prev) => ({ ...prev, customerSegments: e.target.value }))}
+                placeholder="Who are your customers?"
+                rows="10"
+                disabled={isInvestorView}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  border: "1px solid #e8ddd4",
+                  borderRadius: "4px",
+                  fontSize: "12px",
+                  boxSizing: "border-box",
+                  resize: "vertical",
+                  fontFamily: "inherit",
+                  backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                  cursor: isInvestorView ? "not-allowed" : "text",
+                }}
+              />
+            </div>
+
+            {/* Key Resources */}
+            <div
+              style={{
+                gridColumn: "2",
+                gridRow: "2",
+                backgroundColor: "white",
+                padding: "15px",
+                borderRadius: "6px",
+                border: "2px solid #e8ddd4",
+              }}
+            >
+              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>Key Resources</h4>
+              <textarea
+                value={canvasData.keyResources}
+                onChange={(e) => setCanvasData((prev) => ({ ...prev, keyResources: e.target.value }))}
+                placeholder="What key resources do you need?"
+                rows="4"
+                disabled={isInvestorView}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  border: "1px solid #e8ddd4",
+                  borderRadius: "4px",
+                  fontSize: "12px",
+                  boxSizing: "border-box",
+                  resize: "vertical",
+                  fontFamily: "inherit",
+                  backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                  cursor: isInvestorView ? "not-allowed" : "text",
+                }}
+              />
+            </div>
+
+            {/* Channels */}
+            <div
+              style={{
+                gridColumn: "4",
+                gridRow: "2",
+                backgroundColor: "white",
+                padding: "15px",
+                borderRadius: "6px",
+                border: "2px solid #e8ddd4",
+              }}
+            >
+              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>Channels</h4>
+              <textarea
+                value={canvasData.channels}
+                onChange={(e) => setCanvasData((prev) => ({ ...prev, channels: e.target.value }))}
+                placeholder="How do you reach customers?"
+                rows="4"
+                disabled={isInvestorView}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  border: "1px solid #e8ddd4",
+                  borderRadius: "4px",
+                  fontSize: "12px",
+                  boxSizing: "border-box",
+                  resize: "vertical",
+                  fontFamily: "inherit",
+                  backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                  cursor: isInvestorView ? "not-allowed" : "text",
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Cost Structure and Revenue Streams - Full Width Bottom Section */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "15px",
+              marginBottom: "20px",
+            }}
+          >
+            {/* Cost Structure */}
+            <div
+              style={{
+                backgroundColor: "white",
+                padding: "15px",
+                borderRadius: "6px",
+                border: "2px solid #e8ddd4",
+              }}
+            >
+              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>Cost Structure</h4>
+              <textarea
+                value={canvasData.costStructure}
+                onChange={(e) => setCanvasData((prev) => ({ ...prev, costStructure: e.target.value }))}
+                placeholder="What are your main costs?"
+                rows="4"
+                disabled={isInvestorView}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  border: "1px solid #e8ddd4",
+                  borderRadius: "4px",
+                  fontSize: "12px",
+                  boxSizing: "border-box",
+                  resize: "vertical",
+                  fontFamily: "inherit",
+                  backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                  cursor: isInvestorView ? "not-allowed" : "text",
+                }}
+              />
+            </div>
+
+            {/* Revenue Streams */}
+            <div
+              style={{
+                backgroundColor: "white",
+                padding: "15px",
+                borderRadius: "6px",
+                border: "2px solid #e8ddd4",
+              }}
+            >
+              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>
+                Revenue Streams
+              </h4>
+              <textarea
+                value={canvasData.revenueStreams}
+                onChange={(e) => setCanvasData((prev) => ({ ...prev, revenueStreams: e.target.value }))}
+                placeholder="How do you generate revenue?"
+                rows="4"
+                disabled={isInvestorView}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  border: "1px solid #e8ddd4",
+                  borderRadius: "4px",
+                  fontSize: "12px",
+                  boxSizing: "border-box",
+                  resize: "vertical",
+                  fontFamily: "inherit",
+                  backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                  cursor: isInvestorView ? "not-allowed" : "text",
+                }}
+              />
+            </div>
+          </div>
+
+          {!isInvestorView && (
+            <div style={{ textAlign: "right" }}>
+              <button
+                onClick={handleSaveCanvas}
+                style={{
+                  padding: "12px 30px",
+                  backgroundColor: "#7d5a50",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                }}
+              >
+                Save Canvas
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, currentUser, isInvestorView }) => {
   const [visibleCategories, setVisibleCategories] = useState({
     Growth: true,
@@ -424,13 +882,14 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
   const [filterBy, setFilterBy] = useState("all")
   const [newMilestone, setNewMilestone] = useState({
     growthStage: "",
+    customGrowthStage: "",
     goal: "",
-    goalDescription: "",
-    milestones: [],
+    milestoneCategory: "",
+    customMilestoneCategory: "",
+    milestoneDescription: "",
     targetDate: "",
     status: "",
     owner: "",
-    info: "",
     percentageCompletion: 0,
   })
 
@@ -574,28 +1033,82 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
     { key: "Customers", name: "Customers", color: "#a67c52" },
   ]
 
-  const growthStages = ["Growth", "Finance", "Operations", "People", "Systems", "Customers"]
+  const goalDomains = [
+    "Strategic Growth & Product Development",
+    "Marketing, Brand & Customer Acquisition",
+    "Finance",
+    "Operations",
+    "Systems & Technology",
+    "People, Capability & Knowledge",
+    "Governance, Impact & Ecosystem Building",
+    "Other (Specify)",
+  ]
+
+  const milestoneCategoriesByDomain = {
+    "Strategic Growth & Product Development": [
+      "Market Research",
+      "Product Development",
+      "Testing & Quality Assurance",
+      "Launch Preparation",
+      "Continuous Improvement & Scaling",
+      "Other (Specify)",
+    ],
+    "Marketing, Brand & Customer Acquisition": [
+      "Branding & Positioning",
+      "Marketing Campaigns",
+      "Sales & Conversion",
+      "Partnerships & Affiliations",
+      "Customer Retention & Engagement",
+      "Other (Specify)",
+    ],
+    Finance: [
+      "Financial Planning & Forecasting",
+      "Fundraising & Capital Strategy",
+      "Cost Management",
+      "Revenue Optimization",
+      "Compliance & Financial Governance",
+      "Other (Specify)",
+    ],
+    Operations: [
+      "Process Design & Optimization",
+      "Resource & Procurement Management",
+      "Team & Workforce Planning",
+      "Quality Management",
+      "Documentation & Reporting",
+      "Other (Specify)",
+    ],
+    "Systems & Technology": [
+      "System Integration",
+      "Platform Infrastructure",
+      "Security & Compliance",
+      "Automation & AI Enablement",
+      "Tech Cost Auditing & Optimization",
+      "Other (Specify)",
+    ],
+    "People, Capability & Knowledge": [
+      "Onboarding & Training",
+      "Performance & Development",
+      "Culture & Engagement",
+      "User & Partner Training",
+      "Other (Specify)",
+    ],
+    "Governance, Impact & Ecosystem Building": [
+      "Governance Framework",
+      "Impact Measurement",
+      "Ecosystem & Catalyst Partnerships",
+      "Policy & Risk Management",
+      "Other (Specify)",
+    ],
+    "Other (Specify)": ["Other (Specify)"],
+  }
+
   const goals = ["Goal 1", "Goal 2", "Goal 3", "Goal 4"]
   const statuses = ["Not Started", "In Progress", "On Track", "At Risk", "Done"]
   const owners = ["Product Team", "Business Dev", "Legal Team", "Engineering", "Marketing", "Operations"]
-  const availableMilestones = [
-    "Market Research",
-    "Product Development",
-    "Testing Phase",
-    "Launch Preparation",
-    "Marketing Campaign",
-    "Sales Training",
-    "Partnership Development",
-    "Quality Assurance",
-    "Regulatory Approval",
-    "System Integration",
-    "User Training",
-    "Documentation",
-  ]
 
   const filteredMilestones = milestoneData.filter((milestone) => {
     if (filterBy === "all") return true
-    if (growthStages.includes(filterBy)) return milestone.growthStage === filterBy
+    if (goalDomains.includes(filterBy)) return milestone.growthStage === filterBy
     if (statuses.includes(filterBy)) return milestone.status === filterBy
     if (owners.includes(filterBy)) return milestone.owner === filterBy
     if (goals.includes(filterBy)) return milestone.goal === filterBy
@@ -611,13 +1124,14 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
     setEditingMilestone(null)
     setNewMilestone({
       growthStage: "",
+      customGrowthStage: "",
       goal: "",
-      goalDescription: "",
-      milestones: [],
+      milestoneCategory: "",
+      customMilestoneCategory: "",
+      milestoneDescription: "",
       targetDate: "",
       status: "",
       owner: "",
-      info: "",
       percentageCompletion: 0,
     })
     setShowMilestoneModal(true)
@@ -632,7 +1146,8 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
     setEditingMilestone(milestone)
     setNewMilestone({
       ...milestone,
-      milestones: milestone.milestones || [],
+      customGrowthStage: milestone.customGrowthStage || "",
+      customMilestoneCategory: milestone.customMilestoneCategory || "",
       percentageCompletion: milestone.percentageCompletion || 0,
     })
     setShowMilestoneModal(true)
@@ -650,8 +1165,25 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
     }
 
     try {
+      const finalGrowthStage =
+        newMilestone.growthStage === "Other (Specify)" ? newMilestone.customGrowthStage : newMilestone.growthStage
+
+      const finalMilestoneCategory =
+        newMilestone.milestoneCategory === "Other (Specify)"
+          ? newMilestone.customMilestoneCategory
+          : newMilestone.milestoneCategory
+
       const milestoneWithUser = {
-        ...newMilestone,
+        growthStage: finalGrowthStage,
+        customGrowthStage: newMilestone.customGrowthStage,
+        goal: newMilestone.goal,
+        milestoneCategory: finalMilestoneCategory,
+        customMilestoneCategory: newMilestone.customMilestoneCategory,
+        milestoneDescription: newMilestone.milestoneDescription,
+        targetDate: newMilestone.targetDate,
+        status: newMilestone.status,
+        owner: newMilestone.owner,
+        percentageCompletion: newMilestone.percentageCompletion,
         userId: currentUser.uid,
         createdAt: new Date().toISOString(),
       }
@@ -671,13 +1203,14 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
       setShowMilestoneModal(false)
       setNewMilestone({
         growthStage: "",
+        customGrowthStage: "",
         goal: "",
-        goalDescription: "",
-        milestones: [],
+        milestoneCategory: "",
+        customMilestoneCategory: "",
+        milestoneDescription: "",
         targetDate: "",
         status: "",
         owner: "",
-        info: "",
         percentageCompletion: 0,
       })
     } catch (error) {
@@ -701,17 +1234,6 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
         alert("Error deleting milestone. Please try again.")
       }
     }
-  }
-
-  const toggleMilestoneSelection = (milestone) => {
-    setNewMilestone((prev) => {
-      const milestones = prev.milestones || []
-      if (milestones.includes(milestone)) {
-        return { ...prev, milestones: milestones.filter((m) => m !== milestone) }
-      } else {
-        return { ...prev, milestones: [...milestones, milestone] }
-      }
-    })
   }
 
   return (
@@ -870,10 +1392,10 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
                 }}
               >
                 <option value="all">All Milestones</option>
-                <optgroup label="Growth Stage">
-                  {growthStages.map((stage) => (
-                    <option key={stage} value={stage}>
-                      {stage}
+                <optgroup label="Goal Domain">
+                  {goalDomains.map((domain) => (
+                    <option key={domain} value={domain}>
+                      {domain}
                     </option>
                   ))}
                 </optgroup>
@@ -922,10 +1444,10 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
                         borderBottom: "2px solid #c8b6a6",
                       }}
                     >
-                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Growth Stage</th>
+                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Goal Domain</th>
                       <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Goal</th>
-                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Goal Description</th>
-                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Milestones</th>
+                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Milestone Category</th>
+                      <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Milestone Description</th>
                       <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Target Date</th>
                       <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Status</th>
                       <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Owner</th>
@@ -945,12 +1467,8 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
                       >
                         <td style={{ padding: "12px" }}>{milestone.growthStage}</td>
                         <td style={{ padding: "12px" }}>{milestone.goal}</td>
-                        <td style={{ padding: "12px", maxWidth: "200px" }}>{milestone.goalDescription}</td>
-                        <td style={{ padding: "12px" }}>
-                          {milestone.milestones && milestone.milestones.length > 0
-                            ? milestone.milestones.join(", ")
-                            : "-"}
-                        </td>
+                        <td style={{ padding: "12px" }}>{milestone.milestoneCategory}</td>
+                        <td style={{ padding: "12px", maxWidth: "250px" }}>{milestone.milestoneDescription}</td>
                         <td style={{ padding: "12px" }}>{milestone.targetDate}</td>
                         <td style={{ padding: "12px" }}>
                           <span
@@ -1050,65 +1568,138 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
               {editingMilestone ? "Edit Milestone" : "Add New Milestone"}
             </h3>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "15px" }}>
-              <div>
-                <label style={{ display: "block", color: "#4a352f", marginBottom: "5px", fontWeight: "500" }}>
-                  Growth Stage
-                </label>
-                <select
-                  value={newMilestone.growthStage}
-                  onChange={(e) => setNewMilestone({ ...newMilestone, growthStage: e.target.value })}
-                  style={{
-                    width: "100%",
-                    padding: "10px",
-                    border: "2px solid #e8ddd4",
-                    borderRadius: "4px",
-                    fontSize: "14px",
-                  }}
-                >
-                  <option value="">Select Growth Stage</option>
-                  {growthStages.map((stage) => (
-                    <option key={stage} value={stage}>
-                      {stage}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label style={{ display: "block", color: "#4a352f", marginBottom: "5px", fontWeight: "500" }}>
-                  Goal
-                </label>
-                <select
-                  value={newMilestone.goal}
-                  onChange={(e) => setNewMilestone({ ...newMilestone, goal: e.target.value })}
-                  style={{
-                    width: "100%",
-                    padding: "10px",
-                    border: "2px solid #e8ddd4",
-                    borderRadius: "4px",
-                    fontSize: "14px",
-                  }}
-                >
-                  <option value="">Select Goal</option>
-                  {goals.map((goal) => (
-                    <option key={goal} value={goal}>
-                      {goal}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", color: "#4a352f", marginBottom: "5px", fontWeight: "500" }}>
+                Goal Domain (Growth Stage)
+              </label>
+              <select
+                value={newMilestone.growthStage}
+                onChange={(e) => {
+                  setNewMilestone({
+                    ...newMilestone,
+                    growthStage: e.target.value,
+                    milestoneCategory: "",
+                    customMilestoneCategory: "",
+                  })
+                }}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  border: "2px solid #e8ddd4",
+                  borderRadius: "4px",
+                  fontSize: "14px",
+                }}
+              >
+                <option value="">Select Goal Domain</option>
+                {goalDomains.map((domain) => (
+                  <option key={domain} value={domain}>
+                    {domain}
+                  </option>
+                ))}
+              </select>
             </div>
+
+            {newMilestone.growthStage === "Other (Specify)" && (
+              <div style={{ marginBottom: "15px" }}>
+                <label style={{ display: "block", color: "#4a352f", marginBottom: "5px", fontWeight: "500" }}>
+                  Specify Goal Domain
+                </label>
+                <input
+                  type="text"
+                  value={newMilestone.customGrowthStage}
+                  onChange={(e) => setNewMilestone({ ...newMilestone, customGrowthStage: e.target.value })}
+                  placeholder="Enter custom goal domain"
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    border: "2px solid #e8ddd4",
+                    borderRadius: "4px",
+                    fontSize: "14px",
+                  }}
+                />
+              </div>
+            )}
 
             <div style={{ marginBottom: "15px" }}>
               <label style={{ display: "block", color: "#4a352f", marginBottom: "5px", fontWeight: "500" }}>
-                Goal Description
+                Goal
+              </label>
+              <select
+                value={newMilestone.goal}
+                onChange={(e) => setNewMilestone({ ...newMilestone, goal: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  border: "2px solid #e8ddd4",
+                  borderRadius: "4px",
+                  fontSize: "14px",
+                }}
+              >
+                <option value="">Select Goal</option>
+                {goals.map((goal) => (
+                  <option key={goal} value={goal}>
+                    {goal}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {newMilestone.growthStage && newMilestone.growthStage !== "Other (Specify)" && (
+              <div style={{ marginBottom: "15px" }}>
+                <label style={{ display: "block", color: "#4a352f", marginBottom: "5px", fontWeight: "500" }}>
+                  Milestone Category
+                </label>
+                <select
+                  value={newMilestone.milestoneCategory}
+                  onChange={(e) => setNewMilestone({ ...newMilestone, milestoneCategory: e.target.value })}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    border: "2px solid #e8ddd4",
+                    borderRadius: "4px",
+                    fontSize: "14px",
+                  }}
+                >
+                  <option value="">Select Milestone Category</option>
+                  {milestoneCategoriesByDomain[newMilestone.growthStage]?.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {newMilestone.milestoneCategory === "Other (Specify)" && (
+              <div style={{ marginBottom: "15px" }}>
+                <label style={{ display: "block", color: "#4a352f", marginBottom: "5px", fontWeight: "500" }}>
+                  Specify Milestone Category
+                </label>
+                <input
+                  type="text"
+                  value={newMilestone.customMilestoneCategory}
+                  onChange={(e) => setNewMilestone({ ...newMilestone, customMilestoneCategory: e.target.value })}
+                  placeholder="Enter custom milestone category"
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    border: "2px solid #e8ddd4",
+                    borderRadius: "4px",
+                    fontSize: "14px",
+                  }}
+                />
+              </div>
+            )}
+
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", color: "#4a352f", marginBottom: "5px", fontWeight: "500" }}>
+                Milestone Description
               </label>
               <textarea
-                value={newMilestone.goalDescription}
-                onChange={(e) => setNewMilestone({ ...newMilestone, goalDescription: e.target.value })}
-                placeholder="Describe the goal..."
-                rows="3"
+                value={newMilestone.milestoneDescription}
+                onChange={(e) => setNewMilestone({ ...newMilestone, milestoneDescription: e.target.value })}
+                placeholder="Describe the milestone in detail..."
+                rows="4"
                 style={{
                   width: "100%",
                   padding: "10px",
@@ -1119,45 +1710,6 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
                   resize: "vertical",
                 }}
               />
-            </div>
-
-            <div style={{ marginBottom: "15px" }}>
-              <label style={{ display: "block", color: "#4a352f", marginBottom: "5px", fontWeight: "500" }}>
-                Select Milestones
-              </label>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(2, 1fr)",
-                  gap: "10px",
-                  padding: "15px",
-                  backgroundColor: "#f7f3f0",
-                  borderRadius: "4px",
-                  maxHeight: "200px",
-                  overflowY: "auto",
-                }}
-              >
-                {availableMilestones.map((milestone) => (
-                  <label
-                    key={milestone}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      cursor: "pointer",
-                      padding: "5px",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={newMilestone.milestones?.includes(milestone) || false}
-                      onChange={() => toggleMilestoneSelection(milestone)}
-                      style={{ cursor: "pointer" }}
-                    />
-                    <span style={{ color: "#4a352f", fontSize: "14px" }}>{milestone}</span>
-                  </label>
-                ))}
-              </div>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "15px" }}>
@@ -1250,27 +1802,6 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
                   }}
                 />
               </div>
-            </div>
-
-            <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", color: "#4a352f", marginBottom: "5px", fontWeight: "500" }}>
-                Additional Info
-              </label>
-              <textarea
-                value={newMilestone.info}
-                onChange={(e) => setNewMilestone({ ...newMilestone, info: e.target.value })}
-                placeholder="Any additional information..."
-                rows="3"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "2px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                  resize: "vertical",
-                }}
-              />
             </div>
 
             <div
@@ -1450,15 +1981,13 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
 
   const createScatterChartData = (category, color) => {
     let data = []
-    const categoryMap = {} // Track which category each risk belongs to
+    const categoryMap = {}
 
-    // If we're in business-risk section, show ALL risks from ALL categories
     if (category === "business-risk") {
-      // Collect all risks and track their original categories
       Object.entries(riskData).forEach(([catId, risks]) => {
         risks.forEach((risk) => {
           data.push(risk)
-          categoryMap[risk.id] = catId // Map risk ID to its category
+          categoryMap[risk.id] = catId
         })
       })
     } else {
@@ -1469,7 +1998,6 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
       datasets: data
         .filter((item) => item.risk && item.likelihood && item.severity)
         .map((item, index) => {
-          // For business-risk view, find the original category color
           let dotColor = color
           if (category === "business-risk") {
             const originalCategory = categoryMap[item.id]
@@ -2201,8 +2729,8 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0, isI
     window.location.href = "/growth/shop?tab=compliance"
   }
 
-  const handleBuyGovernanceRedirect = () => {
-    window.location.href = "/growth/shop?tab=governance"
+  const handleRequestAdvisorRedirect = () => {
+    window.location.href = "/find-advisors"
   }
 
   const handleFileUpload = async (e, policyId = null) => {
@@ -2326,6 +2854,52 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0, isI
     >
       <h3 style={{ color: "#4a352f", marginBottom: "20px" }}>Board Activity & Governance</h3>
 
+      {/* PIS Score Explanation */}
+      <div
+        style={{
+          backgroundColor: "#f5ede4",
+          border: "2px solid #d4c4b0",
+          padding: "20px",
+          borderRadius: "8px",
+          marginBottom: "20px",
+        }}
+      >
+        <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px" }}>Understanding Your Governance Score</h4>
+
+        <div style={{ marginBottom: "15px" }}>
+          <p style={{ color: "#5d4037", margin: "0 0 10px 0", fontWeight: "600" }}>PIS Calculation:</p>
+          <p style={{ color: "#5d4037", margin: "0 0 5px 0" }}>
+            • PIS = Employees + (Turnover/R1m) + (Liabilities/R1m) + Shareholders
+          </p>
+          <p style={{ color: "#5d4037", margin: 0 }}>
+            • Higher PIS indicates greater public interest and governance requirements
+          </p>
+        </div>
+
+        <div style={{ marginBottom: "15px" }}>
+          <p style={{ color: "#5d4037", margin: "0 0 10px 0", fontWeight: "600" }}>Governance Stages:</p>
+          <p style={{ color: "#5d4037", margin: "0 0 5px 0" }}>• PIS &lt; 100: Advisors Stage - light governance</p>
+          <p style={{ color: "#5d4037", margin: "0 0 5px 0" }}>
+            • PIS 100-349: Emerging Board Stage - informal board recommended
+          </p>
+          <p style={{ color: "#5d4037", margin: 0 }}>• PIS ≥ 350: Full Board Stage - formal board strongly recommended</p>
+        </div>
+
+        <div style={{ marginBottom: "15px" }}>
+          <p style={{ color: "#5d4037", margin: "0 0 10px 0", fontWeight: "600" }}>
+            Purpose - the governance score helps:
+          </p>
+          <p style={{ color: "#5d4037", margin: "0 0 5px 0" }}>• Determine appropriate governance structures</p>
+          <p style={{ color: "#5d4037", margin: "0 0 5px 0" }}>• Assess compliance readiness</p>
+          <p style={{ color: "#5d4037", margin: "0 0 5px 0" }}>• Identify governance improvement areas</p>
+          <p style={{ color: "#5d4037", margin: 0 }}>• Prepare for investment and scaling</p>
+        </div>
+
+        <p style={{ color: "#5d4037", margin: 0, fontStyle: "italic", fontWeight: "500" }}>
+          Strong governance scores indicate readiness for investment and ability to manage complex business operations.
+        </p>
+      </div>
+
       <div
         style={{
           backgroundColor: hasMinimumGovernanceScore ? "#d4edda" : "#fff3cd",
@@ -2339,10 +2913,30 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0, isI
           Current Governance Score: {Math.round((pisScore / 350) * 100)}% ({pisScore} / 350 points)
         </p>
         {!hasMinimumGovernanceScore && (
-          <p style={{ color: "#856404", margin: "10px 0 0 0", fontSize: "14px" }}>
-            You need at least 75% (262.5 points) to access board director features. You can purchase governance support
-            under Tools and Tablets.
-          </p>
+          <div>
+            <p style={{ color: "#856404", margin: "10px 0 0 0", fontSize: "14px" }}>
+              You need at least 75% (262.5 points) to access board director features. You can request advisor support
+              below.
+            </p>
+            {!isInvestorView && (
+              <button
+                onClick={handleRequestAdvisorRedirect}
+                style={{
+                  marginTop: "10px",
+                  padding: "8px 16px",
+                  backgroundColor: "#856404",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                  fontSize: "14px",
+                }}
+              >
+                Request Advisor
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -2637,7 +3231,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0, isI
           </p>
           {!isInvestorView && (
             <button
-              onClick={handleBuyGovernanceRedirect}
+              onClick={handleRequestAdvisorRedirect}
               style={{
                 padding: "10px 20px",
                 backgroundColor: "#856404",
@@ -2648,7 +3242,7 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0, isI
                 fontWeight: "500",
               }}
             >
-              Learn About Board Setup
+              Request Advisor Support
             </button>
           )}
         </div>
@@ -3044,6 +3638,263 @@ const BoardActivityGovernance = ({ activeSection, currentUser, pisScore = 0, isI
           </div>
         </div>
       )}
+
+      {/* Meeting Modal */}
+      {showMeetingModal && !isInvestorView && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "white",
+              padding: "30px",
+              borderRadius: "8px",
+              width: "90%",
+              maxWidth: "500px",
+            }}
+          >
+            <h3 style={{ color: "#5d4037", marginTop: 0 }}>{editingMeeting ? "Edit Meeting" : "Add Meeting"}</h3>
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", marginBottom: "5px", color: "#4a352f" }}>Date:</label>
+              <input
+                type="date"
+                value={newMeeting.date}
+                onChange={(e) => setNewMeeting({ ...newMeeting, date: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  border: "2px solid #e8ddd4",
+                  borderRadius: "4px",
+                  fontSize: "14px",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", marginBottom: "5px", color: "#4a352f" }}>Type:</label>
+              <input
+                type="text"
+                value={newMeeting.type}
+                onChange={(e) => setNewMeeting({ ...newMeeting, type: e.target.value })}
+                placeholder="e.g. Board Meeting, Strategy Session"
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  border: "2px solid #e8ddd4",
+                  borderRadius: "4px",
+                  fontSize: "14px",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "15px" }}>
+              <div>
+                <label style={{ display: "block", marginBottom: "5px", color: "#4a352f" }}>Attendees:</label>
+                <input
+                  type="number"
+                  value={newMeeting.attendees}
+                  onChange={(e) => setNewMeeting({ ...newMeeting, attendees: e.target.value })}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    border: "2px solid #e8ddd4",
+                    borderRadius: "4px",
+                    fontSize: "14px",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", marginBottom: "5px", color: "#4a352f" }}>Total Members:</label>
+                <input
+                  type="number"
+                  value={newMeeting.totalMembers}
+                  onChange={(e) => setNewMeeting({ ...newMeeting, totalMembers: e.target.value })}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    border: "2px solid #e8ddd4",
+                    borderRadius: "4px",
+                    fontSize: "14px",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+            </div>
+            <div style={{ marginBottom: "20px" }}>
+              <label style={{ display: "block", marginBottom: "5px", color: "#4a352f" }}>Minutes:</label>
+              <textarea
+                value={newMeeting.minutes}
+                onChange={(e) => setNewMeeting({ ...newMeeting, minutes: e.target.value })}
+                placeholder="Meeting notes and minutes"
+                rows="4"
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  border: "2px solid #e8ddd4",
+                  borderRadius: "4px",
+                  fontSize: "14px",
+                  boxSizing: "border-box",
+                  resize: "vertical",
+                }}
+              />
+            </div>
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setShowMeetingModal(false)}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#e6d7c3",
+                  color: "#4a352f",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveMeeting}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#7d5a50",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                }}
+              >
+                {editingMeeting ? "Update" : "Add"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Director Modal */}
+      {showDirectorModal && !isInvestorView && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "white",
+              padding: "30px",
+              borderRadius: "8px",
+              width: "90%",
+              maxWidth: "500px",
+            }}
+          >
+            <h3 style={{ color: "#5d4037", marginTop: 0 }}>
+              {editingDirector ? "Edit Director" : "Add Director"}
+            </h3>
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", marginBottom: "5px", color: "#4a352f" }}>Name:</label>
+              <input
+                type="text"
+                value={newDirector.name}
+                onChange={(e) => setNewDirector({ ...newDirector, name: e.target.value })}
+                placeholder="Director's full name"
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  border: "2px solid #e8ddd4",
+                  borderRadius: "4px",
+                  fontSize: "14px",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", marginBottom: "5px", color: "#4a352f" }}>Position:</label>
+              <input
+                type="text"
+                value={newDirector.position}
+                onChange={(e) => setNewDirector({ ...newDirector, position: e.target.value })}
+                placeholder="e.g. Chairperson, Non-Executive Director"
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  border: "2px solid #e8ddd4",
+                  borderRadius: "4px",
+                  fontSize: "14px",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+            <div style={{ marginBottom: "20px" }}>
+              <label style={{ display: "block", marginBottom: "5px", color: "#4a352f" }}>Date Appointed:</label>
+              <input
+                type="date"
+                value={newDirector.date}
+                onChange={(e) => setNewDirector({ ...newDirector, date: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  border: "2px solid #e8ddd4",
+                  borderRadius: "4px",
+                  fontSize: "14px",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setShowDirectorModal(false)}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#e6d7c3",
+                  color: "#4a352f",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveDirector}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#7d5a50",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                }}
+              >
+                {editingDirector ? "Update" : "Add"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -3193,6 +4044,7 @@ const Strategy = () => {
 
   const sectionButtons = [
     { id: "vision-mission-values", label: "Vision, Mission, Values" },
+    { id: "business-model-canvas", label: "Business Model Canvas" },
     { id: "strategic-goals", label: "Strategic Goals" },
     { id: "risk-management", label: "Risk Management" },
     { id: "governance", label: "Governance" },
@@ -3269,9 +4121,9 @@ const Strategy = () => {
                 onClick={() => setActiveSection(button.id)}
                 style={{
                   padding: "10px 15px",
-                  backgroundColor: activeSection === button.id ? "#5d4037" : "#e8ddd4",
+                  backgroundColor: activeSection === button.id ? "#5d4037" : "#ffffff",
                   color: activeSection === button.id ? "#fdfcfb" : "#5d4037",
-                  border: "none",
+                  border: "2px solid #e8ddd4",
                   borderRadius: "6px",
                   cursor: "pointer",
                   fontWeight: "600",
@@ -3309,6 +4161,11 @@ const Strategy = () => {
           )}
 
           <VisionMissionValues
+            activeSection={activeSection}
+            currentUser={currentUser}
+            isInvestorView={isInvestorView}
+          />
+          <BusinessModelCanvas
             activeSection={activeSection}
             currentUser={currentUser}
             isInvestorView={isInvestorView}

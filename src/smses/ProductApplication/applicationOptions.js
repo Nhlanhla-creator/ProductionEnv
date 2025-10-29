@@ -11,11 +11,7 @@ export const sections = [
     label: "Matching\nPreferences",
     path: "matching-preferences"
   },
-  {
-    id: "contactSubmission",
-    label: "Contact &\nSubmission",
-    path: "contact-submission"
-  }
+
 ];
 
 export const engagementTypes = [
