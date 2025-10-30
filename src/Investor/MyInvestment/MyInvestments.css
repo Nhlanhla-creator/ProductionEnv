@@ -348,6 +348,14 @@
   margin-bottom: 10px;
 }
 
+/* ENHANCED: Ultra-compact chart area for Time-to-Fund, Follow-on Funding, and Exit/Repayment */
+.chart-area-ultra-compact {
+  flex-grow: 1;
+  min-height: 280px; /* Increased height for better visibility */
+  position: relative;
+  margin-bottom: 5px;
+}
+
 /* Chart Title - Consistent across all charts */
 .chart-title {
   margin: 0 0 10px 0;
@@ -372,7 +380,7 @@
   font-style: italic;
 }
 
-/* Chart Summary */
+/* Chart Summary - Standard */
 .chart-summary {
   display: flex;
   justify-content: space-between;
@@ -382,9 +390,24 @@
   border-top: 1px solid #f0f0f0;
 }
 
+/* ENHANCED: Ultra-compact summary for Time-to-Fund, Follow-on Funding, and Exit/Repayment */
+.chart-summary-ultra-compact {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #f0f0f0;
+  background: #f8f9fa;
+  padding: 12px 15px;
+  border-radius: 6px;
+  margin-bottom: 0;
+}
+
 .current-value {
   font-weight: 600;
   color: #5e3f26;
+  font-size: 13px;
 }
 
 .target-value {
@@ -408,493 +431,268 @@
   color: #f44336;
 }
 
-/* NEW: BIG Score Infographic */
-.big-score-infographic {
+/* NEW: BIG Score Infographic - FIXED summary layout */
+.big-score-simple {
   display: flex;
   flex-direction: column;
-  gap: 15px;
   height: 100%;
 }
 
-.big-score-main {
+.big-score-main-simple {
   text-align: center;
-  padding: 15px;
+  padding: 30px 20px;
   background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border-radius: 8px;
-  border: 2px solid #7d5a36;
-}
-
-.big-score-value {
-  font-size: 32px;
-  font-weight: 700;
-  color: #5e3f26;
-  margin-bottom: 5px;
-}
-
-.big-score-label {
-  font-size: 14px;
-  color: #666;
-  font-weight: 500;
-  margin-bottom: 5px;
-}
-
-.big-score-target {
-  font-size: 12px;
-  color: #7d5a36;
-  font-weight: 500;
-}
-
-.big-score-components {
+  border-radius: 12px;
+  border: 3px solid #7d5a36;
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-}
-
-.score-component {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.component-header {
-  display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
 }
 
-.component-name {
-  font-size: 12px;
-  color: #5e3f26;
-  font-weight: 500;
-}
-
-.component-value {
-  font-size: 12px;
-  font-weight: 600;
-  color: #7d5a36;
-}
-
-.component-bar {
-  height: 8px;
-  background: #f0f0f0;
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.component-progress {
-  height: 100%;
-  border-radius: 4px;
-  transition: width 0.5s ease;
-}
-
-/* NEW: Enhanced Funding Ready Infographic */
-.funding-ready-infographic {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-  height: 100%;
-}
-
-.readiness-main {
-  text-align: center;
-  padding: 15px;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border-radius: 8px;
-  border: 2px solid #7d5a36;
-}
-
-.readiness-value {
-  font-size: 32px;
+.big-score-value-simple {
+  font-size: 42px;
   font-weight: 700;
   color: #5e3f26;
-  margin-bottom: 5px;
+  margin-bottom: 8px;
+  line-height: 1;
 }
 
-.readiness-label {
-  font-size: 14px;
+.big-score-label-simple {
+  font-size: 16px;
   color: #666;
   font-weight: 500;
-  margin-bottom: 5px;
+  margin-bottom: 6px;
 }
 
-.readiness-target {
-  font-size: 12px;
+.big-score-target-simple {
+  font-size: 14px;
   color: #7d5a36;
   font-weight: 500;
 }
 
-.readiness-breakdown {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.readiness-item {
+/* FIXED: BIG Score summary - average and target on same line */
+.big-score-summary {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px;
+  margin-top: 15px;
+  padding: 12px 15px;
   background: #f8f9fa;
   border-radius: 6px;
-  border-left: 3px solid #7d5a36;
+  border-top: 1px solid #e0e0e0;
 }
 
-.readiness-stage {
+.big-score-current {
+  font-weight: 600;
+  color: #5e3f26;
+  font-size: 13px;
+}
+
+.big-score-target-compact {
   display: flex;
   align-items: center;
-  gap: 8px;
-}
-
-.stage-color {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-}
-
-.stage-name {
+  gap: 5px;
   font-size: 12px;
-  font-weight: 500;
-  color: #5e3f26;
-}
-
-.readiness-stats {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-}
-
-.stage-count {
-  font-size: 11px;
-  font-weight: 600;
-  color: #7d5a36;
-}
-
-.stage-percentage {
-  font-size: 10px;
   color: #666;
 }
 
-.readiness-gap {
+/* NEW: Enhanced Funding Ready Infographic - FIXED summary layout */
+.funding-ready-simple {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px;
-  background: #fff3e0;
-  border-radius: 6px;
-  border: 1px solid #ffb74d;
+  flex-direction: column;
+  height: 100%;
 }
 
-.gap-label {
-  font-size: 12px;
+.readiness-main-simple {
+  text-align: center;
+  padding: 30px 20px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 12px;
+  border: 3px solid #7d5a36;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.readiness-value-simple {
+  font-size: 42px;
+  font-weight: 700;
   color: #5e3f26;
+  margin-bottom: 8px;
+  line-height: 1;
+}
+
+.readiness-label-simple {
+  font-size: 16px;
+  color: #666;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+.readiness-target-simple {
+  font-size: 14px;
+  color: #7d5a36;
   font-weight: 500;
 }
 
-.gap-value {
-  font-size: 12px;
+/* FIXED: Funding Ready summary - current and target on same line */
+.funding-ready-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 15px;
+  padding: 12px 15px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.funding-ready-current {
   font-weight: 600;
-  color: #f57c00;
+  color: #5e3f26;
+  font-size: 13px;
+}
+
+.funding-ready-target {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: #666;
 }
 
 /* NEW: SME Graduation Infographic */
-.graduation-infographic {
+.graduation-simple {
   display: flex;
   flex-direction: column;
-  gap: 15px;
   height: 100%;
 }
 
-.graduation-main {
+.graduation-main-simple {
   text-align: center;
-  padding: 15px;
+  padding: 30px 20px;
   background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border-radius: 8px;
-  border: 2px solid #7d5a36;
-}
-
-.graduation-value {
-  font-size: 32px;
-  font-weight: 700;
-  color: #5e3f26;
-  margin-bottom: 5px;
-}
-
-.graduation-label {
-  font-size: 14px;
-  color: #666;
-  font-weight: 500;
-  margin-bottom: 5px;
-}
-
-.graduation-subtitle {
-  font-size: 12px;
-  color: #7d5a36;
-  font-weight: 500;
-}
-
-.graduation-timeline {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.timeline-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px;
-  background: #f8f9fa;
-  border-radius: 6px;
-}
-
-.timeline-marker {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.marker-value {
-  color: white;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.timeline-content {
+  border-radius: 12px;
+  border: 3px solid #7d5a36;
   flex: 1;
-}
-
-.timeline-stage {
-  font-size: 12px;
-  font-weight: 600;
-  color: #5e3f26;
-  margin-bottom: 2px;
-}
-
-.timeline-count {
-  font-size: 11px;
-  color: #7d5a36;
-  font-weight: 500;
-  margin-bottom: 2px;
-}
-
-.timeline-description {
-  font-size: 10px;
-  color: #666;
-}
-
-.graduation-impact {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.impact-item {
-  text-align: center;
-  padding: 8px;
-  background: #f8f9fa;
-  border-radius: 6px;
-  border: 1px solid #e0e0e0;
-}
-
-.impact-value {
-  font-size: 14px;
-  font-weight: 700;
-  color: #5e3f26;
-  margin-bottom: 2px;
-}
-
-.impact-label {
-  font-size: 10px;
-  color: #666;
-}
-
-/* Gauge and Progress Ring */
-.gauge-wrapper,
-.progress-ring-wrapper {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin: 15px 0;
-  height: 140px;
-}
-
-.progress-ring-wrapper.enhanced {
-  height: 160px;
-}
-
-.gauge-target,
-.progress-target {
-  font-size: 12px;
-  color: #666;
-  margin-top: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-}
-
-.progress-label {
-  font-size: 12px;
-  color: #5e3f26;
-  font-weight: 500;
-  margin-top: 8px;
-}
-
-/* Enhanced Follow-on Funding Details */
-.follow-on-details {
-  margin-top: 15px;
-  padding: 12px;
-  background: #f8f9fa;
-  border-radius: 6px;
-}
-
-.metric-breakdown {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  justify-content: center;
+  align-items: center;
 }
 
-.metric-item {
+.graduation-value-simple {
+  font-size: 42px;
+  font-weight: 700;
+  color: #5e3f26;
+  margin-bottom: 8px;
+  line-height: 1;
+}
+
+.graduation-label-simple {
+  font-size: 16px;
+  color: #666;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+.graduation-summary {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 3px 0;
-  font-size: 11px;
+  margin-top: 15px;
+  padding: 12px 15px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border-top: 1px solid #e0e0e0;
 }
 
-.metric-label {
+.graduation-current {
+  font-weight: 600;
+  color: #5e3f26;
+  font-size: 13px;
+}
+
+.graduation-target {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
   color: #666;
 }
 
-.metric-value {
-  font-weight: 600;
-  color: #5e3f26;
-}
-
-/* NEW: Cost per SME Infographic */
-.cost-infographic {
+/* Cost per SME Infographic */
+.cost-simple {
   display: flex;
   flex-direction: column;
-  gap: 15px;
   height: 100%;
 }
 
-.cost-main-metric {
+.cost-main-simple {
   text-align: center;
-  padding: 15px;
+  padding: 30px 20px;
   background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border-radius: 8px;
-  border: 2px solid #7d5a36;
+  border-radius: 12px;
+  border: 3px solid #7d5a36;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
-.cost-value {
-  font-size: 28px;
+.cost-value-simple {
+  font-size: 32px;
   font-weight: 700;
   color: #5e3f26;
-  margin-bottom: 5px;
+  margin-bottom: 8px;
+  line-height: 1;
 }
 
-.cost-label {
-  font-size: 14px;
+.cost-label-simple {
+  font-size: 16px;
   color: #666;
   font-weight: 500;
+  margin-bottom: 6px;
 }
 
-.cost-breakdown {
+.cost-summary {
   display: flex;
-  gap: 15px;
-  flex: 1;
-}
-
-.breakdown-chart {
-  flex: 1;
-  display: flex;
+  justify-content: space-between;
   align-items: center;
-  justify-content: center;
-}
-
-.breakdown-details {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.breakdown-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px;
-  background: #f8f9fa;
-  border-radius: 6px;
-  border-left: 3px solid #7d5a36;
-}
-
-.breakdown-color {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.breakdown-label {
-  flex: 1;
-  font-size: 12px;
-  color: #5e3f26;
-  font-weight: 500;
-}
-
-.breakdown-value {
-  font-size: 12px;
-  font-weight: 600;
-  color: #7d5a36;
-}
-
-/* NEW: Catalyst Engagement Details */
-.engagement-details {
   margin-top: 15px;
-  padding: 12px;
+  padding: 12px 15px;
   background: #f8f9fa;
   border-radius: 6px;
+  border-top: 1px solid #e0e0e0;
 }
 
-.engagement-metrics {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
-
-.metric {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding: 8px;
-  background: white;
-  border-radius: 6px;
-  border: 1px solid #e0e0e0;
-}
-
-.metric-label {
-  font-size: 10px;
-  color: #666;
-  margin-bottom: 4px;
-}
-
-.metric-value {
-  font-size: 12px;
+.cost-current {
   font-weight: 600;
   color: #5e3f26;
+  font-size: 13px;
 }
 
-.metric-value.positive {
-  color: #4CAF50;
+.cost-target {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: #666;
+}
+
+/* Remove all extra details from main charts */
+.big-score-components,
+.readiness-breakdown,
+.graduation-timeline,
+.cost-breakdown,
+.follow-on-details,
+.engagement-details {
+  display: none;
 }
 
 /* Breakdown Details - FIXED to not stretch chart */
@@ -948,6 +746,14 @@
 .data-integrity-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 20px;
+  padding: 0 10px;
+}
+
+/* Funder Health & Efficiency - 4 charts in one row */
+.funder-charts-grid-4x4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   gap: 20px;
   padding: 0 10px;
 }
@@ -1158,6 +964,459 @@
   min-height: 300px;
 }
 
+/* Popup Styles */
+.popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 20px;
+}
+
+.popup-container {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  max-width: 90%;
+  max-height: 90%;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: popupFadeIn 0.3s ease;
+}
+
+@keyframes popupFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.popup-close {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: #666;
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.popup-close:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.popup-content {
+  width: 100%;
+}
+
+.popup-content h3 {
+  margin: 0 0 20px 0;
+  color: #5e3f26;
+  font-size: 24px;
+  text-align: center;
+  border-bottom: 2px solid #ede4d8;
+  padding-bottom: 15px;
+}
+
+.popup-chart {
+  height: 300px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.popup-details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.detail-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid #7d5a36;
+}
+
+.detail-label {
+  font-weight: 600;
+  color: #5e3f26;
+  font-size: 14px;
+}
+
+.detail-value {
+  font-weight: 600;
+  color: #7d5a36;
+  font-size: 14px;
+}
+
+.detail-value.positive {
+  color: #4CAF50;
+}
+
+/* Popup specific styles for different infographics */
+.big-score-popup,
+.funding-ready-popup,
+.graduation-popup {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+}
+
+.big-score-main-popup,
+.readiness-main-popup,
+.graduation-main-popup {
+  text-align: center;
+  padding: 25px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 12px;
+  border: 3px solid #7d5a36;
+}
+
+.big-score-value,
+.readiness-value,
+.graduation-value {
+  font-size: 48px;
+  font-weight: 700;
+  color: #5e3f26;
+  margin-bottom: 10px;
+}
+
+.big-score-label,
+.readiness-label,
+.graduation-label {
+  font-size: 18px;
+  color: #666;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.big-score-target,
+.readiness-target,
+.graduation-subtitle {
+  font-size: 14px;
+  color: #7d5a36;
+  font-weight: 500;
+}
+
+.big-score-components-popup,
+.readiness-breakdown-popup,
+.graduation-timeline-popup {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.score-component-popup,
+.readiness-item-popup,
+.timeline-item-popup {
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid #7d5a36;
+}
+
+.component-header-popup,
+.readiness-stage-popup,
+.timeline-stage-popup {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.component-name-popup,
+.stage-name-popup {
+  font-size: 14px;
+  font-weight: 600;
+  color: #5e3f26;
+}
+
+.component-value-popup {
+  font-size: 14px;
+  font-weight: 700;
+  color: #7d5a36;
+}
+
+.component-bar-popup {
+  height: 10px;
+  background: #e0e0e0;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.component-progress-popup {
+  height: 100%;
+  border-radius: 5px;
+  transition: width 0.5s ease;
+}
+
+.readiness-stats-popup {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.stage-count-popup {
+  font-size: 13px;
+  font-weight: 600;
+  color: #7d5a36;
+}
+
+.stage-percentage-popup {
+  font-size: 12px;
+  color: #666;
+}
+
+.timeline-marker-popup {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.marker-value-popup {
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.timeline-content-popup {
+  text-align: center;
+}
+
+.timeline-stage-popup {
+  font-size: 14px;
+  font-weight: 600;
+  color: #5e3f26;
+  margin-bottom: 4px;
+}
+
+.timeline-count-popup {
+  font-size: 13px;
+  color: #7d5a36;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.timeline-description-popup {
+  font-size: 12px;
+  color: #666;
+}
+
+/* Enhanced legend styles for line charts */
+.chartjs-legend {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.chartjs-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.chartjs-legend-line {
+  width: 20px;
+  height: 2px;
+}
+
+/* Responsive popup */
+@media (max-width: 768px) {
+  .popup-container {
+    padding: 20px;
+    max-width: 95%;
+  }
+  
+  .popup-content h3 {
+    font-size: 20px;
+  }
+  
+  .popup-chart {
+    height: 250px;
+  }
+  
+  .big-score-value,
+  .readiness-value,
+  .graduation-value {
+    font-size: 36px;
+  }
+  
+  .big-score-main-popup,
+  .readiness-main-popup,
+  .graduation-main-popup {
+    padding: 20px;
+  }
+  
+  .big-score-value-simple,
+  .readiness-value-simple,
+  .graduation-value-simple,
+  .cost-value-simple {
+    font-size: 32px;
+  }
+}
+
+@media (max-width: 576px) {
+  .popup-container {
+    padding: 15px;
+  }
+  
+  .popup-content h3 {
+    font-size: 18px;
+  }
+  
+  .popup-chart {
+    height: 200px;
+  }
+  
+  .detail-item {
+    padding: 8px;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-start;
+  }
+  
+  .big-score-value,
+  .readiness-value,
+  .graduation-value {
+    font-size: 28px;
+  }
+  
+  .big-score-value-simple,
+  .readiness-value-simple,
+  .graduation-value-simple,
+  .cost-value-simple {
+    font-size: 28px;
+  }
+  
+  .big-score-main-simple,
+  .readiness-main-simple,
+  .graduation-main-simple,
+  .cost-main-simple {
+    padding: 20px;
+    min-width: 150px;
+  }
+}
+
+/* Ensure quarter labels are shown in charts */
+.chart-area .chartjs-render-monitor {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* ENHANCED STYLES FOR SPECIFIC CHARTS */
+/* Time-to-Fund, Follow-on Funding Rate, and Exit/Repayment Ratio specific enhancements */
+
+/* Make these specific charts taller */
+.chart-container .chart-area-ultra-compact {
+  min-height: 280px !important;
+  height: 280px !important;
+}
+
+/* Enhanced summary layout for these specific charts */
+.chart-container .chart-summary-ultra-compact {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 15px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.chart-container .chart-summary-ultra-compact .current-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: #5e3f26;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chart-container .chart-summary-ultra-compact .target-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: #7d5a36;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #d4c4b0;
+}
+
+/* Ensure proper spacing in the chart container */
+.chart-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-container .chart-area-ultra-compact {
+  flex: 1;
+}
+
+/* Specific styling for the enhanced charts */
+.enhanced-chart-container {
+  height: 450px !important; /* Increased height for these specific charts */
+}
+
+.enhanced-chart-container .chart-area-ultra-compact {
+  min-height: 320px !important;
+  height: 320px !important;
+}
+
+/* Legend positioning for these charts */
+.enhanced-chart-container .chartjs-legend {
+  margin-top: 15px;
+  margin-bottom: 10px;
+}
+
+/* FIXED: Ensure summary sections are visible and properly styled */
+.chart-summary-compact,
+.chart-summary-ultra-compact,
+.big-score-summary,
+.funding-ready-summary,
+.graduation-summary,
+.cost-summary {
+  display: flex !important;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 15px;
+  padding: 12px 15px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border-top: 1px solid #e0e0e0;
+}
+
 /* Enhanced responsive design */
 @media (max-width: 1200px) {
   .investments-container {
@@ -1165,7 +1424,8 @@
   }
   
   .top-row,
-  .bottom-row {
+  .bottom-row,
+  .funder-charts-grid-4x4 {
     grid-template-columns: repeat(2, 1fr);
   }
   
@@ -1183,16 +1443,13 @@
     height: 400px;
   }
   
-  .cost-breakdown {
-    flex-direction: column;
+  .enhanced-chart-container {
+    height: 420px !important;
   }
   
-  .engagement-metrics {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .graduation-impact {
-    grid-template-columns: repeat(2, 1fr);
+  .enhanced-chart-container .chart-area-ultra-compact {
+    min-height: 290px !important;
+    height: 290px !important;
   }
 }
 
@@ -1203,7 +1460,8 @@
   .exit-charts-grid,
   .funder-charts-grid,
   .insights-charts-grid,
-  .data-integrity-grid {
+  .data-integrity-grid,
+  .funder-charts-grid-4x4 {
     grid-template-columns: 1fr;
   }
   
@@ -1220,12 +1478,13 @@
     font-size: 13px;
   }
   
-  .engagement-metrics {
-    grid-template-columns: 1fr;
+  .enhanced-chart-container {
+    height: 400px !important;
   }
   
-  .graduation-impact {
-    grid-template-columns: 1fr;
+  .enhanced-chart-container .chart-area-ultra-compact {
+    min-height: 270px !important;
+    height: 270px !important;
   }
 }
 
@@ -1249,7 +1508,8 @@
   }
   
   .top-row,
-  .bottom-row {
+  .bottom-row,
+  .funder-charts-grid-4x4 {
     grid-template-columns: 1fr;
   }
   
@@ -1276,10 +1536,40 @@
     padding: 15px;
   }
   
-  .big-score-components,
-  .readiness-breakdown,
-  .graduation-timeline {
-    gap: 8px;
+  .enhanced-chart-container {
+    height: 380px !important;
+  }
+  
+  .enhanced-chart-container .chart-area-ultra-compact {
+    min-height: 260px !important;
+    height: 260px !important;
+  }
+  
+  .chart-summary-compact,
+  .chart-summary-ultra-compact,
+  .big-score-summary,
+  .funding-ready-summary,
+  .graduation-summary,
+  .cost-summary {
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+  }
+  
+  .chart-summary-compact .current-value,
+  .chart-summary-compact .target-value,
+  .chart-summary-ultra-compact .current-value,
+  .chart-summary-ultra-compact .target-value,
+  .big-score-current,
+  .big-score-target-compact,
+  .funding-ready-current,
+  .funding-ready-target,
+  .graduation-current,
+  .graduation-target,
+  .cost-current,
+  .cost-target {
+    justify-content: center;
+    text-align: center;
   }
 }
 
@@ -1328,12 +1618,6 @@
     min-width: 50px;
   }
   
-  .chart-summary {
-    flex-direction: column;
-    gap: 8px;
-    align-items: flex-start;
-  }
-  
   .section-purpose,
   .time-view-controls,
   .charts-grid-4x4,
@@ -1343,15 +1627,23 @@
     padding: 0 5px;
   }
   
-  .cost-value,
-  .big-score-value,
-  .readiness-value,
-  .graduation-value {
-    font-size: 24px;
+  .enhanced-chart-container {
+    height: 350px !important;
   }
   
-  .graduation-impact {
-    grid-template-columns: 1fr;
+  .enhanced-chart-container .chart-area-ultra-compact {
+    min-height: 240px !important;
+    height: 240px !important;
+  }
+  
+  .big-score-value-simple,
+  .readiness-value-simple,
+  .graduation-value-simple {
+    font-size: 36px;
+  }
+  
+  .cost-value-simple {
+    font-size: 28px;
   }
 }
 
@@ -1395,4 +1687,71 @@
     height: auto;
     min-height: 300px;
   }
+}
+
+/* Active SMEs Circle Chart specific styles */
+.active-smes-chart {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.active-smes-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.active-smes-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 15px;
+  padding: 12px 15px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.active-smes-current {
+  font-weight: 600;
+  color: #5e3f26;
+  font-size: 13px;
+}
+
+.active-smes-target {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: #666;
+}
+
+/* Chart header with eye icon */
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.breakdown-icon-btn {
+  background: none;
+  border: none;
+  color: #7d5a36;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.breakdown-icon-btn:hover {
+  background: #f0f0f0;
+  transform: scale(1.1);
 }
