@@ -49,24 +49,7 @@ const ApplicationSummary = ({ formData, onEdit }) => {
             max-height: 1000px;
           }
         }
-            body.sidebar-collapsed .main-container {
-    padding-left: var(--sidebar-collapsed-width) !important;
-  }
-        
-        /* Responsive adjustments for mobile/tablet */
-        @media (max-width: 1024px) {
-          .main-container {
-            padding-left: 16px !important;
-            padding-top: 16px !important;
-          }
-        }
-        
-        @media (max-width: 768px) {
-          .main-container {
-            padding-left: 12px !important;
-            padding-top: 12px !important;
-          }
-        }
+    
       `}</style>
       <div
         className="main-container"
@@ -75,9 +58,7 @@ const ApplicationSummary = ({ formData, onEdit }) => {
           minHeight: "100vh",
           width: "100%",
           background: "linear-gradient(135deg, #faf7f2 0%, #f5f0e1 50%, #f0e6d9 100%)",
-          padding: "16px",
-          paddingLeft: "280px", // Account for sidebar
-          paddingTop: "80px", // Bring content down from top
+        
           boxSizing: "border-box",
           transition: "all 0.3s ease",
         }}

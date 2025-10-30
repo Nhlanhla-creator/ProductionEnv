@@ -517,9 +517,7 @@ export default function FundingApplication() {
         <div
           style={{
             position: "fixed",
-            top: "100px",
-            right: "20px",
-            padding: "10px 15px",
+          
             borderRadius: "4px",
             backgroundColor: saveStatus === "saved" ? "#d4edda" : saveStatus === "error" ? "#f8d7da" : "#fff3cd",
             color: saveStatus === "saved" ? "#155724" : saveStatus === "error" ? "#721c24" : "#856404",

@@ -301,7 +301,7 @@ export default function InternApplication() {
     minHeight: "100vh",
     maxWidth: "100vw",
     overflowX: "hidden",
-    padding: `80px 10px 20px ${sidebarCollapsed ? "80px" : "280px"}`,
+    padding: "0",
     margin: "0",
     boxSizing: "border-box",
     position: "relative",
