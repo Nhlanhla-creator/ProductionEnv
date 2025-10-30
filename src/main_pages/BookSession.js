@@ -82,7 +82,7 @@ const BookSession = () => {
             
             <div style={styles.calendlyWrapper}>
               <InlineWidget 
-                url="https://calendly.com/lerato-bigmarketplace/big-marketplace-session"
+                url="https://calendly.com/lerato-bigmarketplace/30min" 
                 styles={{
                   height: '100%',
                   width: '100%'

@@ -796,7 +796,7 @@ const TabbedFundingTables = ({
               marginLeft: "4px",
             }}
           >
-            24
+            
           </span>
         </button>
 

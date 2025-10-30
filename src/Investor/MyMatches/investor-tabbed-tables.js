@@ -879,23 +879,7 @@ const InvestorTabbedTables = ({ filters, stageFilter, activeTab, setActiveTab, o
         >
           <Users size={18} />
           My Matches
-          <span
-            style={{
-              backgroundColor: activeTab === "sme-opportunities" ? "rgba(255, 255, 255, 0.2)" : "rgba(93, 64, 55, 0.1)",
-              color: activeTab === "sme-opportunities" ? "white" : "#5d4037",
-              borderRadius: "50%",
-              width: "24px",
-              height: "24px",
-              fontSize: "12px",
-              fontWeight: "700",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              marginLeft: "4px",
-            }}
-          >
-            {smeOpportunitiesCount}
-          </span>
+          
         </button>
 
         <button
