@@ -1,5 +1,3 @@
-
-
 "use client"
 import { useState, useEffect } from "react"
 import { CheckCircle, XCircle, Upload, FileText, Loader2 } from "lucide-react"
@@ -7,11 +5,13 @@ import FileUpload from "./file-upload"
 import './UniversalProfile.css';
 import { GoogleGenAI } from "@google/genai";
 import { db, auth } from "../../firebaseConfig"
-import { doc, getDoc, updateDoc } from "firebase/firestore"
+import { doc, getDoc, updateDoc, serverTimestamp  } from "firebase/firestore"
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const ai = new GoogleGenAI({ 
   apiKey: "AIzaSyBV5LGcaYjT0qLWsfqpbKxo8ohz0SDkIvU"
 });
+
 
 const documentsList = [
   {
@@ -178,11 +178,13 @@ const documentValidationRules = {
       "Issued by accredited verification agency",
       "B-BBEE certificate number",
       "B-BBEE level (1-8)",
-      "Issue and expiry dates",
+      "Expiry dates",
       "Company registration details",
-     "SANAS logo or accreditation number / CIPC Logo / DTIC"
+     "SANAS logo or accreditation number / CIPC Logo / DTIC",
+     "Expiry date (B-BBEE certificates are valid for 1 year only)"
+
     ],
-    strictChecks: ["has_certificate_number", "shows_verification_details", "has_expiry_date"]
+  strictChecks: ["has_certificate_number", "not_expired", "currently_valid"]
   },
   "UIF/PAYE/COIDA Certificates": {
   requiredElements: [
@@ -234,9 +236,17 @@ export default function Documents({ data = {}, updateData }) {
   const [isLoading, setIsLoading] = useState(true)
   const [uploadStatus, setUploadStatus] = useState({})
   const [uploadingDocs, setUploadingDocs] = useState({}) // Track which docs are uploading
+const [verificationStatus, setVerificationStatus] = useState({});
 
-  useEffect(() => {
-      const loadDocuments = async () => {
+const [uploadProgress, setUploadProgress] = useState({
+  isUploading: false,
+  currentStep: '',
+  documentName: ''
+});
+
+
+useEffect(() => {
+  const loadDocuments = async () => {
     try {
       setIsLoading(true);
       const userId = auth.currentUser?.uid;
@@ -252,6 +262,7 @@ export default function Documents({ data = {}, updateData }) {
       if (docSnap.exists()) {
         const profileData = docSnap.data();
         const documentsData = {};
+        const verificationData = {}; // ✅ ADD THIS
         
         // Initialize all documents with empty arrays
         documentsList.forEach(doc => {
@@ -268,132 +279,307 @@ export default function Documents({ data = {}, updateData }) {
             }
           });
         }
-          
-          // ALSO check other sections for backward compatibility
-          // But don't override if documents section already has the data
-          if (profileData.entityOverview?.registrationCertificate && !documentsData.registrationCertificate) {
-            documentsData.registrationCertificate = profileData.entityOverview.registrationCertificate
-          }
-          if (profileData.contactDetails?.proofOfAddress && !documentsData.proofOfAddress) {
-            documentsData.proofOfAddress = profileData.contactDetails.proofOfAddress
-          }
-          if (profileData.legalCompliance?.vatCertificate && !documentsData.vatCertificate) {
-            documentsData.vatCertificate = profileData.legalCompliance.vatCertificate
-          }
-          if (profileData.legalCompliance?.bbbeeCert && !documentsData.bbbeeCert) {
-            documentsData.bbbeeCert = profileData.legalCompliance.bbbeeCert
-          }
-          if (profileData.legalCompliance?.otherCerts && !documentsData.otherCerts) {
-            documentsData.otherCerts = profileData.legalCompliance.otherCerts
-          }
-          if (profileData.productsServices?.companyProfile && !documentsData.companyProfile) {
-            documentsData.companyProfile = profileData.productsServices.companyProfile
-          }
-          // Add other document types as needed
-          
-          setFormData(documentsData)
-          updateData(documentsData)
-          
-          // Update upload status
-          const status = {}
-          documentsList.forEach(doc => {
-            const files = documentsData[doc.id] || []
-            status[doc.id] = files.length > 0 ? 'success' : 'pending'
-          })
-          setUploadStatus(status)
-          
-        } else {
-          // Initialize with passed data
-          setFormData(data)
-          const status = {}
-          documentsList.forEach(doc => {
-            const files = data[doc.id] || []
-            status[doc.id] = files.length > 0 ? 'success' : 'pending'
-          })
-          setUploadStatus(status)
+        
+        // ✅ ADD THIS: Load verification status
+        if (profileData.verification) {
+          Object.keys(profileData.verification).forEach(docKey => {
+            verificationData[docKey] = profileData.verification[docKey];
+          });
         }
-      } catch (error) {
-        console.error("Error loading documents:", error)
-        setFormData(data)
-      } finally {
-        setIsLoading(false)
+          
+        
+        setFormData(documentsData);
+        setVerificationStatus(verificationData); // ✅ ADD THIS
+        updateData(documentsData);
+        
+        // Update upload status
+        const status = {};
+        documentsList.forEach(doc => {
+          const files = documentsData[doc.id] || [];
+          status[doc.id] = files.length > 0 ? 'success' : 'pending';
+        });
+        setUploadStatus(status);
+        
+      } else {
+        // Initialize with passed data
+        setFormData(data);
+        const status = {};
+        documentsList.forEach(doc => {
+          const files = data[doc.id] || [];
+          status[doc.id] = files.length > 0 ? 'success' : 'pending';
+        });
+        setUploadStatus(status);
       }
+    } catch (error) {
+      console.error("Error loading documents:", error);
+      setFormData(data);
+    } finally {
+      setIsLoading(false);
     }
+  };
 
-    loadDocuments()
-  }, [])
+  loadDocuments();
+}, []);
 
-  const createStrictPrompt = (docLabel, rules) => { 
+const getRegisteredName = async () => {
+  const user = auth.currentUser;
+  
+  if (!user) {
+    console.log("❌ No user found");
+    return null;
+  }
+
+  try {
+    console.log("🔍 Fetching from universalProfiles with UID:", user.uid);
+    const profileRef = doc(db, "universalProfiles", user.uid);
+    const profileSnap = await getDoc(profileRef);
+    
+    console.log("🔍 Profile exists:", profileSnap.exists());
+    
+    if (profileSnap.exists()) {
+      const data = profileSnap.data();
+      
+      // ✅ GET registeredName FROM entityOverview
+      const registeredName = data.entityOverview?.registeredName;
+      
+      console.log("🏢 Found registeredName:", registeredName);
+      return registeredName || null;
+    } else {
+      console.log("❌ No profile found for UID:", user.uid);
+      return null;
+    }
+  } catch (error) {
+    console.error("❌ Error fetching registeredName:", error);
+    return null;
+  }
+};
+
+const createStrictPrompt = (docLabel, rules, registeredName) => { 
   return `
-VALIDATE THIS ${docLabel} DOCUMENT:
+ANALYZE THE UPLOADED DOCUMENT FILE (not these instructions):
 
-REQUIRED ELEMENTS:
+DOCUMENT VALIDATION FOR: ${docLabel}
+
+CRITICAL CHECKS:
+1. 🔴 DOCUMENT TYPE: Must be exactly ${docLabel}
+2. 🔴 COMPANY NAME: Must match "${registeredName}" 
+3. 🔴 EXPIRY DATE: Must not be expired (current year: 2025)
+4. 🔴 COMPLETENESS: All required elements present
+
+REQUIRED ELEMENTS IN UPLOADED DOCUMENT:
 ${rules.requiredElements.map(item => `- ${item}`).join('\n')}
 
-VALIDATION CHECKS:
-1. Document matches ${docLabel} requirements
-2. Expiry date check (reject if expired/expiring soon)
-3. All required elements present
-
-RESPONSE FORMAT (JSON only):
+ANALYZE THE UPLOADED FILE AND RESPOND WITH:
 {
-  "isValid": true/false,
-  "rejectionReason": "if invalid",
-  "warnings": ["expiring_soon"],
-  "expiryDate": "YYYY-MM-DD if found"
+  "isValid": true,
+  "status": "verified" | "wrong_type" | "name_mismatch" | "expired" | "incomplete",
+  "identifiedDocumentType": "What you detected the uploaded file to be",
+  "message": "Brief validation result",
+  "warnings": []
 }
 `;
 };
 
- const validateDocumentWithAI = async (docLabel, file) => {
- const parseDetailedResponse = (responseText) => {
-  try {
+const validateDocumentWithAI = async (docLabel, file, registeredName) => {
+  const checkExpiryDate = (aiResponseText, file) => {
+    const datePatterns = [
+      /\b(\d{1,2}\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4})\b/gi,
+      /\b(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})\b/gi,
+      /\b(\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2})\b/gi
+    ];
+    
+    let allDates = [];
+    datePatterns.forEach(pattern => {
+      const matches = aiResponseText.match(pattern) || [];
+      allDates = [...allDates, ...matches];
+    });
+    
+    const hasExpiryKeyword = /expir|valid until|valid to|expires|valid through|expiry date|validity|expiration/i.test(aiResponseText);
+    
+    const hasOldDate = allDates.some(date => {
+      const yearMatch = date.match(/\d{4}/);
+      if (yearMatch) {
+        const year = parseInt(yearMatch[0]);
+        return year < 2023;
+      }
+      return false;
+    });
+    
+    return hasExpiryKeyword && hasOldDate;
+  };
+
+  const manualExpiryCheck = (file, docLabel) => {
+  const expiryDocuments = [
+    'B-BBEE Certificate', 'Tax Clearance Certificate', 
+    'Industry Accreditations', 'VAT Certificate', 'Tax Clearance Cert'
+  ];
+  
+  if (!expiryDocuments.includes(docLabel)) {
+    return false;
+  }
+  
+  const currentYear = new Date().getFullYear();
+  const fileName = file.name.toLowerCase();
+  
+  // Check for old dates in filename (2010-2022)
+  for (let year = 2010; year < 2023; year++) {
+    if (fileName.includes(year.toString())) {
+      console.log(`🔍 Manual expiry detected: File contains ${year}`);
+      return true;
+    }
+  }
+  
+  // Check file modification date
+  if (file.lastModified) {
+    const fileYear = new Date(file.lastModified).getFullYear();
+    if (fileYear < 2023) {
+      console.log(`🔍 Manual expiry detected: File from ${fileYear}`);
+      return true;
+    }
+  }
+  
+  return false;
+};
+
+  const parseDetailedResponse = (responseText, docLabel) => {
+    const documentTypeMap = {
+      "tax clearance": "Tax Clearance Certificate",
+      "tax certificate": "Tax Clearance Certificate", 
+      "sars certificate": "Tax Clearance Certificate",
+      "vat": "VAT Certificate",
+      "vat registration": "VAT Certificate",
+      "financial statement": "Financial Statements",
+      "audited financial": "Audited Financials",
+      "5 year budget": "5 Year Budget",
+      "bbbee": "B-BBEE Certificate",
+      "b-bbee": "B-BBEE Certificate",
+      "company registration": "Company Registration Certificate",
+      "cipc": "Company Registration Certificate",
+      "company profile": "Company Profile",
+      "brochure": "Company Profile",
+      "share register": "Share Register",
+      "certified id": "Certified IDs",
+      "id document": "Certified IDs",
+      "proof of address": "Proof of Address",
+      "utility bill": "Proof of Address",
+      "client reference": "Client References",
+      "reference letter": "Client References",
+      "industry accreditation": "Industry Accreditations",
+      "certificate": "Industry Accreditations",
+      "support letter": "Support Letters",
+      "endorsement": "Support Letters",
+      "business plan": "Business Plan",
+      "pitch deck": "Pitch Deck",
+      "impact statement": "Impact Statements",
+      "loan agreement": "Loan Agreements",
+      "contract": "Guarantee Contracts",
+      "uif": "UIF/PAYE/COIDA Certificates",
+      "paye": "UIF/PAYE/COIDA Certificates",
+      "coida": "UIF/PAYE/COIDA Certificates",
+      "program report": "Previous Program Reports"
+    };
+
+    const extractDocumentType = (text) => {
+      const lowerText = text.toLowerCase();
+      
+      for (const [key, documentType] of Object.entries(documentTypeMap)) {
+        if (lowerText.includes(key)) {
+          return documentType;
+        }
+      }
+      
+      if (lowerText.includes('tax') && lowerText.includes('clearance')) return "Tax Clearance Certificate";
+      if (lowerText.includes('bbbee') || lowerText.includes('b-bbee')) return "B-BBEE Certificate";
+      if (lowerText.includes('vat')) return "VAT Certificate";
+      if (lowerText.includes('company') && lowerText.includes('registration')) return "Company Registration Certificate";
+      if (lowerText.includes('business') && lowerText.includes('plan')) return "Business Plan";
+      
+      return "this document type";
+    };
+
+ try {
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    }
-    
-    // ✅ Better fallback: Check what the AI actually said
-    if (responseText.toLowerCase().includes('false')) {
-      return {
-        isValid: false,
-        rejectionReason: `Please upload the correct document`,
-        warnings: []
-      };
-    }
-    
-    if (responseText.toLowerCase().includes('true')) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      
+      let userMessage;
+      let status = parsed.status;
+      
+      // ✅ MORE RELIABLE: Use the AI's identifiedDocumentType if provided
+      let identifiedType = parsed.identifiedDocumentType;
+      
+      // If AI didn't provide identified type, use our fallback
+      if (!identifiedType || identifiedType === "EXACT_DOCUMENT_NAME_FROM_LIST") {
+        identifiedType = extractDocumentType(parsed.message || responseText);
+      }
+
+      // ✅ CLEANER WRONG TYPE MESSAGES
+      if (parsed.status === "wrong_type" || (!parsed.isValid && identifiedType !== docLabel)) {
+        userMessage = `Please upload a ${docLabel} doc, not ${identifiedType}`;
+        status = "wrong_type";
+      } else if (parsed.status === "name_mismatch") {
+        userMessage = "Company name does not match your registered name";
+        status = "name_mismatch";
+      } else if (parsed.status === "expired") {
+        userMessage = "Document expired";
+        status = "expired";
+      } else {
+        userMessage = "Document verified";
+        status = "verified";
+      }
+      
       return {
         isValid: true,
-        rejectionReason: "",
+        status: status,
+        message: userMessage,
+        warnings: parsed.warnings || []
+      };
+    }
+ 
+      const lowerText = responseText.toLowerCase();
+      if (lowerText.includes('false') || lowerText.includes('invalid') || lowerText.includes('reject')) {
+        const docType = extractDocumentType(responseText);
+        return {
+          isValid: true,
+          status: "wrong_type",
+          message: `Please upload a ${docLabel}, not ${docType}`,
+          warnings: []
+        };
+      }
+      
+      if (lowerText.includes('true') || lowerText.includes('valid') || lowerText.includes('approve')) {
+        return {
+          isValid: true,
+          status: "verified", 
+          message: "Document verified",
+          warnings: []
+        };
+      }
+      
+      return {
+        isValid: true,
+        status: "rejected",
+        message: "Validation failed",
+        warnings: []
+      };
+      
+    } catch (error) {
+      return {
+        isValid: true,
+        status: "rejected",
+        message: "Validation error",
         warnings: []
       };
     }
-    
-    // ✅ If we can't parse, show the actual AI response
-    return {
-      isValid: false,
-      rejectionReason: `Validation failed: ${responseText.substring(0, 100)}...`,
-      warnings: []
-    };
-    
-  } catch (error) {
-    return {
-      isValid: false,
-      rejectionReason: "Unable to validate document format",
-      warnings: []
-    };
-  }
-};
+  };
 
   try {
     const rules = documentValidationRules[docLabel];
     
     const validationPrompt = rules ? 
-      createStrictPrompt(docLabel, rules) :
-      `Check if this document is a valid ${docLabel}. Return only "true" or "false".`;
+      createStrictPrompt(docLabel, rules, registeredName) :
+      `Check if this document is a valid ${docLabel}. Return JSON with isValid true/false and message.`;
 
-    // Convert file to base64
     const base64Data = await new Promise((resolve) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
@@ -419,21 +605,49 @@ RESPONSE FORMAT (JSON only):
       ]
     });
 
-    console.log("🔍 RAW AI RESPONSE:", response.text);
+   console.log("🔍 RAW AI RESPONSE:", response.text);
+
+let finalResult = parseDetailedResponse(response.text, docLabel);
+
+// ✅ ALWAYS CHECK EXPIRY, NOT JUST FOR VERIFIED DOCUMENTS
+const isExpired = checkExpiryDate(response.text, file) || manualExpiryCheck(file, docLabel);
+
+if (isExpired) {
+  finalResult = {
+    isValid: true,
+    status: "expired", 
+    message: "Document expired",
+    warnings: []
+  };
+}
+
+return finalResult;
     
-    return parseDetailedResponse(response.text); 
     
   } catch (error) {
     console.error("AI validation failed:", error);
     return {
-      isValid: false,
-      rejectionReason: "Validation service unavailable",
+      isValid: true,
+      status: "rejected",
+      message: "Validation service unavailable",
       warnings: []
     };
   }
 };
 
-  const handleFileChange = async (documentId, files) => {
+const handleFileChange = async (documentId, files) => {
+    const documentConfig = documentsList.find(doc => doc.id === documentId);
+    const documentLabel = documentConfig?.label || documentId;
+console.log("🔄 handleFileChange called for:", documentId);
+
+  // ✅ START UPLOAD PROCESS
+  setUploadProgress({
+    isUploading: true,
+    currentStep: 'Starting validation...',
+    documentName: documentLabel || documentId
+  });
+  console.log("🔄 Upload progress set to true");
+
   try {
     if (!auth.currentUser) {
       console.error("User not authenticated");
@@ -442,84 +656,150 @@ RESPONSE FORMAT (JSON only):
     
     setUploadingDocs(prev => ({ ...prev, [documentId]: true }));
     
-    // Ensure files is always an array
     const filesArray = Array.isArray(files) ? files : [files];
     
-    // AI VALIDATION HERE
+    if (filesArray.length === 0 || !filesArray[0]) {
+      console.error("No files selected");
+      setUploadingDocs(prev => ({ ...prev, [documentId]: false }));
+      return;
+    }
+    
+    
+    // ✅ CHECK FOR WORD DOCUMENTS
+    setUploadProgress({...uploadProgress, currentStep: 'Checking file format...'});
     for (const file of filesArray) {
-      const validationResult = await validateDocumentWithAI(documentId, file);
-      
-      if (!validationResult.isValid) {
-        alert(`Document rejected: ${validationResult.rejectionReason}`);
+      if (file && (file.name.toLowerCase().endsWith('.docx') || file.name.toLowerCase().endsWith('.doc'))) {
+        alert('Please convert this Word document to PDF before uploading. Gemini AI cannot process .docx files.');
         setUploadingDocs(prev => ({ ...prev, [documentId]: false }));
-        return; // Stop if any file fails validation
+        return;
       }
     }
     
-    // Update local state
+    // ✅ GET REGISTERED NAME
+    setUploadProgress({...uploadProgress, currentStep: 'Verifying company details...'});
+    const registeredName = await getRegisteredName();
+    console.log("🏢 Registered Name:", registeredName);
+    
+    // ✅ AI VALIDATION
+    let validationResult;
+    
+    for (const file of filesArray) {
+      setUploadProgress({...uploadProgress, currentStep: 'Analyzing document content...'});
+      validationResult = await validateDocumentWithAI(documentLabel, file, registeredName);
+      
+      if (!validationResult.isValid) {
+        console.log(`Validation issue: ${validationResult.message}`);
+      }
+    }
+
+    if (!validationResult) {
+      console.error("No validation result obtained");
+      setUploadingDocs(prev => ({ ...prev, [documentId]: false }));
+      return;
+    }
+
+    // ✅ UPDATE STATUS
+    setUploadProgress({...uploadProgress, currentStep: 'Updating verification status...'});
+    setVerificationStatus(prev => ({
+      ...prev,
+      [documentId]: {
+        status: validationResult.status,
+        message: validationResult.message,
+        lastChecked: new Date()
+      }
+    }));
+
+    // ✅ UPDATE LOCAL STATE
     const updatedData = { ...formData, [documentId]: filesArray };
     setFormData(updatedData);
-    updateData(updatedData)
+    updateData(updatedData);
       
-      setUploadStatus(prev => ({
-        ...prev,
-        [documentId]: files.length > 0 ? 'success' : 'pending'
-      }));
+    setUploadStatus(prev => ({
+      ...prev,
+      [documentId]: files.length > 0 ? 'success' : 'pending'
+    }));
 
-      // Save to Firebase
-      const userId = auth.currentUser?.uid;
-      if (userId) {
-        const docRef = doc(db, "universalProfiles", userId);
-        
-        // Prepare the update object
-        const updateData = {
-          [`documents.${documentId}`]: files,
-        };
+    // ✅ FIREBASE UPLOAD
+    const userId = auth.currentUser?.uid;
+    if (userId) {
+      setUploadProgress({...uploadProgress, currentStep: 'Uploading to secure storage...'});
+      
+      const docRef = doc(db, "universalProfiles", userId);
+      const file = filesArray[0];
+      const fileExtension = file.name.toLowerCase().split('.').pop();
 
-        // FIXED: Complete switch statement with ALL document types
-        switch(documentId) {
-          case 'registrationCertificate':
-            updateData[`entityOverview.${documentId}`] = files;
-            break;
-          case 'certifiedIds':
-          case 'shareRegister':
-            updateData[`ownershipManagement.${documentId}`] = files;
-            break;
-          case 'proofOfAddress': // This was missing proper handling
-            updateData[`contactDetails.${documentId}`] = files;
-            break;
-          case 'taxClearanceCert':
-          case 'vatCertificate': // This was being handled correctly
-          case 'bbbeeCert': // This was being handled correctly
-          case 'otherCerts': // This was being handled correctly
-          case 'industryAccreditationDocs': // This was being handled correctly
-            updateData[`legalCompliance.${documentId}`] = files;
-            break;
-          case 'companyProfile': // This was being handled correctly
-          case 'clientReferences': // This was being handled correctly
-            updateData[`productsServices.${documentId}`] = files;
-            break;
-          // Add any missing document types here
-          default:
-            // For any document types not specifically categorized,
-            // they will still be saved under documents.${documentId}
-            console.log(`Document ${documentId} saved to documents section only`);
+      const storage = getStorage();
+      const storageRef = ref(storage, `universalProfiles/documents/${userId}/${documentId}_${Date.now()}.${fileExtension}`);
+  
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
+  
+      const updateData = {
+        [`documents.${documentId}`]: downloadURL,
+        [`verification.${documentId}`]: {
+          status: validationResult.status,
+          message: validationResult.message,
+          lastChecked: serverTimestamp()
         }
-        
-        await updateDoc(docRef, updateData);
+      };
+
+
+      switch(documentId) {
+        case 'registrationCertificate':
+          updateData[`entityOverview.${documentId}`] = downloadURL;
+          break;
+        case 'certifiedIds':
+        case 'shareRegister':
+          updateData[`ownershipManagement.${documentId}`] = downloadURL;
+          break;
+        case 'proofOfAddress':
+          updateData[`contactDetails.${documentId}`] = downloadURL;
+          break;
+        case 'taxClearanceCert':
+        case 'vatCertificate':
+        case 'bbbeeCert':
+        case 'otherCerts':
+        case 'industryAccreditationDocs':
+          updateData[`legalCompliance.${documentId}`] = downloadURL;
+          break;
+        case 'companyProfile':
+        case 'clientReferences':
+          updateData[`productsServices.${documentId}`] = downloadURL;
+          break;
+        default:
+          console.log(`Document ${documentId} saved to documents section only`);
       }
-    } catch (error) {
-      console.error("Error uploading files:", error);
-      // Show user-friendly error message
-      // alert(`Failed to upload ${documentId}. Please try again.`);
-    } finally {
-      setUploadingDocs(prev => ({ ...prev, [documentId]: false }));
+      
+      await updateDoc(docRef, updateData);
+      
+      setVerificationStatus(prev => ({
+        ...prev,
+        [documentId]: {
+          status: validationResult.status,
+          message: validationResult.message,
+          lastChecked: new Date()
+        }
+      }));
+      
+      console.log(`Document ${documentId} uploaded with status: ${validationResult.status}`);
     }
+ // ✅ UPLOAD COMPLETE
+    setUploadProgress({ isUploading: false, currentStep: '', documentName: '' });
+    
+  } catch (error) {
+    console.error("Error uploading files:", error);
+    alert('Upload failed - please try again');
+    setUploadProgress({ isUploading: false, currentStep: '', documentName: '' });
+  } finally {
+    setUploadingDocs(prev => ({ ...prev, [documentId]: false }));
   }
+};
+
 
   const getStatusBadge = (documentId, document) => {
-    const isUploading = uploadingDocs[documentId]
-    const files = formData[documentId] || []
+    const isUploading = uploadingDocs[documentId];
+    const files = formData[documentId] || [];
+    const verification = verificationStatus[documentId];
     
     if (isUploading) {
       return (
@@ -537,10 +817,28 @@ RESPONSE FORMAT (JSON only):
           <Loader2 style={{ width: "12px", height: "12px" }} className="animate-spin" />
           Uploading
         </span>
-      )
+      );
     }
     
-    if (files.length > 0) {
+ if (files.length > 0) {
+  let backgroundColor = "#e8f5e8";
+  let color = "#2e7d32";
+  let statusText = "Uploaded";
+  
+  if (verification) {
+    // ✅ ANY non-verified status = "Rejected"
+    if (verification.status === "verified" || verification.status === "expiring_soon") {
+      backgroundColor = "#e8f5e8";
+      color = "#2e7d32";
+      statusText = "Uploaded";
+    } else {
+      backgroundColor = "#ffebee";
+      color = "#c62828";
+      statusText = "Rejected";
+    }
+  }
+  
+      
       return (
         <span style={{
           display: "inline-flex",
@@ -550,13 +848,13 @@ RESPONSE FORMAT (JSON only):
           borderRadius: "16px",
           fontSize: "11px",
           fontWeight: "600",
-          backgroundColor: "#e8f5e8",
-          color: "#2e7d32"
+          backgroundColor,
+          color
         }}>
           <CheckCircle style={{ width: "12px", height: "12px" }} />
-          Uploaded
+          {statusText}
         </span>
-      )
+      );
     } else {
       return (
         <span style={{
@@ -571,11 +869,11 @@ RESPONSE FORMAT (JSON only):
           color: document.required ? "#c62828" : "#1976d2"
         }}>
           <XCircle style={{ width: "12px", height: "12px" }} />
-          {document.required ? "missing" : "Optional"}
+          {document.required ? "Missing" : "Optional"}
         </span>
-      )
+      );
     }
-  }
+  };
 
   const handleDeleteFile = async (documentId, fileIndex) => {
     const currentFiles = formData[documentId] || []
@@ -989,7 +1287,7 @@ RESPONSE FORMAT (JSON only):
                 fontSize: "11px",
                 borderBottom: "2px solid #6d4c41",
                 width: "40%"
-              }}>DESCRIPTION</th>
+              }}>DOCUMENT VERIFICATION</th>
               <th style={{
                 padding: "8px",
                 textAlign: "center",
@@ -1031,19 +1329,18 @@ RESPONSE FORMAT (JSON only):
                     {document.label}
                   </div>
                 </td>
-                <td style={{
-                  padding: "6px 8px",
-                  verticalAlign: "middle"
-                }}>
-                  <div style={{
-                    color: "#6d4c41",
-                    fontSize: "11px",
-                    lineHeight: "1.2"
-                  }}>
-                    {document.description}
-                  </div>
-                </td>
-                <td style={{
+   <td style={{ padding: "16px 20px" }}>
+      <div style={{ 
+        color: "#6d4c41", 
+        fontSize: "12px", 
+        lineHeight: "1.4" 
+      }}>
+        {formData[document.id]?.length > 0 
+          ? verificationStatus[document.id]?.message : "No document uploaded"
+        }
+      </div>
+    </td>
+           <td style={{
                   padding: "6px 8px",
                   textAlign: "center",
                   verticalAlign: "middle"
@@ -1161,6 +1458,32 @@ RESPONSE FORMAT (JSON only):
           }
         </p>
       </div>
+      {uploadProgress.isUploading && (
+  <div style={{
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1001
+  }}>
+    <div style={{
+      backgroundColor: 'white',
+      padding: '30px',
+      borderRadius: '12px',
+      textAlign: 'center',
+      minWidth: '300px'
+    }}>
+      <Loader2 style={{ width: "40px", height: "40px", margin: '0 auto' }} className="animate-spin" />
+      <h3 style={{ margin: '16px 0 8px 0' }}>Processing {uploadProgress.documentName}</h3>
+      <p style={{ color: '#666', fontSize: '14px' }}>{uploadProgress.currentStep}</p>
+    </div>
+  </div>
+)}
     </div>
   )
 }

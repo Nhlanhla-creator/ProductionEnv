@@ -1,1205 +1,1326 @@
 "use client"
-
+import { auth, db } from '../../firebaseConfig';
+import { doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore"
+import { updatePassword, deleteUser, EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth"
+import { differenceInDays } from "date-fns"; 
+import { Eye, EyeOff } from "lucide-react"
 import { useState, useEffect } from "react"
 
 const AdvisorSettings = () => {
-  const [activeTab, setActiveTab] = useState("Account")
-  const [showDeleteRolePopup, setShowDeleteRolePopup] = useState(false)
-  const [showDeleteAccountPopup, setShowDeleteAccountPopup] = useState(false)
-  const [roles, setRoles] = useState([])
-  const [loadingRoles, setLoadingRoles] = useState(false)
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
-
-  const [formData, setFormData] = useState({
-    account: {
-      email: "advisor@example.com",
-      password: "••••••••••",
-      name: "John Doe",
-      phone: "+27 12 345 6789",
-    },
-    notifications: {
-      emailNotifications: true,
-      smsNotifications: false,
-      matchAlerts: true,
-      messageAlerts: true,
-      documentAlerts: true,
-      newsletterSubscription: true,
-    },
-    privacy: {
-      profileVisibility: "public",
-      contactInfoVisibility: "matches",
-      experienceVisibility: "public",
-      allowDataSharing: true,
-    },
-    preferences: {
-      language: "english",
-      timezone: "Africa/Johannesburg",
-      currency: "ZAR",
-      theme: "light",
-    },
-  })
-
-  const colors = {
-    lightBrown: "#f5f0e1",
-    mediumBrown: "#e6d7c3",
-    accentBrown: "#c8b6a6",
-    primaryBrown: "#a67c52",
-    darkBrown: "#7d5a50",
-    textBrown: "#4a352f",
-    backgroundBrown: "#faf7f2",
-    paleBrown: "#f0e6d9",
-  }
-
-  useEffect(() => {
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === "attributes" && mutation.attributeName === "class") {
-          const isCollapsed = document.body.classList.contains("sidebar-collapsed")
-          setIsSidebarCollapsed(isCollapsed)
-        }
-      })
-    })
-
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    })
-
-    setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-
-    return () => observer.disconnect()
-  }, [])
-
-  const handleInputChange = (section, field, value) => {
-    setFormData({
-      ...formData,
-      [section]: {
-        ...formData[section],
-        [field]: value,
-      },
-    })
-  }
-
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    alert("Settings saved successfully!")
-  }
-
-  const handleDeleteRole = async () => {
-    setLoadingRoles(true)
-    try {
-      // Simulate fetching roles - replace with actual Firebase call
-      setTimeout(() => {
-        setRoles(["Admin", "Advisor", "Moderator"])
-        setLoadingRoles(false)
-        setShowDeleteRolePopup(true)
-      }, 1000)
-    } catch (error) {
-      console.error("Error fetching roles:", error)
-      setLoadingRoles(false)
+   const colors = {
+      lightBrown: "#f5f0e1",
+      mediumBrown: "#e6d7c3",
+      accentBrown: "#c8b6a6",
+      primaryBrown: "#a67c52",
+      darkBrown: "#7d5a50",
+      textBrown: "#4a352f",
+      backgroundBrown: "#faf7f2",
+      paleBrown: "#f0e6d9",
     }
+  
+    const [activeTab, setActiveTab] = useState("account")
+    const [formData, setFormData] = useState({
+      email: "",
+      displayName: "",
+      bio: "",
+      notifications: false,
+      sms: false,
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+      language: "en",
+      timezone: "UTC",
+      firstName: "",
+      lastName: "",
+    })
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [loading, setLoading] = useState(false)
+    const [message, setMessage] = useState("")
+    const [deleteLoading, setDeleteLoading] = useState(false)
+    const [deleteMessage, setDeleteMessage] = useState("")
+    const [saveSuccess, setSaveSuccess] = useState(false);
+    const [showDeleteRoleConfirm, setShowDeleteRoleConfirm] = useState(false);
+    const [showPopup, setShowPopup] = useState(false);
+    const [showPasswordFields, setShowPasswordFields] = useState(false);
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmNewPassword, setConfirmNewPassword] = useState('');
+    const [passwordError, setPasswordError] = useState('');
+    const [passwordSuccess, setPasswordSuccess] = useState(false);
+    const [userRoles, setUserRoles] = useState([]);
+    const [roleListDeleted, setRoleListDeleted] = useState([]);
+    const [deletedRoles, setDeletedRoles] = useState([])
+    const [roleSelectionModal, setRoleSelectionModal] = useState({
+      show: false,
+      roles: [],
+    });
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+   const [showPassword, setShowPassword] = useState({
+      current: false,
+      new: false,
+      confirm: false,
+    });
+  
+    useEffect(() => {
+      const checkSidebarState = () => {
+        setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
+      }
+  
+      // Check initial state
+      checkSidebarState()
+  
+      // Watch for changes
+      const observer = new MutationObserver(checkSidebarState)
+      observer.observe(document.body, {
+        attributes: true,
+        attributeFilter: ["class"],
+      })
+  
+      return () => observer.disconnect()
+    }, [])
+  
+    const getContainerStyles = () => ({
+      backgroundColor: colors.backgroundBrown,
+      minHeight: "100vh",
+      padding: "2rem",
+      marginLeft: isSidebarCollapsed ? "100px" : "270px",
+      fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
+      transition: "margin-left 0.3s ease",
+      boxSizing: "border-box",
+    })
+  
+    useEffect(() => {
+      const loadUser = async () => {
+        const user = auth.currentUser;
+        if (!user) return;
+  
+        try {
+          const docRef = doc(db, "users", user.uid);
+          const docSnap = await getDoc(docRef);
+  
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+  
+            // ✅ Set form data
+            setFormData(prev => ({
+              ...prev,
+              email: data.email || "",
+              phone: data.phone || "",
+              notifications: data.notifications ?? true,
+              marketingEmails: data.marketingEmails ?? false,
+              darkMode: data.darkMode ?? false,
+              language: data.language || "en",
+              timezone: data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+              twoFactorAuth: data.twoFactorAuth ?? false,
+            }));
+  
+            // ✅ Set roles (handle both array and string formats)
+            if (Array.isArray(data.roleArray)) {
+              setUserRoles(data.roleArray);
+            } else if (typeof data.role === "string") {
+              setUserRoles(data.role.split(",").map(r => r.trim()));
+            } else {
+              setUserRoles([]); // fallback
+            }
+          }
+        } catch (error) {
+          console.error("Error loading user:", error);
+        }
+      };
+  
+      loadUser();
+    }, []);
+  
+    const checkDeletedStatus = async (user) => {
+      if (!user) return;
+  
+      const userRef = doc(db, "users", user.uid);
+      const snap = await getDoc(userRef);
+  
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.deletedAt) {
+          const daysSinceDelete = differenceInDays(new Date(), new Date(data.deletedAt));
+  
+          if (daysSinceDelete < 30) {
+            // Redirect to retrieve page
+            window.location.href = "/retrieve-account";
+          } else {
+            // Hard delete after 30 days
+            await deleteDoc(userRef);
+            await deleteUser(user);
+            alert("Your account has been permanently deleted.");
+          }
+        }
+      }
+    };
+  
+   
+  
+    const handleRoleClick = async (roleToDelete) => {
+      try {
+        const confirmDelete = window.confirm(
+          `Are you sure you want to delete the role "${roleToDelete}"?`
+        );
+        if (!confirmDelete) return;
+    
+        const user = auth.currentUser;
+        if (!user) return;
+    
+        const userDocRef = doc(db, "users", user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        if (!userDocSnap.exists()) {
+          alert("User profile not found.");
+          return;
+        }
+    
+        const userData = userDocSnap.data();
+    
+        // 1️⃣ Remove role from roleArray (active roles)
+        let updatedRoleArray = [];
+        if (userData.roleArray && Array.isArray(userData.roleArray)) {
+          updatedRoleArray = userData.roleArray.filter(r => r !== roleToDelete);
+        }
+    
+        // 2️⃣ Remove role from role string if it exists
+        let updatedRoleString = "";
+        if (userData.role && typeof userData.role === "string") {
+          const rolesSplit = userData.role.split(",").map(r => r.trim());
+          const filteredRoles = rolesSplit.filter(r => r !== roleToDelete);
+          updatedRoleString = filteredRoles.join(",");
+        }
+    
+        // 3️⃣ Add role to deletedRoles map with timestamp
+        const updatedRolesMap = { ...(userData.roles || {}) };
+        updatedRolesMap[roleToDelete] = {
+          deletedStatus: true,
+          deletedAt: Date.now(),
+        };
+    
+        // 4️⃣ Update Firestore
+        await updateDoc(userDocRef, {
+          roleArray: updatedRoleArray,
+          role: updatedRoleString,
+          roles: updatedRolesMap,
+        });
+    
+        alert(
+          `Role "${roleToDelete}" has been soft-deleted. You can retrieve it within 30 days.`
+        );
+    
+        // 5️⃣ Update local state
+        setUserRoles(prev => prev.filter(r => r !== roleToDelete));
+        setDeletedRoles(prev => [...prev, roleToDelete]);
+    
+      } catch (err) {
+        console.error("Error deleting role:", err);
+        alert("Failed to delete role. Please try again.");
+      }
+    };
+    
+  const handleDeleteAccount = async () => {
+  // Add confirmation dialog
+  const isConfirmed = window.confirm("Are you sure you want to delete your account? This action cannot be undone.");
+  
+  if (!isConfirmed) {
+    return; // Exit if user cancels
   }
 
-  const handleDeleteAccount = () => {
-    setShowDeleteAccountPopup(true)
+  setDeleteLoading(true);
+  setDeleteMessage("");
+  
+  try {
+    const user = auth.currentUser;
+    if (user) {
+      await deleteUser(user);
+      await deleteDoc(doc(db, "users", user.uid));
+      setDeleteMessage("Account deleted successfully.");
+      setTimeout(() => {
+        auth.signOut();
+        window.location.href = "/";
+      }, 2000);
+    }
+  } catch (error) {
+    console.error("Error deleting account:", error);
+    setDeleteMessage(`Error deleting account: ${error.message}`);
+  } finally {
+    setDeleteLoading(false);
   }
-
-  const confirmDeleteRole = (role) => {
-    console.log("Deleting role:", role)
-    setShowDeleteRolePopup(false)
-    // Add actual role deletion logic here
-  }
-
-  const confirmDeleteAccount = () => {
-    console.log("Deleting account")
-    setShowDeleteAccountPopup(false)
-    // Add actual account deletion logic here
-  }
-
-  return (
-    <div
-      style={{
-        backgroundColor: "white",
-        minHeight: "100vh",
-        marginLeft: isSidebarCollapsed ? "80px" : "240px",
-        padding: "32px 48px",
-        fontFamily: "system-ui, -apple-system, sans-serif",
-        transition: "margin-left 0.3s ease",
-      }}
-    >
-      {/* Header */}
-      <div style={{ marginBottom: "32px" }}>
-        <h1
+}
+  
+    const confirmDelete = async () => {
+     const user = auth.currentUser;
+     if (user) {
+       try {
+         const userRef = doc(db, "users", user.uid);
+   
+         // Mark as deleted with timestamp
+         await updateDoc(userRef, {
+           deletedAt: Date.now()
+         });
+   
+         await auth.signOut(); // Sign them out
+         alert("Your account has been scheduled for deletion. You can retrieve it within 30 days.");
+         window.location.href = "/"; // Go to homepage
+       } catch (err) {
+         console.error("Deletion error:", err);
+         alert("Please re-login to delete your account.");
+       }
+     }
+   };
+  
+   const handlePasswordChange = async (e) => {
+    e.preventDefault(); // 🚀 stops form from refreshing
+  
+    setPasswordError("");
+  
+    if (formData.newPassword !== formData.confirmPassword) {
+      setPasswordError("Passwords do not match.");
+      return;
+    }
+    if (formData.newPassword.length < 6) {
+      setPasswordError("Password must be at least 6 characters.");
+      return;
+    }
+  
+    try {
+      const user = auth.currentUser;
+  
+      // Re-authenticate first
+      const credential = EmailAuthProvider.credential(
+        user.email,
+        formData.currentPassword
+      );
+      await reauthenticateWithCredential(user, credential);
+  
+      // Then update
+      await updatePassword(user, formData.newPassword);
+  
+      alert("✅ Password updated successfully!");
+      setFormData({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      setTimeout(() => setPasswordSuccess(false), 3000);
+    } catch (err) {
+          alert(`❌ Error updating password: ${err.message}`);
+    }
+  };
+  
+    const handleSaveChanges = async () => {
+      setLoading(true)
+      setMessage("")
+      try {
+        const user = auth.currentUser
+        if (user) {
+          await updateDoc(doc(db, "users", user.uid), {
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            email: formData.email,
+          })
+          setMessage("Settings saved successfully!")
+        }
+      } catch (error) {
+        console.error("Save error:", error)
+        setMessage(`Error saving settings: ${error.message}`)
+      }
+      setLoading(false)
+    }
+  
+    const openDeletePopup = async () => {
+      setShowPopup(true);
+    
+      const user = auth.currentUser;
+      if (!user) return;
+    
+      const userDocRef = doc(db, "users", user.uid);
+      const userDocSnap = await getDoc(userDocRef);
+      if (!userDocSnap.exists()) return;
+    
+      const userData = userDocSnap.data();
+      const activeRoles = [];
+    
+      // From roles object
+      if (userData.roles && typeof userData.roles === "object") {
+        Object.keys(userData.roles).forEach((r) => {
+          if (!userData.roles[r].deletedStatus) activeRoles.push(r);
+        });
+      }
+    
+      // From roleArray
+      if (Array.isArray(userData.roleArray)) {
+        userData.roleArray.forEach((r) => {
+          if (!activeRoles.includes(r)) activeRoles.push(r);
+        });
+      }
+    
+      // From role string
+      if (typeof userData.role === "string") {
+        userData.role.split(",").forEach((r) => {
+          const trimmed = r.trim();
+          if (!activeRoles.includes(trimmed)) activeRoles.push(trimmed);
+        });
+      }
+    
+      setUserRoles(activeRoles);
+    };
+  
+    const handleInputChange = (e) => {
+      const { name, value, type, checked } = e.target
+      setFormData((prev) => ({
+        ...prev,
+        [name]: type === "checkbox" ? checked : value,
+      }))
+    }
+  
+    const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+  
+    try {
+      const user = auth.currentUser;
+      if (user) {
+        // remove password fields before saving
+        const { currentPassword, newPassword, confirmPassword, ...safeData } = formData;
+  
+        await updateDoc(doc(db, "users", user.uid), safeData);
+  
+        alert("✅ Settings saved successfully!");
+      }
+    } catch (error) {
+      alert(`❌ Error saving settings: ${error.message}`);
+    }
+  
+    setLoading(false);
+  };
+  
+   const toggleVisibility = (field) => {
+      setShowPassword((prev) => ({ ...prev, [field]: !prev[field] }));
+    };
+  
+    return (
+      <div className="settingsContainer" style={getContainerStyles()}>
+        <div style={{ marginBottom: "1rem" }}>
+          <h1
+            style={{
+              fontSize: "2.5rem",
+              fontWeight: "700",
+              margin: 0,
+              marginTop: "3rem",
+              color: colors.textBrown,
+              letterSpacing: "-0.025em",
+            }}
+          >
+            Settings
+          </h1>
+        </div>
+  
+        <div
           style={{
-            fontSize: "32px",
-            fontWeight: "600",
-            color: colors.textBrown,
-            margin: "0",
-            marginTop: "5rem",
+            backgroundColor: "white",
+            borderRadius: "16px",
+            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+            marginBottom: "2rem",
+            overflow: "hidden",
           }}
         >
-          Settings
-        </h1>
-      </div>
-
-      {/* Navigation Tabs */}
-      <div
-        style={{
-          borderBottom: "1px solid #e5e7eb",
-          marginBottom: "40px",
-        }}
-      >
-        <div style={{ display: "flex", gap: "32px" }}>
-          {["Account", "Notifications", "Security", "Appearance"].map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              style={{
-                padding: "12px 0",
-                backgroundColor: "transparent",
-                border: "none",
-                borderBottom: activeTab === tab ? `2px solid ${colors.primaryBrown}` : "2px solid transparent",
-                color: activeTab === tab ? colors.primaryBrown : "#6b7280",
-                fontSize: "16px",
-                fontWeight: activeTab === tab ? "600" : "400",
-                cursor: "pointer",
-                transition: "all 0.2s ease",
-              }}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Content */}
-      <div>
-        {activeTab === "Account" && (
-          <div>
-            <div style={{ marginBottom: "32px" }}>
-              <h2
+          <div
+            style={{
+              display: "flex",
+              padding: "0 2rem",
+              borderBottom: `1px solid ${colors.lightBrown}`,
+              overflowX: "auto",
+            }}
+          >
+            {[
+              { key: "account", label: "Account" },
+              { key: "security", label: "Security" },
+              { key: "appearance", label: "Appearance" },
+              { key: "notifications", label: "Notifications" },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
                 style={{
-                  fontSize: "20px",
-                  fontWeight: "600",
-                  color: colors.textBrown,
-                  margin: "0 0 8px 0",
+                  padding: "1.25rem 1.5rem",
+                  border: "none",
+                  backgroundColor: "transparent",
+                  color: activeTab === tab.key ? colors.textBrown : "#6b7280",
+                  fontWeight: activeTab === tab.key ? "600" : "500",
+                  fontSize: "0.95rem",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                  borderBottom: activeTab === tab.key ? `2px solid ${colors.primaryBrown}` : "2px solid transparent",
+                  whiteSpace: "nowrap",
                 }}
               >
-                Account Information
-              </h2>
-              <p
-                style={{
-                  color: colors.textBrown,
-                  opacity: 0.7,
-                  margin: "0 0 24px 0",
-                  fontSize: "14px",
-                }}
-              >
-                Update your basic account information
-              </p>
-
-              <div style={{ display: "grid", gap: "20px" }}>
-                <div>
-                  <label
+                {tab.label}
+              </button>
+            ))}
+          </div>
+  
+          <div style={{ padding: "3rem" }}>
+            {activeTab === "account" && (
+              <div>
+                <div style={{ marginBottom: "2rem" }}>
+                  <h2
                     style={{
-                      display: "block",
-                      marginBottom: "8px",
-                      fontSize: "14px",
-                      fontWeight: "500",
                       color: colors.textBrown,
+                      fontSize: "1.5rem",
+                      fontWeight: "600",
+                      marginBottom: "0.5rem",
                     }}
                   >
-                    Email Address
-                  </label>
-                  <input
-                    type="email"
-                    value={formData.account.email}
-                    onChange={(e) => handleInputChange("account", "email", e.target.value)}
+                    Account Information
+                  </h2>
+                  <p
                     style={{
-                      width: "100%",
-                      padding: "12px 16px",
-                      border: `1px solid ${colors.mediumBrown}`,
-                      borderRadius: "8px",
-                      fontSize: "14px",
-                      color: colors.textBrown,
-                      backgroundColor: colors.backgroundBrown,
-                      transition: "all 0.2s ease",
-                      outline: "none",
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      marginBottom: "8px",
-                      fontSize: "14px",
-                      fontWeight: "500",
-                      color: colors.textBrown,
+                      color: "#6b7280",
+                      fontSize: "0.95rem",
+                      marginBottom: "2rem",
                     }}
                   >
-                    Password
-                  </label>
-                  <div style={{ display: "flex", gap: "12px" }}>
-                    <input
-                      type="password"
-                      value={formData.account.password}
-                      onChange={(e) => handleInputChange("account", "password", e.target.value)}
+                    Update your account details and personal information.
+                  </p>
+  
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem", marginBottom: "2rem" }}>
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          color: colors.textBrown,
+                          fontWeight: "500",
+                          marginBottom: "0.5rem",
+                          fontSize: "0.95rem",
+                        }}
+                      >
+                        First Name
+                      </label>
+                      <input
+                        type="text"
+                        name="firstName"
+                        value={formData.firstName}
+                        onChange={handleInputChange}
+                        style={{
+                          width: "100%",
+                          padding: "0.875rem 1rem",
+                          border: `1px solid ${colors.mediumBrown}`,
+                          borderRadius: "8px",
+                          fontSize: "1rem",
+                          backgroundColor: "white",
+                          color: colors.textBrown,
+                          outline: "none",
+                          transition: "all 0.2s ease",
+                          boxSizing: "border-box",
+                        }}
+                        onFocus={(e) => {
+                          e.target.style.borderColor = colors.primaryBrown
+                          e.target.style.boxShadow = `0 0 0 3px ${colors.primaryBrown}15`
+                        }}
+                        onBlur={(e) => {
+                          e.target.style.borderColor = colors.mediumBrown
+                          e.target.style.boxShadow = "none"
+                        }}
+                      />
+                    </div>
+  
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          color: colors.textBrown,
+                          fontWeight: "500",
+                          marginBottom: "0.5rem",
+                          fontSize: "0.95rem",
+                        }}
+                      >
+                        Last Name
+                      </label>
+                      <input
+                        type="text"
+                        name="lastName"
+                        value={formData.lastName}
+                        onChange={handleInputChange}
+                        style={{
+                          width: "100%",
+                          padding: "0.875rem 1rem",
+                          border: `1px solid ${colors.mediumBrown}`,
+                          borderRadius: "8px",
+                          fontSize: "1rem",
+                          backgroundColor: "white",
+                          color: colors.textBrown,
+                          outline: "none",
+                          transition: "all 0.2s ease",
+                          boxSizing: "border-box",
+                        }}
+                        onFocus={(e) => {
+                          e.target.style.borderColor = colors.primaryBrown
+                          e.target.style.boxShadow = `0 0 0 3px ${colors.primaryBrown}15`
+                        }}
+                        onBlur={(e) => {
+                          e.target.style.borderColor = colors.mediumBrown
+                          e.target.style.boxShadow = "none"
+                        }}
+                      />
+                    </div>
+                  </div>
+  
+                  <div style={{ marginBottom: "2rem" }}>
+                    <label
                       style={{
-                        width: "100%",
-                        padding: "12px 16px",
-                        border: `1px solid ${colors.mediumBrown}`,
-                        borderRadius: "8px",
-                        fontSize: "14px",
+                        display: "block",
                         color: colors.textBrown,
-                        backgroundColor: colors.backgroundBrown,
-                        transition: "all 0.2s ease",
-                        outline: "none",
-                        flex: 1,
-                      }}
-                    />
-                    <button
-                      style={{
-                        padding: "12px 24px",
-                        backgroundColor: colors.accentBrown,
-                        color: colors.textBrown,
-                        border: "none",
-                        borderRadius: "8px",
-                        cursor: "pointer",
-                        fontSize: "14px",
                         fontWeight: "500",
-                        transition: "all 0.2s ease",
+                        marginBottom: "0.5rem",
+                        fontSize: "0.95rem",
                       }}
                     >
-                      Change Password
+                      Email Address
+                    </label>
+                    <input
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      style={{
+                        width: "100%",
+                        padding: "0.875rem 1rem",
+                        border: `1px solid ${colors.mediumBrown}`,
+                        borderRadius: "8px",
+                        fontSize: "1rem",
+                        backgroundColor: "white",
+                        color: colors.textBrown,
+                        outline: "none",
+                        transition: "all 0.2s ease",
+                        boxSizing: "border-box",
+                      }}
+                      onFocus={(e) => {
+                        e.target.style.borderColor = colors.primaryBrown
+                        e.target.style.boxShadow = `0 0 0 3px ${colors.primaryBrown}15`
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.borderColor = colors.mediumBrown
+                        e.target.style.boxShadow = "none"
+                      }}
+                    />
+                  </div>
+  
+                  <div style={{ display: "flex", gap: "1rem", marginTop: "2.5rem" }}>
+                    <button
+                      type="button"
+                      style={{
+                        padding: "0.75rem 1.5rem",
+                        backgroundColor: colors.primaryBrown,
+                        color: "white",
+                        border: "none",
+                        borderRadius: "8px",
+                        fontSize: "0.95rem",
+                        fontWeight: "500",
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.backgroundColor = colors.darkBrown
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.backgroundColor = colors.primaryBrown
+                      }}
+                      onClick={handleSaveChanges}
+                    >
+                      Save Changes
+                    </button>
+                    <button
+                      type="button"
+                      style={{
+                        padding: "0.75rem 1.5rem",
+                        backgroundColor: "transparent",
+                        color: "#6b7280",
+                        border: `1px solid ${colors.mediumBrown}`,
+                        borderRadius: "8px",
+                        fontSize: "0.95rem",
+                        fontWeight: "500",
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.backgroundColor = colors.lightBrown
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.backgroundColor = "transparent"
+                      }}
+                    >
+                      Cancel
                     </button>
                   </div>
                 </div>
-
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      marginBottom: "8px",
-                      fontSize: "14px",
-                      fontWeight: "500",
-                      color: colors.textBrown,
-                    }}
-                  >
-                    Full Name
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.account.name}
-                    onChange={(e) => handleInputChange("account", "name", e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "12px 16px",
-                      border: `1px solid ${colors.mediumBrown}`,
-                      borderRadius: "8px",
-                      fontSize: "14px",
-                      color: colors.textBrown,
-                      backgroundColor: colors.backgroundBrown,
-                      transition: "all 0.2s ease",
-                      outline: "none",
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      marginBottom: "8px",
-                      fontSize: "14px",
-                      fontWeight: "500",
-                      color: colors.textBrown,
-                    }}
-                  >
-                    Phone Number
-                  </label>
-                  <input
-                    type="tel"
-                    value={formData.account.phone}
-                    onChange={(e) => handleInputChange("account", "phone", e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "12px 16px",
-                      border: `1px solid ${colors.mediumBrown}`,
-                      borderRadius: "8px",
-                      fontSize: "14px",
-                      color: colors.textBrown,
-                      backgroundColor: colors.backgroundBrown,
-                      transition: "all 0.2s ease",
-                      outline: "none",
-                    }}
-                  />
-                </div>
               </div>
-            </div>
-
-            {/* Danger Zone */}
-            <div style={{ marginTop: "48px" }}>
-              <h3
-                style={{
-                  fontSize: "18px",
-                  fontWeight: "600",
-                  color: "#dc3545",
-                  margin: "0 0 16px 0",
-                }}
-              >
-                Danger Zone
-              </h3>
-              <div
-                style={{
-                  backgroundColor: "#fefefe",
-                  border: "1px solid #f3f4f6",
-                  borderRadius: "12px",
-                  padding: "24px",
-                }}
-              >
-                <div style={{ marginBottom: "20px" }}>
-                  <h4
+            )}
+  
+            {activeTab === "appearance" && (
+              <div>
+                <div style={{ marginBottom: "2rem" }}>
+                  <h2
                     style={{
-                      fontSize: "16px",
-                      fontWeight: "600",
                       color: colors.textBrown,
-                      margin: "0 0 8px 0",
+                      fontSize: "1.5rem",
+                      fontWeight: "600",
+                      marginBottom: "0.5rem",
                     }}
                   >
-                    Delete Role
-                  </h4>
+                    Appearance
+                  </h2>
                   <p
                     style={{
-                      fontSize: "14px",
                       color: "#6b7280",
-                      margin: "0 0 16px 0",
-                      lineHeight: "1.5",
+                      fontSize: "0.95rem",
+                      marginBottom: "2rem",
                     }}
                   >
-                    Permanently remove one of your advisor roles. This action cannot be undone.
+                    Change how your public dashboard looks and feels.
                   </p>
-                  <button
-                    onClick={handleDeleteRole}
+  
+                  <h3
                     style={{
-                      padding: "10px 20px",
-                      backgroundColor: "white",
-                      color: "#dc3545",
-                      border: "1px solid #dc3545",
-                      borderRadius: "8px",
-                      fontSize: "14px",
-                      fontWeight: "500",
-                      cursor: "pointer",
-                      transition: "all 0.2s ease",
-                    }}
-                    onMouseOver={(e) => {
-                      e.target.style.backgroundColor = "#dc3545"
-                      e.target.style.color = "white"
-                    }}
-                    onMouseOut={(e) => {
-                      e.target.style.backgroundColor = "white"
-                      e.target.style.color = "#dc3545"
-                    }}
-                  >
-                    Delete Role
-                  </button>
-                </div>
-
-                <div>
-                  <h4
-                    style={{
-                      fontSize: "16px",
-                      fontWeight: "600",
                       color: colors.textBrown,
-                      margin: "0 0 8px 0",
+                      fontSize: "1.1rem",
+                      fontWeight: "600",
+                      marginBottom: "0.5rem",
                     }}
                   >
-                    Delete Account
-                  </h4>
+                    Language
+                  </h3>
                   <p
                     style={{
-                      fontSize: "14px",
                       color: "#6b7280",
-                      margin: "0 0 16px 0",
-                      lineHeight: "1.5",
+                      fontSize: "0.95rem",
+                      marginBottom: "1.5rem",
                     }}
                   >
-                    Permanently delete your advisor account and all associated data. This action cannot be undone.
+                    Default language for public dashboard.
                   </p>
-                  <button
-                    onClick={handleDeleteAccount}
-                    style={{
-                      padding: "10px 20px",
-                      backgroundColor: "white",
-                      color: "#dc3545",
-                      border: "1px solid #dc3545",
-                      borderRadius: "8px",
-                      fontSize: "14px",
-                      fontWeight: "500",
-                      cursor: "pointer",
-                      transition: "all 0.2s ease",
-                    }}
-                    onMouseOver={(e) => {
-                      e.target.style.backgroundColor = "#dc3545"
-                      e.target.style.color = "white"
-                    }}
-                    onMouseOut={(e) => {
-                      e.target.style.backgroundColor = "white"
-                      e.target.style.color = "#dc3545"
-                    }}
-                  >
-                    Delete Account
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Save Changes Button */}
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "32px" }}>
-              <button
-                style={{
-                  padding: "12px 24px",
-                  backgroundColor: colors.primaryBrown,
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  fontWeight: "500",
-                  cursor: "pointer",
-                  transition: "all 0.2s ease",
-                }}
-                onClick={handleSubmit}
-              >
-                Save Changes
-              </button>
-            </div>
-          </div>
-        )}
-
-        {activeTab === "Notifications" && (
-          <div>
-            <h2
-              style={{
-                fontSize: "20px",
-                fontWeight: "600",
-                color: colors.textBrown,
-                margin: "0 0 8px 0",
-              }}
-            >
-              Notification Settings
-            </h2>
-            <p
-              style={{
-                color: colors.textBrown,
-                opacity: 0.7,
-                margin: "0 0 32px 0",
-                fontSize: "14px",
-              }}
-            >
-              Control how and when you receive notifications
-            </p>
-
-            <div style={{ display: "grid", gap: "24px" }}>
-              {Object.entries(formData.notifications).map(([key, value]) => {
-                const labels = {
-                  emailNotifications: { title: "Email Notifications", desc: "Receive notifications via email" },
-                  smsNotifications: { title: "SMS Notifications", desc: "Receive notifications via SMS" },
-                  matchAlerts: { title: "Match Alerts", desc: "Get notified when you have new potential matches" },
-                  messageAlerts: { title: "Message Alerts", desc: "Get notified when you receive new messages" },
-                  documentAlerts: {
-                    title: "Document Alerts",
-                    desc: "Get notified about document updates and requirements",
-                  },
-                  newsletterSubscription: {
-                    title: "Newsletter Subscription",
-                    desc: "Receive our monthly newsletter with updates and insights",
-                  },
-                }
-
-                return (
                   <div
-                    key={key}
+                    style={{
+                      width: "100%",
+                      padding: "0.875rem 1rem",
+                      border: `1px solid ${colors.mediumBrown}`,
+                      borderRadius: "8px",
+                      fontSize: "1rem",
+                      backgroundColor: colors.lightBrown,
+                      color: colors.textBrown,
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    🇬🇧 English
+                  </div>
+                </div>
+              </div>
+            )}
+  
+            {activeTab === "notifications" && (
+              <div>
+                <div style={{ marginBottom: "2rem" }}>
+                  <h2
+                    style={{
+                      color: colors.textBrown,
+                      fontSize: "1.5rem",
+                      fontWeight: "600",
+                      marginBottom: "0.5rem",
+                      letterSpacing: "-0.025em",
+                    }}
+                  >
+                    Notifications
+                  </h2>
+                  <p
+                    style={{
+                      color: "#6b7280",
+                      fontSize: "1rem",
+                      margin: 0,
+                    }}
+                  >
+                    Configure how you receive notifications.
+                  </p>
+                </div>
+  
+                <div style={{ display: "grid", gap: "1.5rem", maxWidth: "600px" }}>
+                  <div
                     style={{
                       display: "flex",
-                      justifyContent: "space-between",
                       alignItems: "center",
-                      padding: "20px",
-                      backgroundColor: "white",
+                      padding: "1.5rem",
+                      backgroundColor: colors.backgroundBrown,
                       borderRadius: "8px",
                       border: `1px solid ${colors.lightBrown}`,
                     }}
                   >
-                    <div>
-                      <h3
-                        style={{
-                          fontSize: "14px",
-                          fontWeight: "600",
-                          color: colors.textBrown,
-                          margin: "0 0 4px 0",
-                        }}
-                      >
-                        {labels[key].title}
-                      </h3>
-                      <p
-                        style={{
-                          fontSize: "13px",
-                          color: colors.textBrown,
-                          opacity: 0.7,
-                          margin: "0",
-                        }}
-                      >
-                        {labels[key].desc}
-                      </p>
-                    </div>
-                    <label
+                    <input
+                      type="checkbox"
+                      id="notifications"
+                      name="notifications"
+                      checked={formData.notifications}
+                      onChange={handleInputChange}
                       style={{
-                        position: "relative",
-                        display: "inline-block",
-                        width: "44px",
-                        height: "24px",
+                        width: "18px",
+                        height: "18px",
+                        marginRight: "1rem",
+                        accentColor: colors.primaryBrown,
+                      }}
+                    />
+                    <label
+                      htmlFor="notifications"
+                      style={{
+                        color: colors.textBrown,
+                        fontWeight: "500",
+                        cursor: "pointer",
+                        fontSize: "1rem",
                       }}
                     >
-                      <input
-                        type="checkbox"
-                        checked={value}
-                        onChange={(e) => handleInputChange("notifications", key, e.target.checked)}
-                        style={{ opacity: 0, width: 0, height: 0 }}
-                      />
-                      <span
-                        style={{
-                          position: "absolute",
-                          cursor: "pointer",
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          backgroundColor: value ? colors.primaryBrown : colors.mediumBrown,
-                          transition: "0.2s",
-                          borderRadius: "24px",
-                        }}
-                      >
-                        <span
-                          style={{
-                            position: "absolute",
-                            content: "",
-                            height: "18px",
-                            width: "18px",
-                            left: value ? "23px" : "3px",
-                            bottom: "3px",
-                            backgroundColor: "white",
-                            transition: "0.2s",
-                            borderRadius: "50%",
-                          }}
-                        />
-                      </span>
+                      Enable Email Notifications
                     </label>
                   </div>
-                )
-              })}
-            </div>
-
-            {/* Save Changes Button */}
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "32px" }}>
+  
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      padding: "1.5rem",
+                      backgroundColor: colors.backgroundBrown,
+                      borderRadius: "8px",
+                      border: `1px solid ${colors.lightBrown}`,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      id="sms"
+                      name="sms"
+                      checked={formData.sms}
+                      onChange={handleInputChange}
+                      style={{
+                        width: "18px",
+                        height: "18px",
+                        marginRight: "1rem",
+                        accentColor: colors.primaryBrown,
+                      }}
+                    />
+                    <label
+                      htmlFor="sms"
+                      style={{
+                        color: colors.textBrown,
+                        fontWeight: "500",
+                        cursor: "pointer",
+                        fontSize: "1rem",
+                      }}
+                    >
+                      Enable SMS Notifications
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
+  
+            {activeTab === "security" && (
+              <div>
+                <div style={{ marginBottom: "2rem" }}>
+                  <h2
+                    style={{
+                      color: colors.textBrown,
+                      fontSize: "1.5rem",
+                      fontWeight: "600",
+                      marginBottom: "0.5rem",
+                      letterSpacing: "-0.025em",
+                    }}
+                  >
+                    Security
+                  </h2>
+                  <p
+                    style={{
+                      color: "#6b7280",
+                      fontSize: "1rem",
+                      margin: 0,
+                    }}
+                  >
+                    Manage your password and security settings.
+                  </p>
+                </div>
+  
+                <form onSubmit={handleSubmit}>
+                  <div style={{ display: "grid", gap: "2rem", maxWidth: "600px" }}>
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          color: colors.textBrown,
+                          fontWeight: "500",
+                          marginBottom: "0.75rem",
+                          fontSize: "0.95rem",
+                        }}
+                      >
+                        Current Password
+                      </label>
+                           <span
+    onClick={() => toggleVisibility("current")} // or "new", "confirm"
+    style={{
+      position: "absolute",
+      right: "1rem",
+      top: "65%",
+      transform: "translateY(-50%)",
+      cursor: "pointer",
+      color: colors.textBrown,
+    }}
+  >
+    {showPassword.current ? <EyeOff size={18} /> : <Eye size={18} />}
+  </span>  
+                      <input
+                                 type={showPassword.current ? "text" : "password"}
+  
+                        name="currentPassword"
+                        value={formData.currentPassword}
+                        onChange={handleInputChange}
+                        style={{
+                          width: "100%",
+                          padding: "0.875rem 1rem",
+                          border: `1px solid ${colors.mediumBrown}`,
+                          borderRadius: "8px",
+                          fontSize: "1rem",
+                          backgroundColor: "white",
+                          color: colors.textBrown,
+                          outline: "none",
+                          transition: "all 0.2s ease",
+                          boxSizing: "border-box",
+                        }}
+                        onFocus={(e) => {
+                          e.target.style.borderColor = colors.primaryBrown
+                          e.target.style.boxShadow = `0 0 0 3px ${colors.primaryBrown}15`
+                        }}
+                        onBlur={(e) => {
+                          e.target.style.borderColor = colors.mediumBrown
+                          e.target.style.boxShadow = "none"
+                        }}
+                      />
+           
+  </div>
+  
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          color: colors.textBrown,
+                          fontWeight: "500",
+                          marginBottom: "0.75rem",
+                          fontSize: "0.95rem",
+                        }}
+                      >
+                        New Password
+                      </label>
+                      <input
+                        type="password"
+                        name="newPassword"
+                        value={formData.newPassword}
+                        onChange={handleInputChange}
+                        style={{
+                          width: "100%",
+                          padding: "0.875rem 1rem",
+                          border: `1px solid ${colors.mediumBrown}`,
+                          borderRadius: "8px",
+                          fontSize: "1rem",
+                          backgroundColor: "white",
+                          color: colors.textBrown,
+                          outline: "none",
+                          transition: "all 0.2s ease",
+                          boxSizing: "border-box",
+                        }}
+                        onFocus={(e) => {
+                          e.target.style.borderColor = colors.primaryBrown
+                          e.target.style.boxShadow = `0 0 0 3px ${colors.primaryBrown}15`
+                        }}
+                        onBlur={(e) => {
+                          e.target.style.borderColor = colors.mediumBrown
+                          e.target.style.boxShadow = "none"
+                        }}
+                      />
+                    </div>
+  
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          color: colors.textBrown,
+                          fontWeight: "500",
+                          marginBottom: "0.75rem",
+                          fontSize: "0.95rem",
+                        }}
+                      >
+                        Confirm New Password
+                      </label>
+                      <input
+                        type="password"
+                        name="confirmPassword"
+                        value={formData.confirmPassword}
+                        onChange={handleInputChange}
+                        style={{
+                          width: "100%",
+                          padding: "0.875rem 1rem",
+                          border: `1px solid ${colors.mediumBrown}`,
+                          borderRadius: "8px",
+                          fontSize: "1rem",
+                          backgroundColor: "white",
+                          color: colors.textBrown,
+                          outline: "none",
+                          transition: "all 0.2s ease",
+                          boxSizing: "border-box",
+                        }}
+                        onFocus={(e) => {
+                          e.target.style.borderColor = colors.primaryBrown
+                          e.target.style.boxShadow = `0 0 0 3px ${colors.primaryBrown}15`
+                        }}
+                        onBlur={(e) => {
+                          e.target.style.borderColor = colors.mediumBrown
+                          e.target.style.boxShadow = "none"
+                        }}
+                      />
+                    </div>
+                  </div>
+  
+                  <div style={{ display: "flex", gap: "1rem", marginTop: "2.5rem" }}>
+                    <button
+                      type="button"
+                      style={{
+                        padding: "0.75rem 1.5rem",
+                        backgroundColor: "white",
+                        color: "#6b7280",
+                        border: `1px solid ${colors.mediumBrown}`,
+                        borderRadius: "8px",
+                        fontSize: "0.95rem",
+                        fontWeight: "500",
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                          onClick={handlePasswordChange}
+                      disabled={loading}
+                      style={{
+                        padding: "0.75rem 1.5rem",
+                        backgroundColor: colors.primaryBrown,
+                        color: "white",
+                        border: "none",
+                        borderRadius: "8px",
+                        fontSize: "0.95rem",
+                        fontWeight: "600",
+                        cursor: loading ? "not-allowed" : "pointer",
+                        transition: "all 0.2s ease",
+                        opacity: loading ? 0.7 : 1,
+                      }}
+                    >
+                      {loading ? "Saving..." : "Save changes"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+  {activeTab === "Delete Account" && (
+    <div>
+      <p>Accounts</p>
+      </div>
+  )}
+            {(activeTab === "profile" || activeTab === "billing" || activeTab === "integrations") && (
+              <div>
+                <div style={{ marginBottom: "2rem" }}>
+                  <h2
+                    style={{
+                      color: colors.textBrown,
+                      fontSize: "1.5rem",
+                      fontWeight: "600",
+                      marginBottom: "0.5rem",
+                      letterSpacing: "-0.025em",
+                    }}
+                  >
+                    {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
+                  </h2>
+                  <p
+                    style={{
+                      color: "#6b7280",
+                      fontSize: "1rem",
+                      margin: 0,
+                    }}
+                  >
+                    {activeTab === "profile" && "Manage your public profile information."}
+                    {activeTab === "billing" && "Manage your billing and subscription settings."}
+                    {activeTab === "integrations" && "Connect and manage third-party integrations."}
+                  </p>
+                </div>
+                <div
+                  style={{
+                    padding: "3rem",
+                    backgroundColor: colors.lightBrown,
+                    borderRadius: "8px",
+                    textAlign: "center",
+                  }}
+                >
+                  <p style={{ color: colors.textBrown, fontSize: "1rem" }}>
+                    {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} settings coming soon...
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+  
+        <div
+          style={{
+            backgroundColor: "white",
+            borderRadius: "16px",
+            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+            overflow: "hidden",
+            marginTop: "2rem",
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "#fafafa",
+              padding: "1.5rem 3rem",
+              borderBottom: "1px solid #f3f4f6",
+            }}
+          >
+            <h3
+              style={{
+                color: "#dc2626",
+                fontSize: "1.25rem",
+                fontWeight: "600",
+                margin: 0,
+                letterSpacing: "-0.025em",
+              }}
+            >
+              Danger Zone
+            </h3>
+            <p
+              style={{
+                color: "#6b7280",
+                fontSize: "0.95rem",
+                margin: "0.5rem 0 0 0",
+              }}
+            >
+              These actions cannot be undone. Please proceed with caution.
+            </p>
+          </div>
+  
+          <div style={{ padding: "3rem" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "1.5rem",
+                padding: "1.5rem",
+                backgroundColor: "#fef2f2",
+                borderRadius: "8px",
+                border: "1px solid #fecaca",
+              }}
+            >
+              <div>
+                <h4
+                  style={{
+                    color: "#dc2626",
+                    fontSize: "1rem",
+                    fontWeight: "600",
+                    margin: "0 0 0.25rem 0",
+                  }}
+                >
+                  Delete Role
+                </h4>
+                <p
+                  style={{
+                    color: "#6b7280",
+                    fontSize: "0.9rem",
+                    margin: 0,
+                  }}
+                >
+                  Remove a specific role from your account
+                </p>
+              </div>
               <button
+                onClick={openDeletePopup}
                 style={{
-                  padding: "12px 24px",
-                  backgroundColor: colors.primaryBrown,
+                  padding: "0.75rem 1.5rem",
+                  backgroundColor: "#dc2626",
                   color: "white",
                   border: "none",
                   borderRadius: "8px",
-                  fontSize: "14px",
+                  fontSize: "0.9rem",
                   fontWeight: "500",
                   cursor: "pointer",
-                  transition: "all 0.2s ease",
+                  transition: "background-color 0.2s ease",
                 }}
-                onClick={handleSubmit}
               >
-                Save Changes
+                Delete Role
               </button>
             </div>
+  
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "1.5rem",
+                backgroundColor: "#fef2f2",
+                borderRadius: "8px",
+                border: "1px solid #fecaca",
+              }}
+            >
+              <div>
+                <h4
+                  style={{
+                    color: "#dc2626",
+                    fontSize: "1rem",
+                    fontWeight: "600",
+                    margin: "0 0 0.25rem 0",
+                  }}
+                >
+                  Delete Account
+                </h4>
+                <p
+                  style={{
+                    color: "#6b7280",
+                    fontSize: "0.9rem",
+                    margin: 0,
+                  }}
+                >
+                  Permanently delete your account and all associated data
+                </p>
+              </div>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleteLoading}
+                style={{
+                  padding: "0.75rem 1.5rem",
+                  backgroundColor: "#dc2626",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontSize: "0.9rem",
+                  fontWeight: "500",
+                  cursor: deleteLoading ? "not-allowed" : "pointer",
+                  transition: "background-color 0.2s ease",
+                  opacity: deleteLoading ? 0.7 : 1,
+                }}
+              >
+                {deleteLoading ? "Deleting..." : "Delete Account"}
+              </button>
+            </div>
+  
+            {deleteMessage && (
+              <div style={{ marginTop: "1rem" }}>
+                <span
+                  style={{
+                    color: deleteMessage.includes("Error") ? "#dc2626" : "#059669",
+                    fontSize: "0.95rem",
+                    fontWeight: "500",
+                    padding: "0.75rem 1rem",
+                    backgroundColor: deleteMessage.includes("Error") ? "#fef2f2" : "#f0fdf4",
+                    borderRadius: "8px",
+                    display: "inline-block",
+                    border: `1px solid ${deleteMessage.includes("Error") ? "#fecaca" : "#bbf7d0"}`,
+                  }}
+                >
+                  {deleteMessage}
+                </span>
+              </div>
+            )}
           </div>
-        )}
-
-        {activeTab === "Security" && (
-          <div>
-            <h2
+        </div>
+  
+        {showPopup && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(0, 0, 0, 0.6)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1000,
+              backdropFilter: "blur(4px)",
+            }}
+          >
+            <div
               style={{
-                fontSize: "20px",
-                fontWeight: "600",
-                color: colors.textBrown,
-                margin: "0 0 8px 0",
+                backgroundColor: "white",
+                padding: "2.5rem",
+                borderRadius: "20px",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+                maxWidth: "450px",
+                width: "90%",
               }}
             >
-              Privacy & Visibility
-            </h2>
-            <p
-              style={{
-                color: colors.textBrown,
-                opacity: 0.7,
-                margin: "0 0 32px 0",
-                fontSize: "14px",
-              }}
-            >
-              Control who can see your profile information
-            </p>
-
-            <div style={{ display: "grid", gap: "24px" }}>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "8px",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    color: colors.textBrown,
-                  }}
-                >
-                  Profile Visibility
-                </label>
-                <select
-                  value={formData.privacy.profileVisibility}
-                  onChange={(e) => handleInputChange("privacy", "profileVisibility", e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "12px 16px",
-                    border: `1px solid ${colors.mediumBrown}`,
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    color: colors.textBrown,
-                    backgroundColor: colors.backgroundBrown,
-                    transition: "all 0.2s ease",
-                    outline: "none",
-                  }}
-                >
-                  <option value="public">Public - Visible to all users</option>
-                  <option value="matches">Matches Only - Visible to matched SMEs</option>
-                  <option value="private">Private - Limited visibility</option>
-                </select>
-              </div>
-
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "8px",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    color: colors.textBrown,
-                  }}
-                >
-                  Contact Information Visibility
-                </label>
-                <select
-                  value={formData.privacy.contactInfoVisibility}
-                  onChange={(e) => handleInputChange("privacy", "contactInfoVisibility", e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "12px 16px",
-                    border: `1px solid ${colors.mediumBrown}`,
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    color: colors.textBrown,
-                    backgroundColor: colors.backgroundBrown,
-                    transition: "all 0.2s ease",
-                    outline: "none",
-                  }}
-                >
-                  <option value="public">Public - Visible to all users</option>
-                  <option value="matches">Matches Only - Visible to matched SMEs</option>
-                  <option value="private">Private - Not visible to others</option>
-                </select>
-              </div>
-
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "8px",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    color: colors.textBrown,
-                  }}
-                >
-                  Experience & Expertise Visibility
-                </label>
-                <select
-                  value={formData.privacy.experienceVisibility}
-                  onChange={(e) => handleInputChange("privacy", "experienceVisibility", e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "12px 16px",
-                    border: `1px solid ${colors.mediumBrown}`,
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    color: colors.textBrown,
-                    backgroundColor: colors.backgroundBrown,
-                    transition: "all 0.2s ease",
-                    outline: "none",
-                  }}
-                >
-                  <option value="public">Public - Visible to all users</option>
-                  <option value="matches">Matches Only - Visible to matched SMEs</option>
-                  <option value="private">Private - Limited visibility</option>
-                </select>
-              </div>
-
+              <h3
+                style={{
+                  color: colors.textBrown,
+                  fontSize: "1.5rem",
+                  fontWeight: "600",
+                  margin: "0 0 2rem 0",
+                  textAlign: "center",
+                  letterSpacing: "-0.025em",
+                }}
+              >
+                Select a Role to Delete
+              </h3>
+  
               <div
                 style={{
                   display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "20px",
-                  backgroundColor: "white",
-                  borderRadius: "8px",
-                  border: `1px solid ${colors.lightBrown}`,
+                  flexDirection: "column",
+                  gap: "1rem",
+                  marginBottom: "2rem",
                 }}
               >
-                <div>
-                  <h3
+                {userRoles.map((role) => (
+                  <button
+                    key={role}
+                    onClick={() => handleRoleClick(role)}
                     style={{
-                      fontSize: "14px",
-                      fontWeight: "600",
-                      color: colors.textBrown,
-                      margin: "0 0 4px 0",
-                    }}
-                  >
-                    Data Sharing for Matching
-                  </h3>
-                  <p
-                    style={{
-                      fontSize: "13px",
-                      color: colors.textBrown,
-                      opacity: 0.7,
-                      margin: "0",
-                    }}
-                  >
-                    Allow your profile data to be used for improved matching algorithms
-                  </p>
-                </div>
-                <label
-                  style={{
-                    position: "relative",
-                    display: "inline-block",
-                    width: "44px",
-                    height: "24px",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={formData.privacy.allowDataSharing}
-                    onChange={(e) => handleInputChange("privacy", "allowDataSharing", e.target.checked)}
-                    style={{ opacity: 0, width: 0, height: 0 }}
-                  />
-                  <span
-                    style={{
-                      position: "absolute",
+                      padding: "1rem 1.5rem",
+                      backgroundColor: "#dc2626",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "12px",
+                      fontWeight: "500",
                       cursor: "pointer",
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      backgroundColor: formData.privacy.allowDataSharing ? colors.primaryBrown : colors.mediumBrown,
-                      transition: "0.2s",
-                      borderRadius: "24px",
+                      transition: "all 0.2s ease",
+                      fontSize: "1rem",
                     }}
+                    onMouseOver={(e) => (e.target.style.backgroundColor = "#b91c1c")}
+                    onMouseOut={(e) => (e.target.style.backgroundColor = "#dc2626")}
                   >
-                    <span
-                      style={{
-                        position: "absolute",
-                        content: "",
-                        height: "18px",
-                        width: "18px",
-                        left: formData.privacy.allowDataSharing ? "23px" : "3px",
-                        bottom: "3px",
-                        backgroundColor: "white",
-                        transition: "0.2s",
-                        borderRadius: "50%",
-                      }}
-                    />
-                  </span>
-                </label>
+                    {role}
+                  </button>
+                ))}
               </div>
-            </div>
-
-            {/* Save Changes Button */}
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "32px" }}>
+  
               <button
+                onClick={() => setShowPopup(false)}
                 style={{
-                  padding: "12px 24px",
-                  backgroundColor: colors.primaryBrown,
-                  color: "white",
+                  width: "100%",
+                  padding: "1rem",
+                  backgroundColor: colors.lightBrown,
+                  color: colors.textBrown,
                   border: "none",
-                  borderRadius: "8px",
-                  fontSize: "14px",
+                  borderRadius: "12px",
                   fontWeight: "500",
                   cursor: "pointer",
-                  transition: "all 0.2s ease",
+                  transition: "background-color 0.2s ease",
+                  fontSize: "1rem",
                 }}
-                onClick={handleSubmit}
+                onMouseOver={(e) => (e.target.style.backgroundColor = colors.mediumBrown)}
+                onMouseOut={(e) => (e.target.style.backgroundColor = colors.lightBrown)}
               >
-                Save Changes
-              </button>
-            </div>
-          </div>
-        )}
-
-        {activeTab === "Appearance" && (
-          <div>
-            <h2
-              style={{
-                fontSize: "20px",
-                fontWeight: "600",
-                color: colors.textBrown,
-                margin: "0 0 8px 0",
-              }}
-            >
-              Preferences
-            </h2>
-            <p
-              style={{
-                color: colors.textBrown,
-                opacity: 0.7,
-                margin: "0 0 32px 0",
-                fontSize: "14px",
-              }}
-            >
-              Customize your experience
-            </p>
-
-            <div style={{ display: "grid", gap: "24px" }}>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "8px",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    color: colors.textBrown,
-                  }}
-                >
-                  Language
-                </label>
-                <div
-                  style={{
-                    padding: "12px 16px",
-                    border: `1px solid ${colors.mediumBrown}`,
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    color: colors.textBrown,
-                    backgroundColor: colors.backgroundBrown,
-                  }}
-                >
-                  English
-                </div>
-              </div>
-
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "8px",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    color: colors.textBrown,
-                  }}
-                >
-                  Timezone
-                </label>
-                <select
-                  value={formData.preferences.timezone}
-                  onChange={(e) => handleInputChange("preferences", "timezone", e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "12px 16px",
-                    border: `1px solid ${colors.mediumBrown}`,
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    color: colors.textBrown,
-                    backgroundColor: colors.backgroundBrown,
-                    transition: "all 0.2s ease",
-                    outline: "none",
-                  }}
-                >
-                  <option value="Africa/Johannesburg">Africa/Johannesburg (GMT+2)</option>
-                  <option value="Africa/Lagos">Africa/Lagos (GMT+1)</option>
-                  <option value="Africa/Cairo">Africa/Cairo (GMT+2)</option>
-                  <option value="Africa/Nairobi">Africa/Nairobi (GMT+3)</option>
-                  <option value="Africa/Casablanca">Africa/Casablanca (GMT+1)</option>
-                </select>
-              </div>
-
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "8px",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    color: colors.textBrown,
-                  }}
-                >
-                  Preferred Currency
-                </label>
-                <select
-                  value={formData.preferences.currency}
-                  onChange={(e) => handleInputChange("preferences", "currency", e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "12px 16px",
-                    border: `1px solid ${colors.mediumBrown}`,
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    color: colors.textBrown,
-                    backgroundColor: colors.backgroundBrown,
-                    transition: "all 0.2s ease",
-                    outline: "none",
-                  }}
-                >
-                  <option value="ZAR">South African Rand (ZAR)</option>
-                  <option value="USD">US Dollar (USD)</option>
-                  <option value="EUR">Euro (EUR)</option>
-                  <option value="GBP">British Pound (GBP)</option>
-                  <option value="NGN">Nigerian Naira (NGN)</option>
-                  <option value="KES">Kenyan Shilling (KES)</option>
-                </select>
-              </div>
-
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "8px",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    color: colors.textBrown,
-                  }}
-                >
-                  Theme
-                </label>
-                <select
-                  value={formData.preferences.theme}
-                  onChange={(e) => handleInputChange("preferences", "theme", e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "12px 16px",
-                    border: `1px solid ${colors.mediumBrown}`,
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    color: colors.textBrown,
-                    backgroundColor: colors.backgroundBrown,
-                    transition: "all 0.2s ease",
-                    outline: "none",
-                  }}
-                >
-                  <option value="light">Light</option>
-                  <option value="dark">Dark</option>
-                  <option value="system">System Default</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Save Changes Button */}
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "32px" }}>
-              <button
-                style={{
-                  padding: "12px 24px",
-                  backgroundColor: colors.primaryBrown,
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  fontWeight: "500",
-                  cursor: "pointer",
-                  transition: "all 0.2s ease",
-                }}
-                onClick={handleSubmit}
-              >
-                Save Changes
+                Cancel
               </button>
             </div>
           </div>
         )}
       </div>
-
-      {/* Delete Role Popup */}
-      {showDeleteRolePopup && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: "white",
-              borderRadius: "12px",
-              padding: "24px",
-              maxWidth: "400px",
-              width: "90%",
-              maxHeight: "80vh",
-              overflow: "auto",
-            }}
-          >
-            <h3
-              style={{
-                fontSize: "18px",
-                fontWeight: "600",
-                color: "#dc3545",
-                margin: "0 0 16px 0",
-              }}
-            >
-              Delete Role
-            </h3>
-            <p
-              style={{
-                fontSize: "14px",
-                color: colors.textBrown,
-                margin: "0 0 20px 0",
-              }}
-            >
-              Select a role to delete. This action cannot be undone.
-            </p>
-            <div style={{ marginBottom: "20px" }}>
-              {roles.map((role, index) => (
-                <button
-                  key={index}
-                  onClick={() => confirmDeleteRole(role)}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    padding: "12px 16px",
-                    marginBottom: "8px",
-                    backgroundColor: "white",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: "8px",
-                    color: colors.textBrown,
-                    cursor: "pointer",
-                    fontSize: "14px",
-                    textAlign: "left",
-                    transition: "all 0.2s ease",
-                  }}
-                  onMouseOver={(e) => {
-                    e.target.style.backgroundColor = "#f9fafb"
-                    e.target.style.borderColor = colors.primaryBrown
-                  }}
-                  onMouseOut={(e) => {
-                    e.target.style.backgroundColor = "white"
-                    e.target.style.borderColor = "#e5e7eb"
-                  }}
-                >
-                  Delete "{role}" role
-                </button>
-              ))}
-            </div>
-            <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
-              <button
-                onClick={() => setShowDeleteRolePopup(false)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: colors.mediumBrown,
-                  color: colors.textBrown,
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "14px",
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Account Popup */}
-      {showDeleteAccountPopup && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: "white",
-              borderRadius: "12px",
-              padding: "24px",
-              maxWidth: "400px",
-              width: "90%",
-            }}
-          >
-            <h3
-              style={{
-                fontSize: "18px",
-                fontWeight: "600",
-                color: "#dc3545",
-                margin: "0 0 16px 0",
-              }}
-            >
-              Delete Account
-            </h3>
-            <p
-              style={{
-                fontSize: "14px",
-                color: colors.textBrown,
-                margin: "0 0 20px 0",
-              }}
-            >
-              Are you sure you want to delete your account? This action cannot be undone and will permanently remove all
-              your data.
-            </p>
-            <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
-              <button
-                onClick={() => setShowDeleteAccountPopup(false)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: colors.mediumBrown,
-                  color: colors.textBrown,
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "14px",
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmDeleteAccount}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#dc3545",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "14px",
-                }}
-              >
-                Delete Account
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
+    )
 }
-
 export default AdvisorSettings
