@@ -781,23 +781,7 @@ const TabbedFundingTables = ({
         >
           <Search size={18} />
           My Matches
-          <span
-            style={{
-              backgroundColor: activeTab === "matches" ? "rgba(255, 255, 255, 0.2)" : "rgba(93, 64, 55, 0.1)",
-              color: activeTab === "matches" ? "white" : "#5d4037",
-              borderRadius: "50%",
-              width: "24px",
-              height: "24px",
-              fontSize: "12px",
-              fontWeight: "700",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              marginLeft: "4px",
-            }}
-          >
-            
-          </span>
+        
         </button>
 
         {/* Successful Deals Tab - THIRD */}
