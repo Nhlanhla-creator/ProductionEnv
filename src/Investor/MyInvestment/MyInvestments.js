@@ -37,7 +37,8 @@ import {
   FiCalendar,
   FiDownload,
   FiTrendingUp as FiTrendingUpIcon,
-  FiInfo
+  FiInfo,
+  FiX
 } from 'react-icons/fi';
 import { MapContainer, TileLayer, GeoJSON, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -135,7 +136,8 @@ const MyInvestments = () => {
   const [vettingTimeView, setVettingTimeView] = useState('Monthly');
   const [portfolioTrendView, setPortfolioTrendView] = useState('Quarterly');
   const [showDownloadOptions, setShowDownloadOptions] = useState(false);
-  const [showSMEDetails, setShowSMEDetails] = useState(false);
+  const [popupContent, setPopupContent] = useState(null);
+  const [showPopup, setShowPopup] = useState(false);
   const sectionRef = useRef(null);
 
   useEffect(() => {
@@ -154,7 +156,18 @@ const MyInvestments = () => {
     return () => observer.disconnect();
   }, []);
 
-  // Download functionality - FIXED to download correct section
+  // Popup functionality
+  const openPopup = (content) => {
+    setPopupContent(content);
+    setShowPopup(true);
+  };
+
+  const closePopup = () => {
+    setShowPopup(false);
+    setPopupContent(null);
+  };
+
+  // Download functionality
   const downloadSectionAsPDF = async (sectionName = 'all') => {
     try {
       const originalCategory = activeCategory;
@@ -195,7 +208,6 @@ const MyInvestments = () => {
         setActiveCategory(originalCategory);
         pdf.save('MyInvestments_Complete_Report.pdf');
       } else {
-        // Set the active category to the one we want to download
         setActiveCategory(sectionName);
         await new Promise(resolve => setTimeout(resolve, 1000));
         
@@ -222,7 +234,6 @@ const MyInvestments = () => {
         const fileName = `MyInvestments_${sectionName.replace(/\s+/g, '_')}.pdf`;
         pdf.save(fileName);
         
-        // Restore original category after download
         setActiveCategory(originalCategory);
       }
       setShowDownloadOptions(false);
@@ -270,7 +281,7 @@ const MyInvestments = () => {
   };
 
   // Custom Pie Chart with Numbers ALWAYS visible
-  const PieChartWithNumbers = ({ data, labels, title, description }) => {
+  const PieChartWithNumbers = ({ data, labels, title, description, showEye = false }) => {
     const chartData = {
       labels: labels,
       datasets: [
@@ -306,11 +317,9 @@ const MyInvestments = () => {
         const ctx = chart.ctx;
         const { chartArea: { left, right, top, bottom, width, height } } = chart;
         
-        // Draw numbers on each slice
         chart.data.datasets.forEach((dataset, i) => {
           chart.getDatasetMeta(i).data.forEach((arc, index) => {
             const { x, y } = arc.tooltipPosition();
-            const percentage = chart.data.labels[index] + ': ' + dataset.data[index];
             
             ctx.save();
             ctx.font = 'bold 14px Arial';
@@ -324,9 +333,39 @@ const MyInvestments = () => {
       }
     }];
 
+    const handleEyeClick = () => {
+      openPopup(
+        <div className="popup-content">
+          <h3>{title}</h3>
+          <div className="popup-chart">
+            <Doughnut data={chartData} options={options} plugins={plugins} />
+          </div>
+          <div className="popup-details">
+            {labels.map((label, index) => (
+              <div key={label} className="detail-item">
+                <span className="detail-label">{label}:</span>
+                <span className="detail-value">{data[index]}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    };
+
     return (
       <div className="chart-container">
-        <h3 className="chart-title">{title}</h3>
+        <div className="chart-header">
+          <h3 className="chart-title">{title}</h3>
+          {showEye && (
+            <button 
+              className="breakdown-icon-btn"
+              onClick={handleEyeClick}
+              title="View breakdown"
+            >
+              <FiEye />
+            </button>
+          )}
+        </div>
         {description && <div className="visual-description">{description}</div>}
         <div className="chart-area">
           <Doughnut data={chartData} options={options} plugins={plugins} />
@@ -335,10 +374,8 @@ const MyInvestments = () => {
     );
   };
 
-  // Active SMEs Circle Chart Component - FIXED with smaller circle
+  // Active SMEs Circle Chart Component
   const ActiveSMEsCircleChart = ({ value, title, description }) => {
-    const [showDetails, setShowDetails] = useState(false);
-    
     const data = {
       datasets: [
         {
@@ -352,7 +389,7 @@ const MyInvestments = () => {
     const options = {
       responsive: true,
       maintainAspectRatio: false,
-      cutout: '75%', // Smaller circle
+      cutout: '75%',
       plugins: {
         legend: {
           display: false
@@ -381,13 +418,42 @@ const MyInvestments = () => {
       }
     }];
 
+    const handleEyeClick = () => {
+      openPopup(
+        <div className="popup-content">
+          <h3>SME Breakdown</h3>
+          <div className="popup-chart">
+            <Doughnut data={data} options={options} plugins={plugins} />
+          </div>
+          <div className="popup-details">
+            <div className="detail-item">
+              <span className="detail-label">Early Stage:</span>
+              <span className="detail-value">28 SMEs (22%)</span>
+            </div>
+            <div className="detail-item">
+              <span className="detail-label">Growth Stage:</span>
+              <span className="detail-value">45 SMEs (35%)</span>
+            </div>
+            <div className="detail-item">
+              <span className="detail-label">Mature Stage:</span>
+              <span className="detail-value">35 SMEs (27%)</span>
+            </div>
+            <div className="detail-item">
+              <span className="detail-label">Exit-ready:</span>
+              <span className="detail-value">20 SMEs (16%)</span>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
     return (
       <div className="chart-container">
         <div className="chart-header">
           <h3 className="chart-title">{title}</h3>
           <button 
-            className={`breakdown-icon-btn ${showDetails ? 'active' : ''}`}
-            onClick={() => setShowDetails(!showDetails)}
+            className="breakdown-icon-btn"
+            onClick={handleEyeClick}
             title="View breakdown"
           >
             <FiEye />
@@ -397,77 +463,78 @@ const MyInvestments = () => {
         <div className="chart-area">
           <Doughnut data={data} options={options} plugins={plugins} />
         </div>
-        {showDetails && (
-          <div className="breakdown-details">
-            <h4>SME Breakdown</h4>
-            <div className="breakdown-list">
-              <div className="breakdown-item">
-                <span className="breakdown-label">Early Stage:</span>
-                <span className="breakdown-value">28 SMEs (22%)</span>
-              </div>
-              <div className="breakdown-item">
-                <span className="breakdown-label">Growth Stage:</span>
-                <span className="breakdown-value">45 SMEs (35%)</span>
-              </div>
-              <div className="breakdown-item">
-                <span className="breakdown-label">Mature Stage:</span>
-                <span className="breakdown-value">35 SMEs (27%)</span>
-              </div>
-              <div className="breakdown-item">
-                <span className="breakdown-label">Exit-ready:</span>
-                <span className="breakdown-value">20 SMEs (16%)</span>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     );
   };
 
-  // NEW: Enhanced BIG Score Infographic Component
+  // BIG Score Infographic Component - SIMPLIFIED
   const BIGScoreInfographic = ({ value, target, title, description }) => {
-    const scoreComponents = [
-      { name: 'Compliance Score', value: 82, color: brownShades[0] },
-      { name: 'Legitimacy Score', value: 76, color: brownShades[1] },
-      { name: 'Leadership Score', value: 85, color: brownShades[2] },
-      { name: 'Governance Score', value: 79, color: brownShades[3] },
-      { name: 'Capital Appeal Score', value: 70, color: brownShades[4] }
-    ];
+    const handleEyeClick = () => {
+      const scoreComponents = [
+        { name: 'Compliance Score', value: 82, color: brownShades[0] },
+        { name: 'Legitimacy Score', value: 76, color: brownShades[1] },
+        { name: 'Leadership Score', value: 85, color: brownShades[2] },
+        { name: 'Governance Score', value: 79, color: brownShades[3] },
+        { name: 'Capital Appeal Score', value: 70, color: brownShades[4] }
+      ];
+
+      openPopup(
+        <div className="popup-content">
+          <h3>BIG Score Breakdown</h3>
+          <div className="big-score-popup">
+            <div className="big-score-main-popup">
+              <div className="big-score-value">{value}</div>
+              <div className="big-score-label">Overall BIG Score</div>
+              <div className="big-score-target">Target: {target}</div>
+            </div>
+            
+            <div className="big-score-components-popup">
+              {scoreComponents.map((component, index) => (
+                <div key={component.name} className="score-component-popup">
+                  <div className="component-header-popup">
+                    <span className="component-name">{component.name}</span>
+                    <span className="component-value">{component.value}</span>
+                  </div>
+                  <div className="component-bar-popup">
+                    <div 
+                      className="component-progress-popup"
+                      style={{
+                        width: `${component.value}%`,
+                        backgroundColor: component.color
+                      }}
+                    ></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    };
 
     return (
       <div className="chart-container">
-        <h3 className="chart-title">{title}</h3>
+        <div className="chart-header">
+          <h3 className="chart-title">{title}</h3>
+          <button 
+            className="breakdown-icon-btn"
+            onClick={handleEyeClick}
+            title="View breakdown"
+          >
+            <FiEye />
+          </button>
+        </div>
         {description && <div className="visual-description">{description}</div>}
         
-        <div className="big-score-infographic">
-          <div className="big-score-main">
-            <div className="big-score-value">{value}</div>
-            <div className="big-score-label">Overall BIG Score</div>
-            <div className="big-score-target">Target: {target}</div>
-          </div>
-          
-          <div className="big-score-components">
-            {scoreComponents.map((component, index) => (
-              <div key={component.name} className="score-component">
-                <div className="component-header">
-                  <span className="component-name">{component.name}</span>
-                  <span className="component-value">{component.value}</span>
-                </div>
-                <div className="component-bar">
-                  <div 
-                    className="component-progress"
-                    style={{
-                      width: `${component.value}%`,
-                      backgroundColor: component.color
-                    }}
-                  ></div>
-                </div>
-              </div>
-            ))}
+        <div className="big-score-simple">
+          <div className="big-score-main-simple">
+            <div className="big-score-value-simple">{value}</div>
+            <div className="big-score-label-simple">Overall BIG Score</div>
+            <div className="big-score-target-simple">Target: {target}</div>
           </div>
         </div>
         
-        <div className="chart-summary">
+        <div className="chart-summary-compact">
           <div className="current-value">Average: {value}/100</div>
           <div className="target-value">
             Target: {target}/100
@@ -482,52 +549,71 @@ const MyInvestments = () => {
     );
   };
 
-  // NEW: Enhanced Funding Ready Infographic
+  // Enhanced Funding Ready Infographic - SIMPLIFIED
   const EnhancedFundingReady = ({ value, target, title, description }) => {
-    const readinessData = [
-      { stage: 'Fully Ready', count: 59, percentage: 46, color: '#4CAF50' },
-      { stage: 'Near Ready', count: 32, percentage: 25, color: '#FF9800' },
-      { stage: 'Developing', count: 25, percentage: 20, color: '#FFC107' },
-      { stage: 'Early Stage', count: 12, percentage: 9, color: '#F44336' }
-    ];
+    const handleEyeClick = () => {
+      const readinessData = [
+        { stage: 'Fully Ready', count: 59, percentage: 46, color: '#4CAF50' },
+        { stage: 'Near Ready', count: 32, percentage: 25, color: '#FF9800' },
+        { stage: 'Developing', count: 25, percentage: 20, color: '#FFC107' },
+        { stage: 'Early Stage', count: 12, percentage: 9, color: '#F44336' }
+      ];
+
+      openPopup(
+        <div className="popup-content">
+          <h3>Funding Ready Breakdown</h3>
+          <div className="funding-ready-popup">
+            <div className="readiness-main-popup">
+              <div className="readiness-value">{value}%</div>
+              <div className="readiness-label">Funding Ready</div>
+              <div className="readiness-target">Target: {target}%</div>
+            </div>
+            
+            <div className="readiness-breakdown-popup">
+              {readinessData.map((item, index) => (
+                <div key={item.stage} className="readiness-item-popup">
+                  <div className="readiness-stage-popup">
+                    <div 
+                      className="stage-color-popup"
+                      style={{ backgroundColor: item.color }}
+                    ></div>
+                    <span className="stage-name-popup">{item.stage}</span>
+                  </div>
+                  <div className="readiness-stats-popup">
+                    <span className="stage-count-popup">{item.count} SMEs</span>
+                    <span className="stage-percentage-popup">({item.percentage}%)</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    };
 
     return (
       <div className="chart-container">
-        <h3 className="chart-title">{title}</h3>
+        <div className="chart-header">
+          <h3 className="chart-title">{title}</h3>
+          <button 
+            className="breakdown-icon-btn"
+            onClick={handleEyeClick}
+            title="View breakdown"
+          >
+            <FiEye />
+          </button>
+        </div>
         {description && <div className="visual-description">{description}</div>}
         
-        <div className="funding-ready-infographic">
-          <div className="readiness-main">
-            <div className="readiness-value">{value}%</div>
-            <div className="readiness-label">Funding Ready</div>
-            <div className="readiness-target">Target: {target}%</div>
-          </div>
-          
-          <div className="readiness-breakdown">
-            {readinessData.map((item, index) => (
-              <div key={item.stage} className="readiness-item">
-                <div className="readiness-stage">
-                  <div 
-                    className="stage-color"
-                    style={{ backgroundColor: item.color }}
-                  ></div>
-                  <span className="stage-name">{item.stage}</span>
-                </div>
-                <div className="readiness-stats">
-                  <span className="stage-count">{item.count} SMEs</span>
-                  <span className="stage-percentage">({item.percentage}%)</span>
-                </div>
-              </div>
-            ))}
-          </div>
-          
-          <div className="readiness-gap">
-            <div className="gap-label">Gap to Target:</div>
-            <div className="gap-value">5 SMEs needed</div>
+        <div className="funding-ready-simple">
+          <div className="readiness-main-simple">
+            <div className="readiness-value-simple">{value}%</div>
+            <div className="readiness-label-simple">Funding Ready</div>
+            <div className="readiness-target-simple">Target: {target}%</div>
           </div>
         </div>
         
-        <div className="chart-summary">
+        <div className="chart-summary-compact">
           <div className="current-value">Current: {value}%</div>
           <div className="target-value">
             Target: {target}%
@@ -542,59 +628,67 @@ const MyInvestments = () => {
     );
   };
 
-  // NEW: Enhanced SME Graduation Infographic
+  // SME Graduation Infographic - SIMPLIFIED
   const SMEGraduationInfographic = ({ value, target, title, description }) => {
-    const graduationStages = [
-      { stage: 'Graduated', count: 40, percentage: 31, color: '#4CAF50', description: 'Self-sustaining' },
-      { stage: 'Near Graduation', count: 35, percentage: 27, color: '#8BC34A', description: '6-12 months' },
-      { stage: 'Progressing', count: 28, percentage: 22, color: '#FFC107', description: '1-2 years' },
-      { stage: 'Early Stage', count: 25, percentage: 20, color: '#FF9800', description: '2+ years' }
-    ];
+    const handleEyeClick = () => {
+      const graduationStages = [
+        { stage: 'Graduated', count: 40, percentage: 31, color: '#4CAF50', description: 'Self-sustaining' },
+        { stage: 'Near Graduation', count: 35, percentage: 27, color: '#8BC34A', description: '6-12 months' },
+        { stage: 'Progressing', count: 28, percentage: 22, color: '#FFC107', description: '1-2 years' },
+        { stage: 'Early Stage', count: 25, percentage: 20, color: '#FF9800', description: '2+ years' }
+      ];
 
-    return (
-      <div className="chart-container">
-        <h3 className="chart-title">{title}</h3>
-        {description && <div className="visual-description">{description}</div>}
-        
-        <div className="graduation-infographic">
-          <div className="graduation-main">
-            <div className="graduation-value">{value}%</div>
-            <div className="graduation-label">Graduated to Bankable</div>
-            <div className="graduation-subtitle">40 SMEs Successfully Graduated</div>
-          </div>
-          
-          <div className="graduation-timeline">
-            {graduationStages.map((item, index) => (
-              <div key={item.stage} className="timeline-item">
-                <div className="timeline-marker" style={{ backgroundColor: item.color }}>
-                  <div className="marker-value">{item.percentage}%</div>
-                </div>
-                <div className="timeline-content">
-                  <div className="timeline-stage">{item.stage}</div>
-                  <div className="timeline-count">{item.count} SMEs</div>
-                  <div className="timeline-description">{item.description}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-          
-          <div className="graduation-impact">
-            <div className="impact-item">
-              <div className="impact-value">R 245M</div>
-              <div className="impact-label">Total Revenue</div>
+      openPopup(
+        <div className="popup-content">
+          <h3>SME Graduation Breakdown</h3>
+          <div className="graduation-popup">
+            <div className="graduation-main-popup">
+              <div className="graduation-value">{value}%</div>
+              <div className="graduation-label">Graduated to Bankable</div>
+              <div className="graduation-subtitle">40 SMEs Successfully Graduated</div>
             </div>
-            <div className="impact-item">
-              <div className="impact-value">1,240</div>
-              <div className="impact-label">Jobs Created</div>
-            </div>
-            <div className="impact-item">
-              <div className="impact-value">R 89M</div>
-              <div className="impact-label">Capital Raised</div>
+            
+            <div className="graduation-timeline-popup">
+              {graduationStages.map((item, index) => (
+                <div key={item.stage} className="timeline-item-popup">
+                  <div className="timeline-marker-popup" style={{ backgroundColor: item.color }}>
+                    <div className="marker-value-popup">{item.percentage}%</div>
+                  </div>
+                  <div className="timeline-content-popup">
+                    <div className="timeline-stage-popup">{item.stage}</div>
+                    <div className="timeline-count-popup">{item.count} SMEs</div>
+                    <div className="timeline-description-popup">{item.description}</div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
+      );
+    };
+
+    return (
+      <div className="chart-container">
+        <div className="chart-header">
+          <h3 className="chart-title">{title}</h3>
+          <button 
+            className="breakdown-icon-btn"
+            onClick={handleEyeClick}
+            title="View breakdown"
+          >
+            <FiEye />
+          </button>
+        </div>
+        {description && <div className="visual-description">{description}</div>}
         
-        <div className="chart-summary">
+        <div className="graduation-simple">
+          <div className="graduation-main-simple">
+            <div className="graduation-value-simple">{value}%</div>
+            <div className="graduation-label-simple">Graduated to Bankable</div>
+          </div>
+        </div>
+        
+        <div className="chart-summary-compact">
           <div className="current-value">Graduation Rate: {value}%</div>
           <div className="target-value">
             Target: {target}%
@@ -609,118 +703,10 @@ const MyInvestments = () => {
     );
   };
 
-  // Gauge Component
-  const GaugeChart = ({ value, target, min = 0, max = 100, title, description, showZones = true }) => {
-    const percentage = ((value - min) / (max - min)) * 100;
-    const radius = 40;
-    const circumference = 2 * Math.PI * radius;
-    const strokeDasharray = circumference;
-    const strokeDashoffset = circumference - (percentage / 100) * circumference;
-
-    let color = '#4CAF50';
-    if (value < 60) color = '#f44336';
-    else if (value < 80) color = '#ff9800';
-
-    return (
-      <div className="chart-container">
-        <h3 className="chart-title">{title}</h3>
-        {description && <div className="visual-description">{description}</div>}
-        <div className="gauge-wrapper">
-          <svg width="120" height="120" viewBox="0 0 120 120">
-            <circle
-              cx="60"
-              cy="60"
-              r={radius}
-              fill="none"
-              stroke="#e0e0e0"
-              strokeWidth="8"
-            />
-            
-            {showZones && (
-              <>
-                <circle
-                  cx="60"
-                  cy="60"
-                  r={radius}
-                  fill="none"
-                  stroke="#f44336"
-                  strokeWidth="8"
-                  strokeDasharray={circumference * 0.6}
-                  strokeDashoffset={circumference * 0.7}
-                  transform="rotate(-90 60 60)"
-                  opacity="0.3"
-                />
-                <circle
-                  cx="60"
-                  cy="60"
-                  r={radius}
-                  fill="none"
-                  stroke="#ff9800"
-                  strokeWidth="8"
-                  strokeDasharray={circumference * 0.2}
-                  strokeDashoffset={circumference * 0.1}
-                  transform="rotate(-90 60 60)"
-                  opacity="0.3"
-                />
-                <circle
-                  cx="60"
-                  cy="60"
-                  r={radius}
-                  fill="none"
-                  stroke="#4CAF50"
-                  strokeWidth="8"
-                  strokeDasharray={circumference * 0.2}
-                  strokeDashoffset={0}
-                  transform="rotate(-90 60 60)"
-                  opacity="0.3"
-                />
-              </>
-            )}
-            
-            <circle
-              cx="60"
-              cy="60"
-              r={radius}
-              fill="none"
-              stroke={color}
-              strokeWidth="8"
-              strokeDasharray={strokeDasharray}
-              strokeDashoffset={strokeDashoffset}
-              strokeLinecap="round"
-              transform="rotate(-90 60 60)"
-            />
-            
-            <text
-              x="60"
-              y="60"
-              textAnchor="middle"
-              dy="7"
-              fontSize="20"
-              fontWeight="bold"
-              fill={color}
-            >
-              {value}
-            </text>
-          </svg>
-        </div>
-        {target && (
-          <div className="gauge-target">
-            Target: {target}
-            {value >= target ? (
-              <FiArrowUp className="trend-icon up" />
-            ) : (
-              <FiArrowDown className="trend-icon down" />
-            )}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // Enhanced Follow-on Funding Rate Component
+  // Enhanced Follow-on Funding Rate Component - SIMPLIFIED
   const EnhancedFollowOnFundingChart = ({ value, target, data, title, description }) => {
     const chartData = {
-      labels: ['Q1', 'Q2', 'Q3', 'Q4'],
+      labels: data.map((_, index) => `Q${index + 1}`),
       datasets: [
         {
           label: 'Follow-on Rate',
@@ -742,46 +728,84 @@ const MyInvestments = () => {
           title: {
             display: true,
             text: 'Rate (%)'
+          },
+          grid: {
+            drawBorder: false,
+          },
+          ticks: {
+            padding: 5
           }
         },
         x: {
           title: {
             display: true,
-            text: 'Quarter'
+            text: ''
+          },
+          grid: {
+            display: false
+          },
+          ticks: {
+            padding: 5
           }
         }
+      },
+      plugins: {
+        legend: {
+          display: false
+        }
+      },
+      layout: {
+        padding: {
+          top: 10,
+          bottom: 5,
+          left: 10,
+          right: 10
+        }
       }
+    };
+
+    const handleEyeClick = () => {
+      openPopup(
+        <div className="popup-content">
+          <h3>Follow-on Funding Details</h3>
+          <div className="popup-chart">
+            <Bar data={chartData} options={options} />
+          </div>
+          <div className="popup-details">
+            <div className="detail-item">
+              <span className="detail-label">Current Quarter:</span>
+              <span className="detail-value">{value}%</span>
+            </div>
+            <div className="detail-item">
+              <span className="detail-label">Quarterly Avg:</span>
+              <span className="detail-value">24.5%</span>
+            </div>
+            <div className="detail-item">
+              <span className="detail-label">Top Sector:</span>
+              <span className="detail-value">Tech (42%)</span>
+            </div>
+          </div>
+        </div>
+      );
     };
 
     return (
       <div className="chart-container">
         <div className="chart-header">
           <h3 className="chart-title">{title}</h3>
-          <button className="info-icon-btn" title="Follow-on Funding Information">
-            <FiInfo />
+          <button 
+            className="breakdown-icon-btn"
+            onClick={handleEyeClick}
+            title="View details"
+          >
+            <FiEye />
           </button>
         </div>
         {description && <div className="visual-description">{description}</div>}
-        <div className="chart-area">
+        <div className="chart-area-ultra-compact">
           <Bar data={chartData} options={options} />
         </div>
-        <div className="follow-on-details">
-          <div className="metric-breakdown">
-            <div className="metric-item">
-              <span className="metric-label">Current Quarter:</span>
-              <span className="metric-value">{value}%</span>
-            </div>
-            <div className="metric-item">
-              <span className="metric-label">Quarterly Avg:</span>
-              <span className="metric-value">24.5%</span>
-            </div>
-            <div className="metric-item">
-              <span className="metric-label">Top Sector:</span>
-              <span className="metric-value">Tech (42%)</span>
-            </div>
-          </div>
-        </div>
-        <div className="chart-summary">
+        <div className="chart-summary-ultra-compact">
           <div className="current-value">Current: {value}%</div>
           <div className="target-value">
             Target: {target}%
@@ -796,7 +820,7 @@ const MyInvestments = () => {
     );
   };
 
-  // NEW: Cost per Funded SME Infographic Component with Numbers in Pie Chart
+  // Cost per Funded SME Infographic Component - SIMPLIFIED
   const CostPerSMEInfographic = ({ value, target, title, description }) => {
     const costData = {
       labels: ['Staff', 'Operations', 'Technology', 'Travel', 'Other'],
@@ -839,11 +863,9 @@ const MyInvestments = () => {
         const ctx = chart.ctx;
         const { chartArea: { left, right, top, bottom, width, height } } = chart;
         
-        // Draw numbers on each slice
         chart.data.datasets.forEach((dataset, i) => {
           chart.getDatasetMeta(i).data.forEach((arc, index) => {
             const { x, y } = arc.tooltipPosition();
-            const percentage = chart.data.labels[index] + ': ' + dataset.data[index];
             
             ctx.save();
             ctx.font = 'bold 14px Arial';
@@ -857,53 +879,61 @@ const MyInvestments = () => {
       }
     }];
 
-    return (
-      <div className="chart-container">
-        <h3 className="chart-title">{title}</h3>
-        {description && <div className="visual-description">{description}</div>}
-        
-        <div className="cost-infographic">
-          <div className="cost-main-metric">
-            <div className="cost-value">R27,500</div>
-            <div className="cost-label">Average Cost per Funded SME</div>
+    const handleEyeClick = () => {
+      openPopup(
+        <div className="popup-content">
+          <h3>Cost Breakdown Details</h3>
+          <div className="popup-chart">
+            <Doughnut data={costData} options={options} plugins={plugins} />
           </div>
-          
-          <div className="cost-breakdown">
-            <div className="breakdown-chart">
-              <Doughnut data={costData} options={options} plugins={plugins} />
+          <div className="popup-details">
+            <div className="detail-item">
+              <span className="detail-label">Staff (45%):</span>
+              <span className="detail-value">R12,375</span>
             </div>
-            
-            <div className="breakdown-details">
-              <div className="breakdown-item">
-                <span className="breakdown-color" style={{backgroundColor: brownShades[0]}}></span>
-                <span className="breakdown-label">Staff (45%)</span>
-                <span className="breakdown-value">R12,375</span>
-              </div>
-              <div className="breakdown-item">
-                <span className="breakdown-color" style={{backgroundColor: brownShades[1]}}></span>
-                <span className="breakdown-label">Operations (25%)</span>
-                <span className="breakdown-value">R6,875</span>
-              </div>
-              <div className="breakdown-item">
-                <span className="breakdown-color" style={{backgroundColor: brownShades[2]}}></span>
-                <span className="breakdown-label">Technology (15%)</span>
-                <span className="breakdown-value">R4,125</span>
-              </div>
-              <div className="breakdown-item">
-                <span className="breakdown-color" style={{backgroundColor: brownShades[3]}}></span>
-                <span className="breakdown-label">Travel (10%)</span>
-                <span className="breakdown-value">R2,750</span>
-              </div>
-              <div className="breakdown-item">
-                <span className="breakdown-color" style={{backgroundColor: brownShades[4]}}></span>
-                <span className="breakdown-label">Other (5%)</span>
-                <span className="breakdown-value">R1,375</span>
-              </div>
+            <div className="detail-item">
+              <span className="detail-label">Operations (25%):</span>
+              <span className="detail-value">R6,875</span>
+            </div>
+            <div className="detail-item">
+              <span className="detail-label">Technology (15%):</span>
+              <span className="detail-value">R4,125</span>
+            </div>
+            <div className="detail-item">
+              <span className="detail-label">Travel (10%):</span>
+              <span className="detail-value">R2,750</span>
+            </div>
+            <div className="detail-item">
+              <span className="detail-label">Other (5%):</span>
+              <span className="detail-value">R1,375</span>
             </div>
           </div>
         </div>
+      );
+    };
+
+    return (
+      <div className="chart-container">
+        <div className="chart-header">
+          <h3 className="chart-title">{title}</h3>
+          <button 
+            className="breakdown-icon-btn"
+            onClick={handleEyeClick}
+            title="View breakdown"
+          >
+            <FiEye />
+          </button>
+        </div>
+        {description && <div className="visual-description">{description}</div>}
         
-        <div className="chart-summary">
+        <div className="cost-simple">
+          <div className="cost-main-simple">
+            <div className="cost-value-simple">R27,500</div>
+            <div className="cost-label-simple">Average Cost per Funded SME</div>
+          </div>
+        </div>
+        
+        <div className="chart-summary-compact">
           <div className="current-value">Efficiency: {value}% of target</div>
           <div className="target-value">
             Target: {target}%
@@ -918,123 +948,23 @@ const MyInvestments = () => {
     );
   };
 
-  // NEW: Catalyst Engagement Score Bar Chart Component
-  const CatalystEngagementChart = ({ value, target, data, title, description }) => {
-    const chartData = {
-      labels: ['Q1', 'Q2', 'Q3', 'Q4'],
-      datasets: [
-        {
-          label: 'Engagement Score',
-          data: data,
-          backgroundColor: brownShades[1],
-          borderColor: brownShades[0],
-          borderWidth: 2,
-          borderRadius: 8,
-          borderSkipped: false,
-        },
-        {
-          label: 'Target',
-          data: [target, target, target, target],
-          backgroundColor: 'rgba(76, 175, 80, 0.1)',
-          borderColor: '#4CAF50',
-          borderWidth: 2,
-          borderDash: [5, 5],
-          type: 'line',
-          pointRadius: 0
-        }
-      ]
-    };
-
-    const options = {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        y: {
-          beginAtZero: true,
-          max: 100,
-          title: {
-            display: true,
-            text: 'Engagement Score'
-          },
-          grid: {
-            color: 'rgba(0, 0, 0, 0.1)'
-          }
-        },
-        x: {
-          title: {
-            display: true,
-            text: 'Quarter'
-          },
-          grid: {
-            display: false
-          }
-        }
-      },
-      plugins: {
-        legend: {
-          position: 'top',
-        },
-        tooltip: {
-          mode: 'index',
-          intersect: false
-        }
-      }
-    };
-
-    return (
-      <div className="chart-container">
-        <h3 className="chart-title">{title}</h3>
-        {description && <div className="visual-description">{description}</div>}
-        <div className="chart-area">
-          <Bar data={chartData} options={options} />
-        </div>
-        <div className="engagement-details">
-          <div className="engagement-metrics">
-            <div className="metric">
-              <span className="metric-label">Current Score:</span>
-              <span className="metric-value">{value}/100</span>
-            </div>
-            <div className="metric">
-              <span className="metric-label">Quarterly Trend:</span>
-              <span className="metric-value positive">+2.5%</span>
-            </div>
-            <div className="metric">
-              <span className="metric-label">Top Partner:</span>
-              <span className="metric-value">Funder A (94)</span>
-            </div>
-          </div>
-        </div>
-        <div className="chart-summary">
-          <div className="current-value">Current: {value}/100</div>
-          <div className="target-value">
-            Target: {target}/100
-            {value >= target ? (
-              <FiArrowUp className="trend-icon up" />
-            ) : (
-              <FiArrowDown className="trend-icon down" />
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Time to Fund Chart Component
+  // Time to Fund Chart Component - SIMPLIFIED
   const TimeToFundChart = ({ value, target, data, title, description }) => {
     const chartData = {
-      labels: ['Q1', 'Q2', 'Q3', 'Q4'],
+      labels: data.map((_, index) => `Q${index + 1}`),
       datasets: [
         {
           label: 'Days to Fund',
           data: data,
-          backgroundColor: brownShades[0],
-          borderColor: brownShades[1],
-          borderWidth: 2,
-          fill: false
+          borderColor: brownShades[0],
+          backgroundColor: brownShades[0] + '20',
+          borderWidth: 3,
+          fill: true,
+          tension: 0.4
         },
         {
           label: 'Target',
-          data: [target, target, target, target],
+          data: Array(data.length).fill(target),
           borderColor: '#4CAF50',
           borderWidth: 2,
           borderDash: [5, 5],
@@ -1053,25 +983,90 @@ const MyInvestments = () => {
           title: {
             display: true,
             text: 'Days'
+          },
+          grid: {
+            drawBorder: false,
+          },
+          ticks: {
+            padding: 5
           }
         },
         x: {
           title: {
             display: true,
-            text: 'Quarter'
+            text: ''
+          },
+          grid: {
+            display: false
+          },
+          ticks: {
+            padding: 5
           }
+        }
+      },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top',
+          labels: {
+            usePointStyle: true,
+            pointStyle: 'line',
+            padding: 10
+          }
+        }
+      },
+      layout: {
+        padding: {
+          top: 10,
+          bottom: 5,
+          left: 10,
+          right: 10
         }
       }
     };
 
+    const handleEyeClick = () => {
+      openPopup(
+        <div className="popup-content">
+          <h3>Time to Fund Details</h3>
+          <div className="popup-chart">
+            <Line data={chartData} options={options} />
+          </div>
+          <div className="popup-details">
+            <div className="detail-item">
+              <span className="detail-label">Current Average:</span>
+              <span className="detail-value">{value} days</span>
+            </div>
+            <div className="detail-item">
+              <span className="detail-label">Target:</span>
+              <span className="detail-value">{target} days</span>
+            </div>
+            <div className="detail-item">
+              <span className="detail-label">Trend:</span>
+              <span className="detail-value positive">Improving</span>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
     return (
       <div className="chart-container">
-        <h3 className="chart-title">{title}</h3>
+        <div className="chart-header">
+          <h3 className="chart-title">{title}</h3>
+          <button 
+            className="breakdown-icon-btn"
+            onClick={handleEyeClick}
+            title="View details"
+          >
+            <FiEye />
+          </button>
+        </div>
         {description && <div className="visual-description">{description}</div>}
-        <div className="chart-area">
+        <div className="chart-area-ultra-compact">
           <Line data={chartData} options={options} />
         </div>
-        <div className="chart-summary">
+        <div className="chart-summary-ultra-compact">
           <div className="current-value">Current: {value} days</div>
           <div className="target-value">
             Target: {target} days
@@ -1086,10 +1081,10 @@ const MyInvestments = () => {
     );
   };
 
-  // Exit Repayment Ratio Chart Component
+  // Exit Repayment Ratio Chart Component - SIMPLIFIED
   const ExitRepaymentChart = ({ value, target, data, title, description }) => {
     const chartData = {
-      labels: ['Q1', 'Q2', 'Q3', 'Q4'],
+      labels: data.map((_, index) => `Q${index + 1}`),
       datasets: [
         {
           label: 'Exit/Repayment Ratio',
@@ -1102,7 +1097,7 @@ const MyInvestments = () => {
         },
         {
           label: 'Target',
-          data: [target, target, target, target],
+          data: Array(data.length).fill(target),
           borderColor: '#4CAF50',
           borderWidth: 2,
           borderDash: [5, 5],
@@ -1122,25 +1117,90 @@ const MyInvestments = () => {
           title: {
             display: true,
             text: 'Ratio (%)'
+          },
+          grid: {
+            drawBorder: false,
+          },
+          ticks: {
+            padding: 5
           }
         },
         x: {
           title: {
             display: true,
-            text: 'Quarter'
+            text: ''
+          },
+          grid: {
+            display: false
+          },
+          ticks: {
+            padding: 5
           }
+        }
+      },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top',
+          labels: {
+            usePointStyle: true,
+            pointStyle: 'line',
+            padding: 10
+          }
+        }
+      },
+      layout: {
+        padding: {
+          top: 10,
+          bottom: 5,
+          left: 10,
+          right: 10
         }
       }
     };
 
+    const handleEyeClick = () => {
+      openPopup(
+        <div className="popup-content">
+          <h3>Exit/Repayment Details</h3>
+          <div className="popup-chart">
+            <Line data={chartData} options={options} />
+          </div>
+          <div className="popup-details">
+            <div className="detail-item">
+              <span className="detail-label">Current Ratio:</span>
+              <span className="detail-value">{value}%</span>
+            </div>
+            <div className="detail-item">
+              <span className="detail-label">Target:</span>
+              <span className="detail-value">{target}%</span>
+            </div>
+            <div className="detail-item">
+              <span className="detail-label">Status:</span>
+              <span className="detail-value positive">On Track</span>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
     return (
       <div className="chart-container">
-        <h3 className="chart-title">{title}</h3>
+        <div className="chart-header">
+          <h3 className="chart-title">{title}</h3>
+          <button 
+            className="breakdown-icon-btn"
+            onClick={handleEyeClick}
+            title="View details"
+          >
+            <FiEye />
+          </button>
+        </div>
         {description && <div className="visual-description">{description}</div>}
-        <div className="chart-area">
+        <div className="chart-area-ultra-compact">
           <Line data={chartData} options={options} />
         </div>
-        <div className="chart-summary">
+        <div className="chart-summary-ultra-compact">
           <div className="current-value">Current: {value}%</div>
           <div className="target-value">
             Target: {target}%
@@ -1318,6 +1378,22 @@ const MyInvestments = () => {
     </div>
   );
 
+  // Popup Component
+  const Popup = () => {
+    if (!showPopup) return null;
+
+    return (
+      <div className="popup-overlay" onClick={closePopup}>
+        <div className="popup-container" onClick={(e) => e.stopPropagation()}>
+          <button className="popup-close" onClick={closePopup}>
+            <FiX />
+          </button>
+          {popupContent}
+        </div>
+      </div>
+    );
+  };
+
   // Data for ALL sections
   const sectionData = {
     'Portfolio Overview': {
@@ -1357,7 +1433,7 @@ const MyInvestments = () => {
                       [280, 295, 305, 312],
                       'Portfolio Value (R millions)',
                       0,
-                      'Quarter',
+                      '',
                       'Value (R millions)'
                     )}
                     options={{
@@ -1370,13 +1446,16 @@ const MyInvestments = () => {
                               return `R${context.parsed} million`;
                             }
                           }
+                        },
+                        legend: {
+                          display: false
                         }
                       },
                       scales: {
                         x: {
                           title: {
                             display: true,
-                            text: 'Quarter'
+                            text: ''
                           }
                         },
                         y: {
@@ -1425,7 +1504,7 @@ const MyInvestments = () => {
                       [15, 18, 22, 20, 25, 28],
                       'Funding (R millions)',
                       2,
-                      'Month',
+                      '',
                       'Funding (R millions)'
                     )}
                     options={{
@@ -1438,13 +1517,16 @@ const MyInvestments = () => {
                               return `R${context.parsed} million`;
                             }
                           }
+                        },
+                        legend: {
+                          display: false
                         }
                       },
                       scales: {
                         x: {
                           title: {
                             display: true,
-                            text: 'Month'
+                            text: ''
                           }
                         },
                         y: {
@@ -1511,6 +1593,7 @@ const MyInvestments = () => {
               description="Shows breakdown by Early/Growth/Mature/Exit-ready"
               labels={['Early', 'Growth', 'Mature', 'Exit-ready']}
               data={[22, 41, 27, 10]}
+              showEye={true}
             />
 
             <div className="chart-container">
@@ -1537,6 +1620,11 @@ const MyInvestments = () => {
                           text: '% of Capital'
                         },
                         beginAtZero: true
+                      }
+                    },
+                    plugins: {
+                      legend: {
+                        display: false
                       }
                     }
                   }}
@@ -1622,6 +1710,7 @@ const MyInvestments = () => {
               description="Highlights women/youth/black-owned ratios"
               labels={['Women-led', 'Youth-led', 'Black-owned', 'Other']}
               data={[38, 24, 72, 16]}
+              showEye={true}
             />
           </div>
         </div>
@@ -1676,6 +1765,11 @@ const MyInvestments = () => {
                             display: true,
                             text: 'Age Category'
                           }
+                        }
+                      },
+                      plugins: {
+                        legend: {
+                          display: false
                         }
                       }
                     }}
@@ -1739,6 +1833,7 @@ const MyInvestments = () => {
                 description="Highlights data reliability"
                 labels={['Verified', 'Partial', 'Unverified']}
                 data={[78, 15, 7]}
+                showEye={true}
               />
             </div>
 
@@ -1832,7 +1927,7 @@ const MyInvestments = () => {
                     [2, 4, 5, 7],
                     '# of Exits',
                     0,
-                    'Quarter',
+                    '',
                     '# of Exits'
                   )}
                   options={{
@@ -1849,8 +1944,13 @@ const MyInvestments = () => {
                       x: {
                         title: {
                           display: true,
-                          text: 'Quarter'
+                          text: ''
                         }
+                      }
+                    },
+                    plugins: {
+                      legend: {
+                        display: false
                       }
                     }
                   }}
@@ -1864,7 +1964,7 @@ const MyInvestments = () => {
               <div className="chart-area">
                 <Line 
                   data={generateLineData(
-                    getTimeData(timeToExitView, ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'], ['Q1', 'Q2', 'Q3', 'Q4'], ['2021', '2022', '2023', '2024']),
+                    ['Q1', 'Q2', 'Q3', 'Q4'],
                     [
                       { label: 'Avg Months', values: getTimeData(timeToExitView, timeToExitData.Monthly, timeToExitData.Quarterly, timeToExitData.Yearly) },
                       { label: 'Target (&lt;32)', values: getTimeData(timeToExitView, [32, 32, 32, 32, 32, 32], [32, 32, 32, 32], [32, 32, 32, 32]) }
@@ -1879,7 +1979,7 @@ const MyInvestments = () => {
                       x: {
                         title: {
                           display: true,
-                          text: timeToExitView
+                          text: ''
                         }
                       },
                       y: {
@@ -1924,6 +2024,11 @@ const MyInvestments = () => {
                           text: 'Deal'
                         }
                       }
+                    },
+                    plugins: {
+                      legend: {
+                        display: false
+                      }
                     }
                   }}
                 />
@@ -1935,6 +2040,7 @@ const MyInvestments = () => {
               description="Share of capital recycled"
               labels={['Reinvested', 'Held']}
               data={[64, 36]}
+              showEye={true}
             />
 
             <SMEGraduationInfographic
@@ -1971,7 +2077,7 @@ const MyInvestments = () => {
             />
           </div>
           
-          <div className="funder-charts-grid">
+          <div className="funder-charts-grid-4x4">
             <div className="chart-container">
               <h3 className="chart-title">Applications Reviewed vs Funded</h3>
               <div className="visual-description">Compares funnel volumes</div>
@@ -2002,6 +2108,11 @@ const MyInvestments = () => {
                           text: 'Stage'
                         }
                       }
+                    },
+                    plugins: {
+                      legend: {
+                        display: false
+                      }
                     }
                   }}
                 />
@@ -2011,10 +2122,10 @@ const MyInvestments = () => {
             <div className="chart-container">
               <h3 className="chart-title">Avg. Vetting Time</h3>
               <div className="visual-description">Efficiency metric</div>
-              <div className="chart-area">
+              <div className="chart-area-compact">
                 <Line 
                   data={generateLineData(
-                    getTimeData(vettingTimeView, ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'], ['Q1', 'Q2', 'Q3', 'Q4'], ['2021', '2022', '2023', '2024']),
+                    ['Q1', 'Q2', 'Q3', 'Q4'],
                     [{ label: 'Days', values: getTimeData(vettingTimeView, vettingTimeData.Monthly, vettingTimeData.Quarterly, vettingTimeData.Yearly) }],
                     vettingTimeView,
                     'Days'
@@ -2026,7 +2137,7 @@ const MyInvestments = () => {
                       x: {
                         title: {
                           display: true,
-                          text: vettingTimeView
+                          text: ''
                         }
                       },
                       y: {
@@ -2035,13 +2146,24 @@ const MyInvestments = () => {
                           text: 'Days'
                         }
                       }
+                    },
+                    plugins: {
+                      legend: {
+                        display: false
+                      }
                     }
                   }}
                 />
               </div>
+              <div className="chart-summary-compact">
+                <div className="current-value">Current: 9 days</div>
+                <div className="target-value">
+                  Target: 8 days
+                  <FiArrowDown className="trend-icon up" />
+                </div>
+              </div>
             </div>
 
-            {/* FIXED: Cost per Funded SME - Now using infographic with numbers in pie chart */}
             <CostPerSMEInfographic
               value={75}
               target={80}
@@ -2074,20 +2196,16 @@ const MyInvestments = () => {
                           text: '# SMEs co-funded'
                         }
                       }
+                    },
+                    plugins: {
+                      legend: {
+                        display: false
+                      }
                     }
                   }}
                 />
               </div>
             </div>
-
-            {/* FIXED: Catalyst Engagement Score - Now using proper bar chart */}
-            <CatalystEngagementChart
-              value={82}
-              target={85}
-              data={[78, 80, 81, 82]}
-              title="Catalyst Engagement Score"
-              description="Quarterly engagement performance with partners"
-            />
           </div>
         </div>
       )
@@ -2276,7 +2394,7 @@ const MyInvestments = () => {
                     [7.5, 9.8, 6.1, 4.2],
                     '% Defaults',
                     0,
-                    'Quarter',
+                    '',
                     '% of active loans'
                   )}
                   options={{
@@ -2286,7 +2404,7 @@ const MyInvestments = () => {
                       x: {
                         title: {
                           display: true,
-                          text: 'Quarter'
+                          text: ''
                         }
                       },
                       y: {
@@ -2296,6 +2414,11 @@ const MyInvestments = () => {
                           display: true,
                           text: '% of active loans'
                         }
+                      }
+                    },
+                    plugins: {
+                      legend: {
+                        display: false
                       }
                     }
                   }}
@@ -2314,7 +2437,7 @@ const MyInvestments = () => {
                       { label: 'Revenue Growth', values: [9, 10, 12, 11] },
                       { label: 'Benchmark (8%)', values: [8, 8, 8, 8] }
                     ],
-                    'Quarter',
+                    '',
                     '% Revenue Growth QoQ'
                   )}
                   options={{
@@ -2324,7 +2447,7 @@ const MyInvestments = () => {
                       x: {
                         title: {
                           display: true,
-                          text: 'Quarter'
+                          text: ''
                         }
                       },
                       y: {
@@ -2388,7 +2511,7 @@ const MyInvestments = () => {
                       { label: 'Graduation Rate', values: [15, 17, 18, 19] },
                       { label: 'Target (25%)', values: [20, 21, 23, 25] }
                     ],
-                    'Quarter',
+                    '',
                     '% of SMEs'
                   )}
                   options={{
@@ -2398,7 +2521,7 @@ const MyInvestments = () => {
                       x: {
                         title: {
                           display: true,
-                          text: 'Quarter'
+                          text: ''
                         }
                       },
                       y: {
@@ -2494,6 +2617,11 @@ const MyInvestments = () => {
                           text: 'Pillar'
                         }
                       }
+                    },
+                    plugins: {
+                      legend: {
+                        display: false
+                      }
                     }
                   }}
                 />
@@ -2531,6 +2659,11 @@ const MyInvestments = () => {
                           text: 'SDG'
                         }
                       }
+                    },
+                    plugins: {
+                      legend: {
+                        display: false
+                      }
                     }
                   }}
                 />
@@ -2542,6 +2675,7 @@ const MyInvestments = () => {
               description="Displays compliance ratio from BIG Score data"
               labels={['Compliant', 'Partial', 'At Risk']}
               data={[72, 21, 7]}
+              showEye={true}
             />
 
             <div className="chart-container full-width">
@@ -2668,6 +2802,7 @@ const MyInvestments = () => {
               description="Highlights data reliability"
               labels={['Verified', 'Partial', 'Unverified']}
               data={[76, 18, 6]}
+              showEye={true}
             />
           </div>
         </div>
@@ -2697,7 +2832,7 @@ const MyInvestments = () => {
       <div className="investments-content">
         <h2 className="investments-title">My Investments</h2>
 
-        {/* Top Categories Row - 5 tabs - FIXED alignment */}
+        {/* Top Categories Row - 5 tabs */}
         <div className="categories-scroll-container">
           <div className="categories-grid">
             {topCategories.map((category) => (
@@ -2713,7 +2848,7 @@ const MyInvestments = () => {
           </div>
         </div>
 
-        {/* Bottom Categories Row - 4 tabs - FIXED alignment */}
+        {/* Bottom Categories Row - 4 tabs */}
         <div className="categories-scroll-container">
           <div className="categories-grid">
             {bottomCategories.map((category) => (
@@ -2735,6 +2870,7 @@ const MyInvestments = () => {
       </div>
 
       {showDownloadOptions && <DownloadOptions />}
+      <Popup />
     </div>
   );
 };
