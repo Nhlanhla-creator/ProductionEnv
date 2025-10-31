@@ -36,79 +36,6 @@ const formatDate = (dateString) => {
   })
 }
 
-// Text truncation component (same as your successful deals)
-const TruncatedText = ({ text, maxLines = 2 }) => {
-  const [isExpanded, setIsExpanded] = useState(false)
-  const [showSeeMore, setShowSeeMore] = useState(false)
-  const textRef = useRef(null)
-
-  useEffect(() => {
-    if (!text || !textRef.current) {
-      setShowSeeMore(false)
-      return
-    }
-
-    const charLimit = maxLines * 35
-    const hasLongText = text.length > charLimit
-    const hasMultipleItems = (text.match(/,/g) || []).length >= 2
-
-    setShowSeeMore(hasLongText || hasMultipleItems)
-  }, [text, maxLines])
-
-  if (!text || text === "-" || text === "Not specified" || text === "Various") {
-    return <span>{text || "-"}</span>
-  }
-
-  const toggleExpanded = (e) => {
-    e.stopPropagation()
-    setIsExpanded(!isExpanded)
-  }
-
-  return (
-    <div style={{ position: "relative" }}>
-      <div
-        ref={textRef}
-        style={{
-          display: "-webkit-box",
-          WebkitBoxOrient: "vertical",
-          WebkitLineClamp: isExpanded ? "none" : maxLines,
-          overflow: "hidden",
-          lineHeight: "1.4",
-        }}
-      >
-        {text}
-      </div>
-      {showSeeMore && (
-        <button
-          onClick={toggleExpanded}
-          style={{
-            backgroundColor: "transparent",
-            border: "none",
-            color: "#5d4037",
-            cursor: "pointer",
-            fontSize: "12px",
-            fontWeight: "500",
-            padding: "2px 4px",
-            display: "flex",
-            alignItems: "center",
-            gap: "2px",
-            marginTop: "2px",
-          }}
-        >
-          {isExpanded ? "See less" : "See more"}
-          <ChevronDown
-            size={12}
-            style={{
-              transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
-              transition: "transform 0.2s ease",
-            }}
-          />
-        </button>
-      )}
-    </div>
-  )
-}
-
 // Cache key for localStorage
 const COHORTS_CACHE_KEY = 'myCohorts_cache'
 const CACHE_TIMEOUT = 5 * 60 * 1000 // 5 minutes
@@ -118,9 +45,27 @@ function MyCohorts() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [selectedCohort, setSelectedCohort] = useState(null)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
 
   useEffect(() => {
     fetchCohorts()
+    
+    // Check sidebar state from localStorage or a global state
+    const checkSidebarState = () => {
+      const sidebarState = localStorage.getItem('sidebarOpen')
+      setIsSidebarOpen(sidebarState !== 'false')
+    }
+    
+    checkSidebarState()
+    
+    // Listen for sidebar toggle events
+    window.addEventListener('sidebarToggle', checkSidebarState)
+    window.addEventListener('storage', checkSidebarState)
+    
+    return () => {
+      window.removeEventListener('sidebarToggle', checkSidebarState)
+      window.removeEventListener('storage', checkSidebarState)
+    }
   }, [])
 
   const getCachedCohorts = () => {
@@ -130,11 +75,9 @@ function MyCohorts() {
 
       const { data, timestamp } = JSON.parse(cached)
       
-      // Check if cache is still valid (less than 5 minutes old)
       if (Date.now() - timestamp < CACHE_TIMEOUT) {
         return data
       } else {
-        // Clear expired cache
         localStorage.removeItem(COHORTS_CACHE_KEY)
         return null
       }
@@ -160,7 +103,6 @@ function MyCohorts() {
     try {
       setLoading(true)
       
-      // Check cache first unless forcing refresh
       if (!forceRefresh) {
         const cachedCohorts = getCachedCohorts()
         if (cachedCohorts) {
@@ -229,7 +171,6 @@ function MyCohorts() {
               currentStatus: "Active Investment",
               profileData: profileData,
               lastUpdated: new Date().toISOString(),
-              // Additional fields for detailed view
               dealStructure: data.fundingDetails?.paymentDeployment || "Not specified",
               dealDuration: "Not specified",
               supportProvided: "Funding and Strategic Support",
@@ -272,7 +213,6 @@ function MyCohorts() {
     setSelectedCohort(cohort)
   }
 
-  // Helper functions for detailed modal (same as your successful deals)
   const getStatusColor = (status) => {
     switch (status) {
       case "Active Investment":
@@ -293,7 +233,6 @@ function MyCohorts() {
     return "#f44336"
   }
 
-  // Modal styles (same as your successful deals)
   const modalOverlayStyle = {
     position: "fixed",
     top: 0,
@@ -321,13 +260,7 @@ function MyCohorts() {
     animation: "slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
   }
 
-  // Clear cache when component unmounts (optional)
-  useEffect(() => {
-    return () => {
-      // Only clear cache if you want fresh data on next visit
-      // localStorage.removeItem(COHORTS_CACHE_KEY)
-    }
-  }, [])
+  const mainMarginLeft = isSidebarOpen ? "250px" : "80px"
 
   if (loading) {
     return (
@@ -335,9 +268,12 @@ function MyCohorts() {
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        minHeight: "80vh",
+        minHeight: "100vh",
         flexDirection: "column",
-        gap: "16px"
+        gap: "16px",
+        marginLeft: mainMarginLeft,
+        padding: "20px",
+        transition: "margin-left 0.3s ease"
       }}>
         <Loader size={48} style={{ color: "#a67c52", animation: "spin 1s linear infinite" }} />
         <p style={{ color: "#7d5a50", fontSize: "16px" }}>Loading your portfolio...</p>
@@ -347,16 +283,15 @@ function MyCohorts() {
 
   return (
     <div style={{ 
-      padding: "70px", 
-      marginLeft: "150px",
-      marginRight: "20px",
+      marginLeft: mainMarginLeft,
+      padding: "60px",
       backgroundColor: "#faf7f2", 
       minHeight: "100vh",
       boxSizing: "border-box",
-      width: "calc(100vw - 100px)"
+      transition: "margin-left 0.3s ease"
     }}>
       <div style={{ 
-        maxWidth: "1200px", 
+        maxWidth: "1400px", 
         margin: "0 auto",
         width: "100%"
       }}>
@@ -413,7 +348,7 @@ function MyCohorts() {
 
         <div style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
           gap: "20px",
           marginBottom: "32px"
         }}>
@@ -478,10 +413,11 @@ function MyCohorts() {
             borderRadius: "16px", 
             boxShadow: "0 4px 12px rgba(0,0,0,0.1)", 
             overflow: "hidden",
-            width: "100%"
+            width: "100%",
+            border: "1px solid #e6d7c3"
           }}>
             <div style={{
-              padding: "20px",
+              padding: "20px 24px",
               borderBottom: "2px solid #e6d7c3",
               backgroundColor: "#f5f0e1",
               display: "flex",
@@ -489,194 +425,277 @@ function MyCohorts() {
               alignItems: "center"
             }}>
               <h2 style={{ fontSize: "20px", fontWeight: "600", color: "#4a352f", margin: 0 }}>
-                Your Portfolio Companies
+                Portfolio Companies
               </h2>
               <span style={{ 
                 fontSize: "12px", 
                 color: "#7d5a50",
-                backgroundColor: "rgba(166, 124, 82, 0.1)",
-                padding: "4px 8px",
-                borderRadius: "4px"
+                backgroundColor: "rgba(166, 124, 82, 0.15)",
+                padding: "6px 12px",
+                borderRadius: "6px",
+                fontWeight: "600"
               }}>
-                {cohorts.length} companies
+                {cohorts.length} {cohorts.length === 1 ? 'company' : 'companies'}
               </span>
             </div>
 
-            <div style={{ padding: "8px" }}>
-              {cohorts.map((cohort, index) => (
-                <div
-                  key={cohort.id}
-                  style={{
-                    padding: "20px",
-                    borderBottom: index < cohorts.length - 1 ? "1px solid #f0e6d9" : "none",
-                    transition: "all 0.3s ease"
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = "#faf7f2"
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = "transparent"
-                  }}
-                >
-                  <div style={{ 
-                    display: "flex", 
-                    justifyContent: "space-between", 
-                    alignItems: "flex-start", 
-                    gap: "20px", 
-                    flexWrap: "wrap" 
-                  }}>
-                    <div style={{ flex: 1, minWidth: "280px" }}>
-                      <div style={{ 
-                        display: "flex", 
-                        alignItems: "center", 
-                        gap: "12px", 
-                        marginBottom: "12px", 
-                        flexWrap: "wrap" 
-                      }}>
-                        <h3 style={{ fontSize: "18px", fontWeight: "600", color: "#4a352f", margin: 0 }}>
-                          {cohort.smeName}
-                        </h3>
+            {/* Table */}
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ 
+                width: "100%", 
+                borderCollapse: "collapse",
+                fontSize: "14px"
+              }}>
+                <thead>
+                  <tr style={{ backgroundColor: "#faf7f2", borderBottom: "2px solid #e6d7c3" }}>
+                    <th style={{ 
+                      padding: "16px 20px", 
+                      textAlign: "left", 
+                      fontWeight: "600", 
+                      color: "#4a352f",
+                      fontSize: "13px",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                      whiteSpace: "nowrap"
+                    }}>
+                      Company
+                    </th>
+                    <th style={{ 
+                      padding: "16px 20px", 
+                      textAlign: "left", 
+                      fontWeight: "600", 
+                      color: "#4a352f",
+                      fontSize: "13px",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                      whiteSpace: "nowrap"
+                    }}>
+                      Investment
+                    </th>
+                    <th style={{ 
+                      padding: "16px 20px", 
+                      textAlign: "left", 
+                      fontWeight: "600", 
+                      color: "#4a352f",
+                      fontSize: "13px",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                      whiteSpace: "nowrap"
+                    }}>
+                      Sector & Location
+                    </th>
+                    <th style={{ 
+                      padding: "16px 20px", 
+                      textAlign: "left", 
+                      fontWeight: "600", 
+                      color: "#4a352f",
+                      fontSize: "13px",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                      whiteSpace: "nowrap"
+                    }}>
+                      Date
+                    </th>
+                    <th style={{ 
+                      padding: "16px 20px", 
+                      textAlign: "left", 
+                      fontWeight: "600", 
+                      color: "#4a352f",
+                      fontSize: "13px",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                      whiteSpace: "nowrap"
+                    }}>
+                      Status
+                    </th>
+                    <th style={{ 
+                      padding: "16px 20px", 
+                      textAlign: "center", 
+                      fontWeight: "600", 
+                      color: "#4a352f",
+                      fontSize: "13px",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                      whiteSpace: "nowrap"
+                    }}>
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cohorts.map((cohort, index) => (
+                    <tr 
+                      key={cohort.id}
+                      style={{
+                        borderBottom: index < cohorts.length - 1 ? "1px solid #f0e6d9" : "none",
+                        transition: "background-color 0.2s ease"
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = "#faf7f2"
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = "transparent"
+                      }}
+                    >
+                      {/* Company Name & Type */}
+                      <td style={{ padding: "20px", minWidth: "220px" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                          <div style={{ 
+                            fontSize: "15px", 
+                            fontWeight: "600", 
+                            color: "#4a352f",
+                            marginBottom: "4px"
+                          }}>
+                            {cohort.smeName}
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <Trophy size={13} style={{ color: "#a67c52" }} />
+                            <span style={{ 
+                              fontSize: "12px", 
+                              color: "#7d5a50",
+                              textTransform: "capitalize"
+                            }}>
+                              {cohort.dealType}
+                            </span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <Users size={13} style={{ color: "#a67c52" }} />
+                            <span style={{ fontSize: "12px", color: "#7d5a50" }}>
+                              {cohort.teamSize} employees
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Investment Amount */}
+                      <td style={{ padding: "20px", minWidth: "140px" }}>
+                        <div style={{ 
+                          fontSize: "16px", 
+                          fontWeight: "700", 
+                          color: "#4a352f",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px"
+                        }}>
+                          {formatCurrency(cohort.dealAmount)}
+                        </div>
+                      </td>
+
+                      {/* Sector & Location */}
+                      <td style={{ padding: "20px", minWidth: "200px" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <Building size={13} style={{ color: "#a67c52" }} />
+                            <span style={{ fontSize: "13px", color: "#5d4037" }}>
+                              {cohort.sector}
+                            </span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <MapPin size={13} style={{ color: "#a67c52" }} />
+                            <span style={{ fontSize: "13px", color: "#5d4037" }}>
+                              {cohort.location}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Date */}
+                      <td style={{ padding: "20px", minWidth: "130px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <Calendar size={14} style={{ color: "#a67c52" }} />
+                          <span style={{ fontSize: "13px", color: "#5d4037" }}>
+                            {formatDate(cohort.completionDate)}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Status */}
+                      <td style={{ padding: "20px", minWidth: "150px" }}>
                         <span style={{
                           backgroundColor: "#4caf5020",
                           color: "#4caf50",
-                          padding: "4px 10px",
-                          borderRadius: "12px",
-                          fontSize: "11px",
-                          fontWeight: "600"
+                          padding: "6px 12px",
+                          borderRadius: "20px",
+                          fontSize: "12px",
+                          fontWeight: "600",
+                          display: "inline-block",
+                          whiteSpace: "nowrap"
                         }}>
                           {cohort.currentStatus}
                         </span>
-                      </div>
+                      </td>
 
-                      <p style={{ 
-                        color: "#7d5a50", 
-                        marginBottom: "16px", 
-                        lineHeight: "1.6",
-                        fontSize: "14px" 
-                      }}>
-                        {cohort.description}
-                      </p>
-
-                      <div style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-                        gap: "12px"
-                      }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <DollarSign size={14} style={{ color: "#a67c52" }} />
-                          <span style={{ color: "#7d5a50", fontSize: "13px" }}>
-                            <strong>Investment:</strong> {formatCurrency(cohort.dealAmount)}
-                          </span>
-                        </div>
-
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <Calendar size={14} style={{ color: "#a67c52" }} />
-                          <span style={{ color: "#7d5a50", fontSize: "13px" }}>
-                            <strong>Date:</strong> {formatDate(cohort.completionDate)}
-                          </span>
-                        </div>
-
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <Building size={14} style={{ color: "#a67c52" }} />
-                          <span style={{ color: "#7d5a50", fontSize: "13px" }}>
-                            <strong>Sector:</strong> {cohort.sector}
-                          </span>
-                        </div>
-
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <MapPin size={14} style={{ color: "#a67c52" }} />
-                          <span style={{ color: "#7d5a50", fontSize: "13px" }}>
-                            <strong>Location:</strong> {cohort.location}
-                          </span>
-                        </div>
-
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <Users size={14} style={{ color: "#a67c52" }} />
-                          <span style={{ color: "#7d5a50", fontSize: "13px" }}>
-                            <strong>Team Size:</strong> {cohort.teamSize}
-                          </span>
-                        </div>
-
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <Trophy size={14} style={{ color: "#a67c52" }} />
-                          <span style={{ color: "#7d5a50", fontSize: "13px" }}>
-                            <strong>Type:</strong> {cohort.dealType}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ 
-                      display: "flex", 
-                      flexDirection: "column", 
-                      gap: "10px", 
-                      minWidth: "180px" 
-                    }}>
-                      <button
-                        onClick={() => handleViewGrowthSuite(cohort)}
-                        style={{
-                          backgroundColor: "#a67c52",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "8px",
-                          padding: "10px 16px",
-                          fontSize: "13px",
-                          fontWeight: "600",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
+                      {/* Actions */}
+                      <td style={{ padding: "20px", minWidth: "200px" }}>
+                        <div style={{ 
+                          display: "flex", 
+                          gap: "8px",
                           justifyContent: "center",
-                          gap: "6px",
-                          transition: "all 0.3s ease",
-                          whiteSpace: "nowrap",
-                          width: "100%"
-                        }}
-                        onMouseEnter={(e) => {
-                          e.target.style.backgroundColor = "#7d5a50"
-                          e.target.style.transform = "translateY(-2px)"
-                        }}
-                        onMouseLeave={(e) => {
-                          e.target.style.backgroundColor = "#a67c52"
-                          e.target.style.transform = "translateY(0)"
-                        }}
-                      >
-                        <Wrench size={14} />
-                        View Growth Suite
-                      </button>
+                          flexWrap: "wrap"
+                        }}>
+                          <button
+                            onClick={() => handleViewGrowthSuite(cohort)}
+                            style={{
+                              backgroundColor: "#a67c52",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "6px",
+                              padding: "8px 12px",
+                              fontSize: "12px",
+                              fontWeight: "600",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              transition: "all 0.2s ease",
+                              whiteSpace: "nowrap"
+                            }}
+                            onMouseEnter={(e) => {
+                              e.target.style.backgroundColor = "#8d6e63"
+                              e.target.style.transform = "translateY(-1px)"
+                            }}
+                            onMouseLeave={(e) => {
+                              e.target.style.backgroundColor = "#a67c52"
+                              e.target.style.transform = "translateY(0)"
+                            }}
+                          >
+                            <Wrench size={13} />
+                            Growth Suite
+                          </button>
 
-                      <button
-                        onClick={() => handleViewDetails(cohort)}
-                        style={{
-                          backgroundColor: "white",
-                          color: "#a67c52",
-                          border: "2px solid #a67c52",
-                          borderRadius: "8px",
-                          padding: "10px 16px",
-                          fontSize: "13px",
-                          fontWeight: "600",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: "6px",
-                          transition: "all 0.3s ease",
-                          whiteSpace: "nowrap",
-                          width: "100%"
-                        }}
-                        onMouseEnter={(e) => {
-                          e.target.style.backgroundColor = "#f5f0e1"
-                        }}
-                        onMouseLeave={(e) => {
-                          e.target.style.backgroundColor = "white"
-                        }}
-                      >
-                        <Eye size={14} />
-                        View Details
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                          <button
+                            onClick={() => handleViewDetails(cohort)}
+                            style={{
+                              backgroundColor: "white",
+                              color: "#a67c52",
+                              border: "1.5px solid #a67c52",
+                              borderRadius: "6px",
+                              padding: "8px 12px",
+                              fontSize: "12px",
+                              fontWeight: "600",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              transition: "all 0.2s ease",
+                              whiteSpace: "nowrap"
+                            }}
+                            onMouseEnter={(e) => {
+                              e.target.style.backgroundColor = "#faf7f2"
+                            }}
+                            onMouseLeave={(e) => {
+                              e.target.style.backgroundColor = "white"
+                            }}
+                          >
+                            <Eye size={13} />
+                            Details
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         ) : (
@@ -686,6 +705,7 @@ function MyCohorts() {
             backgroundColor: "white",
             borderRadius: "16px",
             boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+            border: "1px solid #e6d7c3",
             width: "100%"
           }}>
             <Trophy size={60} style={{ color: "#c8b6a6", marginBottom: "20px" }} />
@@ -699,7 +719,7 @@ function MyCohorts() {
         )}
       </div>
 
-      {/* Detailed View Modal - Same as your successful deals */}
+      {/* Detailed View Modal */}
       {selectedCohort && (
         <div style={modalOverlayStyle} onClick={() => setSelectedCohort(null)}>
           <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
@@ -747,7 +767,7 @@ function MyCohorts() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
                 gap: "24px",
                 marginBottom: "32px",
               }}
@@ -936,7 +956,7 @@ function MyCohorts() {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
                   gap: "16px",
                 }}
               >
@@ -974,6 +994,12 @@ function MyCohorts() {
                   cursor: "pointer",
                   transition: "all 0.3s ease",
                 }}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = "#4a352f"
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = "#5d4037"
+                }}
               >
                 Close
               </button>
@@ -1001,6 +1027,26 @@ function MyCohorts() {
           to {
             opacity: 1;
             transform: translateY(0) scale(1);
+          }
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 1400px) {
+          .main-container {
+            padding: 30px;
+          }
+        }
+        
+        @media (max-width: 1024px) {
+          .main-container {
+            padding: 25px;
+          }
+        }
+        
+        @media (max-width: 768px) {
+          .main-container {
+            margin-left: 0 !important;
+            padding: 20px;
           }
         }
       `}</style>

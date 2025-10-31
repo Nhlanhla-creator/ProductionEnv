@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
-import { ChevronDown, CheckCircle, TrendingUp, AlertCircle, FileText, Megaphone, Brain, Users } from "lucide-react"
+import { ChevronDown, CheckCircle, TrendingUp, AlertCircle, FileText } from "lucide-react"
 import { doc, updateDoc, setDoc, serverTimestamp } from "firebase/firestore"
 import { db } from "../../firebaseConfig"
 import NeedHelp from "../../NeedHelp"
@@ -14,6 +14,7 @@ export function BigScoreCard({
   pisScore,
   leadershipScore,
   onScoreUpdate,
+  onTabChange, // Add this prop to handle tab switching
 }) {
   const [showModal, setShowModal] = useState(false)
   const [bigScore, setBigScore] = useState(null)
@@ -82,7 +83,7 @@ export function BigScoreCard({
             lastUpdated: new Date().toISOString(),
           },
           updatedAt: new Date().toISOString(),
-          createdAt: serverTimestamp(), // only used if doc is new
+          createdAt: serverTimestamp(),
         },
         { merge: true },
       ).catch((err) => console.error("Failed to update BIG evaluation in Firestore:", err))
@@ -95,71 +96,66 @@ export function BigScoreCard({
     }
   }, [complianceScore, legitimacyScore, fundabilityScore, pisScore, leadershipScore, profileData, onScoreUpdate])
 
-  // Generate smart recommendations based on scores with direct tab links
+  // Generate smart recommendations based on scores - UPDATED
   const getRecommendations = () => {
     const recommendations = []
 
-    // Legitimacy Tools - Direct link to legitimacy tab
+    // Legitimacy Tools
     recommendations.push({
       category: "Legitimacy",
-      icon: <Megaphone className="w-4 h-4" />,
       title: "Legitimacy Tools",
       description:
         "A strong online presence and brand builds trust. If your business looks real, funders and clients will believe it is.",
       action: "Legitimacy Tools",
-      url: "/growth/shop?tab=legitimacy",
+      tab: "legitimacy",
       priority: "high",
       color: "#6D4C41",
     })
 
-    // Governance Tools - Direct link to governance tab
+    // Governance Tools
     recommendations.push({
       category: "Governance",
-      icon: <Brain className="w-4 h-4" />,
       title: "Governance Tools",
       description:
         "Your Governance score shows whether you're just hustling — or building an enterprise with proper structure and leadership.",
       action: "Governance Tools",
-      url: "/growth/shop?tab=governance",
+      tab: "governance",
       priority: "medium",
       color: "#B8860B",
     })
 
-    // Compliance Tools - Direct link to compliance tab
+    // Compliance Tools
     recommendations.push({
       category: "Compliance",
-      icon: <FileText className="w-4 h-4" />,
       title: "Compliance Templates",
       description:
         "Professional legal and regulatory templates to ensure your business meets all compliance requirements and reduces risk.",
       action: "Compliance Tools",
-      url: "/growth/shop?tab=compliance",
+      tab: "compliance",
       priority: "high",
       color: "#8D6E63",
     })
 
-    // Capital Appeal Tools - Direct link to fundability tab
+    // Capital Appeal Tools
     recommendations.push({
       category: "Capital Appeal",
-      icon: <TrendingUp className="w-4 h-4" />,
       title: "Capital Appeal Tools",
       description:
         "Investment-ready documents and financial templates to make your business attractive to investors and funders.",
       action: "Capital Appeal Tools",
-      url: "/growth/shop?tab=fundability",
+      tab: "fundability",
       priority: "high",
       color: "#A67C52",
     })
 
-    // HR Templates - Direct link to governance tab (since HR is part of governance)
+    // HR Templates
     recommendations.push({
       category: "Team Development",
-      icon: <Users className="w-4 h-4" />,
       title: "HR Templates",
       description:
-        "Streamline your human resources with professional, ready-to-use templates for policies, contracts, and employee management, ensuring compliance and efficient team operations.",
+        "Streamline your human resources with professional, ready-to-use templates for policies, contracts, and employee management.",
       action: "HR Templates",
-      url: "/growth/shop?tab=governance",
+      tab: "governance",
       priority: "medium",
       color: "#A0522D",
     })
@@ -167,7 +163,6 @@ export function BigScoreCard({
     // Find Service Provider
     recommendations.push({
       category: "Services",
-      icon: <FileText className="w-4 h-4" />,
       title: "Find Service Provider",
       description:
         "Connect with expert service providers to help you with various business needs, from legal and accounting to marketing and HR.",
@@ -182,18 +177,16 @@ export function BigScoreCard({
     return recommendations.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority])
   }
 
-  // Updated progress bar color function with new color scheme
   const getProgressBarColor = (score) => {
-    if (score > 90) return "#1B5E20" // Dark green
-    if (score >= 81) return "#4CAF50" // Green
-    if (score >= 61) return "#FF9800" // Orange
-    if (score >= 41) return "#F44336" // Red
-    return "#B71C1C" // Dark red
+    if (score > 90) return "#1B5E20"
+    if (score >= 81) return "#4CAF50"
+    if (score >= 61) return "#FF9800"
+    if (score >= 41) return "#F44336"
+    return "#B71C1C"
   }
 
   const calculateBigScore = (compliance, legitimacy, fundability, pis, leadership, data) => {
     const stage = data?.entityOverview?.operationStage?.toLowerCase() || "ideation"
-    // Weightings: Compliance 35%, Legitimacy 15%, Fundability 35%, PIS 15%
     const stageWeights = {
       ideation: { compliance: 0.32, legitimacy: 0.13, fundability: 0.32, pis: 0.13, leadership: 0.1 },
       prototype: { compliance: 0.32, legitimacy: 0.13, fundability: 0.32, pis: 0.13, leadership: 0.1 },
@@ -256,7 +249,6 @@ export function BigScoreCard({
     return { totalScore, breakdown }
   }
 
-  // Updated score levels with new ranges and descriptions
   const getScoreLevel = (score) => {
     if (!score && score !== 0) return { level: "Calculating...", color: "#9E9E9E", icon: AlertCircle, description: "" }
     if (score >= 91)
@@ -293,6 +285,19 @@ export function BigScoreCard({
   const scoreLevel = getScoreLevel(bigScore)
   const ScoreIcon = scoreLevel.icon
   const recommendations = getRecommendations()
+
+  // NEW: Handle tool card click
+  const handleToolClick = (rec) => {
+    setShowBoostScoreModal(false)
+    
+    if (rec.url) {
+      // External URL - navigate normally
+      window.location.href = rec.url
+    } else if (rec.tab && onTabChange) {
+      // Switch to tools tab and set the category
+      onTabChange("tools", rec.tab)
+    }
+  }
 
   return (
     <>
@@ -360,7 +365,6 @@ export function BigScoreCard({
           >
             Overall business assessment
           </p>
-          {/* Decorative elements */}
           <div
             style={{
               position: "absolute",
@@ -402,7 +406,6 @@ export function BigScoreCard({
               marginBottom: "24px",
             }}
           >
-            {/* Main Score Circle */}
             <div
               style={{
                 position: "relative",
@@ -430,16 +433,6 @@ export function BigScoreCard({
               >
                 {bigScore !== null ? `${bigScore}%` : "..."}
               </span>
-              <span
-                style={{
-                  fontSize: "11px",
-                  fontWeight: "600",
-                  color: scoreLevel.color,
-                  textTransform: "uppercase",
-                  letterSpacing: "1px",
-                }}
-              ></span>
-              {/* Animated ring */}
               <div
                 style={{
                   position: "absolute",
@@ -453,7 +446,6 @@ export function BigScoreCard({
                 }}
               ></div>
             </div>
-            {/* Connected Status Badge */}
             <div
               style={{
                 position: "absolute",
@@ -476,31 +468,6 @@ export function BigScoreCard({
               {scoreLevel.level}
             </div>
           </div>
-
-          {/* Score Description */}
-          {scoreLevel.description && (
-            <div
-              style={{
-                marginBottom: "20px",
-                padding: "16px",
-                background: "linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)",
-                borderRadius: "12px",
-                border: `2px solid ${scoreLevel.color}20`,
-              }}
-            >
-              <p
-                style={{
-                  margin: "0",
-                  fontSize: "14px",
-                  color: "#495057",
-                  lineHeight: "1.5",
-                  fontWeight: "500",
-                }}
-              >
-                {scoreLevel.description}
-              </p>
-            </div>
-          )}
 
           {/* Action Buttons */}
           <div
@@ -594,7 +561,6 @@ export function BigScoreCard({
           </div>
         </div>
 
-        {/* CSS Animations */}
         <style jsx>{`
           @keyframes pulse {
             0% {
@@ -1113,7 +1079,7 @@ export function BigScoreCard({
         </div>
       )}
 
-      {/* Boost Score Modal */}
+      {/* UPDATED Boost Score Modal - Removed icons, cleaner design */}
       {showBoostScoreModal && (
         <div
           style={{
@@ -1183,8 +1149,71 @@ export function BigScoreCard({
                   textAlign: "center",
                 }}
               >
-                🚀 Boost Your BIG Score
+                Boost Your BIG Score
               </h3>
+
+              {/* Low Score Catalyst Message - Only show when score < 50% */}
+              {bigScore !== null && bigScore < 50 && (
+                <div
+                  style={{
+                    marginBottom: "20px",
+                    padding: "20px",
+                    background: "linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%)",
+                    borderRadius: "12px",
+                    border: "2px solid #D32F2F",
+                    textAlign: "center",
+                  }}
+                >
+                  <h4 style={{
+                    margin: "0 0 12px 0",
+                    fontSize: "16px",
+                    fontWeight: "700",
+                    color: "#B71C1C"
+                  }}>
+                    Need Help Getting Started?
+                  </h4>
+                  <p style={{
+                    margin: "0 0 16px 0",
+                    fontSize: "14px",
+                    color: "#C62828",
+                    lineHeight: "1.6"
+                  }}>
+                    Your score indicates you may benefit from incubation or acceleration support to strengthen your business foundation.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setShowBoostScoreModal(false);
+                      window.location.href = "/applications/product/request-overview";
+                    }}
+                    style={{
+                      width: "100%",
+                      background: "linear-gradient(135deg, #D32F2F, #B71C1C)",
+                      color: "white",
+                      border: "none",
+                      padding: "14px 24px",
+                      borderRadius: "8px",
+                      fontSize: "14px",
+                      fontWeight: "600",
+                      cursor: "pointer",
+                      transition: "all 0.3s ease",
+                      boxShadow: "0 4px 12px rgba(211, 47, 47, 0.3)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px"
+                    }}
+                    onMouseOver={(e) => {
+                      e.target.style.transform = "translateY(-2px)";
+                      e.target.style.boxShadow = "0 6px 16px rgba(211, 47, 47, 0.4)";
+                    }}
+                    onMouseOut={(e) => {
+                      e.target.style.transform = "translateY(0)";
+                      e.target.style.boxShadow = "0 4px 12px rgba(211, 47, 47, 0.3)";
+                    }}
+                  >
+                    Apply for Catalyst Program
+                  </button>
+                </div>
+              )}
+
               {recommendations.length > 0 ? (
                 <>
                   <div
@@ -1205,7 +1234,7 @@ export function BigScoreCard({
                         fontWeight: "700",
                       }}
                     >
-                      🎯 Targeted Growth Tools
+                      Targeted Growth Tools
                     </p>
                     <p
                       style={{
@@ -1232,7 +1261,7 @@ export function BigScoreCard({
                           background: `linear-gradient(135deg, #8D6E63 0%, #6D4C41 100%)`,
                           color: "white",
                           border: "none",
-                          padding: "20px",
+                          padding: "24px 20px",
                           borderRadius: "12px",
                           fontSize: "14px",
                           fontWeight: "600",
@@ -1241,23 +1270,23 @@ export function BigScoreCard({
                           flexDirection: "column",
                           alignItems: "flex-start",
                           justifyContent: "space-between",
-                          gap: "12px",
+                          gap: "16px",
                           transition: "all 0.2s ease",
                           textAlign: "left",
-                          lineHeight: "1.3",
-                          minHeight: "160px",
+                          lineHeight: "1.4",
+                          minHeight: "140px",
                           position: "relative",
                           overflow: "hidden",
                           boxShadow: "0 4px 12px rgba(141, 110, 99, 0.3)",
                         }}
-                        onClick={() => (window.location.href = rec.url)}
+                        onClick={() => handleToolClick(rec)}
                         onMouseOver={(e) => {
-                          e.target.style.transform = "translateY(-3px)"
-                          e.target.style.boxShadow = "0 8px 20px rgba(141, 110, 99, 0.4)"
+                          e.currentTarget.style.transform = "translateY(-3px)"
+                          e.currentTarget.style.boxShadow = "0 8px 20px rgba(141, 110, 99, 0.4)"
                         }}
                         onMouseOut={(e) => {
-                          e.target.style.transform = "translateY(0px)"
-                          e.target.style.boxShadow = "0 4px 12px rgba(141, 110, 99, 0.3)"
+                          e.currentTarget.style.transform = "translateY(0px)"
+                          e.currentTarget.style.boxShadow = "0 4px 12px rgba(141, 110, 99, 0.3)"
                         }}
                       >
                         {/* Priority badge */}
@@ -1279,33 +1308,22 @@ export function BigScoreCard({
                             URGENT
                           </div>
                         )}
-                        <div style={{ flex: "1" }}>
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "10px",
-                              marginBottom: "12px",
-                            }}
-                          >
-                            <div
-                              style={{
-                                background: "rgba(255, 255, 255, 0.2)",
-                                padding: "8px",
-                                borderRadius: "8px",
-                              }}
-                            >
-                              {rec.icon}
-                            </div>
-                            <span style={{ fontSize: "16px", fontWeight: "700" }}>{rec.title}</span>
-                          </div>
+                        <div style={{ flex: "1", width: "100%" }}>
+                          <h4 style={{ 
+                            fontSize: "18px", 
+                            fontWeight: "700",
+                            margin: "0 0 12px 0",
+                            color: "white"
+                          }}>
+                            {rec.title}
+                          </h4>
                           <p
                             style={{
                               fontSize: "13px",
                               fontWeight: "400",
                               margin: "0",
                               opacity: "0.95",
-                              lineHeight: "1.4",
+                              lineHeight: "1.5",
                             }}
                           >
                             {rec.description}
@@ -1315,7 +1333,7 @@ export function BigScoreCard({
                           style={{
                             width: "100%",
                             background: "linear-gradient(135deg, #A67C52 0%, #8D6E63 100%)",
-                            padding: "10px 16px",
+                            padding: "12px 16px",
                             borderRadius: "8px",
                             textAlign: "center",
                             fontSize: "13px",
@@ -1328,7 +1346,7 @@ export function BigScoreCard({
                         >
                           {rec.action === "Find Service Provider"
                             ? "Find Service Provider"
-                            : `💳 Purchase ${rec.action}`}
+                            : `Purchase ${rec.action}`}
                         </div>
                       </div>
                     ))}
@@ -1351,7 +1369,7 @@ export function BigScoreCard({
                         fontWeight: "700",
                       }}
                     >
-                      💡 Why Invest in Growth Tools?
+                      Why Invest in Growth Tools?
                     </p>
                     <p
                       style={{
@@ -1377,7 +1395,7 @@ export function BigScoreCard({
                   }}
                 >
                   <p style={{ fontSize: "18px", fontWeight: "700", color: "#5D4037", margin: "0 0 12px 0" }}>
-                    🎉 Outstanding Performance!
+                    Outstanding Performance!
                   </p>
                   <p style={{ fontSize: "15px", color: "#6D4C41", margin: "0" }}>
                     Your scores are excellent across all areas. Consider our premium optimization tools for advanced
@@ -1390,7 +1408,6 @@ export function BigScoreCard({
         </div>
       )}
 
-      {/* CSS for spinner animation */}
       <style jsx>{`
         @keyframes spin {
           to {
