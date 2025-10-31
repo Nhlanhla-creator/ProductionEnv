@@ -8,17 +8,14 @@ import { FundabilityScoreCard } from "./fundability-score-card"
 import { ComplianceScoreCard } from "./compliance-score"
 import { BigScoreCard } from "./big-score"
 import { PISScoreCard } from "./pis-score"
-import { LeadershipScoreCard } from "./leadership-score-card" // New import
+import { LeadershipScoreCard } from "./leadership-score-card"
 import { CustomerReviewsCard } from "./customer-reviews-card"
-import ShopToolsPage from "../../smses/MyGrowthTools/shop" // Import the shop component
+import ShopToolsPage from "../../smses/MyGrowthTools/shop"
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
 import { X, ChevronRight, Info, Smile, Star, ShieldCheck, ChevronDown, ChevronUp, FileText, TrendingUp, AlertCircle, CheckCircle, Download, Calendar, Bus } from 'lucide-react'
 import "./Dashboard.css"
 import { getFunctions, httpsCallable } from "firebase/functions";
-
-// Add this import at the top with your other imports
-
 
 import { onAuthStateChanged, getAuth } from "firebase/auth"
 import {
@@ -29,11 +26,9 @@ import {
 } from "firebase/firestore";
 import { API_KEYS } from "../../API"
 
-// const apiKey = API_KEYS.OPENAI;
-
-const sendMessageToChatGPT = async (message /*, apiKey not needed */) => {
+const sendMessageToChatGPT = async (message) => {
   try {
-    const functions = getFunctions(); // or getFunctions(undefined, "us-central1") if you deploy there
+    const functions = getFunctions();
     const call = httpsCallable(functions, "generateSummaryText");
     const resp = await call({ prompt: message });
     const content = resp?.data?.content;
@@ -41,7 +36,6 @@ const sendMessageToChatGPT = async (message /*, apiKey not needed */) => {
     return content;
   } catch (err) {
     console.error("Callable error:", err);
-    // Re-throw so your existing callers show the same UI errors
     throw new Error(err?.message || "Failed to generate summary text.");
   }
 };
@@ -58,7 +52,6 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
   const [improvementSummary, setImprovementSummary] = useState("");
   const [isGeneratingNew, setIsGeneratingNew] = useState(false);
 
-  // Debug logging
   useEffect(() => {
     console.log("SummaryReportCard - propUserId:", propUserId);
     console.log("SummaryReportCard - current userId:", userId);
@@ -72,7 +65,6 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
     return { level: "Not Ready for Funding", color: "#F44336" };
   };
 
-  // Function to save summary data to Firebase
   const saveSummaryToFirebase = async (userId, summaryData) => {
     try {
       const summaryRef = doc(db, "Aisummaryreports", userId);
@@ -87,7 +79,6 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
     }
   };
 
-  // Function to load summary data from Firebase
   const loadSummaryFromFirebase = async (userId) => {
     try {
       const summaryRef = doc(db, "Aisummaryreports", userId);
@@ -110,7 +101,6 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
     }
   };
 
-  // Function to check if trigger is set
   const checkTriggerFundabilityEvaluation = async (userId) => {
     try {
       const profileRef = doc(db, "universalProfiles", userId);
@@ -127,7 +117,6 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
     }
   };
 
-  // Function to reset trigger
   const resetTrigger = async (userId) => {
     try {
       const profileRef = doc(db, "universalProfiles", userId);
@@ -139,7 +128,6 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
     }
   };
 
-  // Handle authentication state - Fixed to wait for proper auth
   useEffect(() => {
     if (propUserId) {
       setUserId(propUserId);
@@ -159,7 +147,6 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
     return () => unsubscribe();
   }, [propUserId]);
 
-  // Main data fetching effect - Enhanced with better error handling
   useEffect(() => {
     if (!userId || !apiKey) {
       console.log("No userId available, skipping data fetch");
@@ -173,24 +160,19 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
       setError(null);
 
       try {
-        // Check if trigger is set
         const shouldTriggerNew = await checkTriggerFundabilityEvaluation(userId);
 
         if (shouldTriggerNew) {
           console.log("Trigger detected, waiting 5 seconds then generating new evaluation...");
           setIsGeneratingNew(true);
 
-          // Wait 5 seconds
           await new Promise(resolve => setTimeout(resolve, 5000));
 
-          // Generate new evaluation
           await generateNewEvaluation(userId);
 
-          // Reset trigger
           await resetTrigger(userId);
           setIsGeneratingNew(false);
         } else {
-          // Try to load existing data from Firebase first
           const existingSummary = await loadSummaryFromFirebase(userId);
 
           if (existingSummary && existingSummary.reportData) {
@@ -214,12 +196,10 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
     fetchData();
   }, [userId, apiKey]);
 
-  // Enhanced generateNewEvaluation with better error handling and data validation
   const generateNewEvaluation = async (userId) => {
     try {
       console.log("Generating new evaluation for userId:", userId);
 
-      // Initialize an empty report data structure
       const newReportData = {
         generatedDate: new Date().toLocaleDateString('en-GB', {
           day: '2-digit',
@@ -239,7 +219,6 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
         missingSections: []
       };
 
-      // Check what data we have available
       const availableData = {
         combinedEvaluations: false,
         fundability: false,
@@ -249,7 +228,6 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
         business: false
       };
 
-      // Try to get combined evaluations first
       const combinedQuery = query(collection(db, "combinedEvaluations"), where("userId", "==", userId));
       const combinedSnap = await getDocs(combinedQuery);
 
@@ -261,7 +239,6 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
         newReportData.fundabilityStatus = combinedData.status || getScoreLevel(newReportData.overallScore).level;
       }
 
-      // Fetch all other evaluations in parallel
       const [fundSnap, legitSnap, profileSnap, pitchSnap, businessSnap] = await Promise.all([
         getDoc(doc(db, "aiFundabilityEvaluations", userId)),
         getDoc(doc(db, "aiLegitimacyEvaluation", userId)),
@@ -270,7 +247,6 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
         getDocs(query(collection(db, "aiEvaluations"), where("userId", "==", userId)))
       ]);
 
-      // Process fundability data
       if (fundSnap.exists()) {
         availableData.fundability = true;
         newReportData.aiEvaluations.fundability = fundSnap.data();
@@ -278,7 +254,6 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
         newReportData.missingSections.push("Fundability Evaluation");
       }
 
-      // Process legitimacy data
       if (legitSnap.exists()) {
         availableData.legitimacy = true;
         newReportData.aiEvaluations.legitimacy = legitSnap.data();
@@ -286,7 +261,6 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
         newReportData.missingSections.push("Legitimacy Evaluation");
       }
 
-      // Process profile data
       if (profileSnap.exists()) {
         availableData.profile = true;
         const profileData = profileSnap.data();
@@ -294,7 +268,6 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
         newReportData.overallScore = profileData.bigScore || newReportData.overallScore;
         newReportData.profileEvaluationScore = profileData.pisScore || 0;
 
-        // If we have profile data but no combined score, use profile score as fallback
         if (!availableData.combinedEvaluations) {
           newReportData.overallScore = profileData.bigScore || 0;
           newReportData.fundabilityStatus = getScoreLevel(newReportData.overallScore).level;
@@ -303,7 +276,6 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
         newReportData.missingSections.push("Business Profile");
       }
 
-      // Process pitch data
       if (!pitchSnap.empty) {
         availableData.pitch = true;
         const pitchData = pitchSnap.docs[0].data();
@@ -313,7 +285,6 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
         newReportData.missingSections.push("Pitch Deck Evaluation");
       }
 
-      // Process business plan data
       if (!businessSnap.empty) {
         availableData.business = true;
         const businessData = businessSnap.docs[0].data();
@@ -323,7 +294,6 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
         newReportData.missingSections.push("Business Plan Evaluation");
       }
 
-      // Calculate weighted average if we have multiple scores
       const scores = [];
       if (availableData.business) scores.push(newReportData.businessPlanScore);
       if (availableData.pitch) scores.push(newReportData.pitchDeckScore);
@@ -331,14 +301,12 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
 
       if (scores.length > 0) {
         newReportData.weightedAverageScore = scores.reduce((a, b) => a + b, 0) / scores.length;
-        // Only use weighted average if we don't have a combined score
         if (!availableData.combinedEvaluations) {
           newReportData.overallScore = newReportData.weightedAverageScore;
           newReportData.fundabilityStatus = getScoreLevel(newReportData.overallScore).level;
         }
       }
 
-      // Extract detailed scores from available structured content
       if (newReportData.structuredContent.businessPlan?.rawContent) {
         newReportData.detailedScores = [
           ...newReportData.detailedScores,
@@ -365,10 +333,8 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
         ];
       }
 
-      // Set improvement suggestions based on available data
       newReportData.improvementSuggestions = getImprovementSuggestions(newReportData.structuredContent);
 
-      // If we're missing critical sections, add a general improvement suggestion
       if (newReportData.missingSections.length > 0) {
         newReportData.improvementSuggestions.push({
           category: "Complete Missing Evaluations",
@@ -381,11 +347,9 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
 
       setReportData(newReportData);
 
-      // Generate AI insights with whatever data we have
       if (Object.values(availableData).some(v => v)) {
         await generateAIInsights(newReportData, userId);
       } else {
-        // If no data at all, use the basic fallback
         await generateBasicAIInsights(newReportData, userId);
       }
 
@@ -395,7 +359,6 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
     }
   };
 
-  // New function for basic AI insights when limited data is available
   const generateBasicAIInsights = async (reportData, userId) => {
     const fallbackPriorities = [
       {
@@ -415,7 +378,6 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
     setTopPriorities(fallbackPriorities);
     setImprovementSummary("### Complete Your Profile\n- Fill out all business profile sections\n- Upload required documents\n- Provide financial information\n\n### Next Steps\n- Complete business plan evaluation\n- Submit pitch deck for review\n- Ensure all compliance requirements are met");
 
-    // Save basic summary to Firebase
     const summaryData = {
       reportData,
       topPriorities: fallbackPriorities,
@@ -426,7 +388,6 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
     await saveSummaryToFirebase(userId, summaryData);
   };
 
-  // Rest of the component methods remain the same...
   const generateAIInsights = async (reportData, userId) => {
     if (!reportData || !reportData.aiEvaluations) return;
 
@@ -447,7 +408,6 @@ ${reportData.aiEvaluations.business?.evaluation?.content || ""}
     setPrioritiesLoading(true);
 
     try {
-      // Generate top priorities
       const priorityPrompt = `
 You are an expert business analyst specializing in fundability assessment. Based on the comprehensive business evaluations provided below, identify the TOP 3 MOST CRITICAL PRIORITIES that this business needs to address immediately to improve their fundability and investment readiness.
 
@@ -486,7 +446,6 @@ Respond only with valid JSON.
 
       setTopPriorities(newTopPriorities);
 
-      // Generate improvement summary
       const summaryPrompt = `
 You are an expert business analyst. You are given four evaluations for a company:
 1. AI Fundability Analysis
@@ -520,7 +479,6 @@ Keep it concise, professional, and actionable.
       const summaryResponse = await sendMessageToChatGPT(summaryPrompt + "\n\n" + combinedText, apiKey);
       setImprovementSummary(summaryResponse);
 
-      // Save to Firebase
       const summaryData = {
         topPriorities: newTopPriorities,
         improvementSummary: summaryResponse,
@@ -533,7 +491,6 @@ Keep it concise, professional, and actionable.
       console.error("Failed to generate AI insights:", err);
       setImprovementSummary("Unable to generate improvement summary at this time.");
 
-      // Save what we have to Firebase anyway
       const summaryData = {
         reportData,
         topPriorities: generateIntelligentFallback(reportData),
@@ -550,7 +507,6 @@ Keep it concise, professional, and actionable.
   const generateIntelligentFallback = (reportData) => {
     const fallbackPriorities = [];
 
-    // Analyze scores to determine weak areas
     const scores = {
       business: reportData.businessPlanScore || 0,
       pitch: reportData.pitchDeckScore || 0,
@@ -558,10 +514,8 @@ Keep it concise, professional, and actionable.
       overall: reportData.overallScore || 0
     };
 
-    // Find the lowest scoring areas
     const sortedScores = Object.entries(scores).sort(([, a], [, b]) => a - b);
 
-    // Map score types to actionable priorities
     const priorityMap = {
       business: {
         title: "Business Strategy",
@@ -581,7 +535,6 @@ Keep it concise, professional, and actionable.
       }
     };
 
-    // Generate priorities based on lowest scores
     for (let i = 0; i < Math.min(3, sortedScores.length); i++) {
       const [scoreType] = sortedScores[i];
       if (priorityMap[scoreType]) {
@@ -589,7 +542,6 @@ Keep it concise, professional, and actionable.
       }
     }
 
-    // Fill remaining slots with common priorities if needed
     const commonPriorities = [
       {
         title: "Financial Modeling",
@@ -619,19 +571,17 @@ Keep it concise, professional, and actionable.
     return fallbackPriorities.slice(0, 3);
   };
 
-  // Helper function to extract scores from markdown content
   const extractScoresFromMarkdown = (markdown) => {
     const scoreRegex = /\| (.+?) \| (\d) \|/g;
     const matches = [...markdown.matchAll(scoreRegex)];
     return matches.map(match => ({
       category: match[1],
-      score: parseInt(match[2]) * 20, // Convert 0-5 scale to 0-100
+      score: parseInt(match[2]) * 20,
       maxScore: 100,
       rationale: `${match[1]} scored ${parseInt(match[2])} out of 5`
     }));
   };
 
-  // Helper function to get max score for profile categories
   const getMaxScoreForProfileCategory = (category) => {
     const maxScores = {
       leadership: 15,
@@ -645,11 +595,9 @@ Keep it concise, professional, and actionable.
     return maxScores[category] || 5;
   };
 
-  // Helper function to extract improvement suggestions
   const getImprovementSuggestions = (structuredContent) => {
     const suggestions = [];
 
-    // Business plan improvements
     if (structuredContent.businessPlan?.rawContent) {
       const businessPlanContent = structuredContent.businessPlan.rawContent;
       const improvementSection = businessPlanContent.match(/### 3\. Improvement Suggestions.*?### 4/s)?.[0];
@@ -663,7 +611,6 @@ Keep it concise, professional, and actionable.
       }
     }
 
-    // Pitch deck improvements
     if (structuredContent.pitchDeck?.rawContent) {
       const pitchDeckContent = structuredContent.pitchDeck.rawContent;
       const improvementSection = pitchDeckContent.match(/### 4\. Key Improvement Suggestions.*?### 5/s)?.[0];
@@ -677,7 +624,6 @@ Keep it concise, professional, and actionable.
       }
     }
 
-    // Profile evaluation improvements
     if (structuredContent.profileEvaluation?.summaryRecommendation) {
       suggestions.push({
         category: "Profile Evaluation",
@@ -847,7 +793,6 @@ Keep it concise, professional, and actionable.
           </div>
 
           <div class="content">
-            <!-- Scores Overview -->
             <div class="section">
               <div class="scores-grid">
                 <div class="score-card">
@@ -873,7 +818,6 @@ Keep it concise, professional, and actionable.
               </div>
             </div>
 
-            <!-- Key Improvement Areas -->
             <div class="section">
               <h2 class="section-title">
                 <span style="display: inline-block; padding: 8px; background: #5D4037; border-radius: 8px; color: white;">📈</span>
@@ -885,7 +829,6 @@ Keep it concise, professional, and actionable.
               </div>
             </div>
 
-            <!-- Footer -->
             <div style="text-align: center; padding-top: 30px; border-top: 1px solid #e9ecef; color: #6c757d; font-size: 0.9rem;">
               <p>This report was generated by BIG Analytics on ${new Date().toLocaleDateString('en-GB', {
       day: '2-digit',
@@ -923,7 +866,6 @@ Keep it concise, professional, and actionable.
 
   return (
     <>
-      {/* Compact Summary Report Card */}
       <div
         className="summary-report-card"
         style={{
@@ -949,7 +891,6 @@ Keep it concise, professional, and actionable.
           e.currentTarget.style.boxShadow = '0 8px 32px rgba(62, 39, 35, 0.3)';
         }}
       >
-        {/* Decorative elements */}
         <div style={{
           position: 'absolute',
           top: 0,
@@ -969,7 +910,6 @@ Keep it concise, professional, and actionable.
           borderRadius: '50%'
         }} />
 
-        {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{
@@ -999,11 +939,8 @@ Keep it concise, professional, and actionable.
               </p>
             </div>
           </div>
-
-
         </div>
 
-        {/* Core Metrics - Updated */}
         <div style={{
           marginBottom: '20px'
         }}>
@@ -1100,19 +1037,12 @@ Keep it concise, professional, and actionable.
                       {priority.description}
                     </div>
                   </div>
-
                 );
               })}
-
             </div>
-
-
-
           )}
         </div>
 
-
-        {/* View Full Report Button */}
         <button
           onClick={() => setShowReportModal(true)}
           style={{
@@ -1148,7 +1078,6 @@ Keep it concise, professional, and actionable.
         </button>
       </div>
 
-      {/* Improved Full Report Modal */}
       {showReportModal && reportData && (
         <div
           className="modal-overlay"
@@ -1189,7 +1118,6 @@ Keep it concise, professional, and actionable.
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal Header */}
             <div style={{
               background: 'linear-gradient(135deg, #5D4037 0%, #3E2723 100%)',
               color: 'white',
@@ -1256,13 +1184,11 @@ Keep it concise, professional, and actionable.
               </div>
             </div>
 
-            {/* Modal Body */}
             <div style={{
               padding: '40px',
               overflowY: 'auto',
               flex: 1
             }}>
-              {/* Improvement Summary Section */}
               <div style={{
                 backgroundColor: 'white',
                 borderRadius: '16px',
@@ -1343,7 +1269,6 @@ Keep it concise, professional, and actionable.
                 )}
               </div>
 
-              {/* Download Button */}
               <div style={{
                 textAlign: 'center',
                 marginTop: '32px'
@@ -1397,19 +1322,27 @@ export function Dashboard() {
   const [currentDashboardStep, setCurrentDashboardStep] = useState(0)
   const [authChecked, setAuthChecked] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [activeTab, setActiveTab] = useState("bigscore") // New state for tab management
+  const [activeTab, setActiveTab] = useState("bigscore")
+  const [toolsCategory, setToolsCategory] = useState(null) // NEW: For tracking which tools category to open
 
-  // Score states for BIG Score calculation - Added leadershipScore
+  // Score states
   const [complianceScore, setComplianceScore] = useState(0)
   const [legitimacyScore, setLegitimacyScore] = useState(0)
-  const [leadershipScore, setLeadershipScore] = useState(0) // New state
+  const [leadershipScore, setLeadershipScore] = useState(0)
   const [fundabilityScore, setFundabilityScore] = useState(0)
   const [pisScore, setPisScore] = useState(0)
   
   const apiKey = API_KEYS.OPENAI
-  console.log(apiKey)
   const user = auth.currentUser
   const userName = user ? user.email : "User"
+
+  // NEW: Handle tab change with optional category
+  const handleTabChange = (tab, category = null) => {
+    setActiveTab(tab)
+    if (category) {
+      setToolsCategory(category)
+    }
+  }
 
   const dashboardSteps = [
     {
@@ -1446,7 +1379,6 @@ export function Dashboard() {
     backgroundBrown: "#EFEBE9",
   }
 
-  // Add/remove body class to prevent scrolling when modal is open
   useEffect(() => {
     if (showDashboardPopup) {
       document.body.classList.add('modal-open');
@@ -1458,7 +1390,6 @@ export function Dashboard() {
       document.body.style.width = '';
     }
 
-    // Cleanup on unmount
     return () => {
       document.body.classList.remove('modal-open');
       document.body.style.position = '';
@@ -1587,7 +1518,7 @@ export function Dashboard() {
               border: '1px solid #e8ddd6'
             }}>
               <button
-                onClick={() => setActiveTab("bigscore")}
+                onClick={() => handleTabChange("bigscore")}
                 style={{
                   flex: 1,
                   padding: '18px 24px',
@@ -1614,7 +1545,7 @@ export function Dashboard() {
                 BIG Score
               </button>
               <button
-                onClick={() => setActiveTab("tools")}
+                onClick={() => handleTabChange("tools")}
                 style={{
                   flex: 1,
                   padding: '18px 24px',
@@ -1637,23 +1568,20 @@ export function Dashboard() {
                   }
                 }}
               >
-            Improve My BIG Score
+                Improve My BIG Score
               </button>
             </div>
           </section>
 
-          {/* Conditional Content Based on Active Tab */}
           {activeTab === "bigscore" ? (
             <>
-              {/* Top Row - Application Tracker (full width) */}
               <section className="tracker-section" style={{ marginBottom: '20px' }}>
                 <ApplicationTracker styles={styles} userId={profileData?.id} />
               </section>
 
-              {/* Row 1 - BIG Score, Customer Reviews, and wider Summary Report */}
               <section className="big-score-reviews-row" style={{
                 display: 'grid',
-                gridTemplateColumns: '1fr 1fr 2fr', // BIG Score (1 unit), Customer Reviews (1 unit), Summary Report (2 units)
+                gridTemplateColumns: '1fr 1fr 2fr',
                 gap: '20px',
                 marginBottom: '20px'
               }}>
@@ -1662,10 +1590,11 @@ export function Dashboard() {
                   profileData={profileData}
                   complianceScore={complianceScore}
                   legitimacyScore={legitimacyScore}
-                  leadershipScore={leadershipScore} // Added leadershipScore prop
+                  leadershipScore={leadershipScore}
                   fundabilityScore={fundabilityScore}
                   pisScore={pisScore}
                   onScoreUpdate={score => console.log("Updated BIG Score:", score)}
+                  onTabChange={handleTabChange} // Pass the handler
                 />
 
                 <CustomerReviewsCard styles={styles} />
@@ -1676,45 +1605,6 @@ export function Dashboard() {
                     userId={profileData?.id}
                     apiKey={apiKey}
                   />
-                )}
-                {!apiKey && (
-                  <section className="individual-scores-row" style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(5, 1fr)',
-                    gap: '20px',
-                    marginBottom: '20px'
-                  }}>
-
-                    <div style={{
-                      background: 'linear-gradient(135deg, #ffffff 0%, #faf8f6 100%)',
-                      borderRadius: '20px',
-                      padding: '24px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      minHeight: '200px',
-                      border: '1px solid #e8ddd6'
-                    }}>
-                      <div style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        gap: '12px',
-                        color: '#8d6e63'
-                      }}>
-                        <div style={{
-                          width: '24px',
-                          height: '24px',
-                          border: '3px solid #d7ccc8',
-                          borderTop: '3px solid #8d6e63',
-                          borderRadius: '50%',
-                          animation: 'spin 1s linear infinite'
-                        }}></div>
-                        <span style={{ fontSize: '12px', fontWeight: '500' }}>Loading...</span>
-                      </div>
-                    </div>
-
-                  </section>
                 )}
               </section>
 
@@ -1762,7 +1652,6 @@ export function Dashboard() {
                 </section>
               )}
 
-              {/* Loading indicator while API key is being fetched */}
               {!apiKey && (
                 <section className="individual-scores-row" style={{
                   display: 'grid',
@@ -1804,80 +1693,75 @@ export function Dashboard() {
               )}
             </>
           ) : (
-            // Tools & Templates Tab Content
             <section className="tools-section">
-              <ShopToolsPage />
+              <ShopToolsPage initialCategory={toolsCategory} />
             </section>
           )}
         </main>
       </div>
 
-      {/* Additional CSS for responsive design - UPDATED for 5 cards */}
       <style jsx>{`
-        /* Prevent body scroll when modal is open */
         body.modal-open {
           overflow: hidden;
           position: fixed;
           width: 100%;
         }
 
-        /* Summary Report Card Specific Styles */
         .summary-report-card {
           min-height: 400px;
         }
 
-        /* Enhanced z-index and interaction handling */
         .score-card-wrapper {
           transition: transform 0.2s ease;
           position: relative;
           z-index: 1;
           isolation: isolate;
         }
+
         .priority-card {
-  position: relative;
-}
+          position: relative;
+        }
 
-.priority-card:hover .tooltip-content {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(0px);
-  z-index: 99;
-}
-.tooltip-content {
-  position: absolute;
-  bottom: 120%;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: #3E2723;
-  color: #EFEBE9;
-  padding: 10px 14px;
-  border-radius: 8px;
-  font-size: 0.75rem;
-  max-width: 240px;
-  width: max-content;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
-  white-space: normal;
-  line-height: 1.4;
-  pointer-events: none;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.25s ease, transform 0.25s ease;
-  z-index: 1000;
-}
+        .priority-card:hover .tooltip-content {
+          opacity: 1;
+          visibility: visible;
+          transform: translateY(0px);
+          z-index: 99;
+        }
 
-.priority-card:hover .tooltip-content {
-  opacity: 1;
-  visibility: visible;
-  transform: translateX(-50%) translateY(-6px);
-}
+        .tooltip-content {
+          position: absolute;
+          bottom: 120%;
+          left: 50%;
+          transform: translateX(-50%);
+          background-color: #3E2723;
+          color: #EFEBE9;
+          padding: 10px 14px;
+          border-radius: 8px;
+          font-size: 0.75rem;
+          max-width: 240px;
+          width: max-content;
+          box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+          white-space: normal;
+          line-height: 1.4;
+          pointer-events: none;
+          opacity: 0;
+          visibility: hidden;
+          transition: opacity 0.25s ease, transform 0.25s ease;
+          z-index: 1000;
+        }
 
+        .priority-card:hover .tooltip-content {
+          opacity: 1;
+          visibility: visible;
+          transform: translateX(-50%) translateY(-6px);
+        }
 
         .score-card-wrapper:hover {
           transform: translateY(-2px);
           z-index: 50;
         }
 
-        /* Ensure buttons are always clickable with higher specificity */
         .score-card-wrapper .fun-button,
         .score-card-wrapper button,
         .score-card-wrapper .text-center {
@@ -1886,7 +1770,6 @@ export function Dashboard() {
           pointer-events: auto !important;
         }
 
-        /* Enhanced tooltip positioning and interaction */
         .score-tooltip {
           animation: fadeInUp 0.3s ease;
           z-index: 100 !important;
@@ -1894,7 +1777,6 @@ export function Dashboard() {
           user-select: none;
         }
 
-        /* Prevent tooltip from interfering with buttons */
         .score-card-wrapper .fun-button:hover ~ .score-tooltip,
         .score-card-wrapper button:hover ~ .score-tooltip,
         .score-card-wrapper .text-center:hover ~ .score-tooltip {
@@ -1913,7 +1795,6 @@ export function Dashboard() {
           z-index: 2;
         }
 
-        /* Modal improvements */
         .modal-overlay {
           z-index: 9999;
           backdrop-filter: blur(4px);
@@ -1923,7 +1804,6 @@ export function Dashboard() {
           z-index: 10000;
         }
 
-        /* Spinning animation for loading indicator */
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
@@ -1951,31 +1831,31 @@ export function Dashboard() {
 
         @media (max-width: 1400px) {
           .individual-scores-row {
-            grid-template-columns: repeat(3, 1fr) !important; /* 3 columns on smaller desktops */
+            grid-template-columns: repeat(3, 1fr) !important;
           }
         }
 
         @media (max-width: 1200px) {
           .big-score-reviews-row {
-            grid-template-columns: 1fr 2fr !important; /* Stack BIG Score and Customer Reviews, keep Summary Report wider */
+            grid-template-columns: 1fr 2fr !important;
           }
           
           .individual-scores-row {
-            grid-template-columns: repeat(3, 1fr) !important; /* 3 columns on tablets */
+            grid-template-columns: repeat(3, 1fr) !important;
           }
         }
 
         @media (max-width: 1024px) {
           .big-score-reviews-row {
-            grid-template-columns: repeat(2, 1fr) !important; /* Two columns on tablets */
+            grid-template-columns: repeat(2, 1fr) !important;
           }
           
           .summary-report-card {
-            grid-column: 1 / -1; /* Summary Report spans full width on tablets */
+            grid-column: 1 / -1;
           }
           
           .individual-scores-row {
-            grid-template-columns: repeat(2, 1fr) !important; /* 2 columns on smaller tablets */
+            grid-template-columns: repeat(2, 1fr) !important;
           }
 
           .explanation-card {
@@ -1994,7 +1874,7 @@ export function Dashboard() {
         @media (max-width: 768px) {
           .big-score-reviews-row,
           .individual-scores-row {
-            grid-template-columns: 1fr !important; /* Single column on mobile */
+            grid-template-columns: 1fr !important;
           }
 
           .summary-report-card {
@@ -2026,7 +1906,6 @@ export function Dashboard() {
             font-size: 0.8rem !important;
           }
 
-          /* Modal adjustments for mobile */
           .modal-content {
             max-width: 95vw !important;
             max-height: 95vh !important;

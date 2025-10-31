@@ -18,7 +18,6 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
   const [showAboutScore, setShowAboutScore] = useState(false);
   const [showScoreBreakdown, setShowScoreBreakdown] = useState(false);
   const [showDetailedAnalysis, setShowDetailedAnalysis] = useState(false);
-  const [showPisCalculation, setShowPisCalculation] = useState(false); // ← ADD THIS LINE
   const [governanceStage, setGovernanceStage] = useState("");
   const [governanceRecommendation, setGovernanceRecommendation] = useState("");
   const [triggeredByAuto, setTriggeredByAuto] = useState(true);
@@ -81,7 +80,6 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
   };
 
   // Add/remove body class to prevent scrolling when modal is open
-  // ⬇️ Add this effect (after parseAiEvaluation, before other effects)
   useEffect(() => {
     if (!aiEvaluationResult) return;
 
@@ -96,7 +94,7 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
 
     // Notify parent with the current overall score
     if (onScoreUpdate) onScoreUpdate(parsed.govScore || 0);
-  }, [aiEvaluationResult, profileData]); // include profileData so fallback PIS recalculation can use latest data
+  }, [aiEvaluationResult, profileData]);
 
 
   useEffect(() => {
@@ -133,7 +131,7 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
 
   const sendMessageToChatGPT = async (message) => {
     try {
-      const functions = getFunctions(); // optionally: getFunctions(undefined, "us-central1")
+      const functions = getFunctions();
       const fn = httpsCallable(functions, "generateGovernanceAnalysis");
       const resp = await fn({ prompt: message });
       const content = resp?.data?.content;
@@ -467,7 +465,7 @@ Governance Score: [score]%
         console.log("Trigger detected: Running PIS AI evaluation...");
 
 
-        const result = await runAiEvaluation(); // This already saves to Firestore internally
+        const result = await runAiEvaluation();
 
         // Reset the trigger
         await updateDoc(docRef, { triggerLegitimacyEvaluation: false });
@@ -619,9 +617,9 @@ Governance Score: [score]%
         border: "1px solid #e8ddd6",
         overflow: "hidden",
         position: "relative",
-        width: "100%", // Add this line to make it full width
-        minWidth: "210px", // Add this for minimum width
-        maxWidth: "000px", // Add this to limit maximum width (optional)
+        width: "100%",
+        minWidth: "210px",
+        maxWidth: "000px",
       }}>
         {/* Header with gradient */}
         <div style={{
@@ -770,7 +768,7 @@ Governance Score: [score]%
               transition: "all 0.3s ease",
               boxShadow: "0 4px 16px rgba(93, 64, 55, 0.3)",
               whiteSpace: "nowrap",
-              marginTop: "18px" // 👈 added this line to bring it down
+              marginTop: "18px"
             }}
             onMouseOver={(e) => {
               e.target.style.transform = "translateY(-2px)";
@@ -1001,116 +999,6 @@ Governance Score: [score]%
                 )}
               </div>
 
-              {/* NEW: PIS Calculation Section */}
-              <div style={{
-                marginTop: "20px",
-                border: "1px solid #d7ccc8",
-                borderRadius: "8px",
-                overflow: "hidden"
-              }}>
-                <div
-                  style={{
-                    backgroundColor: "#8d6e63",
-                    color: "white",
-                    padding: "12px 16px",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    cursor: "pointer",
-                    fontWeight: "bold"
-                  }}
-                  onClick={() => setShowPisCalculation(!showPisCalculation)}
-                >
-                  <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <Calculator size={18} />
-                    PIS Calculation Breakdown
-                  </span>
-                  <ChevronDown
-                    size={20}
-                    style={{
-                      transform: showPisCalculation ? "rotate(180deg)" : "rotate(0deg)",
-                      transition: "transform 0.2s ease"
-                    }}
-                  />
-                </div>
-                {showPisCalculation && (
-                  <div style={{
-                    backgroundColor: "#f5f2f0",
-                    padding: "20px",
-                    color: "#5d4037",
-                    fontFamily: "monospace",
-                    fontSize: "14px",
-                    lineHeight: "1.6"
-                  }}>
-                    <div style={{ marginBottom: "16px" }}>
-                      <strong style={{ color: "#5d4037" }}>## PIS Calculation</strong>
-                    </div>
-
-                    {(() => {
-                      const pisCalc = calculatePIS();
-                      return (
-                        <>
-                          <div style={{ marginBottom: "8px" }}>
-                            Employees: <strong>{pisCalc.employees}</strong>
-                          </div>
-                          <div style={{ marginBottom: "8px" }}>
-                            Annual Turnover: <strong>R {pisCalc.turnover.toLocaleString()}</strong>
-                          </div>
-                          <div style={{ marginBottom: "8px" }}>
-                            Liabilities: <strong>R {pisCalc.liabilities.toLocaleString()}</strong>
-                          </div>
-                          <div style={{ marginBottom: "16px" }}>
-                            Shareholders: <strong>{pisCalc.shareholders}</strong>
-                          </div>
-
-                          <div style={{ marginBottom: "8px" }}>
-                            <strong>PIS = Employees + (Turnover/R1m) + (Liabilities/R1m) + Shareholders</strong>
-                          </div>
-                          <div style={{ marginBottom: "8px" }}>
-                            PIS = {pisCalc.employees} + ({pisCalc.turnover.toLocaleString()}/1,000,000) + ({pisCalc.liabilities.toLocaleString()}/1,000,000) + {pisCalc.shareholders}
-                          </div>
-                          <div style={{ marginBottom: "8px" }}>
-                            PIS = {pisCalc.employees} + {pisCalc.turnoverComponent} + {pisCalc.liabilitiesComponent} + {pisCalc.shareholders}
-                          </div>
-                          <div style={{ marginBottom: "16px", fontWeight: "bold", color: "#5d4037" }}>
-                            PIS = {pisCalc.totalPIS}
-                          </div>
-
-                          <div style={{
-                            backgroundColor: "#efebe9",
-                            padding: "12px",
-                            borderRadius: "6px",
-                            borderLeft: "4px solid #8d6e63"
-                          }}>
-                            <strong>PIS Score: {pisCalc.totalPIS}</strong>
-                          </div>
-
-                          <div style={{
-                            marginTop: "12px",
-                            backgroundColor: "#e8f5e8",
-                            padding: "12px",
-                            borderRadius: "6px",
-                            borderLeft: "4px solid #4caf50",
-                            fontSize: "13px"
-                          }}>
-                            <strong>Governance Stage: </strong>
-                            {pisCalc.totalPIS < 100 ? 'Advisors Stage' : pisCalc.totalPIS < 350 ? 'Emerging Board Stage' : 'Full Board Stage'}
-                            <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
-                              {pisCalc.totalPIS < 100
-                                ? 'Light governance structure recommended'
-                                : pisCalc.totalPIS < 350
-                                  ? 'Informal board structure recommended'
-                                  : 'Formal board structure strongly recommended'
-                              }
-                            </div>
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
-                )}
-              </div>
-
               {/* About the Governance Score section */}
               <div style={{
                 marginTop: "20px",
@@ -1146,10 +1034,13 @@ Governance Score: [score]%
                     padding: "20px",
                     color: "#5d4037"
                   }}>
-                    <p style={{ marginBottom: "16px", lineHeight: "1.6" }}>
+                    {/* Introduction */}
+                    <p style={{ marginBottom: "20px", lineHeight: "1.6", fontSize: "15px" }}>
                       The Governance score evaluates whether a business is ready to establish or improve its governance structures.
                       It combines the Public Interest Score (PIS) with an assessment of governance maturity.
                     </p>
+
+                    {/* Evaluation Categories */}
                     <div style={{
                       backgroundColor: "#efebe9",
                       padding: "16px",
@@ -1157,12 +1048,26 @@ Governance Score: [score]%
                       marginBottom: "16px",
                       borderLeft: "4px solid #8d6e63"
                     }}>
-                      <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>PIS Calculation:</p>
-                      <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037" }}>
-                        <li style={{ marginBottom: "6px" }}><strong>PIS = Employees + (Turnover/R1m) + (Liabilities/R1m) + Shareholders</strong></li>
-                        <li style={{ marginBottom: "6px" }}>Higher PIS indicates greater public interest and governance requirements</li>
+                      <p style={{ fontWeight: "bold", marginBottom: "12px", color: "#6d4c41", fontSize: "15px" }}>
+                        Evaluation Categories:
+                      </p>
+                      <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037", lineHeight: "1.8" }}>
+                        <li style={{ marginBottom: "12px" }}>
+                          <strong>Board Structure and Functionality:</strong> Evaluates the composition, roles, and effectiveness of your board or advisory structure. Assesses whether you have the right governance oversight for your business size and complexity.
+                        </li>
+                        <li style={{ marginBottom: "12px" }}>
+                          <strong>Strategic Planning:</strong> Reviews your long-term vision, business plans, and decision-making processes. Examines whether you have clear strategic direction and regularly review performance against goals.
+                        </li>
+                        <li style={{ marginBottom: "12px" }}>
+                          <strong>Risk Management:</strong> Analyzes how you identify, assess, and mitigate business risks. Evaluates your preparedness for crises and ability to protect business continuity.
+                        </li>
+                        <li style={{ marginBottom: "12px" }}>
+                          <strong>Policies & Documentation:</strong> Reviews essential business policies, employment contracts, and compliance documentation. Assesses completeness of your policy framework and legal protection measures.
+                        </li>
                       </ul>
                     </div>
+
+                    {/* Governance Stages */}
                     <div style={{
                       backgroundColor: "#efebe9",
                       padding: "16px",
@@ -1170,31 +1075,42 @@ Governance Score: [score]%
                       marginBottom: "16px",
                       borderLeft: "4px solid #8d6e63"
                     }}>
-                      <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>Governance Stages:</p>
-                      <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037" }}>
-                        <li style={{ marginBottom: "4px" }}><strong>PIS &lt; 100:</strong> Advisors Stage - light governance</li>
-                        <li style={{ marginBottom: "4px" }}><strong>PIS 100-349:</strong> Emerging Board Stage - informal board recommended</li>
-                        <li style={{ marginBottom: "4px" }}><strong>PIS ≥ 350:</strong> Full Board Stage - formal board strongly recommended</li>
+                      <p style={{ fontWeight: "bold", marginBottom: "12px", color: "#6d4c41", fontSize: "15px" }}>
+                        Governance Stages:
+                      </p>
+                      <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037", lineHeight: "1.8" }}>
+                        <li style={{ marginBottom: "8px" }}>
+                          <strong>PIS &lt; 100:</strong> Advisors Stage - light governance structures suitable for smaller operations
+                        </li>
+                        <li style={{ marginBottom: "8px" }}>
+                          <strong>PIS 100-349:</strong> Emerging Board Stage - informal board recommended for growing businesses
+                        </li>
+                        <li style={{ marginBottom: "8px" }}>
+                          <strong>PIS ≥ 350:</strong> Full Board Stage - formal board strongly recommended for complex operations
+                        </li>
                       </ul>
                     </div>
+
+                    {/* PIS Calculation */}
                     <div style={{
                       backgroundColor: "#efebe9",
                       padding: "16px",
                       borderRadius: "8px",
-                      marginBottom: "16px",
+                      marginBottom: "0",
                       borderLeft: "4px solid #8d6e63"
                     }}>
-                      <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>Purpose - the governance score helps:</p>
-                      <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037" }}>
-                        <li style={{ marginBottom: "4px" }}>Determine appropriate governance structures</li>
-                        <li style={{ marginBottom: "4px" }}>Assess compliance readiness</li>
-                        <li style={{ marginBottom: "4px" }}>Identify governance improvement areas</li>
-                        <li style={{ marginBottom: "4px" }}>Prepare for investment and scaling</li>
+                      <p style={{ fontWeight: "bold", marginBottom: "12px", color: "#6d4c41", fontSize: "15px" }}>
+                        PIS Calculation:
+                      </p>
+                      <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037", lineHeight: "1.8" }}>
+                        <li style={{ marginBottom: "8px" }}>
+                          <strong>PIS = Employees + (Turnover/R1m) + (Liabilities/R1m) + Shareholders</strong>
+                        </li>
+                        <li style={{ marginBottom: "0" }}>
+                          Higher PIS indicates greater public interest and governance requirements
+                        </li>
                       </ul>
                     </div>
-                    <p style={{ marginBottom: "0", lineHeight: "1.6", fontStyle: "italic", color: "#6d4c41" }}>
-                      Strong governance scores indicate readiness for investment and ability to manage complex business operations.
-                    </p>
                   </div>
                 )}
               </div>

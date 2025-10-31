@@ -1116,45 +1116,6 @@ OUTPUT FORMAT:
                 )}
               </div>
 
-              {/* Improve Your Score Button - Inside Modal */}
-              <div
-                style={{
-                  marginBottom: "20px",
-                  textAlign: "center",
-                }}
-              >
-                <button
-                  onClick={() => window.open("http://localhost:3000/growth/shop#legitimacy", "_blank")}
-                  style={{
-                    padding: "14px 24px",
-                    borderRadius: "10px",
-                    background: "linear-gradient(135deg, #8D6E63 0%, #6D4C41 100%)",
-                    color: "white",
-                    border: "none",
-                    fontWeight: "600",
-                    fontSize: "14px",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "8px",
-                    transition: "all 0.3s ease",
-                    boxShadow: "0 4px 16px rgba(141, 110, 99, 0.3)",
-                    margin: "0 auto",
-                  }}
-                  onMouseOver={(e) => {
-                    e.target.style.transform = "translateY(-2px)"
-                    e.target.style.boxShadow = "0 6px 20px rgba(141, 110, 99, 0.4)"
-                  }}
-                  onMouseOut={(e) => {
-                    e.target.style.transform = "translateY(0px)"
-                    e.target.style.boxShadow = "0 4px 16px rgba(141, 110, 99, 0.3)"
-                  }}
-                >
-                  <span>🚀 Improve Your Score</span>
-                </button>
-              </div>
-
               {/* About the Legitimacy Score section */}
               <div
                 style={{

@@ -14,9 +14,11 @@ import {
   where,
   updateDoc,
   serverTimestamp,
+  setDoc,
+  arrayUnion
 } from "firebase/firestore"
 import { db } from "../../firebaseConfig"
-import { Eye, Filter } from "lucide-react"
+import { Eye, Filter, History } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import emailjs from '@emailjs/browser'
 import { API_KEYS } from "../../API"
@@ -603,7 +605,115 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
     sortBy: "",
   })
 
+  const [contactedApplications, setContactedApplications] = useState([])
+  const [showContactedApplications, setShowContactedApplications] = useState(false)
+  const [applicationsWithContacts, setApplicationsWithContacts] = useState(new Set())
+
   const navigate = useNavigate()
+
+  useEffect(() => {
+    const loadContactedApplications = async () => {
+      try {
+        const user = getAuth().currentUser
+        if (!user) return
+
+        const userDocRef = doc(db, "userApplications", user.uid)
+        const userDoc = await getDoc(userDocRef)
+
+        if (userDoc.exists()) {
+          const data = userDoc.data()
+          const contactedApps = data.contactedApplications || []
+          setContactedApplications(contactedApps)
+
+          // Populate applicationsWithContacts set
+          const contactedIds = new Set(contactedApps.map(app => app.id))
+          setApplicationsWithContacts(contactedIds)
+        }
+      } catch (error) {
+        console.error("Error loading contacted applications:", error)
+      }
+    }
+
+    if (currentUser) {
+      loadContactedApplications()
+    }
+  }, [currentUser])
+
+  const saveContactedAppToFirestore = async (contactedApp) => {
+    try {
+      const user = getAuth().currentUser
+      if (!user) return
+
+      const userDocRef = doc(db, "userApplications", user.uid)
+      const userDoc = await getDoc(userDocRef)
+
+      if (userDoc.exists()) {
+        // Update existing document
+        await updateDoc(userDocRef, {
+          contactedApplications: arrayUnion(contactedApp),
+          updatedAt: serverTimestamp()
+        })
+      } else {
+        // Create new document
+        await setDoc(userDocRef, {
+          userId: user.uid,
+          contactedApplications: [contactedApp],
+          createdAt: serverTimestamp()
+        })
+      }
+    } catch (error) {
+      console.error("Error saving contacted application:", error)
+    }
+  }
+
+  const updateContactedApplication = async (applicationId, newSupplierId) => {
+    try {
+      // Update in local state
+      setContactedApplications(prev =>
+        prev.map(app => {
+          if (app.id === applicationId) {
+            const updatedSuppliers = [...(app.contactedSuppliers || []), newSupplierId]
+            return {
+              ...app,
+              contactedSuppliers: updatedSuppliers,
+              contactedCount: updatedSuppliers.length,
+              lastContacted: new Date().toISOString()
+            }
+          }
+          return app
+        })
+      )
+
+      // Update in Firestore
+      const user = getAuth().currentUser
+      if (!user) return
+
+      const userDocRef = doc(db, "userApplications", user.uid)
+      const userDoc = await getDoc(userDocRef)
+
+      if (userDoc.exists()) {
+        const data = userDoc.data()
+        const updatedContactedApps = data.contactedApplications.map(app => {
+          if (app.id === applicationId) {
+            const updatedSuppliers = [...(app.contactedSuppliers || []), newSupplierId]
+            return {
+              ...app,
+              contactedSuppliers: updatedSuppliers,
+              contactedCount: updatedSuppliers.length,
+              lastContacted: new Date().toISOString()
+            }
+          }
+          return app
+        })
+
+        await updateDoc(userDocRef, {
+          contactedApplications: updatedContactedApps
+        })
+      }
+    } catch (error) {
+      console.error("Error updating contacted application:", error)
+    }
+  }
 
   const handleNewRequest = () => {
     navigate("/applications/product/request-overview")
@@ -974,12 +1084,43 @@ BIG Marketplace Africa Team`;
       setTimeout(() => setNotification(null), 3000)
       return
     }
+
     try {
       const auth = getAuth()
       const currentUser = auth.currentUser
       if (!currentUser) throw new Error("Please log in to contact suppliers")
 
-      // Update supplier's stage in Firestore first
+      // ✅ TRACK CONTACTED APPLICATIONS
+      const isFirstContact = !applicationsWithContacts.has(currentUserApplication?.id)
+
+      if (currentUserApplication && isFirstContact) {
+        // First contact for this application - create new entry
+        setApplicationsWithContacts(prev => new Set([...prev, currentUserApplication.id]))
+
+        const contactedApp = {
+          id: currentUserApplication.id || `app_${Date.now()}`,
+          createdAt: new Date().toISOString(),
+          data: currentUserApplication,
+          matches: filteredSuppliers,
+          matchCount: filteredSuppliers.length,
+          contactedSuppliers: [supplier.id],
+          contactedCount: 1,
+          lastContacted: new Date().toISOString()
+        }
+
+        setContactedApplications(prev => [contactedApp, ...prev])
+        await saveContactedAppToFirestore(contactedApp)
+
+        setNotification({
+          type: "info",
+          message: "Application saved to your contacted requests"
+        })
+      } else if (currentUserApplication) {
+        // Update existing contacted application
+        await updateContactedApplication(currentUserApplication.id, supplier.id)
+      }
+
+      // ... REST OF YOUR EXISTING handleConnectClick CODE
       const supplierRef = doc(db, "universalProfiles", supplier.id)
       await updateDoc(supplierRef, {
         currentStage: "Contact Initiated",
@@ -1156,6 +1297,19 @@ BIG Marketplace Africa Team`;
     }
   }
 
+  const loadContactedRequest = (contactedApp) => {
+    setCurrentUserApplication(contactedApp.data)
+    setSuppliers(contactedApp.matches)
+    setFilteredSuppliers(contactedApp.matches)
+    setShowContactedApplications(false)
+
+    setNotification({
+      type: "success",
+      message: "Loaded previous contacted request"
+    })
+    setTimeout(() => setNotification(null), 3000)
+  }
+
   const handleViewDetails = (supplier) => {
     setModalContent({
       type: "supplier-details",
@@ -1280,824 +1434,899 @@ BIG Marketplace Africa Team`;
           </div>
         )}
 
-        {/* Table Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button onClick={() => setShowFilters(true)} style={filterButtonStyle}>
-              <Filter size={16} />
-              Filter
-            </button>
-            <button onClick={handleNewRequest} style={newRequestButtonStyle}>
-              New Requests
-            </button>
-          </div>
-        </div>
-
-        {/* Table Structure */}
-        <div style={tableContainerStyle}>
-          <table style={tableStyle}>
-            <colgroup>
-              <col style={{ width: "8%" }} />
-              <col style={{ width: "8%" }} />
-              <col style={{ width: "8%" }} />
-              <col style={{ width: "5%" }} />
-              <col style={{ width: "5%" }} />
-              <col style={{ width: "8%" }} />
-              <col style={{ width: "8%" }} />
-              <col style={{ width: "8%" }} />
-              <col style={{ width: "8%" }} />
-              <col style={{ width: "8%" }} />
-              <col style={{ width: "5%" }} />
-              <col style={{ width: "8%" }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th style={tableHeaderStyle}>Supplier Name</th>
-                <th style={tableHeaderStyle}>Location</th>
-                <th style={tableHeaderStyle}>Sector Focus</th>
-                <th style={tableHeaderStyle}>BBBEE Level</th>
-                <th style={tableHeaderStyle}>Revenue</th>
-                <th style={tableHeaderStyle}>Category</th>
-                <th style={tableHeaderStyle}>Service Required</th>
-                <th style={tableHeaderStyle}>Urgency</th>
-                <th style={tableHeaderStyle}>Match %</th>
-                <th style={tableHeaderStyle}>Action</th>
-                <th style={{ ...tableHeaderStyle, borderRight: "none" }}>Stage</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredSuppliers.map((supplier) => {
-                const statusStyle = getStatusStyle(supplier.status)
-                const stageStyle = getStageStyle(supplier.currentStage)
-
-                return (
-                  <tr key={supplier.id} style={tableRowStyle}>
-                    <td style={tableCellStyle}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                        <div>
-                          <span onClick={() => handleViewDetails(supplier)} style={supplierNameStyle}>
-                            <TruncatedText
-                              text={supplier.entityOverview?.tradingName || supplier.entityOverview?.registeredName}
-                              maxLength={15}
-                            />
-                          </span>
-                        </div>
-                      </div>
-                    </td>
-
-                    <td style={tableCellStyle}>
-                      <TruncatedText text={supplier.entityOverview?.location || "Not specified"} maxLength={12} />
-                    </td>
-
-                    <td style={tableCellStyle}>
-                      <TruncatedText
-                        text={supplier.entityOverview?.economicSectors?.[0] || "Not specified"}
-                        maxLength={12}
-                      />
-                    </td>
-
-                    <td style={tableCellStyle}>
-                      <TruncatedText text={supplier.legalCompliance?.bbbeeLevel || "N/A"} maxLength={8} />
-                    </td>
-
-                    <td style={tableCellStyle}>
-                      <TruncatedText
-                        text={supplier.financialOverview?.annualRevenue || "Not specified"}
-                        maxLength={12}
-                      />
-                    </td>
-
-                    <td style={tableCellStyle}>
-                      <TruncatedText
-                        text={
-                          supplier.productsServices?.productCategories?.[0]?.name ||
-                          supplier.productsServices?.serviceCategories?.[0]?.name ||
-                          "Not specified"
-                        }
-                        maxLength={10}
-                      />
-                    </td>
-
-                    <td style={tableCellStyle}>
-                      <TruncatedText
-                        text={supplier.serviceRequired || "Not specified"}
-                        maxLength={15}
-                      />
-                    </td>
-
-                    <td style={tableCellStyle}>
-                      <TruncatedText text={supplier.urgency || "1 month"} maxLength={10} />
-                    </td>
-
-                    <td style={tableCellStyle}>
-                      <div style={matchContainerStyle}>
-                        <div style={progressBarStyle}>
-                          <div
-                            style={{
-                              ...progressFillStyle,
-                              width: `${supplier.matchPercentage}%`,
-                              background:
-                                supplier.matchPercentage > 75
-                                  ? "#48BB78"
-                                  : supplier.matchPercentage > 50
-                                    ? "#F6AD55"
-                                    : "#F56565",
-                            }}
-                          />
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "4px" }}>
-                          <span
-                            style={{
-                              ...matchScoreStyle,
-                              color:
-                                supplier.matchPercentage > 75
-                                  ? "#48BB78"
-                                  : supplier.matchPercentage > 50
-                                    ? "#D69E2E"
-                                    : "#E53E3E",
-                            }}
-                          >
-                            {supplier.matchPercentage}%
-                          </span>
-                          <Eye
-                            size={14}
-                            style={{
-                              cursor: "pointer",
-                              color: "#a67c52",
-                            }}
-                            onClick={() => handleShowMatchBreakdown(supplier)}
-                            title="View match breakdown"
-                          />
-                        </div>
-                      </div>
-                    </td>
-
-                    <td style={tableCellStyle}>
-                      <button
-                        onClick={() => handleConnectClick(supplier)}
-                        style={{
-                          ...statusBadgeStyle,
-                          backgroundColor: "#5D2A0A",
-                          color: "white",
-                          padding: "0.25rem 0.5rem",
-                          cursor: "pointer",
-                          border: "none",
-                          borderRadius: "3px",
-                          fontWeight: "500",
-                          fontSize: "0.65rem",
-                        }}
-                      >
-                        Contact
-                      </button>
-                    </td>
-
-                    <td style={{ ...tableCellStyle, borderRight: "none" }}>
-                      <div
-                        style={{
-                          ...statusBadgeStyle,
-                          backgroundColor: stageStyle.backgroundColor,
-                          color: stageStyle.color,
-                          fontSize: "0.65rem",
-                          padding: "0.15rem 0.3rem",
-                          textAlign: "center",
-                          lineHeight: "1.2",
-                          minHeight: "2.5rem",
-                          display: "flex",
-                          flexDirection: "column",
-                          justifyContent: "center",
-                        }}
-                      >
-                        {supplier.currentStage.split(" ").map((word, index) => (
-                          <div key={index} style={{ fontSize: "0.6rem" }}>
-                            {word}
-                          </div>
-                        ))}
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Table Footer */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginTop: "1rem",
-            padding: "1rem",
+        <div style={{ marginBottom: "2rem" }}>
+          {/* Current Request Section */}
+          <div style={{
             background: "#FEFCFA",
+            padding: "1rem",
             borderRadius: "8px",
             border: "1px solid #E8D5C4",
-          }}
-        >
-          <div style={{ color: "#5D2A0A", fontSize: "0.875rem" }}>
-            Showing {filteredSuppliers.length} of {suppliers.length} suppliers
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <button
-              style={{
-                padding: "0.5rem 1rem",
-                background: "#F5EBE0",
-                color: "#5D2A0A",
-                border: "1px solid #E8D5C4",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontSize: "0.875rem",
-              }}
-            >
-              Previous
-            </button>
-            <span style={{ color: "#5D2A0A", fontSize: "0.875rem" }}>Page 1 of 1</span>
-            <button
-              style={{
-                padding: "0.5rem 1rem",
-                background: "#F5EBE0",
-                color: "#5D2A0A",
-                border: "1px solid #E8D5C4",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontSize: "0.875rem",
-              }}
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Match Breakdown Modal */}
-      {mounted &&
-        showMatchBreakdown &&
-        createPortal(
-          <div
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: "rgba(0,0,0,0.5)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000,
-            }}
-          >
-            <div
-              style={{
-                background: "white",
-                borderRadius: "12px",
-                maxWidth: "800px",
-                width: "95%",
-                maxHeight: "90vh",
-                overflowY: "auto",
-                boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-              }}
-            >
-              <div style={modalHeaderStyle}>
-                <h3 style={modalTitleStyle}>
-                  Match Breakdown -{" "}
-                  {matchBreakdownData?.entityOverview?.tradingName ||
-                    matchBreakdownData?.entityOverview?.registeredName}
-                </h3>
-                <button onClick={() => setShowMatchBreakdown(false)} style={modalCloseButtonStyle}>
-                  ✖
+            marginBottom: "1rem"
+          }}>
+            {/* Table Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+              <h3 style={{ color: "#5D2A0A", margin: 0 }}>Current Request</h3>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button onClick={() => setShowFilters(true)} style={filterButtonStyle}>
+                  <Filter size={16} />
+                  Filter
                 </button>
+                <button onClick={handleNewRequest} style={newRequestButtonStyle}>
+                  New Requests
+                </button>
+                {contactedApplications.length > 0 && (
+                  <button
+                    onClick={() => setShowContactedApplications(!showContactedApplications)}
+                    style={{
+                      background: "#5D2A0A",
+                      color: "white",
+                      border: "1px solid #5D2A0A",
+                      padding: "0.5rem 1rem",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "0.875rem",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem"
+                    }}
+                  >
+                    <History size={16} />
+                    {showContactedApplications ? "Hide" : "Show"} Contacted ({contactedApplications.length})
+                  </button>
+                )}
               </div>
-              <div style={modalBodyStyle}>
-                <div
-                  style={{
-                    textAlign: "center",
-                    marginBottom: "2rem",
-                    paddingBottom: "1rem",
-                    borderBottom: "2px solid #E8D5C4",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: "3rem",
-                      fontWeight: "bold",
-                      color:
-                        matchBreakdownData?.matchPercentage >= 80
-                          ? "#388E3C"
-                          : matchBreakdownData?.matchPercentage >= 60
-                            ? "#F57C00"
-                            : "#D32F2F",
-                      marginBottom: "0.5rem",
-                    }}
-                  >
-                    {matchBreakdownData?.matchPercentage}%
-                  </div>
-                  <p
-                    style={{
-                      fontSize: "1rem",
-                      color: "#8D6E63",
-                      margin: "0",
-                    }}
-                  >
-                    Overall Match Score
-                  </p>
-                </div>
+            </div>
 
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))",
-                    gap: "1rem",
-                    marginBottom: "2rem",
-                  }}
-                >
-                  {matchBreakdownData?.matchDetails &&
-                    Object.entries(matchBreakdownData.matchDetails).map(([key, details]) => {
-                      const criteriaInfo = ENHANCED_MATCHING_CRITERIA[key]
-                      const weight = criteriaInfo ? criteriaInfo.weight * 100 : 0
-                      const scoreColor = details.score >= 80 ? "#388E3C" : details.score >= 50 ? "#F57C00" : "#D32F2F"
+            {/* Table Structure */}
+            <div style={tableContainerStyle}>
+              <table style={tableStyle}>
+                <colgroup>
+                  <col style={{ width: "8%" }} />
+                  <col style={{ width: "8%" }} />
+                  <col style={{ width: "8%" }} />
+                  <col style={{ width: "5%" }} />
+                  <col style={{ width: "5%" }} />
+                  <col style={{ width: "8%" }} />
+                  <col style={{ width: "8%" }} />
+                  <col style={{ width: "8%" }} />
+                  <col style={{ width: "8%" }} />
+                  <col style={{ width: "8%" }} />
+                  <col style={{ width: "5%" }} />
+                  <col style={{ width: "8%" }} />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th style={tableHeaderStyle}>Supplier Name</th>
+                    <th style={tableHeaderStyle}>Location</th>
+                    <th style={tableHeaderStyle}>Sector Focus</th>
+                    <th style={tableHeaderStyle}>BBBEE Level</th>
+                    <th style={tableHeaderStyle}>Revenue</th>
+                    <th style={tableHeaderStyle}>Category</th>
+                    <th style={tableHeaderStyle}>Service Required</th>
+                    <th style={tableHeaderStyle}>Urgency</th>
+                    <th style={tableHeaderStyle}>Match %</th>
+                    <th style={tableHeaderStyle}>Action</th>
+                    <th style={{ ...tableHeaderStyle, borderRight: "none" }}>Stage</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredSuppliers.map((supplier) => {
+                    const statusStyle = getStatusStyle(supplier.status)
+                    const stageStyle = getStageStyle(supplier.currentStage)
 
-                      return (
-                        <div
-                          key={key}
-                          style={{
-                            background: "#FEFCFA",
-                            border: "1px solid #E8D5C4",
-                            borderRadius: "8px",
-                            padding: "1.25rem",
-                            borderLeft: `4px solid ${scoreColor}`,
-                          }}
-                        >
-                          <div
+                    return (
+                      <tr key={supplier.id} style={tableRowStyle}>
+                        <td style={tableCellStyle}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                            <div>
+                              <span onClick={() => handleViewDetails(supplier)} style={supplierNameStyle}>
+                                <TruncatedText
+                                  text={supplier.entityOverview?.tradingName || supplier.entityOverview?.registeredName}
+                                  maxLength={15}
+                                />
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td style={tableCellStyle}>
+                          <TruncatedText text={supplier.entityOverview?.location || "Not specified"} maxLength={12} />
+                        </td>
+
+                        <td style={tableCellStyle}>
+                          <TruncatedText
+                            text={supplier.entityOverview?.economicSectors?.[0] || "Not specified"}
+                            maxLength={12}
+                          />
+                        </td>
+
+                        <td style={tableCellStyle}>
+                          <TruncatedText text={supplier.legalCompliance?.bbbeeLevel || "N/A"} maxLength={8} />
+                        </td>
+
+                        <td style={tableCellStyle}>
+                          <TruncatedText
+                            text={supplier.financialOverview?.annualRevenue || "Not specified"}
+                            maxLength={12}
+                          />
+                        </td>
+
+                        <td style={tableCellStyle}>
+                          <TruncatedText
+                            text={
+                              supplier.productsServices?.productCategories?.[0]?.name ||
+                              supplier.productsServices?.serviceCategories?.[0]?.name ||
+                              "Not specified"
+                            }
+                            maxLength={10}
+                          />
+                        </td>
+
+                        <td style={tableCellStyle}>
+                          <TruncatedText
+                            text={supplier.serviceRequired || "Not specified"}
+                            maxLength={15}
+                          />
+                        </td>
+
+                        <td style={tableCellStyle}>
+                          <TruncatedText text={supplier.urgency || "1 month"} maxLength={10} />
+                        </td>
+
+                        <td style={tableCellStyle}>
+                          <div style={matchContainerStyle}>
+                            <div style={progressBarStyle}>
+                              <div
+                                style={{
+                                  ...progressFillStyle,
+                                  width: `${supplier.matchPercentage}%`,
+                                  background:
+                                    supplier.matchPercentage > 75
+                                      ? "#48BB78"
+                                      : supplier.matchPercentage > 50
+                                        ? "#F6AD55"
+                                        : "#F56565",
+                                }}
+                              />
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "4px" }}>
+                              <span
+                                style={{
+                                  ...matchScoreStyle,
+                                  color:
+                                    supplier.matchPercentage > 75
+                                      ? "#48BB78"
+                                      : supplier.matchPercentage > 50
+                                        ? "#D69E2E"
+                                        : "#E53E3E",
+                                }}
+                              >
+                                {supplier.matchPercentage}%
+                              </span>
+                              <Eye
+                                size={14}
+                                style={{
+                                  cursor: "pointer",
+                                  color: "#a67c52",
+                                }}
+                                onClick={() => handleShowMatchBreakdown(supplier)}
+                                title="View match breakdown"
+                              />
+                            </div>
+                          </div>
+                        </td>
+
+                        <td style={tableCellStyle}>
+                          <button
+                            onClick={() => handleConnectClick(supplier)}
                             style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "flex-start",
-                              marginBottom: "0.75rem",
+                              ...statusBadgeStyle,
+                              backgroundColor: "#5D2A0A",
+                              color: "white",
+                              padding: "0.25rem 0.5rem",
+                              cursor: "pointer",
+                              border: "none",
+                              borderRadius: "3px",
+                              fontWeight: "500",
+                              fontSize: "0.65rem",
                             }}
                           >
-                            <h4
-                              style={{
-                                fontSize: "0.875rem",
-                                fontWeight: "600",
-                                color: "#5D2A0A",
-                                margin: "0",
-                                lineHeight: "1.3",
-                                flex: "1",
-                              }}
-                            >
-                              {details.description}
-                            </h4>
-                            <span
-                              style={{
-                                fontSize: "1.25rem",
-                                fontWeight: "bold",
-                                color: scoreColor,
-                                marginLeft: "1rem",
-                              }}
-                            >
-                              {Math.round(details.score)}%
-                            </span>
-                          </div>
+                            Contact
+                          </button>
+                        </td>
 
+                        <td style={{ ...tableCellStyle, borderRight: "none" }}>
                           <div
                             style={{
-                              background: "#E8D5C4",
-                              borderRadius: "4px",
-                              height: "8px",
-                              overflow: "hidden",
-                              marginBottom: "0.5rem",
+                              ...statusBadgeStyle,
+                              backgroundColor: stageStyle.backgroundColor,
+                              color: stageStyle.color,
+                              fontSize: "0.65rem",
+                              padding: "0.15rem 0.3rem",
+                              textAlign: "center",
+                              lineHeight: "1.2",
+                              minHeight: "2.5rem",
+                              display: "flex",
+                              flexDirection: "column",
+                              justifyContent: "center",
+                            }}
+                          >
+                            {supplier.currentStage.split(" ").map((word, index) => (
+                              <div key={index} style={{ fontSize: "0.6rem" }}>
+                                {word}
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Table Footer */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginTop: "1rem",
+                padding: "1rem",
+                background: "#FEFCFA",
+                borderRadius: "8px",
+                border: "1px solid #E8D5C4",
+              }}
+            >
+              <div style={{ color: "#5D2A0A", fontSize: "0.875rem" }}>
+                Showing {filteredSuppliers.length} of {suppliers.length} suppliers
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <button
+                  style={{
+                    padding: "0.5rem 1rem",
+                    background: "#F5EBE0",
+                    color: "#5D2A0A",
+                    border: "1px solid #E8D5C4",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontSize: "0.875rem",
+                  }}
+                >
+                  Previous
+                </button>
+                <span style={{ color: "#5D2A0A", fontSize: "0.875rem" }}>Page 1 of 1</span>
+                <button
+                  style={{
+                    padding: "0.5rem 1rem",
+                    background: "#F5EBE0",
+                    color: "#5D2A0A",
+                    border: "1px solid #E8D5C4",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontSize: "0.875rem",
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Contacted Requests Section */}
+          {showContactedApplications && contactedApplications.length > 0 && (
+            <div style={{
+              background: "#F9F5F0",
+              padding: "1.5rem",
+              borderRadius: "8px",
+              border: "2px solid #D7CCC8",
+              marginTop: "2rem"
+            }}>
+              <h3 style={{
+                color: "#5D2A0A",
+                marginBottom: "1.5rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem"
+              }}>
+                <History size={20} />
+                Contacted Requests ({contactedApplications.length})
+              </h3>
+
+              {contactedApplications.map((contactedApp, index) => (
+                <div key={contactedApp.id} style={{
+                  background: "white",
+                  padding: "1.5rem",
+                  borderRadius: "8px",
+                  border: "2px solid #E8D5C4",
+                  marginBottom: "1rem",
+                  transition: "all 0.2s",
+                  boxShadow: "0 2px 8px rgba(93, 42, 10, 0.1)"
+                }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = "translateY(-2px)";
+                    e.currentTarget.style.boxShadow = "0 4px 12px rgba(93, 42, 10, 0.15)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = "translateY(0)";
+                    e.currentTarget.style.boxShadow = "0 2px 8px rgba(93, 42, 10, 0.1)";
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
+                    <div style={{ flex: 1 }}>
+                      <h4 style={{ color: "#5D2A0A", margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>
+                        {contactedApp.data?.requestOverview?.purpose?.substring(0, 60) || "Product/Service Request"}...
+                      </h4>
+
+                      <div style={{ display: "flex", gap: "2rem", fontSize: "0.875rem", color: "#7D5A50", flexWrap: "wrap" }}>
+                        <div>
+                          <strong>Created:</strong> {new Date(contactedApp.createdAt).toLocaleDateString()}
+                        </div>
+                        <div>
+                          <strong>Total Matches:</strong> {contactedApp.matchCount} suppliers
+                        </div>
+                        <div>
+                          <strong>Contacted:</strong> {contactedApp.contactedCount || 0} supplier(s)
+                        </div>
+                        <div>
+                          <strong>Last Contact:</strong> {new Date(contactedApp.lastContacted).toLocaleDateString()}
+                        </div>
+                        <div>
+                          <strong>Status:</strong>
+                          <span style={{
+                            color: contactedApp.contactedCount > 0 ? "#388E3C" : "#D32F2F",
+                            fontWeight: "600",
+                            marginLeft: "0.25rem"
+                          }}>
+                            {contactedApp.contactedCount > 0 ? "Active" : "No contacts"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => loadContactedRequest(contactedApp)}
+                      style={{
+                        background: "transparent",
+                        color: "#5D2A0A",
+                        border: "2px solid #5D2A0A",
+                        padding: "0.5rem 1rem",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        fontSize: "0.875rem",
+                        fontWeight: "600",
+                        transition: "all 0.2s",
+                        whiteSpace: "nowrap"
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.background = "#5D2A0A";
+                        e.target.style.color = "white";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.background = "transparent";
+                        e.target.style.color = "#5D2A0A";
+                      }}
+                    >
+                      Resume This Request
+                    </button>
+                  </div>
+
+                  {/* Show contacted suppliers if any */}
+                  {contactedApp.contactedSuppliers && contactedApp.contactedSuppliers.length > 0 && (
+                    <div style={{
+                      background: "#E8F5E8",
+                      padding: "0.75rem",
+                      borderRadius: "6px",
+                      border: "1px solid #C8E6C9",
+                      fontSize: "0.8rem",
+                      color: "#2E7D32"
+                    }}>
+                      <strong>Contacted Suppliers:</strong> {contactedApp.contactedCount} suppliers
+                      <div style={{ marginTop: "0.25rem", fontSize: "0.75rem" }}>
+                        (Supplier IDs: {contactedApp.contactedSuppliers.slice(0, 3).join(", ")}
+                        {contactedApp.contactedSuppliers.length > 3 ? `... +${contactedApp.contactedSuppliers.length - 3} more` : ""})
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Match Breakdown Modal */}
+        {mounted &&
+          showMatchBreakdown &&
+          createPortal(
+            <div
+              style={{
+                position: "fixed",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: "rgba(0,0,0,0.5)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 1000,
+              }}
+            >
+              <div
+                style={{
+                  background: "white",
+                  borderRadius: "12px",
+                  maxWidth: "800px",
+                  width: "95%",
+                  maxHeight: "90vh",
+                  overflowY: "auto",
+                  boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
+                }}
+              >
+                <div style={modalHeaderStyle}>
+                  <h3 style={modalTitleStyle}>
+                    Match Breakdown -{" "}
+                    {matchBreakdownData?.entityOverview?.tradingName ||
+                      matchBreakdownData?.entityOverview?.registeredName}
+                  </h3>
+                  <button onClick={() => setShowMatchBreakdown(false)} style={modalCloseButtonStyle}>
+                    ✖
+                  </button>
+                </div>
+                <div style={modalBodyStyle}>
+                  <div
+                    style={{
+                      textAlign: "center",
+                      marginBottom: "2rem",
+                      paddingBottom: "1rem",
+                      borderBottom: "2px solid #E8D5C4",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "3rem",
+                        fontWeight: "bold",
+                        color:
+                          matchBreakdownData?.matchPercentage >= 80
+                            ? "#388E3C"
+                            : matchBreakdownData?.matchPercentage >= 60
+                              ? "#F57C00"
+                              : "#D32F2F",
+                        marginBottom: "0.5rem",
+                      }}
+                    >
+                      {matchBreakdownData?.matchPercentage}%
+                    </div>
+                    <p
+                      style={{
+                        fontSize: "1rem",
+                        color: "#8D6E63",
+                        margin: "0",
+                      }}
+                    >
+                      Overall Match Score
+                    </p>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))",
+                      gap: "1rem",
+                      marginBottom: "2rem",
+                    }}
+                  >
+                    {matchBreakdownData?.matchDetails &&
+                      Object.entries(matchBreakdownData.matchDetails).map(([key, details]) => {
+                        const criteriaInfo = ENHANCED_MATCHING_CRITERIA[key]
+                        const weight = criteriaInfo ? criteriaInfo.weight * 100 : 0
+                        const scoreColor = details.score >= 80 ? "#388E3C" : details.score >= 50 ? "#F57C00" : "#D32F2F"
+
+                        return (
+                          <div
+                            key={key}
+                            style={{
+                              background: "#FEFCFA",
+                              border: "1px solid #E8D5C4",
+                              borderRadius: "8px",
+                              padding: "1.25rem",
+                              borderLeft: `4px solid ${scoreColor}`,
                             }}
                           >
                             <div
                               style={{
-                                height: "100%",
-                                background: scoreColor,
-                                width: `${details.score}%`,
-                                transition: "width 0.3s ease",
-                              }}
-                            />
-                          </div>
-
-                          <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                            }}
-                          >
-                            <span
-                              style={{
-                                fontSize: "0.75rem",
-                                color: "#8D6E63",
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "flex-start",
+                                marginBottom: "0.75rem",
                               }}
                             >
-                              Weight: {weight}%
-                            </span>
-                            <span
-                              style={{
-                                fontSize: "0.75rem",
-                                color: "#8D6E63",
-                              }}
-                            >
-                              Contribution: {Math.round((details.score * weight) / 100)}%
-                            </span>
-                          </div>
-
-                          {/* Show matched categories for category match */}
-                          {key === 'categoryMatch' && details.matches && details.matches.length > 0 && (
-                            <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #E8D5C4' }}>
-                              <span style={{ fontSize: "0.75rem", color: "#8D6E63", fontWeight: "600" }}>
-                                Matched Categories:
+                              <h4
+                                style={{
+                                  fontSize: "0.875rem",
+                                  fontWeight: "600",
+                                  color: "#5D2A0A",
+                                  margin: "0",
+                                  lineHeight: "1.3",
+                                  flex: "1",
+                                }}
+                              >
+                                {details.description}
+                              </h4>
+                              <span
+                                style={{
+                                  fontSize: "1.25rem",
+                                  fontWeight: "bold",
+                                  color: scoreColor,
+                                  marginLeft: "1rem",
+                                }}
+                              >
+                                {Math.round(details.score)}%
                               </span>
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', marginTop: '0.25rem' }}>
-                                {details.matches.map((category, idx) => (
-                                  <span
-                                    key={idx}
-                                    style={{
-                                      background: '#E8F5E8',
-                                      color: '#388E3C',
-                                      padding: '0.25rem 0.5rem',
-                                      borderRadius: '12px',
-                                      fontSize: '0.7rem',
-                                    }}
-                                  >
-                                    {category}
-                                  </span>
-                                ))}
-                              </div>
                             </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                </div>
 
-                <div
-                  style={{
-                    background: "#F5EBE0",
-                    border: "1px solid #E8D5C4",
-                    borderRadius: "8px",
-                    padding: "1.5rem",
-                    marginBottom: "2rem",
-                  }}
-                >
-                  <h4
+                            <div
+                              style={{
+                                background: "#E8D5C4",
+                                borderRadius: "4px",
+                                height: "8px",
+                                overflow: "hidden",
+                                marginBottom: "0.5rem",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  height: "100%",
+                                  background: scoreColor,
+                                  width: `${details.score}%`,
+                                  transition: "width 0.3s ease",
+                                }}
+                              />
+                            </div>
+
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontSize: "0.75rem",
+                                  color: "#8D6E63",
+                                }}
+                              >
+                                Weight: {weight}%
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: "0.75rem",
+                                  color: "#8D6E63",
+                                }}
+                              >
+                                Contribution: {Math.round((details.score * weight) / 100)}%
+                              </span>
+                            </div>
+
+                            {/* Show matched categories for category match */}
+                            {key === 'categoryMatch' && details.matches && details.matches.length > 0 && (
+                              <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #E8D5C4' }}>
+                                <span style={{ fontSize: "0.75rem", color: "#8D6E63", fontWeight: "600" }}>
+                                  Matched Categories:
+                                </span>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', marginTop: '0.25rem' }}>
+                                  {details.matches.map((category, idx) => (
+                                    <span
+                                      key={idx}
+                                      style={{
+                                        background: '#E8F5E8',
+                                        color: '#388E3C',
+                                        padding: '0.25rem 0.5rem',
+                                        borderRadius: '12px',
+                                        fontSize: '0.7rem',
+                                      }}
+                                    >
+                                      {category}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                  </div>
+
+                  <div
                     style={{
-                      fontSize: "1rem",
-                      fontWeight: "600",
-                      color: "#5D2A0A",
-                      margin: "0 0 1rem 0",
+                      background: "#F5EBE0",
+                      border: "1px solid #E8D5C4",
+                      borderRadius: "8px",
+                      padding: "1.5rem",
+                      marginBottom: "2rem",
                     }}
                   >
-                    How to Improve Your Match Score:
-                  </h4>
+                    <h4
+                      style={{
+                        fontSize: "1rem",
+                        fontWeight: "600",
+                        color: "#5D2A0A",
+                        margin: "0 0 1rem 0",
+                      }}
+                    >
+                      How to Improve Your Match Score:
+                    </h4>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+                        gap: "1rem",
+                      }}
+                    >
+                      {matchBreakdownData?.matchDetails &&
+                        Object.entries(matchBreakdownData.matchDetails)
+                          .filter(([key, details]) => details.score < 70)
+                          .map(([key, details]) => (
+                            <div
+                              key={key}
+                              style={{
+                                background: "white",
+                                border: "1px solid #E8D5C4",
+                                borderRadius: "6px",
+                                padding: "1rem",
+                              }}
+                            >
+                              <h5
+                                style={{
+                                  fontSize: "0.875rem",
+                                  fontWeight: "600",
+                                  color: "#D32F2F",
+                                  margin: "0 0 0.5rem 0",
+                                }}
+                              >
+                                {details.description}
+                              </h5>
+                              <p
+                                style={{
+                                  fontSize: "0.8rem",
+                                  color: "#5D2A0A",
+                                  margin: "0",
+                                  lineHeight: "1.4",
+                                }}
+                              >
+                                {getImprovementSuggestion(key, details.score)}
+                              </p>
+                            </div>
+                          ))}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "center",
+                      paddingTop: "1.5rem",
+                      borderTop: "1px solid #E8D5C4",
+                    }}
+                  >
+                    <button
+                      style={{
+                        padding: "0.75rem 2rem",
+                        background: "#5D2A0A",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "6px",
+                        fontSize: "0.875rem",
+                        fontWeight: "500",
+                        cursor: "pointer",
+                        transition: "all 0.2s",
+                      }}
+                      onClick={() => setShowMatchBreakdown(false)}
+                    >
+                      Close Breakdown
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )}
+
+        {/* Filter Modal */}
+        {mounted &&
+          showFilters &&
+          createPortal(
+            <div
+              style={{
+                position: "fixed",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: "rgba(0,0,0,0.5)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 1000,
+              }}
+            >
+              <div
+                style={{
+                  background: "white",
+                  borderRadius: "12px",
+                  maxWidth: "1000px",
+                  width: "95%",
+                  maxHeight: "90vh",
+                  overflowY: "auto",
+                  boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
+                }}
+              >
+                <div style={modalHeaderStyle}>
+                  <h3 style={modalTitleStyle}>Filter Suppliers</h3>
+                  <button onClick={() => setShowFilters(false)} style={modalCloseButtonStyle}>
+                    ✖
+                  </button>
+                </div>
+                <div style={modalBodyStyle}>
+                  <div
+                    style={{
+                      textAlign: "center",
+                      marginBottom: "2rem",
+                      paddingBottom: "1rem",
+                      borderBottom: "2px solid #E8D5C4",
+                    }}
+                  >
+                    <h1
+                      style={{
+                        fontSize: "1.5rem",
+                        fontWeight: "bold",
+                        color: "#5D2A0A",
+                        margin: "0 0 0.5rem 0",
+                      }}
+                    >
+                      Filter Suppliers
+                    </h1>
+                    <p
+                      style={{
+                        fontSize: "1rem",
+                        color: "#8D6E63",
+                        margin: "0",
+                      }}
+                    >
+                      Find the perfect suppliers for your business needs
+                    </p>
+                  </div>
+
                   <div
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-                      gap: "1rem",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                      gap: "1.5rem",
+                      marginBottom: "2rem",
                     }}
                   >
-                    {matchBreakdownData?.matchDetails &&
-                      Object.entries(matchBreakdownData.matchDetails)
-                        .filter(([key, details]) => details.score < 70)
-                        .map(([key, details]) => (
-                          <div
-                            key={key}
-                            style={{
-                              background: "white",
-                              border: "1px solid #E8D5C4",
-                              borderRadius: "6px",
-                              padding: "1rem",
-                            }}
-                          >
-                            <h5
-                              style={{
-                                fontSize: "0.875rem",
-                                fontWeight: "600",
-                                color: "#D32F2F",
-                                margin: "0 0 0.5rem 0",
-                              }}
-                            >
-                              {details.description}
-                            </h5>
-                            <p
-                              style={{
-                                fontSize: "0.8rem",
-                                color: "#5D2A0A",
-                                margin: "0",
-                                lineHeight: "1.4",
-                              }}
-                            >
-                              {getImprovementSuggestion(key, details.score)}
-                            </p>
-                          </div>
-                        ))}
-                  </div>
-                </div>
+                    <div style={filterCardStyle}>
+                      <h3 style={filterTitleStyle}>📍 Location</h3>
+                      <select
+                        style={filterSelectStyle}
+                        value={filters.location}
+                        onChange={(e) => setFilters({ ...filters, location: e.target.value })}
+                      >
+                        <option value="">Select Location</option>
+                        {["South Africa", "Johannesburg", "Cape Town", "Durban", "Pretoria", "Bloemfontein"].map(
+                          (loc) => (
+                            <option key={loc} value={loc}>
+                              {loc}
+                            </option>
+                          ),
+                        )}
+                      </select>
+                    </div>
 
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "center",
-                    paddingTop: "1.5rem",
-                    borderTop: "1px solid #E8D5C4",
-                  }}
-                >
-                  <button
-                    style={{
-                      padding: "0.75rem 2rem",
-                      background: "#5D2A0A",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "6px",
-                      fontSize: "0.875rem",
-                      fontWeight: "500",
-                      cursor: "pointer",
-                      transition: "all 0.2s",
-                    }}
-                    onClick={() => setShowMatchBreakdown(false)}
-                  >
-                    Close Breakdown
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
-
-      {/* Filter Modal */}
-      {mounted &&
-        showFilters &&
-        createPortal(
-          <div
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: "rgba(0,0,0,0.5)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000,
-            }}
-          >
-            <div
-              style={{
-                background: "white",
-                borderRadius: "12px",
-                maxWidth: "1000px",
-                width: "95%",
-                maxHeight: "90vh",
-                overflowY: "auto",
-                boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-              }}
-            >
-              <div style={modalHeaderStyle}>
-                <h3 style={modalTitleStyle}>Filter Suppliers</h3>
-                <button onClick={() => setShowFilters(false)} style={modalCloseButtonStyle}>
-                  ✖
-                </button>
-              </div>
-              <div style={modalBodyStyle}>
-                <div
-                  style={{
-                    textAlign: "center",
-                    marginBottom: "2rem",
-                    paddingBottom: "1rem",
-                    borderBottom: "2px solid #E8D5C4",
-                  }}
-                >
-                  <h1
-                    style={{
-                      fontSize: "1.5rem",
-                      fontWeight: "bold",
-                      color: "#5D2A0A",
-                      margin: "0 0 0.5rem 0",
-                    }}
-                  >
-                    Filter Suppliers
-                  </h1>
-                  <p
-                    style={{
-                      fontSize: "1rem",
-                      color: "#8D6E63",
-                      margin: "0",
-                    }}
-                  >
-                    Find the perfect suppliers for your business needs
-                  </p>
-                </div>
-
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                    gap: "1.5rem",
-                    marginBottom: "2rem",
-                  }}
-                >
-                  <div style={filterCardStyle}>
-                    <h3 style={filterTitleStyle}>📍 Location</h3>
-                    <select
-                      style={filterSelectStyle}
-                      value={filters.location}
-                      onChange={(e) => setFilters({ ...filters, location: e.target.value })}
-                    >
-                      <option value="">Select Location</option>
-                      {["South Africa", "Johannesburg", "Cape Town", "Durban", "Pretoria", "Bloemfontein"].map(
-                        (loc) => (
-                          <option key={loc} value={loc}>
-                            {loc}
-                          </option>
-                        ),
-                      )}
-                    </select>
-                  </div>
-
-                  <div style={filterCardStyle}>
-                    <h3 style={filterTitleStyle}>🎯 Match Score Minimum</h3>
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "0.5rem",
-                      }}
-                    >
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={filters.matchScore}
-                        onChange={(e) => setFilters({ ...filters, matchScore: Number.parseInt(e.target.value) })}
-                        style={{
-                          width: "100%",
-                          height: "6px",
-                          background: "#E8D5C4",
-                          borderRadius: "3px",
-                          outline: "none",
-                          appearance: "none",
-                        }}
-                      />
+                    <div style={filterCardStyle}>
+                      <h3 style={filterTitleStyle}>🎯 Match Score Minimum</h3>
                       <div
                         style={{
-                          textAlign: "center",
-                          fontWeight: "600",
-                          color: "#5D2A0A",
-                          fontSize: "0.875rem",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "0.5rem",
                         }}
                       >
-                        {filters.matchScore}%
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={filterCardStyle}>
-                    <h3 style={filterTitleStyle}>💰 Contract Value Range</h3>
-                    <div style={{ display: "flex", gap: "0.5rem" }}>
-                      <input
-                        type="text"
-                        placeholder="Min Amount"
-                        style={filterInputStyle}
-                        value={filters.minValue}
-                        onChange={(e) => setFilters({ ...filters, minValue: e.target.value })}
-                      />
-                      <input
-                        type="text"
-                        placeholder="Max Amount"
-                        style={filterInputStyle}
-                        value={filters.maxValue}
-                        onChange={(e) => setFilters({ ...filters, maxValue: e.target.value })}
-                      />
-                    </div>
-                  </div>
-
-                  <div style={filterCardStyle}>
-                    <h3 style={filterTitleStyle}>🏢 Entity Type</h3>
-                    <select
-                      style={filterSelectStyle}
-                      value={filters.entityType}
-                      onChange={(e) => setFilters({ ...filters, entityType: e.target.value })}
-                    >
-                      <option value="">Select Entity Type</option>
-                      {["Pty Ltd", "CC", "NGO", "Co-op", "Sole Proprietor", "Partnership"].map((type) => (
-                        <option key={type} value={type}>
-                          {type}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div style={filterCardStyle}>
-                    <h3 style={filterTitleStyle}>🏭 Industry/Sector</h3>
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "0.5rem",
-                        maxHeight: "200px",
-                        overflowY: "auto",
-                      }}
-                    >
-                      {[
-                        "Agriculture",
-                        "Mining",
-                        "Manufacturing",
-                        "Energy",
-                        "Construction",
-                        "Retail",
-                        "Transport",
-                        "Finance",
-                        "Real Estate",
-                        "ICT",
-                        "Tourism",
-                        "Education",
-                        "Health",
-                        "Arts",
-                        "Other Services",
-                      ].map((sector) => (
-                        <div
-                          key={sector}
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={filters.matchScore}
+                          onChange={(e) => setFilters({ ...filters, matchScore: Number.parseInt(e.target.value) })}
                           style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.5rem",
+                            width: "100%",
+                            height: "6px",
+                            background: "#E8D5C4",
+                            borderRadius: "3px",
+                            outline: "none",
+                            appearance: "none",
+                          }}
+                        />
+                        <div
+                          style={{
+                            textAlign: "center",
+                            fontWeight: "600",
+                            color: "#5D2A0A",
+                            fontSize: "0.875rem",
                           }}
                         >
-                          <input
-                            type="checkbox"
-                            id={`sector-${sector}`}
-                            checked={filters.sectors.includes(sector)}
-                            onChange={() => {
-                              const newSectors = filters.sectors.includes(sector)
-                                ? filters.sectors.filter((s) => s !== sector)
-                                : [...filters.sectors, sector]
-                              setFilters({ ...filters, sectors: newSectors })
-                            }}
-                            style={{
-                              width: "16px",
-                              height: "16px",
-                              accentColor: "#5D2A0A",
-                            }}
-                          />
-                          <label
-                            htmlFor={`sector-${sector}`}
-                            style={{
-                              fontSize: "0.875rem",
-                              color: "#5D2A0A",
-                              cursor: "pointer",
-                            }}
-                          >
-                            {sector}
-                          </label>
+                          {filters.matchScore}%
                         </div>
-                      ))}
+                      </div>
                     </div>
-                  </div>
 
-                  <div style={filterCardStyle}>
-                    <h3 style={filterTitleStyle}>⭐ BBBEE Level</h3>
-                    <select
-                      style={filterSelectStyle}
-                      value={filters.bbbeeLevel}
-                      onChange={(e) => setFilters({ ...filters, bbbeeLevel: e.target.value })}
-                    >
-                      <option value="">Select BBBEE Level</option>
-                      {[
-                        "Level 1",
-                        "Level 2",
-                        "Level 3",
-                        "Level 4",
-                        "Level 5",
-                        "Level 6",
-                        "Level 7",
-                        "Level 8",
-                        "Non-Compliant",
-                      ].map((level) => (
-                        <option key={level} value={level}>
-                          {level}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                    <div style={filterCardStyle}>
+                      <h3 style={filterTitleStyle}>💰 Contract Value Range</h3>
+                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                        <input
+                          type="text"
+                          placeholder="Min Amount"
+                          style={filterInputStyle}
+                          value={filters.minValue}
+                          onChange={(e) => setFilters({ ...filters, minValue: e.target.value })}
+                        />
+                        <input
+                          type="text"
+                          placeholder="Max Amount"
+                          style={filterInputStyle}
+                          value={filters.maxValue}
+                          onChange={(e) => setFilters({ ...filters, maxValue: e.target.value })}
+                        />
+                      </div>
+                    </div>
 
-                  <div style={filterCardStyle}>
-                    <h3 style={filterTitleStyle}>📦 Procurement Category</h3>
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "0.5rem",
-                      }}
-                    >
-                      {["Services", "Goods", "Construction", "Professional Services", "IT Solutions"].map(
-                        (category) => (
+                    <div style={filterCardStyle}>
+                      <h3 style={filterTitleStyle}>🏢 Entity Type</h3>
+                      <select
+                        style={filterSelectStyle}
+                        value={filters.entityType}
+                        onChange={(e) => setFilters({ ...filters, entityType: e.target.value })}
+                      >
+                        <option value="">Select Entity Type</option>
+                        {["Pty Ltd", "CC", "NGO", "Co-op", "Sole Proprietor", "Partnership"].map((type) => (
+                          <option key={type} value={type}>
+                            {type}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div style={filterCardStyle}>
+                      <h3 style={filterTitleStyle}>🏭 Industry/Sector</h3>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "0.5rem",
+                          maxHeight: "200px",
+                          overflowY: "auto",
+                        }}
+                      >
+                        {[
+                          "Agriculture",
+                          "Mining",
+                          "Manufacturing",
+                          "Energy",
+                          "Construction",
+                          "Retail",
+                          "Transport",
+                          "Finance",
+                          "Real Estate",
+                          "ICT",
+                          "Tourism",
+                          "Education",
+                          "Health",
+                          "Arts",
+                          "Other Services",
+                        ].map((sector) => (
                           <div
-                            key={category}
+                            key={sector}
                             style={{
                               display: "flex",
                               alignItems: "center",
@@ -2106,13 +2335,13 @@ BIG Marketplace Africa Team`;
                           >
                             <input
                               type="checkbox"
-                              id={`proc-${category}`}
-                              checked={filters.procurementCategories.includes(category)}
+                              id={`sector-${sector}`}
+                              checked={filters.sectors.includes(sector)}
                               onChange={() => {
-                                const newCategories = filters.procurementCategories.includes(category)
-                                  ? filters.procurementCategories.filter((c) => c !== category)
-                                  : [...filters.procurementCategories, category]
-                                setFilters({ ...filters, procurementCategories: newCategories })
+                                const newSectors = filters.sectors.includes(sector)
+                                  ? filters.sectors.filter((s) => s !== sector)
+                                  : [...filters.sectors, sector]
+                                setFilters({ ...filters, sectors: newSectors })
                               }}
                               style={{
                                 width: "16px",
@@ -2121,367 +2350,444 @@ BIG Marketplace Africa Team`;
                               }}
                             />
                             <label
-                              htmlFor={`proc-${category}`}
+                              htmlFor={`sector-${sector}`}
                               style={{
                                 fontSize: "0.875rem",
                                 color: "#5D2A0A",
                                 cursor: "pointer",
                               }}
                             >
-                              {category}
+                              {sector}
                             </label>
                           </div>
-                        ),
-                      )}
+                        ))}
+                      </div>
+                    </div>
+
+                    <div style={filterCardStyle}>
+                      <h3 style={filterTitleStyle}>⭐ BBBEE Level</h3>
+                      <select
+                        style={filterSelectStyle}
+                        value={filters.bbbeeLevel}
+                        onChange={(e) => setFilters({ ...filters, bbbeeLevel: e.target.value })}
+                      >
+                        <option value="">Select BBBEE Level</option>
+                        {[
+                          "Level 1",
+                          "Level 2",
+                          "Level 3",
+                          "Level 4",
+                          "Level 5",
+                          "Level 6",
+                          "Level 7",
+                          "Level 8",
+                          "Non-Compliant",
+                        ].map((level) => (
+                          <option key={level} value={level}>
+                            {level}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div style={filterCardStyle}>
+                      <h3 style={filterTitleStyle}>📦 Procurement Category</h3>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "0.5rem",
+                        }}
+                      >
+                        {["Services", "Goods", "Construction", "Professional Services", "IT Solutions"].map(
+                          (category) => (
+                            <div
+                              key={category}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                id={`proc-${category}`}
+                                checked={filters.procurementCategories.includes(category)}
+                                onChange={() => {
+                                  const newCategories = filters.procurementCategories.includes(category)
+                                    ? filters.procurementCategories.filter((c) => c !== category)
+                                    : [...filters.procurementCategories, category]
+                                  setFilters({ ...filters, procurementCategories: newCategories })
+                                }}
+                                style={{
+                                  width: "16px",
+                                  height: "16px",
+                                  accentColor: "#5D2A0A",
+                                }}
+                              />
+                              <label
+                                htmlFor={`proc-${category}`}
+                                style={{
+                                  fontSize: "0.875rem",
+                                  color: "#5D2A0A",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {category}
+                              </label>
+                            </div>
+                          ),
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={filterCardStyle}>
+                      <h3 style={filterTitleStyle}>⏰ Availability</h3>
+                      <select
+                        style={filterSelectStyle}
+                        value={filters.availability}
+                        onChange={(e) => setFilters({ ...filters, availability: e.target.value })}
+                      >
+                        <option value="">Select Availability</option>
+                        {["Immediate", "Within 1 week", "Within 1 month", "Within 3 months", "Custom"].map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div style={filterCardStyle}>
+                      <h3 style={filterTitleStyle}>🔄 Sort By</h3>
+                      <select
+                        style={filterSelectStyle}
+                        value={filters.sortBy}
+                        onChange={(e) => setFilters({ ...filters, sortBy: e.target.value })}
+                      >
+                        <option value="">Select Sort Option</option>
+                        {[
+                          "Match Score (High to Low)",
+                          "Match Score (Low to High)",
+                          "Rating (High to Low)",
+                          "Rating (Low to High)",
+                          "Date Added (Newest First)",
+                          "Date Added (Oldest First)",
+                        ].map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 
-                  <div style={filterCardStyle}>
-                    <h3 style={filterTitleStyle}>⏰ Availability</h3>
-                    <select
-                      style={filterSelectStyle}
-                      value={filters.availability}
-                      onChange={(e) => setFilters({ ...filters, availability: e.target.value })}
-                    >
-                      <option value="">Select Availability</option>
-                      {["Immediate", "Within 1 week", "Within 1 month", "Within 3 months", "Custom"].map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div style={filterCardStyle}>
-                    <h3 style={filterTitleStyle}>🔄 Sort By</h3>
-                    <select
-                      style={filterSelectStyle}
-                      value={filters.sortBy}
-                      onChange={(e) => setFilters({ ...filters, sortBy: e.target.value })}
-                    >
-                      <option value="">Select Sort Option</option>
-                      {[
-                        "Match Score (High to Low)",
-                        "Match Score (Low to High)",
-                        "Rating (High to Low)",
-                        "Rating (Low to High)",
-                        "Date Added (Newest First)",
-                        "Date Added (Oldest First)",
-                      ].map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: "1rem",
-                    paddingTop: "1.5rem",
-                    borderTop: "1px solid #E8D5C4",
-                  }}
-                >
-                  <button
-                    style={{
-                      flex: "1",
-                      padding: "0.75rem 1.5rem",
-                      background: "#F5EBE0",
-                      color: "#5D2A0A",
-                      border: "1px solid #E8D5C4",
-                      borderRadius: "6px",
-                      fontSize: "0.875rem",
-                      fontWeight: "500",
-                      cursor: "pointer",
-                      transition: "all 0.2s",
-                    }}
-                    onClick={clearAllFilters}
-                  >
-                    Clear All Filters
-                  </button>
-                  <button
-                    style={{
-                      flex: "1",
-                      padding: "0.75rem 1.5rem",
-                      background: "#5D2A0A",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "6px",
-                      fontSize: "0.875rem",
-                      fontWeight: "500",
-                      cursor: "pointer",
-                      transition: "all 0.2s",
-                    }}
-                    onClick={() => setShowFilters(false)}
-                  >
-                    Apply Filters
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
-
-      {/* Supplier Details Modal */}
-      {mounted && showModal && modalContent.type === "supplier-details" && (
-        <SupplierDetailsModal
-          supplier={modalContent.supplier}
-          isOpen={showModal}
-          onClose={() => setShowModal(false)}
-        />
-      )}
-
-      {/* Keep your existing modals for other types */}
-      {mounted && showModal && modalContent.type === "documents" && (
-        createPortal(
-          <div
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: "rgba(0,0,0,0.5)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000,
-            }}
-          >
-            <div
-              style={{
-                background: "white",
-                borderRadius: "12px",
-                maxWidth: "600px",
-                width: "90%",
-                maxHeight: "80vh",
-                overflowY: "auto",
-                boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-              }}
-            >
-              <div style={modalHeaderStyle}>
-                <h3 style={modalTitleStyle}>Supplier Documents</h3>
-                <button onClick={() => setShowModal(false)} style={modalCloseButtonStyle}>
-                  ✖
-                </button>
-              </div>
-              <div style={modalBodyStyle}>
-                <div>
-                  <p style={{ marginBottom: "1rem", color: "#5D2A0A" }}>
-                    Documents for{" "}
-                    <strong>
-                      {modalContent.supplier?.entityOverview?.tradingName ||
-                        modalContent.supplier?.entityOverview?.registeredName}
-                    </strong>
-                    :
-                  </p>
-                  <ul
-                    style={{
-                      listStyle: "none",
-                      padding: "0",
-                      margin: "0 0 1.5rem 0",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "0.5rem",
-                    }}
-                  >
-                    <li
-                      style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
-                    >
-                      📄 Company Profile.pdf
-                    </li>
-                    <li
-                      style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
-                    >
-                      📄 BBBEE Certificate.pdf
-                    </li>
-                    <li
-                      style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
-                    >
-                      📄 Tax Compliance.pdf
-                    </li>
-                    <li
-                      style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
-                    >
-                      📄 References.pdf
-                    </li>
-                    <li
-                      style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
-                    >
-                      📄 Service Portfolio.pdf
-                    </li>
-                    <li
-                      style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
-                    >
-                      📄 Case Studies.pdf
-                    </li>
-                  </ul>
-                  <div style={modalActionsStyle}>
-                    <button style={primaryButtonStyle}>Download All</button>
-                    <button style={cancelButtonStyle} onClick={() => setShowModal(false)}>
-                      Close
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )
-      )}
-
-      {mounted && showModal && modalContent.type === "message" && (
-        createPortal(
-          <div
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: "rgba(0,0,0,0.5)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000,
-            }}
-          >
-            <div
-              style={{
-                background: "white",
-                borderRadius: "12px",
-                maxWidth: "600px",
-                width: "90%",
-                maxHeight: "80vh",
-                overflowY: "auto",
-                boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-              }}
-            >
-              <div style={modalHeaderStyle}>
-                <h3 style={modalTitleStyle}>Send Message</h3>
-                <button onClick={() => setShowModal(false)} style={modalCloseButtonStyle}>
-                  ✖
-                </button>
-              </div>
-              <div style={modalBodyStyle}>
-                <div>
-                  <p style={{ marginBottom: "1rem", color: "#5D2A0A" }}>
-                    Send a message to{" "}
-                    <strong>
-                      {modalContent.supplier?.entityOverview?.tradingName ||
-                        modalContent.supplier?.entityOverview?.registeredName}
-                    </strong>
-                    :
-                  </p>
-                  <textarea
-                    style={{
-                      width: "100%",
-                      minHeight: "120px",
-                      padding: "0.75rem",
-                      border: "1px solid #E8D5C4",
-                      borderRadius: "6px",
-                      fontSize: "0.875rem",
-                      fontFamily: "inherit",
-                      resize: "vertical",
-                      background: "#FEFCFA",
-                      marginBottom: "1.5rem",
-                    }}
-                    placeholder="Type your message here..."
-                    rows={4}
-                  />
-                  <div style={modalActionsStyle}>
-                    <button style={primaryButtonStyle}>Send Message</button>
-                    <button style={cancelButtonStyle} onClick={() => setShowModal(false)}>
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )
-      )}
-
-      {mounted && showModal && modalContent.type === "call" && (
-        createPortal(
-          <div
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: "rgba(0,0,0,0.5)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000,
-            }}
-          >
-            <div
-              style={{
-                background: "white",
-                borderRadius: "12px",
-                maxWidth: "600px",
-                width: "90%",
-                maxHeight: "80vh",
-                overflowY: "auto",
-                boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-              }}
-            >
-              <div style={modalHeaderStyle}>
-                <h3 style={modalTitleStyle}>Call Supplier</h3>
-                <button onClick={() => setShowModal(false)} style={modalCloseButtonStyle}>
-                  ✖
-                </button>
-              </div>
-              <div style={modalBodyStyle}>
-                <div>
-                  <p style={{ marginBottom: "1rem", color: "#5D2A0A" }}>
-                    Call{" "}
-                    <strong>
-                      {modalContent.supplier?.entityOverview?.tradingName ||
-                        modalContent.supplier?.entityOverview?.registeredName}
-                    </strong>
-                    :
-                  </p>
                   <div
                     style={{
-                      padding: "1rem",
-                      background: "#F5EBE0",
-                      borderRadius: "8px",
-                      marginBottom: "1.5rem",
-                      border: "1px solid #E8D5C4",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: "1rem",
+                      paddingTop: "1.5rem",
+                      borderTop: "1px solid #E8D5C4",
                     }}
                   >
-                    <p style={{ margin: "0.25rem 0", color: "#5D2A0A" }}>Primary Contact: John Smith</p>
-                    <p style={{ margin: "0.25rem 0", color: "#5D2A0A" }}>Phone: +27 12 345 6789</p>
-                    <p style={{ margin: "0.25rem 0", color: "#5D2A0A" }}>
-                      Email: contact@
-                      {(modalContent.supplier?.entityOverview?.tradingName || "supplier")
-                        .toLowerCase()
-                        .replace(/\s/g, "")}
-                      .com
-                    </p>
-                  </div>
-                  <div style={modalActionsStyle}>
-                    <button style={primaryButtonStyle}>Dial Now</button>
-                    <button style={cancelButtonStyle} onClick={() => setShowModal(false)}>
-                      Cancel
+                    <button
+                      style={{
+                        flex: "1",
+                        padding: "0.75rem 1.5rem",
+                        background: "#F5EBE0",
+                        color: "#5D2A0A",
+                        border: "1px solid #E8D5C4",
+                        borderRadius: "6px",
+                        fontSize: "0.875rem",
+                        fontWeight: "500",
+                        cursor: "pointer",
+                        transition: "all 0.2s",
+                      }}
+                      onClick={clearAllFilters}
+                    >
+                      Clear All Filters
+                    </button>
+                    <button
+                      style={{
+                        flex: "1",
+                        padding: "0.75rem 1.5rem",
+                        background: "#5D2A0A",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "6px",
+                        fontSize: "0.875rem",
+                        fontWeight: "500",
+                        cursor: "pointer",
+                        transition: "all 0.2s",
+                      }}
+                      onClick={() => setShowFilters(false)}
+                    >
+                      Apply Filters
                     </button>
                   </div>
                 </div>
               </div>
-            </div>
-          </div>,
-          document.body
-        )
-      )}
+            </div>,
+            document.body,
+          )}
+
+        {/* Supplier Details Modal */}
+        {mounted && showModal && modalContent.type === "supplier-details" && (
+          <SupplierDetailsModal
+            supplier={modalContent.supplier}
+            isOpen={showModal}
+            onClose={() => setShowModal(false)}
+          />
+        )}
+
+        {/* Keep your existing modals for other types */}
+        {mounted && showModal && modalContent.type === "documents" && (
+          createPortal(
+            <div
+              style={{
+                position: "fixed",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: "rgba(0,0,0,0.5)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 1000,
+              }}
+            >
+              <div
+                style={{
+                  background: "white",
+                  borderRadius: "12px",
+                  maxWidth: "600px",
+                  width: "90%",
+                  maxHeight: "80vh",
+                  overflowY: "auto",
+                  boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
+                }}
+              >
+                <div style={modalHeaderStyle}>
+                  <h3 style={modalTitleStyle}>Supplier Documents</h3>
+                  <button onClick={() => setShowModal(false)} style={modalCloseButtonStyle}>
+                    ✖
+                  </button>
+                </div>
+                <div style={modalBodyStyle}>
+                  <div>
+                    <p style={{ marginBottom: "1rem", color: "#5D2A0A" }}>
+                      Documents for{" "}
+                      <strong>
+                        {modalContent.supplier?.entityOverview?.tradingName ||
+                          modalContent.supplier?.entityOverview?.registeredName}
+                      </strong>
+                      :
+                    </p>
+                    <ul
+                      style={{
+                        listStyle: "none",
+                        padding: "0",
+                        margin: "0 0 1.5rem 0",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      <li
+                        style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
+                      >
+                        📄 Company Profile.pdf
+                      </li>
+                      <li
+                        style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
+                      >
+                        📄 BBBEE Certificate.pdf
+                      </li>
+                      <li
+                        style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
+                      >
+                        📄 Tax Compliance.pdf
+                      </li>
+                      <li
+                        style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
+                      >
+                        📄 References.pdf
+                      </li>
+                      <li
+                        style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
+                      >
+                        📄 Service Portfolio.pdf
+                      </li>
+                      <li
+                        style={{ padding: "0.75rem", background: "#F5EBE0", borderRadius: "4px", fontSize: "0.875rem" }}
+                      >
+                        📄 Case Studies.pdf
+                      </li>
+                    </ul>
+                    <div style={modalActionsStyle}>
+                      <button style={primaryButtonStyle}>Download All</button>
+                      <button style={cancelButtonStyle} onClick={() => setShowModal(false)}>
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        )}
+
+        {mounted && showModal && modalContent.type === "message" && (
+          createPortal(
+            <div
+              style={{
+                position: "fixed",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: "rgba(0,0,0,0.5)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 1000,
+              }}
+            >
+              <div
+                style={{
+                  background: "white",
+                  borderRadius: "12px",
+                  maxWidth: "600px",
+                  width: "90%",
+                  maxHeight: "80vh",
+                  overflowY: "auto",
+                  boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
+                }}
+              >
+                <div style={modalHeaderStyle}>
+                  <h3 style={modalTitleStyle}>Send Message</h3>
+                  <button onClick={() => setShowModal(false)} style={modalCloseButtonStyle}>
+                    ✖
+                  </button>
+                </div>
+                <div style={modalBodyStyle}>
+                  <div>
+                    <p style={{ marginBottom: "1rem", color: "#5D2A0A" }}>
+                      Send a message to{" "}
+                      <strong>
+                        {modalContent.supplier?.entityOverview?.tradingName ||
+                          modalContent.supplier?.entityOverview?.registeredName}
+                      </strong>
+                      :
+                    </p>
+                    <textarea
+                      style={{
+                        width: "100%",
+                        minHeight: "120px",
+                        padding: "0.75rem",
+                        border: "1px solid #E8D5C4",
+                        borderRadius: "6px",
+                        fontSize: "0.875rem",
+                        fontFamily: "inherit",
+                        resize: "vertical",
+                        background: "#FEFCFA",
+                        marginBottom: "1.5rem",
+                      }}
+                      placeholder="Type your message here..."
+                      rows={4}
+                    />
+                    <div style={modalActionsStyle}>
+                      <button style={primaryButtonStyle}>Send Message</button>
+                      <button style={cancelButtonStyle} onClick={() => setShowModal(false)}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        )}
+
+        {mounted && showModal && modalContent.type === "call" && (
+          createPortal(
+            <div
+              style={{
+                position: "fixed",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: "rgba(0,0,0,0.5)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 1000,
+              }}
+            >
+              <div
+                style={{
+                  background: "white",
+                  borderRadius: "12px",
+                  maxWidth: "600px",
+                  width: "90%",
+                  maxHeight: "80vh",
+                  overflowY: "auto",
+                  boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
+                }}
+              >
+                <div style={modalHeaderStyle}>
+                  <h3 style={modalTitleStyle}>Call Supplier</h3>
+                  <button onClick={() => setShowModal(false)} style={modalCloseButtonStyle}>
+                    ✖
+                  </button>
+                </div>
+                <div style={modalBodyStyle}>
+                  <div>
+                    <p style={{ marginBottom: "1rem", color: "#5D2A0A" }}>
+                      Call{" "}
+                      <strong>
+                        {modalContent.supplier?.entityOverview?.tradingName ||
+                          modalContent.supplier?.entityOverview?.registeredName}
+                      </strong>
+                      :
+                    </p>
+                    <div
+                      style={{
+                        padding: "1rem",
+                        background: "#F5EBE0",
+                        borderRadius: "8px",
+                        marginBottom: "1.5rem",
+                        border: "1px solid #E8D5C4",
+                      }}
+                    >
+                      <p style={{ margin: "0.25rem 0", color: "#5D2A0A" }}>Primary Contact: John Smith</p>
+                      <p style={{ margin: "0.25rem 0", color: "#5D2A0A" }}>Phone: +27 12 345 6789</p>
+                      <p style={{ margin: "0.25rem 0", color: "#5D2A0A" }}>
+                        Email: contact@
+                        {(modalContent.supplier?.entityOverview?.tradingName || "supplier")
+                          .toLowerCase()
+                          .replace(/\s/g, "")}
+                        .com
+                      </p>
+                    </div>
+                    <div style={modalActionsStyle}>
+                      <button style={primaryButtonStyle}>Dial Now</button>
+                      <button style={cancelButtonStyle} onClick={() => setShowModal(false)}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        )}
+      </div>
     </>
   )
 }

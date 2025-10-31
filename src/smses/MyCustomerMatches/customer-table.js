@@ -161,7 +161,7 @@ function getDeliveryModeMatches(appModes, supplyModes) {
   // Check if either has Hybrid for full compatibility
   const appHasHybrid = appModes.includes("Hybrid")
   const supplyHasHybrid = supplyModes.includes("Hybrid")
-  
+
   if (appHasHybrid || supplyHasHybrid) {
     matches.push({
       applicationMode: appHasHybrid ? "Hybrid" : appModes[0],
@@ -413,11 +413,12 @@ export function CustomerTable() {
     supplierLocation: "",
     sortBy: "newest",
   })
-const [supplierRatings, setSupplierRatings] = useState({})
+  const [supplierRatings, setSupplierRatings] = useState({})
   const [showMatchBreakdown, setShowMatchBreakdown] = useState(false)
   const [matchBreakdownData, setMatchBreakdownData] = useState(null)
   const [universalProfiles, setUniversalProfiles] = useState([])
   const [productProfiles, setProductProfiles] = useState([])
+  const [currentUserApplication, setCurrentUserApplication] = useState(null)
 
 
   function calculateMatchScore(application, supplier, ratingsData = null) {
@@ -428,11 +429,11 @@ const [supplierRatings, setSupplierRatings] = useState({})
         breakdown: {}
       };
     }
-  
+
     let score = 0
     let totalWeight = 0
     const breakdown = {}
-  
+
     // Safely extract all required data with fallbacks
     const demand = application.productsServices || {}
     const supply = supplier.productsServices || {}
@@ -442,83 +443,83 @@ const [supplierRatings, setSupplierRatings] = useState({})
     const supplierFinancial = supplier.financialOverview || {}
     const supplierEntity = supplier.entityOverview || {}
     const supplierOwnership = supplier.ownershipManagement || {}
-    
+
     // Normalize application categories
     const appCategories = Array.isArray(demand.categories)
       ? demand.categories
-          .map((c) => (typeof c === "string" ? c.toLowerCase().trim() : (c.name || "").toLowerCase().trim()))
-          .filter(Boolean)
+        .map((c) => (typeof c === "string" ? c.toLowerCase().trim() : (c.name || "").toLowerCase().trim()))
+        .filter(Boolean)
       : []
-  
+
     console.log("Application Categories:", appCategories)
-  
+
     // Normalize supplier categories from both productCategories and serviceCategories
     const supplierProductCategories = Array.isArray(supply.productCategories)
       ? supply.productCategories
-          .map((c) => (typeof c === "string" ? c.toLowerCase().trim() : (c.name || "").toLowerCase().trim()))
-          .filter(Boolean)
+        .map((c) => (typeof c === "string" ? c.toLowerCase().trim() : (c.name || "").toLowerCase().trim()))
+        .filter(Boolean)
       : []
-  
+
     const supplierServiceCategories = Array.isArray(supply.serviceCategories)
       ? supply.serviceCategories
-          .map((c) => (typeof c === "string" ? c.toLowerCase().trim() : (c.name || "").toLowerCase().trim()))
-          .filter(Boolean)
+        .map((c) => (typeof c === "string" ? c.toLowerCase().trim() : (c.name || "").toLowerCase().trim()))
+        .filter(Boolean)
       : []
-  
+
     // Combine all supplier categories and remove duplicates
     const allSupplierCategories = [...new Set([...supplierProductCategories, ...supplierServiceCategories])]
     console.log("Supplier Categories:", allSupplierCategories)
-  
+
     // Rest of your normalized data...
     const appBudgetMin = Number.parseInt((requestOverview.minBudget || "0").replace(/\D/g, "")) || 0
     const appBudgetMax = Number.parseInt((requestOverview.maxBudget || "0").replace(/\D/g, "")) || 1000000
     const appLocation = (requestOverview.location || "").toLowerCase().trim()
-    
+
     console.log("Budget Range:", appBudgetMin, "-", appBudgetMax)
-  
+
     const appDeliveryModes = Array.isArray(requestOverview.deliveryModes)
       ? requestOverview.deliveryModes.map((m) => m.toLowerCase().trim()).filter(Boolean)
       : []
-  
+
     const number = matchingPrefs.bbeeLevel ? matchingPrefs.bbeeLevel.replace(/\D/g, '') : "0"
     const appBBBEEPref = Number.parseInt(number || "0") || 0
-    
-  const appOwnershipPrefs = Array.isArray(matchingPrefs.ownershipPrefs)
+
+    const appOwnershipPrefs = Array.isArray(matchingPrefs.ownershipPrefs)
       ? matchingPrefs.ownershipPrefs.map((p) => p.toLowerCase().trim()).filter(Boolean)
       : []
-  
+
     const supplyDeliveryModes = Array.isArray(supply.deliveryModes)
       ? supply.deliveryModes.map((m) => m.toLowerCase().trim()).filter(Boolean)
       : []
-  
+
     const bbbeeLevel = Number.parseInt(supplierLegal.bbbeeLevel || "0") || 0
     const revenue = Number.parseInt((supplierFinancial.annualRevenue || "0").replace(/\D/g, "")) || 0
     const location = (supplierEntity.location || "").toLowerCase().trim()
     const experienceText = (supplierEntity.businessDescription || "").toLowerCase().trim()
     const sectorPref = (matchingPrefs.sectorExperience || "").toLowerCase().trim()
     const supplierRating = (supplier.pisScore || 50) / 10
-  
+
     console.log("Supplier Revenue:", revenue)
-  
+
     // IMPROVED CATEGORY MATCHING (30%)
     if (MATCHING_CRITERIA.CATEGORY_MATCH.weight > 0) {
       let categoryScore = 0
-  
+
       if (appCategories.length > 0 && allSupplierCategories.length > 0) {
         // Find matching categories (case-insensitive, partial matches)
-        const matchingCategories = appCategories.filter(appCat => 
-          allSupplierCategories.some(supplierCat => 
+        const matchingCategories = appCategories.filter(appCat =>
+          allSupplierCategories.some(supplierCat =>
             supplierCat.includes(appCat) || appCat.includes(supplierCat) ||
             calculateSimilarity(appCat, supplierCat) > 0.7
           )
         )
-        
+
         categoryScore = matchingCategories.length / appCategories.length
         console.log("Category Matches:", matchingCategories, "Score:", categoryScore)
       } else if (appCategories.length === 0) {
         categoryScore = 0.5 // Neutral score if no categories specified
       }
-  
+
       score += categoryScore * MATCHING_CRITERIA.CATEGORY_MATCH.weight * 100
       breakdown.categoryMatch = {
         score: categoryScore * 100,
@@ -527,18 +528,18 @@ const [supplierRatings, setSupplierRatings] = useState({})
       }
       totalWeight += MATCHING_CRITERIA.CATEGORY_MATCH.weight * 100
     }
-  
+
     // Rest of your existing criteria calculations remain the same...
     // 2. BBBEE_LEVEL (10%)
     if (MATCHING_CRITERIA.BBBEE_LEVEL.weight > 0) {
       let bbbeeScore = 0
-  
+
       if (appBBBEEPref <= bbbeeLevel) {
         bbbeeScore = 1 // Perfect match
       } else if (appBBBEEPref - bbbeeLevel <= 2) {
         bbbeeScore = 0.5 // Partial match
       }
-  
+
       score += bbbeeScore * MATCHING_CRITERIA.BBBEE_LEVEL.weight * 100
       breakdown.bbbeeMatch = {
         score: bbbeeScore * 100,
@@ -546,11 +547,11 @@ const [supplierRatings, setSupplierRatings] = useState({})
       }
       totalWeight += MATCHING_CRITERIA.BBBEE_LEVEL.weight * 100
     }
-  
+
     // 3. LOCATION (10%)
     if (MATCHING_CRITERIA.LOCATION.weight > 0) {
       const locationScore = location && appLocation && (location.includes(appLocation) || appLocation.includes(location)) ? 1 : 0
-  
+
       score += locationScore * MATCHING_CRITERIA.LOCATION.weight * 100
       breakdown.locationMatch = {
         score: locationScore * 100,
@@ -558,45 +559,45 @@ const [supplierRatings, setSupplierRatings] = useState({})
       }
       totalWeight += MATCHING_CRITERIA.LOCATION.weight * 100
     }
-  
-    
-// 4. DELIVERY_MODE (10%) - SIMPLIFIED WITH HYBRID COMPATIBILITY
-if (MATCHING_CRITERIA.DELIVERY_MODE.weight > 0) {
-  let deliveryScore = 0
 
-  if (appDeliveryModes.length > 0 && supplyDeliveryModes.length > 0) {
-    // Check if either party has Hybrid - if so, full compatibility
-    const appHasHybrid = appDeliveryModes.includes("Hybrid")
-    const supplyHasHybrid = supplyDeliveryModes.includes("Hybrid")
-    
-    if (appHasHybrid || supplyHasHybrid) {
-      deliveryScore = 1 // Full score if either has Hybrid
-    } else {
-      // Standard matching for non-Hybrid cases
-      const deliveryMatches = appDeliveryModes.filter((appMode) => 
-        supplyDeliveryModes.includes(appMode)
-      )
-      deliveryScore = deliveryMatches.length / appDeliveryModes.length
+
+    // 4. DELIVERY_MODE (10%) - SIMPLIFIED WITH HYBRID COMPATIBILITY
+    if (MATCHING_CRITERIA.DELIVERY_MODE.weight > 0) {
+      let deliveryScore = 0
+
+      if (appDeliveryModes.length > 0 && supplyDeliveryModes.length > 0) {
+        // Check if either party has Hybrid - if so, full compatibility
+        const appHasHybrid = appDeliveryModes.includes("Hybrid")
+        const supplyHasHybrid = supplyDeliveryModes.includes("Hybrid")
+
+        if (appHasHybrid || supplyHasHybrid) {
+          deliveryScore = 1 // Full score if either has Hybrid
+        } else {
+          // Standard matching for non-Hybrid cases
+          const deliveryMatches = appDeliveryModes.filter((appMode) =>
+            supplyDeliveryModes.includes(appMode)
+          )
+          deliveryScore = deliveryMatches.length / appDeliveryModes.length
+        }
+      } else if (appDeliveryModes.length === 0) {
+        deliveryScore = 0.5 // Neutral score if no delivery modes specified
+      }
+
+      score += deliveryScore * MATCHING_CRITERIA.DELIVERY_MODE.weight * 100
+      breakdown.deliveryMatch = {
+        score: deliveryScore * 100,
+        description: MATCHING_CRITERIA.DELIVERY_MODE.description,
+        matches: appDeliveryModes.length > 0 ? getDeliveryModeMatches(appDeliveryModes, supplyDeliveryModes) : [],
+        hasHybrid: appDeliveryModes.includes("Hybrid") || supplyDeliveryModes.includes("Hybrid")
+      }
+      totalWeight += MATCHING_CRITERIA.DELIVERY_MODE.weight * 100
     }
-  } else if (appDeliveryModes.length === 0) {
-    deliveryScore = 0.5 // Neutral score if no delivery modes specified
-  }
 
-  score += deliveryScore * MATCHING_CRITERIA.DELIVERY_MODE.weight * 100
-  breakdown.deliveryMatch = {
-    score: deliveryScore * 100,
-    description: MATCHING_CRITERIA.DELIVERY_MODE.description,
-    matches: appDeliveryModes.length > 0 ? getDeliveryModeMatches(appDeliveryModes, supplyDeliveryModes) : [],
-    hasHybrid: appDeliveryModes.includes("Hybrid") || supplyDeliveryModes.includes("Hybrid")
-  }
-  totalWeight += MATCHING_CRITERIA.DELIVERY_MODE.weight * 100
-}
 
-  
     // 5. BUDGET_RANGE (10%)
     if (MATCHING_CRITERIA.BUDGET_RANGE.weight > 0) {
       let budgetScore = 0
-  
+
       if (revenue > 0) {
         if (revenue >= appBudgetMin && revenue <= appBudgetMax) {
           budgetScore = 1
@@ -606,7 +607,7 @@ if (MATCHING_CRITERIA.DELIVERY_MODE.weight > 0) {
           budgetScore = 0.3
         }
       }
-  
+
       score += budgetScore * MATCHING_CRITERIA.BUDGET_RANGE.weight * 100
       breakdown.budgetMatch = {
         score: budgetScore * 100,
@@ -614,148 +615,148 @@ if (MATCHING_CRITERIA.DELIVERY_MODE.weight > 0) {
       }
       totalWeight += MATCHING_CRITERIA.BUDGET_RANGE.weight * 100
     }
-  
+
     // 6. OWNERSHIP_PREFS (10%)
-  // IMPROVED OWNERSHIP_PREFS (10%)
-  if (MATCHING_CRITERIA.OWNERSHIP_PREFS.weight > 0) {
-    let ownershipScore = 0
-    const ownershipDetails = {
-      blackOwned: { percentage: 0, meetsThreshold: false },
-      womenOwned: { percentage: 0, meetsThreshold: false },
-      youthOwned: { percentage: 0, meetsThreshold: false },
-      disabilityInclusive: { percentage: 0, meetsThreshold: false }
-    }
-  console.log(appOwnershipPrefs)
-    if (appOwnershipPrefs.length > 0) {
-      // Calculate ownership percentages from shareholders array
-      const shareholderData = calculateOwnershipPercentages(supplierOwnership)
-      
-      // Update ownership details with calculated percentages
-      ownershipDetails.blackOwned.percentage = shareholderData.blackOwnership
-      ownershipDetails.womenOwned.percentage = shareholderData.womenOwnership
-      ownershipDetails.youthOwned.percentage = shareholderData.youthOwnership
-      ownershipDetails.disabilityInclusive.percentage = shareholderData.disabilityOwnership
-  
-      // Check thresholds for each preference
-      appOwnershipPrefs.forEach((pref) => {
-        const normalizedPref = pref.toLowerCase().trim()
-        
-        if (normalizedPref.includes("black-owned") || normalizedPref.includes("black owned")) {
-          const meetsThreshold = shareholderData.blackOwnership >= 51
-          ownershipDetails.blackOwned.meetsThreshold = meetsThreshold
-          if (meetsThreshold) ownershipScore += 0.4
-        }
-        else if (normalizedPref.includes("women-owned") || normalizedPref.includes("women owned") || normalizedPref.includes("female-owned")) {
-          const meetsThreshold = shareholderData.womenOwnership >= 30
-          ownershipDetails.womenOwned.meetsThreshold = meetsThreshold
-          if (meetsThreshold) ownershipScore += 0.3
-        }
-        else if (normalizedPref.includes("youth-owned") || normalizedPref.includes("youth owned")) {
-          const meetsThreshold = shareholderData.youthOwnership >= 25
-          ownershipDetails.youthOwned.meetsThreshold = meetsThreshold
-          if (meetsThreshold) ownershipScore += 0.2
-        }
-        else if (normalizedPref.includes("disability") || normalizedPref.includes("disabled")) {
-          const meetsThreshold = shareholderData.disabilityOwnership >= 5
-          ownershipDetails.disabilityInclusive.meetsThreshold = meetsThreshold
-          if (meetsThreshold) ownershipScore += 0.1
-        }
-      })
-      
-      ownershipScore = Math.min(ownershipScore, 1)
-    } else {
-      ownershipScore = 0.5 // Neutral score if no preferences
-    }
-  
-    score += ownershipScore * MATCHING_CRITERIA.OWNERSHIP_PREFS.weight * 100
-    breakdown.ownershipMatch = {
-      score: ownershipScore * 100,
-      description: MATCHING_CRITERIA.OWNERSHIP_PREFS.description,
-      details: ownershipDetails
-    }
-    totalWeight += MATCHING_CRITERIA.OWNERSHIP_PREFS.weight * 100
-  }
-  
-
-// 7. URGENCY_LEAD_TIME MATCHING (10%) - CORRECTED LOGIC
-if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
-  let urgencyLeadTimeScore = 0
-  
-  const appStartDate = requestOverview.startDate
-  const appEndDate = requestOverview.endDate
-  
-  // Check if we have application dates and supplier lead time data
-  if (appStartDate && (supply.minLeadTime || supply.maxLeadTime)) {
-    const requestStart = new Date(appStartDate).getTime()
-    const requestEnd = new Date(appEndDate || appStartDate).getTime() // Use start date if no end date
-    const now = new Date().getTime()
-    
-    const daysUntilRequestStart = (requestStart - now) / (1000 * 60 * 60 * 24)
-    const totalProjectDays = (requestEnd - now) / (1000 * 60 * 60 * 24)
-    
-    // Calculate supplier's delivery times in days
-    const minDeliveryDays = supply.minLeadTime ? 
-      convertToDays(supply.minLeadTime, supply.minLeadTimeUnit || 'days') : 0
-    const maxDeliveryDays = supply.maxLeadTime ? 
-      convertToDays(supply.maxLeadTime, supply.maxLeadTimeUnit || 'days') : minDeliveryDays * 1.5
-    
-    console.log("Lead Time Matching Debug:", {
-      appStartDate,
-      appEndDate,
-      daysUntilRequestStart: Math.round(daysUntilRequestStart),
-      totalProjectDays: Math.round(totalProjectDays),
-      minDeliveryDays: Math.round(minDeliveryDays),
-      maxDeliveryDays: Math.round(maxDeliveryDays),
-      supplierData: {
-        minLeadTime: supply.minLeadTime,
-        maxLeadTime: supply.maxLeadTime,
-        minLeadTimeUnit: supply.minLeadTimeUnit,
-        maxLeadTimeUnit: supply.maxLeadTimeUnit
+    // IMPROVED OWNERSHIP_PREFS (10%)
+    if (MATCHING_CRITERIA.OWNERSHIP_PREFS.weight > 0) {
+      let ownershipScore = 0
+      const ownershipDetails = {
+        blackOwned: { percentage: 0, meetsThreshold: false },
+        womenOwned: { percentage: 0, meetsThreshold: false },
+        youthOwned: { percentage: 0, meetsThreshold: false },
+        disabilityInclusive: { percentage: 0, meetsThreshold: false }
       }
-    })
-    
-    // Apply your scoring logic:
-    // 1.0 if both min and max fit within project timeframe
-    // 0.8 if only minimum fits but maximum doesn't
-    // 0.0 if neither fits
-    
-    const minFits = minDeliveryDays <= totalProjectDays
-    const maxFits = maxDeliveryDays <= totalProjectDays
-    console.log(minFits)
-    console.log(maxFits)
-    if (minFits && maxFits) {
-      urgencyLeadTimeScore = 1.0 // Full points - both fit perfectly
-    } else if (minFits && !maxFits) {
-      urgencyLeadTimeScore = 0.8 // Partial points - minimum fits but maximum doesn't
-    } else {
-      urgencyLeadTimeScore = 0.0 // No points - can't deliver in time
-    }
-    
-    console.log("Lead Time Score Result:", {
-      minFits,
-      maxFits,
-      finalScore: urgencyLeadTimeScore
-    })
-    
-  } else {
-    // Missing data - neutral score
-    urgencyLeadTimeScore = 0.5
-    console.log("Lead Time: Missing data, using neutral score")
-  }
+      console.log(appOwnershipPrefs)
+      if (appOwnershipPrefs.length > 0) {
+        // Calculate ownership percentages from shareholders array
+        const shareholderData = calculateOwnershipPercentages(supplierOwnership)
 
-  score += urgencyLeadTimeScore * MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100
-  breakdown.urgencyLeadTimeMatch = {
-    score: urgencyLeadTimeScore * 100,
-    description: MATCHING_CRITERIA.URGENCY_LEAD_TIME.description,
-    canDeliverInTime: urgencyLeadTimeScore > 0,
-  }
-  totalWeight += MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100
-}
-  
+        // Update ownership details with calculated percentages
+        ownershipDetails.blackOwned.percentage = shareholderData.blackOwnership
+        ownershipDetails.womenOwned.percentage = shareholderData.womenOwnership
+        ownershipDetails.youthOwned.percentage = shareholderData.youthOwnership
+        ownershipDetails.disabilityInclusive.percentage = shareholderData.disabilityOwnership
+
+        // Check thresholds for each preference
+        appOwnershipPrefs.forEach((pref) => {
+          const normalizedPref = pref.toLowerCase().trim()
+
+          if (normalizedPref.includes("black-owned") || normalizedPref.includes("black owned")) {
+            const meetsThreshold = shareholderData.blackOwnership >= 51
+            ownershipDetails.blackOwned.meetsThreshold = meetsThreshold
+            if (meetsThreshold) ownershipScore += 0.4
+          }
+          else if (normalizedPref.includes("women-owned") || normalizedPref.includes("women owned") || normalizedPref.includes("female-owned")) {
+            const meetsThreshold = shareholderData.womenOwnership >= 30
+            ownershipDetails.womenOwned.meetsThreshold = meetsThreshold
+            if (meetsThreshold) ownershipScore += 0.3
+          }
+          else if (normalizedPref.includes("youth-owned") || normalizedPref.includes("youth owned")) {
+            const meetsThreshold = shareholderData.youthOwnership >= 25
+            ownershipDetails.youthOwned.meetsThreshold = meetsThreshold
+            if (meetsThreshold) ownershipScore += 0.2
+          }
+          else if (normalizedPref.includes("disability") || normalizedPref.includes("disabled")) {
+            const meetsThreshold = shareholderData.disabilityOwnership >= 5
+            ownershipDetails.disabilityInclusive.meetsThreshold = meetsThreshold
+            if (meetsThreshold) ownershipScore += 0.1
+          }
+        })
+
+        ownershipScore = Math.min(ownershipScore, 1)
+      } else {
+        ownershipScore = 0.5 // Neutral score if no preferences
+      }
+
+      score += ownershipScore * MATCHING_CRITERIA.OWNERSHIP_PREFS.weight * 100
+      breakdown.ownershipMatch = {
+        score: ownershipScore * 100,
+        description: MATCHING_CRITERIA.OWNERSHIP_PREFS.description,
+        details: ownershipDetails
+      }
+      totalWeight += MATCHING_CRITERIA.OWNERSHIP_PREFS.weight * 100
+    }
+
+
+    // 7. URGENCY_LEAD_TIME MATCHING (10%) - CORRECTED LOGIC
+    if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
+      let urgencyLeadTimeScore = 0
+
+      const appStartDate = requestOverview.startDate
+      const appEndDate = requestOverview.endDate
+
+      // Check if we have application dates and supplier lead time data
+      if (appStartDate && (supply.minLeadTime || supply.maxLeadTime)) {
+        const requestStart = new Date(appStartDate).getTime()
+        const requestEnd = new Date(appEndDate || appStartDate).getTime() // Use start date if no end date
+        const now = new Date().getTime()
+
+        const daysUntilRequestStart = (requestStart - now) / (1000 * 60 * 60 * 24)
+        const totalProjectDays = (requestEnd - now) / (1000 * 60 * 60 * 24)
+
+        // Calculate supplier's delivery times in days
+        const minDeliveryDays = supply.minLeadTime ?
+          convertToDays(supply.minLeadTime, supply.minLeadTimeUnit || 'days') : 0
+        const maxDeliveryDays = supply.maxLeadTime ?
+          convertToDays(supply.maxLeadTime, supply.maxLeadTimeUnit || 'days') : minDeliveryDays * 1.5
+
+        console.log("Lead Time Matching Debug:", {
+          appStartDate,
+          appEndDate,
+          daysUntilRequestStart: Math.round(daysUntilRequestStart),
+          totalProjectDays: Math.round(totalProjectDays),
+          minDeliveryDays: Math.round(minDeliveryDays),
+          maxDeliveryDays: Math.round(maxDeliveryDays),
+          supplierData: {
+            minLeadTime: supply.minLeadTime,
+            maxLeadTime: supply.maxLeadTime,
+            minLeadTimeUnit: supply.minLeadTimeUnit,
+            maxLeadTimeUnit: supply.maxLeadTimeUnit
+          }
+        })
+
+        // Apply your scoring logic:
+        // 1.0 if both min and max fit within project timeframe
+        // 0.8 if only minimum fits but maximum doesn't
+        // 0.0 if neither fits
+
+        const minFits = minDeliveryDays <= totalProjectDays
+        const maxFits = maxDeliveryDays <= totalProjectDays
+        console.log(minFits)
+        console.log(maxFits)
+        if (minFits && maxFits) {
+          urgencyLeadTimeScore = 1.0 // Full points - both fit perfectly
+        } else if (minFits && !maxFits) {
+          urgencyLeadTimeScore = 0.8 // Partial points - minimum fits but maximum doesn't
+        } else {
+          urgencyLeadTimeScore = 0.0 // No points - can't deliver in time
+        }
+
+        console.log("Lead Time Score Result:", {
+          minFits,
+          maxFits,
+          finalScore: urgencyLeadTimeScore
+        })
+
+      } else {
+        // Missing data - neutral score
+        urgencyLeadTimeScore = 0.5
+        console.log("Lead Time: Missing data, using neutral score")
+      }
+
+      score += urgencyLeadTimeScore * MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100
+      breakdown.urgencyLeadTimeMatch = {
+        score: urgencyLeadTimeScore * 100,
+        description: MATCHING_CRITERIA.URGENCY_LEAD_TIME.description,
+        canDeliverInTime: urgencyLeadTimeScore > 0,
+      }
+      totalWeight += MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100
+    }
+
     // 8. EXPERIENCE (10%)
     if (MATCHING_CRITERIA.EXPERIENCE.weight > 0) {
       let experienceScore = 0
-  
+
       if (sectorPref && experienceText) {
         // Simple keyword matching
         const prefWords = sectorPref.split(/\s+/)
@@ -764,7 +765,7 @@ if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
       } else if (!sectorPref) {
         experienceScore = 0.5 // Neutral score if no preference
       }
-  
+
       score += experienceScore * MATCHING_CRITERIA.EXPERIENCE.weight * 100
       breakdown.experienceMatch = {
         score: experienceScore * 100,
@@ -772,15 +773,15 @@ if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
       }
       totalWeight += MATCHING_CRITERIA.EXPERIENCE.weight * 100
     }
-  
-  
-   // 9. RATING (5%)
+
+
+    // 9. RATING (5%)
     if (MATCHING_CRITERIA.RATING.weight > 0) {
       console.log("Available ratings data:", ratingsData)
-      
+
       // Use the ratings data passed as parameter, or fall back to state
       const effectiveRatingsData = ratingsData || supplierRatings;
-      
+
       // Helper function to get rating from the data
       const getRatingFromData = (supplierId) => {
         return effectiveRatingsData[supplierId] || {
@@ -789,22 +790,22 @@ if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
           latestComment: "No ratings yet"
         };
       };
-  
+
       // Use the actual supplier rating
       const supplierId = supplier?.id;
       const supplierRatingData = getRatingFromData(supplierId);
       const actualRating = supplierRatingData.average || 0;
-      
+
       console.log("Rating calculation:", {
         supplierId,
         actualRating,
         ratingData: supplierRatingData,
         allRatings: effectiveRatingsData
       });
-  
+
       // Normalize rating to 0-1 scale (assuming 0-5 scale)
       const ratingScore = actualRating / 5;
-  
+
       score += ratingScore * MATCHING_CRITERIA.RATING.weight * 100;
       breakdown.ratingMatch = {
         score: ratingScore * 100,
@@ -816,22 +817,22 @@ if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
     }
     // Calculate final weighted score
     const finalScore = totalWeight > 0 ? score / totalWeight : 0
-  
+
     return {
       totalScore: Math.round(finalScore * 100), // Convert to percentage
       breakdown,
     }
   }
-  
+
   const fetchSupplierRatings = async () => {
     try {
       const ratingsSnapshot = await getDocs(collection(db, "supplierReviews"))
       const ratingsData = {}
-      
+
       ratingsSnapshot.forEach((doc) => {
         const ratingData = doc.data()
         const supplierId = ratingData.supplierId
-        
+
         if (supplierId) {
           if (!ratingsData[supplierId]) {
             ratingsData[supplierId] = []
@@ -845,7 +846,7 @@ if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
           })
         }
       })
-      
+
       // Calculate average ratings for each supplier
       const averageRatings = {}
       Object.keys(ratingsData).forEach(supplierId => {
@@ -866,17 +867,17 @@ if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
           }
         }
       })
-      
+
       console.log("Fetched supplier ratings:", averageRatings)
       setSupplierRatings(averageRatings)
       return averageRatings // Return the data so it can be used immediately
-     
+
     } catch (error) {
       console.error("Error fetching supplier ratings:", error)
       return {}
     }
   }
-  
+
   const formatMatchBreakdown = (matchDetails) => {
     if (!matchDetails) return null
 
@@ -927,7 +928,7 @@ if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
         return
       }
 
-          const matchScore = calculateMatchScore(productProfiles, supplierProfile, supplierRatings);
+      const matchScore = calculateMatchScore(productProfiles, supplierProfile, supplierRatings);
 
       // Update the application in state with the new match data
       setApplications((prev) =>
@@ -1003,6 +1004,23 @@ if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
 
     setLoading(true)
 
+    const fetchCurrentUserApplication = async () => {
+      try {
+        const auth = getAuth()
+        const user = auth.currentUser
+        if (!user) return
+
+        const applicationDoc = await getDoc(doc(db, "productApplications", user.uid))
+        if (applicationDoc.exists()) {
+          setCurrentUserApplication(applicationDoc.data())
+        }
+      } catch (error) {
+        console.error("Error fetching current user application:", error)
+      }
+    }
+
+    fetchCurrentUserApplication()
+
     const fetchUniversalProfiles = async () => {
       try {
         const profilesSnapshot = await getDocs(collection(db, "universalProfiles"))
@@ -1025,8 +1043,8 @@ if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
       async (querySnapshot) => {
         const profiles = await fetchUniversalProfiles()
 
-          const ratingsData = await fetchSupplierRatings()
-      
+        const ratingsData = await fetchSupplierRatings()
+
         const apps = await Promise.all(
           querySnapshot.docs.map(async (docSnapshot) => {
             const data = docSnapshot.data()
@@ -1044,12 +1062,12 @@ if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
             // Note: 'product' variable seems to be undefined - you might want docSnap.data()
             console.log(product) // Changed from 'product' to docSnap.data()
             console.log(supplierProfile)
-           if (product && supplierProfile) {
-            // Pass the ratings data directly to calculateMatchScore
-            const matchResult = calculateMatchScore(product, supplierProfile, ratingsData)
-            matchPercentage = matchResult.totalScore
-            matchDetails = matchResult.breakdown
-          }
+            if (product && supplierProfile) {
+              // Pass the ratings data directly to calculateMatchScore
+              const matchResult = calculateMatchScore(product, supplierProfile, ratingsData)
+              matchPercentage = matchResult.totalScore
+              matchDetails = matchResult.breakdown
+            }
 
             return {
               id: doc.id,
@@ -1075,14 +1093,14 @@ if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
     return () => unsubscribe()
   }, [currentCustomerId])
 
-  
-const getSupplierRating = (supplierId) => {
-  return supplierRatings[supplierId] || {
-    average: 0,
-    count: 0,
-    latestComment: "No ratings yet"
+
+  const getSupplierRating = (supplierId) => {
+    return supplierRatings[supplierId] || {
+      average: 0,
+      count: 0,
+      latestComment: "No ratings yet"
+    }
   }
-}
   // Add these helper functions inside your CustomerTable component:
   const getCustomerEconomicSectors = (customerId) => {
     const customerProfile = universalProfiles.find((profile) => profile.id === customerId)
@@ -1090,29 +1108,17 @@ const getSupplierRating = (supplierId) => {
   }
 
   const getServiceRequested = (application) => {
-    // First try to get from originalRequest
+    // Get from the current user's product application (what the customer is requesting)
+    if (currentUserApplication?.requestOverview?.purpose) {
+      return currentUserApplication.requestOverview.purpose
+    }
+
+    // Fallback to original request data
     if (
       application.originalRequest?.serviceRequested &&
       application.originalRequest.serviceRequested !== "Not specified"
     ) {
       return application.originalRequest.serviceRequested
-    }
-
-    // If not available, try to get from the supplier's universal profile
-    const supplierProfile = universalProfiles.find((profile) => profile.id === application.supplierId)
-    if (!supplierProfile) return "Not specified"
-
-    // Get first category from either productCategories or serviceCategories
-    const productsServices = supplierProfile.productsServices || {}
-
-    if (Array.isArray(productsServices.productCategories) && productsServices.productCategories.length > 0) {
-      const firstCat = productsServices.productCategories[0]
-      return typeof firstCat === "string" ? firstCat : firstCat?.name || "Not specified"
-    }
-
-    if (Array.isArray(productsServices.serviceCategories) && productsServices.serviceCategories.length > 0) {
-      const firstCat = productsServices.serviceCategories[0]
-      return typeof firstCat === "string" ? firstCat : firstCat?.name || "Not specified"
     }
 
     return "Not specified"
@@ -1140,6 +1146,34 @@ const getSupplierRating = (supplierId) => {
     }
 
     return allCategories
+  }
+
+  const getBudgetText = (application) => {
+    // First try to get from current user application (what the customer is requesting)
+    if (currentUserApplication?.requestOverview) {
+      const minBudget = currentUserApplication.requestOverview.minBudget || "0"
+      const maxBudget = currentUserApplication.requestOverview.maxBudget || "0"
+
+      const min = parseInt(minBudget.replace(/\D/g, "")) || 0
+      const max = parseInt(maxBudget.replace(/\D/g, "")) || 0
+
+      if (min > 0 || max > 0) {
+        return `R${min.toLocaleString()} - R${max.toLocaleString()}`
+      }
+    }
+
+    // Fallback to original request data
+    const budgetRange = application.originalRequest?.budgetRange
+    if (budgetRange) {
+      const min = parseInt((budgetRange.min || "0").replace(/\D/g, "")) || 0
+      const max = parseInt((budgetRange.max || "0").replace(/\D/g, "")) || 0
+
+      if (min > 0 || max > 0) {
+        return `R${min.toLocaleString()} - R${max.toLocaleString()}`
+      }
+    }
+
+    return "Not specified"
   }
 
   // Update date display to handle null values
@@ -1688,9 +1722,7 @@ const getSupplierRating = (supplierId) => {
                 sortedApplications.map((application) => {
                   const statusStyle = getStatusStyle(application.status)
                   const budgetRange = application.originalRequest?.budgetRange
-                  const budgetText = budgetRange
-                    ? `R${Number.parseInt(budgetRange.min || 0).toLocaleString()} - R${Number.parseInt(budgetRange.max || 0).toLocaleString()}`
-                    : "Not specified"
+                  const budgetText = getBudgetText(application)
 
                   return (
                     <tr key={application.id} style={tableRowStyle}>

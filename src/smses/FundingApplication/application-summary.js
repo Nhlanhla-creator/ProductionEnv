@@ -7,7 +7,7 @@ const ApplicationSummary = ({ formData, onEdit }) => {
     applicationOverview: false,
     useOfFunds: false,
     enterpriseReadiness: false,
-    financialOverview: false,
+    guarantees: false,
     growthPotential: false,
     socialImpact: false,
     declarationCommitment: false,
@@ -20,7 +20,6 @@ const ApplicationSummary = ({ formData, onEdit }) => {
     }))
   }
 
-  // Add currency parsing function
   const parseCurrency = (value) => {
     if (!value) return 0
     return parseInt(value.toString().replace(/[^\d]/g, '')) || 0
@@ -62,11 +61,6 @@ const ApplicationSummary = ({ formData, onEdit }) => {
     )
   }
 
-  const formatFiles = (files) => {
-    if (!files || !files.length) return "None"
-    return files.map((file) => (typeof file === "string" ? file : file.name)).join(", ")
-  }
-
   const formatArray = (arr) => {
     if (!arr || !arr.length) return "None specified"
     return arr.join(" • ")
@@ -74,7 +68,6 @@ const ApplicationSummary = ({ formData, onEdit }) => {
 
   const formatBoolean = (value) => (value ? "✅ Confirmed" : "❌ Pending")
 
-  // Safe value formatter - removes double question marks issue
   const formatValue = (value, defaultText = "Not provided") => {
     if (value === null || value === undefined || value === "") {
       return defaultText
@@ -84,10 +77,6 @@ const ApplicationSummary = ({ formData, onEdit }) => {
 
   const handleEdit = () => {
     if (onEdit) onEdit()
-  }
-
-  const handleNavigate = () => {
-    // Add your navigation logic here
   }
 
   return (
@@ -117,7 +106,6 @@ const ApplicationSummary = ({ formData, onEdit }) => {
           fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
           minHeight: '100vh',
           background: 'linear-gradient(135deg, #faf7f2 0%, #f5f0e1 50%, #f0e6d9 100%)',
-       
           transition: 'all 0.3s ease'
         }}>
         <div style={{
@@ -137,7 +125,6 @@ const ApplicationSummary = ({ formData, onEdit }) => {
             position: 'relative',
             overflow: 'hidden'
           }}>
-            {/* Background decoration */}
             <div style={{
               position: 'absolute',
               top: '-50%',
@@ -159,10 +146,8 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                 zIndex: 2
               }}>
 
-              {/* Fundability Score */}
               <FundabilityScoreCard applicationData={formData} />
 
-              {/* Title */}
               <div style={{ textAlign: 'center' }}>
                 <h1 style={{
                   background: 'linear-gradient(135deg, #4a352f, #7d5a50)',
@@ -185,7 +170,6 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                 </p>
               </div>
 
-              {/* Action Button */}
               <button
                 onClick={handleEdit}
                 style={{
@@ -248,16 +232,6 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                   cursor: "pointer",
                   transition: 'all 0.3s ease'
                 }}
-                onMouseEnter={(e) => {
-                  if (!expandedSections.applicationOverview) {
-                    e.currentTarget.style.background = 'linear-gradient(135deg, #c8b6a6, #a67c52)'
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!expandedSections.applicationOverview) {
-                    e.currentTarget.style.background = 'linear-gradient(135deg, #e6d7c3, #c8b6a6)'
-                  }
-                }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <FileBarChart size={24} color={expandedSections.applicationOverview ? "#faf7f2" : "#4a352f"} />
@@ -289,11 +263,19 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                   }}>
                     {[
                       { label: "Application Date", value: formatValue(formData?.applicationOverview?.applicationDate) },
-                      { label: "Application Type", value: formatValue(formData?.applicationOverview?.applicationType) },
+                      { 
+                        label: "Application Type", 
+                        value: formatValue(formData?.applicationOverview?.applicationType),
+                        detail: formData?.applicationOverview?.applicationType === 'other' ? formData?.applicationOverview?.otherApplicationTypeSpecification : null
+                      },
                       { label: "Funding Stage", value: formatValue(formData?.applicationOverview?.fundingStage) },
                       { label: "Preferred Start Date", value: formatValue(formData?.applicationOverview?.preferredStartDate) },
-                      { label: "Submission Channel", value: formatValue(formData?.applicationOverview?.submissionChannel) },
-                      { label: "Support Required", value: formatValue(formData?.applicationOverview?.supportFormat) },
+                      { label: "Submission Channel", value: formatValue(formData?.applicationOverview?.submissionChannel, "Online Portal") },
+                      { 
+                        label: "Support Required", 
+                        value: formatValue(formData?.applicationOverview?.supportFormat),
+                        detail: formData?.applicationOverview?.supportFormat === 'other' ? formData?.applicationOverview?.otherSupportFormatSpecification : null
+                      },
                       { label: "Urgency", value: formatValue(formData?.applicationOverview?.urgency) }
                     ].map((item, i) => (
                       <div key={i} style={{
@@ -326,10 +308,25 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                           fontSize: "15px",
                           color: "#4a352f",
                           fontWeight: "500",
-                          lineHeight: '1.4'
+                          lineHeight: '1.4',
+                          display: 'block',
+                          marginBottom: item.detail ? '8px' : 0
                         }}>
                           {item.value}
                         </span>
+                        {item.detail && (
+                          <div style={{
+                            fontSize: "14px",
+                            color: "#7d5a50",
+                            fontStyle: 'italic',
+                            padding: '8px 12px',
+                            background: 'rgba(166, 124, 82, 0.1)',
+                            borderRadius: '6px',
+                            border: '1px solid rgba(166, 124, 82, 0.2)'
+                          }}>
+                            {item.detail}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -393,9 +390,17 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                     {[
                       { label: "Amount Requested", value: formatValue(formData?.useOfFunds?.amountRequested, "R 0") },
                       { label: "Personal Equity Contributed", value: formatValue(formData?.useOfFunds?.personalEquity, "R 0") },
-                      { label: "Funding Instruments Preferred", value: formatArray(formData?.useOfFunds?.fundingInstruments) },
-                      { label: "Type of Funder Preferred", value: formatArray(formData?.useOfFunds?.funderTypes) },
-                      { label: "Equity Offered", value: formatValue(formData?.useOfFunds?.equityType, "0%") }, // This now correctly shows "0-20%"
+                      { 
+                        label: "Funding Instruments Preferred", 
+                        value: formatArray(formData?.useOfFunds?.fundingInstruments),
+                        detail: formData?.useOfFunds?.fundingInstruments?.includes('other') ? formData?.useOfFunds?.fundingInstrumentOther : null
+                      },
+                      { 
+                        label: "Type of Funder Preferred", 
+                        value: formatArray(formData?.useOfFunds?.funderTypes),
+                        detail: formData?.useOfFunds?.funderTypes?.includes('other') ? formData?.useOfFunds?.funderTypeOther : null
+                      },
+                      { label: "Equity Offered", value: formatValue(formData?.useOfFunds?.equityType, "0%") },
                     ].map((item, i) => (
                       <div key={i} style={{
                         background: 'rgba(250, 247, 242, 0.8)',
@@ -427,15 +432,94 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                           fontSize: "15px",
                           color: "#4a352f",
                           fontWeight: "500",
-                          lineHeight: '1.4'
+                          lineHeight: '1.4',
+                          display: 'block',
+                          marginBottom: item.detail ? '8px' : 0
                         }}>
                           {item.value}
                         </span>
+                        {item.detail && (
+                          <div style={{
+                            fontSize: "14px",
+                            color: "#7d5a50",
+                            fontStyle: 'italic',
+                            padding: '8px 12px',
+                            background: 'rgba(166, 124, 82, 0.1)',
+                            borderRadius: '6px',
+                            border: '1px solid rgba(166, 124, 82, 0.2)'
+                          }}>
+                            {item.detail}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
 
-                  {/* Rest of the component remains the same */}
+                  {/* Additional Support Section */}
+                  {(formData?.useOfFunds?.additionalSupportFocus || formData?.useOfFunds?.additionalSupportFocusSubtype) && (
+                    <div style={{
+                      marginBottom: '24px',
+                      padding: '20px',
+                      background: 'rgba(166, 124, 82, 0.1)',
+                      borderRadius: '12px',
+                      border: '1px solid rgba(166, 124, 82, 0.2)'
+                    }}>
+                      <h3 style={{
+                        fontSize: "18px",
+                        fontWeight: "700",
+                        color: "#4a352f",
+                        marginBottom: "16px",
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}>
+                        Additional Support Required
+                      </h3>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                        <div>
+                          <span style={{
+                            display: "block",
+                            fontSize: "13px",
+                            color: "#7d5a50",
+                            marginBottom: "8px",
+                            fontWeight: '600',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>
+                            Support Focus
+                          </span>
+                          <span style={{
+                            fontSize: "15px",
+                            color: "#4a352f",
+                            fontWeight: "500"
+                          }}>
+                            {formatValue(formData?.useOfFunds?.additionalSupportFocus)}
+                          </span>
+                        </div>
+                        <div>
+                          <span style={{
+                            display: "block",
+                            fontSize: "13px",
+                            color: "#7d5a50",
+                            marginBottom: "8px",
+                            fontWeight: '600',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>
+                            Support Focus Subtype
+                          </span>
+                          <span style={{
+                            fontSize: "15px",
+                            color: "#4a352f",
+                            fontWeight: "500"
+                          }}>
+                            {formatValue(formData?.useOfFunds?.additionalSupportFocusSubtype)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div style={{ marginBottom: '24px' }}>
                     <h3 style={{
                       fontSize: "18px",
@@ -610,6 +694,11 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                         value: formatValue(formData?.enterpriseReadiness?.hasPitchDeck, "No")
                       },
                       {
+                        label: "Has Financials (>3 months)",
+                        value: formatValue(formData?.enterpriseReadiness?.hasFinancials, "No"),
+                        detail: formData?.enterpriseReadiness?.hasFinancials === "yes" ? `Period: ${formData?.enterpriseReadiness?.financialsPeriod || 'N/A'} | Audited: ${formData?.enterpriseReadiness?.hasAuditedFinancials || 'No'}` : null
+                      },
+                      {
                         label: "Has MVP/Prototype",
                         value: formatValue(formData?.enterpriseReadiness?.hasMvp, "No"),
                         detail: formData?.enterpriseReadiness?.hasMvp === "yes" ? formData?.enterpriseReadiness?.mvpDetails : null
@@ -620,8 +709,8 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                         detail: formData?.enterpriseReadiness?.hasTraction === "yes" ? formData?.enterpriseReadiness?.tractionDetails : null
                       },
                       {
-                        label: "Has Audited Financials",
-                        value: formatValue(formData?.enterpriseReadiness?.hasAuditedFinancials, "No")
+                        label: "Has Guarantees",
+                        value: formatValue(formData?.enterpriseReadiness?.hasGuarantees, "No")
                       },
                       {
                         label: "Has Mentor",
@@ -631,17 +720,19 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                       {
                         label: "Has Advisors/Board",
                         value: formatValue(formData?.enterpriseReadiness?.hasAdvisors, "No"),
-                        detail: formData?.enterpriseReadiness?.hasAdvisors === "yes" ? formData?.enterpriseReadiness?.advisorsDetails : null
+                        detail: formData?.enterpriseReadiness?.hasAdvisors === "yes" ? 
+                          `${formData?.enterpriseReadiness?.advisorsDetails || 'N/A'} | Meet Regularly: ${formData?.enterpriseReadiness?.advisorsMeetRegularly || 'N/A'}${formData?.enterpriseReadiness?.advisorsMeetRegularly === 'yes' ? ` (${formData?.enterpriseReadiness?.advisorsMeetingFrequency || 'N/A'})` : ''}` : null
                       },
                       {
                         label: "Main Barriers to Growth",
-                        value: formatArray(formData?.enterpriseReadiness?.barriers)
+                        value: formatArray(formData?.enterpriseReadiness?.barriers),
+                        detail: formData?.enterpriseReadiness?.barriers?.includes('other') ? formData?.enterpriseReadiness?.otherBarrierDetails : null
                       },
                       {
                         label: "Support Previously Received",
                         value: formatValue(formData?.enterpriseReadiness?.previousSupport, "No"),
                         detail: formData?.enterpriseReadiness?.previousSupport === "yes" ?
-                          `What: ${formData?.enterpriseReadiness?.previousSupportDetails || 'N/A'} | From: ${formData?.enterpriseReadiness?.previousSupportSource || 'N/A'}` : null
+                          `What: ${formData?.enterpriseReadiness?.previousSupportDetails || 'N/A'} | From: ${formData?.enterpriseReadiness?.previousSupportSource || 'N/A'} | Amount: ${formData?.enterpriseReadiness?.previousSupportAmount || 'N/A'}` : null
                       },
                       {
                         label: "Current Paying Customers",
@@ -693,7 +784,8 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                             padding: '8px 12px',
                             background: 'rgba(166, 124, 82, 0.1)',
                             borderRadius: '6px',
-                            border: '1px solid rgba(166, 124, 82, 0.2)'
+                            border: '1px solid rgba(166, 124, 82, 0.2)',
+                            whiteSpace: 'pre-wrap'
                           }}>
                             {item.detail}
                           </div>
@@ -701,112 +793,71 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
-            </div>
 
-            {/* Financial Overview */}
-            <div style={{
-              background: 'linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))',
-              backdropFilter: 'blur(20px)',
-              borderRadius: "20px",
-              overflow: "hidden",
-              border: "1px solid rgba(200, 182, 166, 0.3)",
-              boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
-              transition: 'all 0.3s ease'
-            }}>
-              <div
-                onClick={() => toggleSection("financialOverview")}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "20px 28px",
-                  background: expandedSections.financialOverview
-                    ? 'linear-gradient(135deg, #a67c52, #7d5a50)'
-                    : 'linear-gradient(135deg, #e6d7c3, #c8b6a6)',
-                  cursor: "pointer",
-                  transition: 'all 0.3s ease'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <TrendingUp size={24} color={expandedSections.financialOverview ? "#faf7f2" : "#4a352f"} />
-                  <h2 style={{
-                    margin: 0,
-                    fontSize: "20px",
-                    fontWeight: "700",
-                    color: expandedSections.financialOverview ? "#faf7f2" : "#4a352f"
-                  }}>
-                    Financial Overview
-                  </h2>
-                </div>
-                {expandedSections.financialOverview ?
-                  <ChevronUp size={24} color="#faf7f2" /> :
-                  <ChevronDown size={24} color="#4a352f" />
-                }
-              </div>
-
-              {expandedSections.financialOverview && (
-                <div style={{
-                  padding: "28px",
-                  background: 'linear-gradient(135deg, rgba(250, 247, 242, 0.8), rgba(240, 230, 217, 0.6))',
-                  animation: 'slideDown 0.3s ease-out'
-                }}>
-                  <div style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-                    gap: "20px",
-                    marginBottom: '24px'
-                  }}>
-                    {[
-                      { label: "Generates Revenue", value: formatValue(formData?.financialOverview?.generatesRevenue, "No") },
-                      ...(formData?.financialOverview?.generatesRevenue === "yes" ?
-                        [{ label: "Annual Revenue", value: formatValue(formData?.financialOverview?.annualRevenue, "R 0") }] : []
-                      ),
-                      { label: "Current Valuation", value: formatValue(formData?.financialOverview?.currentValuation, "Not provided") },
-                      { label: "Profitability Status", value: formatValue(formData?.financialOverview?.profitabilityStatus, "Not provided") },
-                      { label: "Existing Debt or Loans", value: formatValue(formData?.financialOverview?.existingDebt, "R 0") },
-                      { label: "Fundraising History", value: formatValue(formData?.financialOverview?.fundraisingHistory, "None") }
-                    ].map((item, i) => (
-                      <div key={i} style={{
-                        background: 'rgba(250, 247, 242, 0.8)',
-                        borderRadius: '12px',
-                        padding: '20px',
-                        border: '1px solid rgba(200, 182, 166, 0.2)',
-                        transition: 'all 0.3s ease'
-                      }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = 'translateY(-1px)'
-                          e.currentTarget.style.boxShadow = '0 4px 16px rgba(74, 53, 47, 0.08)'
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = 'translateY(0)'
-                          e.currentTarget.style.boxShadow = 'none'
-                        }}>
+                  {/* AI Evaluation Section */}
+                  {formData?.enterpriseReadiness?.aiEvaluation && (
+                    <div style={{
+                      marginTop: '24px',
+                      padding: '20px',
+                      background: 'rgba(166, 124, 82, 0.1)',
+                      borderRadius: '12px',
+                      border: '1px solid rgba(166, 124, 82, 0.2)'
+                    }}>
+                      <h3 style={{
+                        fontSize: "18px",
+                        fontWeight: "700",
+                        color: "#4a352f",
+                        marginBottom: "16px",
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}>
+                        🤖 AI Evaluation
+                      </h3>
+                      <div style={{ marginBottom: '12px' }}>
                         <span style={{
-                          display: "block",
-                          fontSize: "13px",
-                          color: "#7d5a50",
-                          marginBottom: "8px",
+                          display: "inline-block",
+                          padding: "4px 12px",
+                          background: formData.enterpriseReadiness.aiEvaluation.score >= 80 ? '#10b981' : 
+                                     formData.enterpriseReadiness.aiEvaluation.score >= 60 ? '#f59e0b' : '#ef4444',
+                          color: 'white',
+                          borderRadius: '6px',
                           fontWeight: '600',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.5px'
+                          fontSize: '14px'
                         }}>
-                          {item.label}
+                          Score: {formData.enterpriseReadiness.aiEvaluation.score}/100
                         </span>
                         <span style={{
-                          fontSize: "15px",
-                          color: "#4a352f",
-                          fontWeight: "500",
-                          lineHeight: '1.4'
+                          marginLeft: '12px',
+                          fontSize: '14px',
+                          color: '#7d5a50',
+                          fontWeight: '600'
                         }}>
-                          {item.value}
+                          {formData.enterpriseReadiness.aiEvaluation.label}
                         </span>
                       </div>
-                    ))}
-                  </div>
+                      <div style={{
+                        fontSize: "14px",
+                        color: "#4a352f",
+                        lineHeight: '1.6',
+                        whiteSpace: 'pre-wrap'
+                      }}>
+                        {formData.enterpriseReadiness.aiEvaluation.response}
+                      </div>
+                      <div style={{
+                        marginTop: '12px',
+                        fontSize: '12px',
+                        color: '#7d5a50',
+                        fontStyle: 'italic'
+                      }}>
+                        Evaluated on: {new Date(formData.enterpriseReadiness.aiEvaluation.timestamp).toLocaleString()}
+                      </div>
+                    </div>
+                  )}
 
+                  {/* Document Links */}
                   <div style={{
+                    marginTop: '24px',
                     background: 'rgba(166, 124, 82, 0.1)',
                     borderRadius: '16px',
                     padding: '20px',
@@ -820,7 +871,7 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                       textTransform: 'uppercase',
                       letterSpacing: '0.5px'
                     }}>
-                      Financial Documents
+                      Supporting Documents
                     </h3>
                     <div style={{
                       display: "grid",
@@ -828,14 +879,12 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                       gap: "16px"
                     }}>
                       {[
-                        { label: "Bank Statements", url: formData?.financialOverview?.bankStatements },
-                        { label: "Bank Confirmation", url: formData?.financialOverview?.bankConfirmation },
-                        { label: "Loan Agreements", url: formData?.financialOverview?.loanAgreements },
-                        { label: "Financial Statements", url: formData?.financialOverview?.financialStatements }
+                        { label: "Business Plan", url: formData?.enterpriseReadiness?.businessPlanFile },
+                        { label: "Pitch Deck", url: formData?.enterpriseReadiness?.pitchDeckFile },
+                        { label: "Financials", url: formData?.enterpriseReadiness?.financialsFile },
+                        { label: "Guarantee/Contract", url: formData?.enterpriseReadiness?.guaranteeFile }
                       ].map((doc, i) => (
-                        <div key={i} style={{
-                          padding: '12px'
-                        }}>
+                        <div key={i} style={{ padding: '12px' }}>
                           <span style={{
                             display: "block",
                             fontSize: "12px",
@@ -855,7 +904,6 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                 </div>
               )}
             </div>
-
 
             {/* Guarantees Section */}
             <div style={{
@@ -917,8 +965,19 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                       { label: "Subscription Revenue", value: formatValue(formData?.guarantees?.subscriptionRevenue, "Not provided") },
                       { label: "Letters of Credit", value: formatValue(formData?.guarantees?.letterOfGuarantee, "Not provided") },
                       { label: "Third-Party Guarantees", value: formatValue(formData?.guarantees?.thirdPartyGuarantees, "Not provided") },
+                      { label: "Factoring Agreements", value: formatValue(formData?.guarantees?.factoringAgreements, "Not provided") },
+                      { label: "Surety Bonds", value: formatValue(formData?.guarantees?.suretyBonds, "Not provided") },
                       { label: "Government Contracts", value: formatValue(formData?.guarantees?.governmentContracts, "Not provided") },
-                      { label: "Personal Surety", value: formatValue(formData?.guarantees?.personalSurety, "Not provided") }
+                      { label: "Approved Supplier Status", value: formatValue(formData?.guarantees?.approvedSupplierStatus, "Not provided") },
+                      { label: "Incubator Guarantees", value: formatValue(formData?.guarantees?.incubatorGuarantees, "Not provided") },
+                      { label: "Export Credit Guarantees", value: formatValue(formData?.guarantees?.exportCreditGuarantees, "Not provided") },
+                      { label: "Liens/Collateral", value: formatValue(formData?.guarantees?.liensCollateral, "Not provided") },
+                      { label: "Secured Assets", value: formatValue(formData?.guarantees?.securedAssets, "Not provided") },
+                      { label: "Retention Guarantees", value: formatValue(formData?.guarantees?.retentionGuarantees, "Not provided") },
+                      { label: "Export Credit Insurance", value: formatValue(formData?.guarantees?.exportCreditInsurance, "Not provided") },
+                      { label: "Receivables Financing", value: formatValue(formData?.guarantees?.receivablesFinancing, "Not provided") },
+                      { label: "Personal Surety", value: formatValue(formData?.guarantees?.personalSurety, "Not provided") },
+                      { label: "Corporate Guarantees", value: formatValue(formData?.guarantees?.corporateGuarantees, "Not provided") }
                     ].map((item, i) => (
                       <div key={i} style={{
                         background: 'rgba(250, 247, 242, 0.8)',
@@ -1052,7 +1111,6 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                   <ChevronDown size={24} color="#4a352f" />
                 }
               </div>
-
 
               {expandedSections.growthPotential && (
                 <div style={{
@@ -1240,11 +1298,15 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                   }}>
                     {[
                       { label: "Jobs to be Created (Next 12 months)", value: formatValue(formData?.socialImpact?.jobsToCreate, "0") },
+                      { label: "CSI/CSR Spend", value: formatValue(formData?.socialImpact?.csiCsrSpend, "R 0") },
                       { label: "Youth Ownership %", value: `${formatValue(formData?.socialImpact?.youthOwnership, "0")}%` },
                       { label: "Women Ownership %", value: `${formatValue(formData?.socialImpact?.womenOwnership, "0")}%` },
                       { label: "Black Ownership %", value: `${formatValue(formData?.socialImpact?.blackOwnership, "0")}%` },
-                      { label: "Environmental or Community Impact", value: formatValue(formData?.socialImpact?.environmentalImpact, "None specified") },
-                      { label: "Alignment with SDGs or ESD priorities", value: formatValue(formData?.socialImpact?.sdgAlignment, "None specified") }
+                      { label: "Disabled Ownership %", value: `${formatValue(formData?.socialImpact?.disabledOwnership, "0")}%` },
+                      { label: "Local Procurement Spend", value: formatValue(formData?.socialImpact?.localProcurementSpend, "R 0") },
+                      { label: "Local Employees to be Hired", value: formatValue(formData?.socialImpact?.localEmployeesHired, "0") },
+                      { label: "Community Investment Amount", value: formatValue(formData?.socialImpact?.communityInvestmentAmount, "R 0") },
+                      { label: "Number of Beneficiaries", value: formatValue(formData?.socialImpact?.numberOfBeneficiaries, "0") }
                     ].map((item, i) => (
                       <div key={i} style={{
                         background: 'rgba(250, 247, 242, 0.8)',
@@ -1283,6 +1345,143 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                       </div>
                     ))}
                   </div>
+
+                  {/* Text Fields */}
+                  {(formData?.socialImpact?.localValueStrategy || formData?.socialImpact?.socialInvestmentCommunities || 
+                    formData?.socialImpact?.csrFocusAreas || formData?.socialImpact?.environmentalImpact || 
+                    formData?.socialImpact?.sdgAlignment) && (
+                    <div style={{
+                      background: 'rgba(166, 124, 82, 0.1)',
+                      borderRadius: '16px',
+                      padding: '20px',
+                      border: '1px solid rgba(166, 124, 82, 0.2)',
+                      marginBottom: '24px'
+                    }}>
+                      <h3 style={{
+                        fontSize: "18px",
+                        fontWeight: "700",
+                        color: "#4a352f",
+                        marginBottom: "16px"
+                      }}>
+                        Impact Details
+                      </h3>
+                      {formData?.socialImpact?.localValueStrategy && (
+                        <div style={{ marginBottom: '16px' }}>
+                          <span style={{
+                            display: "block",
+                            fontSize: "13px",
+                            color: "#7d5a50",
+                            marginBottom: "8px",
+                            fontWeight: '600',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>
+                            Local Value Creation Strategy
+                          </span>
+                          <p style={{
+                            fontSize: "14px",
+                            color: "#4a352f",
+                            lineHeight: '1.6',
+                            margin: 0
+                          }}>
+                            {formData.socialImpact.localValueStrategy}
+                          </p>
+                        </div>
+                      )}
+                      {formData?.socialImpact?.socialInvestmentCommunities && (
+                        <div style={{ marginBottom: '16px' }}>
+                          <span style={{
+                            display: "block",
+                            fontSize: "13px",
+                            color: "#7d5a50",
+                            marginBottom: "8px",
+                            fontWeight: '600',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>
+                            Social Investment in Communities
+                          </span>
+                          <p style={{
+                            fontSize: "14px",
+                            color: "#4a352f",
+                            lineHeight: '1.6',
+                            margin: 0
+                          }}>
+                            {formData.socialImpact.socialInvestmentCommunities}
+                          </p>
+                        </div>
+                      )}
+                      {formData?.socialImpact?.csrFocusAreas && (
+                        <div style={{ marginBottom: '16px' }}>
+                          <span style={{
+                            display: "block",
+                            fontSize: "13px",
+                            color: "#7d5a50",
+                            marginBottom: "8px",
+                            fontWeight: '600',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>
+                            CSR/CSI Focus Areas
+                          </span>
+                          <p style={{
+                            fontSize: "14px",
+                            color: "#4a352f",
+                            lineHeight: '1.6',
+                            margin: 0
+                          }}>
+                            {formData.socialImpact.csrFocusAreas}
+                          </p>
+                        </div>
+                      )}
+                      {formData?.socialImpact?.environmentalImpact && (
+                        <div style={{ marginBottom: '16px' }}>
+                          <span style={{
+                            display: "block",
+                            fontSize: "13px",
+                            color: "#7d5a50",
+                            marginBottom: "8px",
+                            fontWeight: '600',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>
+                            Environmental or Community Impact
+                          </span>
+                          <p style={{
+                            fontSize: "14px",
+                            color: "#4a352f",
+                            lineHeight: '1.6',
+                            margin: 0
+                          }}>
+                            {formData.socialImpact.environmentalImpact}
+                          </p>
+                        </div>
+                      )}
+                      {formData?.socialImpact?.sdgAlignment && (
+                        <div>
+                          <span style={{
+                            display: "block",
+                            fontSize: "13px",
+                            color: "#7d5a50",
+                            marginBottom: "8px",
+                            fontWeight: '600',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>
+                            Alignment with SDGs or ESD Priorities
+                          </span>
+                          <p style={{
+                            fontSize: "14px",
+                            color: "#4a352f",
+                            lineHeight: '1.6',
+                            margin: 0
+                          }}>
+                            {formData.socialImpact.sdgAlignment}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div style={{
                     background: 'rgba(166, 124, 82, 0.1)',
