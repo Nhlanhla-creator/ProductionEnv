@@ -128,6 +128,142 @@ const brownShades = [
   '#3f2a18', '#d4c4b0', '#5D4037', '#3E2723'
 ];
 
+// COMPLETELY STATIC chart options - NO ANIMATIONS WHATSOEVER
+const staticChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  animation: false,
+  animations: {
+    colors: false,
+    x: false,
+    y: false
+  },
+  transitions: {
+    active: {
+      animation: {
+        duration: 0
+      }
+    }
+  },
+  responsiveAnimationDuration: 0,
+  animationDuration: 0,
+  hover: {
+    animationDuration: 0
+  },
+  plugins: {
+    legend: {
+      display: true,
+      labels: {
+        usePointStyle: false,
+        pointStyle: 'line',
+        boxWidth: 15,
+        boxHeight: 2,
+      }
+    },
+    tooltip: {
+      enabled: true,
+      animation: false,
+      transitions: {
+        active: {
+          animation: {
+            duration: 0
+          }
+        }
+      }
+    }
+  },
+  elements: {
+    line: {
+      tension: 0
+    },
+    point: {
+      radius: 3,
+      hoverRadius: 3
+    },
+    arc: {
+      hoverOffset: 0
+    }
+  }
+};
+
+// Static options for specific chart types
+const staticPieOptions = {
+  ...staticChartOptions,
+  plugins: {
+    ...staticChartOptions.plugins,
+    legend: {
+      position: 'bottom'
+    }
+  }
+};
+
+const staticBarOptions = {
+  ...staticChartOptions,
+  scales: {
+    x: {
+      grid: {
+        display: false
+      },
+      title: {
+        display: false
+      },
+      ticks: {
+        display: true
+      }
+    },
+    y: {
+      beginAtZero: true,
+      grid: {
+        drawBorder: false
+      },
+      title: {
+        display: false
+      },
+      ticks: {
+        display: true
+      }
+    }
+  }
+};
+
+const staticLineOptions = {
+  ...staticChartOptions,
+  elements: {
+    line: {
+      tension: 0
+    },
+    point: {
+      radius: 3,
+      hoverRadius: 3
+    }
+  },
+  scales: {
+    x: {
+      grid: {
+        display: false
+      },
+      title: {
+        display: false
+      },
+      ticks: {
+        display: true
+      }
+    },
+    y: {
+      beginAtZero: true,
+      grid: {
+        drawBorder: false
+      },
+      title: {
+        display: false
+      },
+      ticks: {
+        display: true
+      }
+    }
+  }
+};
+
 const MyInvestments = () => {
   const [activeCategory, setActiveCategory] = useState('Portfolio Overview');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -138,6 +274,7 @@ const MyInvestments = () => {
   const [showDownloadOptions, setShowDownloadOptions] = useState(false);
   const [popupContent, setPopupContent] = useState(null);
   const [showPopup, setShowPopup] = useState(false);
+  const [hoveredChart, setHoveredChart] = useState(null);
   const sectionRef = useRef(null);
 
   useEffect(() => {
@@ -280,8 +417,39 @@ const MyInvestments = () => {
     Yearly: [4.8, 4.3, 4.1, 3.8]
   };
 
-  // Custom Pie Chart with Numbers ALWAYS visible
-  const PieChartWithNumbers = ({ data, labels, title, description, showEye = false }) => {
+  // Chart descriptions for hover tooltips
+  const chartDescriptions = {
+    'total-portfolio-value': 'Quarterly portfolio value trend showing growth over time',
+    'funding-facilitated': 'Monthly funding distribution across different periods',
+    'applications-reviewed': 'Funnel showing applications reviewed vs approved vs funded',
+    'industry-sector': 'Sector diversification across different industries',
+    'funding-instrument': 'Allocation by different funding instruments',
+    'exit-repayment-history': 'Historical exit and repayment trends',
+    'exit-multiple': 'Return multiples for exited equity deals',
+    'default-ratio': 'Default and non-performing ratio trends',
+    'job-creation': 'Job creation and retention by sector',
+    'esg-pillar': 'Environmental, Social, and Governance pillar scores',
+    'sdg-alignment': 'Sustainable Development Goal alignment percentages',
+    'pipeline-aging': 'Age distribution of pipeline deals',
+    'capital-requirement': 'Forecasted capital requirements by quarter',
+    'active-partnerships': 'Active partnerships and co-funders activity',
+    'vetting-time': 'Average vetting time efficiency metrics',
+    'sme-growth-index': 'SME revenue growth vs benchmark comparison',
+    'graduation-rate': 'SME graduation rate to bankable status',
+    'diversity-inclusion': 'Diversity and inclusion performance metrics',
+    'lifecycle-stage': 'Portfolio distribution by business lifecycle stages',
+    'demographic-ownership': 'Demographic and ownership diversity breakdown',
+    'reinvestment-ratio': 'Capital reinvestment vs holding ratios',
+    'governance-compliance': 'Governance compliance health status',
+    'active-smes': 'Distribution of active SMEs across different stages',
+    'follow-on-funding': 'Follow-on funding rates over quarters',
+    'time-to-fund': 'Average time to fund deals vs target',
+    'exit-repayment': 'Exit and repayment ratio performance',
+    'data-confidence': 'Data verification and confidence levels'
+  };
+
+  // Custom Pie Chart with Numbers ALWAYS visible - COMPLETELY STATIC
+  const PieChartWithNumbers = ({ data, labels, title, showEye = false, chartId }) => {
     const chartData = {
       labels: labels,
       datasets: [
@@ -289,24 +457,19 @@ const MyInvestments = () => {
           data: data,
           backgroundColor: brownShades.slice(0, data.length),
           borderWidth: 2,
-          borderColor: '#fff'
+          borderColor: '#fff',
+          hoverOffset: 0
         }
       ]
     };
 
     const options = {
-      responsive: true,
-      maintainAspectRatio: false,
+      ...staticPieOptions,
       plugins: {
-        legend: {
-          position: 'bottom'
-        },
+        ...staticPieOptions.plugins,
         tooltip: {
-          callbacks: {
-            label: function(context) {
-              return `${context.label}: ${context.parsed}`;
-            }
-          }
+          enabled: true,
+          animation: false
         }
       }
     };
@@ -353,7 +516,11 @@ const MyInvestments = () => {
     };
 
     return (
-      <div className="chart-container">
+      <div 
+        className="chart-container"
+        onMouseEnter={() => setHoveredChart(chartId)}
+        onMouseLeave={() => setHoveredChart(null)}
+      >
         <div className="chart-header">
           <h3 className="chart-title">{title}</h3>
           {showEye && (
@@ -366,36 +533,45 @@ const MyInvestments = () => {
             </button>
           )}
         </div>
-        {description && <div className="visual-description">{description}</div>}
+        {hoveredChart === chartId && (
+          <div className="visual-description">
+            {chartDescriptions[chartId] || 'Chart visualization'}
+          </div>
+        )}
         <div className="chart-area">
-          <Doughnut data={chartData} options={options} plugins={plugins} />
+          <Doughnut data={chartData} options={options} plugins={plugins} id={chartId} />
         </div>
       </div>
     );
   };
 
-  // Active SMEs Circle Chart Component
-  const ActiveSMEsCircleChart = ({ value, title, description }) => {
+  // Active SMEs Pie Chart Component - STATIC
+  const ActiveSMEsPieChart = ({ title }) => {
     const data = {
+      labels: ['Early Stage', 'Growth Stage', 'Mature Stage', 'Exit-ready'],
       datasets: [
         {
-          data: [128, 0],
-          backgroundColor: [brownShades[0], '#f0f0f0'],
-          borderWidth: 0,
+          data: [28, 45, 35, 20],
+          backgroundColor: [
+            brownShades[0],
+            brownShades[1],
+            brownShades[2],
+            brownShades[3]
+          ],
+          borderWidth: 2,
+          borderColor: '#fff',
+          hoverOffset: 0
         }
       ]
     };
 
     const options = {
-      responsive: true,
-      maintainAspectRatio: false,
-      cutout: '75%',
+      ...staticPieOptions,
       plugins: {
-        legend: {
-          display: false
-        },
+        ...staticPieOptions.plugins,
         tooltip: {
-          enabled: false
+          enabled: true,
+          animation: false
         }
       }
     };
@@ -404,17 +580,21 @@ const MyInvestments = () => {
       id: 'centerText',
       afterDraw: (chart) => {
         const ctx = chart.ctx;
-        const width = chart.width;
-        const height = chart.height;
-        ctx.save();
-        ctx.font = 'bold 24px Arial';
-        ctx.fillStyle = brownShades[0];
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('128', width / 2, height / 2 - 10);
-        ctx.font = '12px Arial';
-        ctx.fillText('SMEs', width / 2, height / 2 + 15);
-        ctx.restore();
+        const { chartArea: { left, right, top, bottom, width, height } } = chart;
+        
+        chart.data.datasets.forEach((dataset, i) => {
+          chart.getDatasetMeta(i).data.forEach((arc, index) => {
+            const { x, y } = arc.tooltipPosition();
+            
+            ctx.save();
+            ctx.font = 'bold 14px Arial';
+            ctx.fillStyle = '#fff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(dataset.data[index], x, y);
+            ctx.restore();
+          });
+        });
       }
     }];
 
@@ -423,7 +603,7 @@ const MyInvestments = () => {
         <div className="popup-content">
           <h3>SME Breakdown</h3>
           <div className="popup-chart">
-            <Doughnut data={data} options={options} plugins={plugins} />
+            <Pie data={data} options={options} plugins={plugins} />
           </div>
           <div className="popup-details">
             <div className="detail-item">
@@ -448,7 +628,11 @@ const MyInvestments = () => {
     };
 
     return (
-      <div className="chart-container">
+      <div 
+        className="chart-container"
+        onMouseEnter={() => setHoveredChart('active-smes')}
+        onMouseLeave={() => setHoveredChart(null)}
+      >
         <div className="chart-header">
           <h3 className="chart-title">{title}</h3>
           <button 
@@ -459,16 +643,20 @@ const MyInvestments = () => {
             <FiEye />
           </button>
         </div>
-        {description && <div className="visual-description">{description}</div>}
+        {hoveredChart === 'active-smes' && (
+          <div className="visual-description">
+            {chartDescriptions['active-smes']}
+          </div>
+        )}
         <div className="chart-area">
-          <Doughnut data={data} options={options} plugins={plugins} />
+          <Pie data={data} options={options} plugins={plugins} id="active-smes" />
         </div>
       </div>
     );
   };
 
   // BIG Score Infographic Component - SIMPLIFIED
-  const BIGScoreInfographic = ({ value, target, title, description }) => {
+  const BIGScoreInfographic = ({ value, target, title }) => {
     const handleEyeClick = () => {
       const scoreComponents = [
         { name: 'Compliance Score', value: 82, color: brownShades[0] },
@@ -513,7 +701,11 @@ const MyInvestments = () => {
     };
 
     return (
-      <div className="chart-container">
+      <div 
+        className="chart-container"
+        onMouseEnter={() => setHoveredChart('big-score')}
+        onMouseLeave={() => setHoveredChart(null)}
+      >
         <div className="chart-header">
           <h3 className="chart-title">{title}</h3>
           <button 
@@ -524,7 +716,11 @@ const MyInvestments = () => {
             <FiEye />
           </button>
         </div>
-        {description && <div className="visual-description">{description}</div>}
+        {hoveredChart === 'big-score' && (
+          <div className="visual-description">
+            Detailed breakdown of BIG Score components across compliance, legitimacy, leadership, governance, and capital appeal
+          </div>
+        )}
         
         <div className="big-score-simple">
           <div className="big-score-main-simple">
@@ -550,7 +746,7 @@ const MyInvestments = () => {
   };
 
   // Enhanced Funding Ready Infographic - SIMPLIFIED
-  const EnhancedFundingReady = ({ value, target, title, description }) => {
+  const EnhancedFundingReady = ({ value, target, title }) => {
     const handleEyeClick = () => {
       const readinessData = [
         { stage: 'Fully Ready', count: 59, percentage: 46, color: '#4CAF50' },
@@ -592,7 +788,11 @@ const MyInvestments = () => {
     };
 
     return (
-      <div className="chart-container">
+      <div 
+        className="chart-container"
+        onMouseEnter={() => setHoveredChart('funding-ready')}
+        onMouseLeave={() => setHoveredChart(null)}
+      >
         <div className="chart-header">
           <h3 className="chart-title">{title}</h3>
           <button 
@@ -603,7 +803,11 @@ const MyInvestments = () => {
             <FiEye />
           </button>
         </div>
-        {description && <div className="visual-description">{description}</div>}
+        {hoveredChart === 'funding-ready' && (
+          <div className="visual-description">
+            Shows readiness ratio with detailed breakdown across fully ready, near ready, developing, and early stage SMEs
+          </div>
+        )}
         
         <div className="funding-ready-simple">
           <div className="readiness-main-simple">
@@ -629,7 +833,7 @@ const MyInvestments = () => {
   };
 
   // SME Graduation Infographic - SIMPLIFIED
-  const SMEGraduationInfographic = ({ value, target, title, description }) => {
+  const SMEGraduationInfographic = ({ value, target, title }) => {
     const handleEyeClick = () => {
       const graduationStages = [
         { stage: 'Graduated', count: 40, percentage: 31, color: '#4CAF50', description: 'Self-sustaining' },
@@ -668,7 +872,11 @@ const MyInvestments = () => {
     };
 
     return (
-      <div className="chart-container">
+      <div 
+        className="chart-container"
+        onMouseEnter={() => setHoveredChart('graduation')}
+        onMouseLeave={() => setHoveredChart(null)}
+      >
         <div className="chart-header">
           <h3 className="chart-title">{title}</h3>
           <button 
@@ -679,7 +887,11 @@ const MyInvestments = () => {
             <FiEye />
           </button>
         </div>
-        {description && <div className="visual-description">{description}</div>}
+        {hoveredChart === 'graduation' && (
+          <div className="visual-description">
+            Percentage of SMEs now self-sustaining with impact metrics across graduated, near graduation, progressing, and early stages
+          </div>
+        )}
         
         <div className="graduation-simple">
           <div className="graduation-main-simple">
@@ -703,8 +915,8 @@ const MyInvestments = () => {
     );
   };
 
-  // Enhanced Follow-on Funding Rate Component - SIMPLIFIED
-  const EnhancedFollowOnFundingChart = ({ value, target, data, title, description }) => {
+  // Enhanced Follow-on Funding Rate Component - STATIC
+  const EnhancedFollowOnFundingChart = ({ value, target, data, title }) => {
     const chartData = {
       labels: data.map((_, index) => `Q${index + 1}`),
       datasets: [
@@ -713,53 +925,18 @@ const MyInvestments = () => {
           data: data,
           backgroundColor: brownShades.map(color => color + '80'),
           borderColor: brownShades[2],
-          borderWidth: 2
+          borderWidth: 2,
+          hoverBackgroundColor: brownShades.map(color => color + '80')
         }
       ]
     };
 
     const options = {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        y: {
-          beginAtZero: true,
-          max: 35,
-          title: {
-            display: true,
-            text: 'Rate (%)'
-          },
-          grid: {
-            drawBorder: false,
-          },
-          ticks: {
-            padding: 5
-          }
-        },
-        x: {
-          title: {
-            display: true,
-            text: ''
-          },
-          grid: {
-            display: false
-          },
-          ticks: {
-            padding: 5
-          }
-        }
-      },
+      ...staticBarOptions,
       plugins: {
+        ...staticBarOptions.plugins,
         legend: {
           display: false
-        }
-      },
-      layout: {
-        padding: {
-          top: 10,
-          bottom: 5,
-          left: 10,
-          right: 10
         }
       }
     };
@@ -790,7 +967,11 @@ const MyInvestments = () => {
     };
 
     return (
-      <div className="chart-container">
+      <div 
+        className="chart-container"
+        onMouseEnter={() => setHoveredChart('follow-on-funding')}
+        onMouseLeave={() => setHoveredChart(null)}
+      >
         <div className="chart-header">
           <h3 className="chart-title">{title}</h3>
           <button 
@@ -801,9 +982,13 @@ const MyInvestments = () => {
             <FiEye />
           </button>
         </div>
-        {description && <div className="visual-description">{description}</div>}
+        {hoveredChart === 'follow-on-funding' && (
+          <div className="visual-description">
+            {chartDescriptions['follow-on-funding']}
+          </div>
+        )}
         <div className="chart-area-ultra-compact">
-          <Bar data={chartData} options={options} />
+          <Bar data={chartData} options={options} id="follow-on-funding" />
         </div>
         <div className="chart-summary-ultra-compact">
           <div className="current-value">Current: {value}%</div>
@@ -821,7 +1006,7 @@ const MyInvestments = () => {
   };
 
   // Cost per Funded SME Infographic Component - SIMPLIFIED
-  const CostPerSMEInfographic = ({ value, target, title, description }) => {
+  const CostPerSMEInfographic = ({ value, target, title }) => {
     const costData = {
       labels: ['Staff', 'Operations', 'Technology', 'Travel', 'Other'],
       datasets: [
@@ -835,24 +1020,19 @@ const MyInvestments = () => {
             brownShades[4]
           ],
           borderWidth: 2,
-          borderColor: '#fff'
+          borderColor: '#fff',
+          hoverOffset: 0
         }
       ]
     };
 
     const options = {
-      responsive: true,
-      maintainAspectRatio: false,
+      ...staticPieOptions,
       plugins: {
-        legend: {
-          position: 'bottom'
-        },
+        ...staticPieOptions.plugins,
         tooltip: {
-          callbacks: {
-            label: function(context) {
-              return `${context.label}: ${context.parsed}%`;
-            }
-          }
+          enabled: true,
+          animation: false
         }
       }
     };
@@ -913,7 +1093,11 @@ const MyInvestments = () => {
     };
 
     return (
-      <div className="chart-container">
+      <div 
+        className="chart-container"
+        onMouseEnter={() => setHoveredChart('cost-sme')}
+        onMouseLeave={() => setHoveredChart(null)}
+      >
         <div className="chart-header">
           <h3 className="chart-title">{title}</h3>
           <button 
@@ -924,7 +1108,11 @@ const MyInvestments = () => {
             <FiEye />
           </button>
         </div>
-        {description && <div className="visual-description">{description}</div>}
+        {hoveredChart === 'cost-sme' && (
+          <div className="visual-description">
+            Detailed breakdown of operational costs per funded SME across staff, operations, technology, travel, and other expenses
+          </div>
+        )}
         
         <div className="cost-simple">
           <div className="cost-main-simple">
@@ -948,8 +1136,8 @@ const MyInvestments = () => {
     );
   };
 
-  // Time to Fund Chart Component - SIMPLIFIED
-  const TimeToFundChart = ({ value, target, data, title, description }) => {
+  // Time to Fund Chart Component - STATIC with lines instead of boxes
+  const TimeToFundChart = ({ value, target, data, title }) => {
     const chartData = {
       labels: data.map((_, index) => `Q${index + 1}`),
       datasets: [
@@ -960,7 +1148,11 @@ const MyInvestments = () => {
           backgroundColor: brownShades[0] + '20',
           borderWidth: 3,
           fill: true,
-          tension: 0.4
+          tension: 0,
+          pointBackgroundColor: brownShades[0],
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          pointRadius: 4
         },
         {
           label: 'Target',
@@ -969,58 +1161,25 @@ const MyInvestments = () => {
           borderWidth: 2,
           borderDash: [5, 5],
           fill: false,
-          pointRadius: 0
+          pointRadius: 0,
+          tension: 0
         }
       ]
     };
 
     const options = {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        y: {
-          beginAtZero: true,
-          title: {
-            display: true,
-            text: 'Days'
-          },
-          grid: {
-            drawBorder: false,
-          },
-          ticks: {
-            padding: 5
-          }
-        },
-        x: {
-          title: {
-            display: true,
-            text: ''
-          },
-          grid: {
-            display: false
-          },
-          ticks: {
-            padding: 5
-          }
-        }
-      },
+      ...staticLineOptions,
       plugins: {
+        ...staticLineOptions.plugins,
         legend: {
           display: true,
           position: 'top',
           labels: {
             usePointStyle: true,
             pointStyle: 'line',
-            padding: 10
+            boxWidth: 15,
+            boxHeight: 2,
           }
-        }
-      },
-      layout: {
-        padding: {
-          top: 10,
-          bottom: 5,
-          left: 10,
-          right: 10
         }
       }
     };
@@ -1051,7 +1210,11 @@ const MyInvestments = () => {
     };
 
     return (
-      <div className="chart-container">
+      <div 
+        className="chart-container"
+        onMouseEnter={() => setHoveredChart('time-to-fund')}
+        onMouseLeave={() => setHoveredChart(null)}
+      >
         <div className="chart-header">
           <h3 className="chart-title">{title}</h3>
           <button 
@@ -1062,9 +1225,13 @@ const MyInvestments = () => {
             <FiEye />
           </button>
         </div>
-        {description && <div className="visual-description">{description}</div>}
+        {hoveredChart === 'time-to-fund' && (
+          <div className="visual-description">
+            {chartDescriptions['time-to-fund']}
+          </div>
+        )}
         <div className="chart-area-ultra-compact">
-          <Line data={chartData} options={options} />
+          <Line data={chartData} options={options} id="time-to-fund" />
         </div>
         <div className="chart-summary-ultra-compact">
           <div className="current-value">Current: {value} days</div>
@@ -1081,8 +1248,8 @@ const MyInvestments = () => {
     );
   };
 
-  // Exit Repayment Ratio Chart Component - SIMPLIFIED
-  const ExitRepaymentChart = ({ value, target, data, title, description }) => {
+  // Exit Repayment Ratio Chart Component - STATIC with lines instead of boxes
+  const ExitRepaymentChart = ({ value, target, data, title }) => {
     const chartData = {
       labels: data.map((_, index) => `Q${index + 1}`),
       datasets: [
@@ -1093,7 +1260,11 @@ const MyInvestments = () => {
           backgroundColor: brownShades[5] + '20',
           borderWidth: 3,
           fill: true,
-          tension: 0.4
+          tension: 0,
+          pointBackgroundColor: brownShades[5],
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          pointRadius: 4
         },
         {
           label: 'Target',
@@ -1102,59 +1273,25 @@ const MyInvestments = () => {
           borderWidth: 2,
           borderDash: [5, 5],
           fill: false,
-          pointRadius: 0
+          pointRadius: 0,
+          tension: 0
         }
       ]
     };
 
     const options = {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        y: {
-          beginAtZero: true,
-          max: 20,
-          title: {
-            display: true,
-            text: 'Ratio (%)'
-          },
-          grid: {
-            drawBorder: false,
-          },
-          ticks: {
-            padding: 5
-          }
-        },
-        x: {
-          title: {
-            display: true,
-            text: ''
-          },
-          grid: {
-            display: false
-          },
-          ticks: {
-            padding: 5
-          }
-        }
-      },
+      ...staticLineOptions,
       plugins: {
+        ...staticLineOptions.plugins,
         legend: {
           display: true,
           position: 'top',
           labels: {
             usePointStyle: true,
             pointStyle: 'line',
-            padding: 10
+            boxWidth: 15,
+            boxHeight: 2,
           }
-        }
-      },
-      layout: {
-        padding: {
-          top: 10,
-          bottom: 5,
-          left: 10,
-          right: 10
         }
       }
     };
@@ -1185,7 +1322,11 @@ const MyInvestments = () => {
     };
 
     return (
-      <div className="chart-container">
+      <div 
+        className="chart-container"
+        onMouseEnter={() => setHoveredChart('exit-repayment')}
+        onMouseLeave={() => setHoveredChart(null)}
+      >
         <div className="chart-header">
           <h3 className="chart-title">{title}</h3>
           <button 
@@ -1196,9 +1337,13 @@ const MyInvestments = () => {
             <FiEye />
           </button>
         </div>
-        {description && <div className="visual-description">{description}</div>}
+        {hoveredChart === 'exit-repayment' && (
+          <div className="visual-description">
+            {chartDescriptions['exit-repayment']}
+          </div>
+        )}
         <div className="chart-area-ultra-compact">
-          <Line data={chartData} options={options} />
+          <Line data={chartData} options={options} id="exit-repayment" />
         </div>
         <div className="chart-summary-ultra-compact">
           <div className="current-value">Current: {value}%</div>
@@ -1210,6 +1355,79 @@ const MyInvestments = () => {
               <FiArrowDown className="trend-icon down" />
             )}
           </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Bar Chart Component with Title and Hover Description
+  const BarChartWithTitle = ({ data, title, chartTitle, chartId }) => {
+    const options = {
+      ...staticBarOptions,
+      plugins: {
+        ...staticBarOptions.plugins,
+        legend: {
+          display: false
+        }
+      }
+    };
+
+    return (
+      <div 
+        className="chart-container"
+        onMouseEnter={() => setHoveredChart(chartId)}
+        onMouseLeave={() => setHoveredChart(null)}
+      >
+        <div className="chart-header">
+          <h3 className="chart-title">{title}</h3>
+        </div>
+        {hoveredChart === chartId && (
+          <div className="visual-description">
+            {chartDescriptions[chartId] || 'Chart visualization'}
+          </div>
+        )}
+        <div className="chart-title-fixed">{chartTitle}</div>
+        <div className="chart-area">
+          <Bar 
+            data={data} 
+            options={options} 
+            id={chartId}
+          />
+        </div>
+      </div>
+    );
+  };
+
+  // Line Chart Component with Title and Hover Description
+  const LineChartWithTitle = ({ data, title, chartTitle, chartId, options = staticLineOptions }) => {
+    const customOptions = {
+      ...options,
+      plugins: {
+        ...options.plugins
+      }
+    };
+
+    return (
+      <div 
+        className="chart-container"
+        onMouseEnter={() => setHoveredChart(chartId)}
+        onMouseLeave={() => setHoveredChart(null)}
+      >
+        <div className="chart-header">
+          <h3 className="chart-title">{title}</h3>
+        </div>
+        {hoveredChart === chartId && (
+          <div className="visual-description">
+            {chartDescriptions[chartId] || 'Chart visualization'}
+          </div>
+        )}
+        <div className="chart-title-fixed">{chartTitle}</div>
+        <div className="chart-area">
+          <Line 
+            data={data} 
+            options={customOptions} 
+            id={chartId}
+          />
         </div>
       </div>
     );
@@ -1256,18 +1474,20 @@ const MyInvestments = () => {
     </div>
   );
 
-  const generateBarData = (labels, data, label, colorIndex, xAxisTitle, yAxisTitle) => ({
+  // Data generation functions with static options
+  const generateBarData = (labels, data, label, colorIndex) => ({
     labels,
     datasets: [{
       label,
       data,
       backgroundColor: brownShades[colorIndex % brownShades.length],
       borderColor: brownShades[(colorIndex + 1) % brownShades.length],
-      borderWidth: 1
+      borderWidth: 1,
+      hoverBackgroundColor: brownShades[colorIndex % brownShades.length]
     }]
   });
 
-  const generateLineData = (labels, datasets, xAxisTitle, yAxisTitle) => ({
+  const generateLineData = (labels, datasets) => ({
     labels,
     datasets: datasets.map((ds, i) => ({
       label: ds.label,
@@ -1280,6 +1500,7 @@ const MyInvestments = () => {
       pointBorderWidth: 2,
       pointRadius: 4,
       fill: ds.fill || false,
+      tension: 0
     }))
   });
 
@@ -1289,18 +1510,20 @@ const MyInvestments = () => {
       data,
       backgroundColor: brownShades.slice(0, data.length),
       borderWidth: 2,
-      borderColor: '#fff'
+      borderColor: '#fff',
+      hoverOffset: 0
     }]
   });
 
-  const generateStackedBarData = (labels, datasets, xAxisTitle, yAxisTitle) => ({
+  const generateStackedBarData = (labels, datasets) => ({
     labels,
     datasets: datasets.map((ds, i) => ({
       label: ds.label,
       data: ds.values,
       backgroundColor: brownShades[i % brownShades.length],
       borderColor: brownShades[i % brownShades.length],
-      borderWidth: 1
+      borderWidth: 1,
+      hoverBackgroundColor: brownShades[i % brownShades.length]
     }))
   });
 
@@ -1333,11 +1556,11 @@ const MyInvestments = () => {
     return brownShades[3];
   };
 
-  // Section Purpose Component
-  const SectionPurpose = ({ purpose }) => (
-    <div className="section-purpose">
+  // Purpose Component
+  const Purpose = ({ purpose }) => (
+    <div className="purpose">
       <div className="purpose-text">
-        <strong>Section Purpose:</strong> {purpose}
+        <strong>Purpose:</strong> {purpose}
       </div>
     </div>
   );
@@ -1402,7 +1625,7 @@ const MyInvestments = () => {
       content: (
         <div className="portfolio-overview">
           <div className="section-header">
-            <SectionPurpose purpose="Provide a high-level snapshot of overall performance and exposure at a glance" />
+            <Purpose purpose="Provide a high-level snapshot of overall performance and exposure at a glance" />
             <div className="section-controls">
               <button 
                 className="download-section-btn"
@@ -1423,131 +1646,54 @@ const MyInvestments = () => {
           {/* TOP ROW - 4 charts */}
           <div className="charts-grid-4x4">
             <div className="top-row">
-              <div className="chart-container">
-                <h3 className="chart-title">Total Portfolio Value / Exposure</h3>
-                <div className="visual-description">Quarterly portfolio value trend</div>
-                <div className="chart-area">
-                  <Bar 
-                    data={generateBarData(
-                      ['Q1', 'Q2', 'Q3', 'Q4'],
-                      [280, 295, 305, 312],
-                      'Portfolio Value (R millions)',
-                      0,
-                      '',
-                      'Value (R millions)'
-                    )}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      plugins: {
-                        tooltip: {
-                          callbacks: {
-                            label: function(context) {
-                              return `R${context.parsed} million`;
-                            }
-                          }
-                        },
-                        legend: {
-                          display: false
-                        }
-                      },
-                      scales: {
-                        x: {
-                          title: {
-                            display: true,
-                            text: ''
-                          }
-                        },
-                        y: {
-                          title: {
-                            display: true,
-                            text: 'Value (R millions)'
-                          },
-                          beginAtZero: true
-                        }
-                      }
-                    }}
-                  />
-                </div>
-              </div>
+              <BarChartWithTitle
+                data={generateBarData(
+                  ['Q1', 'Q2', 'Q3', 'Q4'],
+                  [280, 295, 305, 312],
+                  'Portfolio Value (R millions)',
+                  0
+                )}
+                title="Total Portfolio Value / Exposure"
+                chartTitle="Values (R millions) per quarter"
+                chartId="total-portfolio-value"
+              />
 
-              <ActiveSMEsCircleChart
-                value="128"
+              <ActiveSMEsPieChart
                 title="# of Active SMEs"
-                description="Total number of active SMEs in portfolio"
               />
 
               <BIGScoreInfographic 
                 value={78.4} 
                 target={80} 
                 title="Avg. BIG Score"
-                description="Detailed breakdown of BIG Score components"
               />
 
               <EnhancedFundingReady 
                 value={46} 
                 target={50} 
                 title='% Portfolio "Funding Ready"'
-                description='Shows readiness ratio with detailed breakdown'
               />
             </div>
 
             {/* BOTTOM ROW - 4 charts */}
             <div className="bottom-row">
-              <div className="chart-container">
-                <h3 className="chart-title">Funding Facilitated</h3>
-                <div className="visual-description">Monthly funding distribution</div>
-                <div className="chart-area">
-                  <Bar 
-                    data={generateBarData(
-                      ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-                      [15, 18, 22, 20, 25, 28],
-                      'Funding (R millions)',
-                      2,
-                      '',
-                      'Funding (R millions)'
-                    )}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      plugins: {
-                        tooltip: {
-                          callbacks: {
-                            label: function(context) {
-                              return `R${context.parsed} million`;
-                            }
-                          }
-                        },
-                        legend: {
-                          display: false
-                        }
-                      },
-                      scales: {
-                        x: {
-                          title: {
-                            display: true,
-                            text: ''
-                          }
-                        },
-                        y: {
-                          title: {
-                            display: true,
-                            text: 'Funding (R millions)'
-                          },
-                          beginAtZero: true
-                        }
-                      }
-                    }}
-                  />
-                </div>
-              </div>
+              <BarChartWithTitle
+                data={generateBarData(
+                  ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                  [15, 18, 22, 20, 25, 28],
+                  'Funding (R millions)',
+                  2
+                )}
+                title="Funding Facilitated"
+                chartTitle="Monthly funding amounts (R millions)"
+                chartId="funding-facilitated"
+              />
 
               <TimeToFundChart
                 value={32}
                 target={30}
                 data={getTimeData(timeToFundView, timeToFundData.Monthly, timeToFundData.Quarterly, timeToFundData.Yearly)}
                 title="Avg. Time-to-Fund"
-                description="Average days from application to funding disbursement"
               />
 
               <EnhancedFollowOnFundingChart
@@ -1555,7 +1701,6 @@ const MyInvestments = () => {
                 target={30}
                 data={[22, 24, 25, 27]}
                 title="Follow-on Funding Rate"
-                description="Percentage of SMEs receiving additional funding with sector breakdown"
               />
 
               <ExitRepaymentChart
@@ -1563,7 +1708,6 @@ const MyInvestments = () => {
                 target={15}
                 data={[10, 11, 12, 12]}
                 title="Exit / Repayment Ratio"
-                description="Percentage of exited or repaid investments"
               />
             </div>
           </div>
@@ -1576,7 +1720,7 @@ const MyInvestments = () => {
       content: (
         <div className="portfolio-composition">
           <div className="section-header">
-            <SectionPurpose purpose="Show diversification and concentration by sector, stage, location, etc." />
+            <Purpose purpose="Show diversification and concentration by sector, stage, location, etc." />
             <div className="section-controls">
               <button 
                 className="download-section-btn"
@@ -1590,51 +1734,35 @@ const MyInvestments = () => {
           <div className="composition-charts-grid">
             <PieChartWithNumbers
               title="By Lifecycle Stage"
-              description="Shows breakdown by Early/Growth/Mature/Exit-ready"
               labels={['Early', 'Growth', 'Mature', 'Exit-ready']}
               data={[22, 41, 27, 10]}
               showEye={true}
+              chartId="lifecycle-stage"
             />
 
-            <div className="chart-container">
-              <h3 className="chart-title">By Industry / Sector</h3>
-              <div className="visual-description">Highlights sector diversification</div>
-              <div className="chart-area">
-                <Bar 
-                  data={generateBarData(
-                    ['Manufacturing', 'Services', 'Agriculture', 'Retail', 'Tech'],
-                    [28, 24, 20, 18, 10],
-                    '% Capital',
-                    1,
-                    'Sector',
-                    '% of Capital'
-                  )}
-                  options={{
-                    indexAxis: 'y',
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                      x: {
-                        title: {
-                          display: true,
-                          text: '% of Capital'
-                        },
-                        beginAtZero: true
-                      }
-                    },
-                    plugins: {
-                      legend: {
-                        display: false
-                      }
-                    }
-                  }}
-                />
-              </div>
-            </div>
+            <BarChartWithTitle
+              data={generateBarData(
+                ['Manufacturing', 'Services', 'Agriculture', 'Retail', 'Tech'],
+                [28, 24, 20, 18, 10],
+                '% Capital',
+                1
+              )}
+              title="By Industry / Sector"
+              chartTitle="Capital allocation by sector (%)"
+              chartId="industry-sector"
+            />
 
-            <div className="chart-container">
+            <div 
+              className="chart-container"
+              onMouseEnter={() => setHoveredChart('geography')}
+              onMouseLeave={() => setHoveredChart(null)}
+            >
               <h3 className="chart-title">By Geography</h3>
-              <div className="visual-description">Displays provincial distribution with hover tooltips</div>
+              {hoveredChart === 'geography' && (
+                <div className="visual-description">
+                  Displays provincial distribution with hover tooltips showing regional allocations
+                </div>
+              )}
               <div className="chart-area">
                 <div className="map-container">
                   <MapContainer 
@@ -1667,227 +1795,26 @@ const MyInvestments = () => {
               </div>
             </div>
 
-            <div className="chart-container">
-              <h3 className="chart-title">By Funding Instrument</h3>
-              <div className="visual-description">Shows allocation by debt/equity/grant/EaaS</div>
-              <div className="chart-area">
-                <Bar 
-                  data={generateStackedBarData(
-                    ['Equity', 'Debt', 'Grant', 'EaaS'],
-                    [
-                      { label: 'Current', values: [120, 95, 45, 52] },
-                      { label: 'Target', values: [130, 100, 50, 70] }
-                    ],
-                    'Instrument Type',
-                    'ZAR millions'
-                  )}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                      x: { 
-                        stacked: true,
-                        title: {
-                          display: true,
-                          text: 'Instrument Type'
-                        }
-                      },
-                      y: { 
-                        stacked: true,
-                        title: {
-                          display: true,
-                          text: 'ZAR millions'
-                        }
-                      }
-                    }
-                  }}
-                />
-              </div>
-            </div>
+            <BarChartWithTitle
+              data={generateStackedBarData(
+                ['Equity', 'Debt', 'Grant', 'EaaS'],
+                [
+                  { label: 'Current', values: [120, 95, 45, 52] },
+                  { label: 'Target', values: [130, 100, 50, 70] }
+                ]
+              )}
+              title="By Funding Instrument"
+              chartTitle="Current vs Target allocation (R millions)"
+              chartId="funding-instrument"
+            />
 
             <PieChartWithNumbers
               title="By Demographic / Ownership"
-              description="Highlights women/youth/black-owned ratios"
               labels={['Women-led', 'Youth-led', 'Black-owned', 'Other']}
               data={[38, 24, 72, 16]}
               showEye={true}
+              chartId="demographic-ownership"
             />
-          </div>
-        </div>
-      )
-    },
-    'Pipeline & Future Opportunities': {
-      icon: <FiTarget />,
-      purpose: 'Show pipeline strength and forecast future capital needs',
-      content: (
-        <div className="pipeline-opportunities">
-          <div className="section-header">
-            <SectionPurpose purpose="Show pipeline strength and forecast future capital needs" />
-            <div className="section-controls">
-              <button 
-                className="download-section-btn"
-                onClick={() => setShowDownloadOptions(!showDownloadOptions)}
-              >
-                <FiDownload /> Download
-              </button>
-            </div>
-          </div>
-          
-          {/* TOP ROW - 4 charts */}
-          <div className="charts-grid-4x4">
-            <div className="top-row">
-              <div className="chart-container">
-                <h3 className="chart-title">Pipeline Stage Aging</h3>
-                <div className="visual-description">Age distribution of pipeline</div>
-                <div className="chart-area">
-                  <Bar 
-                    data={generateBarData(
-                      ['&lt;1 month', '1-3 months', '3-6 months', '&gt;6 months'],
-                      [15, 24, 30, 10],
-                      '# of SMEs',
-                      0,
-                      'Age Category',
-                      '# of SMEs'
-                    )}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      scales: {
-                        y: {
-                          beginAtZero: true,
-                          title: {
-                            display: true,
-                            text: '# of SMEs'
-                          }
-                        },
-                        x: {
-                          title: {
-                            display: true,
-                            text: 'Age Category'
-                          }
-                        }
-                      },
-                      plugins: {
-                        legend: {
-                          display: false
-                        }
-                      }
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div className="chart-container">
-                <h3 className="chart-title">Conversion Funnel (App→Approval→Disburse)</h3>
-                <div className="visual-description">Displays application conversion efficiency</div>
-                <div className="chart-area">
-                  <FunnelChart 
-                    stages={['Application', 'Approval', 'Disbursed']}
-                    values={[28, 45, 82]}
-                    colors={[brownShades[0], brownShades[1], brownShades[2]]}
-                  />
-                </div>
-              </div>
-
-              <div className="chart-container">
-                <h3 className="chart-title">Forecasted Capital Requirement (Next 12mo)</h3>
-                <div className="visual-description">Forecasted need by instrument</div>
-                <div className="chart-area">
-                  <Bar 
-                    data={generateStackedBarData(
-                      ['Q1', 'Q2', 'Q3', 'Q4'],
-                      [
-                        { label: 'Debt', values: [35, 40, 45, 50] },
-                        { label: 'Equity', values: [22, 25, 28, 30] },
-                        { label: 'Grants', values: [15, 18, 20, 22] }
-                      ],
-                      'Quarter',
-                      'ZAR millions'
-                    )}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      scales: {
-                        x: { 
-                          stacked: true,
-                          title: {
-                            display: true,
-                            text: 'Quarter'
-                          }
-                        },
-                        y: { 
-                          stacked: true,
-                          title: {
-                            display: true,
-                            text: 'ZAR millions'
-                          }
-                        }
-                      }
-                    }}
-                  />
-                </div>
-              </div>
-
-              <PieChartWithNumbers
-                title="Data Confidence Meter"
-                description="Highlights data reliability"
-                labels={['Verified', 'Partial', 'Unverified']}
-                data={[78, 15, 7]}
-                showEye={true}
-              />
-            </div>
-
-            {/* BOTTOM - Full width table */}
-            <div className="bottom-full">
-              <div className="chart-container full-width">
-                <h3 className="chart-title">Co-Invest / Support Opportunities</h3>
-                <div className="visual-description">Ranked table of co-investment candidates</div>
-                <div className="table-container">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>SME</th>
-                        <th>Stage</th>
-                        <th>Ask</th>
-                        <th>Score</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td>KZN AgroPack</td>
-                        <td>Growth</td>
-                        <td>R8m</td>
-                        <td>83</td>
-                      </tr>
-                      <tr>
-                        <td>Tech Innovate</td>
-                        <td>Early</td>
-                        <td>R5m</td>
-                        <td>79</td>
-                      </tr>
-                      <tr>
-                        <td>Green Manufacturing</td>
-                        <td>Mature</td>
-                        <td>R12m</td>
-                        <td>88</td>
-                      </tr>
-                      <tr>
-                        <td>Urban Solutions</td>
-                        <td>Growth</td>
-                        <td>R6m</td>
-                        <td>76</td>
-                      </tr>
-                      <tr>
-                        <td>Digital Finance Co</td>
-                        <td>Early</td>
-                        <td>R10m</td>
-                        <td>81</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       )
@@ -1898,7 +1825,7 @@ const MyInvestments = () => {
       content: (
         <div className="exit-liquidity">
           <div className="section-header">
-            <SectionPurpose purpose="Measure realized outcomes, repayments, and liquidity flow" />
+            <Purpose purpose="Measure realized outcomes, repayments, and liquidity flow" />
             <div className="section-controls">
               <button 
                 className="download-section-btn"
@@ -1917,137 +1844,55 @@ const MyInvestments = () => {
           </div>
           
           <div className="exit-charts-grid">
-            <div className="chart-container">
-              <h3 className="chart-title">Exit / Repayment History</h3>
-              <div className="visual-description">Exit trends over time</div>
-              <div className="chart-area">
-                <Bar 
-                  data={generateBarData(
-                    ['Q1', 'Q2', 'Q3', 'Q4'],
-                    [2, 4, 5, 7],
-                    '# of Exits',
-                    0,
-                    '',
-                    '# of Exits'
-                  )}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                      y: {
-                        beginAtZero: true,
-                        title: {
-                          display: true,
-                          text: '# of Exits'
-                        }
-                      },
-                      x: {
-                        title: {
-                          display: true,
-                          text: ''
-                        }
-                      }
-                    },
-                    plugins: {
-                      legend: {
-                        display: false
-                      }
-                    }
-                  }}
-                />
-              </div>
-            </div>
+            <BarChartWithTitle
+              data={generateBarData(
+                ['Q1', 'Q2', 'Q3', 'Q4'],
+                [2, 4, 5, 7],
+                '# of Exits',
+                0
+              )}
+              title="Exit / Repayment History"
+              chartTitle="Number of exits per quarter"
+              chartId="exit-repayment-history"
+            />
 
-            <div className="chart-container">
-              <h3 className="chart-title">Avg. Time-to-Exit</h3>
-              <div className="visual-description">Average months to exit</div>
-              <div className="chart-area">
-                <Line 
-                  data={generateLineData(
-                    ['Q1', 'Q2', 'Q3', 'Q4'],
-                    [
-                      { label: 'Avg Months', values: getTimeData(timeToExitView, timeToExitData.Monthly, timeToExitData.Quarterly, timeToExitData.Yearly) },
-                      { label: 'Target (&lt;32)', values: getTimeData(timeToExitView, [32, 32, 32, 32, 32, 32], [32, 32, 32, 32], [32, 32, 32, 32]) }
-                    ],
-                    timeToExitView,
-                    'Months'
-                  )}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                      x: {
-                        title: {
-                          display: true,
-                          text: ''
-                        }
-                      },
-                      y: {
-                        title: {
-                          display: true,
-                          text: 'Months'
-                        }
-                      }
-                    }
-                  }}
-                />
-              </div>
-            </div>
+            <LineChartWithTitle
+              data={generateLineData(
+                ['Q1', 'Q2', 'Q3', 'Q4'],
+                [
+                  { label: 'Avg Months', values: getTimeData(timeToExitView, timeToExitData.Monthly, timeToExitData.Quarterly, timeToExitData.Yearly) },
+                  { label: 'Target (&lt;32)', values: getTimeData(timeToExitView, [32, 32, 32, 32, 32, 32], [32, 32, 32, 32], [32, 32, 32, 32]) }
+                ]
+              )}
+              title="Avg. Time-to-Exit"
+              chartTitle="Average months to exit vs target"
+              chartId="time-to-exit"
+            />
 
-            <div className="chart-container">
-              <h3 className="chart-title">Exit Multiple</h3>
-              <div className="visual-description">Return multiples for exited equity deals</div>
-              <div className="chart-area">
-                <Bar 
-                  data={generateBarData(
-                    ['Deal A', 'Deal B', 'Deal C', 'Deal D', 'Deal E'],
-                    [1.8, 2.4, 3.0, 2.1, 2.8],
-                    'Multiple (x)',
-                    1,
-                    'Deal',
-                    'Multiple (x)'
-                  )}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                      y: {
-                        beginAtZero: true,
-                        title: {
-                          display: true,
-                          text: 'Multiple (x)'
-                        }
-                      },
-                      x: {
-                        title: {
-                          display: true,
-                          text: 'Deal'
-                        }
-                      }
-                    },
-                    plugins: {
-                      legend: {
-                        display: false
-                      }
-                    }
-                  }}
-                />
-              </div>
-            </div>
+            <BarChartWithTitle
+              data={generateBarData(
+                ['Deal A', 'Deal B', 'Deal C', 'Deal D', 'Deal E'],
+                [1.8, 2.4, 3.0, 2.1, 2.8],
+                'Multiple (x)',
+                1
+              )}
+              title="Exit Multiple"
+              chartTitle="Return multiples for exited deals (x)"
+              chartId="exit-multiple"
+            />
 
             <PieChartWithNumbers
               title="Reinvestment Ratio"
-              description="Share of capital recycled"
               labels={['Reinvested', 'Held']}
               data={[64, 36]}
               showEye={true}
+              chartId="reinvestment-ratio"
             />
 
             <SMEGraduationInfographic
               value={31}
               target={35}
               title="SME Graduation to Bankable"
-              description="% of SMEs now self-sustaining with impact metrics"
             />
           </div>
         </div>
@@ -2059,7 +1904,7 @@ const MyInvestments = () => {
       content: (
         <div className="funder-efficiency">
           <div className="section-header">
-            <SectionPurpose purpose="Track funder/catalyst performance and operational efficiency" />
+            <Purpose purpose="Track funder/catalyst performance and operational efficiency" />
             <div className="section-controls">
               <button 
                 className="download-section-btn"
@@ -2078,132 +1923,339 @@ const MyInvestments = () => {
           </div>
           
           <div className="funder-charts-grid-4x4">
-            <div className="chart-container">
-              <h3 className="chart-title">Applications Reviewed vs Funded</h3>
-              <div className="visual-description">Compares funnel volumes</div>
-              <div className="chart-area">
-                <Bar 
-                  data={generateBarData(
-                    ['Reviewed', 'Approved', 'Funded'],
-                    [210, 85, 46],
-                    '# of apps',
-                    0,
-                    'Stage',
-                    '# of Applications'
-                  )}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                      y: {
-                        beginAtZero: true,
-                        title: {
-                          display: true,
-                          text: '# of Applications'
-                        }
-                      },
-                      x: {
-                        title: {
-                          display: true,
-                          text: 'Stage'
-                        }
-                      }
-                    },
-                    plugins: {
-                      legend: {
-                        display: false
-                      }
-                    }
-                  }}
-                />
-              </div>
-            </div>
+            <BarChartWithTitle
+              data={generateBarData(
+                ['Reviewed', 'Approved', 'Funded'],
+                [210, 85, 46],
+                '# of apps',
+                0
+              )}
+              title="Applications Reviewed vs Funded"
+              chartTitle="Application funnel volumes"
+              chartId="applications-reviewed"
+            />
 
-            <div className="chart-container">
-              <h3 className="chart-title">Avg. Vetting Time</h3>
-              <div className="visual-description">Efficiency metric</div>
-              <div className="chart-area-compact">
-                <Line 
-                  data={generateLineData(
-                    ['Q1', 'Q2', 'Q3', 'Q4'],
-                    [{ label: 'Days', values: getTimeData(vettingTimeView, vettingTimeData.Monthly, vettingTimeData.Quarterly, vettingTimeData.Yearly) }],
-                    vettingTimeView,
-                    'Days'
-                  )}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                      x: {
-                        title: {
-                          display: true,
-                          text: ''
-                        }
-                      },
-                      y: {
-                        title: {
-                          display: true,
-                          text: 'Days'
-                        }
-                      }
-                    },
-                    plugins: {
-                      legend: {
-                        display: false
-                      }
-                    }
-                  }}
-                />
-              </div>
-              <div className="chart-summary-compact">
-                <div className="current-value">Current: 9 days</div>
-                <div className="target-value">
-                  Target: 8 days
-                  <FiArrowDown className="trend-icon up" />
-                </div>
-              </div>
-            </div>
+            <LineChartWithTitle
+              data={generateLineData(
+                ['Q1', 'Q2', 'Q3', 'Q4'],
+                [{ label: 'Days', values: getTimeData(vettingTimeView, vettingTimeData.Monthly, vettingTimeData.Quarterly, vettingTimeData.Yearly) }]
+              )}
+              title="Avg. Vetting Time"
+              chartTitle="Average vetting time in days"
+              chartId="vetting-time"
+              options={{
+                ...staticLineOptions,
+                plugins: {
+                  ...staticLineOptions.plugins,
+                  legend: {
+                    display: false
+                  }
+                }
+              }}
+            />
 
             <CostPerSMEInfographic
               value={75}
               target={80}
               title="Cost per Funded SME"
-              description="Detailed breakdown of operational costs per funded SME"
             />
 
-            <div className="chart-container">
-              <h3 className="chart-title">Active Partnerships / Co-Funders</h3>
-              <div className="visual-description">Lists top partners by activity</div>
+            <BarChartWithTitle
+              data={generateBarData(
+                ['Funder A', 'Funder B', 'Funder C', 'Funder D'],
+                [12, 9, 7, 5],
+                '# SMEs co-funded',
+                2
+              )}
+              title="Active Partnerships / Co-Funders"
+              chartTitle="Number of SMEs co-funded per partner"
+              chartId="active-partnerships"
+            />
+          </div>
+        </div>
+      )
+    },
+    'Performance & Risk Dashboard': {
+      icon: <FiBarChart2 />,
+      purpose: 'Assess growth, risk, and inclusion performance of portfolio',
+      content: (
+        <div className="performance-risk">
+          <div className="section-header">
+            <Purpose purpose="Assess growth, risk, and inclusion performance of portfolio" />
+            <div className="section-controls">
+              <button 
+                className="download-section-btn"
+                onClick={() => setShowDownloadOptions(!showDownloadOptions)}
+              >
+                <FiDownload /> Download
+              </button>
+            </div>
+          </div>
+          
+          <div className="performance-charts-grid">
+            <BarChartWithTitle
+              data={generateBarData(
+                ['Q1', 'Q2', 'Q3', 'Q4'],
+                [7.5, 9.8, 6.1, 4.2],
+                '% Defaults',
+                0
+              )}
+              title="Default / Non-performing Ratio"
+              chartTitle="Default rates per quarter (%)"
+              chartId="default-ratio"
+            />
+
+            <LineChartWithTitle
+              data={generateLineData(
+                ['Q1', 'Q2', 'Q3', 'Q4'],
+                [
+                  { label: 'Revenue Growth', values: [9, 10, 12, 11] },
+                  { label: 'Benchmark (8%)', values: [8, 8, 8, 8] }
+                ]
+              )}
+              title="SME Growth Index"
+              chartTitle="Revenue growth vs benchmark (%)"
+              chartId="sme-growth-index"
+            />
+
+            <BarChartWithTitle
+              data={generateStackedBarData(
+                ['Agriculture', 'Services', 'Manufacturing', 'Retail', 'Tech'],
+                [
+                  { label: 'New Jobs', values: [800, 1000, 600, 400, 300] },
+                  { label: 'Retained Jobs', values: [400, 500, 400, 300, 200] }
+                ]
+              )}
+              title="Job Creation / Retention"
+              chartTitle="Jobs created and retained by sector"
+              chartId="job-creation"
+            />
+
+            <LineChartWithTitle
+              data={generateLineData(
+                ['Q1', 'Q2', 'Q3', 'Q4'],
+                [
+                  { label: 'Graduation Rate', values: [15, 17, 18, 19] },
+                  { label: 'Target (25%)', values: [20, 21, 23, 25] }
+                ]
+              )}
+              title="SME Graduation Rate (to 80+ BIG Score)"
+              chartTitle="Graduation rate vs target (%)"
+              chartId="graduation-rate"
+              options={{
+                ...staticLineOptions,
+                scales: {
+                  ...staticLineOptions.scales,
+                  y: {
+                    ...staticLineOptions.scales.y,
+                    max: 30
+                  }
+                }
+              }}
+            />
+
+            <div 
+              className="chart-container"
+              onMouseEnter={() => setHoveredChart('diversity-inclusion')}
+              onMouseLeave={() => setHoveredChart(null)}
+            >
+              <h3 className="chart-title">Diversity & Inclusion Score</h3>
+              {hoveredChart === 'diversity-inclusion' && (
+                <div className="visual-description">
+                  {chartDescriptions['diversity-inclusion']}
+                </div>
+              )}
               <div className="chart-area">
-                <Bar 
-                  data={generateBarData(
-                    ['Funder A', 'Funder B', 'Funder C', 'Funder D'],
-                    [12, 9, 7, 5],
-                    '# SMEs co-funded',
-                    2,
-                    'Funder',
-                    '# SMEs co-funded'
+                <Radar 
+                  data={generateRadarData(
+                    ['Women', 'Youth', 'Rural', 'Black-owned'],
+                    [38, 24, 45, 72],
+                    [35, 25, 40, 70]
                   )}
                   options={{
-                    indexAxis: 'y',
-                    responsive: true,
-                    maintainAspectRatio: false,
+                    ...staticChartOptions,
                     scales: {
-                      x: {
+                      r: {
                         beginAtZero: true,
-                        title: {
-                          display: true,
-                          text: '# SMEs co-funded'
+                        max: 100,
+                        ticks: {
+                          stepSize: 20
                         }
-                      }
-                    },
-                    plugins: {
-                      legend: {
-                        display: false
                       }
                     }
                   }}
+                  id="diversity-inclusion"
                 />
+              </div>
+            </div>
+          </div>
+        </div>
+      )
+    },
+    'ESG & Impact Performance': {
+      icon: <FiGlobe />,
+      purpose: 'Measure environmental, social, and governance outcomes',
+      content: (
+        <div className="esg-impact">
+          <div className="section-header">
+            <Purpose purpose="Measure environmental, social, and governance outcomes" />
+            <div className="section-controls">
+              <button 
+                className="download-section-btn"
+                onClick={() => setShowDownloadOptions(!showDownloadOptions)}
+              >
+                <FiDownload /> Download
+              </button>
+            </div>
+          </div>
+          
+          <div className="esg-charts-grid">
+            <BarChartWithTitle
+              data={generateBarData(
+                ['Environmental', 'Social', 'Governance'],
+                [62, 81, 74],
+                'Score (0-100)',
+                1
+              )}
+              title="ESG Pillar Scores (E, S, G)"
+              chartTitle="ESG pillar performance scores (0-100)"
+              chartId="esg-pillar"
+            />
+
+            <BarChartWithTitle
+              data={generateBarData(
+                ['SDG8', 'SDG9', 'SDG5', 'SDG11'],
+                [64, 41, 38, 32],
+                '% of portfolio',
+                2
+              )}
+              title="SDG Alignment"
+              chartTitle="Portfolio alignment with SDGs (%)"
+              chartId="sdg-alignment"
+            />
+
+            <PieChartWithNumbers
+              title="Governance Compliance Health"
+              labels={['Compliant', 'Partial', 'At Risk']}
+              data={[72, 21, 7]}
+              showEye={true}
+              chartId="governance-compliance"
+            />
+
+            <div className="chart-container full-width">
+              <h3 className="chart-title">Top 5 ESG Contributors</h3>
+              <div className="table-container">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>SME</th>
+                      <th>Pillar</th>
+                      <th>Supporting Stat</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>FemmeTech Labs</td>
+                      <td>Social</td>
+                      <td>68 new jobs created</td>
+                    </tr>
+                    <tr>
+                      <td>Green Agro</td>
+                      <td>Environmental</td>
+                      <td>120t CO2 reduced annually</td>
+                    </tr>
+                    <tr>
+                      <td>EduTech SA</td>
+                      <td>Social</td>
+                      <td>500+ training hours delivered</td>
+                    </tr>
+                    <tr>
+                      <td>Clean Energy Co</td>
+                      <td>Environmental</td>
+                      <td>100% renewable energy usage</td>
+                    </tr>
+                    <tr>
+                      <td>Community Build</td>
+                      <td>Governance</td>
+                      <td>100% compliance rating</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )
+    },
+    'Data Integrity & Trust Layer': {
+      icon: <FiShield />,
+      purpose: 'Ensure transparency, compliance, and auditability',
+      content: (
+        <div className="data-integrity">
+          <div className="section-header">
+            <Purpose purpose="Ensure transparency, compliance, and auditability" />
+            <div className="section-controls">
+              <button 
+                className="download-section-btn"
+                onClick={() => setShowDownloadOptions(!showDownloadOptions)}
+              >
+                <FiDownload /> Download
+              </button>
+            </div>
+          </div>
+          
+          <div className="data-integrity-grid">
+            <div className="chart-container full-width">
+              <h3 className="chart-title">Compliance Verification Status</h3>
+              <div className="table-container">
+                <table className="data-table verification-table">
+                  <thead>
+                    <tr>
+                      <th>SME</th>
+                      <th>CIPC</th>
+                      <th>Tax</th>
+                      <th>KYC</th>
+                      <th>Audit Stamp</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>FemmeTech Labs</td>
+                      <td><span className="status-badge verified">Verified</span></td>
+                      <td><span className="status-badge verified">Verified</span></td>
+                      <td><span className="status-badge verified">Verified</span></td>
+                      <td>2024-12-01</td>
+                    </tr>
+                    <tr>
+                      <td>Green Agro</td>
+                      <td><span className="status-badge verified">Verified</span></td>
+                      <td><span className="status-badge partial">Partial</span></td>
+                      <td><span className="status-badge verified">Verified</span></td>
+                      <td>2024-11-15</td>
+                    </tr>
+                    <tr>
+                      <td>Tech Innovate</td>
+                      <td><span className="status-badge unverified">Pending</span></td>
+                      <td><span className="status-badge verified">Verified</span></td>
+                      <td><span className="status-badge partial">Partial</span></td>
+                      <td>2024-12-10</td>
+                    </tr>
+                    <tr>
+                      <td>Urban Solutions</td>
+                      <td><span className="status-badge verified">Verified</span></td>
+                      <td><span className="status-badge verified">Verified</span></td>
+                      <td><span className="status-badge verified">Verified</span></td>
+                      <td>2024-10-22</td>
+                    </tr>
+                    <tr>
+                      <td>Service Provider</td>
+                      <td><span className="status-badge partial">Partial</span></td>
+                      <td><span className="status-badge unverified">Pending</span></td>
+                      <td><span className="status-badge verified">Verified</span></td>
+                      <td>2024-11-30</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -2216,7 +2268,7 @@ const MyInvestments = () => {
       content: (
         <div className="insights-ai">
           <div className="section-header">
-            <SectionPurpose purpose="Provide AI-driven opportunities, risks, and alerts" />
+            <Purpose purpose="Provide AI-driven opportunities, risks, and alerts" />
             <div className="section-controls">
               <button 
                 className="download-section-btn"
@@ -2237,7 +2289,6 @@ const MyInvestments = () => {
           <div className="insights-charts-grid">
             <div className="chart-container full-width">
               <h3 className="chart-title">Top 5 High-Performers</h3>
-              <div className="visual-description">Ranked actionable table</div>
               <div className="table-container">
                 <table className="data-table">
                   <thead>
@@ -2292,7 +2343,6 @@ const MyInvestments = () => {
 
             <div className="chart-container full-width">
               <h3 className="chart-title">At-Risk / Watchlist SMEs</h3>
-              <div className="visual-description">Risk alerts table</div>
               <div className="table-container">
                 <table className="data-table risk-table">
                   <thead>
@@ -2330,7 +2380,6 @@ const MyInvestments = () => {
 
             <div className="chart-container full-width">
               <h3 className="chart-title">Portfolio Trend Alerts</h3>
-              <div className="visual-description">Small trend mini-cards ("Defaults ↓ 5.6%")</div>
               <div className="trend-alerts-grid">
                 <TrendAlertCard 
                   title="Defaults" 
@@ -2366,13 +2415,13 @@ const MyInvestments = () => {
         </div>
       )
     },
-    'Performance & Risk Dashboard': {
-      icon: <FiBarChart2 />,
-      purpose: 'Assess growth, risk, and inclusion performance of portfolio',
+    'Pipeline & Future Opportunities': {
+      icon: <FiTarget />,
+      purpose: 'Show pipeline strength and forecast future capital needs',
       content: (
-        <div className="performance-risk">
+        <div className="pipeline-opportunities">
           <div className="section-header">
-            <SectionPurpose purpose="Assess growth, risk, and inclusion performance of portfolio" />
+            <Purpose purpose="Show pipeline strength and forecast future capital needs" />
             <div className="section-controls">
               <button 
                 className="download-section-btn"
@@ -2383,429 +2432,116 @@ const MyInvestments = () => {
             </div>
           </div>
           
-          <div className="performance-charts-grid">
-            <div className="chart-container">
-              <h3 className="chart-title">Default / Non-performing Ratio</h3>
-              <div className="visual-description">Tracks decline in defaults</div>
-              <div className="chart-area">
-                <Bar 
-                  data={generateBarData(
-                    ['Q1', 'Q2', 'Q3', 'Q4'],
-                    [7.5, 9.8, 6.1, 4.2],
-                    '% Defaults',
-                    0,
-                    '',
-                    '% of active loans'
-                  )}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                      x: {
-                        title: {
-                          display: true,
-                          text: ''
-                        }
-                      },
-                      y: {
-                        beginAtZero: true,
-                        max: 12,
-                        title: {
-                          display: true,
-                          text: '% of active loans'
-                        }
-                      }
-                    },
-                    plugins: {
-                      legend: {
-                        display: false
-                      }
-                    }
-                  }}
-                />
-              </div>
-            </div>
+          {/* TOP ROW - 4 charts */}
+          <div className="charts-grid-4x4">
+            <div className="top-row">
+              <BarChartWithTitle
+                data={generateBarData(
+                  ['&lt;1 month', '1-3 months', '3-6 months', '&gt;6 months'],
+                  [15, 24, 30, 10],
+                  '# of SMEs',
+                  0
+                )}
+                title="Pipeline Stage Aging"
+                chartTitle="Number of SMEs by pipeline age"
+                chartId="pipeline-aging"
+              />
 
-            <div className="chart-container">
-              <h3 className="chart-title">SME Growth Index</h3>
-              <div className="visual-description">Shows average revenue growth vs benchmark</div>
-              <div className="chart-area">
-                <Line 
-                  data={generateLineData(
-                    ['Q1', 'Q2', 'Q3', 'Q4'],
-                    [
-                      { label: 'Revenue Growth', values: [9, 10, 12, 11] },
-                      { label: 'Benchmark (8%)', values: [8, 8, 8, 8] }
-                    ],
-                    '',
-                    '% Revenue Growth QoQ'
-                  )}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                      x: {
-                        title: {
-                          display: true,
-                          text: ''
-                        }
-                      },
-                      y: {
-                        title: {
-                          display: true,
-                          text: '% Revenue Growth QoQ'
-                        }
-                      }
-                    }
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="chart-container">
-              <h3 className="chart-title">Job Creation / Retention</h3>
-              <div className="visual-description">Shows jobs created by sector</div>
-              <div className="chart-area">
-                <Bar 
-                  data={generateStackedBarData(
-                    ['Agriculture', 'Services', 'Manufacturing', 'Retail', 'Tech'],
-                    [
-                      { label: 'New Jobs', values: [800, 1000, 600, 400, 300] },
-                      { label: 'Retained Jobs', values: [400, 500, 400, 300, 200] }
-                    ],
-                    'Sector',
-                    '# of jobs'
-                  )}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                      x: { 
-                        stacked: true,
-                        title: {
-                          display: true,
-                          text: 'Sector'
-                        }
-                      },
-                      y: { 
-                        stacked: true,
-                        title: {
-                          display: true,
-                          text: '# of jobs'
-                        }
-                      }
-                    }
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="chart-container">
-              <h3 className="chart-title">SME Graduation Rate (to 80+ BIG Score)</h3>
-              <div className="visual-description">Indicates progress in improving SME readiness</div>
-              <div className="chart-area">
-                <Line 
-                  data={generateLineData(
-                    ['Q1', 'Q2', 'Q3', 'Q4'],
-                    [
-                      { label: 'Graduation Rate', values: [15, 17, 18, 19] },
-                      { label: 'Target (25%)', values: [20, 21, 23, 25] }
-                    ],
-                    '',
-                    '% of SMEs'
-                  )}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                      x: {
-                        title: {
-                          display: true,
-                          text: ''
-                        }
-                      },
-                      y: {
-                        beginAtZero: true,
-                        max: 30,
-                        title: {
-                          display: true,
-                          text: '% of SMEs'
-                        }
-                      }
-                    }
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="chart-container">
-              <h3 className="chart-title">Diversity & Inclusion Score</h3>
-              <div className="visual-description">Compares actual vs target inclusion values</div>
-              <div className="chart-area">
-                <Radar 
-                  data={generateRadarData(
-                    ['Women', 'Youth', 'Rural', 'Black-owned'],
-                    [38, 24, 45, 72],
-                    [35, 25, 40, 70]
-                  )}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                      r: {
-                        beginAtZero: true,
-                        max: 100,
-                        ticks: {
-                          stepSize: 20
-                        }
-                      }
-                    }
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      )
-    },
-    'ESG & Impact Performance': {
-      icon: <FiGlobe />,
-      purpose: 'Measure environmental, social, and governance outcomes',
-      content: (
-        <div className="esg-impact">
-          <div className="section-header">
-            <SectionPurpose purpose="Measure environmental, social, and governance outcomes" />
-            <div className="section-controls">
-              <button 
-                className="download-section-btn"
-                onClick={() => setShowDownloadOptions(!showDownloadOptions)}
+              <div 
+                className="chart-container"
+                onMouseEnter={() => setHoveredChart('conversion-funnel')}
+                onMouseLeave={() => setHoveredChart(null)}
               >
-                <FiDownload /> Download
-              </button>
-            </div>
-          </div>
-          
-          <div className="esg-charts-grid">
-            <div className="chart-container">
-              <h3 className="chart-title">ESG Pillar Scores (E, S, G)</h3>
-              <div className="visual-description">Shows average ESG performance</div>
-              <div className="chart-area">
-                <Bar 
-                  data={generateBarData(
-                    ['Environmental', 'Social', 'Governance'],
-                    [62, 81, 74],
-                    'Score (0-100)',
-                    1,
-                    'Pillar',
-                    'Score (0-100)'
-                  )}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                      y: {
-                        beginAtZero: true,
-                        max: 100,
-                        title: {
-                          display: true,
-                          text: 'Score (0-100)'
-                        }
-                      },
-                      x: {
-                        title: {
-                          display: true,
-                          text: 'Pillar'
-                        }
-                      }
-                    },
-                    plugins: {
-                      legend: {
-                        display: false
-                      }
-                    }
-                  }}
-                />
+                <h3 className="chart-title">Conversion Funnel (App→Approval→Disburse)</h3>
+                {hoveredChart === 'conversion-funnel' && (
+                  <div className="visual-description">
+                    Displays application conversion efficiency from application to approval to disbursement stages
+                  </div>
+                )}
+                <div className="chart-area">
+                  <FunnelChart 
+                    stages={['Application', 'Approval', 'Disbursed']}
+                    values={[28, 45, 82]}
+                    colors={[brownShades[0], brownShades[1], brownShades[2]]}
+                  />
+                </div>
               </div>
+
+              <BarChartWithTitle
+                data={generateStackedBarData(
+                  ['Q1', 'Q2', 'Q3', 'Q4'],
+                  [
+                    { label: 'Debt', values: [35, 40, 45, 50] },
+                    { label: 'Equity', values: [22, 25, 28, 30] },
+                    { label: 'Grants', values: [15, 18, 20, 22] }
+                  ]
+                )}
+                title="Forecasted Capital Requirement (Next 12mo)"
+                chartTitle="Capital requirements by instrument (R millions)"
+                chartId="capital-requirement"
+              />
+
+              <PieChartWithNumbers
+                title="Data Confidence Meter"
+                labels={['Verified', 'Partial', 'Unverified']}
+                data={[78, 15, 7]}
+                showEye={true}
+                chartId="data-confidence"
+              />
             </div>
 
-            <div className="chart-container">
-              <h3 className="chart-title">SDG Alignment</h3>
-              <div className="visual-description">Highlights SDG coverage (8, 9, 5, 11)</div>
-              <div className="chart-area">
-                <Bar 
-                  data={generateBarData(
-                    ['SDG8', 'SDG9', 'SDG5', 'SDG11'],
-                    [64, 41, 38, 32],
-                    '% of portfolio',
-                    2,
-                    'SDG',
-                    '% of portfolio'
-                  )}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                      y: {
-                        beginAtZero: true,
-                        max: 100,
-                        title: {
-                          display: true,
-                          text: '% of portfolio'
-                        }
-                      },
-                      x: {
-                        title: {
-                          display: true,
-                          text: 'SDG'
-                        }
-                      }
-                    },
-                    plugins: {
-                      legend: {
-                        display: false
-                      }
-                    }
-                  }}
-                />
-              </div>
-            </div>
-
-            <PieChartWithNumbers
-              title="Governance Compliance Health"
-              description="Displays compliance ratio from BIG Score data"
-              labels={['Compliant', 'Partial', 'At Risk']}
-              data={[72, 21, 7]}
-              showEye={true}
-            />
-
-            <div className="chart-container full-width">
-              <h3 className="chart-title">Top 5 ESG Contributors</h3>
-              <div className="visual-description">Lists SMEs with notable ESG impacts</div>
-              <div className="table-container">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>SME</th>
-                      <th>Pillar</th>
-                      <th>Supporting Stat</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td>FemmeTech Labs</td>
-                      <td>Social</td>
-                      <td>68 new jobs created</td>
-                    </tr>
-                    <tr>
-                      <td>Green Agro</td>
-                      <td>Environmental</td>
-                      <td>120t CO2 reduced annually</td>
-                    </tr>
-                    <tr>
-                      <td>EduTech SA</td>
-                      <td>Social</td>
-                      <td>500+ training hours delivered</td>
-                    </tr>
-                    <tr>
-                      <td>Clean Energy Co</td>
-                      <td>Environmental</td>
-                      <td>100% renewable energy usage</td>
-                    </tr>
-                    <tr>
-                      <td>Community Build</td>
-                      <td>Governance</td>
-                      <td>100% compliance rating</td>
-                    </tr>
-                  </tbody>
+            {/* BOTTOM - Full width table */}
+            <div className="bottom-full">
+              <div className="chart-container full-width">
+                <h3 className="chart-title">Co-Invest / Support Opportunities</h3>
+                <div className="table-container">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>SME</th>
+                        <th>Stage</th>
+                        <th>Ask</th>
+                        <th>Score</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>KZN AgroPack</td>
+                        <td>Growth</td>
+                        <td>R8m</td>
+                        <td>83</td>
+                      </tr>
+                      <tr>
+                        <td>Tech Innovate</td>
+                        <td>Early</td>
+                        <td>R5m</td>
+                        <td>79</td>
+                      </tr>
+                      <tr>
+                        <td>Green Manufacturing</td>
+                        <td>Mature</td>
+                        <td>R12m</td>
+                        <td>88</td>
+                      </tr>
+                      <tr>
+                        <td>Urban Solutions</td>
+                        <td>Growth</td>
+                        <td>R6m</td>
+                        <td>76</td>
+                      </tr>
+                      <tr>
+                        <td>Digital Finance Co</td>
+                        <td>Early</td>
+                        <td>R10m</td>
+                        <td>81</td>
+                      </tr>
+                    </tbody>
                 </table>
               </div>
             </div>
           </div>
         </div>
-      )
-    },
-    'Data Integrity & Trust Layer': {
-      icon: <FiShield />,
-      purpose: 'Ensure transparency, compliance, and auditability',
-      content: (
-        <div className="data-integrity">
-          <div className="section-header">
-            <SectionPurpose purpose="Ensure transparency, compliance, and auditability" />
-            <div className="section-controls">
-              <button 
-                className="download-section-btn"
-                onClick={() => setShowDownloadOptions(!showDownloadOptions)}
-              >
-                <FiDownload /> Download
-              </button>
-            </div>
-          </div>
-          
-          <div className="data-integrity-grid">
-            <div className="chart-container full-width">
-              <h3 className="chart-title">Compliance Verification Status</h3>
-              <div className="visual-description">Shows compliance per SME</div>
-              <div className="table-container">
-                <table className="data-table verification-table">
-                  <thead>
-                    <tr>
-                      <th>SME</th>
-                      <th>CIPC</th>
-                      <th>Tax</th>
-                      <th>KYC</th>
-                      <th>Audit Stamp</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td>FemmeTech Labs</td>
-                      <td><span className="status-badge verified">Verified</span></td>
-                      <td><span className="status-badge verified">Verified</span></td>
-                      <td><span className="status-badge verified">Verified</span></td>
-                      <td>2024-12-01</td>
-                    </tr>
-                    <tr>
-                      <td>Green Agro</td>
-                      <td><span className="status-badge verified">Verified</span></td>
-                      <td><span className="status-badge partial">Partial</span></td>
-                      <td><span className="status-badge verified">Verified</span></td>
-                      <td>2024-11-15</td>
-                    </tr>
-                    <tr>
-                      <td>Tech Innovate</td>
-                      <td><span className="status-badge unverified">Pending</span></td>
-                      <td><span className="status-badge verified">Verified</span></td>
-                      <td><span className="status-badge partial">Partial</span></td>
-                      <td>2024-12-10</td>
-                    </tr>
-                    <tr>
-                      <td>Urban Solutions</td>
-                      <td><span className="status-badge verified">Verified</span></td>
-                      <td><span className="status-badge verified">Verified</span></td>
-                      <td><span className="status-badge verified">Verified</span></td>
-                      <td>2024-10-22</td>
-                    </tr>
-                    <tr>
-                      <td>Service Provider</td>
-                      <td><span className="status-badge partial">Partial</span></td>
-                      <td><span className="status-badge unverified">Pending</span></td>
-                      <td><span className="status-badge verified">Verified</span></td>
-                      <td>2024-11-30</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <PieChartWithNumbers
-              title="Data Confidence Meter"
-              description="Highlights data reliability"
-              labels={['Verified', 'Partial', 'Unverified']}
-              data={[76, 18, 6]}
-              showEye={true}
-            />
-          </div>
-        </div>
+      </div>
       )
     }
   };
@@ -2823,7 +2559,18 @@ const MyInvestments = () => {
     backgroundColor: "#f8f9fa",
   });
 
-  const allCategories = Object.keys(sectionData);
+  const allCategories = [
+    'Portfolio Overview',
+    'Portfolio Composition', 
+    'Exit & Liquidity Metrics',
+    'Funder Health & Efficiency',
+    'Performance & Risk Dashboard',
+    'ESG & Impact Performance',
+    'Data Integrity & Trust Layer',
+    'Insights & AI Recommendations',
+    'Pipeline & Future Opportunities'
+  ];
+
   const topCategories = allCategories.slice(0, 5);
   const bottomCategories = allCategories.slice(5);
 

@@ -6,7 +6,6 @@
   padding: 20px;
   min-height: 100vh;
   background-color: #f9f9f9;
-  transition: margin-left 0.3s ease;
   margin-top: 60px;
 }
 
@@ -25,7 +24,7 @@
   padding-left: 10px;
 }
 
-/* Horizontal scrolling tabs - FIXED alignment to match section purpose */
+/* Horizontal scrolling tabs */
 .categories-scroll-container {
   width: 100%;
   overflow-x: auto;
@@ -56,7 +55,6 @@
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.3s ease;
   font-weight: 500;
   color: #5e3f26;
   display: flex;
@@ -66,11 +64,17 @@
   font-size: 14px;
   flex-shrink: 0;
   min-width: max-content;
+  /* REMOVE ALL ANIMATIONS */
+  transition: none !important;
+  animation: none !important;
+  transform: none !important;
 }
 
 .category-btn:hover {
   background-color: #d4c4b0;
-  transform: translateY(-2px);
+  /* NO TRANSFORM OR ANIMATION */
+  transform: none !important;
+  animation: none !important;
 }
 
 .category-btn.active {
@@ -78,6 +82,9 @@
   color: white;
   font-weight: 600;
   box-shadow: 0 4px 8px rgba(125, 90, 54, 0.3);
+  /* NO TRANSFORM OR ANIMATION */
+  transform: none !important;
+  animation: none !important;
 }
 
 .btn-icon {
@@ -90,7 +97,7 @@
   min-height: 600px;
 }
 
-/* Section Header - FIXED alignment */
+/* Section Header */
 .section-header {
   display: flex;
   justify-content: space-between;
@@ -139,8 +146,11 @@
   font-size: 11px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
   color: #666;
+  /* REMOVE ALL ANIMATIONS */
+  transition: none !important;
+  animation: none !important;
+  transform: none !important;
 }
 
 .time-view-btn.active {
@@ -150,10 +160,13 @@
 
 .time-view-btn:hover:not(.active) {
   background-color: #e0e0e0;
+  /* NO TRANSFORM OR ANIMATION */
+  transform: none !important;
+  animation: none !important;
 }
 
-/* Section Purpose - FIXED alignment */
-.section-purpose {
+/* Purpose */
+.purpose {
   background: white;
   border-radius: 8px;
   padding: 15px 20px;
@@ -182,13 +195,18 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  transition: all 0.3s ease;
   font-size: 14px;
+  /* REMOVE ALL ANIMATIONS */
+  transition: none !important;
+  animation: none !important;
+  transform: none !important;
 }
 
 .download-section-btn:hover {
   background: #5e3f26;
-  transform: translateY(-2px);
+  /* NO TRANSFORM OR ANIMATION */
+  transform: none !important;
+  animation: none !important;
 }
 
 /* Download Options */
@@ -236,13 +254,19 @@
   border-radius: 6px;
   cursor: pointer;
   font-weight: 500;
-  transition: all 0.3s ease;
   text-align: left;
+  /* REMOVE ALL ANIMATIONS */
+  transition: none !important;
+  animation: none !important;
+  transform: none !important;
 }
 
 .download-options-list button:hover {
   background: #7d5a36;
   color: white;
+  /* NO TRANSFORM OR ANIMATION */
+  transform: none !important;
+  animation: none !important;
 }
 
 .close-download {
@@ -254,15 +278,21 @@
   border-radius: 6px;
   cursor: pointer;
   font-weight: 500;
-  transition: all 0.3s ease;
+  /* REMOVE ALL ANIMATIONS */
+  transition: none !important;
+  animation: none !important;
+  transform: none !important;
 }
 
 .close-download:hover {
   background: #666;
   color: white;
+  /* NO TRANSFORM OR ANIMATION */
+  transform: none !important;
+  animation: none !important;
 }
 
-/* 4x4 Grid Layout for Portfolio Overview - FIXED consistent sizing */
+/* 4x4 Grid Layout for Portfolio Overview */
 .charts-grid-4x4 {
   display: flex;
   flex-direction: column;
@@ -297,19 +327,24 @@
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
-  transition: all 0.3s ease;
   flex-shrink: 0;
   width: 24px;
   height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
+  /* REMOVE ALL ANIMATIONS */
+  transition: none !important;
+  animation: none !important;
+  transform: none !important;
 }
 
 .breakdown-icon-btn:hover,
 .info-icon-btn:hover {
   background: #f0f0f0;
-  transform: scale(1.1);
+  /* NO TRANSFORM OR ANIMATION */
+  transform: none !important;
+  animation: none !important;
 }
 
 .breakdown-icon-btn.active {
@@ -317,7 +352,7 @@
   color: white;
 }
 
-/* Chart containers - FIXED consistent sizing */
+/* Chart containers - COMPLETELY REMOVE ALL HOVER ANIMATIONS AND TRANSFORMS */
 .chart-container {
   background: white;
   border-radius: 8px;
@@ -325,15 +360,23 @@
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
   display: flex;
   flex-direction: column;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-  height: 420px; /* Fixed consistent height for all charts */
+  height: 420px;
   position: relative;
   overflow: hidden;
+  /* COMPLETELY REMOVE ALL ANIMATIONS AND TRANSFORMS */
+  transition: none !important;
+  animation: none !important;
+  transform: none !important;
 }
 
+/* REMOVE HOVER EFFECTS THAT CAUSE MOVEMENT */
 .chart-container:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+  /* NO TRANSFORM OR ANIMATION - KEEP STATIC */
+  transform: none !important;
+  animation: none !important;
+  transition: none !important;
+  /* Keep only box-shadow change if needed */
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
 }
 
 .chart-container.full-width {
@@ -348,15 +391,28 @@
   margin-bottom: 10px;
 }
 
-/* ENHANCED: Ultra-compact chart area for Time-to-Fund, Follow-on Funding, and Exit/Repayment */
+/* Fixed chart title */
+.chart-title-fixed {
+  font-size: 14px;
+  font-weight: 600;
+  color: #7d5a36;
+  margin-bottom: 15px;
+  text-align: center;
+  padding: 8px 12px;
+  background: #f8f9fa;
+  border-radius: 4px;
+  border-left: 3px solid #7d5a36;
+}
+
+/* Ultra-compact chart area */
 .chart-area-ultra-compact {
   flex-grow: 1;
-  min-height: 280px; /* Increased height for better visibility */
+  min-height: 280px;
   position: relative;
   margin-bottom: 5px;
 }
 
-/* Chart Title - Consistent across all charts */
+/* Chart Title */
 .chart-title {
   margin: 0 0 10px 0;
   color: #5e3f26;
@@ -378,19 +434,13 @@
   margin-bottom: 15px;
   line-height: 1.4;
   font-style: italic;
+  background: #f8f9fa;
+  padding: 8px 12px;
+  border-radius: 4px;
+  border-left: 3px solid #7d5a36;
 }
 
-/* Chart Summary - Standard */
-.chart-summary {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 15px;
-  padding-top: 15px;
-  border-top: 1px solid #f0f0f0;
-}
-
-/* ENHANCED: Ultra-compact summary for Time-to-Fund, Follow-on Funding, and Exit/Repayment */
+/* Ultra-compact summary */
 .chart-summary-ultra-compact {
   display: flex;
   justify-content: space-between;
@@ -431,7 +481,7 @@
   color: #f44336;
 }
 
-/* NEW: BIG Score Infographic - FIXED summary layout */
+/* BIG Score Infographic */
 .big-score-simple {
   display: flex;
   flex-direction: column;
@@ -472,8 +522,7 @@
   font-weight: 500;
 }
 
-/* FIXED: BIG Score summary - average and target on same line */
-.big-score-summary {
+.chart-summary-compact {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -484,21 +533,7 @@
   border-top: 1px solid #e0e0e0;
 }
 
-.big-score-current {
-  font-weight: 600;
-  color: #5e3f26;
-  font-size: 13px;
-}
-
-.big-score-target-compact {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  color: #666;
-}
-
-/* NEW: Enhanced Funding Ready Infographic - FIXED summary layout */
+/* Enhanced Funding Ready Infographic */
 .funding-ready-simple {
   display: flex;
   flex-direction: column;
@@ -539,33 +574,7 @@
   font-weight: 500;
 }
 
-/* FIXED: Funding Ready summary - current and target on same line */
-.funding-ready-summary {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 15px;
-  padding: 12px 15px;
-  background: #f8f9fa;
-  border-radius: 6px;
-  border-top: 1px solid #e0e0e0;
-}
-
-.funding-ready-current {
-  font-weight: 600;
-  color: #5e3f26;
-  font-size: 13px;
-}
-
-.funding-ready-target {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  color: #666;
-}
-
-/* NEW: SME Graduation Infographic */
+/* SME Graduation Infographic */
 .graduation-simple {
   display: flex;
   flex-direction: column;
@@ -598,31 +607,6 @@
   color: #666;
   font-weight: 500;
   margin-bottom: 6px;
-}
-
-.graduation-summary {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 15px;
-  padding: 12px 15px;
-  background: #f8f9fa;
-  border-radius: 6px;
-  border-top: 1px solid #e0e0e0;
-}
-
-.graduation-current {
-  font-weight: 600;
-  color: #5e3f26;
-  font-size: 13px;
-}
-
-.graduation-target {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  color: #666;
 }
 
 /* Cost per SME Infographic */
@@ -660,105 +644,7 @@
   margin-bottom: 6px;
 }
 
-.cost-summary {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 15px;
-  padding: 12px 15px;
-  background: #f8f9fa;
-  border-radius: 6px;
-  border-top: 1px solid #e0e0e0;
-}
-
-.cost-current {
-  font-weight: 600;
-  color: #5e3f26;
-  font-size: 13px;
-}
-
-.cost-target {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  color: #666;
-}
-
-/* Remove all extra details from main charts */
-.big-score-components,
-.readiness-breakdown,
-.graduation-timeline,
-.cost-breakdown,
-.follow-on-details,
-.engagement-details {
-  display: none;
-}
-
-/* Breakdown Details - FIXED to not stretch chart */
-.breakdown-details {
-  margin-top: 15px;
-  padding: 15px;
-  background: #f8f9fa;
-  border-radius: 6px;
-  border-left: 3px solid #7d5a36;
-  position: relative;
-  z-index: 2;
-}
-
-.breakdown-details h4 {
-  margin: 0 0 10px 0;
-  color: #5e3f26;
-  font-size: 14px;
-}
-
-.breakdown-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.breakdown-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 4px 0;
-}
-
-.breakdown-label {
-  font-size: 12px;
-  color: #666;
-}
-
-.breakdown-value {
-  font-size: 12px;
-  font-weight: 600;
-  color: #5e3f26;
-}
-
-/* Grid layouts for other sections */
-.composition-charts-grid,
-.performance-charts-grid,
-.esg-charts-grid,
-.exit-charts-grid,
-.funder-charts-grid,
-.insights-charts-grid,
-.data-integrity-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: 20px;
-  padding: 0 10px;
-}
-
-/* Funder Health & Efficiency - 4 charts in one row */
-.funder-charts-grid-4x4 {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
-  padding: 0 10px;
-}
-
-/* Funnel Chart */
+/* Funnel Chart - REMOVE ALL HOVER ANIMATIONS */
 .funnel-container {
   display: flex;
   flex-direction: column;
@@ -781,13 +667,20 @@
   justify-content: space-between;
   padding: 0 15px;
   border-radius: 4px;
-  transition: all 0.3s ease;
   position: relative;
+  /* REMOVE ALL ANIMATIONS */
+  transition: none !important;
+  animation: none !important;
+  transform: none !important;
 }
 
+/* REMOVE HOVER EFFECTS THAT CAUSE MOVEMENT */
 .funnel-bar:hover {
-  transform: scale(1.02);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  /* NO TRANSFORM OR ANIMATION */
+  transform: none !important;
+  animation: none !important;
+  transition: none !important;
+  box-shadow: none !important;
 }
 
 .funnel-label {
@@ -804,33 +697,33 @@
   text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
 }
 
-/* Trend Alert Cards */
-.trend-alerts-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 15px;
-  margin-top: 15px;
-}
-
+/* Trend Alert Cards - REMOVE ALL HOVER ANIMATIONS */
 .trend-alert-card {
   background: white;
   border-radius: 8px;
   padding: 15px;
   border-left: 4px solid #4CAF50;
-  transition: all 0.3s ease;
   height: 120px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  /* REMOVE ALL ANIMATIONS */
+  transition: none !important;
+  animation: none !important;
+  transform: none !important;
 }
 
 .trend-alert-card.negative {
   border-left-color: #f44336;
 }
 
+/* REMOVE HOVER EFFECTS THAT CAUSE MOVEMENT */
 .trend-alert-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  /* NO TRANSFORM OR ANIMATION */
+  transform: none !important;
+  animation: none !important;
+  transition: none !important;
+  box-shadow: none !important;
 }
 
 .trend-alert-header {
@@ -880,10 +773,6 @@
   line-height: 1.3;
 }
 
-.trend-alert-sparkline {
-  height: 25px;
-}
-
 /* Tables */
 .table-container {
   overflow-x: auto;
@@ -913,6 +802,10 @@
 
 .data-table tr:hover {
   background-color: #f9f9f9;
+  /* NO TRANSFORM OR ANIMATION */
+  transform: none !important;
+  animation: none !important;
+  transition: none !important;
 }
 
 /* Status badges */
@@ -944,10 +837,18 @@
 /* Risk table specific styles */
 .risk-table tr:hover {
   background-color: #fff3f3;
+  /* NO TRANSFORM OR ANIMATION */
+  transform: none !important;
+  animation: none !important;
+  transition: none !important;
 }
 
 .verification-table tr:hover {
   background-color: #f9f9f9;
+  /* NO TRANSFORM OR ANIMATION */
+  transform: none !important;
+  animation: none !important;
+  transition: none !important;
 }
 
 /* Map container */
@@ -988,18 +889,6 @@
   overflow-y: auto;
   position: relative;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  animation: popupFadeIn 0.3s ease;
-}
-
-@keyframes popupFadeIn {
-  from {
-    opacity: 0;
-    transform: scale(0.9);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
 }
 
 .popup-close {
@@ -1013,12 +902,18 @@
   cursor: pointer;
   padding: 5px;
   border-radius: 4px;
-  transition: all 0.3s ease;
+  /* REMOVE ALL ANIMATIONS */
+  transition: none !important;
+  animation: none !important;
+  transform: none !important;
 }
 
 .popup-close:hover {
   background: #f0f0f0;
   color: #333;
+  /* NO TRANSFORM OR ANIMATION */
+  transform: none !important;
+  animation: none !important;
 }
 
 .popup-content {
@@ -1169,7 +1064,6 @@
 .component-progress-popup {
   height: 100%;
   border-radius: 5px;
-  transition: width 0.5s ease;
 }
 
 .readiness-stats-popup {
@@ -1248,81 +1142,55 @@
   height: 2px;
 }
 
-/* Responsive popup */
-@media (max-width: 768px) {
-  .popup-container {
-    padding: 20px;
-    max-width: 95%;
-  }
-  
-  .popup-content h3 {
-    font-size: 20px;
-  }
-  
-  .popup-chart {
-    height: 250px;
-  }
-  
-  .big-score-value,
-  .readiness-value,
-  .graduation-value {
-    font-size: 36px;
-  }
-  
-  .big-score-main-popup,
-  .readiness-main-popup,
-  .graduation-main-popup {
-    padding: 20px;
-  }
-  
-  .big-score-value-simple,
-  .readiness-value-simple,
-  .graduation-value-simple,
-  .cost-value-simple {
-    font-size: 32px;
-  }
+/* Grid layouts for other sections */
+.composition-charts-grid,
+.performance-charts-grid,
+.esg-charts-grid,
+.exit-charts-grid,
+.funder-charts-grid,
+.insights-charts-grid,
+.data-integrity-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 20px;
+  padding: 0 10px;
 }
 
-@media (max-width: 576px) {
-  .popup-container {
-    padding: 15px;
-  }
-  
-  .popup-content h3 {
-    font-size: 18px;
-  }
-  
-  .popup-chart {
-    height: 200px;
-  }
-  
-  .detail-item {
-    padding: 8px;
-    flex-direction: column;
-    gap: 4px;
-    align-items: flex-start;
-  }
-  
-  .big-score-value,
-  .readiness-value,
-  .graduation-value {
-    font-size: 28px;
-  }
-  
-  .big-score-value-simple,
-  .readiness-value-simple,
-  .graduation-value-simple,
-  .cost-value-simple {
-    font-size: 28px;
-  }
-  
-  .big-score-main-simple,
-  .readiness-main-simple,
-  .graduation-main-simple,
-  .cost-main-simple {
-    padding: 20px;
-    min-width: 150px;
-  }
+/* Funder Health & Efficiency - 4 charts in one row */
+.funder-charts-grid-4x4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  padding: 0 10px;
+}
+
+/* Chart area compact */
+.chart-area-compact {
+  flex-grow: 1;
+  min-height: 200px;
+  position: relative;
+  margin-bottom: 10px;
+}
+
+/* COMPLETELY DISABLE ALL CHART.JS ANIMATIONS */
+.chartjs-render-monitor {
+  animation: none !important;
+  transition: none !important;
+  transform: none !important;
+}
+
+.chart-area canvas {
+  animation: none !important;
+  transition: none !important;
+  transform: none !important;
+}
+
+/* Disable any potential hover animations on charts only */
+.chart-area *,
+.chart-area canvas * {
+  transition: none !important;
+  animation: none !important;
+  transform: none !important;
 }
 
 /* Ensure quarter labels are shown in charts */
@@ -1331,93 +1199,28 @@
   height: 100% !important;
 }
 
-/* ENHANCED STYLES FOR SPECIFIC CHARTS */
-/* Time-to-Fund, Follow-on Funding Rate, and Exit/Repayment Ratio specific enhancements */
-
-/* Make these specific charts taller */
-.chart-container .chart-area-ultra-compact {
-  min-height: 280px !important;
-  height: 280px !important;
+/* GLOBAL ANIMATION DISABLING - OVERRIDE ALL POSSIBLE ANIMATIONS */
+*,
+*::before,
+*::after {
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+  animation: none !important;
+  transition: none !important;
+  transform: none !important;
 }
 
-/* Enhanced summary layout for these specific charts */
-.chart-container .chart-summary-ultra-compact {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 15px;
-  padding: 15px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  border: 1px solid #e0e0e0;
+/* Trend alerts grid */
+.trend-alerts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 15px;
+  margin-top: 20px;
 }
 
-.chart-container .chart-summary-ultra-compact .current-value {
-  font-size: 14px;
-  font-weight: 700;
-  color: #5e3f26;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.chart-container .chart-summary-ultra-compact .target-value {
-  font-size: 13px;
-  font-weight: 600;
-  color: #7d5a36;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: white;
-  padding: 6px 12px;
-  border-radius: 6px;
-  border: 1px solid #d4c4b0;
-}
-
-/* Ensure proper spacing in the chart container */
-.chart-container {
-  display: flex;
-  flex-direction: column;
-}
-
-.chart-container .chart-area-ultra-compact {
-  flex: 1;
-}
-
-/* Specific styling for the enhanced charts */
-.enhanced-chart-container {
-  height: 450px !important; /* Increased height for these specific charts */
-}
-
-.enhanced-chart-container .chart-area-ultra-compact {
-  min-height: 320px !important;
-  height: 320px !important;
-}
-
-/* Legend positioning for these charts */
-.enhanced-chart-container .chartjs-legend {
-  margin-top: 15px;
-  margin-bottom: 10px;
-}
-
-/* FIXED: Ensure summary sections are visible and properly styled */
-.chart-summary-compact,
-.chart-summary-ultra-compact,
-.big-score-summary,
-.funding-ready-summary,
-.graduation-summary,
-.cost-summary {
-  display: flex !important;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 15px;
-  padding: 12px 15px;
-  background: #f8f9fa;
-  border-radius: 6px;
-  border-top: 1px solid #e0e0e0;
-}
-
-/* Enhanced responsive design */
+/* Responsive design */
 @media (max-width: 1200px) {
   .investments-container {
     margin-left: 200px;
@@ -1441,15 +1244,6 @@
   
   .chart-container {
     height: 400px;
-  }
-  
-  .enhanced-chart-container {
-    height: 420px !important;
-  }
-  
-  .enhanced-chart-container .chart-area-ultra-compact {
-    min-height: 290px !important;
-    height: 290px !important;
   }
 }
 
@@ -1476,15 +1270,6 @@
   .category-btn {
     padding: 10px 16px;
     font-size: 13px;
-  }
-  
-  .enhanced-chart-container {
-    height: 400px !important;
-  }
-  
-  .enhanced-chart-container .chart-area-ultra-compact {
-    min-height: 270px !important;
-    height: 270px !important;
   }
 }
 
@@ -1536,21 +1321,8 @@
     padding: 15px;
   }
   
-  .enhanced-chart-container {
-    height: 380px !important;
-  }
-  
-  .enhanced-chart-container .chart-area-ultra-compact {
-    min-height: 260px !important;
-    height: 260px !important;
-  }
-  
   .chart-summary-compact,
-  .chart-summary-ultra-compact,
-  .big-score-summary,
-  .funding-ready-summary,
-  .graduation-summary,
-  .cost-summary {
+  .chart-summary-ultra-compact {
     flex-direction: column;
     gap: 10px;
     align-items: stretch;
@@ -1559,15 +1331,7 @@
   .chart-summary-compact .current-value,
   .chart-summary-compact .target-value,
   .chart-summary-ultra-compact .current-value,
-  .chart-summary-ultra-compact .target-value,
-  .big-score-current,
-  .big-score-target-compact,
-  .funding-ready-current,
-  .funding-ready-target,
-  .graduation-current,
-  .graduation-target,
-  .cost-current,
-  .cost-target {
+  .chart-summary-ultra-compact .target-value {
     justify-content: center;
     text-align: center;
   }
@@ -1618,22 +1382,13 @@
     min-width: 50px;
   }
   
-  .section-purpose,
+  .purpose,
   .time-view-controls,
   .charts-grid-4x4,
   .composition-charts-grid,
   .performance-charts-grid,
   .esg-charts-grid {
     padding: 0 5px;
-  }
-  
-  .enhanced-chart-container {
-    height: 350px !important;
-  }
-  
-  .enhanced-chart-container .chart-area-ultra-compact {
-    min-height: 240px !important;
-    height: 240px !important;
   }
   
   .big-score-value-simple,
@@ -1689,45 +1444,6 @@
   }
 }
 
-/* Active SMEs Circle Chart specific styles */
-.active-smes-chart {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.active-smes-main {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.active-smes-summary {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 15px;
-  padding: 12px 15px;
-  background: #f8f9fa;
-  border-radius: 6px;
-  border-top: 1px solid #e0e0e0;
-}
-
-.active-smes-current {
-  font-weight: 600;
-  color: #5e3f26;
-  font-size: 13px;
-}
-
-.active-smes-target {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  color: #666;
-}
-
 /* Chart header with eye icon */
 .chart-header {
   display: flex;
@@ -1743,15 +1459,20 @@
   cursor: pointer;
   padding: 6px;
   border-radius: 4px;
-  transition: all 0.3s ease;
   width: 28px;
   height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
+  /* REMOVE ALL ANIMATIONS */
+  transition: none !important;
+  animation: none !important;
+  transform: none !important;
 }
 
 .breakdown-icon-btn:hover {
   background: #f0f0f0;
-  transform: scale(1.1);
+  /* NO TRANSFORM OR ANIMATION */
+  transform: none !important;
+  animation: none !important;
 }
