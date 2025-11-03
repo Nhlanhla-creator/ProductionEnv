@@ -101,6 +101,7 @@ const SuccessfulDealsTable = () => {
   const [deals, setDeals] = useState([])
   const [selectedDeal, setSelectedDeal] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [processedDeals, setProcessedDeals] = useState(new Set()) // Track processed deal IDs
 
   useEffect(() => {
     const fetchSuccessfulDeals = async () => {
@@ -110,109 +111,132 @@ const SuccessfulDealsTable = () => {
         const q = query(collection(db, "investorApplications"), where("pipelineStage", "==", "Deal Complete"))
 
         const unsubscribe = onSnapshot(q, async (querySnapshot) => {
-          console.log("[v0] Found successful deals:", querySnapshot.docs.length) // Added debug logging
+          console.log("[v0] Found successful deals:", querySnapshot.docs.length)
 
-          const successfulDeals = await Promise.all(
-            querySnapshot.docs.map(async (docSnap) => {
-              const data = docSnap.data()
-              console.log("[v0] Processing deal with smeId:", data.smeId) // Added debug logging
+          const newDeals = []
+          const newProcessedDeals = new Set(processedDeals)
 
-              try {
-                let profileData = {}
+          for (const docSnap of querySnapshot.docs) {
+            const data = docSnap.data()
+            
+            // Skip if we've already processed this deal
+            if (newProcessedDeals.has(docSnap.id)) {
+              continue
+            }
 
-                // First try with smeId as document ID
-                if (data.smeId) {
-                  const profileRef = doc(db, "universalProfiles", data.smeId)
-                  const profileSnap = await getDoc(profileRef)
+            console.log("[v0] Processing deal with smeId:", data.smeId)
 
-                  if (profileSnap.exists()) {
-                    profileData = profileSnap.data()
-                    console.log("[v0] Found profile data for smeId:", data.smeId, profileData.entityOverview) // Added debug logging
-                  } else {
-                    console.log("[v0] No profile found for smeId:", data.smeId) // Added debug logging
+            try {
+              let profileData = {}
+              let smeName = "Unnamed Business"
 
-                    // If not found, try with userId field
-                    if (data.userId) {
-                      const userProfileRef = doc(db, "universalProfiles", data.userId)
-                      const userProfileSnap = await getDoc(userProfileRef)
+              // First try with smeId as document ID
+              if (data.smeId) {
+                const profileRef = doc(db, "universalProfiles", data.smeId)
+                const profileSnap = await getDoc(profileRef)
 
-                      if (userProfileSnap.exists()) {
-                        profileData = userProfileSnap.data()
-                        console.log("[v0] Found profile data for userId:", data.userId) // Added debug logging
-                      }
+                if (profileSnap.exists()) {
+                  profileData = profileSnap.data()
+                  smeName = profileData.entityOverview?.tradingName || 
+                           profileData.entityOverview?.registeredName || 
+                           data.companyName || 
+                           data.smeName || 
+                           "Unnamed Business"
+                  console.log("[v0] Found profile data for smeId:", data.smeId, smeName)
+                } else {
+                  console.log("[v0] No profile found for smeId:", data.smeId)
+
+                  // If not found, try with userId field
+                  if (data.userId) {
+                    const userProfileRef = doc(db, "universalProfiles", data.userId)
+                    const userProfileSnap = await getDoc(userProfileRef)
+
+                    if (userProfileSnap.exists()) {
+                      profileData = userProfileSnap.data()
+                      smeName = profileData.entityOverview?.tradingName || 
+                               profileData.entityOverview?.registeredName || 
+                               data.companyName || 
+                               data.smeName || 
+                               "Unnamed Business"
+                      console.log("[v0] Found profile data for userId:", data.userId, smeName)
                     }
                   }
                 }
-
-                const smeName =
-                  profileData.entityOverview?.tradingName ||
-                  profileData.entityOverview?.registeredName ||
-                  data.companyName ||
-                  data.smeName ||
-                  "Unnamed Business"
-
-                const location =
-                  formatLabel(profileData.entityOverview?.location) || formatLabel(data.location) || "Not specified"
-
-                const sector =
-                  formatLabel(profileData.entityOverview?.economicSectors?.[0]) ||
-                  formatLabel(data.sector) ||
-                  "Not specified"
-
-                const teamSize = profileData.entityOverview?.employeeCount || data.teamSize || "Not specified"
-
-                console.log("[v0] Final deal data:", { smeName, location, sector, teamSize }) // Added debug logging
-
-                return {
-                  id: docSnap.id,
-                  smeName,
-                  dealAmount: data.fundingDetails?.amountApproved || data.fundingRequired || "Not specified",
-                  dealType: data.fundingDetails?.investmentType || data.investmentType || "equity", // Added fallback
-                  completionDate: data.updatedAt || data.createdAt,
-                  sector,
-                  dealStructure: data.fundingDetails?.paymentDeployment || "Not specified",
-                  dealDuration: "Not specified",
-                  supportProvided: "Funding and Strategic Support",
-                  currentStatus: "Active Investment",
-                  roi: "Pending",
-                  exitStrategy: "To be determined",
-                  location,
-                  teamSize,
-                  revenueGrowth: "Pending",
-                  fundingDetails: data.fundingDetails || {},
-                }
-              } catch (error) {
-                console.error("[v0] Error fetching profile for deal:", data.smeId, error) // Enhanced error logging
-                return {
-                  id: docSnap.id,
-                  smeName: data.companyName || data.smeName || "Unnamed Business", // Added companyName fallback
-                  dealAmount: data.fundingDetails?.amountApproved || data.fundingRequired || "Not specified",
-                  dealType: data.fundingDetails?.investmentType || data.investmentType || "equity",
-                  completionDate: data.updatedAt || data.createdAt,
-                  sector: formatLabel(data.sector) || "Not specified", // Added direct data fallback
-                  dealStructure: data.fundingDetails?.paymentDeployment || "Not specified",
-                  dealDuration: "Not specified",
-                  supportProvided: "Funding and Strategic Support",
-                  currentStatus: "Active Investment",
-                  roi: "Pending",
-                  exitStrategy: "To be determined",
-                  location: formatLabel(data.location) || "Not specified", // Added direct data fallback
-                  teamSize: data.teamSize || "Not specified", // Added direct data fallback
-                  revenueGrowth: "Pending",
-                  fundingDetails: data.fundingDetails || {},
-                }
               }
-            }),
-          )
 
-          console.log("[v0] Final successful deals:", successfulDeals) // Added debug logging
-          setDeals(successfulDeals)
+              // If we still don't have a proper name, use available data
+              if (smeName === "Unnamed Business") {
+                smeName = data.companyName || data.smeName || "Unnamed Business"
+              }
+
+              const location = formatLabel(profileData.entityOverview?.location) || formatLabel(data.location) || "Not specified"
+              const sector = formatLabel(profileData.entityOverview?.economicSectors?.[0]) || formatLabel(data.sector) || "Not specified"
+              const teamSize = profileData.entityOverview?.employeeCount || data.teamSize || "Not specified"
+
+              console.log("[v0] Final deal data:", { smeName, location, sector, teamSize })
+
+              const deal = {
+                id: docSnap.id,
+                smeName,
+                dealAmount: data.fundingDetails?.amountApproved || data.fundingRequired || "Not specified",
+                dealType: data.fundingDetails?.investmentType || data.investmentType || "equity",
+                completionDate: data.updatedAt || data.createdAt,
+                sector,
+                dealStructure: data.fundingDetails?.paymentDeployment || "Not specified",
+                dealDuration: "Not specified",
+                supportProvided: "Funding and Strategic Support",
+                currentStatus: "Active Investment",
+                roi: "Pending",
+                exitStrategy: "To be determined",
+                location,
+                teamSize,
+                revenueGrowth: "Pending",
+                fundingDetails: data.fundingDetails || {},
+              }
+
+              newDeals.push(deal)
+              newProcessedDeals.add(docSnap.id)
+
+            } catch (error) {
+              console.error("[v0] Error fetching profile for deal:", data.smeId, error)
+              const fallbackDeal = {
+                id: docSnap.id,
+                smeName: data.companyName || data.smeName || "Unnamed Business",
+                dealAmount: data.fundingDetails?.amountApproved || data.fundingRequired || "Not specified",
+                dealType: data.fundingDetails?.investmentType || data.investmentType || "equity",
+                completionDate: data.updatedAt || data.createdAt,
+                sector: formatLabel(data.sector) || "Not specified",
+                dealStructure: data.fundingDetails?.paymentDeployment || "Not specified",
+                dealDuration: "Not specified",
+                supportProvided: "Funding and Strategic Support",
+                currentStatus: "Active Investment",
+                roi: "Pending",
+                exitStrategy: "To be determined",
+                location: formatLabel(data.location) || "Not specified",
+                teamSize: data.teamSize || "Not specified",
+                revenueGrowth: "Pending",
+                fundingDetails: data.fundingDetails || {},
+              }
+              newDeals.push(fallbackDeal)
+              newProcessedDeals.add(docSnap.id)
+            }
+          }
+
+          // Only update if we have new deals to prevent infinite re-renders
+          if (newDeals.length > 0) {
+            setDeals(prev => {
+              const updatedDeals = [...newDeals, ...prev.filter(deal => !newProcessedDeals.has(deal.id))]
+              return updatedDeals.slice(0, 50) // Keep only latest 50 deals
+            })
+            setProcessedDeals(newProcessedDeals)
+          }
+          
           setLoading(false)
         })
 
         return () => unsubscribe()
       } catch (error) {
-        console.error("[v0] Error fetching successful deals:", error) // Enhanced error logging
+        console.error("[v0] Error fetching successful deals:", error)
         setLoading(false)
       }
     }
@@ -830,8 +854,8 @@ const InvestorTabbedTables = ({ filters, stageFilter, activeTab, setActiveTab, o
     gap: "8px",
   })
 
-  // Calculate counts for tab badges (you can make these dynamic)
-  const smeOpportunitiesCount = 8 // This would come from your actual data
+  // Calculate counts for tab badges
+  const smeOpportunitiesCount = 8
   const [portfolioCompaniesCount, setPortfolioCompaniesCount] = useState(0)
 
   useEffect(() => {

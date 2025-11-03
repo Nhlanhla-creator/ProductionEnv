@@ -362,6 +362,24 @@ useEffect(() => {
   setLoading(true)
   setAuthLoading(true)
 
+  // Track processed applications across sessions
+  const processedAppsKey = `investorProcessedApplications_${auth.currentUser?.uid}`;
+  const getProcessedApplications = () => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem(processedAppsKey) || '[]'));
+    } catch {
+      return new Set();
+    }
+  };
+  
+  const saveProcessedApplications = (processedSet) => {
+    try {
+      localStorage.setItem(processedAppsKey, JSON.stringify([...processedSet]));
+    } catch (error) {
+      console.error('Error saving processed applications:', error);
+    }
+  };
+
   const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
     setUser(currentUser)
     setAuthLoading(false)
@@ -386,18 +404,23 @@ useEffect(() => {
       const unsubscribeData = onSnapshot(q, async (querySnapshot) => {
         try {
           const stagesFromFirestore = {}
+          const processedApplications = getProcessedApplications();
+          const newProcessedApplications = new Set(processedApplications);
+          
           const fetchWithProfiles = await Promise.all(
             querySnapshot.docs.map(async (docSnap) => {
               const data = docSnap.data()
 
-              // Check if this is a new application
-              const isNew = !smes.some((sme) => sme.id === docSnap.id)
-              if (isNew) {
+              // Check if this is a genuinely new application
+              const isNew = !processedApplications.has(docSnap.id);
+              if (isNew && data.smeName) {
                 addInvestorNotification(
-                  `New application received from ${data.smeName || "an SME"}`,
+                  `New application received from ${data.smeName}`,
                   "new_application",
                   docSnap.id,
-                )
+                  data.smeName
+                );
+                newProcessedApplications.add(docSnap.id);
               }
 
               // Convert date fields if needed
@@ -443,7 +466,7 @@ useEffect(() => {
                     bigScore: Math.floor(Math.random() * 30) + 70,
                     smeName: profileData.entityOverview?.tradingName ||
                       profileData.entityOverview?.registeredName ||
-                      "Unnamed Business",
+                      data.smeName || "Unnamed Business",
                     supportRequired: formatLabel(profileData.applicationOverview?.supportFormat),
                     location: formatLabel(profileData.entityOverview?.location),
                     gurantees: formatLabel(profileData.guarantees),
@@ -460,7 +483,7 @@ useEffect(() => {
                     pipelineStage: data.pipelineStage || null,
                     revenue: `R${Number(profileData.financialOverview?.annualRevenue || 0).toLocaleString()}`,
                     teamSize: profileData.entityOverview?.employeeCount || "N/A",
-                    matchPercentage: matchPercentage, // Add match percentage
+                    matchPercentage: matchPercentage,
                   }
                 }
               } catch (error) {
@@ -472,10 +495,12 @@ useEffect(() => {
                 id: docSnap.id,
                 ...data,
                 matchPercentage: 0,
-                // ... other fields
               }
             }),
           )
+
+          // Save processed applications to localStorage
+          saveProcessedApplications(newProcessedApplications);
 
           // Sort and update state
           fetchWithProfiles.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
