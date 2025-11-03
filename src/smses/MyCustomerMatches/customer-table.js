@@ -16,6 +16,7 @@ import {
 import { db } from "../../firebaseConfig"
 import { getAuth } from "firebase/auth"
 import { DayPicker } from "react-day-picker"
+import CustomerDetailsModal from "./CustomerDetailsModal"
 import "react-day-picker/dist/style.module.css"
 import { FileText, MessageCircle, Filter, Download, Send, FileIcon, Calendar, Check, Eye } from "lucide-react"
 
@@ -419,6 +420,8 @@ export function CustomerTable() {
   const [universalProfiles, setUniversalProfiles] = useState([])
   const [productProfiles, setProductProfiles] = useState([])
   const [currentUserApplication, setCurrentUserApplication] = useState(null)
+  const [showCustomerModal, setShowCustomerModal] = useState(false)
+  const [selectedCustomer, setSelectedCustomer] = useState(null)
 
 
   function calculateMatchScore(application, supplier, ratingsData = null) {
@@ -1221,8 +1224,8 @@ export function CustomerTable() {
   })
 
   const handleViewDetails = (application) => {
-    setSelectedApplication(application)
-    setShowModal(true)
+    setSelectedCustomer(application)
+    setShowCustomerModal(true)
   }
 
   const handleViewDocuments = (application) => {
@@ -2465,6 +2468,8 @@ export function CustomerTable() {
           document.body,
         )}
 
+
+
       {/* Shortlist Modal */}
       {mounted &&
         showShortlistModal &&
@@ -2864,6 +2869,15 @@ export function CustomerTable() {
           </div>,
           document.body,
         )}
+
+      {/* Customer Details Modal */}
+      {mounted && showCustomerModal && selectedCustomer && (
+        <CustomerDetailsModal
+          customer={selectedCustomer}
+          isOpen={showCustomerModal}
+          onClose={() => setShowCustomerModal(false)}
+        />
+      )}
 
       {/* Documents Modal */}
       {mounted &&

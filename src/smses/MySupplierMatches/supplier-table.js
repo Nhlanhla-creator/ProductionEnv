@@ -23,6 +23,7 @@ import { useNavigate } from "react-router-dom"
 import emailjs from '@emailjs/browser'
 import { API_KEYS } from "../../API"
 import SupplierDetailsModal from './SupplierDetailsModal'
+
 import { findSynonyms, expandSearchTerms, containsTermOrSynonyms } from '../../utils/synonyms';
 
 // Status definitions with brown color scheme
