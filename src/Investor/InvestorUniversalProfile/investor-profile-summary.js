@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { ChevronDown,  ChevronUp, Edit, Printer, Check, Star, Shield, TrendingUp, User, Mail, Building, Briefcase, FileText, CheckSquare } from 'lucide-react'
+import { ChevronDown, ChevronUp, Edit, Printer, Check, Star, Shield, TrendingUp, User, Mail, Building, Briefcase, FileText, CheckSquare } from 'lucide-react'
 import { createPortal } from 'react-dom'
 
 import VerificationScoreCard from './VerificationScoreCard'
@@ -38,19 +38,19 @@ const InvestorProfileSummary = ({ data, onEdit }) => {
   }
 
   const renderDocsStatus = () => {
-    // Mock documents list for this example
+    // Use the same documents list as the upload component
     const documentsList = [
-      { id: 'businessRegistration', label: 'Business Registration Certificate', required: true },
-      { id: 'taxClearance', label: 'Tax Clearance Certificate', required: true },
-      { id: 'proofOfAddress', label: 'Proof of Address', required: true },
-      { id: 'identityDocument', label: 'Identity Document', required: true },
-      { id: 'financialStatements', label: 'Financial Statements', required: false }
+      { id: 'registrationDocs', label: 'Company Registration Documents', required: true },
+      { id: 'idOffund', label: 'ID of Fund Lead', required: true },
+      { id: 'fundMandate', label: 'Investment Mandate or Programme Brochures', required: true },
     ]
 
     return documentsList
       .filter((doc) => doc.required)
       .map((doc, idx) => {
-        const uploaded = data?.documentUpload?.[doc.id]?.length > 0
+        const uploadedFiles = data?.documentUpload?.[doc.id]
+        const isUploaded = uploadedFiles && uploadedFiles.length > 0
+
         return (
           <div key={idx} style={{
             background: 'rgba(250, 247, 242, 0.8)',
@@ -81,9 +81,10 @@ const InvestorProfileSummary = ({ data, onEdit }) => {
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '8px'
+              gap: '8px',
+              marginBottom: isUploaded ? '8px' : '0'
             }}>
-              {uploaded ? (
+              {isUploaded ? (
                 <>
                   <Check size={16} color="#a67c52" />
                   <span style={{ color: '#4a352f', fontWeight: '500' }}>Uploaded</span>
@@ -92,6 +93,39 @@ const InvestorProfileSummary = ({ data, onEdit }) => {
                 <span style={{ color: '#7d5a50', fontStyle: 'italic' }}>Not uploaded</span>
               )}
             </div>
+
+            {/* Show uploaded file names */}
+            {isUploaded && (
+              <div style={{
+                marginTop: '8px',
+                padding: '8px',
+                backgroundColor: 'rgba(166, 124, 82, 0.1)',
+                borderRadius: '6px'
+              }}>
+                <span style={{
+                  fontSize: "12px",
+                  color: "#7d5a50",
+                  fontWeight: "500",
+                  display: "block",
+                  marginBottom: "4px"
+                }}>
+                  Uploaded files:
+                </span>
+                {uploadedFiles.map((file, fileIndex) => (
+                  <div key={fileIndex} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '11px',
+                    color: '#4a352f',
+                    marginBottom: '2px'
+                  }}>
+                    <FileText size={12} />
+                    <span>{file.name || `File ${fileIndex + 1}`}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )
       })
