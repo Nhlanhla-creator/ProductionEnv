@@ -72,43 +72,52 @@ const VerificationScoreCard = ({ profileData }) => {
     };
 
     const getTierInfo = (score) => {
-        const isVerified = score >= 70; // Verified if score is 70 or higher
+        // Updated tier thresholds to be more reasonable
+        const isVerified = score >= 60; // Verified if score is 60 or higher
 
-        if (score >= 85) return {
+        if (score >= 80) return {
             status: "Verified",
             badge: "🟢",
             tier: "Tier 1",
-            description: "Fully Verified",
+            description: "Fully Verified - Complete Profile",
             color: 'linear-gradient(135deg, #4CAF50, #2E7D32)'
         };
-        if (score >= 70) return {
+        if (score >= 60) return {
             status: "Verified",
             badge: "🔵",
             tier: "Tier 2",
-            description: "Mostly Complete",
+            description: "Mostly Complete - Good Standing",
             color: 'linear-gradient(135deg, #2196F3, #1565C0)'
         };
-        if (score >= 50) return {
-            status: "Not Verified",
+        if (score >= 40) return {
+            status: "Partially Verified",
             badge: "🟡",
             tier: "Tier 3",
-            description: "Partially Verified",
-            color: 'linear-gradient(135deg, #9E9E9E, #616161)'
+            description: "Partially Complete - Needs More Info",
+            color: 'linear-gradient(135deg, #FF9800, #F57C00)'
+        };
+        if (score >= 20) return {
+            status: "Not Verified",
+            badge: "🟠",
+            tier: "Tier 4",
+            description: "Basic Info Provided",
+            color: 'linear-gradient(135deg, #FF5722, #D84315)'
         };
         return {
             status: "Not Verified",
             badge: "🔴",
-            tier: "Tier 4",
-            description: "Incomplete",
+            tier: "Tier 5",
+            description: "Minimal Information",
             color: 'linear-gradient(135deg, #F44336, #C62828)'
         };
     };
 
     const getScoreColor = (score) => {
-        const tier = getTierInfo(score).name;
+        const tier = getTierInfo(score).tier;
         if (tier === "Tier 1") return 'linear-gradient(135deg, #4CAF50, #2E7D32)';
         if (tier === "Tier 2") return 'linear-gradient(135deg, #2196F3, #1565C0)';
-        if (tier === "Tier 3") return 'linear-gradient(135deg, #9E9E9E, #616161)';
+        if (tier === "Tier 3") return 'linear-gradient(135deg, #FF9800, #F57C00)';
+        if (tier === "Tier 4") return 'linear-gradient(135deg, #FF5722, #D84315)';
         return 'linear-gradient(135deg, #F44336, #C62828)';
     };
 
@@ -216,7 +225,7 @@ const VerificationScoreCard = ({ profileData }) => {
                         </h3>
                     </div>
 
-                    {/* Score Display - Updated: Removed percentage from circle */}
+                    {/* Score Display */}
                     <div style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -240,7 +249,7 @@ const VerificationScoreCard = ({ profileData }) => {
                             color: getScoreTextColor(),
                             boxShadow: '0 8px 24px rgba(0,0,0,0.1)'
                         }}>
-                            {/* Percentage removed - now just an empty colored circle */}
+                        
                         </div>
                         <div>
                             <div style={{
@@ -265,6 +274,14 @@ const VerificationScoreCard = ({ profileData }) => {
                                 fontSize: '14px'
                             }}>
                                 {tierInfo.description}
+                            </p>
+                            <p style={{
+                                margin: '4px 0 0 0',
+                                color: '#7d5a50',
+                                fontSize: '12px',
+                                fontWeight: '500'
+                            }}>
+                               
                             </p>
                         </div>
                     </div>
@@ -408,32 +425,39 @@ const VerificationScoreCard = ({ profileData }) => {
                         }}>
                             {[
                                 {
-                                    min: 85,
+                                    min: 80,
                                     badge: "🟢",
                                     name: "Tier 1: Fully Verified",
                                     desc: "Complete profile with all documentation. Highest priority for matching.",
-                                    current: verificationScore >= 85
+                                    current: verificationScore >= 80
                                 },
                                 {
-                                    min: 70,
+                                    min: 60,
                                     badge: "🔵",
                                     name: "Tier 2: Mostly Complete",
                                     desc: "Most required information provided. Good match candidate.",
-                                    current: verificationScore >= 70 && verificationScore < 85
+                                    current: verificationScore >= 60 && verificationScore < 80
                                 },
                                 {
-                                    min: 50,
+                                    min: 40,
                                     badge: "🟡",
                                     name: "Tier 3: Partially Verified",
                                     desc: "Basic information available but needs more documentation.",
-                                    current: verificationScore >= 50 && verificationScore < 70
+                                    current: verificationScore >= 40 && verificationScore < 60
+                                },
+                                {
+                                    min: 20,
+                                    badge: "🟠",
+                                    name: "Tier 4: Basic Information",
+                                    desc: "Some essential information provided but significant gaps remain.",
+                                    current: verificationScore >= 20 && verificationScore < 40
                                 },
                                 {
                                     min: 0,
                                     badge: "🔴",
-                                    name: "Tier 4: Incomplete",
+                                    name: "Tier 5: Incomplete",
                                     desc: "Minimal information provided. Limited matching eligibility.",
-                                    current: verificationScore < 50
+                                    current: verificationScore < 20
                                 }
                             ].map((tier, i) => (
                                 <div key={i} style={{
@@ -533,7 +557,7 @@ const VerificationScoreCard = ({ profileData }) => {
                         borderRadius: '50%',
                         animation: 'spin 3s linear infinite'
                     }} />
-                    {/* Percentage removed - now just an empty colored circle */}
+                  
                 </div>
 
                 <div style={{ flex: 1 }}>
