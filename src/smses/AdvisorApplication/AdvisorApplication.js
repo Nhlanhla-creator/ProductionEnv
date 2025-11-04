@@ -3,9 +3,8 @@
 import { useState, useEffect } from "react"
 import "./AdvisoryApplication.css"
 import { CheckCircle, ChevronRight, X, ArrowRight } from "lucide-react"
-//import { renderSMEProfileSnapshot } from "./sme-profile-snapshot"
-import { renderAdvisoryNeedsAssessment } from "./advisory-needs-assessment"
-import { renderUrgencyTimeline } from "./urgency-timeline"
+import  renderAdvisoryNeedsAssessment from "./advisory-needs-assessment"
+
 import { renderDocumentUploads } from "./document-uploads"
 import ApplicationSummary from "./application-summary"
 import { updateDoc, doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore"
@@ -16,18 +15,11 @@ import { db, auth } from "../../firebaseConfig"
 
 // Updated sections to match new structure
 export const sections = [
-  // {
-  //   id: "smeProfileSnapshot",
-  //   label: "SME Profile\nSnapshot",
-  // },
   {
     id: "advisoryNeedsAssessment",
     label: "Advisory Needs\nAssessment",
   },
-  {
-    id: "urgencyTimeline",
-    label: "Urgency &\nTimeline",
-  },
+ 
   {
     id: "documentUploads",
     label: "Document\nUploads",
@@ -43,22 +35,12 @@ const onboardingSteps = [
     icon: "🤝",
   },
   {
-    title: "Step 1: SME Profile Snapshot",
-    content: "We'll start with your basic company information that's auto-pulled from your existing data.",
-    icon: "📋",
-  },
-  {
-    title: "Step 2: Advisory Needs Assessment",
+    title: "Step 1: Advisory Needs Assessment",
     content: "Tell us about the specific type of advisory support you need and your engagement preferences.",
     icon: "🎯",
   },
   {
-    title: "Step 3: Urgency & Timeline",
-    content: "Let us know when you need to start and how long you expect the engagement to last.",
-    icon: "⏰",
-  },
-  {
-    title: "Step 4: Document Uploads",
+    title: "Step 2: Document Uploads",
     content: "Upload any relevant documents that will help us make better matches.",
     icon: "📄",
   },
@@ -83,30 +65,26 @@ export default function FundingApplication() {
 
   // Section validations
   const sectionValidations = {
-    // smeProfileSnapshot: (data) => {
-    //   return data?.companyName && data?.sector && data?.businessStage && data?.currentPISScore
-    // },
     advisoryNeedsAssessment: (data) => {
-      const hasAdvisoryRole = data?.advisoryRole
-      const hasSupportFocus = data?.supportFocus && data.supportFocus.length > 0
+      const hasAdvisors = data?.advisors && data.advisors.length > 0
       const hasTimeCommitment = data?.timeCommitment
       const hasCompensationType = data?.compensationType
       const hasMeetingFormat = data?.meetingFormat
+      const hasStartDate = data?.startDate
+      const hasProjectDuration = data?.projectDuration
 
       // If meeting format is in-person, province is required
       const provinceValid = data?.meetingFormat !== "in-person" || data?.province
 
       return (
-        hasAdvisoryRole &&
-        hasSupportFocus &&
+        hasAdvisors &&
         hasTimeCommitment &&
         hasCompensationType &&
         hasMeetingFormat &&
-        provinceValid
+        provinceValid &&
+        hasStartDate &&
+        hasProjectDuration
       )
-    },
-    urgencyTimeline: (data) => {
-      return data?.startDate && data?.projectDuration
     },
     documentUploads: (data) => {
       // For advisory applications, document uploads are optional
@@ -116,21 +94,12 @@ export default function FundingApplication() {
   }
 
   const [completedSections, setCompletedSections] = useState({
-    //  smeProfileSnapshot: false,
     advisoryNeedsAssessment: false,
-    urgencyTimeline: false,
     documentUploads: false,
   })
 
   const [formData, setFormData] = useState({
-    // smeProfileSnapshot: {
-    //   companyName: "Auto-filled Company Name",
-    //   sector: "",
-    //   businessStage: "",
-    //   currentPISScore: "45/100 – Governance Gap Detected",
-    // },
     advisoryNeedsAssessment: {},
-    urgencyTimeline: {},
     documentUploads: {},
   })
 
@@ -218,9 +187,7 @@ export default function FundingApplication() {
 
         // Restore form data
         setFormData({
-          //smeProfileSnapshot: data.smeProfileSnapshot || formData.smeProfileSnapshot,
           advisoryNeedsAssessment: data.advisoryNeedsAssessment || {},
-          urgencyTimeline: data.urgencyTimeline || {},
           documentUploads: data.documentUploads || {},
         })
 
@@ -404,16 +371,13 @@ export default function FundingApplication() {
 
   const renderActiveSection = () => {
     switch (activeSection) {
-      // case "smeProfileSnapshot":
-      //   return renderSMEProfileSnapshot(formData.smeProfileSnapshot, updateFormData)
       case "advisoryNeedsAssessment":
         return renderAdvisoryNeedsAssessment(formData.advisoryNeedsAssessment, updateFormData)
-      case "urgencyTimeline":
-        return renderUrgencyTimeline(formData.urgencyTimeline, updateFormData)
+  
       case "documentUploads":
         return renderDocumentUploads(formData.documentUploads, updateFormData)
       default:
-      //     return renderSMEProfileSnapshot(formData.smeProfileSnapshot, updateFormData)
+        return null
     }
   }
 
@@ -458,7 +422,7 @@ export default function FundingApplication() {
     minHeight: "100vh",
     maxWidth: "100vw",
     overflowX: "hidden",
-    padding: `80px 10px 20px ${isSidebarCollapsed ? "80px" : "280px"}`,
+    padding: "0",
     margin: "0",
     boxSizing: "border-box",
     position: "relative",
@@ -517,7 +481,9 @@ export default function FundingApplication() {
         <div
           style={{
             position: "fixed",
-          
+            top: "100px",
+            right: "20px",
+            padding: "10px 15px",
             borderRadius: "4px",
             backgroundColor: saveStatus === "saved" ? "#d4edda" : saveStatus === "error" ? "#f8d7da" : "#fff3cd",
             color: saveStatus === "saved" ? "#155724" : saveStatus === "error" ? "#721c24" : "#856404",
@@ -751,95 +717,57 @@ export default function FundingApplication() {
         </div>
       )}
 
-      <h1
-        style={{
-          width: "100%",
-          textAlign: "center",
-          margin: "20px 0",
-          fontSize: "clamp(1.5rem, 4vw, 2.5rem)",
-          lineHeight: "1.2",
-          wordBreak: "break-word",
-        }}
-      >
-        Advisory Matching Application
-      </h1>
-
+      {/* Application Header */}
       <div
         style={{
-          width: "100%",
-          maxWidth: "100%",
-          overflowX: "auto",
-          padding: "10px 0",
-          margin: "20px 0",
-          boxSizing: "border-box",
+          textAlign: "center",
+          marginBottom: "30px",
+          padding: "0 20px",
         }}
-        className="profile-tracker"
+        className="application-header"
       >
-        <div
+        <h1
           style={{
-            display: "flex",
-            gap: "8px",
-            justifyContent: "center",
-            alignItems: "center",
-            minWidth: "max-content",
-            padding: "0 10px",
-            flexWrap: "wrap",
+            fontSize: "clamp(1.5rem, 4vw, 2.5rem)",
+            lineHeight: "1.2",
+            margin: "0 0 10px 0",
+            wordBreak: "break-word",
           }}
-          className="profile-tracker-inner"
         >
-          {sections.map((section) => (
-            <button
-              key={section.id}
-              onClick={() => setActiveSection(section.id)}
-              style={{
-                minWidth: "100px",
-                maxWidth: "140px",
-                padding: "10px 8px",
-                fontSize: "clamp(0.7rem, 1.5vw, 0.9rem)",
-                lineHeight: "1.2",
-                textAlign: "center",
-                cursor: "pointer",
-                transition: "all 0.3s ease",
-                wordBreak: "break-word",
-                hyphens: "auto",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                position: "relative",
-                minHeight: "60px",
-              }}
-              className={`profile-tracker-button ${
-                activeSection === section.id ? "active" : completedSections[section.id] ? "completed" : "pending"
-              }`}
-            >
-              {section.label.split("\n").map((line, i) => (
-                <span key={i} className="tracker-label-line" style={{ display: "block", margin: "1px 0" }}>
-                  {line}
-                </span>
-              ))}
-              {completedSections[section.id] && (
-                <CheckCircle
-                  style={{
-                    position: "absolute",
-                    top: "2px",
-                    right: "2px",
-                    width: "16px",
-                    height: "16px",
-                  }}
-                  className="check-icon"
-                />
-              )}
-            </button>
-          ))}
-        </div>
+          Advisory Matching Application
+        </h1>
+        <p
+          style={{
+            fontSize: "clamp(0.9rem, 2vw, 1.1rem)",
+            color: "#666",
+            margin: "0",
+            lineHeight: "1.4",
+          }}
+        >
+          Complete all sections to submit your application
+        </p>
       </div>
 
+      {/* Section Tracker */}
+      <div className="section-tracker">
+        {sections.map((section) => (
+          <button
+            key={section.id}
+            onClick={() => setActiveSection(section.id)}
+            className={`section-button ${activeSection === section.id ? "active" : ""} ${completedSections[section.id] ? "completed" : ""}`}
+          >
+            <span className="section-label">{section.label}</span>
+            {completedSections[section.id] && <CheckCircle size={16} className="completed-icon" />}
+          </button>
+        ))}
+      </div>
+
+      {/* Section Content */}
       <div
         style={{
           width: "100%",
           maxWidth: "100%",
-          padding: "20px",
+          padding: "40px",
           margin: "0 auto",
           backgroundColor: "white",
           borderRadius: "8px",

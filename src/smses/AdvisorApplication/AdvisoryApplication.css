@@ -1,4 +1,3 @@
-
 .tooltip-container {
   position: relative;
   display: inline-block;
@@ -25,6 +24,7 @@
   visibility: visible;
   opacity: 1;
 }
+
 .funding-application-container {
   
   --up-brown-50: #f8f5f2;
@@ -57,7 +57,7 @@
   color: var(--up-brown-900);
   line-height: 1.6;
   min-height: 100vh;
-background-image: url('../../assets/BiGBackround.png'); 
+  background-image: url('../../assets/BiGBackround.png'); 
   background-size: cover;
   background-repeat: no-repeat;
   background-position: center;
@@ -142,198 +142,90 @@ background-image: url('../../assets/BiGBackround.png');
 }
 
 
-.funding-application-container .profile-tracker {
-  width: 100%;
-  overflow-x: auto;
-  margin-bottom: 2rem;
-  padding: 1rem 0;
-  scrollbar-width: thin;
-  scrollbar-color: var(--up-brown-600) var(--up-brown-50);
-  position: relative;
-}
-
-.funding-application-container .profile-tracker:before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--up-brown-200) 20%, var(--up-brown-200) 80%, transparent);
-}
-
-.funding-application-container .profile-tracker:-webkit-scrollbar {
-  height: 8px;
-}
-
-.funding-application-container .profile-tracker:-webkit-scrollbar-track {
-  background: var(--up-brown-50);
-  border-radius: 4px;
-}
-
-.funding-application-container .profile-tracker:-webkit-scrollbar-thumb {
-  background: linear-gradient(45deg, var(--up-brown-600), var(--up-brown-700));
-  border-radius: 4px;
-  border: 1px solid var(--up-brown-500);
-}
-
-.funding-application-container .profile-tracker:-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(45deg, var(--up-brown-700), var(--up-brown-800));
-}
-
-.funding-application-container .profile-tracker-inner {
+/* Section Tracker - Card Style Design */
+.section-tracker {
   display: flex;
-  min-width: max-content;
-  gap: 1.5rem;
-  padding: 0 1rem;
+  justify-content: center;
   align-items: center;
+  gap: 16px;
+  padding: 20px;
+  margin: 20px auto;
+  flex-wrap: wrap;
+  max-width: 800px;
 }
 
-.funding-application-container .profile-tracker-button {
+.section-button {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 1rem 1.5rem;
-  border-radius: 12px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  text-align: center;
-  width: 120px;
-  height: 90px;
-  flex-shrink: 0;
-  transition: all 0.3s ease;
-  cursor: pointer;
+  padding: 24px 32px;
+  min-width: 180px;
+  min-height: 120px;
   border: none;
-  white-space: pre-line;
-  line-height: 1.3;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.05);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  overflow: hidden;
+  border-radius: 16px;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  line-height: 1.4;
 }
 
-.funding-application-container .profile-tracker-button:before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  transition: left 0.6s ease;
-}
-
-.funding-application-container .profile-tracker-button:hover:before {
-  left: 100%;
-}
-
-.funding-application-container .profile-tracker-button:after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.1));
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask-composite: xor;
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.funding-application-container .profile-tracker-button:hover:after {
-  opacity: 1;
-}
-
-.funding-application-container .profile-tracker-button.active {
-  background: linear-gradient(135deg, var(--up-brown-900), var(--up-brown-800));
-  color: var(--up-white);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2), 0 4px 10px rgba(0, 0, 0, 0.1);
-  transform: translateY(-3px) scale(1.02);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.funding-application-container .profile-tracker-button.completed {
-  background: linear-gradient(135deg, var(--up-brown-100), var(--up-brown-50));
-  color: var(--up-brown-800);
-  border: 1px solid var(--up-brown-300);
-  position: relative;
-}
-
-.funding-application-container .profile-tracker-button.pending {
-  background: linear-gradient(135deg, var(--up-brown-700), var(--up-brown-600));
-  color: var(--up-white);
-  opacity: 0.85;
-  position: relative;
-}
-
-.funding-application-container .profile-tracker-button.pending:hover {
-  opacity: 1;
-  transform: translateY(-2px) scale(1.01);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15), 0 3px 8px rgba(0, 0, 0, 0.08);
-}
-
-.funding-application-container .profile-tracker-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12), 0 3px 8px rgba(0, 0, 0, 0.06);
-}
-
-.funding-application-container .profile-tracker-button .check-icon {
-  position: absolute;
-  top: 1px;
-  right: 1px;
-  width: 20px;
-  height: 20px;
-  color: var(--up-green);
-  background: linear-gradient(135deg, var(--up-white), #f8f9fa);
-  border-radius: 50%;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.1);
-  padding: 3px;
-  border: 2px solid var(--up-green);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  animation: checkPulse 2s infinite;
-}
-
-@keyframes checkPulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.1); }
-}
-
-.funding-application-container .tracker-label-line {
+.section-button .section-label {
   display: block;
-  position: relative;
+  white-space: pre-line;
 }
 
-.funding-application-container .profile-tracker-button.active .tracker-label-line {
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+/* Active state - brown/dark theme */
+.section-button.active {
+  background: linear-gradient(135deg, #7d5a50 0%, #5a4139 100%);
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(125, 90, 80, 0.4);
 }
 
-.funding-application-container .profile-tracker-button:focus {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(139, 69, 19, 0.3), 0 4px 12px rgba(0, 0, 0, 0.08);
+/* Completed state - light brown/beige */
+.section-button.completed {
+  background: linear-gradient(135deg, #f3e5dc 0%, #e8d8cf 100%);
+  color: #5a4139;
+  border: 1px solid #d7ccc8;
 }
 
-.funding-application-container .profile-tracker-button:focus:not(:focus-visible) {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.05);
+.section-button.completed:hover {
+  background: linear-gradient(135deg, #e8d8cf 0%, #d7ccc8 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
 }
 
-@media (max-width: 768px) {
-  .funding-application-container .profile-tracker-button {
-    width: 120px;
-    height: 80px;
-    padding: 0.875rem 1.25rem;
-    font-size: 0.8125rem;
-  }
+/* Pending state - medium brown */
+.section-button.pending {
+  background: linear-gradient(135deg, #bcaaa4 0%, #a1887f 100%);
+  color: white;
+  border: 1px solid #8d6e63;
+}
 
-  .funding-application-container .profile-tracker-inner {
-    gap: 1.25rem;
-    padding: 0 0.75rem;
-  }
+.section-button.pending:hover {
+  background: linear-gradient(135deg, #a1887f 0%, #8d6e63 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+
+/* Completed icon styling */
+.completed-icon {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: #10b981;
+  border-radius: 50%;
+  padding: 2px;
+  color: white;
+}
+
+.check-icon {
+  color: white;
 }
 
 
@@ -877,6 +769,22 @@ background-image: url('../../assets/BiGBackround.png');
     flex-direction: column;
     align-items: stretch;
   }
+
+  .section-button {
+    min-width: 140px;
+    min-height: 100px;
+    padding: 16px 24px;
+    font-size: 15px;
+  }
+}
+
+@media (max-width: 480px) {
+  .section-button {
+    min-width: 120px;
+    min-height: 90px;
+    padding: 12px 16px;
+    font-size: 14px;
+  }
 }
 
 
@@ -896,7 +804,6 @@ background-image: url('../../assets/BiGBackround.png');
 
 .funding-application-container::-webkit-scrollbar-thumb:hover {
   background-color: var(--up-brown-600);
-  
 }
 
 .multi-select-container {
@@ -1004,8 +911,6 @@ background-image: url('../../assets/BiGBackround.png');
 .multi-select-button:hover {
   background-color: #795548;
 }
-
-
 
 
 .popup-overlay {

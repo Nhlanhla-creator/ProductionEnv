@@ -1,13 +1,11 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronDown, ChevronUp, Edit, ExternalLink, FileText, User, Target, Clock, Upload } from "lucide-react"
+import { ChevronDown, ChevronUp, Edit, ExternalLink, FileText, Target, Upload } from "lucide-react"
 
 const ApplicationSummary = ({ formData, onEdit }) => {
   const [expandedSections, setExpandedSections] = useState({
-    //smeProfileSnapshot: false,
     advisoryNeedsAssessment: false,
-    urgencyTimeline: false,
     documentUploads: false,
   })
 
@@ -55,22 +53,29 @@ const ApplicationSummary = ({ formData, onEdit }) => {
     )
   }
 
-  const formatFiles = (files) => {
-    if (!files || !files.length) return "None"
-    return files.map((file) => (typeof file === "string" ? file : file.name)).join(", ")
-  }
-
   const formatArray = (arr) => {
     if (!arr || !arr.length) return "None specified"
     return arr.join(" • ")
   }
 
-  const handleEdit = () => {
-    if (onEdit) onEdit()
+  const formatAdvisors = (advisors) => {
+    if (!advisors || !advisors.length) return "None specified"
+    return advisors.map((advisor, index) => (
+      <div key={index} style={{ marginBottom: "16px", paddingBottom: "16px", borderBottom: index < advisors.length - 1 ? "1px solid rgba(200, 182, 166, 0.2)" : "none" }}>
+        <div style={{ fontWeight: "600", color: "#4a352f", marginBottom: "8px" }}>
+          {advisor.advisorName || `Advisor ${index + 1}`}
+        </div>
+        <div style={{ fontSize: "13px", color: "#7d5a50", lineHeight: "1.6" }}>
+          <div><strong>Role:</strong> {formatArray(advisor.advisoryRole)}</div>
+          <div><strong>Focus:</strong> {formatArray(advisor.supportFocus)}</div>
+          <div><strong>Expertise:</strong> {formatArray(advisor.functionalExpertise)}</div>
+        </div>
+      </div>
+    ))
   }
 
-  const handleNavigate = () => {
-    // Add your navigation logic here
+  const handleEdit = () => {
+    if (onEdit) onEdit()
   }
 
   return (
@@ -89,10 +94,9 @@ const ApplicationSummary = ({ formData, onEdit }) => {
           to { 
             opacity: 1;
             transform: translateY(0);
-            max-height: 1000px;
+            max-height: 2000px;
           }
         }
-           
       `}</style>
 
       <div
@@ -273,6 +277,35 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                     animation: "slideDown 0.3s ease-out",
                   }}
                 >
+                  {/* Advisors Section */}
+                  <div
+                    style={{
+                      background: "rgba(166, 124, 82, 0.1)",
+                      borderRadius: "12px",
+                      padding: "16px",
+                      border: "1px solid rgba(166, 124, 82, 0.2)",
+                      marginBottom: "16px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "12px",
+                        color: "#7d5a50",
+                        marginBottom: "12px",
+                        fontWeight: "700",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.5px",
+                      }}
+                    >
+                      Requested Advisors
+                    </span>
+                    <div>
+                      {formatAdvisors(formData?.advisoryNeedsAssessment?.advisors)}
+                    </div>
+                  </div>
+
+                  {/* Engagement Preferences */}
                   <div
                     style={{
                       display: "grid",
@@ -282,12 +315,13 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                     }}
                   >
                     {[
-                      { label: "Advisory Role", value: formData?.advisoryNeedsAssessment?.advisoryRole },
-                      { label: "Support Focus", value: formatArray(formData?.advisoryNeedsAssessment?.supportFocus) },
                       { label: "Time Commitment", value: formData?.advisoryNeedsAssessment?.timeCommitment },
                       { label: "Compensation Type", value: formData?.advisoryNeedsAssessment?.compensationType },
+                      { label: "Compensation Amount", value: formData?.advisoryNeedsAssessment?.compensationAmount },
                       { label: "Meeting Format", value: formData?.advisoryNeedsAssessment?.meetingFormat },
                       { label: "Province", value: formData?.advisoryNeedsAssessment?.province || "Not applicable" },
+                      { label: "Start Date", value: formData?.advisoryNeedsAssessment?.startDate },
+                      { label: "Project Duration", value: formData?.advisoryNeedsAssessment?.projectDuration },
                     ].map((item, i) => (
                       <div
                         key={i}
@@ -333,118 +367,67 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
-            </div>
 
-            {/* Urgency & Timeline */}
-            <div
-              style={{
-                background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
-                backdropFilter: "blur(20px)",
-                borderRadius: "16px",
-                overflow: "hidden",
-                border: "1px solid rgba(200, 182, 166, 0.3)",
-                boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
-                transition: "all 0.3s ease",
-              }}
-            >
-              <div
-                onClick={() => toggleSection("urgencyTimeline")}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "16px 20px",
-                  background: expandedSections.urgencyTimeline
-                    ? "linear-gradient(135deg, #c8b6a6, #a67c52)"
-                    : "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
-                  cursor: "pointer",
-                  transition: "all 0.3s ease",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <Clock size={20} color={expandedSections.urgencyTimeline ? "#faf7f2" : "#4a352f"} />
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: "clamp(16px, 2.5vw, 20px)",
-                      fontWeight: "700",
-                      color: expandedSections.urgencyTimeline ? "#faf7f2" : "#4a352f",
-                    }}
-                  >
-                    Urgency & Timeline
-                  </h2>
-                </div>
-                {expandedSections.urgencyTimeline ? (
-                  <ChevronUp size={20} color="#faf7f2" />
-                ) : (
-                  <ChevronDown size={20} color="#4a352f" />
-                )}
-              </div>
-
-              {expandedSections.urgencyTimeline && (
-                <div
-                  style={{
-                    padding: "20px",
-                    background: "linear-gradient(135deg, rgba(250, 247, 242, 0.8), rgba(240, 230, 217, 0.6))",
-                    animation: "slideDown 0.3s ease-out",
-                  }}
-                >
+                  {/* Matching Preferences */}
                   <div
                     style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                      gap: "16px",
+                      background: "rgba(166, 124, 82, 0.1)",
+                      borderRadius: "12px",
+                      padding: "16px",
+                      border: "1px solid rgba(166, 124, 82, 0.2)",
                     }}
                   >
-                    {[
-                      { label: "Start Date", value: formData?.urgencyTimeline?.startDate },
-                      { label: "Project Duration", value: formData?.urgencyTimeline?.projectDuration },
-                    ].map((item, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          background: "rgba(250, 247, 242, 0.8)",
-                          borderRadius: "12px",
-                          padding: "16px",
-                          border: "1px solid rgba(200, 182, 166, 0.2)",
-                          transition: "all 0.3s ease",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = "translateY(-1px)"
-                          e.currentTarget.style.boxShadow = "0 4px 16px rgba(74, 53, 47, 0.08)"
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = "translateY(0)"
-                          e.currentTarget.style.boxShadow = "none"
-                        }}
-                      >
-                        <span
-                          style={{
-                            display: "block",
-                            fontSize: "12px",
-                            color: "#7d5a50",
-                            marginBottom: "6px",
-                            fontWeight: "600",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.5px",
-                          }}
-                        >
-                          {item.label}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: "14px",
-                            color: "#4a352f",
-                            fontWeight: "500",
-                            lineHeight: "1.4",
-                          }}
-                        >
-                          {item.value || "Not specified"}
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "12px",
+                        color: "#7d5a50",
+                        marginBottom: "12px",
+                        fontWeight: "700",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.5px",
+                      }}
+                    >
+                      Matching Preferences
+                    </span>
+                    <div style={{ display: "grid", gap: "12px" }}>
+                      <div>
+                        <strong style={{ color: "#4a352f" }}>B-BBEE Level:</strong>{" "}
+                        <span style={{ color: "#7d5a50" }}>{formData?.advisoryNeedsAssessment?.bbeeLevel || "Not specified"}</span>
+                      </div>
+                      <div>
+                        <strong style={{ color: "#4a352f" }}>Ownership Preferences:</strong>{" "}
+                        <span style={{ color: "#7d5a50" }}>{formatArray(formData?.advisoryNeedsAssessment?.ownershipPrefs)}</span>
+                      </div>
+                      <div>
+                        <strong style={{ color: "#4a352f" }}>Sector Experience:</strong>{" "}
+                        <span style={{ color: "#7d5a50" }}>{formData?.advisoryNeedsAssessment?.sectorExperience || "Not specified"}</span>
+                      </div>
+                      <div>
+                        <strong style={{ color: "#4a352f" }}>Engagement Type:</strong>{" "}
+                        <span style={{ color: "#7d5a50" }}>{formData?.advisoryNeedsAssessment?.engagementType || "Not specified"}</span>
+                      </div>
+                      <div>
+                        <strong style={{ color: "#4a352f" }}>Delivery Mode:</strong>{" "}
+                        <span style={{ color: "#7d5a50" }}>{formatArray(formData?.advisoryNeedsAssessment?.deliveryModes)}</span>
+                      </div>
+                      <div>
+                        <strong style={{ color: "#4a352f" }}>Location:</strong>{" "}
+                        <span style={{ color: "#7d5a50" }}>{formData?.advisoryNeedsAssessment?.location || "Not specified"}</span>
+                      </div>
+                      <div>
+                        <strong style={{ color: "#4a352f" }}>Budget Range:</strong>{" "}
+                        <span style={{ color: "#7d5a50" }}>
+                          {formData?.advisoryNeedsAssessment?.minBudget || "R 0"} - {formData?.advisoryNeedsAssessment?.maxBudget || "R 0"}
                         </span>
                       </div>
-                    ))}
+                      <div>
+                        <strong style={{ color: "#4a352f" }}>ESD/CSR Program:</strong>{" "}
+                        <span style={{ color: "#7d5a50" }}>
+                          {formData?.advisoryNeedsAssessment?.esdProgram === true ? "Yes" : formData?.advisoryNeedsAssessment?.esdProgram === false ? "No" : "Not specified"}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

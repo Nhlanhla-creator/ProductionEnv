@@ -52,7 +52,7 @@ const downloadCSV = (data, filename) => {
 }
 
 // Loan Repayments Component
-const LoanRepayments = ({ activeSection }) => {
+const LoanRepayments = ({ activeSection, currentUser, isInvestorView }) => {
   const [timeFrame, setTimeFrame] = useState("monthly")
   const [monthlyData, setMonthlyData] = useState({
     labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
@@ -68,13 +68,17 @@ const LoanRepayments = ({ activeSection }) => {
   const [comments, setComments] = useState([])
   const [showEditForm, setShowEditForm] = useState(false)
   const [showDownloadOptions, setShowDownloadOptions] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   const saveLoanData = async () => {
+    if (!currentUser) return
+    
     try {
-      await setDoc(doc(db, "loan-repayments", "main"), {
+      await setDoc(doc(db, "loan-repayments", currentUser.uid), {
         monthlyData,
         quarterlyData,
         comments,
+        lastUpdated: new Date().toISOString()
       })
       setShowEditForm(false)
       alert("Loan repayment data saved successfully!")
@@ -85,8 +89,11 @@ const LoanRepayments = ({ activeSection }) => {
   }
 
   const loadLoanData = async () => {
+    if (!currentUser) return
+    
     try {
-      const docRef = doc(db, "loan-repayments", "main")
+      setIsLoading(true)
+      const docRef = doc(db, "loan-repayments", currentUser.uid)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         const data = docSnap.data()
@@ -105,15 +112,27 @@ const LoanRepayments = ({ activeSection }) => {
           },
         )
         setComments(data.comments || [])
+      } else {
+        // Initialize with empty data if no document exists
+        await setDoc(docRef, {
+          monthlyData,
+          quarterlyData,
+          comments: [],
+          lastUpdated: new Date().toISOString()
+        })
       }
     } catch (error) {
       console.error("Error loading loan data:", error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
   useEffect(() => {
-    loadLoanData()
-  }, [])
+    if (currentUser) {
+      loadLoanData()
+    }
+  }, [currentUser])
 
   const updateScheduledValue = (index, value, period) => {
     if (period === "monthly") {
@@ -146,12 +165,24 @@ const LoanRepayments = ({ activeSection }) => {
         text: comment,
         date: new Date().toISOString().split("T")[0],
       }
-      setComments([...comments, newComment])
+      const updatedComments = [...comments, newComment]
+      setComments(updatedComments)
       setComment("")
+      
+      // Auto-save comments
+      if (currentUser) {
+        setDoc(doc(db, "loan-repayments", currentUser.uid), {
+          monthlyData,
+          quarterlyData,
+          comments: updatedComments,
+          lastUpdated: new Date().toISOString()
+        }, { merge: true })
+      }
     }
   }
 
   const handleDownload = () => {
+    const data = timeFrame === "monthly" ? monthlyData : quarterlyData
     const csvData = [
       ["Metric", "Value"],
       ["Time Frame", timeFrame],
@@ -174,6 +205,21 @@ const LoanRepayments = ({ activeSection }) => {
 
   if (activeSection !== "loan-repayments") return null
 
+  if (isLoading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '200px',
+        backgroundColor: '#fdfcfb',
+        borderRadius: '8px'
+      }}>
+        <div>Loading loan repayment data...</div>
+      </div>
+    )
+  }
+
   const data = timeFrame === "monthly" ? monthlyData : quarterlyData
 
   const chartOptions = {
@@ -187,7 +233,6 @@ const LoanRepayments = ({ activeSection }) => {
         text: `Loan Repayments vs Schedule (${timeFrame})`,
         color: "#4a352f",
       },
-      // Configure datalabels plugin
     },
     scales: {
       y: {
@@ -200,9 +245,7 @@ const LoanRepayments = ({ activeSection }) => {
       },
       x: {
         title: {
-          display: true,
-          text: timeFrame === "monthly" ? "Months" : "Quarters",
-          color: "#7d5a50",
+          display: false,
         },
       },
     },
@@ -263,19 +306,21 @@ const LoanRepayments = ({ activeSection }) => {
             >
               Quarterly
             </button>
-            <button
-              onClick={() => setShowEditForm(!showEditForm)}
-              style={{
-                padding: "8px 15px",
-                backgroundColor: "#4a352f",
-                color: "#faf7f2",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              {showEditForm ? "Cancel" : "Edit Data"}
-            </button>
+            {!isInvestorView && (
+              <button
+                onClick={() => setShowEditForm(!showEditForm)}
+                style={{
+                  padding: "8px 15px",
+                  backgroundColor: "#4a352f",
+                  color: "#faf7f2",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                }}
+              >
+                {showEditForm ? "Cancel" : "Edit Data"}
+              </button>
+            )}
             <button
               onClick={handleDownload}
               style={{
@@ -292,7 +337,7 @@ const LoanRepayments = ({ activeSection }) => {
           </div>
         </div>
 
-        {showEditForm && (
+        {!isInvestorView && showEditForm && (
           <div
             style={{
               backgroundColor: "#f7f3f0",
@@ -451,35 +496,37 @@ const LoanRepayments = ({ activeSection }) => {
         }}
       >
         <h3 style={{ color: "#5d4037", marginTop: 0 }}>Comments & Notes</h3>
-        <div style={{ marginBottom: "15px" }}>
-          <textarea
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder="Add a comment..."
-            style={{
-              width: "100%",
-              minHeight: "80px",
-              padding: "10px",
-              border: "1px solid #d4c4b0",
-              borderRadius: "4px",
-              resize: "vertical",
-            }}
-          />
-          <button
-            onClick={handleAddComment}
-            style={{
-              padding: "8px 15px",
-              backgroundColor: "#5d4037",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              marginTop: "10px",
-            }}
-          >
-            Add Comment
-          </button>
-        </div>
+        {!isInvestorView && (
+          <div style={{ marginBottom: "15px" }}>
+            <textarea
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder="Add a comment..."
+              style={{
+                width: "100%",
+                minHeight: "80px",
+                padding: "10px",
+                border: "1px solid #d4c4b0",
+                borderRadius: "4px",
+                resize: "vertical",
+              }}
+            />
+            <button
+              onClick={handleAddComment}
+              style={{
+                padding: "8px 15px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                marginTop: "10px",
+              }}
+            >
+              Add Comment
+            </button>
+          </div>
+        )}
 
         <div style={{ maxHeight: "300px", overflowY: "auto" }}>
           {comments.length === 0 ? (
@@ -490,7 +537,7 @@ const LoanRepayments = ({ activeSection }) => {
                 color: "#72542b",
               }}
             >
-              <p>No comments yet. Add your first comment above.</p>
+              <p>No comments yet.</p>
             </div>
           ) : (
             comments.map((c) => (
@@ -526,15 +573,21 @@ const LoanRepayments = ({ activeSection }) => {
 }
 
 // IRR Component
-const IRRInvestments = ({ activeSection, currentUser }) => {
+const IRRInvestments = ({ activeSection, currentUser, isInvestorView }) => {
   const [investments, setInvestments] = useState([])
   const [expandedInvestment, setExpandedInvestment] = useState(null)
   const [showEditForm, setShowEditForm] = useState(false)
   const [showDownloadOptions, setShowDownloadOptions] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   const saveIRRData = async () => {
+    if (!currentUser) return
+    
     try {
-      await setDoc(doc(db, "irr-investments", currentUser.uid), { investments })
+      await setDoc(doc(db, "irr-investments", currentUser.uid), { 
+        investments,
+        lastUpdated: new Date().toISOString()
+      })
       setShowEditForm(false)
       alert("IRR investment data saved successfully!")
     } catch (error) {
@@ -544,14 +597,25 @@ const IRRInvestments = ({ activeSection, currentUser }) => {
   }
 
   const loadIRRData = async () => {
+    if (!currentUser) return
+    
     try {
+      setIsLoading(true)
       const docRef = doc(db, "irr-investments", currentUser.uid)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         setInvestments(docSnap.data().investments || [])
+      } else {
+        // Initialize with empty data if no document exists
+        await setDoc(docRef, {
+          investments: [],
+          lastUpdated: new Date().toISOString()
+        })
       }
     } catch (error) {
       console.error("Error loading IRR data:", error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -609,7 +673,13 @@ const IRRInvestments = ({ activeSection, currentUser }) => {
     if (type === "csv") {
       const csvContent = [
         ["Investment Name", "IRR %", "Initial Investment", "Duration", "Risk Rating"],
-        ...investments.map((inv) => [inv.name, inv.irr, inv.initialInvestment, inv.duration, inv.riskRating]),
+        ...investments.map((inv) => [
+          inv.name, 
+          inv.irr, 
+          inv.details.initialInvestment, 
+          inv.details.duration, 
+          inv.details.riskRating
+        ]),
       ]
         .map((row) => row.join(","))
         .join("\n")
@@ -636,6 +706,21 @@ const IRRInvestments = ({ activeSection, currentUser }) => {
 
   if (activeSection !== "irr-investments") return null
 
+  if (isLoading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '200px',
+        backgroundColor: '#fdfcfb',
+        borderRadius: '8px'
+      }}>
+        <div>Loading IRR investments data...</div>
+      </div>
+    )
+  }
+
   return (
     <div
       style={{
@@ -649,19 +734,21 @@ const IRRInvestments = ({ activeSection, currentUser }) => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <h2 style={{ color: "#5d4037", marginTop: 0 }}>IRR on Equity Investments</h2>
         <div style={{ display: "flex", gap: "10px" }}>
-          <button
-            onClick={() => setShowEditForm(!showEditForm)}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#5d4037",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            {showEditForm ? "Cancel" : "Edit Data"}
-          </button>
+          {!isInvestorView && (
+            <button
+              onClick={() => setShowEditForm(!showEditForm)}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
+            >
+              {showEditForm ? "Cancel" : "Edit Data"}
+            </button>
+          )}
           <div style={{ position: "relative" }}>
             <button
               onClick={() => setShowDownloadOptions(!showDownloadOptions)}
@@ -725,7 +812,7 @@ const IRRInvestments = ({ activeSection, currentUser }) => {
         </div>
       </div>
 
-      {showEditForm && (
+      {!isInvestorView && showEditForm && (
         <div
           style={{
             backgroundColor: "#f7f3f0",
@@ -880,7 +967,7 @@ const IRRInvestments = ({ activeSection, currentUser }) => {
             color: "#72542b",
           }}
         >
-          <p>No investment data available. Click "Edit Data" to add your first investment.</p>
+          <p>No investment data available. {!isInvestorView && 'Click "Edit Data" to add your first investment.'}</p>
         </div>
       ) : (
         <div
@@ -979,14 +1066,20 @@ const IRRInvestments = ({ activeSection, currentUser }) => {
 }
 
 // Default Flags Component
-const DefaultFlags = ({ activeSection, currentUser }) => {
+const DefaultFlags = ({ activeSection, currentUser, isInvestorView }) => {
   const [flags, setFlags] = useState([])
   const [showEditForm, setShowEditForm] = useState(false)
   const [showDownloadOptions, setShowDownloadOptions] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   const saveDefaultFlagsData = async () => {
+    if (!currentUser) return
+    
     try {
-      await setDoc(doc(db, "default-flags", currentUser.uid), { flags })
+      await setDoc(doc(db, "default-flags", currentUser.uid), { 
+        flags,
+        lastUpdated: new Date().toISOString()
+      })
       setShowEditForm(false)
       alert("Default flags data saved successfully!")
     } catch (error) {
@@ -996,14 +1089,25 @@ const DefaultFlags = ({ activeSection, currentUser }) => {
   }
 
   const loadDefaultFlagsData = async () => {
+    if (!currentUser) return
+    
     try {
+      setIsLoading(true)
       const docRef = doc(db, "default-flags", currentUser.uid)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         setFlags(docSnap.data().flags || [])
+      } else {
+        // Initialize with empty data if no document exists
+        await setDoc(docRef, {
+          flags: [],
+          lastUpdated: new Date().toISOString()
+        })
       }
     } catch (error) {
       console.error("Error loading default flags data:", error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -1055,8 +1159,8 @@ const DefaultFlags = ({ activeSection, currentUser }) => {
   const handleDownload = (type) => {
     if (type === "csv") {
       const csvContent = [
-        ["Flag Type", "Status", "Description", "Date Raised"],
-        ...flags.map((flag) => [flag.type, flag.status, flag.description, flag.dateRaised]),
+        ["Flag Name", "Status", "Count", "Action"],
+        ...flags.map((flag) => [flag.name, flag.status, flag.count, flag.action]),
       ]
         .map((row) => row.join(","))
         .join("\n")
@@ -1083,6 +1187,21 @@ const DefaultFlags = ({ activeSection, currentUser }) => {
 
   if (activeSection !== "default-flags") return null
 
+  if (isLoading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '200px',
+        backgroundColor: '#fdfcfb',
+        borderRadius: '8px'
+      }}>
+        <div>Loading default flags data...</div>
+      </div>
+    )
+  }
+
   return (
     <div
       style={{
@@ -1096,19 +1215,21 @@ const DefaultFlags = ({ activeSection, currentUser }) => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <h2 style={{ color: "#5d4037", marginTop: 0 }}>Default Flags & Early Warnings</h2>
         <div style={{ display: "flex", gap: "10px" }}>
-          <button
-            onClick={() => setShowEditForm(!showEditForm)}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#5d4037",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            {showEditForm ? "Cancel" : "Edit Data"}
-          </button>
+          {!isInvestorView && (
+            <button
+              onClick={() => setShowEditForm(!showEditForm)}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
+            >
+              {showEditForm ? "Cancel" : "Edit Data"}
+            </button>
+          )}
           <div style={{ position: "relative" }}>
             <button
               onClick={() => setShowDownloadOptions(!showDownloadOptions)}
@@ -1172,7 +1293,7 @@ const DefaultFlags = ({ activeSection, currentUser }) => {
         </div>
       </div>
 
-      {showEditForm && (
+      {!isInvestorView && showEditForm && (
         <div
           style={{
             backgroundColor: "#f7f3f0",
@@ -1297,7 +1418,7 @@ const DefaultFlags = ({ activeSection, currentUser }) => {
             color: "#72542b",
           }}
         >
-          <p>No flag data available. Click "Edit Data" to add your first flag.</p>
+          <p>No flag data available. {!isInvestorView && 'Click "Edit Data" to add your first flag.'}</p>
         </div>
       ) : (
         <div style={{ overflowX: "auto" }}>
@@ -1315,11 +1436,13 @@ const DefaultFlags = ({ activeSection, currentUser }) => {
                   borderBottom: "2px solid #d4c4b0",
                 }}
               >
-                <th style={{ padding: "12px", textAlign: "left" }}>Flag Type</th>
+                <th style={{ padding: "12px", textAlign: "left" }}>Flag Name</th>
                 <th style={{ padding: "12px", textAlign: "left" }}>Status</th>
                 <th style={{ padding: "12px", textAlign: "left" }}>Count</th>
                 <th style={{ padding: "12px", textAlign: "left" }}>Action</th>
-                <th style={{ padding: "12px", textAlign: "left" }}>Actions</th>
+                {!isInvestorView && (
+                  <th style={{ padding: "12px", textAlign: "left" }}>Actions</th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -1346,21 +1469,23 @@ const DefaultFlags = ({ activeSection, currentUser }) => {
                   </td>
                   <td style={{ padding: "12px" }}>{flag.count}</td>
                   <td style={{ padding: "12px" }}>{flag.action}</td>
-                  <td style={{ padding: "12px" }}>
-                    <button
-                      onClick={() => handleAction(flag.id, flag.action)}
-                      style={{
-                        padding: "6px 12px",
-                        backgroundColor: "#5d4037",
-                        color: "#fdfcfb",
-                        border: "none",
-                        borderRadius: "4px",
-                        cursor: "pointer",
-                      }}
-                    >
-                      Take Action
-                    </button>
-                  </td>
+                  {!isInvestorView && (
+                    <td style={{ padding: "12px" }}>
+                      <button
+                        onClick={() => handleAction(flag.id, flag.action)}
+                        style={{
+                          padding: "6px 12px",
+                          backgroundColor: "#5d4037",
+                          color: "#fdfcfb",
+                          border: "none",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Take Action
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -1371,41 +1496,84 @@ const DefaultFlags = ({ activeSection, currentUser }) => {
   )
 }
 
-// Investment Ratios Component (keeping as is per user request)
-const InvestmentRatios = ({ activeSection, currentUser }) => {
+// Investment Ratios Component (updated - removed mock data)
+const InvestmentRatios = ({ activeSection, currentUser, isInvestorView }) => {
   const [expandedRatio, setExpandedRatio] = useState(null)
   const [showDownloadOptions, setShowDownloadOptions] = useState(false)
+  const [showEditForm, setShowEditForm] = useState(false)
+  const [ratios, setRatios] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  const ratios = [
-    {
-      name: "Debt/EBITDA",
-      value: 3.2,
-      target: "<4.0",
-      description: "Measures a company's ability to pay off its debt with EBITDA",
-      status: "Good",
-    },
-    {
-      name: "Interest Coverage",
-      value: 4.5,
-      target: ">3.0",
-      description: "Measures how easily a company can pay interest on outstanding debt",
-      status: "Excellent",
-    },
-    {
-      name: "Current Ratio",
-      value: 1.8,
-      target: ">1.5",
-      description: "Measures a company's ability to pay short-term obligations",
-      status: "Good",
-    },
-    {
-      name: "ROIC",
-      value: 12.5,
-      target: ">10.0",
-      description: "Measures how well a company generates cash flow relative to capital invested",
-      status: "Excellent",
-    },
-  ]
+  const saveRatiosData = async () => {
+    if (!currentUser) return
+    
+    try {
+      await setDoc(doc(db, "investment-ratios", currentUser.uid), { 
+        ratios,
+        lastUpdated: new Date().toISOString()
+      })
+      setShowEditForm(false)
+      alert("Investment ratios data saved successfully!")
+    } catch (error) {
+      console.error("Error saving ratios data:", error)
+      alert("Error saving data")
+    }
+  }
+
+  const loadRatiosData = async () => {
+    if (!currentUser) return
+    
+    try {
+      setIsLoading(true)
+      const docRef = doc(db, "investment-ratios", currentUser.uid)
+      const docSnap = await getDoc(docRef)
+      if (docSnap.exists()) {
+        setRatios(docSnap.data().ratios || [])
+      } else {
+        // Initialize with empty data if no document exists
+        await setDoc(docRef, {
+          ratios: [],
+          lastUpdated: new Date().toISOString()
+        })
+      }
+    } catch (error) {
+      console.error("Error loading ratios data:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (currentUser) {
+      loadRatiosData()
+    }
+  }, [currentUser])
+
+  const updateRatio = (index, field, value) => {
+    const newRatios = [...ratios]
+    if (field === "value") {
+      newRatios[index][field] = Number.parseFloat(value) || 0
+    } else {
+      newRatios[index][field] = value
+    }
+    setRatios(newRatios)
+  }
+
+  const addRatio = () => {
+    const newRatio = {
+      name: "New Ratio",
+      value: 0,
+      target: ">0",
+      description: "Description of the ratio",
+      status: "Fair",
+    }
+    setRatios([...ratios, newRatio])
+  }
+
+  const removeRatio = (index) => {
+    const newRatios = ratios.filter((_, i) => i !== index)
+    setRatios(newRatios)
+  }
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -1461,6 +1629,21 @@ const InvestmentRatios = ({ activeSection, currentUser }) => {
 
   if (activeSection !== "investment-ratios") return null
 
+  if (isLoading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '200px',
+        backgroundColor: '#fdfcfb',
+        borderRadius: '8px'
+      }}>
+        <div>Loading investment ratios data...</div>
+      </div>
+    )
+  }
+
   return (
     <div
       style={{
@@ -1473,181 +1656,355 @@ const InvestmentRatios = ({ activeSection, currentUser }) => {
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <h2 style={{ color: "#5d4037", marginTop: 0 }}>Investment Ratios</h2>
-        <div style={{ position: "relative" }}>
-          <button
-            onClick={() => setShowDownloadOptions(!showDownloadOptions)}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#72542b",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            Download
-          </button>
-          {showDownloadOptions && (
-            <div
-              style={{
-                position: "absolute",
-                top: "100%",
-                right: 0,
-                backgroundColor: "#fdfcfb",
-                border: "1px solid #d4c4b0",
-                borderRadius: "4px",
-                boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                zIndex: 1000,
-              }}
-            >
-              <button
-                onClick={() => handleDownload("json")}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  padding: "8px 15px",
-                  backgroundColor: "transparent",
-                  border: "none",
-                  textAlign: "left",
-                  cursor: "pointer",
-                  color: "#5d4037",
-                }}
-              >
-                Download JSON
-              </button>
-              <button
-                onClick={() => handleDownload("csv")}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  padding: "8px 15px",
-                  backgroundColor: "transparent",
-                  border: "none",
-                  textAlign: "left",
-                  cursor: "pointer",
-                  color: "#5d4037",
-                }}
-              >
-                Download CSV
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: window.innerWidth < 768 ? "1fr" : "repeat(auto-fit, minmax(250px, 1fr))",
-          gap: "20px",
-        }}
-      >
-        {ratios.map((ratio, index) => (
-          <div
-            key={index}
-            style={{
-              padding: "15px",
-              backgroundColor: "#f5f0e1",
-              borderRadius: "6px",
-              textAlign: "center",
-            }}
-          >
-            <h3 style={{ color: "#7d5a50" }}>{ratio.name}</h3>
-            <div
-              style={{
-                width: "120px",
-                height: "120px",
-                borderRadius: "50%",
-                backgroundColor: "#e6d7c3",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto",
-                border: `8px solid ${getStatusColor(ratio.status)}`,
-                marginBottom: "15px",
-                position: "relative",
-              }}
-            >
-              <span
-                style={{
-                  fontSize: "24px",
-                  fontWeight: "bold",
-                  color: "#5d4037",
-                }}
-              >
-                {ratio.value}
-              </span>
-              <span
-                style={{
-                  fontSize: "12px",
-                  color: "#72542b",
-                  marginTop: "5px",
-                }}
-              >
-                Target: {ratio.target}
-              </span>
-            </div>
-
+        <div style={{ display: "flex", gap: "10px" }}>
+          {!isInvestorView && (
             <button
-              onClick={() => toggleRatio(index)}
+              onClick={() => setShowEditForm(!showEditForm)}
               style={{
-                padding: "8px 15px",
+                padding: "8px 16px",
                 backgroundColor: "#5d4037",
                 color: "#fdfcfb",
                 border: "none",
                 borderRadius: "4px",
                 cursor: "pointer",
-                marginBottom: "10px",
               }}
             >
-              {expandedRatio === index ? "Hide Details" : "Show Details"}
+              {showEditForm ? "Cancel" : "Edit Data"}
             </button>
-
-            {expandedRatio === index && (
+          )}
+          <div style={{ position: "relative" }}>
+            <button
+              onClick={() => setShowDownloadOptions(!showDownloadOptions)}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#72542b",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
+            >
+              Download
+            </button>
+            {showDownloadOptions && (
               <div
                 style={{
-                  textAlign: "left",
-                  backgroundColor: "#e8ddd4",
-                  padding: "10px",
+                  position: "absolute",
+                  top: "100%",
+                  right: 0,
+                  backgroundColor: "#fdfcfb",
+                  border: "1px solid #d4c4b0",
                   borderRadius: "4px",
-                  marginTop: "10px",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                  zIndex: 1000,
                 }}
               >
-                <p>
-                  <strong>Description:</strong> {ratio.description}
-                </p>
-                <p>
-                  <strong>Status:</strong>
-                  <span
-                    style={{
-                      padding: "4px 8px",
-                      borderRadius: "4px",
-                      backgroundColor: getStatusColor(ratio.status),
-                      color: "white",
-                      marginLeft: "8px",
-                    }}
-                  >
-                    {ratio.status}
-                  </span>
-                </p>
+                <button
+                  onClick={() => handleDownload("json")}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    padding: "8px 15px",
+                    backgroundColor: "transparent",
+                    border: "none",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    color: "#5d4037",
+                  }}
+                >
+                  Download JSON
+                </button>
+                <button
+                  onClick={() => handleDownload("csv")}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    padding: "8px 15px",
+                    backgroundColor: "transparent",
+                    border: "none",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    color: "#5d4037",
+                  }}
+                >
+                  Download CSV
+                </button>
               </div>
             )}
           </div>
-        ))}
+        </div>
       </div>
+
+      {!isInvestorView && showEditForm && (
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "6px",
+            marginBottom: "20px",
+          }}
+        >
+          <h3 style={{ color: "#72542b", marginTop: 0 }}>Edit Investment Ratios Data</h3>
+          {ratios.map((ratio, index) => (
+            <div
+              key={index}
+              style={{
+                marginBottom: "20px",
+                padding: "15px",
+                backgroundColor: "#fdfcfb",
+                borderRadius: "4px",
+              }}
+            >
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "2fr 1fr 1fr 1fr auto",
+                  gap: "10px",
+                  alignItems: "center",
+                  marginBottom: "10px",
+                }}
+              >
+                <input
+                  type="text"
+                  value={ratio.name}
+                  onChange={(e) => updateRatio(index, "name", e.target.value)}
+                  style={{
+                    padding: "8px",
+                    border: "1px solid #d4c4b0",
+                    borderRadius: "4px",
+                  }}
+                  placeholder="Ratio Name"
+                />
+                <input
+                  type="number"
+                  step="0.1"
+                  value={ratio.value}
+                  onChange={(e) => updateRatio(index, "value", e.target.value)}
+                  style={{
+                    padding: "8px",
+                    border: "1px solid #d4c4b0",
+                    borderRadius: "4px",
+                  }}
+                  placeholder="Value"
+                />
+                <input
+                  type="text"
+                  value={ratio.target}
+                  onChange={(e) => updateRatio(index, "target", e.target.value)}
+                  style={{
+                    padding: "8px",
+                    border: "1px solid #d4c4b0",
+                    borderRadius: "4px",
+                  }}
+                  placeholder="Target"
+                />
+                <select
+                  value={ratio.status}
+                  onChange={(e) => updateRatio(index, "status", e.target.value)}
+                  style={{
+                    padding: "8px",
+                    border: "1px solid #d4c4b0",
+                    borderRadius: "4px",
+                  }}
+                >
+                  <option value="Excellent">Excellent</option>
+                  <option value="Good">Good</option>
+                  <option value="Fair">Fair</option>
+                  <option value="Poor">Poor</option>
+                </select>
+                <button
+                  onClick={() => removeRatio(index)}
+                  style={{
+                    padding: "8px",
+                    backgroundColor: "#dc2626",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+              <textarea
+                value={ratio.description}
+                onChange={(e) => updateRatio(index, "description", e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                  minHeight: "60px",
+                  resize: "vertical",
+                }}
+                placeholder="Description"
+              />
+            </div>
+          ))}
+          <div style={{ marginTop: "15px" }}>
+            <button
+              onClick={addRatio}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#72542b",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                marginRight: "10px",
+              }}
+            >
+              Add Ratio
+            </button>
+            <button
+              onClick={saveRatiosData}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#16a34a",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
+            >
+              Save Data
+            </button>
+          </div>
+        </div>
+      )}
+
+      {ratios.length === 0 ? (
+        <div
+          style={{
+            textAlign: "center",
+            padding: "40px",
+            color: "#72542b",
+          }}
+        >
+          <p>No ratio data available. {!isInvestorView && 'Click "Edit Data" to add your first investment ratio.'}</p>
+        </div>
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: window.innerWidth < 768 ? "1fr" : "repeat(auto-fit, minmax(250px, 1fr))",
+            gap: "20px",
+          }}
+        >
+          {ratios.map((ratio, index) => (
+            <div
+              key={index}
+              style={{
+                padding: "15px",
+                backgroundColor: "#f5f0e1",
+                borderRadius: "6px",
+                textAlign: "center",
+              }}
+            >
+              <h3 style={{ color: "#7d5a50" }}>{ratio.name}</h3>
+              <div
+                style={{
+                  width: "120px",
+                  height: "120px",
+                  borderRadius: "50%",
+                  backgroundColor: "#e6d7c3",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  margin: "0 auto",
+                  border: `8px solid ${getStatusColor(ratio.status)}`,
+                  marginBottom: "15px",
+                  position: "relative",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "24px",
+                    fontWeight: "bold",
+                    color: "#5d4037",
+                  }}
+                >
+                  {ratio.value}
+                </span>
+                <span
+                  style={{
+                    fontSize: "12px",
+                    color: "#72542b",
+                    marginTop: "5px",
+                  }}
+                >
+                  Target: {ratio.target}
+                </span>
+              </div>
+
+              <button
+                onClick={() => toggleRatio(index)}
+                style={{
+                  padding: "8px 15px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  marginBottom: "10px",
+                }}
+              >
+                {expandedRatio === index ? "Hide Details" : "Show Details"}
+              </button>
+
+              {expandedRatio === index && (
+                <div
+                  style={{
+                    textAlign: "left",
+                    backgroundColor: "#e8ddd4",
+                    padding: "10px",
+                    borderRadius: "4px",
+                    marginTop: "10px",
+                  }}
+                >
+                  <p>
+                    <strong>Description:</strong> {ratio.description}
+                  </p>
+                  <p>
+                    <strong>Status:</strong>
+                    <span
+                      style={{
+                        padding: "4px 8px",
+                        borderRadius: "4px",
+                        backgroundColor: getStatusColor(ratio.status),
+                        color: "white",
+                        marginLeft: "8px",
+                      }}
+                    >
+                      {ratio.status}
+                    </span>
+                  </p>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
 
 // Cap Table Component
-const CapTable = ({ activeSection, currentUser }) => {
+const CapTable = ({ activeSection, currentUser, isInvestorView }) => {
   const [investors, setInvestors] = useState([])
   const [showEditForm, setShowEditForm] = useState(false)
   const [showDownloadOptions, setShowDownloadOptions] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   const saveCapTableData = async () => {
+    if (!currentUser) return
+    
     try {
-      await setDoc(doc(db, "cap-table", currentUser.uid), { investors })
+      await setDoc(doc(db, "cap-table", currentUser.uid), { 
+        investors,
+        lastUpdated: new Date().toISOString()
+      })
       setShowEditForm(false)
       alert("Cap table data saved successfully!")
     } catch (error) {
@@ -1657,14 +2014,25 @@ const CapTable = ({ activeSection, currentUser }) => {
   }
 
   const loadCapTableData = async () => {
+    if (!currentUser) return
+    
     try {
+      setIsLoading(true)
       const docRef = doc(db, "cap-table", currentUser.uid)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         setInvestors(docSnap.data().investors || [])
+      } else {
+        // Initialize with empty data if no document exists
+        await setDoc(docRef, {
+          investors: [],
+          lastUpdated: new Date().toISOString()
+        })
       }
     } catch (error) {
       console.error("Error loading cap table data:", error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -1729,6 +2097,21 @@ const CapTable = ({ activeSection, currentUser }) => {
 
   if (activeSection !== "cap-table") return null
 
+  if (isLoading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '200px',
+        backgroundColor: '#fdfcfb',
+        borderRadius: '8px'
+      }}>
+        <div>Loading cap table data...</div>
+      </div>
+    )
+  }
+
   const totalShares = investors.reduce((sum, inv) => sum + inv.shares, 0)
   const totalValuation = investors.reduce((sum, inv) => sum + inv.valuation, 0)
 
@@ -1745,19 +2128,21 @@ const CapTable = ({ activeSection, currentUser }) => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <h2 style={{ color: "#5d4037", marginTop: 0 }}>Cap Table Overview</h2>
         <div style={{ display: "flex", gap: "10px" }}>
-          <button
-            onClick={() => setShowEditForm(!showEditForm)}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#5d4037",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            {showEditForm ? "Cancel" : "Edit Data"}
-          </button>
+          {!isInvestorView && (
+            <button
+              onClick={() => setShowEditForm(!showEditForm)}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
+            >
+              {showEditForm ? "Cancel" : "Edit Data"}
+            </button>
+          )}
           <div style={{ position: "relative" }}>
             <button
               onClick={() => setShowDownloadOptions(!showDownloadOptions)}
@@ -1821,7 +2206,7 @@ const CapTable = ({ activeSection, currentUser }) => {
         </div>
       </div>
 
-      {showEditForm && (
+      {!isInvestorView && showEditForm && (
         <div
           style={{
             backgroundColor: "#f7f3f0",
@@ -1934,7 +2319,7 @@ const CapTable = ({ activeSection, currentUser }) => {
             color: "#72542b",
           }}
         >
-          <p>No investor data available. Click "Edit Data" to add your first investor.</p>
+          <p>No investor data available. {!isInvestorView && 'Click "Edit Data" to add your first investor.'}</p>
         </div>
       ) : (
         <div
@@ -1965,7 +2350,6 @@ const CapTable = ({ activeSection, currentUser }) => {
                     legend: {
                       position: window.innerWidth < 768 ? "bottom" : "right",
                     },
-                    // ↓ THIS is the datalabels config (lines ~1110-1120)
                     datalabels: {
                       color: "#fff",
                       font: {
@@ -2047,14 +2431,20 @@ const CapTable = ({ activeSection, currentUser }) => {
 }
 
 // Dividend History Component
-const DividendHistory = ({ activeSection, currentUser }) => {
+const DividendHistory = ({ activeSection, currentUser, isInvestorView }) => {
   const [dividends, setDividends] = useState([])
   const [showEditForm, setShowEditForm] = useState(false)
   const [showDownloadOptions, setShowDownloadOptions] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   const saveDividendData = async () => {
+    if (!currentUser) return
+    
     try {
-      await setDoc(doc(db, "dividend-history", currentUser.uid), { dividends })
+      await setDoc(doc(db, "dividend-history", currentUser.uid), { 
+        dividends,
+        lastUpdated: new Date().toISOString()
+      })
       setShowEditForm(false)
       alert("Dividend history data saved successfully!")
     } catch (error) {
@@ -2064,14 +2454,25 @@ const DividendHistory = ({ activeSection, currentUser }) => {
   }
 
   const loadDividendData = async () => {
+    if (!currentUser) return
+    
     try {
+      setIsLoading(true)
       const docRef = doc(db, "dividend-history", currentUser.uid)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         setDividends(docSnap.data().dividends || [])
+      } else {
+        // Initialize with empty data if no document exists
+        await setDoc(docRef, {
+          dividends: [],
+          lastUpdated: new Date().toISOString()
+        })
       }
     } catch (error) {
       console.error("Error loading dividend data:", error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -2105,8 +2506,8 @@ const DividendHistory = ({ activeSection, currentUser }) => {
   const handleDownload = (type) => {
     if (type === "csv") {
       const csvContent = [
-        ["Date", "Amount (R)", "Type", "Status"],
-        ...dividends.map((div) => [div.date, div.amount.toFixed(2), div.type, div.status]),
+        ["Year", "Amount per Share", "Payment Date"],
+        ...dividends.map((div) => [div.year, div.amount.toFixed(2), div.paymentDate]),
       ]
         .map((row) => row.join(","))
         .join("\n")
@@ -2133,6 +2534,21 @@ const DividendHistory = ({ activeSection, currentUser }) => {
 
   if (activeSection !== "dividend-history") return null
 
+  if (isLoading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '200px',
+        backgroundColor: '#fdfcfb',
+        borderRadius: '8px'
+      }}>
+        <div>Loading dividend history data...</div>
+      </div>
+    )
+  }
+
   return (
     <div
       style={{
@@ -2146,19 +2562,21 @@ const DividendHistory = ({ activeSection, currentUser }) => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <h2 style={{ color: "#5d4037", marginTop: 0 }}>Dividend History</h2>
         <div style={{ display: "flex", gap: "10px" }}>
-          <button
-            onClick={() => setShowEditForm(!showEditForm)}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#5d4037",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            {showEditForm ? "Cancel" : "Edit Data"}
-          </button>
+          {!isInvestorView && (
+            <button
+              onClick={() => setShowEditForm(!showEditForm)}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
+            >
+              {showEditForm ? "Cancel" : "Edit Data"}
+            </button>
+          )}
           <div style={{ position: "relative" }}>
             <button
               onClick={() => setShowDownloadOptions(!showDownloadOptions)}
@@ -2222,7 +2640,7 @@ const DividendHistory = ({ activeSection, currentUser }) => {
         </div>
       </div>
 
-      {showEditForm && (
+      {!isInvestorView && showEditForm && (
         <div
           style={{
             backgroundColor: "#f7f3f0",
@@ -2334,7 +2752,7 @@ const DividendHistory = ({ activeSection, currentUser }) => {
             color: "#72542b",
           }}
         >
-          <p>No dividend data available. Click "Edit Data" to add your first dividend entry.</p>
+          <p>No dividend data available. {!isInvestorView && 'Click "Edit Data" to add your first dividend entry.'}</p>
         </div>
       ) : (
         <div
@@ -2552,12 +2970,36 @@ const CapitalStructure = () => {
             ))}
           </div>
 
-          <CapTable activeSection={activeSection} currentUser={currentUser} />
-          <IRRInvestments activeSection={activeSection} currentUser={currentUser} />
-          <InvestmentRatios activeSection={activeSection} currentUser={currentUser} />
-          <DividendHistory activeSection={activeSection} currentUser={currentUser} />
-          <LoanRepayments activeSection={activeSection} currentUser={currentUser} />
-          <DefaultFlags activeSection={activeSection} currentUser={currentUser} />
+          <CapTable 
+            activeSection={activeSection} 
+            currentUser={currentUser} 
+            isInvestorView={isInvestorView} 
+          />
+          <IRRInvestments 
+            activeSection={activeSection} 
+            currentUser={currentUser} 
+            isInvestorView={isInvestorView} 
+          />
+          <InvestmentRatios 
+            activeSection={activeSection} 
+            currentUser={currentUser} 
+            isInvestorView={isInvestorView} 
+          />
+          <DividendHistory 
+            activeSection={activeSection} 
+            currentUser={currentUser} 
+            isInvestorView={isInvestorView} 
+          />
+          <LoanRepayments 
+            activeSection={activeSection} 
+            currentUser={currentUser} 
+            isInvestorView={isInvestorView} 
+          />
+          <DefaultFlags 
+            activeSection={activeSection} 
+            currentUser={currentUser} 
+            isInvestorView={isInvestorView} 
+          />
         </div>
       </div>
     </div>

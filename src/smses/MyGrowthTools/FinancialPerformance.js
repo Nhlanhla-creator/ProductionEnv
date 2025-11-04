@@ -158,12 +158,12 @@ const PnLSnapshot = ({
     const npMarginBudget = salesBudget.map((s, i) => (s !== 0 ? (netProfitBudget[i] / s) * 100 : 0))
 
     const chartData = {
-      sales: { actual: sales, budget: salesBudget },
-      cogs: { actual: cogs, budget: cogsBudget },
-      opex: { actual: opex, budget: opexBudget },
-      grossProfit: { actual: grossProfit, budget: grossProfitBudget },
-      ebitda: { actual: ebitda, budget: ebitdaBudget },
-      netProfit: { actual: netProfit, budget: netProfitBudget },
+      sales: { actual: sales.map(val => val / 1000000), budget: salesBudget.map(val => val / 1000000) },
+      cogs: { actual: cogs.map(val => val / 1000000), budget: cogsBudget.map(val => val / 1000000) },
+      opex: { actual: opex.map(val => val / 1000000), budget: opexBudget.map(val => val / 1000000) },
+      grossProfit: { actual: grossProfit.map(val => val / 1000000), budget: grossProfitBudget.map(val => val / 1000000) },
+      ebitda: { actual: ebitda.map(val => val / 1000000), budget: ebitdaBudget.map(val => val / 1000000) },
+      netProfit: { actual: netProfit.map(val => val / 1000000), budget: netProfitBudget.map(val => val / 1000000) },
       gpMargin: { actual: gpMargin, budget: gpMarginBudget },
       npMargin: { actual: npMargin, budget: npMarginBudget },
     }
@@ -185,7 +185,7 @@ const PnLSnapshot = ({
     const orderedMonths = [...months.slice(startMonthIndex), ...months.slice(0, startMonthIndex)]
 
     if (viewMode === "month") {
-      return orderedMonths.map((month) => `${month} ${currentYear.toString().slice(-2)}`)
+      return orderedMonths
     } else if (viewMode === "quarter") {
       return ["Q1", "Q2", "Q3", "Q4"]
     } else {
@@ -276,7 +276,7 @@ const PnLSnapshot = ({
     }))
   }
 
-  const createChartData = (chartName, label, color, isPercentage = false) => {
+  const createChartData = (chartName, isPercentage = false) => {
     const data = firebaseChartData[chartName] || { actual: [], budget: [] }
     const actualData = aggregateDataForView(data.actual)
     const budgetData = aggregateDataForView(data.budget)
@@ -287,8 +287,8 @@ const PnLSnapshot = ({
         labels,
         datasets: [
           {
-            type: "bar", // Ensure variance is displayed as bar if showVariance is true
-            label: `${label} Variance`,
+            type: "bar",
+            label: "Variance",
             data: varianceData,
             backgroundColor: varianceData.map((v) => (v >= 0 ? "rgba(139, 105, 20, 0.6)" : "rgba(160, 82, 45, 0.6)")),
             borderColor: varianceData.map((v) => (v >= 0 ? "rgb(139, 105, 20)" : "rgb(160, 82, 45)")),
@@ -303,15 +303,15 @@ const PnLSnapshot = ({
       datasets: [
         {
           type: "bar",
-          label: `${label} Actual`,
+          label: "Actual",
           data: actualData,
-          backgroundColor: color,
-          borderColor: color.replace("0.6", "1"),
+          backgroundColor: "rgba(93, 64, 55, 0.6)",
+          borderColor: "rgb(93, 64, 55)",
           borderWidth: 2,
         },
         {
           type: "line",
-          label: `${label} Budget`,
+          label: "Budget",
           data: budgetData,
           borderColor: "#8b6914",
           backgroundColor: "rgba(139, 105, 20, 0.1)",
@@ -353,16 +353,12 @@ const PnLSnapshot = ({
       y: {
         beginAtZero: true,
         title: {
-          display: true,
-          text: isPercentage ? "Percentage (%)" : "Amount (R-m)",
-          color: "#72542b",
+          display: false,
         },
       },
       x: {
         title: {
-          display: true,
-          text: viewMode === "month" ? "Months" : viewMode === "quarter" ? "Quarters" : "Years",
-          color: "#72542b",
+          display: false,
         },
       },
     },
@@ -458,7 +454,7 @@ const PnLSnapshot = ({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", // Changed to exactly 3 columns per row
+          gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))",
           gap: "20px",
         }}
       >
@@ -466,8 +462,8 @@ const PnLSnapshot = ({
           <div>
             <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
               <Bar
-                data={createChartData("sales", "Sales Revenue", "rgba(93, 64, 55, 0.6)")}
-                options={chartOptions("Sales Revenue")}
+                data={createChartData("sales")}
+                options={chartOptions("Sales Revenue (R m)")}
               />
             </div>
             <button
@@ -507,8 +503,8 @@ const PnLSnapshot = ({
           <div>
             <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
               <Bar
-                data={createChartData("cogs", "Cost of Goods Sold", "rgba(139, 105, 20, 0.6)")}
-                options={chartOptions("Cost of Goods Sold")}
+                data={createChartData("cogs")}
+                options={chartOptions("Cost of Goods Sold (R m)")}
               />
             </div>
             <button
@@ -548,8 +544,8 @@ const PnLSnapshot = ({
           <div>
             <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
               <Bar
-                data={createChartData("opex", "Operating Expenses", "rgba(114, 84, 43, 0.6)")}
-                options={chartOptions("Operating Expenses")}
+                data={createChartData("opex")}
+                options={chartOptions("Operating Expenses (R m)")}
               />
             </div>
             <button
@@ -589,8 +585,8 @@ const PnLSnapshot = ({
           <div>
             <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
               <Bar
-                data={createChartData("grossProfit", "Gross Profit", "rgba(160, 120, 70, 0.6)")}
-                options={chartOptions("Gross Profit")}
+                data={createChartData("grossProfit")}
+                options={chartOptions("Gross Profit (R m)")}
               />
             </div>
             <button
@@ -630,8 +626,8 @@ const PnLSnapshot = ({
           <div>
             <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
               <Bar
-                data={createChartData("ebitda", "EBITDA", "rgba(139, 90, 43, 0.6)")}
-                options={chartOptions("EBITDA")}
+                data={createChartData("ebitda")}
+                options={chartOptions("EBITDA (R m)")}
               />
             </div>
             <button
@@ -671,8 +667,8 @@ const PnLSnapshot = ({
           <div>
             <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
               <Bar
-                data={createChartData("netProfit", "Net Profit", "rgba(101, 67, 33, 0.6)")}
-                options={chartOptions("Net Profit")}
+                data={createChartData("netProfit")}
+                options={chartOptions("Net Profit (R m)")}
               />
             </div>
             <button
@@ -712,7 +708,7 @@ const PnLSnapshot = ({
           <div>
             <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
               <Bar
-                data={createChartData("gpMargin", "GP Margin", "rgba(180, 140, 90, 0.6)", true)}
+                data={createChartData("gpMargin", true)}
                 options={chartOptions("GP Margin (%)", true)}
               />
             </div>
@@ -753,7 +749,7 @@ const PnLSnapshot = ({
           <div>
             <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
               <Bar
-                data={createChartData("npMargin", "NP Margin", "rgba(139, 69, 19, 0.6)", true)}
+                data={createChartData("npMargin", true)}
                 options={chartOptions("NP Margin (%)", true)}
               />
             </div>
@@ -1162,9 +1158,6 @@ const CashflowTrends = ({ activeSection, viewMode, financialYearStart, balanceSh
   }
 
   const months = generateMonths()
-  const currentYear = new Date().getFullYear()
-
-  const labelsWithYear = months.map((month) => `${month} ${currentYear.toString().slice(-2)}`)
 
   const exampleCashflowData = [1.2, 1.1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.35, 0.3, 0.25, 0.2]
   const exampleBurnRateData = [0.1, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0.05, 0.05, 0.05, 0.05, 0.05]
@@ -1193,17 +1186,17 @@ const CashflowTrends = ({ activeSection, viewMode, financialYearStart, balanceSh
       const quarters = []
       for (let i = 0; i < 4; i++) {
         const sum = data.slice(i * 3, i * 3 + 3).reduce((acc, val) => acc + val, 0)
-        quarters.push(sum) // Keep as sum for quarters, division by 3 removed for consistency with P&L aggregation
+        quarters.push(sum)
       }
       return quarters
     } else {
-      return [data.reduce((acc, val) => acc + val, 0)] // Keep as sum for year, division by 12 removed for consistency
+      return [data.reduce((acc, val) => acc + val, 0)]
     }
   }
 
   const getLabelsForView = () => {
     if (viewMode === "month") {
-      return labelsWithYear
+      return months
     } else if (viewMode === "quarter") {
       return ["Q1", "Q2", "Q3", "Q4"]
     } else {
@@ -1228,7 +1221,7 @@ const CashflowTrends = ({ activeSection, viewMode, financialYearStart, balanceSh
       },
       title: {
         display: true,
-        text: "Cashflow",
+        text: "Cashflow (R m)",
         color: "#5d4037",
         font: {
           size: 16,
@@ -1242,17 +1235,14 @@ const CashflowTrends = ({ activeSection, viewMode, financialYearStart, balanceSh
     },
     scales: {
       y: {
+        beginAtZero: true,
         title: {
-          display: true,
-          text: "Amount (R-m)",
-          color: "#72542b",
+          display: false,
         },
       },
       x: {
         title: {
-          display: true,
-          text: viewMode === "month" ? "Months" : viewMode === "quarter" ? "Quarters" : "Year",
-          color: "#72542b",
+          display: false,
         },
       },
     },
@@ -1266,7 +1256,7 @@ const CashflowTrends = ({ activeSection, viewMode, financialYearStart, balanceSh
       },
       title: {
         display: true,
-        text: "Burn Rate (Monthly Net Cash Outflow)",
+        text: "Burn Rate (R m)",
         color: "#5d4037",
         font: {
           size: 16,
@@ -1282,16 +1272,12 @@ const CashflowTrends = ({ activeSection, viewMode, financialYearStart, balanceSh
       y: {
         beginAtZero: true,
         title: {
-          display: true,
-          text: "Amount (R-m)",
-          color: "#72542b",
+          display: false,
         },
       },
       x: {
         title: {
-          display: true,
-          text: viewMode === "month" ? "Months" : viewMode === "quarter" ? "Quarters" : "Year",
-          color: "#72542b",
+          display: false,
         },
       },
     },
@@ -1422,7 +1408,7 @@ const BalanceSheet = ({
   user,
   onUpdateChartData,
   chartData,
-  isInvestorView, // Added isInvestorView prop
+  isInvestorView,
 }) => {
   const [balanceSheetTab, setBalanceSheetTab] = useState("snapshot")
   const [showModal, setShowModal] = useState(false)
@@ -1680,8 +1666,6 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
   }
 
   const months = generateMonths()
-  const currentYear = new Date().getFullYear()
-  const labelsWithYear = months.map((month) => `${month} ${currentYear.toString().slice(-2)}`)
 
   const receivablesData = chartData.receivables?.actual || []
   const payablesData = chartData.payables?.actual || []
@@ -1707,7 +1691,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
 
   const getLabelsForView = () => {
     if (viewMode === "month") {
-      return labelsWithYear
+      return months
     } else if (viewMode === "quarter") {
       return ["Q1", "Q2", "Q3", "Q4"]
     } else {
@@ -1726,7 +1710,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
       },
       title: {
         display: true,
-        text: "Receivables & Payables",
+        text: "Receivables & Payables (R m)",
         color: "#5d4037",
         font: {
           size: 16,
@@ -1742,16 +1726,12 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
       y: {
         beginAtZero: true,
         title: {
-          display: true,
-          text: "Amount (R-m)",
-          color: "#72542b",
+          display: false,
         },
       },
       x: {
         title: {
-          display: true,
-          text: viewMode === "month" ? "Months" : viewMode === "quarter" ? "Quarters" : "Year",
-          color: "#72542b",
+          display: false,
         },
       },
     },
@@ -1777,16 +1757,12 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
       y: {
         beginAtZero: true,
         title: {
-          display: true,
-          text: "Days",
-          color: "#72542b",
+          display: false,
         },
       },
       x: {
         title: {
-          display: true,
-          text: viewMode === "month" ? "Months" : viewMode === "quarter" ? "Quarters" : "Year",
-          color: "#72542b",
+          display: false,
         },
       },
     },
@@ -1818,18 +1794,14 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
       y: {
         beginAtZero: true,
         title: {
-          display: true,
-          text: "Inventory (R-m)",
-          color: "#72542b",
+          display: false,
         },
         position: "left",
       },
       y1: {
         beginAtZero: true,
         title: {
-          display: true,
-          text: "Inventory Days",
-          color: "#8b6914",
+          display: false,
         },
         position: "right",
         grid: {
@@ -1838,9 +1810,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
       },
       x: {
         title: {
-          display: true,
-          text: viewMode === "month" ? "Months" : viewMode === "quarter" ? "Quarters" : "Year",
-          color: "#72542b",
+          display: false,
         },
       },
     },
@@ -2213,14 +2183,14 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
                   labels: displayLabels,
                   datasets: [
                     {
-                      label: "Receivables",
+                      label: "Actual",
                       data: aggregateDataForView(receivablesData),
                       backgroundColor: "rgba(93, 64, 55, 0.6)",
                       borderColor: "rgb(93, 64, 55)",
                       borderWidth: 2,
                     },
                     {
-                      label: "Payables",
+                      label: "Budget",
                       data: aggregateDataForView(payablesData),
                       backgroundColor: "rgba(139, 105, 20, 0.6)",
                       borderColor: "rgb(139, 105, 20)",
@@ -2238,14 +2208,14 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
                   labels: displayLabels,
                   datasets: [
                     {
-                      label: "Receivables Days",
+                      label: "Actual",
                       data: aggregateDataForView(receivablesDaysData),
                       backgroundColor: "rgba(114, 84, 43, 0.6)",
                       borderColor: "rgb(114, 84, 43)",
                       borderWidth: 2,
                     },
                     {
-                      label: "Payables Days",
+                      label: "Budget",
                       data: aggregateDataForView(payablesDaysData),
                       backgroundColor: "rgba(156, 124, 95, 0.6)",
                       borderColor: "rgb(156, 124, 95)",
@@ -2263,7 +2233,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
                   labels: displayLabels,
                   datasets: [
                     {
-                      label: "Inventory",
+                      label: "Actual",
                       data: aggregateDataForView(inventoryData),
                       backgroundColor: "rgba(76, 175, 80, 0.6)",
                       borderColor: "rgb(76, 175, 80)",
@@ -2271,7 +2241,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
                       yAxisID: "y",
                     },
                     {
-                      label: "Inventory Days",
+                      label: "Budget",
                       data: aggregateDataForView(inventoryDaysData),
                       backgroundColor: "rgba(139, 105, 20, 0.6)",
                       borderColor: "rgb(139, 105, 20)",
@@ -3228,7 +3198,7 @@ const FinancialPerformance = () => {
             user={user}
             onUpdateChartData={handleUpdateChartData}
             chartData={chartData}
-            isInvestorView={isInvestorView} // Pass isInvestorView prop
+            isInvestorView={isInvestorView}
           />
         </div>
       </div>
