@@ -145,11 +145,12 @@ const DownloadModal = ({ isOpen, onClose, onDownload, availableSections, section
 }
 
 // NewLeads Component
-const NewLeads = ({ activeSection, currentUser }) => {
+const NewLeads = ({ activeSection, currentUser, isInvestorView }) => {
   const [leadData, setLeadData] = useState([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
   const [qualifiedData, setQualifiedData] = useState([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
   const [showEditForm, setShowEditForm] = useState(false)
   const [showDownloadModal, setShowDownloadModal] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
   const saveLeadsData = async () => {
@@ -158,7 +159,11 @@ const NewLeads = ({ activeSection, currentUser }) => {
       return
     }
     try {
-      await setDoc(doc(db, "new-leads", currentUser.uid), { leadData, qualifiedData })
+      await setDoc(doc(db, "new-leads", currentUser.uid), { 
+        leadData, 
+        qualifiedData,
+        lastUpdated: new Date().toISOString()
+      })
       setShowEditForm(false)
       alert("Leads data saved successfully!")
     } catch (error) {
@@ -170,20 +175,32 @@ const NewLeads = ({ activeSection, currentUser }) => {
   const loadLeadsData = async () => {
     if (!currentUser) return
     try {
+      setIsLoading(true)
       const docRef = doc(db, "new-leads", currentUser.uid)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         const data = docSnap.data()
         setLeadData(data.leadData || [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
         setQualifiedData(data.qualifiedData || [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+      } else {
+        // Initialize with empty data if no document exists
+        await setDoc(docRef, {
+          leadData: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          qualifiedData: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          lastUpdated: new Date().toISOString()
+        })
       }
     } catch (error) {
       console.error("Error loading leads data:", error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
   useEffect(() => {
-    loadLeadsData()
+    if (currentUser) {
+      loadLeadsData()
+    }
   }, [currentUser])
 
   const updateLeadValue = (index, value) => {
@@ -219,6 +236,21 @@ const NewLeads = ({ activeSection, currentUser }) => {
 
   if (activeSection !== "new-leads") return null
 
+  if (isLoading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '200px',
+        backgroundColor: '#fdfcfb',
+        borderRadius: '8px'
+      }}>
+        <div>Loading leads data...</div>
+      </div>
+    )
+  }
+
   return (
     <div
       style={{
@@ -232,19 +264,21 @@ const NewLeads = ({ activeSection, currentUser }) => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <h2 style={{ color: "#5d4037", marginTop: 0 }}>New Leads & Qualified Leads</h2>
         <div style={{ display: "flex", gap: "10px" }}>
-          <button
-            onClick={() => setShowEditForm(!showEditForm)}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#5d4037",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            {showEditForm ? "Cancel" : "Edit Data"}
-          </button>
+          {!isInvestorView && (
+            <button
+              onClick={() => setShowEditForm(!showEditForm)}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
+            >
+              {showEditForm ? "Cancel" : "Edit Data"}
+            </button>
+          )}
           <button
             onClick={() => setShowDownloadModal(true)}
             style={{
@@ -261,7 +295,7 @@ const NewLeads = ({ activeSection, currentUser }) => {
         </div>
       </div>
 
-      {showEditForm && (
+      {!isInvestorView && showEditForm && (
         <div
           style={{
             backgroundColor: "#f7f3f0",
@@ -365,6 +399,11 @@ const NewLeads = ({ activeSection, currentUser }) => {
                   text: "Number of Leads",
                 },
               },
+              x: {
+                title: {
+                  display: false,
+                },
+              },
             },
           }}
         />
@@ -386,10 +425,11 @@ const NewLeads = ({ activeSection, currentUser }) => {
 }
 
 // LeadSourceAnalysis Component
-const LeadSourceAnalysis = ({ activeSection, currentUser }) => {
+const LeadSourceAnalysis = ({ activeSection, currentUser, isInvestorView }) => {
   const [sources, setSources] = useState([])
   const [showEditForm, setShowEditForm] = useState(false)
   const [showDownloadModal, setShowDownloadModal] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   const saveSourceData = async () => {
     if (!currentUser) {
@@ -397,7 +437,10 @@ const LeadSourceAnalysis = ({ activeSection, currentUser }) => {
       return
     }
     try {
-      await setDoc(doc(db, "lead-source", currentUser.uid), { sources })
+      await setDoc(doc(db, "lead-source", currentUser.uid), { 
+        sources,
+        lastUpdated: new Date().toISOString()
+      })
       setShowEditForm(false)
       alert("Lead source data saved successfully!")
     } catch (error) {
@@ -409,18 +452,29 @@ const LeadSourceAnalysis = ({ activeSection, currentUser }) => {
   const loadSourceData = async () => {
     if (!currentUser) return
     try {
+      setIsLoading(true)
       const docRef = doc(db, "lead-source", currentUser.uid)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         setSources(docSnap.data().sources || [])
+      } else {
+        // Initialize with empty data if no document exists
+        await setDoc(docRef, {
+          sources: [],
+          lastUpdated: new Date().toISOString()
+        })
       }
     } catch (error) {
       console.error("Error loading lead source data:", error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
   useEffect(() => {
-    loadSourceData()
+    if (currentUser) {
+      loadSourceData()
+    }
   }, [currentUser])
 
   const updateSource = (index, field, value) => {
@@ -454,6 +508,21 @@ const LeadSourceAnalysis = ({ activeSection, currentUser }) => {
 
   if (activeSection !== "lead-source-analysis") return null
 
+  if (isLoading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '200px',
+        backgroundColor: '#fdfcfb',
+        borderRadius: '8px'
+      }}>
+        <div>Loading lead source data...</div>
+      </div>
+    )
+  }
+
   const sourceNames = sources.map((s) => s.name)
   const sourceData = sources.map((s) => s.percentage)
 
@@ -470,19 +539,21 @@ const LeadSourceAnalysis = ({ activeSection, currentUser }) => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <h2 style={{ color: "#5d4037", marginTop: 0 }}>Lead Source Analysis</h2>
         <div style={{ display: "flex", gap: "10px" }}>
-          <button
-            onClick={() => setShowEditForm(!showEditForm)}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#5d4037",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            {showEditForm ? "Cancel" : "Edit Data"}
-          </button>
+          {!isInvestorView && (
+            <button
+              onClick={() => setShowEditForm(!showEditForm)}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
+            >
+              {showEditForm ? "Cancel" : "Edit Data"}
+            </button>
+          )}
           <button
             onClick={() => setShowDownloadModal(true)}
             style={{
@@ -499,7 +570,7 @@ const LeadSourceAnalysis = ({ activeSection, currentUser }) => {
         </div>
       </div>
 
-      {showEditForm && (
+      {!isInvestorView && showEditForm && (
         <div
           style={{
             backgroundColor: "#f7f3f0",
@@ -600,7 +671,7 @@ const LeadSourceAnalysis = ({ activeSection, currentUser }) => {
             color: "#72542b",
           }}
         >
-          <p>No lead source data available. Click "Edit Data" to add your first source.</p>
+          <p>No lead source data available. {!isInvestorView && 'Click "Edit Data" to add your first source.'}</p>
         </div>
       ) : (
         <div
@@ -683,11 +754,12 @@ const LeadSourceAnalysis = ({ activeSection, currentUser }) => {
 }
 
 // CostPerLead Component
-const CostPerLead = ({ activeSection, currentUser }) => {
+const CostPerLead = ({ activeSection, currentUser, isInvestorView }) => {
   const [campaigns, setCampaigns] = useState([])
   const [industryAvg, setIndustryAvg] = useState(0)
   const [showEditForm, setShowEditForm] = useState(false)
   const [showDownloadModal, setShowDownloadModal] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   const saveCostPerLeadData = async () => {
     if (!currentUser) {
@@ -695,7 +767,11 @@ const CostPerLead = ({ activeSection, currentUser }) => {
       return
     }
     try {
-      await setDoc(doc(db, "cost-per-lead", currentUser.uid), { campaigns, industryAvg })
+      await setDoc(doc(db, "cost-per-lead", currentUser.uid), { 
+        campaigns, 
+        industryAvg,
+        lastUpdated: new Date().toISOString()
+      })
       setShowEditForm(false)
       alert("Cost per lead data saved successfully!")
     } catch (error) {
@@ -707,20 +783,32 @@ const CostPerLead = ({ activeSection, currentUser }) => {
   const loadCostPerLeadData = async () => {
     if (!currentUser) return
     try {
+      setIsLoading(true)
       const docRef = doc(db, "cost-per-lead", currentUser.uid)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         const data = docSnap.data()
         setCampaigns(data.campaigns || [])
         setIndustryAvg(data.industryAvg || 0)
+      } else {
+        // Initialize with empty data if no document exists
+        await setDoc(docRef, {
+          campaigns: [],
+          industryAvg: 0,
+          lastUpdated: new Date().toISOString()
+        })
       }
     } catch (error) {
       console.error("Error loading cost per lead data:", error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
   useEffect(() => {
-    loadCostPerLeadData()
+    if (currentUser) {
+      loadCostPerLeadData()
+    }
   }, [currentUser])
 
   const updateCampaign = (index, field, value) => {
@@ -757,6 +845,21 @@ const CostPerLead = ({ activeSection, currentUser }) => {
 
   if (activeSection !== "cost-per-lead") return null
 
+  if (isLoading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '200px',
+        backgroundColor: '#fdfcfb',
+        borderRadius: '8px'
+      }}>
+        <div>Loading cost per lead data...</div>
+      </div>
+    )
+  }
+
   const campaignNames = campaigns.map((c) => c.name)
   const costData = campaigns.map((c) => c.cost)
 
@@ -773,19 +876,21 @@ const CostPerLead = ({ activeSection, currentUser }) => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <h2 style={{ color: "#5d4037", marginTop: 0 }}>Cost Per Lead by Campaign</h2>
         <div style={{ display: "flex", gap: "10px" }}>
-          <button
-            onClick={() => setShowEditForm(!showEditForm)}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#5d4037",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            {showEditForm ? "Cancel" : "Edit Data"}
-          </button>
+          {!isInvestorView && (
+            <button
+              onClick={() => setShowEditForm(!showEditForm)}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
+            >
+              {showEditForm ? "Cancel" : "Edit Data"}
+            </button>
+          )}
           <button
             onClick={() => setShowDownloadModal(true)}
             style={{
@@ -802,7 +907,7 @@ const CostPerLead = ({ activeSection, currentUser }) => {
         </div>
       </div>
 
-      {showEditForm && (
+      {!isInvestorView && showEditForm && (
         <div
           style={{
             backgroundColor: "#f7f3f0",
@@ -918,7 +1023,7 @@ const CostPerLead = ({ activeSection, currentUser }) => {
             color: "#72542b",
           }}
         >
-          <p>No campaign data available. Click "Edit Data" to add your first campaign.</p>
+          <p>No campaign data available. {!isInvestorView && 'Click "Edit Data" to add your first campaign.'}</p>
         </div>
       ) : (
         <div style={{ height: "400px" }}>
@@ -961,6 +1066,11 @@ const CostPerLead = ({ activeSection, currentUser }) => {
                     text: "Cost (ZAR)",
                   },
                 },
+                x: {
+                  title: {
+                    display: false,
+                  },
+                },
               },
             }}
           />
@@ -983,11 +1093,12 @@ const CostPerLead = ({ activeSection, currentUser }) => {
 }
 
 // CustomerAcquisitionCost Component
-const CustomerAcquisitionCost = ({ activeSection, currentUser }) => {
+const CustomerAcquisitionCost = ({ activeSection, currentUser, isInvestorView }) => {
   const [cacData, setCacData] = useState([0, 0, 0, 0, 0])
   const [ltvData, setLtvData] = useState([0, 0, 0, 0, 0])
   const [showEditForm, setShowEditForm] = useState(false)
   const [showDownloadModal, setShowDownloadModal] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const quarters = ["Q1 2022", "Q2 2022", "Q3 2022", "Q4 2022", "Q1 2023"]
 
   const saveCacData = async () => {
@@ -996,7 +1107,11 @@ const CustomerAcquisitionCost = ({ activeSection, currentUser }) => {
       return
     }
     try {
-      await setDoc(doc(db, "customer-acquisition-cost", currentUser.uid), { cacData, ltvData })
+      await setDoc(doc(db, "customer-acquisition-cost", currentUser.uid), { 
+        cacData, 
+        ltvData,
+        lastUpdated: new Date().toISOString()
+      })
       setShowEditForm(false)
       alert("CAC data saved successfully!")
     } catch (error) {
@@ -1008,20 +1123,32 @@ const CustomerAcquisitionCost = ({ activeSection, currentUser }) => {
   const loadCacData = async () => {
     if (!currentUser) return
     try {
+      setIsLoading(true)
       const docRef = doc(db, "customer-acquisition-cost", currentUser.uid)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         const data = docSnap.data()
         setCacData(data.cacData || [0, 0, 0, 0, 0])
         setLtvData(data.ltvData || [0, 0, 0, 0, 0])
+      } else {
+        // Initialize with empty data if no document exists
+        await setDoc(docRef, {
+          cacData: [0, 0, 0, 0, 0],
+          ltvData: [0, 0, 0, 0, 0],
+          lastUpdated: new Date().toISOString()
+        })
       }
     } catch (error) {
       console.error("Error loading CAC data:", error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
   useEffect(() => {
-    loadCacData()
+    if (currentUser) {
+      loadCacData()
+    }
   }, [currentUser])
 
   const updateCacValue = (index, value) => {
@@ -1056,6 +1183,21 @@ const CustomerAcquisitionCost = ({ activeSection, currentUser }) => {
 
   if (activeSection !== "customer-acquisition-cost") return null
 
+  if (isLoading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '200px',
+        backgroundColor: '#fdfcfb',
+        borderRadius: '8px'
+      }}>
+        <div>Loading CAC data...</div>
+      </div>
+    )
+  }
+
   const currentCac = cacData[cacData.length - 1] || 0
   const currentLtv = ltvData[ltvData.length - 1] || 0
   const ratio = currentCac > 0 ? (currentLtv / currentCac).toFixed(1) : 0
@@ -1073,19 +1215,21 @@ const CustomerAcquisitionCost = ({ activeSection, currentUser }) => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <h2 style={{ color: "#5d4037", marginTop: 0 }}>Customer Acquisition Cost (CAC) vs LTV</h2>
         <div style={{ display: "flex", gap: "10px" }}>
-          <button
-            onClick={() => setShowEditForm(!showEditForm)}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#5d4037",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            {showEditForm ? "Cancel" : "Edit Data"}
-          </button>
+          {!isInvestorView && (
+            <button
+              onClick={() => setShowEditForm(!showEditForm)}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
+            >
+              {showEditForm ? "Cancel" : "Edit Data"}
+            </button>
+          )}
           <button
             onClick={() => setShowDownloadModal(true)}
             style={{
@@ -1102,7 +1246,7 @@ const CustomerAcquisitionCost = ({ activeSection, currentUser }) => {
         </div>
       </div>
 
-      {showEditForm && (
+      {!isInvestorView && showEditForm && (
         <div
           style={{
             backgroundColor: "#f7f3f0",
@@ -1210,6 +1354,11 @@ const CustomerAcquisitionCost = ({ activeSection, currentUser }) => {
                   text: "Amount (ZAR)",
                 },
               },
+              x: {
+                title: {
+                  display: false,
+                },
+              },
             },
           }}
         />
@@ -1244,10 +1393,11 @@ const CustomerAcquisitionCost = ({ activeSection, currentUser }) => {
 }
 
 // CampaignROI Component
-const CampaignROI = ({ activeSection, currentUser }) => {
+const CampaignROI = ({ activeSection, currentUser, isInvestorView }) => {
   const [campaigns, setCampaigns] = useState([])
   const [showEditForm, setShowEditForm] = useState(false)
   const [showDownloadModal, setShowDownloadModal] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   const saveCampaignROIData = async () => {
     if (!currentUser) {
@@ -1255,7 +1405,10 @@ const CampaignROI = ({ activeSection, currentUser }) => {
       return
     }
     try {
-      await setDoc(doc(db, "campaign-roi", currentUser.uid), { campaigns })
+      await setDoc(doc(db, "campaign-roi", currentUser.uid), { 
+        campaigns,
+        lastUpdated: new Date().toISOString()
+      })
       setShowEditForm(false)
       alert("Campaign ROI data saved successfully!")
     } catch (error) {
@@ -1267,18 +1420,29 @@ const CampaignROI = ({ activeSection, currentUser }) => {
   const loadCampaignROIData = async () => {
     if (!currentUser) return
     try {
+      setIsLoading(true)
       const docRef = doc(db, "campaign-roi", currentUser.uid)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         setCampaigns(docSnap.data().campaigns || [])
+      } else {
+        // Initialize with empty data if no document exists
+        await setDoc(docRef, {
+          campaigns: [],
+          lastUpdated: new Date().toISOString()
+        })
       }
     } catch (error) {
       console.error("Error loading campaign ROI data:", error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
   useEffect(() => {
-    loadCampaignROIData()
+    if (currentUser) {
+      loadCampaignROIData()
+    }
   }, [currentUser])
 
   const updateCampaign = (index, field, value) => {
@@ -1317,6 +1481,21 @@ const CampaignROI = ({ activeSection, currentUser }) => {
 
   if (activeSection !== "campaign-roi") return null
 
+  if (isLoading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '200px',
+        backgroundColor: '#fdfcfb',
+        borderRadius: '8px'
+      }}>
+        <div>Loading campaign ROI data...</div>
+      </div>
+    )
+  }
+
   return (
     <div
       style={{
@@ -1330,19 +1509,21 @@ const CampaignROI = ({ activeSection, currentUser }) => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <h2 style={{ color: "#5d4037", marginTop: 0 }}>Campaign ROI Analysis</h2>
         <div style={{ display: "flex", gap: "10px" }}>
-          <button
-            onClick={() => setShowEditForm(!showEditForm)}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#5d4037",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            {showEditForm ? "Cancel" : "Edit Data"}
-          </button>
+          {!isInvestorView && (
+            <button
+              onClick={() => setShowEditForm(!showEditForm)}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
+            >
+              {showEditForm ? "Cancel" : "Edit Data"}
+            </button>
+          )}
           <button
             onClick={() => setShowDownloadModal(true)}
             style={{
@@ -1359,7 +1540,7 @@ const CampaignROI = ({ activeSection, currentUser }) => {
         </div>
       </div>
 
-      {showEditForm && (
+      {!isInvestorView && showEditForm && (
         <div
           style={{
             backgroundColor: "#f7f3f0",
@@ -1471,7 +1652,7 @@ const CampaignROI = ({ activeSection, currentUser }) => {
             color: "#72542b",
           }}
         >
-          <p>No campaign data available. Click "Edit Data" to add your first campaign.</p>
+          <p>No campaign data available. {!isInvestorView && 'Click "Edit Data" to add your first campaign.'}</p>
         </div>
       ) : (
         <>
@@ -1619,10 +1800,11 @@ const CampaignROI = ({ activeSection, currentUser }) => {
 }
 
 // ConversionRate Component
-const ConversionRate = ({ activeSection, currentUser }) => {
+const ConversionRate = ({ activeSection, currentUser, isInvestorView }) => {
   const [stages, setStages] = useState([])
   const [showEditForm, setShowEditForm] = useState(false)
   const [showDownloadModal, setShowDownloadModal] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   const saveConversionData = async () => {
     if (!currentUser) {
@@ -1630,7 +1812,10 @@ const ConversionRate = ({ activeSection, currentUser }) => {
       return
     }
     try {
-      await setDoc(doc(db, "conversion-rate", currentUser.uid), { stages })
+      await setDoc(doc(db, "conversion-rate", currentUser.uid), { 
+        stages,
+        lastUpdated: new Date().toISOString()
+      })
       setShowEditForm(false)
       alert("Conversion rate data saved successfully!")
     } catch (error) {
@@ -1642,18 +1827,29 @@ const ConversionRate = ({ activeSection, currentUser }) => {
   const loadConversionData = async () => {
     if (!currentUser) return
     try {
+      setIsLoading(true)
       const docRef = doc(db, "conversion-rate", currentUser.uid)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         setStages(docSnap.data().stages || [])
+      } else {
+        // Initialize with empty data if no document exists
+        await setDoc(docRef, {
+          stages: [],
+          lastUpdated: new Date().toISOString()
+        })
       }
     } catch (error) {
       console.error("Error loading conversion rate data:", error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
   useEffect(() => {
-    loadConversionData()
+    if (currentUser) {
+      loadConversionData()
+    }
   }, [currentUser])
 
   const updateStage = (index, field, value) => {
@@ -1687,6 +1883,21 @@ const ConversionRate = ({ activeSection, currentUser }) => {
 
   if (activeSection !== "conversion-rate") return null
 
+  if (isLoading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '200px',
+        backgroundColor: '#fdfcfb',
+        borderRadius: '8px'
+      }}>
+        <div>Loading conversion rate data...</div>
+      </div>
+    )
+  }
+
   return (
     <div
       style={{
@@ -1700,19 +1911,21 @@ const ConversionRate = ({ activeSection, currentUser }) => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <h2 style={{ color: "#5d4037", marginTop: 0 }}>Conversion Rates</h2>
         <div style={{ display: "flex", gap: "10px" }}>
-          <button
-            onClick={() => setShowEditForm(!showEditForm)}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#5d4037",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            {showEditForm ? "Cancel" : "Edit Data"}
-          </button>
+          {!isInvestorView && (
+            <button
+              onClick={() => setShowEditForm(!showEditForm)}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
+            >
+              {showEditForm ? "Cancel" : "Edit Data"}
+            </button>
+          )}
           <button
             onClick={() => setShowDownloadModal(true)}
             style={{
@@ -1729,7 +1942,7 @@ const ConversionRate = ({ activeSection, currentUser }) => {
         </div>
       </div>
 
-      {showEditForm && (
+      {!isInvestorView && showEditForm && (
         <div
           style={{
             backgroundColor: "#f7f3f0",
@@ -1830,7 +2043,7 @@ const ConversionRate = ({ activeSection, currentUser }) => {
             color: "#72542b",
           }}
         >
-          <p>No conversion stage data available. Click "Edit Data" to add your first stage.</p>
+          <p>No conversion stage data available. {!isInvestorView && 'Click "Edit Data" to add your first stage.'}</p>
         </div>
       ) : (
         <div
@@ -1899,12 +2112,13 @@ const ConversionRate = ({ activeSection, currentUser }) => {
 }
 
 // RetentionLTV Component
-const RetentionLTV = ({ activeSection, currentUser }) => {
+const RetentionLTV = ({ activeSection, currentUser, isInvestorView }) => {
   const [retentionRates, setRetentionRates] = useState([0, 0, 0, 0, 0, 0])
   const [ltvValues, setLtvValues] = useState([0, 0, 0, 0, 0, 0])
   const [churnRate, setChurnRate] = useState(0)
   const [showEditForm, setShowEditForm] = useState(false)
   const [showDownloadModal, setShowDownloadModal] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const cohorts = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
 
   const saveRetentionLTVData = async () => {
@@ -1913,7 +2127,12 @@ const RetentionLTV = ({ activeSection, currentUser }) => {
       return
     }
     try {
-      await setDoc(doc(db, "retention-ltv", currentUser.uid), { retentionRates, ltvValues, churnRate })
+      await setDoc(doc(db, "retention-ltv", currentUser.uid), { 
+        retentionRates, 
+        ltvValues, 
+        churnRate,
+        lastUpdated: new Date().toISOString()
+      })
       setShowEditForm(false)
       alert("Retention & LTV data saved successfully!")
     } catch (error) {
@@ -1925,6 +2144,7 @@ const RetentionLTV = ({ activeSection, currentUser }) => {
   const loadRetentionLTVData = async () => {
     if (!currentUser) return
     try {
+      setIsLoading(true)
       const docRef = doc(db, "retention-ltv", currentUser.uid)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
@@ -1932,14 +2152,26 @@ const RetentionLTV = ({ activeSection, currentUser }) => {
         setRetentionRates(data.retentionRates || [0, 0, 0, 0, 0, 0])
         setLtvValues(data.ltvValues || [0, 0, 0, 0, 0, 0])
         setChurnRate(data.churnRate || 0)
+      } else {
+        // Initialize with empty data if no document exists
+        await setDoc(docRef, {
+          retentionRates: [0, 0, 0, 0, 0, 0],
+          ltvValues: [0, 0, 0, 0, 0, 0],
+          churnRate: 0,
+          lastUpdated: new Date().toISOString()
+        })
       }
     } catch (error) {
       console.error("Error loading retention & LTV data:", error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
   useEffect(() => {
-    loadRetentionLTVData()
+    if (currentUser) {
+      loadRetentionLTVData()
+    }
   }, [currentUser])
 
   const updateRetentionValue = (index, value) => {
@@ -1975,6 +2207,21 @@ const RetentionLTV = ({ activeSection, currentUser }) => {
 
   if (activeSection !== "retention-ltv") return null
 
+  if (isLoading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '200px',
+        backgroundColor: '#fdfcfb',
+        borderRadius: '8px'
+      }}>
+        <div>Loading retention & LTV data...</div>
+      </div>
+    )
+  }
+
   return (
     <div
       style={{
@@ -1988,19 +2235,21 @@ const RetentionLTV = ({ activeSection, currentUser }) => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <h2 style={{ color: "#5d4037", marginTop: 0 }}>Retention & Lifetime Value (LTV)</h2>
         <div style={{ display: "flex", gap: "10px" }}>
-          <button
-            onClick={() => setShowEditForm(!showEditForm)}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#5d4037",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            {showEditForm ? "Cancel" : "Edit Data"}
-          </button>
+          {!isInvestorView && (
+            <button
+              onClick={() => setShowEditForm(!showEditForm)}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
+            >
+              {showEditForm ? "Cancel" : "Edit Data"}
+            </button>
+          )}
           <button
             onClick={() => setShowDownloadModal(true)}
             style={{
@@ -2017,7 +2266,7 @@ const RetentionLTV = ({ activeSection, currentUser }) => {
         </div>
       </div>
 
-      {showEditForm && (
+      {!isInvestorView && showEditForm && (
         <div
           style={{
             backgroundColor: "#f7f3f0",
@@ -2139,6 +2388,11 @@ const RetentionLTV = ({ activeSection, currentUser }) => {
                     text: "Retention Rate (%)",
                   },
                 },
+                x: {
+                  title: {
+                    display: false,
+                  },
+                },
               },
             }}
           />
@@ -2171,6 +2425,11 @@ const RetentionLTV = ({ activeSection, currentUser }) => {
                   title: {
                     display: true,
                     text: "LTV (ZAR)",
+                  },
+                },
+                x: {
+                  title: {
+                    display: false,
                   },
                 },
               },
@@ -2209,10 +2468,11 @@ const RetentionLTV = ({ activeSection, currentUser }) => {
 }
 
 // SalesVelocity Component
-const SalesVelocity = ({ activeSection, currentUser }) => {
+const SalesVelocity = ({ activeSection, currentUser, isInvestorView }) => {
   const [velocityData, setVelocityData] = useState([0, 0, 0, 0, 0, 0, 0, 0])
   const [showEditForm, setShowEditForm] = useState(false)
   const [showDownloadModal, setShowDownloadModal] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug"]
 
   const saveSalesVelocityData = async () => {
@@ -2221,7 +2481,10 @@ const SalesVelocity = ({ activeSection, currentUser }) => {
       return
     }
     try {
-      await setDoc(doc(db, "sales-velocity", currentUser.uid), { velocityData })
+      await setDoc(doc(db, "sales-velocity", currentUser.uid), { 
+        velocityData,
+        lastUpdated: new Date().toISOString()
+      })
       setShowEditForm(false)
       alert("Sales velocity data saved successfully!")
     } catch (error) {
@@ -2233,18 +2496,29 @@ const SalesVelocity = ({ activeSection, currentUser }) => {
   const loadSalesVelocityData = async () => {
     if (!currentUser) return
     try {
+      setIsLoading(true)
       const docRef = doc(db, "sales-velocity", currentUser.uid)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         setVelocityData(docSnap.data().velocityData || [0, 0, 0, 0, 0, 0, 0, 0])
+      } else {
+        // Initialize with empty data if no document exists
+        await setDoc(docRef, {
+          velocityData: [0, 0, 0, 0, 0, 0, 0, 0],
+          lastUpdated: new Date().toISOString()
+        })
       }
     } catch (error) {
       console.error("Error loading sales velocity data:", error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
   useEffect(() => {
-    loadSalesVelocityData()
+    if (currentUser) {
+      loadSalesVelocityData()
+    }
   }, [currentUser])
 
   const updateVelocityValue = (index, value) => {
@@ -2275,6 +2549,21 @@ const SalesVelocity = ({ activeSection, currentUser }) => {
 
   if (activeSection !== "sales-velocity") return null
 
+  if (isLoading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '200px',
+        backgroundColor: '#fdfcfb',
+        borderRadius: '8px'
+      }}>
+        <div>Loading sales velocity data...</div>
+      </div>
+    )
+  }
+
   const currentVelocity = velocityData[velocityData.length - 1] || 0
   const firstVelocity = velocityData[0] || 0
   const improvement = firstVelocity > 0 ? firstVelocity - currentVelocity : 0
@@ -2292,19 +2581,21 @@ const SalesVelocity = ({ activeSection, currentUser }) => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <h2 style={{ color: "#5d4037", marginTop: 0 }}>Sales Velocity (Days to Close)</h2>
         <div style={{ display: "flex", gap: "10px" }}>
-          <button
-            onClick={() => setShowEditForm(!showEditForm)}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#5d4037",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            {showEditForm ? "Cancel" : "Edit Data"}
-          </button>
+          {!isInvestorView && (
+            <button
+              onClick={() => setShowEditForm(!showEditForm)}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
+            >
+              {showEditForm ? "Cancel" : "Edit Data"}
+            </button>
+          )}
           <button
             onClick={() => setShowDownloadModal(true)}
             style={{
@@ -2321,7 +2612,7 @@ const SalesVelocity = ({ activeSection, currentUser }) => {
         </div>
       </div>
 
-      {showEditForm && (
+      {!isInvestorView && showEditForm && (
         <div
           style={{
             backgroundColor: "#f7f3f0",
@@ -2396,6 +2687,11 @@ const SalesVelocity = ({ activeSection, currentUser }) => {
                 title: {
                   display: true,
                   text: "Days",
+                },
+              },
+              x: {
+                title: {
+                  display: false,
                 },
               },
             },
@@ -2474,12 +2770,13 @@ const SalesVelocity = ({ activeSection, currentUser }) => {
 }
 
 // RepeatCustomers Component
-const RepeatCustomers = ({ activeSection, currentUser }) => {
+const RepeatCustomers = ({ activeSection, currentUser, isInvestorView }) => {
   const [repeatData, setRepeatData] = useState([0, 0, 0, 0, 0])
   const [churnData, setChurnData] = useState([0, 0, 0, 0, 0])
   const [loyaltyImpact, setLoyaltyImpact] = useState(0)
   const [showEditForm, setShowEditForm] = useState(false)
   const [showDownloadModal, setShowDownloadModal] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const years = ["2019", "2020", "2021", "2022", "2023"]
 
   const saveRepeatCustomersData = async () => {
@@ -2488,7 +2785,12 @@ const RepeatCustomers = ({ activeSection, currentUser }) => {
       return
     }
     try {
-      await setDoc(doc(db, "repeat-customers", currentUser.uid), { repeatData, churnData, loyaltyImpact })
+      await setDoc(doc(db, "repeat-customers", currentUser.uid), { 
+        repeatData, 
+        churnData, 
+        loyaltyImpact,
+        lastUpdated: new Date().toISOString()
+      })
       setShowEditForm(false)
       alert("Repeat customers data saved successfully!")
     } catch (error) {
@@ -2500,6 +2802,7 @@ const RepeatCustomers = ({ activeSection, currentUser }) => {
   const loadRepeatCustomersData = async () => {
     if (!currentUser) return
     try {
+      setIsLoading(true)
       const docRef = doc(db, "repeat-customers", currentUser.uid)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
@@ -2507,14 +2810,26 @@ const RepeatCustomers = ({ activeSection, currentUser }) => {
         setRepeatData(data.repeatData || [0, 0, 0, 0, 0])
         setChurnData(data.churnData || [0, 0, 0, 0, 0])
         setLoyaltyImpact(data.loyaltyImpact || 0)
+      } else {
+        // Initialize with empty data if no document exists
+        await setDoc(docRef, {
+          repeatData: [0, 0, 0, 0, 0],
+          churnData: [0, 0, 0, 0, 0],
+          loyaltyImpact: 0,
+          lastUpdated: new Date().toISOString()
+        })
       }
     } catch (error) {
       console.error("Error loading repeat customers data:", error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
   useEffect(() => {
-    loadRepeatCustomersData()
+    if (currentUser) {
+      loadRepeatCustomersData()
+    }
   }, [currentUser])
 
   const updateRepeatValue = (index, value) => {
@@ -2549,6 +2864,21 @@ const RepeatCustomers = ({ activeSection, currentUser }) => {
 
   if (activeSection !== "repeat-customers") return null
 
+  if (isLoading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '200px',
+        backgroundColor: '#fdfcfb',
+        borderRadius: '8px'
+      }}>
+        <div>Loading repeat customers data...</div>
+      </div>
+    )
+  }
+
   const currentRepeatRate = repeatData[repeatData.length - 1] || 0
   const currentChurnRate = churnData[churnData.length - 1] || 0
 
@@ -2565,19 +2895,21 @@ const RepeatCustomers = ({ activeSection, currentUser }) => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <h2 style={{ color: "#5d4037", marginTop: 0 }}>Repeat Customers & Churn Rate</h2>
         <div style={{ display: "flex", gap: "10px" }}>
-          <button
-            onClick={() => setShowEditForm(!showEditForm)}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#5d4037",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            {showEditForm ? "Cancel" : "Edit Data"}
-          </button>
+          {!isInvestorView && (
+            <button
+              onClick={() => setShowEditForm(!showEditForm)}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
+            >
+              {showEditForm ? "Cancel" : "Edit Data"}
+            </button>
+          )}
           <button
             onClick={() => setShowDownloadModal(true)}
             style={{
@@ -2594,7 +2926,7 @@ const RepeatCustomers = ({ activeSection, currentUser }) => {
         </div>
       </div>
 
-      {showEditForm && (
+      {!isInvestorView && showEditForm && (
         <div
           style={{
             backgroundColor: "#f7f3f0",
@@ -2713,6 +3045,11 @@ const RepeatCustomers = ({ activeSection, currentUser }) => {
                 title: {
                   display: true,
                   text: "Percentage (%)",
+                },
+              },
+              x: {
+                title: {
+                  display: false,
                 },
               },
             },
@@ -2961,15 +3298,15 @@ const MarketingSales = () => {
             ))}
           </div>
 
-          <NewLeads activeSection={activeSection} currentUser={currentUser} />
-          <LeadSourceAnalysis activeSection={activeSection} currentUser={currentUser} />
-          <CostPerLead activeSection={activeSection} currentUser={currentUser} />
-          <CustomerAcquisitionCost activeSection={activeSection} currentUser={currentUser} />
-          <CampaignROI activeSection={activeSection} currentUser={currentUser} />
-          <ConversionRate activeSection={activeSection} currentUser={currentUser} />
-          <RetentionLTV activeSection={activeSection} currentUser={currentUser} />
-          <SalesVelocity activeSection={activeSection} currentUser={currentUser} />
-          <RepeatCustomers activeSection={activeSection} currentUser={currentUser} />
+          <NewLeads activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
+          <LeadSourceAnalysis activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
+          <CostPerLead activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
+          <CustomerAcquisitionCost activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
+          <CampaignROI activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
+          <ConversionRate activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
+          <RetentionLTV activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
+          <SalesVelocity activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
+          <RepeatCustomers activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
         </div>
       </div>
     </div>

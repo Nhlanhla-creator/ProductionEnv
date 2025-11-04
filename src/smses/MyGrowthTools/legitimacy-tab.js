@@ -2,7 +2,7 @@
 import { useState } from "react"
 import { getFirestore, collection, addDoc, serverTimestamp } from "firebase/firestore"
 import { getAuth } from "firebase/auth"
-import { Check, ShoppingCart, CreditCard } from "lucide-react"
+import { Check, ShoppingCart, Globe, Palette, Monitor, TrendingUp, Star } from "lucide-react"
 import EmbeddedCheckout from "../../components/EmbeddedCheckout"
 
 // UPDATED: Use the new one-time checkout function
@@ -42,12 +42,12 @@ const createOneTimeCheckout = async (amount, currency, userId, toolName, toolCat
 };
 
 const LegitimacyTab = () => {
-  const [selectedPackage, setSelectedPackage] = useState(null)
+  const [activeSubTab, setActiveSubTab] = useState("digital")
+  const [selectedItems, setSelectedItems] = useState({})
   const [isPaymentLoading, setIsPaymentLoading] = useState(false)
   const [showCheckout, setShowCheckout] = useState(false)
   const [checkoutId, setCheckoutId] = useState(null)
   const [paymentProcessing, setPaymentProcessing] = useState(false)
-  const [hoveredPackage, setHoveredPackage] = useState(null)
 
   const colors = {
     darkBrown: "#372C27",
@@ -66,64 +66,158 @@ const LegitimacyTab = () => {
     error: "#dc2626",
   }
 
-  const legitimacyPackages = [
-    {
+  const legitimacyCategories = {
+    digital: {
       name: "Digital Foundation",
-      subtitle: "Exist online",
-      focus: "Get your business online",
-      price: 4500,
-      features: ["1-year hosting & domain registration", "Up to 5 business email accounts"],
-      icon: "",
-      deliveryTime: "24-48 hours"
+      scoreArea: "Online Presence",
+      description: "Get your business online with professional infrastructure.",
+      icon: <Globe size={24} />,
+      items: [
+        {
+          name: "1-year Hosting",
+          description: "Reliable web hosting service for your business website",
+          price: 1500,
+          deliveryTime: "24-48 hours"
+        },
+        {
+          name: "Domain Registration",
+          description: "Professional domain name registration for 1 year",
+          price: 500,
+          deliveryTime: "24-48 hours"
+        },
+        {
+          name: "Business Email Accounts (5)",
+          description: "Up to 5 professional business email accounts",
+          price: 2500,
+          deliveryTime: "24-48 hours"
+        },
+      ],
+      bundlePrice: 4500,
     },
-    {
+    branding: {
       name: "First Impressions",
-      subtitle: "Look professional",
-      focus: "Establish a professional brand identity",
-      price: 5000,
-      features: [
-        "Logo design (2 concepts, 3 revisions)",
-        "Brand board (colours & fonts)",
-        "Business card template",
-        "Email signature template",
-        "Company brochure/flyer",
-        "Letterhead design",
+      scoreArea: "Professional Brand Identity",
+      description: "Establish a professional brand that builds trust and credibility.",
+      icon: <Palette size={24} />,
+      items: [
+        {
+          name: "Logo Design",
+          description: "2 logo concepts with 3 rounds of revisions",
+          price: 2000,
+          deliveryTime: "3-5 business days"
+        },
+        {
+          name: "Brand Board",
+          description: "Complete brand colors, fonts, and style guide",
+          price: 1000,
+          deliveryTime: "3-5 business days"
+        },
+        {
+          name: "Business Card Template",
+          description: "Professional business card design template",
+          price: 500,
+          deliveryTime: "3-5 business days"
+        },
+        {
+          name: "Email Signature Template",
+          description: "Branded email signature for your team",
+          price: 300,
+          deliveryTime: "3-5 business days"
+        },
+        {
+          name: "Company Brochure/Flyer",
+          description: "Marketing collateral design",
+          price: 800,
+          deliveryTime: "3-5 business days"
+        },
+        {
+          name: "Letterhead Design",
+          description: "Professional letterhead template",
+          price: 400,
+          deliveryTime: "3-5 business days"
+        },
       ],
-      icon: "",
-      deliveryTime: "3-5 business days"
+      bundlePrice: 5000,
     },
-    {
+    presence: {
       name: "Digital Presence",
-      subtitle: "Show up credibly online",
-      focus: "Bring your brand to life online",
-      price: 6000,
-      features: [
-        "Starter website (5 pages)",
-        "LinkedIn company page",
-        "Leadership social media kit (profile & banner templates)",
+      scoreArea: "Online Credibility",
+      description: "Bring your brand to life online with professional digital assets.",
+      icon: <Monitor size={24} />,
+      items: [
+        {
+          name: "Starter Website (5 pages)",
+          description: "Professional 5-page website with responsive design",
+          price: 4000,
+          deliveryTime: "5-7 business days"
+        },
+        {
+          name: "LinkedIn Company Page",
+          description: "Complete LinkedIn company page setup and optimization",
+          price: 1000,
+          deliveryTime: "5-7 business days"
+        },
+        {
+          name: "Leadership Social Media Kit",
+          description: "Profile and banner templates for leadership team",
+          price: 1000,
+          deliveryTime: "5-7 business days"
+        },
       ],
-      icon: "",
-      deliveryTime: "5-7 business days"
+      bundlePrice: 6000,
     },
-    {
+    visibility: {
       name: "Legitimacy Accelerator",
-      subtitle: "Amplify trust with visibility",
-      focus: "Boost trust with visibility",
-      price: 6000,
-      features: ["Google Business Profile & SEO setup", "30-sec explainer video", "1 press release draft"],
-      icon: "",
-      deliveryTime: "7-10 business days"
+      scoreArea: "Trust & Visibility",
+      description: "Boost trust and visibility with strategic marketing tools.",
+      icon: <TrendingUp size={24} />,
+      items: [
+        {
+          name: "Google Business Profile Setup",
+          description: "Complete Google Business Profile with SEO optimization",
+          price: 2000,
+          deliveryTime: "7-10 business days"
+        },
+        {
+          name: "30-sec Explainer Video",
+          description: "Professional animated explainer video for your business",
+          price: 3000,
+          deliveryTime: "7-10 business days"
+        },
+        {
+          name: "Press Release Draft",
+          description: "Professional press release for business announcement",
+          price: 1000,
+          deliveryTime: "7-10 business days"
+        },
+      ],
+      bundlePrice: 6000,
     },
-  ]
+    complete: {
+      name: "Full Legitimacy Booster",
+      scoreArea: "Complete Solution",
+      description: "Get all four packs at a discounted rate for maximum impact.",
+      icon: <Star size={24} />,
+      items: [
+        {
+          name: "Complete Legitimacy Bundle",
+          description: "All 4 packs (Digital Foundation, First Impressions, Digital Presence, and Legitimacy Accelerator) at 20% discount.",
+          price: 17200,
+          deliveryTime: "7-14 business days",
+          isBundle: true
+        },
+      ],
+      bundlePrice: 17200,
+    },
+  }
 
   const styles = {
     container: {
       padding: "2rem 0",
-      position: "relative",
     },
     header: {
       textAlign: "center",
-      marginBottom: "3rem",
+      marginBottom: "2rem",
     },
     title: {
       fontSize: "clamp(2rem, 4vw, 2.5rem)",
@@ -149,156 +243,166 @@ const LegitimacyTab = () => {
       maxWidth: "800px",
       margin: "0 auto",
     },
-    packagesGrid: {
-      display: "grid",
-      gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-      gap: "2rem",
-      marginBottom: "3rem",
-      maxWidth: "1400px",
-      margin: "0 auto",
-      padding: "0 1rem",
-    },
-    packageCard: {
-      background: colors.offWhite,
-      borderRadius: "1.5rem",
-      boxShadow: "0 10px 30px rgba(0, 0, 0, 0.15), 0 4px 10px rgba(0, 0, 0, 0.05)",
-      cursor: "pointer",
-      position: "relative",
+    subTabsContainer: {
       display: "flex",
-      flexDirection: "column",
-      height: "100%",
+      gap: "0",
+      background: colors.cream,
+      borderRadius: "12px",
       overflow: "hidden",
+      marginBottom: "2rem",
       border: `1px solid ${colors.lightTan}`,
-      transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+      flexWrap: "wrap",
     },
-    packageCardSelected: {
-      borderColor: colors.accentGold,
-      boxShadow: `0 15px 40px ${colors.accentGold}20, 0 6px 15px ${colors.accentGold}10`,
-      transform: "translateY(-6px)",
-    },
-    packageCardHover: {
-      transform: "translateY(-4px)",
-      boxShadow: "0 12px 35px rgba(0, 0, 0, 0.2), 0 5px 12px rgba(0, 0, 0, 0.08)",
-    },
-    cardHeaderBackground: {
-      height: "140px",
-      background: `linear-gradient(135deg, ${colors.mediumBrown} 0%, ${colors.darkBrown} 100%)`,
+    subTab: {
+      flex: 1,
+      minWidth: "120px",
+      padding: "1.5rem 1rem",
+      background: colors.offWhite,
+      border: "none",
+      cursor: "pointer",
+      fontWeight: "600",
+      fontSize: "0.9rem",
+      color: colors.mediumBrown,
+      transition: "all 0.3s ease",
       display: "flex",
       flexDirection: "column",
-      justifyContent: "center",
       alignItems: "center",
+      gap: "0.5rem",
+      borderRight: `1px solid ${colors.lightTan}`,
+    },
+    subTabActive: {
+      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
       color: colors.lightText,
-      padding: "1rem",
-      position: "relative",
-      zIndex: 1,
-      borderTopLeftRadius: "1.5rem",
-      borderTopRightRadius: "1.5rem",
     },
-    packageIcon: {
-      fontSize: "2.5rem",
-      marginBottom: "0.5rem",
-      filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.3))",
-    },
-    packageName: {
-      fontSize: "clamp(1.2rem, 2vw, 1.5rem)",
-      fontWeight: "700",
-      lineHeight: "1.3",
-      textAlign: "center",
-      textShadow: "0 1px 2px rgba(0,0,0,0.2)",
-    },
-    priceContainer: {
+    tableContainer: {
       background: colors.offWhite,
+      border: `2px solid ${colors.lightTan}`,
       borderRadius: "1rem",
-      padding: "1.5rem 1rem",
-      textAlign: "center",
-      position: "relative",
-      top: "-30px",
-      zIndex: 2,
-      margin: "0 1.5rem",
-      boxShadow: "0 4px 15px rgba(0, 0, 0, 0.1)",
-      border: `1px solid ${colors.lightTan}`,
+      boxShadow: "0 8px 24px rgba(0, 0, 0, 0.1)",
+      overflow: "hidden",
+      marginBottom: "2rem",
     },
-    packagePrice: {
-      fontSize: "clamp(2rem, 3vw, 2.5rem)",
-      fontWeight: "800",
-      color: colors.accentGold,
-      margin: "0",
-      lineHeight: "1",
+    table: {
+      width: "100%",
+      borderCollapse: "collapse",
     },
-    packageSubtitle: {
+    tableHeader: {
+      background: `linear-gradient(135deg, ${colors.darkBrown} 0%, ${colors.mediumBrown} 100%)`,
+      color: colors.lightText,
+      fontWeight: "700",
       fontSize: "clamp(0.9rem, 1.5vw, 1rem)",
+      textAlign: "left",
+    },
+    th: {
+      padding: "1.25rem 1.5rem",
+      borderBottom: `2px solid ${colors.mediumBrown}`,
+    },
+    itemRow: {
+      background: colors.offWhite,
+      color: colors.darkText,
+      transition: "all 0.3s ease",
+      cursor: "pointer",
+    },
+    itemRowSelected: {
+      backgroundColor: colors.lightTan,
+      borderLeft: `4px solid ${colors.accentGold}`,
+    },
+    td: {
+      padding: "1.25rem 1.5rem",
+      borderBottom: `1px solid ${colors.lightTan}`,
+      verticalAlign: "top",
+    },
+    checkboxContainer: {
+      display: "flex",
+      alignItems: "center",
+      gap: "0.75rem",
+      cursor: "pointer",
+    },
+    checkbox: {
+      width: "22px",
+      height: "22px",
+      borderRadius: "6px",
+      border: `2px solid ${colors.accentGold}`,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: colors.offWhite,
+      flexShrink: 0,
+      transition: "all 0.3s ease",
+      boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+    },
+    checkboxChecked: {
+      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
+      borderColor: colors.accentGold,
+      color: colors.lightText,
+      transform: "scale(1.1)",
+      boxShadow: `0 4px 8px ${colors.accentGold}40`,
+    },
+    itemName: {
+      fontWeight: "600",
+      fontSize: "clamp(0.9rem, 1.5vw, 1rem)",
+      color: colors.darkBrown,
+    },
+    itemDescription: {
+      fontSize: "clamp(0.8rem, 1.5vw, 0.9rem)",
+      color: colors.mediumBrown,
+      lineHeight: "1.4",
+      marginTop: "0.5rem",
+    },
+    itemPrice: {
+      fontWeight: "700",
+      fontSize: "clamp(0.9rem, 1.5vw, 1rem)",
+      color: colors.accentGold,
+      whiteSpace: "nowrap",
+    },
+    bundleNote: {
+      fontSize: "clamp(0.75rem, 1.5vw, 0.85rem)",
       color: colors.mediumBrown,
       fontStyle: "italic",
       marginTop: "0.5rem",
-      fontWeight: 500,
-    },
-    packageFocus: {
-      fontSize: "clamp(0.8rem, 1.5vw, 0.9rem)",
-      color: colors.mediumBrown,
-      marginTop: "0.5rem",
-      minHeight: "2.5em",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    deliveryBadge: {
-      background: `linear-gradient(135deg, ${colors.accentGold}20 0%, ${colors.lightTan}40 100%)`,
-      color: colors.darkBrown,
-      padding: "0.4rem 0.8rem",
-      borderRadius: "20px",
-      fontSize: "0.75rem",
-      fontWeight: 600,
-      marginTop: "0.5rem",
+      padding: "0.5rem 0.75rem",
+      background: `${colors.accentGold}20`,
+      borderRadius: "6px",
       border: `1px solid ${colors.accentGold}40`,
     },
-    featuresContainer: {
-      padding: "0 2rem 2rem",
-      marginTop: "-20px",
-      flex: "1",
-      display: "flex",
-      flexDirection: "column",
-      justifyContent: "space-between",
+    totalSection: {
+      background: `linear-gradient(135deg, ${colors.gradientStart} 0%, ${colors.gradientEnd} 100%)`,
+      color: colors.lightText,
+      padding: "2.5rem",
+      borderRadius: "1.5rem",
+      textAlign: "center",
+      marginTop: "3rem",
+      boxShadow: "0 12px 40px rgba(0, 0, 0, 0.3)",
     },
-    packageFeatures: {
-      listStyle: "none",
-      padding: "0",
-      margin: "0 0 1.5rem 0",
+    totalTitle: {
+      fontSize: "clamp(1.25rem, 2.5vw, 1.5rem)",
+      fontWeight: "700",
+      marginBottom: "1rem",
     },
-    packageFeature: {
-      display: "flex",
-      alignItems: "flex-start",
-      gap: "0.75rem",
-      marginBottom: "0.75rem",
-      fontSize: "clamp(0.85rem, 1.5vw, 0.95rem)",
-      color: colors.darkText,
-      lineHeight: "1.5",
+    totalAmount: {
+      fontSize: "clamp(2rem, 4vw, 2.5rem)",
+      fontWeight: "800",
+      marginBottom: "1.5rem",
     },
     buyButton: {
-      width: "100%",
-      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
-      color: colors.lightText,
+      background: colors.offWhite,
+      color: colors.darkBrown,
       border: "none",
-      padding: "1rem 2rem",
+      padding: "1.25rem 2.5rem",
       borderRadius: "0.75rem",
       fontWeight: "700",
-      fontSize: "clamp(0.9rem, 1.5vw, 1rem)",
+      fontSize: "clamp(1rem, 1.5vw, 1.1rem)",
       cursor: "pointer",
       transition: "all 0.3s ease",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
       gap: "0.75rem",
-      marginTop: "auto",
-      minHeight: "50px",
-      boxShadow: `0 4px 12px ${colors.accentGold}40`,
+      margin: "0 auto",
+      minWidth: "220px",
+      boxShadow: "0 6px 20px rgba(0, 0, 0, 0.2)",
       textTransform: "uppercase",
       letterSpacing: "0.5px",
-    },
-    buyButtonProcessing: {
-      background: `linear-gradient(135deg, ${colors.lightBrown} 0%, ${colors.lightTan} 100%)`,
-      cursor: "not-allowed",
-      opacity: 0.7,
-      color: colors.mediumBrown,
     },
     checkoutModal: {
       position: "fixed",
@@ -313,7 +417,6 @@ const LegitimacyTab = () => {
       alignItems: "center",
       zIndex: 1000,
       padding: "1rem",
-      boxSizing: "border-box",
     },
     checkoutContent: {
       background: colors.offWhite,
@@ -327,111 +430,55 @@ const LegitimacyTab = () => {
       border: `1px solid ${colors.lightTan}`,
       position: "relative",
     },
-    checkoutHeader: {
-      color: colors.darkBrown,
-      marginBottom: "0.5rem",
-      textAlign: "center",
-      fontSize: "1.5rem",
-      fontWeight: 700,
-    },
-    checkoutInfo: {
-      background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
-      borderRadius: "12px",
-      padding: "1.5rem",
-      marginBottom: "1.5rem",
-      border: `1px solid ${colors.lightTan}`,
-      textAlign: "center",
-    },
-    packageSummary: {
-      color: colors.darkBrown,
-      fontSize: "1.1rem",
-      fontWeight: 600,
-      marginBottom: "0.5rem",
-    },
-    priceSummary: {
-      color: colors.accentGold,
-      fontSize: "1.5rem",
-      fontWeight: 800,
-      marginBottom: "0.5rem",
-    },
-    deliveryInfo: {
-      color: colors.mediumBrown,
-      fontSize: "0.9rem",
-      fontStyle: "italic",
-    },
-    processingOverlay: {
-      position: "absolute",
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: `${colors.offWhite}F5`,
-      backdropFilter: "blur(6px)",
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center",
-      zIndex: 1001,
-      borderRadius: "24px",
-      boxShadow: `inset 0 0 20px ${colors.darkBrown}20`,
-    },
-    processingSpinner: {
-      width: "80px",
-      height: "80px",
-      border: `6px solid ${colors.lightTan}`,
-      borderTop: `6px solid ${colors.accentGold}`,
-      borderRadius: "50%",
-      animation: "spin 1s linear infinite",
-      marginBottom: "2rem",
-    },
-    processingTitle: {
-      color: colors.darkBrown,
-      fontSize: "1.75rem",
-      fontWeight: 800,
-      marginBottom: "1rem",
-      textAlign: "center",
-      textShadow: `0 2px 4px ${colors.darkBrown}20`,
-    },
-    processingText: {
-      color: colors.mediumBrown,
-      fontSize: "1.1rem",
-      textAlign: "center",
-      lineHeight: "1.6",
-      maxWidth: "350px",
-      fontWeight: 500,
-      textShadow: `0 1px 2px ${colors.darkBrown}10`,
-    },
-    progressBar: {
-      marginTop: "2rem",
-      width: "200px",
-      height: "4px",
-      background: colors.lightTan,
-      borderRadius: "2px",
-      overflow: "hidden",
-      position: "relative",
-    },
-    progressBarFill: {
-      width: "50%",
-      height: "100%",
-      background: `linear-gradient(90deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
-      borderRadius: "2px",
-      animation: "progressSlide 2s linear infinite",
-    },
-    cancelButton: {
-      padding: "1rem 2rem",
-      background: `linear-gradient(135deg, ${colors.lightTan} 0%, ${colors.cream} 100%)`,
-      color: colors.darkBrown,
-      border: "none",
-      borderRadius: "12px",
-      fontWeight: 700,
-      fontSize: "1rem",
-      cursor: "pointer",
-      transition: "all 0.3s ease",
-    },
   }
 
-  const handlePurchase = async (packageIndex) => {
-    setSelectedPackage(packageIndex)
+  const toggleItem = (itemIndex) => {
+    const key = `${activeSubTab}-${itemIndex}`
+    setSelectedItems((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }))
+  }
+
+  const calculateTotal = () => {
+    const category = legitimacyCategories[activeSubTab]
+    let total = 0
+    let selectedCount = 0
+    const selectedPrices = []
+
+    category.items.forEach((item, itemIdx) => {
+      const key = `${activeSubTab}-${itemIdx}`
+      if (selectedItems[key]) {
+        selectedPrices.push(item.price)
+        selectedCount++
+      }
+    })
+
+    // Check if all items are selected and bundle price exists (excluding the complete bundle tab)
+    if (activeSubTab !== "complete" && selectedCount === category.items.length && category.bundlePrice) {
+      total = category.bundlePrice
+    } else {
+      total = selectedPrices.reduce((sum, price) => sum + price, 0)
+    }
+
+    return { total, selectedCount }
+  }
+
+  const { total, selectedCount } = calculateTotal()
+
+  const getSelectedItemsList = () => {
+    const category = legitimacyCategories[activeSubTab]
+    const selectedItemsList = []
+    category.items.forEach((item, itemIdx) => {
+      const key = `${activeSubTab}-${itemIdx}`
+      if (selectedItems[key]) {
+        selectedItemsList.push(`${category.name}: ${item.name}`)
+      }
+    })
+    return selectedItemsList
+  }
+
+  const handlePurchase = async () => {
     const auth = getAuth()
     const user = auth.currentUser
 
@@ -440,21 +487,23 @@ const LegitimacyTab = () => {
       return
     }
 
+    if (selectedCount === 0) {
+      alert("Please select at least one item to purchase.")
+      return
+    }
+
     setIsPaymentLoading(true)
 
     try {
-      const selectedPkg = legitimacyPackages[packageIndex]
-      console.log("Creating one-time checkout for:", selectedPkg.name)
-
+      const category = legitimacyCategories[activeSubTab]
+      const selectedItemsList = getSelectedItemsList()
       const result = await createOneTimeCheckout(
-        selectedPkg.price,
+        total,
         "ZAR",
         user.uid,
-        selectedPkg.name,
+        `${category.name}`,
         "Legitimacy Tools"
       )
-
-      console.log("One-time checkout result:", result)
 
       if (!result || !result.checkoutId) {
         throw new Error("Invalid response from checkout service.")
@@ -466,20 +515,19 @@ const LegitimacyTab = () => {
       const purchaseData = {
         userId: user.uid,
         userEmail: user.email,
-        packageName: `Legitimacy - ${selectedPkg.name}`,
-        price: `R${selectedPkg.price}`,
-        amount: selectedPkg.price,
+        packageName: `Legitimacy - ${category.name}`,
+        items: selectedItemsList,
+        totalAmount: total,
         transactionRef: transactionRef,
         checkoutId: result.checkoutId,
         status: "Pending",
         createdAt: serverTimestamp(),
         type: "legitimacy_tools",
         deliveryStatus: "pending",
+        selectedCount: selectedCount,
         packageDetails: {
-          icon: selectedPkg.icon,
-          subtitle: selectedPkg.subtitle,
-          deliveryTime: selectedPkg.deliveryTime,
-          features: selectedPkg.features
+          scoreArea: category.scoreArea,
+          deliveryTime: category.items[0]?.deliveryTime || "24-48 hours"
         }
       }
 
@@ -489,18 +537,20 @@ const LegitimacyTab = () => {
       setShowCheckout(true)
     } catch (error) {
       console.error("Payment error:", error)
-      alert(`Failed to initialize payment: ${error.message}. Please try again or refresh the page.`)
+      alert(`Failed to initialize payment: ${error.message}`)
     } finally {
       setIsPaymentLoading(false)
     }
   }
 
   const handleCheckoutCompleted = async (event) => {
-    console.log("Growth tool payment completed:", event)
+    console.log("Legitimacy payment completed:", event)
     setPaymentProcessing(true)
 
     try {
-      // Send notification to backend for email
+      const category = legitimacyCategories[activeSubTab]
+      const selectedItemsList = getSelectedItemsList()
+
       await fetch(`${process.env.REACT_APP_API_URL}/api/payments/handle-payment-success`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -509,42 +559,48 @@ const LegitimacyTab = () => {
           transactionId: event.transactionId,
           userId: getAuth().currentUser?.uid,
           type: 'payment',
-          toolName: legitimacyPackages[selectedPackage]?.name || 'Growth Tool',
-          amount: legitimacyPackages[selectedPackage]?.price || 0,
+          toolName: category.name,
+          amount: total,
           currency: 'ZAR',
-          customerEmail: getAuth().currentUser?.email
+          customerEmail: getAuth().currentUser?.email,
+          selectedItems: selectedItemsList,
+          selectedCount: selectedCount
         })
       });
-      console.log('✅ Email notification sent to backend');
 
-      // Show success message
-      alert(`🎉 Payment Successful!\n\n${legitimacyPackages[selectedPackage]?.name} purchased successfully!\n\nDelivery time: ${legitimacyPackages[selectedPackage]?.deliveryTime}\n\nYou'll receive a confirmation email shortly.`)
+      alert(`🎉 Payment Successful!\n\n${category.name} purchased successfully!\n\n${selectedCount} item${selectedCount !== 1 ? "s" : ""} selected\nTotal: R${total.toLocaleString()}\n\nYour legitimacy tools will be delivered within the specified timeframe.\n\nYou'll receive a confirmation email shortly.`)
       
     } catch (emailError) {
       console.warn('⚠️ Failed to send email notification:', emailError);
       alert("Payment successful! Your legitimacy tools will be delivered within 24 hours.")
     } finally {
       setShowCheckout(false)
-      setSelectedPackage(null)
+      setSelectedItems({})
       setPaymentProcessing(false)
     }
   }
 
   const handleCheckoutCancelled = () => {
-    console.log("Payment cancelled")
     setShowCheckout(false)
-    setSelectedPackage(null)
     setPaymentProcessing(false)
     alert("Payment cancelled")
   }
 
   const handleCheckoutExpired = () => {
-    console.log("Payment expired")
     setShowCheckout(false)
-    setSelectedPackage(null)
     setPaymentProcessing(false)
     alert("Payment session expired. Please try again.")
   }
+
+  const currentCategory = legitimacyCategories[activeSubTab]
+  
+  // Calculate bundle savings (excluding complete bundle tab)
+  const individualTotal = activeSubTab !== "complete" 
+    ? currentCategory.items.reduce((sum, item) => sum + item.price, 0)
+    : 0
+  const bundleSavings = currentCategory.bundlePrice && activeSubTab !== "complete" 
+    ? individualTotal - currentCategory.bundlePrice 
+    : 0
 
   return (
     <div style={styles.container}>
@@ -557,103 +613,181 @@ const LegitimacyTab = () => {
         </p>
       </div>
 
-      <div style={styles.packagesGrid}>
-        {legitimacyPackages.map((pkg, index) => (
-          <div
-            key={index}
+      {/* Sub-tabs */}
+      <div style={styles.subTabsContainer}>
+        {Object.entries(legitimacyCategories).map(([key, category], index, array) => (
+          <button
+            key={key}
+            onClick={() => setActiveSubTab(key)}
             style={{
-              ...styles.packageCard,
-              ...(selectedPackage === index ? styles.packageCardSelected : {}),
-              ...(hoveredPackage === index ? styles.packageCardHover : {}),
+              ...styles.subTab,
+              ...(activeSubTab === key ? styles.subTabActive : {}),
+              borderRight: index === array.length - 1 ? "none" : `1px solid ${colors.lightTan}`,
             }}
-            onMouseEnter={() => setHoveredPackage(index)}
-            onMouseLeave={() => setHoveredPackage(null)}
+            onMouseEnter={(e) => {
+              if (activeSubTab !== key) {
+                e.target.style.background = colors.cream
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeSubTab !== key) {
+                e.target.style.background = colors.offWhite
+              }
+            }}
           >
-            <div style={styles.cardHeaderBackground}>
-              <div style={styles.packageIcon}>{pkg.icon}</div>
-              <h3 style={styles.packageName}>{pkg.name}</h3>
-            </div>
-
-            <div style={styles.priceContainer}>
-              <p style={styles.packagePrice}>R{pkg.price.toLocaleString()}</p>
-              <p style={styles.packageSubtitle}>{`"${pkg.subtitle}"`}</p>
-              <p style={styles.packageFocus}>{pkg.focus}</p>
-              <div style={styles.deliveryBadge}>
-                ⚡ Delivered in {pkg.deliveryTime}
-              </div>
-            </div>
-
-            <div style={styles.featuresContainer}>
-              <ul style={styles.packageFeatures}>
-                {pkg.features.map((feature, featureIndex) => (
-                  <li key={featureIndex} style={styles.packageFeature}>
-                    <Check size={16} style={{ color: colors.featureCheck, flexShrink: 0, marginTop: "0.125rem" }} />
-                    <span>{feature}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <button
-                style={{
-                  ...styles.buyButton,
-                  ...(isPaymentLoading && selectedPackage === index ? styles.buyButtonProcessing : {}),
-                }}
-                onClick={() => handlePurchase(index)}
-                disabled={isPaymentLoading}
-                onMouseEnter={(e) => {
-                  if (!isPaymentLoading) {
-                    e.target.style.transform = "translateY(-2px)"
-                    e.target.style.boxShadow = `0 8px 20px ${colors.accentGold}60`
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isPaymentLoading) {
-                    e.target.style.transform = "translateY(0)"
-                    e.target.style.boxShadow = `0 4px 12px ${colors.accentGold}40`
-                  }
-                }}
-              >
-                {isPaymentLoading && selectedPackage === index ? (
-                  <>
-                    <div style={{
-                      width: "20px",
-                      height: "20px",
-                      border: "2px solid transparent",
-                      borderTop: "2px solid currentColor",
-                      borderRadius: "50%",
-                      animation: "spin 1s linear infinite",
-                    }}></div>
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <ShoppingCart size={20} />
-                    Buy Package
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
+            {category.icon}
+            <span style={{ textAlign: "center", fontSize: "0.85rem" }}>{category.name}</span>
+          </button>
         ))}
       </div>
 
-      {/* Enhanced Checkout Modal */}
+      {/* Items Table */}
+      <div style={styles.tableContainer}>
+        <table style={styles.table}>
+          <thead>
+            <tr style={styles.tableHeader}>
+              <th style={{ ...styles.th, width: "50%" }}>Item</th>
+              <th style={{ ...styles.th, width: "30%" }}>Description</th>
+              <th style={{ ...styles.th, width: "20%", textAlign: "right" }}>Price</th>
+            </tr>
+          </thead>
+          <tbody>
+            {currentCategory.items.map((item, itemIndex) => {
+              const key = `${activeSubTab}-${itemIndex}`
+              const isSelected = selectedItems[key]
+              const isLastItem = itemIndex === currentCategory.items.length - 1
+              
+              return (
+                <tr
+                  key={key}
+                  style={{
+                    ...styles.itemRow,
+                    ...(isSelected ? styles.itemRowSelected : {}),
+                  }}
+                  onClick={() => toggleItem(itemIndex)}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.backgroundColor = colors.cream
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.backgroundColor = colors.offWhite
+                    }
+                  }}
+                >
+                  <td style={styles.td}>
+                    <div style={styles.checkboxContainer}>
+                      <div
+                        style={{
+                          ...styles.checkbox,
+                          ...(isSelected ? styles.checkboxChecked : {}),
+                        }}
+                      >
+                        {isSelected && <Check size={16} />}
+                      </div>
+                      <div>
+                        <span style={styles.itemName}>{item.name}</span>
+                        {item.deliveryTime && (
+                          <div style={{ fontSize: "0.75rem", color: colors.mediumBrown, marginTop: "0.25rem" }}>
+                            ⚡ {item.deliveryTime}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {isLastItem && !item.isBundle && currentCategory.bundlePrice && bundleSavings > 0 && (
+                      <p style={styles.bundleNote}>
+                        Select all items for R{currentCategory.bundlePrice.toLocaleString()} (Save R{bundleSavings.toLocaleString()})
+                      </p>
+                    )}
+                  </td>
+                  <td style={styles.td}>
+                    <p style={styles.itemDescription}>{item.description}</p>
+                  </td>
+                  <td style={{ ...styles.td, textAlign: "right" }}>
+                    <span style={styles.itemPrice}>R{item.price.toLocaleString()}</span>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {selectedCount > 0 && (
+        <div style={styles.totalSection}>
+          <h3 style={styles.totalTitle}>Your {currentCategory.name}</h3>
+          <div style={styles.totalAmount}>R{total.toLocaleString()}</div>
+          <p style={{ margin: "0 0 1.5rem 0", opacity: "0.9" }}>
+            {selectedCount} item{selectedCount !== 1 ? "s" : ""} selected
+            {activeSubTab !== "complete" && selectedCount === currentCategory.items.length && bundleSavings > 0 && (
+              <span style={{ display: "block", marginTop: "0.5rem", fontSize: "0.9rem" }}>
+                💰 Bundle savings: R{bundleSavings.toLocaleString()}
+              </span>
+            )}
+          </p>
+          <button
+            style={styles.buyButton}
+            onClick={handlePurchase}
+            disabled={isPaymentLoading}
+            onMouseEnter={(e) => {
+              if (!isPaymentLoading) {
+                e.target.style.transform = "translateY(-3px)"
+                e.target.style.boxShadow = "0 10px 30px rgba(0, 0, 0, 0.3)"
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isPaymentLoading) {
+                e.target.style.transform = "translateY(0)"
+                e.target.style.boxShadow = "0 6px 20px rgba(0, 0, 0, 0.2)"
+              }
+            }}
+          >
+            {isPaymentLoading ? (
+              <>
+                <div style={{
+                  width: "20px",
+                  height: "20px",
+                  border: "2px solid transparent",
+                  borderTop: "2px solid currentColor",
+                  borderRadius: "50%",
+                  animation: "spin 1s linear infinite",
+                }}></div>
+                Processing...
+              </>
+            ) : (
+              <>
+                <ShoppingCart size={20} />
+                Buy Selected Items
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Checkout Modal */}
       {showCheckout && checkoutId && (
         <div style={styles.checkoutModal}>
           <div style={styles.checkoutContent}>
-            <h2 style={styles.checkoutHeader}>
+            <h2 style={{ textAlign: "center", color: colors.darkBrown, marginBottom: "1rem" }}>
               Complete Your Purchase
             </h2>
             
-            <div style={styles.checkoutInfo}>
-              <div style={styles.packageSummary}>
-                {legitimacyPackages[selectedPackage]?.icon} {legitimacyPackages[selectedPackage]?.name}
+            <div style={{
+              background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
+              borderRadius: "12px",
+              padding: "1.5rem",
+              marginBottom: "1.5rem",
+              textAlign: "center",
+            }}>
+              <div style={{ fontSize: "1.1rem", fontWeight: 600, color: colors.darkBrown, marginBottom: "0.5rem" }}>
+                {currentCategory.name}
               </div>
-              <div style={styles.priceSummary}>
-                R{legitimacyPackages[selectedPackage]?.price.toLocaleString()}
+              <div style={{ fontSize: "1.5rem", fontWeight: 800, color: colors.accentGold, marginBottom: "0.5rem" }}>
+                R{total.toLocaleString()}
               </div>
-              <div style={styles.deliveryInfo}>
-                📦 Delivered in {legitimacyPackages[selectedPackage]?.deliveryTime}
+              <div style={{ fontSize: "0.9rem", color: colors.mediumBrown, fontStyle: "italic" }}>
+                {selectedCount} item{selectedCount !== 1 ? "s" : ""} selected
               </div>
             </div>
 
@@ -663,8 +797,8 @@ const LegitimacyTab = () => {
               onCancelled={handleCheckoutCancelled}
               onExpired={handleCheckoutExpired}
               paymentType="payment"
-              amount={legitimacyPackages[selectedPackage]?.price}
-              toolName={legitimacyPackages[selectedPackage]?.name}
+              amount={total}
+              toolName={currentCategory.name}
               userEmail={getAuth().currentUser?.email}
               userName={getAuth().currentUser?.displayName}
             />
@@ -672,13 +806,18 @@ const LegitimacyTab = () => {
             <div style={{ textAlign: "center", marginTop: "1rem" }}>
               <button
                 style={{
-                  ...styles.cancelButton,
+                  padding: "1rem 2rem",
+                  background: `linear-gradient(135deg, ${colors.lightTan} 0%, ${colors.cream} 100%)`,
+                  color: colors.darkBrown,
+                  border: "none",
+                  borderRadius: "12px",
+                  fontWeight: 700,
+                  cursor: "pointer",
                   opacity: paymentProcessing ? 0.5 : 1,
                 }}
                 onClick={() => {
                   if (!paymentProcessing) {
                     setShowCheckout(false)
-                    setSelectedPackage(null)
                   }
                 }}
                 disabled={paymentProcessing}
@@ -687,22 +826,36 @@ const LegitimacyTab = () => {
               </button>
             </div>
 
-            {/* Processing Overlay */}
             {paymentProcessing && (
-              <div style={styles.processingOverlay}>
-                <div style={styles.processingSpinner}></div>
-                <h3 style={styles.processingTitle}>
+              <div style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: `${colors.offWhite}F5`,
+                backdropFilter: "blur(6px)",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: "24px",
+              }}>
+                <div style={{
+                  width: "80px",
+                  height: "80px",
+                  border: `6px solid ${colors.lightTan}`,
+                  borderTop: `6px solid ${colors.accentGold}`,
+                  borderRadius: "50%",
+                  animation: "spin 1s linear infinite",
+                  marginBottom: "2rem",
+                }}></div>
+                <h3 style={{ color: colors.darkBrown, marginBottom: "1rem" }}>
                   Processing Your Purchase...
                 </h3>
-                <p style={styles.processingText}>
-                  🔒 Securing your legitimacy package...
-                  <br />
-                  <strong>Please do not close this window.</strong>
+                <p style={{ color: colors.mediumBrown, textAlign: "center" }}>
+                  Please do not close this window.
                 </p>
-                
-                <div style={styles.progressBar}>
-                  <div style={styles.progressBarFill}></div>
-                </div>
               </div>
             )}
           </div>
@@ -714,31 +867,10 @@ const LegitimacyTab = () => {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
         }
-
-        @keyframes progressSlide {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(300%); }
-        }
-
-        /* Responsive design */
-        @media (max-width: 1200px) {
-          .packagesGrid {
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)) !important;
-          }
-        }
-
+        
         @media (max-width: 768px) {
-          .packagesGrid {
-            grid-template-columns: 1fr !important;
-            gap: 1.5rem !important;
-            padding: 0 0.5rem !important;
-          }
-        }
-
-        @media (max-width: 480px) {
-          .checkoutContent {
-            padding: 1rem !important;
-            margin: 0.5rem !important;
+          .subTabsContainer {
+            flex-direction: column;
           }
         }
       `}</style>
