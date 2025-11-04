@@ -1,3 +1,5 @@
+
+
 "use client"
 import { useState, useEffect } from "react"
 import { CheckCircle, XCircle, Upload, FileText, Loader2 } from "lucide-react"
@@ -636,21 +638,22 @@ return finalResult;
 };
 
 const handleFileChange = async (documentId, files) => {
-    const documentConfig = documentsList.find(doc => doc.id === documentId);
-    const documentLabel = documentConfig?.label || documentId;
-console.log("🔄 handleFileChange called for:", documentId);
-
-  // ✅ START UPLOAD PROCESS
+  console.log("🎯 handleFileChange STARTED");
+  
+  const documentConfig = documentsList.find(doc => doc.id === documentId);
+  const documentLabel = documentConfig?.label || documentId;
+  
+  console.log("🔄 Setting uploadProgress to true");
   setUploadProgress({
     isUploading: true,
     currentStep: 'Starting validation...',
-    documentName: documentLabel || documentId
+    documentName: documentLabel
   });
-  console.log("🔄 Upload progress set to true");
 
   try {
     if (!auth.currentUser) {
       console.error("User not authenticated");
+      setUploadProgress({ isUploading: false, currentStep: '', documentName: '' });
       return;
     }
     
@@ -661,30 +664,33 @@ console.log("🔄 handleFileChange called for:", documentId);
     if (filesArray.length === 0 || !filesArray[0]) {
       console.error("No files selected");
       setUploadingDocs(prev => ({ ...prev, [documentId]: false }));
+      setUploadProgress({ isUploading: false, currentStep: '', documentName: '' });
       return;
     }
     
+    // ✅ USE FUNCTION FORM TO GET LATEST STATE
+    setUploadProgress(prev => ({ ...prev, currentStep: 'Checking file format...' }));
     
-    // ✅ CHECK FOR WORD DOCUMENTS
-    setUploadProgress({...uploadProgress, currentStep: 'Checking file format...'});
     for (const file of filesArray) {
       if (file && (file.name.toLowerCase().endsWith('.docx') || file.name.toLowerCase().endsWith('.doc'))) {
         alert('Please convert this Word document to PDF before uploading. Gemini AI cannot process .docx files.');
         setUploadingDocs(prev => ({ ...prev, [documentId]: false }));
+        setUploadProgress({ isUploading: false, currentStep: '', documentName: '' });
         return;
       }
     }
     
-    // ✅ GET REGISTERED NAME
-    setUploadProgress({...uploadProgress, currentStep: 'Verifying company details...'});
+    // ✅ USE FUNCTION FORM
+    setUploadProgress(prev => ({ ...prev, currentStep: 'Verifying company details...' }));
+    
     const registeredName = await getRegisteredName();
     console.log("🏢 Registered Name:", registeredName);
     
-    // ✅ AI VALIDATION
     let validationResult;
     
     for (const file of filesArray) {
-      setUploadProgress({...uploadProgress, currentStep: 'Analyzing document content...'});
+      // ✅ USE FUNCTION FORM
+      setUploadProgress(prev => ({ ...prev, currentStep: 'Analyzing document content...' }));
       validationResult = await validateDocumentWithAI(documentLabel, file, registeredName);
       
       if (!validationResult.isValid) {
@@ -695,11 +701,13 @@ console.log("🔄 handleFileChange called for:", documentId);
     if (!validationResult) {
       console.error("No validation result obtained");
       setUploadingDocs(prev => ({ ...prev, [documentId]: false }));
+      setUploadProgress({ isUploading: false, currentStep: '', documentName: '' });
       return;
     }
 
-    // ✅ UPDATE STATUS
-    setUploadProgress({...uploadProgress, currentStep: 'Updating verification status...'});
+    // ✅ USE FUNCTION FORM
+    setUploadProgress(prev => ({ ...prev, currentStep: 'Updating verification status...' }));
+    
     setVerificationStatus(prev => ({
       ...prev,
       [documentId]: {
@@ -709,7 +717,6 @@ console.log("🔄 handleFileChange called for:", documentId);
       }
     }));
 
-    // ✅ UPDATE LOCAL STATE
     const updatedData = { ...formData, [documentId]: filesArray };
     setFormData(updatedData);
     updateData(updatedData);
@@ -719,10 +726,10 @@ console.log("🔄 handleFileChange called for:", documentId);
       [documentId]: files.length > 0 ? 'success' : 'pending'
     }));
 
-    // ✅ FIREBASE UPLOAD
     const userId = auth.currentUser?.uid;
     if (userId) {
-      setUploadProgress({...uploadProgress, currentStep: 'Uploading to secure storage...'});
+      // ✅ USE FUNCTION FORM
+      setUploadProgress(prev => ({ ...prev, currentStep: 'Uploading to secure storage...' }));
       
       const docRef = doc(db, "universalProfiles", userId);
       const file = filesArray[0];
@@ -768,8 +775,7 @@ console.log("🔄 handleFileChange called for:", documentId);
           break;
         default:
           console.log(`Document ${documentId} saved to documents section only`);
-      }
-      
+      }      
       await updateDoc(docRef, updateData);
       
       setVerificationStatus(prev => ({
@@ -783,7 +789,8 @@ console.log("🔄 handleFileChange called for:", documentId);
       
       console.log(`Document ${documentId} uploaded with status: ${validationResult.status}`);
     }
- // ✅ UPLOAD COMPLETE
+
+    // ✅ UPLOAD COMPLETE - KEEP THIS
     setUploadProgress({ isUploading: false, currentStep: '', documentName: '' });
     
   } catch (error) {
@@ -1126,11 +1133,22 @@ console.log("🔄 handleFileChange called for:", documentId);
     )
   }
 
+
   return (
+    
     <div style={{ 
       backgroundColor: "#faf8f6",
       borderRadius: "12px"
     }}>
+      <style>
+  {`
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  `}
+</style>
+
       <h2 style={{ 
         fontSize: "24px", 
         fontWeight: "bold", 
@@ -1460,29 +1478,39 @@ console.log("🔄 handleFileChange called for:", documentId);
       </div>
       {uploadProgress.isUploading && (
   <div style={{
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 1001
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: 'rgba(0,0,0,0.7)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 9999
+}}>
+  <div style={{
+    backgroundColor: 'white',
+    padding: '30px',
+    borderRadius: '12px',
+    textAlign: 'center',
+    minWidth: '300px'
   }}>
+    {/* ✅ REPLACE Loader2 WITH THIS SPINNING DIV */}
     <div style={{
-      backgroundColor: 'white',
-      padding: '30px',
-      borderRadius: '12px',
-      textAlign: 'center',
-      minWidth: '300px'
-    }}>
-      <Loader2 style={{ width: "40px", height: "40px", margin: '0 auto' }} className="animate-spin" />
-      <h3 style={{ margin: '16px 0 8px 0' }}>Processing {uploadProgress.documentName}</h3>
-      <p style={{ color: '#666', fontSize: '14px' }}>{uploadProgress.currentStep}</p>
-    </div>
+      width: "40px",
+      height: "40px",
+      border: "3px solid #f3f3f3",
+      borderTop: "3px solid #8d6e63",
+      borderRadius: "50%",
+      animation: "spin 1s linear infinite",
+      margin: "0 auto"
+    }}></div>
+    
+    <h3 style={{ margin: '16px 0 8px 0' }}>Processing {uploadProgress.documentName}</h3>
+    <p style={{ color: '#666', fontSize: '14px' }}>{uploadProgress.currentStep}</p>
   </div>
+</div>
 )}
     </div>
   )
