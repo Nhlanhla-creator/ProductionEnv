@@ -19,6 +19,7 @@ import { getAuth } from "firebase/auth"
 import { DOCUMENT_PATHS } from "../../utils/documentUtils"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
 import get from "lodash.get"
+import { useNavigate } from "react-router-dom"
 import styles from "./funding.module.css";
 const ADJACENT_INDUSTRIES = {
   ict: ["technology", "software", "digital services"],
@@ -565,9 +566,13 @@ export const FundingTable = ({ filters = {}, onInsightsData, onPrimaryMatchCount
   const [scoreBreakdowns, setScoreBreakdowns] = useState({})
   const [showBreakdownModal, setShowBreakdownModal] = useState(false)
   const [existingApplications, setExistingApplications] = useState({})
-
+ const navigate = useNavigate()
+const [showBigScoreWarning, setShowBigScoreWarning] = useState(false);
   const [currentBreakdown, setCurrentBreakdown] = useState(null)
   // Filter states
+// Add this state to track the big score
+const [bigScore, setBigScore] = useState(null);
+
 
   const [tableFilters, setTableFilters] = useState({
     funderName: "",
@@ -583,8 +588,107 @@ export const FundingTable = ({ filters = {}, onInsightsData, onPrimaryMatchCount
     supportOffered: "",
   })
 
+
+useEffect(() => {
+  const fetchBigScore = async () => {
+    try {
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) return;
+
+      // Directly get the document using user ID as document ID
+      const bigEvalDocRef = doc(db, "bigEvaluations", user.uid);
+      const bigEvalDoc = await getDoc(bigEvalDocRef);
+      
+      if (bigEvalDoc.exists()) {
+        const bigEvalData = bigEvalDoc.data();
+        const bigScoreData = bigEvalData.scores?.bigScore;
+        setBigScore(bigScoreData);
+        
+        console.log(`BigScore loaded: ${bigScoreData}%`);
+        
+        // Optional: Log all scores for debugging
+        console.log("All BigScore data:", bigEvalData);
+      } else {
+        console.log("No BigScore evaluation found for user");
+        setBigScore(0); // Default to 0 if no evaluation exists
+      }
+    } catch (error) {
+      console.error("Error fetching big score:", error);
+      setBigScore(0); // Default to 0 on error
+    }
+  };
+
+  fetchBigScore();
+}, []);
+
+const BigScoreIndicator = () => {
+  if (bigScore === null) {
+    return (
+      <div style={{
+        padding: "0.5rem",
+        background: "#FFF3CD",
+        border: "1px solid #FFEAA7",
+        borderRadius: "4px",
+        fontSize: "0.75rem",
+        color: "#856404",
+        marginBottom: "1rem"
+      }}>
+        ⏳ Loading your BigScore...
+      </div>
+    );
+  }
+
+  const isEligible = bigScore >= 75;
+  
+  return (
+    <div style={{
+      padding: "0.75rem",
+      background: isEligible ? "#D4EDDA" : "#F8D7DA",
+      border: `1px solid ${isEligible ? "#C3E6CB" : "#F5C6CB"}`,
+      borderRadius: "6px",
+      fontSize: "0.8rem",
+      color: isEligible ? "#155724" : "#721C24",
+      marginBottom: "1rem",
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center"
+    }}>
+      <div>
+        <strong>BigScore: {bigScore}%</strong>
+        {isEligible ? (
+          <span> ✓ Eligible to apply</span>
+        ) : (
+          <span> ✗ Minimum 75% required</span>
+        )}
+      </div>
+      {!isEligible && (
+        <button
+          onClick={() => {
+            const event = new CustomEvent("showAdvisorHelp", {
+              detail: { bigScore, message: "Improve your BigScore to apply for funding" }
+            });
+            window.dispatchEvent(event);
+          }}
+          style={{
+            padding: "0.25rem 0.5rem",
+            background: "#007BFF",
+            color: "white",
+            border: "none",
+            borderRadius: "3px",
+            fontSize: "0.7rem",
+            cursor: "pointer"
+          }}
+        >
+          Get Help
+        </button>
+      )}
+    </div>
+  );
+};
   // Add this useEffect to listen for application status changes
   // Add this useEffect after your existing useEffects, around line 500-600
+
   useEffect(() => {
     const updatePipelineStagesFromApplications = async () => {
       const auth = getAuth()
@@ -959,8 +1063,22 @@ export const FundingTable = ({ filters = {}, onInsightsData, onPrimaryMatchCount
       const user = auth.currentUser;
       if (!user) throw new Error("User not authenticated");
 
+ if (bigScore === null) {
+      setNotification({ 
+        type: "info", 
+        message: "Please wait while we verify your eligibility..." 
+      });
+      return;
+    }
+
+    // If BigScore is still loading, show a message
+   if (bigScore < 75) {
+      setShowBigScoreWarning(true);
+      return;
+    }
+     
       // Check if application already exists in either collection
-      const applicationKey = `${funder.funderId}_${funder.name}`;
+      const applicationKey = `${funder.funderId}_${funder.name}`; 
       if (existingApplications[applicationKey]) {
         setNotification({ 
           type: "warning", 
@@ -1054,6 +1172,7 @@ export const FundingTable = ({ filters = {}, onInsightsData, onPrimaryMatchCount
       const user = auth.currentUser
       if (!user || !currentBusiness) throw new Error("Missing user or business")
 
+       
       // Double-check if application already exists
       const existingAppQuery = query(
         collection(db, "smeApplications"),
@@ -1796,6 +1915,306 @@ if (!maxTicket) {
 
   const [mounted, setMounted] = useState(false)
 
+
+const BigScoreWarningModal = () => {
+  if (!showBigScoreWarning) return null;
+
+  const handleGetHelpClick = () => {
+    setShowBigScoreWarning(false);
+    // Navigate to advisor matches page
+    navigate("/find-advisors");
+  };
+
+  return createPortal(
+    <div style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: "rgba(0, 0, 0, 0.7)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 2000,
+      backdropFilter: "blur(4px)",
+    }}>
+      <div style={{
+        background: "linear-gradient(135deg, #FFF9C4 0%, #FFECB3 100%)",
+        borderRadius: "20px",
+        padding: "40px",
+        maxWidth: "500px",
+        width: "90%",
+        boxShadow: "0 20px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 152, 0, 0.2)",
+        border: "2px solid #412c21ff",
+        textAlign: "center",
+        position: "relative",
+        animation: "slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)"
+      }}>
+        {/* Warning Icon */}
+        <div style={{
+          width: "80px",
+          height: "80px",
+          background: "linear-gradient(135deg, #e30909ff 0%, #d04e0eff 100%)",
+          borderRadius: "50%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          margin: "0 auto 20px",
+          boxShadow: "0 8px 20px rgba(219, 55, 14, 0.98)"
+        }}>
+          <span style={{
+            fontSize: "40px",
+            color: "white",
+            fontWeight: "bold"
+          }}>!</span>
+        </div>
+
+        {/* Title */}
+        <h2 style={{
+          color: "#2c1b12ff",
+          fontSize: "28px",
+          fontWeight: "800",
+          margin: "0 0 15px 0",
+          textShadow: "0 2px 4px rgba(0,0,0,0.1)"
+        }}>
+          BigScore Too Low
+        </h2>
+
+        {/* Message */}
+        <div style={{
+          background: "rgba(255, 255, 255, 0.8)",
+          borderRadius: "12px",
+          padding: "20px",
+          margin: "20px 0",
+          border: "1px solid #412c21ff"
+        }}>
+          <p style={{
+            color: "#5D4037",
+            fontSize: "16px",
+            lineHeight: "1.6",
+            margin: "0 0 15px 0"
+          }}>
+            Your current <strong>BigScore is {bigScore}%</strong>, which is below the minimum requirement of <strong>75%</strong> needed to apply for funding.
+          </p>
+          
+          <div style={{
+            background: "linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%)",
+            borderRadius: "8px",
+            padding: "15px",
+            border: "1px solid #FFB74D"
+          }}>
+            <h4 style={{
+              color: "#412c21ff",
+              margin: "0 0 10px 0",
+              fontSize: "16px"
+            }}>
+              🚀 How to Improve Your Score:
+            </h4>
+            <ul style={{
+              textAlign: "left",
+              color: "#5D4037",
+              fontSize: "14px",
+              lineHeight: "1.5",
+              margin: 0,
+              paddingLeft: "20px"
+            }}>
+              <li>Complete your business profile</li>
+              <li>Upload all required documents</li>
+              <li>Improve your financial metrics</li>
+              <li>Connect with business advisors</li>
+              <li>Participate in catalyst programs</li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Score Visualization */}
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          background: "rgba(255, 255, 255, 0.9)",
+          borderRadius: "10px",
+          padding: "15px",
+          margin: "20px 0",
+          border: "1px solid #4d3324ff"
+        }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{
+              color: "#412c21ff",
+              fontSize: "14px",
+              fontWeight: "600",
+              marginBottom: "5px"
+            }}>Your Score</div>
+            <div style={{
+              color: "#412c21ff",
+              fontSize: "24px",
+              fontWeight: "800"
+            }}>{bigScore}%</div>
+          </div>
+          
+          <div style={{
+            flex: 1,
+            margin: "0 20px",
+            position: "relative"
+          }}>
+            <div style={{
+              width: "100%",
+              height: "12px",
+              background: "linear-gradient(to right, #E65100 0%, #FF9800 50%, #4CAF50 100%)",
+              borderRadius: "6px",
+              position: "relative"
+            }}>
+              <div style={{
+                position: "absolute",
+                left: `${bigScore}%`,
+                top: "-5px",
+                width: "4px",
+                height: "22px",
+                background: "#5D2A0A",
+                borderRadius: "2px",
+                transform: "translateX(-50%)"
+              }} />
+            </div>
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              marginTop: "5px",
+              fontSize: "12px",
+              color: "#8D6E63"
+            }}>
+              <span>0%</span>
+              <span style={{ color: "#4CAF50", fontWeight: "600" }}>75% Required</span>
+              <span>100%</span>
+            </div>
+          </div>
+          
+          <div style={{ textAlign: "center" }}>
+            <div style={{
+              color: "#4CAF50",
+              fontSize: "14px",
+              fontWeight: "600",
+              marginBottom: "5px"
+            }}>Goal</div>
+            <div style={{
+              color: "#4CAF50",
+              fontSize: "24px",
+              fontWeight: "800"
+            }}>75%</div>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div style={{
+          display: "flex",
+          gap: "15px",
+          justifyContent: "center",
+          marginTop: "25px"
+        }}>
+          <button
+            onClick={() => setShowBigScoreWarning(false)}
+            style={{
+              flex: 1,
+              padding: "15px 25px",
+              background: "linear-gradient(135deg, #78909C 0%, #546E7A 100%)",
+              color: "white",
+              border: "none",
+              borderRadius: "12px",
+              fontSize: "16px",
+              fontWeight: "600",
+              cursor: "pointer",
+              transition: "all 0.3s ease",
+              boxShadow: "0 4px 12px rgba(84, 110, 122, 0.3)"
+            }}
+            onMouseOver={(e) => {
+              e.target.style.transform = "translateY(-2px)";
+              e.target.style.boxShadow = "0 6px 16px rgba(84, 110, 122, 0.4)";
+            }}
+            onMouseOut={(e) => {
+              e.target.style.transform = "translateY(0)";
+              e.target.style.boxShadow = "0 4px 12px rgba(84, 110, 122, 0.3)";
+            }}
+          >
+            Close
+          </button>
+          
+          <button
+            onClick={handleGetHelpClick}
+            style={{
+              flex: 1,
+              padding: "15px 25px",
+              background: "linear-gradient(135deg, #3e3a34ff 0%, #291e1483 100%)",
+              color: "white",
+              border: "none",
+              borderRadius: "12px",
+              fontSize: "16px",
+              fontWeight: "600",
+              cursor: "pointer",
+              transition: "all 0.3s ease",
+              boxShadow: "0 4px 12px rgba(255, 152, 0, 0.4)"
+            }}
+            onMouseOver={(e) => {
+              e.target.style.transform = "translateY(-2px)";
+              e.target.style.boxShadow = "0 6px 16px  rgba(62, 39, 35, 0.5)";
+            }}
+            onMouseOut={(e) => {
+              e.target.style.transform = "translateY(0)";
+              e.target.style.boxShadow = "0 4px 12px rgba(62, 39, 35, 0.5)";
+            }}
+          >
+            Find Advisors
+          </button>
+        </div>
+
+        {/* Close Button */}
+        <button
+          onClick={() => setShowBigScoreWarning(false)}
+          style={{
+            position: "absolute",
+            top: "15px",
+            right: "15px",
+            background: "rgba(255, 255, 255, 0.9)",
+            border: "none",
+            borderRadius: "50%",
+            width: "40px",
+            height: "40px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            fontSize: "20px",
+            color: "#412c21ff",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+            transition: "all 0.3s ease"
+          }}
+          onMouseOver={(e) => {
+            e.target.style.background = "#412c21ff";
+            e.target.style.color = "white";
+          }}
+          onMouseOut={(e) => {
+            e.target.style.background = "rgba(255, 255, 255, 0.9)";
+            e.target.style.color = "#412c21ff";
+          }}
+        >
+          ✕
+        </button>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
+
+// Add the styles to the document head
+useEffect(() => {
+  const styleSheet = document.createElement("style");
+  styleSheet.innerText = styles;
+  document.head.appendChild(styleSheet);
+  return () => {
+    document.head.removeChild(styleSheet);
+  };
+}, []);
+
   useEffect(() => {
     setMounted(true)
     return () => setMounted(false)
@@ -1811,7 +2230,10 @@ if (!maxTicket) {
           filter: showFilterModal || showBreakdownModal || modalFunder ? "blur(2px)" : "none",
           transition: "filter 0.2s ease",
         }}
+
       >
+            <BigScoreIndicator />
+               <BigScoreWarningModal />
         {notification && (
           <div
             style={{

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import { ChevronDown, ChevronUp, TrendingUp, FileText, Presentation, Shield, RefreshCw, AlertCircle } from 'lucide-react'
 import { createPortal } from 'react-dom'
-import { X } from 'lucide-react'
+import { X ,DollarSign} from 'lucide-react'
 import { db, auth } from "../../firebaseConfig"
 import { doc, onSnapshot, updateDoc, setDoc, getDoc } from "firebase/firestore"
 import { collection, query, where, getDocs } from "firebase/firestore"
@@ -18,61 +18,66 @@ const FundabilityScoreCard = ({ applicationData }) => {
     const [businessPlanAnalysis, setBusinessPlanAnalysis] = useState(null)
     const [pitchDeckAnalysis, setPitchDeckAnalysis] = useState(null)
     const [guaranteesAnalysis, setGuaranteesAnalysis] = useState(null)
+const [creditReportAnalysis, setCreditReportAnalysis] = useState(null)
 
     const { callFunction, loading, error } = useFirebaseFunctions();
 
     // Fetch AI evaluations for business plan, pitch deck, and guarantees
-    useEffect(() => {
-        const fetchAIEvaluations = async () => {
-            if (!auth?.currentUser?.uid) return;
+   useEffect(() => {
+    const fetchAIEvaluations = async () => {
+        if (!auth?.currentUser?.uid) return;
 
-            try {
-                const userId = auth.currentUser.uid;
+        try {
+            const userId = auth.currentUser.uid;
 
-                // Fetch Business Plan Evaluation
-                const bpQuery = query(collection(db, "aiEvaluations"), where("userId", "==", userId))
-                const bpSnapshot = await getDocs(bpQuery)
-                if (!bpSnapshot.empty) {
-                    const bpData = bpSnapshot.docs[0].data()
-                    setBusinessPlanAnalysis({
-                        score: bpData?.evaluation?.score || 0,
-                        content: bpData?.evaluation?.content || "",
-                        timestamp: bpData.timestamp
-                    })
-                }
-
-                // Fetch Pitch Deck Evaluation
-                const pdQuery = query(collection(db, "aiPitchEvaluations"), where("userId", "==", userId))
-                const pdSnapshot = await getDocs(pdQuery)
-                if (!pdSnapshot.empty) {
-                    const pdData = pdSnapshot.docs[0].data()
-                    setPitchDeckAnalysis({
-                        score: pdData?.evaluation?.score || 0,
-                        content: pdData?.evaluation?.content || "",
-                        operationalScore: pdData?.evaluation?.operationalScore || 0,
-                        timestamp: pdData.timestamp
-                    })
-                }
-
-                // Fetch Guarantees Analysis from Fundability Evaluation
-                const fundabilityQuery = query(collection(db, "aiFundabilityEvaluations"), where("userId", "==", userId))
-                const fundabilitySnapshot = await getDocs(fundabilityQuery)
-                if (!fundabilitySnapshot.empty) {
-                    const fundabilityData = fundabilitySnapshot.docs[0].data()
-                    setGuaranteesAnalysis({
-                        result: fundabilityData?.result || "",
-                        timestamp: fundabilityData.timestamp
-                    })
-                }
-
-            } catch (error) {
-                console.error("Error fetching AI evaluations:", error)
-                setEvaluationError("Failed to load AI analysis data")
+            // Fetch Business Plan Evaluation
+            const bpQuery = query(collection(db, "aiEvaluations"), where("userId", "==", userId))
+            const bpSnapshot = await getDocs(bpQuery)
+            if (!bpSnapshot.empty) {
+                const bpData = bpSnapshot.docs[0].data()
+                setBusinessPlanAnalysis({
+                    score: bpData?.evaluation?.score || 0,
+                    content: bpData?.evaluation?.content || "",
+                    timestamp: bpData.timestamp
+                })
             }
-        }
 
-        fetchAIEvaluations();
-    }, [auth?.currentUser?.uid]);
+            // Fetch Pitch Deck Evaluation
+            const pdQuery = query(collection(db, "aiPitchEvaluations"), where("userId", "==", userId))
+            const pdSnapshot = await getDocs(pdQuery)
+            if (!pdSnapshot.empty) {
+                const pdData = pdSnapshot.docs[0].data()
+                setPitchDeckAnalysis({
+                    score: pdData?.evaluation?.score || 0,
+                    content: pdData?.evaluation?.content || "",
+                    operationalScore: pdData?.evaluation?.operationalScore || 0,
+                    timestamp: pdData.timestamp
+                })
+            }
+
+            // Fetch Credit Report Analysis
+            const creditQuery = query(collection(db, "creditAnalyses"), where("userId", "==", userId))
+            const creditSnapshot = await getDocs(creditQuery)
+            if (!creditSnapshot.empty) {
+                const creditData = creditSnapshot.docs[0].data()
+                setCreditReportAnalysis({
+                    score: creditData?.evaluation?.score || 0,
+                    content: creditData?.evaluation?.content || "",
+                    isCreditReport: creditData?.evaluation?.isCreditReport || false,
+                    label: creditData?.evaluation?.label || "",
+                    timestamp: creditData.createdAt
+                })
+            }
+
+        } catch (error) {
+            console.error("Error fetching AI evaluations:", error)
+            setEvaluationError("Failed to load AI analysis data")
+        }
+    }
+
+    fetchAIEvaluations();
+}, [auth?.currentUser?.uid]);
+
 
     // Parse guarantees score from AI evaluation
     const parseGuaranteesScore = (aiText) => {
@@ -96,83 +101,104 @@ const FundabilityScoreCard = ({ applicationData }) => {
     };
 
     // Enhanced scoring with AI data
-    const calculateFundabilityScore = (data) => {
-        const breakdown = {
-            businessPlanAnalysis: { score: 0, max: 35, weight: 0.35, rawScore: 0, maxRaw: 5 },
-            pitchDeckScore: { score: 0, max: 30, weight: 0.30, rawScore: 0, maxRaw: 5 },
-            guarantees: { score: 0, max: 35, weight: 0.35, rawScore: 0, maxRaw: 5 }
-        };
-
-        // Business Plan Analysis (35%) - Using AI evaluation
-        let businessPlanScore = 0;
-        if (businessPlanAnalysis?.score) {
-            // Convert AI score (0-100) to our scale (0-5) then to percentage
-            const rawScore = (businessPlanAnalysis.score / 100) * 5;
-            businessPlanScore = (rawScore / 5) * 100;
-            breakdown.businessPlanAnalysis.rawScore = Math.round(rawScore * 10) / 10;
-        } else {
-            // Fallback to basic scoring if no AI analysis
-            if (data?.enterpriseReadiness?.hasBusinessPlan === "yes") businessPlanScore += 20;
-            if (data?.enterpriseReadiness?.hasMvp === "yes") businessPlanScore += 10;
-            if (data?.enterpriseReadiness?.hasTraction === "yes") businessPlanScore += 15;
-            if (data?.enterpriseReadiness?.hasPayingCustomers === "yes") businessPlanScore += 20;
-            if (data?.financialOverview?.generatesRevenue === "yes") businessPlanScore += 15;
-            if (data?.enterpriseReadiness?.hasAuditedFinancials === "yes") businessPlanScore += 20;
-        }
-        breakdown.businessPlanAnalysis.score = Math.min(businessPlanScore, 100);
-
-        // Pitch Deck Score (30%) - Using AI evaluation
-        let pitchDeckScore = 0;
-        if (pitchDeckAnalysis?.score) {
-            // Convert AI score to our scale
-            const rawScore = (pitchDeckAnalysis.score / 100) * 5;
-            pitchDeckScore = (rawScore / 5) * 100;
-            breakdown.pitchDeckScore.rawScore = Math.round(rawScore * 10) / 10;
-        } else if (pitchDeckAnalysis?.operationalScore) {
-            // Use operational score if available
-            const rawScore = pitchDeckAnalysis.operationalScore;
-            pitchDeckScore = (rawScore / 5) * 100;
-            breakdown.pitchDeckScore.rawScore = rawScore;
-        } else {
-            // Fallback to basic scoring
-            if (data?.enterpriseReadiness?.hasPitchDeck === "yes") pitchDeckScore += 25;
-            if (data?.growthPotential?.marketShare === "yes") pitchDeckScore += 15;
-            if (data?.growthPotential?.employment === "yes") pitchDeckScore += 20;
-            if (data?.socialImpact?.environmentalImpact && data.socialImpact.environmentalImpact !== "None specified") pitchDeckScore += 15;
-            if (data?.enterpriseReadiness?.hasMentor === "yes") pitchDeckScore += 10;
-            if (data?.enterpriseReadiness?.hasAdvisors === "yes") pitchDeckScore += 15;
-        }
-        breakdown.pitchDeckScore.score = Math.min(pitchDeckScore, 100);
-
-        // Guarantees (35%) - Using AI evaluation
-        let guaranteesScore = 0;
-        if (guaranteesAnalysis?.result) {
-            const rawScore = parseGuaranteesScore(guaranteesAnalysis.result);
-            guaranteesScore = (rawScore / 5) * 100;
-            breakdown.guarantees.rawScore = rawScore;
-        } else {
-            // Fallback to basic scoring
-            if (data?.guarantees?.signedCustomerContracts && data.guarantees.signedCustomerContracts !== "Not provided") guaranteesScore += 25;
-            if (data?.guarantees?.purchaseOrders && data.guarantees.purchaseOrders !== "Not provided") guaranteesScore += 20;
-            if (data?.guarantees?.offtakeAgreements && data.guarantees.offtakeAgreements !== "Not provided") guaranteesScore += 20;
-            if (data?.guarantees?.letterOfGuarantee && data.guarantees.letterOfGuarantee !== "Not provided") guaranteesScore += 15;
-            if (data?.guarantees?.thirdPartyGuarantees && data.guarantees.thirdPartyGuarantees !== "Not provided") guaranteesScore += 10;
-            if (data?.guarantees?.governmentContracts && data.guarantees.governmentContracts !== "Not provided") guaranteesScore += 10;
-        }
-        breakdown.guarantees.score = Math.min(guaranteesScore, 100);
-
-        // Calculate weighted total score
-        const totalScore = Math.round(
-            (breakdown.businessPlanAnalysis.score * breakdown.businessPlanAnalysis.weight) +
-            (breakdown.pitchDeckScore.score * breakdown.pitchDeckScore.weight) +
-            (breakdown.guarantees.score * breakdown.guarantees.weight)
-        );
-
-        return {
-            score: totalScore,
-            breakdown: breakdown
-        };
+ const calculateFundabilityScore = (data) => {
+    const breakdown = {
+        businessPlanAnalysis: { score: 0, max: 25, weight: 0.25, rawScore: 0, maxRaw: 5 },
+        pitchDeckScore: { score: 0, max: 25, weight: 0.25, rawScore: 0, maxRaw: 5 },
+        guarantees: { score: 0, max: 25, weight: 0.25, rawScore: 0, maxRaw: 5, uploaded: 0, total: 19 },
+        creditReport: { score: 0, max: 25, weight: 0.25, rawScore: 0, maxRaw: 5 }
     };
+
+    // Business Plan Analysis (25%) - Only use AI evaluation, default to 0
+    if (businessPlanAnalysis?.score) {
+        const rawScore = (businessPlanAnalysis.score / 100) * 5;
+        const businessPlanScore = (rawScore / 5) * 100;
+        breakdown.businessPlanAnalysis.score = Math.min(businessPlanScore, 100);
+        breakdown.businessPlanAnalysis.rawScore = Math.round(rawScore * 10) / 10;
+    }
+
+    // Pitch Deck Score (25%) - Only use AI evaluation, default to 0
+    if (pitchDeckAnalysis?.score) {
+        const rawScore = (pitchDeckAnalysis.score / 100) * 5;
+        const pitchDeckScore = (rawScore / 5) * 100;
+        breakdown.pitchDeckScore.score = Math.min(pitchDeckScore, 100);
+        breakdown.pitchDeckScore.rawScore = Math.round(rawScore * 10) / 10;
+    } else if (pitchDeckAnalysis?.operationalScore) {
+        const rawScore = pitchDeckAnalysis.operationalScore;
+        const pitchDeckScore = (rawScore / 5) * 100;
+        breakdown.pitchDeckScore.score = Math.min(pitchDeckScore, 100);
+        breakdown.pitchDeckScore.rawScore = rawScore;
+    }
+
+    // Guarantees (25%) - Calculate based on uploaded documents
+    if (data?.guarantees) {
+        const guaranteeFields = [
+            'signedCustomerContracts',
+            'purchaseOrders',
+            'offtakeAgreements',
+            'subscriptionRevenue',
+            'letterOfGuarantee',
+            'thirdPartyGuarantees',
+            'factoringAgreements',
+            'suretyBonds',
+            'governmentContracts',
+            'approvedSupplierStatus',
+            'incubatorGuarantees',
+            'exportCreditGuarantees',
+            'liensCollateral',
+            'securedAssets',
+            'retentionGuarantees',
+            'exportCreditInsurance',
+            'receivablesFinancing',
+            'personalSurety',
+            'corporateGuarantees'
+        ];
+        
+        const totalGuarantees = guaranteeFields.length;
+        let uploadedCount = 0;
+        
+        guaranteeFields.forEach(field => {
+            const fileField = field + 'Files';
+            if (data.guarantees[field] === 'yes' && 
+                data.guarantees[fileField] && 
+                Array.isArray(data.guarantees[fileField]) && 
+                data.guarantees[fileField].length > 0) {
+                uploadedCount++;
+            }
+        });
+        
+        const percentage = (uploadedCount / totalGuarantees) * 100;
+        const rawScore = (uploadedCount / totalGuarantees) * 5;
+        
+        breakdown.guarantees.score = Math.min(percentage, 100);
+        breakdown.guarantees.rawScore = Math.round(rawScore * 10) / 10;
+        breakdown.guarantees.uploaded = uploadedCount;
+        breakdown.guarantees.total = totalGuarantees;
+    }
+
+
+       // Credit Report (25%) - Convert from 850 scale to percentage, then to 5-point scale
+    if (creditReportAnalysis?.score) {
+        const scoreOutOf850 = creditReportAnalysis.score;
+        const percentageScore = (scoreOutOf850 / 850) * 100;
+        const rawScore = (percentageScore / 100) * 5;
+        breakdown.creditReport.score = Math.min(percentageScore, 100);
+        breakdown.creditReport.rawScore = Math.round(rawScore * 10) / 10;
+    }
+
+    // Calculate weighted total score
+    const totalScore = Math.round(
+        (breakdown.businessPlanAnalysis.score * breakdown.businessPlanAnalysis.weight) +
+        (breakdown.pitchDeckScore.score * breakdown.pitchDeckScore.weight) +
+        (breakdown.guarantees.score * breakdown.guarantees.weight) +
+        (breakdown.creditReport.score * breakdown.creditReport.weight)
+    );
+
+    return {
+        score: totalScore,
+        breakdown: breakdown
+    };
+};
 
     // Refresh AI evaluations
     const refreshAIEvaluations = async () => {
@@ -204,30 +230,30 @@ const FundabilityScoreCard = ({ applicationData }) => {
     };
 
     useEffect(() => {
-        if (applicationData || businessPlanAnalysis || pitchDeckAnalysis || guaranteesAnalysis) {
-            const { score, breakdown } = calculateFundabilityScore(applicationData);
-            setFundabilityScore(score);
-            setScoreBreakdown(breakdown);
+    if (applicationData || businessPlanAnalysis || pitchDeckAnalysis || guaranteesAnalysis || creditReportAnalysis) {
+        const { score, breakdown } = calculateFundabilityScore(applicationData);
+        setFundabilityScore(score);
+        setScoreBreakdown(breakdown);
+        
+        // Animate score
+        let start = 0;
+        const duration = 1500;
+        const startTime = Date.now();
+        
+        const animate = () => {
+            const now = Date.now();
+            const progress = Math.min((now - startTime) / duration, 1);
+            const currentScore = Math.floor(progress * score);
+            setAnimatedScore(currentScore);
             
-            // Animate score
-            let start = 0;
-            const duration = 1500;
-            const startTime = Date.now();
-            
-            const animate = () => {
-                const now = Date.now();
-                const progress = Math.min((now - startTime) / duration, 1);
-                const currentScore = Math.floor(progress * score);
-                setAnimatedScore(currentScore);
-                
-                if (progress < 1) {
-                    requestAnimationFrame(animate);
-                }
-            };
-            
-            animate();
-        }
-    }, [applicationData, businessPlanAnalysis, pitchDeckAnalysis, guaranteesAnalysis]);
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            }
+        };
+        
+        animate();
+    }
+}, [applicationData, businessPlanAnalysis, pitchDeckAnalysis, guaranteesAnalysis, creditReportAnalysis]);
 
     const getTierInfo = (score) => {
         if (score >= 85) return {
@@ -267,14 +293,15 @@ const FundabilityScoreCard = ({ applicationData }) => {
 
     const getScoreTextColor = () => '#ffffff';
 
-    const formatRequirementName = (key) => {
-        const names = {
-            businessPlanAnalysis: "Business Plan Analysis",
-            pitchDeckScore: "Pitch Deck Score",
-            guarantees: "Guarantees & Security"
-        };
-        return names[key] || key;
+const formatRequirementName = (key) => {
+    const names = {
+        businessPlanAnalysis: "Business Plan Analysis",
+        pitchDeckScore: "Pitch Deck Score",
+        guarantees: "Guarantees & Security",
+        creditReport: "Credit Report"
     };
+    return names[key] || key;
+};
 
     const getAnalysisStatus = (analysis) => {
         if (!analysis) return { text: "No AI analysis", color: "#F44336" };
@@ -372,43 +399,7 @@ const FundabilityScoreCard = ({ applicationData }) => {
                     </div>
 
                     {/* Refresh Button */}
-                    <div style={{
-                        display: 'flex',
-                        justifyContent: 'flex-end',
-                        marginBottom: '20px'
-                    }}>
-                        <button
-                            onClick={refreshAIEvaluations}
-                            disabled={isEvaluating}
-                            style={{
-                                padding: '10px 16px',
-                                background: 'linear-gradient(135deg, #5d4037, #4a2c20)',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '8px',
-                                fontSize: '14px',
-                                fontWeight: '600',
-                                cursor: isEvaluating ? 'not-allowed' : 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '8px',
-                                transition: 'all 0.3s ease',
-                                opacity: isEvaluating ? 0.7 : 1
-                            }}
-                        >
-                            {isEvaluating ? (
-                                <>
-                                    <RefreshCw size={16} className="spin" />
-                                    Refreshing...
-                                </>
-                            ) : (
-                                <>
-                                    <RefreshCw size={16} />
-                                    Refresh AI Analysis
-                                </>
-                            )}
-                        </button>
-                    </div>
+                   
 
                     {/* Score Display */}
                     <div style={{
@@ -470,80 +461,116 @@ const FundabilityScoreCard = ({ applicationData }) => {
                         gap: '16px',
                         marginBottom: '24px'
                     }}>
-                        <div style={{
-                            padding: '16px',
-                            background: 'white',
-                            borderRadius: '12px',
-                            border: `2px solid ${getAnalysisStatus(businessPlanAnalysis).color}20`,
-                            textAlign: 'center'
-                        }}>
-                            <FileText size={24} color={getAnalysisStatus(businessPlanAnalysis).color} />
-                            <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
-                                Business Plan
-                            </div>
-                            <div style={{ 
-                                fontSize: '12px', 
-                                color: getAnalysisStatus(businessPlanAnalysis).color,
-                                fontWeight: '600'
-                            }}>
-                                {getAnalysisStatus(businessPlanAnalysis).text}
-                            </div>
-                            {businessPlanAnalysis?.rawScore && (
-                                <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
-                                    Score: {businessPlanAnalysis.rawScore}/5
-                                </div>
-                            )}
-                        </div>
+                       <div style={{
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+    gap: '16px',
+    marginBottom: '24px'
+}}>
+    {/* Business Plan Card */}
+    <div style={{
+        padding: '16px',
+        background: 'white',
+        borderRadius: '12px',
+        border: `2px solid ${getAnalysisStatus(businessPlanAnalysis).color}20`,
+        textAlign: 'center'
+    }}>
+        <FileText size={24} color={getAnalysisStatus(businessPlanAnalysis).color} />
+        <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
+            Business Plan
+        </div>
+        <div style={{ 
+            fontSize: '12px', 
+            color: getAnalysisStatus(businessPlanAnalysis).color,
+            fontWeight: '600'
+        }}>
+            {getAnalysisStatus(businessPlanAnalysis).text}
+        </div>
+        {businessPlanAnalysis?.rawScore && (
+            <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
+                Score: {businessPlanAnalysis.rawScore}/5
+            </div>
+        )}
+    </div>
 
-                        <div style={{
-                            padding: '16px',
-                            background: 'white',
-                            borderRadius: '12px',
-                            border: `2px solid ${getAnalysisStatus(pitchDeckAnalysis).color}20`,
-                            textAlign: 'center'
-                        }}>
-                            <Presentation size={24} color={getAnalysisStatus(pitchDeckAnalysis).color} />
-                            <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
-                                Pitch Deck
-                            </div>
-                            <div style={{ 
-                                fontSize: '12px', 
-                                color: getAnalysisStatus(pitchDeckAnalysis).color,
-                                fontWeight: '600'
-                            }}>
-                                {getAnalysisStatus(pitchDeckAnalysis).text}
-                            </div>
-                            {pitchDeckAnalysis?.rawScore && (
-                                <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
-                                    Score: {pitchDeckAnalysis.rawScore}/5
-                                </div>
-                            )}
-                        </div>
+    {/* Pitch Deck Card */}
+    <div style={{
+        padding: '16px',
+        background: 'white',
+        borderRadius: '12px',
+        border: `2px solid ${getAnalysisStatus(pitchDeckAnalysis).color}20`,
+        textAlign: 'center'
+    }}>
+        <Presentation size={24} color={getAnalysisStatus(pitchDeckAnalysis).color} />
+        <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
+            Pitch Deck
+        </div>
+        <div style={{ 
+            fontSize: '12px', 
+            color: getAnalysisStatus(pitchDeckAnalysis).color,
+            fontWeight: '600'
+        }}>
+            {getAnalysisStatus(pitchDeckAnalysis).text}
+        </div>
+        {pitchDeckAnalysis?.rawScore && (
+            <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
+                Score: {pitchDeckAnalysis.rawScore}/5
+            </div>
+        )}
+    </div>
 
-                        <div style={{
-                            padding: '16px',
-                            background: 'white',
-                            borderRadius: '12px',
-                            border: `2px solid ${getAnalysisStatus(guaranteesAnalysis).color}20`,
-                            textAlign: 'center'
-                        }}>
-                            <Shield size={24} color={getAnalysisStatus(guaranteesAnalysis).color} />
-                            <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
-                                Guarantees
-                            </div>
-                            <div style={{ 
-                                fontSize: '12px', 
-                                color: getAnalysisStatus(guaranteesAnalysis).color,
-                                fontWeight: '600'
-                            }}>
-                                {getAnalysisStatus(guaranteesAnalysis).text}
-                            </div>
-                            {scoreBreakdown.guarantees?.rawScore && (
-                                <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
-                                    Score: {scoreBreakdown.guarantees.rawScore}/5
-                                </div>
-                            )}
-                        </div>
+    {/* Guarantees Card - Shows uploaded count instead of AI status */}
+    <div style={{
+        padding: '16px',
+        background: 'white',
+        borderRadius: '12px',
+        border: `2px solid #4CAF5020`,
+        textAlign: 'center'
+    }}>
+        <Shield size={24} color="#4CAF50" />
+        <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
+            Guarantees
+        </div>
+        <div style={{ 
+            fontSize: '12px', 
+            color: '#4CAF50',
+            fontWeight: '600'
+        }}>
+            {scoreBreakdown.guarantees?.uploaded || 0}/{scoreBreakdown.guarantees?.total || 19} Uploaded
+        </div>
+        {scoreBreakdown.guarantees?.rawScore > 0 && (
+            <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
+                Score: {scoreBreakdown.guarantees.rawScore}/5
+            </div>
+        )}
+    </div>
+
+    {/* Credit Report Card */}
+    <div style={{
+        padding: '16px',
+        background: 'white',
+        borderRadius: '12px',
+        border: `2px solid ${getAnalysisStatus(creditReportAnalysis).color}20`,
+        textAlign: 'center'
+    }}>
+        <DollarSign size={24} color={getAnalysisStatus(creditReportAnalysis).color} />
+        <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
+            Credit Report
+        </div>
+        <div style={{ 
+            fontSize: '12px', 
+            color: getAnalysisStatus(creditReportAnalysis).color,
+            fontWeight: '600'
+        }}>
+            {getAnalysisStatus(creditReportAnalysis).text}
+        </div>
+        {creditReportAnalysis?.rawScore && (
+            <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
+                Score: {creditReportAnalysis.rawScore}/5
+            </div>
+        )}
+    </div>
+</div>
                     </div>
 
                     {/* Score Breakdown */}
@@ -562,82 +589,87 @@ const FundabilityScoreCard = ({ applicationData }) => {
                             gap: '16px'
                         }}>
                             {Object.entries(scoreBreakdown).map(([key, data]) => (
-                                <div key={key} style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    padding: '16px',
-                                    background: 'rgba(250, 247, 242, 0.8)',
-                                    borderRadius: '12px',
-                                    border: '1px solid rgba(200, 182, 166, 0.2)'
-                                }}>
-                                    <div style={{
-                                        width: '20px',
-                                        height: '20px',
-                                        borderRadius: '50%',
-                                        background: tierInfo.color,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        color: 'white',
-                                        fontSize: '12px',
-                                        fontWeight: 'bold'
-                                    }}>
-                                        {key === 'businessPlanAnalysis' ? <FileText size={12} /> : 
-                                         key === 'pitchDeckScore' ? <Presentation size={12} /> : 
-                                         <Shield size={12} />}
-                                    </div>
-                                    <div style={{ flex: 1 }}>
-                                        <span style={{
-                                            color: '#4a352f',
-                                            fontWeight: '600',
-                                            fontSize: '14px'
-                                        }}>
-                                            {formatRequirementName(key)}
-                                        </span>
-                                        <div style={{
-                                            fontSize: '12px',
-                                            color: '#7d5a50',
-                                            marginTop: '4px'
-                                        }}>
-                                            Weight: {Math.round(data.weight * 100)}%
-                                            {data.rawScore > 0 && ` • AI Score: ${data.rawScore}/${data.maxRaw}`}
-                                        </div>
-                                    </div>
-                                    <div style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '12px'
-                                    }}>
-                                        <div style={{
-                                            width: '80px',
-                                            height: '8px',
-                                            background: '#f3e8dc',
-                                            borderRadius: '4px',
-                                            overflow: 'hidden',
-                                            border: '1px solid #d6b88a'
-                                        }}>
-                                            <div style={{
-                                                width: `${data.score}%`,
-                                                backgroundColor: data.score >= 80 ? '#4CAF50' : 
-                                                              data.score >= 60 ? '#FF9800' : '#F44336',
-                                                height: '100%',
-                                                borderRadius: '4px',
-                                                transition: 'width 0.3s ease'
-                                            }}></div>
-                                        </div>
-                                        <span style={{
-                                            fontWeight: '600',
-                                            color: '#4a352f',
-                                            fontSize: '14px',
-                                            minWidth: '35px',
-                                            textAlign: 'right'
-                                        }}>
-                                            {Math.round(data.score)}%
-                                        </span>
-                                    </div>
-                                </div>
-                            ))}
+    <div key={key} style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '16px',
+        background: 'rgba(250, 247, 242, 0.8)',
+        borderRadius: '12px',
+        border: '1px solid rgba(200, 182, 166, 0.2)'
+    }}>
+        <div style={{
+            width: '20px',
+            height: '20px',
+            borderRadius: '50%',
+            background: tierInfo.color,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'white',
+            fontSize: '12px',
+            fontWeight: 'bold'
+        }}>
+            {key === 'businessPlanAnalysis' ? <FileText size={12} /> : 
+             key === 'pitchDeckScore' ? <Presentation size={12} /> : 
+             key === 'guarantees' ? <Shield size={12} /> :
+             <DollarSign size={12} />}
+        </div>
+        <div style={{ flex: 1 }}>
+            <span style={{
+                color: '#4a352f',
+                fontWeight: '600',
+                fontSize: '14px'
+            }}>
+                {formatRequirementName(key)}
+            </span>
+            <div style={{
+                fontSize: '12px',
+                color: '#7d5a50',
+                marginTop: '4px'
+            }}>
+                Weight: {Math.round(data.weight * 100)}%
+                {key === 'guarantees' && data.uploaded !== undefined && 
+                    ` • ${data.uploaded}/${data.total} Uploaded`}
+                {data.rawScore > 0 && key !== 'guarantees' && ` • AI Score: ${data.rawScore}/${data.maxRaw}`}
+                {data.rawScore > 0 && key === 'guarantees' && ` • Score: ${data.rawScore}/${data.maxRaw}`}
+            </div>
+        </div>
+        <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px'
+        }}>
+            <div style={{
+                width: '80px',
+                height: '8px',
+                background: '#f3e8dc',
+                borderRadius: '4px',
+                overflow: 'hidden',
+                border: '1px solid #d6b88a'
+            }}>
+                <div style={{
+                    width: `${data.score}%`,
+                    backgroundColor: data.score >= 80 ? '#4CAF50' : 
+                                  data.score >= 60 ? '#FF9800' : '#F44336',
+                    height: '100%',
+                    borderRadius: '4px',
+                    transition: 'width 0.3s ease'
+                }}></div>
+            </div>
+            <span style={{
+                fontWeight: '600',
+                color: '#4a352f',
+                fontSize: '14px',
+                minWidth: '35px',
+                textAlign: 'right'
+            }}>
+                {Math.round(data.score)}%
+            </span>
+        </div>
+    </div>
+))}
+
                         </div>
                     </div>
 
@@ -853,17 +885,17 @@ const FundabilityScoreCard = ({ applicationData }) => {
                             fontSize: '11px',
                             color: '#7d5a50'
                         }}>
-                            <div style={{
-                                width: '6px',
-                                height: '6px',
-                                borderRadius: '50%',
-                                backgroundColor: 
-                                    businessPlanAnalysis && pitchDeckAnalysis && guaranteesAnalysis ? '#4CAF50' :
-                                    businessPlanAnalysis || pitchDeckAnalysis || guaranteesAnalysis ? '#FF9800' : '#F44336'
-                            }} />
-                            {businessPlanAnalysis && pitchDeckAnalysis && guaranteesAnalysis ? 'AI Analysis Complete' :
-                             businessPlanAnalysis || pitchDeckAnalysis || guaranteesAnalysis ? 'Partial AI Analysis' : 
-                             'AI Analysis Pending'}
+                           <div style={{
+    width: '6px',
+    height: '6px',
+    borderRadius: '50%',
+    backgroundColor: 
+        businessPlanAnalysis && pitchDeckAnalysis && guaranteesAnalysis && creditReportAnalysis ? '#4CAF50' :
+        businessPlanAnalysis || pitchDeckAnalysis || guaranteesAnalysis || creditReportAnalysis ? '#FF9800' : '#F44336'
+}} />
+{businessPlanAnalysis && pitchDeckAnalysis && guaranteesAnalysis && creditReportAnalysis ? 'AI Analysis Complete' :
+ businessPlanAnalysis || pitchDeckAnalysis || guaranteesAnalysis || creditReportAnalysis ? 'Partial AI Analysis' : 
+ 'AI Analysis Pending'}
                         </div>
                     </div>
                 </div>

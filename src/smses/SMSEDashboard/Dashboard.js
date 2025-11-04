@@ -40,7 +40,7 @@ const sendMessageToChatGPT = async (message) => {
   }
 };
 
-// Summary Report Card Component - Updated with Firebase Integration
+// Summary Report Card Component - Updated with Capital Appeal and rerun logic
 export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) => {
   const [userId, setUserId] = useState(propUserId || null);
   const [reportData, setReportData] = useState(null);
@@ -128,6 +128,15 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
     }
   };
 
+  // Check if summary contains fallback or unavailable text
+  const needsRegeneration = (summary) => {
+    if (!summary) return false;
+    const lowerSummary = summary.toLowerCase();
+    return lowerSummary.includes("unavailable") || 
+           lowerSummary.includes("using fallback") ||
+           lowerSummary.includes("unable to generate");
+  };
+
   useEffect(() => {
     if (propUserId) {
       setUserId(propUserId);
@@ -147,7 +156,7 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
     return () => unsubscribe();
   }, [propUserId]);
 
-  useEffect(() => {
+ useEffect(() => {
     if (!userId || !apiKey) {
       console.log("No userId available, skipping data fetch");
       return;
@@ -167,19 +176,31 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
           setIsGeneratingNew(true);
 
           await new Promise(resolve => setTimeout(resolve, 5000));
-
           await generateNewEvaluation(userId);
-
           await resetTrigger(userId);
           setIsGeneratingNew(false);
         } else {
           const existingSummary = await loadSummaryFromFirebase(userId);
 
+          // Check if existing summary needs regeneration
           if (existingSummary && existingSummary.reportData) {
-            console.log("Loading existing summary from Firebase");
-            setReportData(existingSummary.reportData);
-            setTopPriorities(existingSummary.topPriorities);
-            setImprovementSummary(existingSummary.improvementSummary);
+            if (needsRegeneration(existingSummary.improvementSummary)) {
+              console.log("Existing summary contains fallback/unavailable text, regenerating...");
+              await generateNewEvaluation(userId);
+            } else {
+              console.log("Loading existing summary from Firebase");
+              // Fetch latest scores from bigEvaluations
+              const bigEvalQuery = query(collection(db, "bigEvaluations"), where("userId", "==", userId));
+              const bigEvalSnap = await getDocs(bigEvalQuery);
+              if (!bigEvalSnap.empty) {
+                const bigEvalData = bigEvalSnap.docs[0].data();
+                existingSummary.reportData.legitimacyScore = bigEvalData.scores?.legitimacy || 0;
+                existingSummary.reportData.leadershipScore = bigEvalData.scores?.leadership || 0;
+              }
+              setReportData(existingSummary.reportData);
+              setTopPriorities(existingSummary.topPriorities);
+              setImprovementSummary(existingSummary.improvementSummary);
+            }
           } else {
             console.log("No existing summary found, generating new one");
             await generateNewEvaluation(userId);
@@ -208,8 +229,8 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
         }),
         overallScore: 0,
         fundabilityStatus: "Assessment Incomplete",
-        businessPlanScore: 0,
-        pitchDeckScore: 0,
+        governanceScore: 0,
+        leadershipScore: 0,
         profileEvaluationScore: 0,
         weightedAverageScore: 0,
         detailedScores: [],
@@ -224,8 +245,8 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
         fundability: false,
         legitimacy: false,
         profile: false,
-        pitch: false,
-        business: false
+        governance: false,
+        leadership: false
       };
 
       const combinedQuery = query(collection(db, "combinedEvaluations"), where("userId", "==", userId));
@@ -239,21 +260,24 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
         newReportData.fundabilityStatus = combinedData.status || getScoreLevel(newReportData.overallScore).level;
       }
 
-      const [fundSnap, legitSnap, profileSnap, pitchSnap, businessSnap] = await Promise.all([
+      // Fetch all evaluations in parallel
+      const [fundSnap, legitSnap, profileSnap, governanceQuery, leadershipQuery] = await Promise.all([
         getDoc(doc(db, "aiFundabilityEvaluations", userId)),
         getDoc(doc(db, "aiLegitimacyEvaluation", userId)),
         getDoc(doc(db, "universalProfiles", userId)),
-        getDocs(query(collection(db, "aiPitchEvaluations"), where("userId", "==", userId))),
-        getDocs(query(collection(db, "aiEvaluations"), where("userId", "==", userId)))
+       getDoc(doc(db, "aiGovernanceEvaluation", userId)),
+        getDoc(doc(db, "aiLeadershipEvaluation", userId))
       ]);
 
+      // Process fundability data
       if (fundSnap.exists()) {
         availableData.fundability = true;
         newReportData.aiEvaluations.fundability = fundSnap.data();
       } else {
-        newReportData.missingSections.push("Fundability Evaluation");
+        newReportData.missingSections.push("Capital Appeal");
       }
 
+      // Process legitimacy data
       if (legitSnap.exists()) {
         availableData.legitimacy = true;
         newReportData.aiEvaluations.legitimacy = legitSnap.data();
@@ -261,6 +285,7 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
         newReportData.missingSections.push("Legitimacy Evaluation");
       }
 
+      // Process profile data
       if (profileSnap.exists()) {
         availableData.profile = true;
         const profileData = profileSnap.data();
@@ -276,27 +301,29 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
         newReportData.missingSections.push("Business Profile");
       }
 
-      if (!pitchSnap.empty) {
-        availableData.pitch = true;
-        const pitchData = pitchSnap.docs[0].data();
-        newReportData.aiEvaluations.pitch = pitchData;
-        newReportData.pitchDeckScore = pitchData.evaluation?.score || 0;
+      // Process governance data
+      if (!governanceQuery.empty) {
+        availableData.governance = true;
+        const governanceData = governanceQuery.data() || {};
+        newReportData.aiEvaluations.governance = governanceData;
+        newReportData.governanceScore = governanceData.governanceScore || 0;
       } else {
-        newReportData.missingSections.push("Pitch Deck Evaluation");
+        newReportData.missingSections.push("Governance Evaluation");
       }
 
-      if (!businessSnap.empty) {
-        availableData.business = true;
-        const businessData = businessSnap.docs[0].data();
-        newReportData.aiEvaluations.business = businessData;
-        newReportData.businessPlanScore = businessData.evaluation?.score || 0;
+      // Process leadership data
+      if (!leadershipQuery.empty) {
+        availableData.leadership = true;
+        const leadershipData = leadershipQuery.data() || {};
+        newReportData.aiEvaluations.leadership = leadershipData ;
+        newReportData.leadershipScore = leadershipData.leadershipScore || 0;
       } else {
-        newReportData.missingSections.push("Business Plan Evaluation");
+        newReportData.missingSections.push("Leadership Evaluation");
       }
 
       const scores = [];
-      if (availableData.business) scores.push(newReportData.businessPlanScore);
-      if (availableData.pitch) scores.push(newReportData.pitchDeckScore);
+      if (availableData.governance) scores.push(newReportData.governanceScore);
+      if (availableData.leadership) scores.push(newReportData.leadershipScore);
       if (availableData.profile) scores.push(newReportData.profileEvaluationScore);
 
       if (scores.length > 0) {
@@ -307,17 +334,17 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
         }
       }
 
-      if (newReportData.structuredContent.businessPlan?.rawContent) {
+      if (newReportData.structuredContent.governance?.rawContent) {
         newReportData.detailedScores = [
           ...newReportData.detailedScores,
-          ...extractScoresFromMarkdown(newReportData.structuredContent.businessPlan.rawContent)
+          ...extractScoresFromMarkdown(newReportData.structuredContent.governance.rawContent)
         ];
       }
 
-      if (newReportData.structuredContent.pitchDeck?.rawContent) {
+      if (newReportData.structuredContent.leadership?.rawContent) {
         newReportData.detailedScores = [
           ...newReportData.detailedScores,
-          ...extractScoresFromMarkdown(newReportData.structuredContent.pitchDeck.rawContent)
+          ...extractScoresFromMarkdown(newReportData.structuredContent.leadership.rawContent)
         ];
       }
 
@@ -367,7 +394,7 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
       },
       {
         title: "Upload Business Documents",
-        description: "Upload your business plan and pitch deck for detailed AI analysis and recommendations."
+        description: "Upload your documents for detailed AI analysis and recommendations."
       },
       {
         title: "Financial Documentation",
@@ -376,7 +403,7 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
     ];
 
     setTopPriorities(fallbackPriorities);
-    setImprovementSummary("### Complete Your Profile\n- Fill out all business profile sections\n- Upload required documents\n- Provide financial information\n\n### Next Steps\n- Complete business plan evaluation\n- Submit pitch deck for review\n- Ensure all compliance requirements are met");
+    setImprovementSummary("### Complete Your Profile\n- Fill out all business profile sections\n- Upload required documents\n- Provide financial information\n\n### Next Steps\n- Complete document upload for compliance\n- Submit leadership structure for review\n- Ensure all compliance requirements are met");
 
     const summaryData = {
       reportData,
@@ -392,17 +419,17 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
     if (!reportData || !reportData.aiEvaluations) return;
 
     const combinedText = `
-AI Fundability Analysis:
+Capital Appeal Analysis:
 ${reportData.aiEvaluations.fundability?.result || ""}
 
 AI Legitimacy Analysis:
 ${reportData.aiEvaluations.legitimacy?.result || ""}
 
-AI Pitch Deck Evaluation:
-${reportData.aiEvaluations.pitch?.evaluation?.content || ""}
+Governance Evaluation:
+${reportData.aiEvaluations.governance?.result || ""}
 
-AI Business Plan Evaluation:
-${reportData.aiEvaluations.business?.evaluation?.content || ""}
+Leadership Evaluation:
+${reportData.aiEvaluations.leadership?.result || ""}
     `.trim();
 
     setPrioritiesLoading(true);
@@ -448,16 +475,16 @@ Respond only with valid JSON.
 
       const summaryPrompt = `
 You are an expert business analyst. You are given four evaluations for a company:
-1. AI Fundability Analysis
+1. AI Capital Appeal Analysis
 2. AI Legitimacy Analysis
-3. AI Pitch Deck Evaluation
-4. AI Business Plan Evaluation
+3. Governance Evaluation
+4. Leadership Evaluation
 
 Each contains text describing the strengths and weaknesses. Your job is to summarize the **key areas of improvement**, grouped clearly under each of the above headings, in clean Markdown-style formatting.
 
 Respond with a bullet-pointed summary using the following structure:
 
-### AI Fundability Analysis
+### AI Capital Appeal Analysis
 - [Improvement 1]
 - [Improvement 2]
 
@@ -465,11 +492,11 @@ Respond with a bullet-pointed summary using the following structure:
 - [Improvement 1]
 - [Improvement 2]
 
-### AI Pitch Deck Evaluation
+### Governance Evaluation
 - [Improvement 1]
 - [Improvement 2]
 
-### AI Business Plan Evaluation
+### Leadership Evaluation
 - [Improvement 1]
 - [Improvement 2]
 
@@ -508,8 +535,8 @@ Keep it concise, professional, and actionable.
     const fallbackPriorities = [];
 
     const scores = {
-      business: reportData.businessPlanScore || 0,
-      pitch: reportData.pitchDeckScore || 0,
+      governance: reportData.governanceScore || 0,
+      leadership: reportData.leadershipScore || 0,
       profile: reportData.profileEvaluationScore || 0,
       overall: reportData.overallScore || 0
     };
@@ -517,13 +544,13 @@ Keep it concise, professional, and actionable.
     const sortedScores = Object.entries(scores).sort(([, a], [, b]) => a - b);
 
     const priorityMap = {
-      business: {
-        title: "Business Strategy",
-        description: "Strengthen your business plan with detailed market analysis, financial projections, and operational strategy to demonstrate viability to investors."
+      governance: {
+        title: "Governance Structure",
+        description: "Strengthen your governance framework with clear policies, decision-making processes, and accountability measures to build investor confidence."
       },
-      pitch: {
-        title: "Pitch Presentation",
-        description: "Improve your pitch deck with compelling storytelling, clear value proposition, and strong financial metrics to capture investor interest."
+      leadership: {
+        title: "Leadership Development",
+        description: "Enhance leadership team capabilities by showcasing experience, expertise, and strategic vision to demonstrate strong business stewardship."
       },
       profile: {
         title: "Company Profile",
@@ -598,12 +625,12 @@ Keep it concise, professional, and actionable.
   const getImprovementSuggestions = (structuredContent) => {
     const suggestions = [];
 
-    if (structuredContent.businessPlan?.rawContent) {
-      const businessPlanContent = structuredContent.businessPlan.rawContent;
-      const improvementSection = businessPlanContent.match(/### 3\. Improvement Suggestions.*?### 4/s)?.[0];
+    if (structuredContent.governance?.rawContent) {
+      const governanceContent = structuredContent.governance.rawContent;
+      const improvementSection = governanceContent.match(/### 3\. Improvement Suggestions.*?### 4/s)?.[0];
       if (improvementSection) {
         suggestions.push({
-          category: "Business Plan Improvements",
+          category: "Governance Improvements",
           suggestions: improvementSection.split('\n')
             .filter(line => line.trim().startsWith('-') || line.trim().startsWith('•'))
             .map(line => line.replace(/^[-\•]\s*/, '').trim())
@@ -611,12 +638,12 @@ Keep it concise, professional, and actionable.
       }
     }
 
-    if (structuredContent.pitchDeck?.rawContent) {
-      const pitchDeckContent = structuredContent.pitchDeck.rawContent;
-      const improvementSection = pitchDeckContent.match(/### 4\. Key Improvement Suggestions.*?### 5/s)?.[0];
+    if (structuredContent.leadership?.rawContent) {
+      const leadershipContent = structuredContent.leadership.rawContent;
+      const improvementSection = leadershipContent.match(/### 4\. Key Improvement Suggestions.*?### 5/s)?.[0];
       if (improvementSection) {
         suggestions.push({
-          category: "Pitch Deck Improvements",
+          category: "Leadership Improvements",
           suggestions: improvementSection.split('\n')
             .filter(line => line.trim().startsWith('-') || line.trim().startsWith('•'))
             .map(line => line.replace(/^[-\•]\s*/, '').trim())
@@ -793,6 +820,7 @@ Keep it concise, professional, and actionable.
           </div>
 
           <div class="content">
+            <!-- Scores Overview -->
             <div class="section">
               <div class="scores-grid">
                 <div class="score-card">
@@ -800,12 +828,12 @@ Keep it concise, professional, and actionable.
                   <div class="score-label">Overall BIG Score</div>
                 </div>
                 <div class="score-card">
-                  <div class="score-value">${reportData.businessPlanScore}</div>
-                  <div class="score-label">Business Plan</div>
+                  <div class="score-value">${reportData.governanceScore}</div>
+                  <div class="score-label">Governance</div>
                 </div>
                 <div class="score-card">
-                  <div class="score-value">${reportData.pitchDeckScore}</div>
-                  <div class="score-label">Pitch Deck</div>
+                  <div class="score-value">${reportData.leadershipScore}</div>
+                  <div class="score-label">Leadership</div>
                 </div>
                 <div class="score-card">
                   <div class="score-value">${reportData.profileEvaluationScore}</div>
@@ -818,6 +846,7 @@ Keep it concise, professional, and actionable.
               </div>
             </div>
 
+            <!-- Key Improvement Areas -->
             <div class="section">
               <h2 class="section-title">
                 <span style="display: inline-block; padding: 8px; background: #5D4037; border-radius: 8px; color: white;">📈</span>
@@ -829,6 +858,7 @@ Keep it concise, professional, and actionable.
               </div>
             </div>
 
+            <!-- Footer -->
             <div style="text-align: center; padding-top: 30px; border-top: 1px solid #e9ecef; color: #6c757d; font-size: 0.9rem;">
               <p>This report was generated by BIG Analytics on ${new Date().toLocaleDateString('en-GB', {
       day: '2-digit',
@@ -866,6 +896,7 @@ Keep it concise, professional, and actionable.
 
   return (
     <>
+      {/* Compact Summary Report Card */}
       <div
         className="summary-report-card"
         style={{
@@ -891,6 +922,7 @@ Keep it concise, professional, and actionable.
           e.currentTarget.style.boxShadow = '0 8px 32px rgba(62, 39, 35, 0.3)';
         }}
       >
+        {/* Decorative elements */}
         <div style={{
           position: 'absolute',
           top: 0,
@@ -910,6 +942,7 @@ Keep it concise, professional, and actionable.
           borderRadius: '50%'
         }} />
 
+        {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{
@@ -941,6 +974,7 @@ Keep it concise, professional, and actionable.
           </div>
         </div>
 
+        {/* Core Metrics - Updated */}
         <div style={{
           marginBottom: '20px'
         }}>
@@ -1043,6 +1077,7 @@ Keep it concise, professional, and actionable.
           )}
         </div>
 
+        {/* View Full Report Button */}
         <button
           onClick={() => setShowReportModal(true)}
           style={{
@@ -1078,6 +1113,7 @@ Keep it concise, professional, and actionable.
         </button>
       </div>
 
+      {/* Improved Full Report Modal */}
       {showReportModal && reportData && (
         <div
           className="modal-overlay"
@@ -1118,6 +1154,7 @@ Keep it concise, professional, and actionable.
             }}
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Modal Header */}
             <div style={{
               background: 'linear-gradient(135deg, #5D4037 0%, #3E2723 100%)',
               color: 'white',
@@ -1184,11 +1221,13 @@ Keep it concise, professional, and actionable.
               </div>
             </div>
 
+            {/* Modal Body */}
             <div style={{
               padding: '40px',
               overflowY: 'auto',
               flex: 1
             }}>
+              {/* Improvement Summary Section */}
               <div style={{
                 backgroundColor: 'white',
                 borderRadius: '16px',
@@ -1269,6 +1308,7 @@ Keep it concise, professional, and actionable.
                 )}
               </div>
 
+              {/* Download Button */}
               <div style={{
                 textAlign: 'center',
                 marginTop: '32px'
@@ -1322,27 +1362,19 @@ export function Dashboard() {
   const [currentDashboardStep, setCurrentDashboardStep] = useState(0)
   const [authChecked, setAuthChecked] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [activeTab, setActiveTab] = useState("bigscore")
-  const [toolsCategory, setToolsCategory] = useState(null) // NEW: For tracking which tools category to open
+  const [activeTab, setActiveTab] = useState("bigscore") // New state for tab management
 
-  // Score states
+  // Score states for BIG Score calculation - Added leadershipScore
   const [complianceScore, setComplianceScore] = useState(0)
   const [legitimacyScore, setLegitimacyScore] = useState(0)
-  const [leadershipScore, setLeadershipScore] = useState(0)
+  const [leadershipScore, setLeadershipScore] = useState(0) // New state
   const [fundabilityScore, setFundabilityScore] = useState(0)
   const [pisScore, setPisScore] = useState(0)
   
   const apiKey = API_KEYS.OPENAI
+  console.log(apiKey)
   const user = auth.currentUser
   const userName = user ? user.email : "User"
-
-  // NEW: Handle tab change with optional category
-  const handleTabChange = (tab, category = null) => {
-    setActiveTab(tab)
-    if (category) {
-      setToolsCategory(category)
-    }
-  }
 
   const dashboardSteps = [
     {
@@ -1379,6 +1411,7 @@ export function Dashboard() {
     backgroundBrown: "#EFEBE9",
   }
 
+  // Add/remove body class to prevent scrolling when modal is open
   useEffect(() => {
     if (showDashboardPopup) {
       document.body.classList.add('modal-open');
@@ -1390,6 +1423,7 @@ export function Dashboard() {
       document.body.style.width = '';
     }
 
+    // Cleanup on unmount
     return () => {
       document.body.classList.remove('modal-open');
       document.body.style.position = '';
@@ -1518,7 +1552,7 @@ export function Dashboard() {
               border: '1px solid #e8ddd6'
             }}>
               <button
-                onClick={() => handleTabChange("bigscore")}
+                onClick={() => setActiveTab("bigscore")}
                 style={{
                   flex: 1,
                   padding: '18px 24px',
@@ -1545,7 +1579,7 @@ export function Dashboard() {
                 BIG Score
               </button>
               <button
-                onClick={() => handleTabChange("tools")}
+                onClick={() => setActiveTab("tools")}
                 style={{
                   flex: 1,
                   padding: '18px 24px',
@@ -1568,20 +1602,23 @@ export function Dashboard() {
                   }
                 }}
               >
-                Improve My BIG Score
+            Improve My BIG Score
               </button>
             </div>
           </section>
 
+          {/* Conditional Content Based on Active Tab */}
           {activeTab === "bigscore" ? (
             <>
+              {/* Top Row - Application Tracker (full width) */}
               <section className="tracker-section" style={{ marginBottom: '20px' }}>
                 <ApplicationTracker styles={styles} userId={profileData?.id} />
               </section>
 
+              {/* Row 1 - BIG Score, Customer Reviews, and wider Summary Report */}
               <section className="big-score-reviews-row" style={{
                 display: 'grid',
-                gridTemplateColumns: '1fr 1fr 2fr',
+                gridTemplateColumns: '1fr 1fr 2fr', // BIG Score (1 unit), Customer Reviews (1 unit), Summary Report (2 units)
                 gap: '20px',
                 marginBottom: '20px'
               }}>
@@ -1590,11 +1627,10 @@ export function Dashboard() {
                   profileData={profileData}
                   complianceScore={complianceScore}
                   legitimacyScore={legitimacyScore}
-                  leadershipScore={leadershipScore}
+                  leadershipScore={leadershipScore} // Added leadershipScore prop
                   fundabilityScore={fundabilityScore}
                   pisScore={pisScore}
                   onScoreUpdate={score => console.log("Updated BIG Score:", score)}
-                  onTabChange={handleTabChange} // Pass the handler
                 />
 
                 <CustomerReviewsCard styles={styles} />
@@ -1605,6 +1641,45 @@ export function Dashboard() {
                     userId={profileData?.id}
                     apiKey={apiKey}
                   />
+                )}
+                {!apiKey && (
+                  <section className="individual-scores-row" style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(5, 1fr)',
+                    gap: '20px',
+                    marginBottom: '20px'
+                  }}>
+
+                    <div style={{
+                      background: 'linear-gradient(135deg, #ffffff 0%, #faf8f6 100%)',
+                      borderRadius: '20px',
+                      padding: '24px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      minHeight: '200px',
+                      border: '1px solid #e8ddd6'
+                    }}>
+                      <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '12px',
+                        color: '#8d6e63'
+                      }}>
+                        <div style={{
+                          width: '24px',
+                          height: '24px',
+                          border: '3px solid #d7ccc8',
+                          borderTop: '3px solid #8d6e63',
+                          borderRadius: '50%',
+                          animation: 'spin 1s linear infinite'
+                        }}></div>
+                        <span style={{ fontSize: '12px', fontWeight: '500' }}>Loading...</span>
+                      </div>
+                    </div>
+
+                  </section>
                 )}
               </section>
 
@@ -1652,6 +1727,7 @@ export function Dashboard() {
                 </section>
               )}
 
+              {/* Loading indicator while API key is being fetched */}
               {!apiKey && (
                 <section className="individual-scores-row" style={{
                   display: 'grid',
@@ -1693,75 +1769,80 @@ export function Dashboard() {
               )}
             </>
           ) : (
+            // Tools & Templates Tab Content
             <section className="tools-section">
-              <ShopToolsPage initialCategory={toolsCategory} />
+              <ShopToolsPage />
             </section>
           )}
         </main>
       </div>
 
+      {/* Additional CSS for responsive design - UPDATED for 5 cards */}
       <style jsx>{`
+        /* Prevent body scroll when modal is open */
         body.modal-open {
           overflow: hidden;
           position: fixed;
           width: 100%;
         }
 
+        /* Summary Report Card Specific Styles */
         .summary-report-card {
           min-height: 400px;
         }
 
+        /* Enhanced z-index and interaction handling */
         .score-card-wrapper {
           transition: transform 0.2s ease;
           position: relative;
           z-index: 1;
           isolation: isolate;
         }
-
         .priority-card {
-          position: relative;
-        }
+  position: relative;
+}
 
-        .priority-card:hover .tooltip-content {
-          opacity: 1;
-          visibility: visible;
-          transform: translateY(0px);
-          z-index: 99;
-        }
+.priority-card:hover .tooltip-content {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0px);
+  z-index: 99;
+}
+.tooltip-content {
+  position: absolute;
+  bottom: 120%;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #3E2723;
+  color: #EFEBE9;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  max-width: 240px;
+  width: max-content;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  white-space: normal;
+  line-height: 1.4;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  z-index: 1000;
+}
 
-        .tooltip-content {
-          position: absolute;
-          bottom: 120%;
-          left: 50%;
-          transform: translateX(-50%);
-          background-color: #3E2723;
-          color: #EFEBE9;
-          padding: 10px 14px;
-          border-radius: 8px;
-          font-size: 0.75rem;
-          max-width: 240px;
-          width: max-content;
-          box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
-          white-space: normal;
-          line-height: 1.4;
-          pointer-events: none;
-          opacity: 0;
-          visibility: hidden;
-          transition: opacity 0.25s ease, transform 0.25s ease;
-          z-index: 1000;
-        }
+.priority-card:hover .tooltip-content {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(-6px);
+}
 
-        .priority-card:hover .tooltip-content {
-          opacity: 1;
-          visibility: visible;
-          transform: translateX(-50%) translateY(-6px);
-        }
 
         .score-card-wrapper:hover {
           transform: translateY(-2px);
           z-index: 50;
         }
 
+        /* Ensure buttons are always clickable with higher specificity */
         .score-card-wrapper .fun-button,
         .score-card-wrapper button,
         .score-card-wrapper .text-center {
@@ -1770,6 +1851,7 @@ export function Dashboard() {
           pointer-events: auto !important;
         }
 
+        /* Enhanced tooltip positioning and interaction */
         .score-tooltip {
           animation: fadeInUp 0.3s ease;
           z-index: 100 !important;
@@ -1777,6 +1859,7 @@ export function Dashboard() {
           user-select: none;
         }
 
+        /* Prevent tooltip from interfering with buttons */
         .score-card-wrapper .fun-button:hover ~ .score-tooltip,
         .score-card-wrapper button:hover ~ .score-tooltip,
         .score-card-wrapper .text-center:hover ~ .score-tooltip {
@@ -1795,6 +1878,7 @@ export function Dashboard() {
           z-index: 2;
         }
 
+        /* Modal improvements */
         .modal-overlay {
           z-index: 9999;
           backdrop-filter: blur(4px);
@@ -1804,6 +1888,7 @@ export function Dashboard() {
           z-index: 10000;
         }
 
+        /* Spinning animation for loading indicator */
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
@@ -1831,31 +1916,31 @@ export function Dashboard() {
 
         @media (max-width: 1400px) {
           .individual-scores-row {
-            grid-template-columns: repeat(3, 1fr) !important;
+            grid-template-columns: repeat(3, 1fr) !important; /* 3 columns on smaller desktops */
           }
         }
 
         @media (max-width: 1200px) {
           .big-score-reviews-row {
-            grid-template-columns: 1fr 2fr !important;
+            grid-template-columns: 1fr 2fr !important; /* Stack BIG Score and Customer Reviews, keep Summary Report wider */
           }
           
           .individual-scores-row {
-            grid-template-columns: repeat(3, 1fr) !important;
+            grid-template-columns: repeat(3, 1fr) !important; /* 3 columns on tablets */
           }
         }
 
         @media (max-width: 1024px) {
           .big-score-reviews-row {
-            grid-template-columns: repeat(2, 1fr) !important;
+            grid-template-columns: repeat(2, 1fr) !important; /* Two columns on tablets */
           }
           
           .summary-report-card {
-            grid-column: 1 / -1;
+            grid-column: 1 / -1; /* Summary Report spans full width on tablets */
           }
           
           .individual-scores-row {
-            grid-template-columns: repeat(2, 1fr) !important;
+            grid-template-columns: repeat(2, 1fr) !important; /* 2 columns on smaller tablets */
           }
 
           .explanation-card {
@@ -1874,7 +1959,7 @@ export function Dashboard() {
         @media (max-width: 768px) {
           .big-score-reviews-row,
           .individual-scores-row {
-            grid-template-columns: 1fr !important;
+            grid-template-columns: 1fr !important; /* Single column on mobile */
           }
 
           .summary-report-card {
@@ -1906,6 +1991,7 @@ export function Dashboard() {
             font-size: 0.8rem !important;
           }
 
+          /* Modal adjustments for mobile */
           .modal-content {
             max-width: 95vw !important;
             max-height: 95vh !important;
