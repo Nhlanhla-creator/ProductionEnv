@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { getAuth } from "firebase/auth";
 import { getDoc, doc, updateDoc, serverTimestamp, collection, getDocs, where } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db } from "../../firebaseConfig";
+import { db, auth } from "../../firebaseConfig";
 import { FileText, ExternalLink, Upload } from "lucide-react";
 import get from "lodash.get";
 import { DOCUMENT_PATHS, checkSubmittedDocs, getDocumentURL } from "../../utils/documentUtils";
@@ -47,17 +47,19 @@ const documentValidationRules = {
     ],
     strictChecks:["has_account_number", "shows_valid_south_african_bank", "has_account_holder's_name"]
   },
-  "B-B BEE Certificate": {
-    requiredElements: [
-      "Issued by accredited verification agency",
-      "B-BBEE certificate number",
-      "B-BBEE level (1-8)",
-      "Issue and expiry dates",
-      "Company registration details",
-     "SANAS logo or accreditation number / CIPC Logo / DTIC"
-    ],
-    strictChecks: ["has_certificate_number", "shows_verification_details", "has_expiry_date"]
-  },
+"B-B BEE Certificate": {
+  requiredElements: [
+    "Expiry date - MUST NOT BE EXPIRED",
+    "Issued by accredited verification agency",
+    "B-BBEE certificate number",
+    "B-BBEE level (1-8)", 
+    "Issue date",
+    "Certificate must be currently valid",
+    "Company registration details",
+    "SANAS logo or accreditation number"
+  ],
+  strictChecks: ["has_certificate_number", "not_expired", "currently_valid"]
+},
    "Business Plan": {
     requiredElements: [
       "Executive Summary",
@@ -255,6 +257,7 @@ const MyDocuments = () => {
   const [isOverlayVisible, setIsOverlayVisible] = useState(false);
   const [validatingDoc, setValidatingDoc] = useState(null);
   const [validationResults, setValidationResults] = useState({});
+const [rejectionReasons, setRejectionReasons] = useState({});
 
   useEffect(() => {
     const auth = getAuth();
@@ -312,107 +315,270 @@ useEffect(() => {
 
   return () => unsubscribe(); // Cleanup
 }, []);
-//   const getUserDetails = async () => {
-//   const auth = getAuth();
-//   const user = auth.currentUser;
+
+
+const getRegisteredName = async () => {
+  const user = auth.currentUser;
   
-//   if (!user) return null;
+  if (!user) {
+    console.log("❌ No user found");
+    return null;
+  }
 
-//   try {
-//     const profileRef = doc(db, "universalProfiles", user.uid);
-//     const profileSnap = await getDoc(profileRef);
+  try {
+    console.log("🔍 Fetching from universalProfiles with UID:", user.uid);
+    const profileRef = doc(db, "universalProfiles", user.uid);
+    const profileSnap = await getDoc(profileRef);
     
-//     if (profileSnap.exists()) {
-//       const data = profileSnap.data();
-//       return {
-//         companyName: data.registeredName || data.companyName,
-//         taxNumber: data.taxNumber,
-//         vatNumber: data.vatNumber,
-//         registrationNumber: data.registrationNumber,
-//         contactName: data.contactName
-//         // Add other fields you need
-//       };
-//     }
-//     return null;
-//   } catch (error) {
-//     console.error("Error fetching user details:", error);
-//     return null;
-//   }
-// };
+    console.log("🔍 Profile exists:", profileSnap.exists());
+    
+    if (profileSnap.exists()) {
+      const data = profileSnap.data();
+      
+      // ✅ GET registeredName FROM entityOverview
+      const registeredName = data.entityOverview?.registeredName;
+      
+      console.log("🏢 Found registeredName:", registeredName);
+      return registeredName || null;
+    } else {
+      console.log("❌ No profile found for UID:", user.uid);
+      return null;
+    }
+  } catch (error) {
+    console.error("❌ Error fetching registeredName:", error);
+    return null;
+  }
+};
 
 
-const createStrictPrompt = (docLabel, rules) => {  // ✅ Remove userDetails parameter
+
+const createStrictPrompt = (docLabel, rules, registeredName) => { 
   return `
-VALIDATE THIS ${docLabel} DOCUMENT:
+ANALYZE THE UPLOADED DOCUMENT FILE (not these instructions):
 
-REQUIRED ELEMENTS:
+DOCUMENT VALIDATION FOR: ${docLabel}
+
+CRITICAL CHECKS:
+1. 🔴 DOCUMENT TYPE: Must be exactly ${docLabel}
+2. 🔴 COMPANY NAME: Must match "${registeredName}" 
+3. 🔴 EXPIRY DATE: Must not be expired (current year: 2025)
+4. 🔴 COMPLETENESS: All required elements present
+
+REQUIRED ELEMENTS IN UPLOADED DOCUMENT:
 ${rules.requiredElements.map(item => `- ${item}`).join('\n')}
 
-VALIDATION CHECKS:
-1. Document matches ${docLabel} requirements
-2. Expiry date check (reject if expired/expiring soon)
-3. All required elements present
-
-RESPONSE FORMAT (JSON only):
+ANALYZE THE UPLOADED FILE AND RESPOND WITH:
 {
-  "isValid": true/false,
-  "rejectionReason": "if invalid",
-  "warnings": ["expiring_soon"],
-  "expiryDate": "YYYY-MM-DD if found"
+  "isValid": true,
+  "status": "verified" | "wrong_type" | "name_mismatch" | "expired" | "incomplete",
+  "identifiedDocumentType": "What you detected the uploaded file to be",
+  "message": "Brief validation result",
+  "warnings": []
 }
 `;
 };
 
- const validateDocumentWithAI = async (docLabel, file) => {
-  // ✅ MOVE THE PARSER FUNCTION INSIDE
- const parseDetailedResponse = (responseText) => {
-  try {
+
+const validateDocumentWithAI = async (docLabel, file, registeredName) => {
+  const checkExpiryDate = (aiResponseText, file) => {
+    const datePatterns = [
+      /\b(\d{1,2}\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4})\b/gi,
+      /\b(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})\b/gi,
+      /\b(\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2})\b/gi
+    ];
+    
+    let allDates = [];
+    datePatterns.forEach(pattern => {
+      const matches = aiResponseText.match(pattern) || [];
+      allDates = [...allDates, ...matches];
+    });
+    
+    const hasExpiryKeyword = /expir|valid until|valid to|expires|valid through|expiry date|validity|expiration/i.test(aiResponseText);
+    
+    const hasOldDate = allDates.some(date => {
+      const yearMatch = date.match(/\d{4}/);
+      if (yearMatch) {
+        const year = parseInt(yearMatch[0]);
+        return year < 2023;
+      }
+      return false;
+    });
+    
+    return hasExpiryKeyword && hasOldDate;
+  };
+
+  const manualExpiryCheck = (file, docLabel) => {
+  const expiryDocuments = [
+    'B-BBEE Certificate', 'Tax Clearance Certificate', 
+    'Industry Accreditations', 'VAT Certificate', 'Tax Clearance Cert'
+  ];
+  
+  if (!expiryDocuments.includes(docLabel)) {
+    return false;
+  }
+  
+  const currentYear = new Date().getFullYear();
+  const fileName = file.name.toLowerCase();
+  
+  // Check for old dates in filename (2010-2022)
+  for (let year = 2010; year < 2023; year++) {
+    if (fileName.includes(year.toString())) {
+      console.log(`🔍 Manual expiry detected: File contains ${year}`);
+      return true;
+    }
+  }
+  
+  // Check file modification date
+  if (file.lastModified) {
+    const fileYear = new Date(file.lastModified).getFullYear();
+    if (fileYear < 2023) {
+      console.log(`🔍 Manual expiry detected: File from ${fileYear}`);
+      return true;
+    }
+  }
+  
+  return false;
+};
+
+  const parseDetailedResponse = (responseText, docLabel) => {
+    const documentTypeMap = {
+      "tax clearance": "Tax Clearance Certificate",
+      "tax certificate": "Tax Clearance Certificate", 
+      "sars certificate": "Tax Clearance Certificate",
+      "vat": "VAT Certificate",
+      "vat registration": "VAT Certificate",
+      "financial statement": "Financial Statements",
+      "audited financial": "Audited Financials",
+      "5 year budget": "5 Year Budget",
+      "bbbee": "B-BBEE Certificate",
+      "b-bbee": "B-BBEE Certificate",
+      "company registration": "Company Registration Certificate",
+      "cipc": "Company Registration Certificate",
+      "company profile": "Company Profile",
+      "brochure": "Company Profile",
+      "share register": "Share Register",
+      "certified id": "Certified IDs",
+      "id document": "Certified IDs",
+      "proof of address": "Proof of Address",
+      "utility bill": "Proof of Address",
+      "client reference": "Client References",
+      "reference letter": "Client References",
+      "industry accreditation": "Industry Accreditations",
+      "certificate": "Industry Accreditations",
+      "support letter": "Support Letters",
+      "endorsement": "Support Letters",
+      "business plan": "Business Plan",
+      "pitch deck": "Pitch Deck",
+      "impact statement": "Impact Statements",
+      "loan agreement": "Loan Agreements",
+      "contract": "Guarantee Contracts",
+      "uif": "UIF/PAYE/COIDA Certificates",
+      "paye": "UIF/PAYE/COIDA Certificates",
+      "coida": "UIF/PAYE/COIDA Certificates",
+      "program report": "Previous Program Reports"
+    };
+
+    const extractDocumentType = (text) => {
+      const lowerText = text.toLowerCase();
+      
+      for (const [key, documentType] of Object.entries(documentTypeMap)) {
+        if (lowerText.includes(key)) {
+          return documentType;
+        }
+      }
+      
+      if (lowerText.includes('tax') && lowerText.includes('clearance')) return "Tax Clearance Certificate";
+      if (lowerText.includes('bbbee') || lowerText.includes('b-bbee')) return "B-BBEE Certificate";
+      if (lowerText.includes('vat')) return "VAT Certificate";
+      if (lowerText.includes('company') && lowerText.includes('registration')) return "Company Registration Certificate";
+      if (lowerText.includes('business') && lowerText.includes('plan')) return "Business Plan";
+      
+      return "this document type";
+    };
+
+ try {
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    }
-    
-    // ✅ Better fallback: Check what the AI actually said
-    if (responseText.toLowerCase().includes('false')) {
-      return {
-        isValid: false,
-        rejectionReason: "Document does not appear to be the correct type",
-        warnings: []
-      };
-    }
-    
-    if (responseText.toLowerCase().includes('true')) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      
+      let userMessage;
+      let status = parsed.status;
+      
+      // ✅ MORE RELIABLE: Use the AI's identifiedDocumentType if provided
+      let identifiedType = parsed.identifiedDocumentType;
+      
+      // If AI didn't provide identified type, use our fallback
+      if (!identifiedType || identifiedType === "EXACT_DOCUMENT_NAME_FROM_LIST") {
+        identifiedType = extractDocumentType(parsed.message || responseText);
+      }
+
+      // ✅ CLEANER WRONG TYPE MESSAGES
+      if (parsed.status === "wrong_type" || (!parsed.isValid && identifiedType !== docLabel)) {
+        userMessage = `Please upload a ${docLabel} doc, not ${identifiedType}`;
+        status = "wrong_type";
+      } else if (parsed.status === "name_mismatch") {
+        userMessage = "Company name does not match your registered name";
+        status = "name_mismatch";
+      } else if (parsed.status === "expired") {
+        userMessage = "Document expired";
+        status = "expired";
+      } else {
+        userMessage = "Document verified";
+        status = "verified";
+      }
+      
       return {
         isValid: true,
-        rejectionReason: "",
+        status: status,
+        message: userMessage,
+        warnings: parsed.warnings || []
+      };
+    }
+ 
+      const lowerText = responseText.toLowerCase();
+      if (lowerText.includes('false') || lowerText.includes('invalid') || lowerText.includes('reject')) {
+        const docType = extractDocumentType(responseText);
+        return {
+          isValid: true,
+          status: "wrong_type",
+          message: `Please upload a ${docLabel}, not ${docType}`,
+          warnings: []
+        };
+      }
+      
+      if (lowerText.includes('true') || lowerText.includes('valid') || lowerText.includes('approve')) {
+        return {
+          isValid: true,
+          status: "verified", 
+          message: "Document verified",
+          warnings: []
+        };
+      }
+      
+      return {
+        isValid: true,
+        status: "rejected",
+        message: "Validation failed",
+        warnings: []
+      };
+      
+    } catch (error) {
+      return {
+        isValid: true,
+        status: "rejected",
+        message: "Validation error",
         warnings: []
       };
     }
-    
-    // ✅ If we can't parse, show the actual AI response
-    return {
-      isValid: false,
-      rejectionReason: `Validation failed: ${responseText.substring(0, 100)}...`,
-      warnings: []
-    };
-    
-  } catch (error) {
-    return {
-      isValid: false,
-      rejectionReason: "Unable to validate document format",
-      warnings: []
-    };
-  }
-};
+  };
 
   try {
     const rules = documentValidationRules[docLabel];
     
     const validationPrompt = rules ? 
-      createStrictPrompt(docLabel, rules) :
-      `Check if this document is a valid ${docLabel}. Return only "true" or "false".`;
+      createStrictPrompt(docLabel, rules, registeredName) :
+      `Check if this document is a valid ${docLabel}. Return JSON with isValid true/false and message.`;
 
-    // Convert file to base64
     const base64Data = await new Promise((resolve) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
@@ -438,25 +604,41 @@ RESPONSE FORMAT (JSON only):
       ]
     });
 
-    console.log("🔍 RAW AI RESPONSE:", response.text);
+   console.log("🔍 RAW AI RESPONSE:", response.text);
+
+let finalResult = parseDetailedResponse(response.text, docLabel);
+
+const isExpired = checkExpiryDate(response.text, file) || manualExpiryCheck(file, docLabel);
+
+if (isExpired) {
+  finalResult = {
+    isValid: true,
+    status: "expired", 
+    message: "Document expired",
+    warnings: []
+  };
+}
+
+return finalResult;
     
-    return parseDetailedResponse(response.text); // ✅ Now it's defined
     
   } catch (error) {
     console.error("AI validation failed:", error);
     return {
-      isValid: false,
-      rejectionReason: "Validation service unavailable",
+      isValid: true,
+      status: "rejected",
+      message: "Validation service unavailable",
       warnings: []
     };
   }
 };
+
 const handleFileUpload = async (docLabel, file) => {
   const auth = getAuth();
   const user = auth.currentUser;
   if (!user || !file) return;
 
-  // Your existing file validation (type and size checks)...
+  // File validation...
   const allowedTypes = ['.pdf', '.jpg', '.jpeg', '.png'];
   const fileExtension = file.name.toLowerCase().split('.').pop();
   
@@ -475,9 +657,25 @@ const handleFileUpload = async (docLabel, file) => {
   setIsUploading(true);
   setIsOverlayVisible(true);
 
-   try {
-       const validationResult = await validateDocumentWithAI(docLabel, file);
+  try {
+    // ✅ ADD THIS: Get registered name first
+    const registeredName = await getRegisteredName();
+    console.log("🏢 Registered Name for validation:", registeredName);
+    
+    // ✅ PASS registeredName to validation
+    const validationResult = await validateDocumentWithAI(docLabel, file, registeredName);
     console.log("AI validation result:", validationResult);
+
+
+setRejectionReasons(prev => ({
+  ...prev,
+  [docLabel]: validationResult.rejectionReason
+}));
+
+// Check the updated state
+setTimeout(() => {
+  console.log("Current rejection reasons:", rejectionReasons);
+}, 0);
 
     if (!validationResult.isValid) {
       alert(`Document rejected: ${validationResult.rejectionReason}`);
@@ -486,10 +684,6 @@ const handleFileUpload = async (docLabel, file) => {
       return;
     }
 
-    if (!validationResult.isValid) {
-      alert(`Document rejected: ${validationResult.rejectionReason}`);
-      return;
-    }
 
     // Check for warnings
     if (validationResult.warnings && validationResult.warnings.length > 0) {
@@ -519,11 +713,16 @@ const handleFileUpload = async (docLabel, file) => {
       return `${parts.join(".")}.UpdatedAt`;
     })();
 
-    await updateDoc(profileRef, {
-      [path]: downloadURL,
-      [timestampPath]: serverTimestamp(),
-    });
-
+   await updateDoc(profileRef, {
+  [path]: downloadURL,
+  [timestampPath]: serverTimestamp(),
+  // ✅ ADD VERIFICATION STATUS
+  [`verification.${docLabel}`]: {
+    status: validationResult.status,
+    message: validationResult.message,
+    lastChecked: serverTimestamp()
+  }
+});
     setSubmittedDocuments((prev) => Array.from(new Set([...prev, docLabel])));
     
     const updatedProfileSnap = await getDoc(profileRef);
@@ -535,7 +734,6 @@ const handleFileUpload = async (docLabel, file) => {
     setIsUploading(false);
     setTimeout(() => {
       setIsOverlayVisible(false);
-      alert(`${docLabel} ${isUpdate ? 'updated' : 'uploaded'} successfully.`);
     }, 300);
     
   } catch (error) {
@@ -605,10 +803,11 @@ const handleFileUpload = async (docLabel, file) => {
     );
   };
 
-  const getStatusBadge = (docLabel) => {
-    const url = getDocumentURL(docLabel, profileData);
-    const isUploaded = !!url;
-    
+ const getStatusBadge = (docLabel) => {
+  const url = getDocumentURL(docLabel, profileData);
+  const verification = profileData.verification?.[docLabel];
+  
+  if (!url) {
     return (
       <span style={{
         display: "inline-flex",
@@ -617,13 +816,54 @@ const handleFileUpload = async (docLabel, file) => {
         borderRadius: "12px",
         fontSize: "11px",
         fontWeight: "600",
-        backgroundColor: isUploaded ? "#e8f5e8" : "#ffebee",
-        color: isUploaded ? "#2e7d32" : "#c62828"
+        backgroundColor: "#ffebee",
+        color: "#c62828"
       }}>
-        {isUploaded ? "Uploaded" : "Pending"}
+        Pending
       </span>
     );
-  };
+  }
+
+  // ✅ SHOW VERIFICATION STATUS INSTEAD OF JUST "UPLOADED"
+  let backgroundColor = "#e8f5e8";
+  let color = "#2e7d32";
+  let statusText = "Uploaded";
+
+  if (verification) {
+    if (verification.status === "verified") {
+      backgroundColor = "#e8f5e8";
+      color = "#2e7d32";
+      statusText = "Verified";
+    } else if (verification.status === "expired") {
+      backgroundColor = "#ffebee";
+      color = "#c62828";
+      statusText = "Expired";
+    } else if (verification.status === "wrong_type") {
+      backgroundColor = "#fff3e0";
+      color = "#ef6c00";
+      statusText = "Wrong Type";
+    } else if (verification.status === "name_mismatch") {
+      backgroundColor = "#fff3e0";
+      color = "#ef6c00";
+      statusText = "Name Mismatch";
+    }
+  }
+
+  return (
+    <span style={{
+      display: "inline-flex",
+      alignItems: "center",
+      padding: "4px 8px",
+      borderRadius: "12px",
+      fontSize: "11px",
+      fontWeight: "600",
+      backgroundColor,
+      color
+    }}>
+      {statusText}
+    </span>
+  );
+};
 
   // Responsive container styles
   const getContainerStyles = () => ({
@@ -971,14 +1211,17 @@ const handleFileUpload = async (docLabel, file) => {
                             ? new Date(updatedAt.seconds * 1000).toLocaleDateString()
                             : "-"}
                         </td>
-                        <td style={{
-                          padding: "16px 20px",
-                          textAlign: "center",
-                          verticalAlign: "middle",
-                          backgroundColor: "transparent"
-                        }}>
-                          {getStatusBadge(doc)}
-                        </td>
+                 <td style={{
+                      padding: "16px 20px",
+                      fontSize: "13px",
+                      fontWeight: "10px",
+                      color: profileData.verification?.[doc]?.status === "verified" ? "#2e7d32" : "#6d4c41",
+                      textAlign: "center",
+                      verticalAlign: "middle",
+                      backgroundColor: "transparent"
+                    }}>
+                      {profileData.verification?.[doc]?.message || "No document uploaded"}
+                    </td>
                         <td style={{
                           padding: "16px 20px",
                           textAlign: "center",
@@ -1017,6 +1260,14 @@ const handleFileUpload = async (docLabel, file) => {
                               onChange={(e) => handleFileUpload(doc, e.target.files[0])}
                             />
                           </label>
+                        </td>
+                        <td style={{ padding: "16px 20px", textAlign: "center" }}>
+                                              {rejectionReasons[doc.label] && (
+                        <div style={{ color: "red", fontSize: "12px" }}>
+                          {rejectionReasons[doc.label]}
+                        </div>
+                      )}
+                                              
                         </td>
                       </tr>
                     );
