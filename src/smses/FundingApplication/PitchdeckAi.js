@@ -10,6 +10,12 @@ import { db, auth } from '../../firebaseConfig'
 import { doc, setDoc, getDoc } from "firebase/firestore"
 import { collection, query, where, getDocs, addDoc } from "firebase/firestore"
 import { API_KEYS } from '../../API';
+import { GoogleGenAI } from "@google/genai"
+
+// ✅ Initialize Google AI only
+const ai = new GoogleGenAI({ 
+  apiKey: "AIzaSyBV5LGcaYjT0qLWsfqpbKxo8ohz0SDkIvU"
+})
 
 export const fetchUserProfile = async () => {
   try {
@@ -22,7 +28,7 @@ export const fetchUserProfile = async () => {
     const profileSnap = await getDoc(profileRef);
 
     if (profileSnap.exists()) {
-      return profileSnap.data(); // This is the user's profile data
+      return profileSnap.data();
     } else {
       throw new Error("No profile found for the current user.");
     }
@@ -31,71 +37,426 @@ export const fetchUserProfile = async () => {
     throw error;
   }
 };
-// ChatGPT API function - replace YOUR_API_KEY with your actual OpenAI API key
-const sendMessageToChatGPT = async (message,apiKey) => {
-  const API_KEY = apiKey; // Replace with your actual API key
-  const API_URL = 'https://api.openai.com/v1/chat/completions';
 
+// ✅ Enhanced file extraction with Google AI
+const extractWithGoogleAI = async (file, documentType = "Pitch Deck") => {
   try {
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4.1',
-        messages: [
-          {
-            role: 'user',
-            content: message,
-          },
-        ],
-        max_tokens: 1000,
-        temperature: 0.7,
-      }),
-    });
+    console.log(`🔍 Analyzing ${file.name} with Google AI...`)
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+    // Convert file to base64 for Google AI
+    const base64Data = await new Promise((resolve) => {
+      const reader = new FileReader()
+      reader.readAsDataURL(file)
+      reader.onload = () => resolve(reader.result.split(',')[1])
+    })
+
+    const prompt = `
+EXTRACT ALL TEXT FROM THIS PITCH DECK:
+
+DOCUMENT TYPE: ${documentType}
+FILE NAME: ${file.name}
+
+INSTRUCTIONS:
+1. Extract ALL readable text from this document
+2. Preserve numbers, financial data, business metrics, and strategic information
+3. Include headers, footers, tables, and any visible text
+4. Focus on business plans, financial projections, market analysis, and growth strategies
+5. Return the extracted text in a clean, readable format
+
+EXTRACTED TEXT:
+`
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [
+        {
+          parts: [
+            {
+              inlineData: {
+                mimeType: file.type,
+                data: base64Data,
+              }
+            },
+            {
+              text: prompt
+            }
+          ]
+        }
+      ]
+    })
+
+    console.log("✅ Google AI extraction successful")
+    return response.text || "[No text extracted by Google AI]"
+
+  } catch (error) {
+    console.error("❌ Google AI extraction failed:", error)
+    throw new Error(`AI extraction failed: ${error.message}`)
+  }
+}
+
+// ✅ Enhanced PDF extraction with fallbacks
+const extractFromPDF = async (file) => {
+  try {
+    console.log("📄 Attempting PDF extraction with Google AI...")
+    
+    // Primary method: Use Google AI for best results
+    const aiText = await extractWithGoogleAI(file, "Pitch Deck PDF")
+    if (aiText && aiText.length > 100) {
+      console.log("✅ PDF extracted successfully with Google AI")
+      return aiText
+    }
+    
+    // Fallback: Traditional PDF.js extraction
+    console.log("🔄 Falling back to PDF.js extraction...")
+    let pdfjsLib = null
+    
+    try {
+      const pdfjs = await import("pdfjs-dist")
+      pdfjs.GlobalWorkerOptions.workerSrc = 
+        `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`
+      pdfjsLib = pdfjs
+    } catch (pdfError) {
+      console.warn("PDF.js not available:", pdfError)
+      throw new Error("PDF extraction libraries not available")
     }
 
-    const data = await response.json();
-    return data.choices[0].message.content;
-  } catch (error) {
-    console.error('ChatGPT API Error:', error);
-    throw new Error(`Failed to get response from ChatGPT: ${error.message}`);
-  }
-};
+    const arrayBuffer = await file.arrayBuffer()
+    const loadingTask = pdfjsLib.getDocument({
+      data: arrayBuffer,
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      useSystemFonts: true,
+    })
 
-export default function PitchDeckGPT({ files = [], onEvaluationComplete ,apiKey}) {
+    const pdf = await loadingTask.promise
+    console.log(`✅ PDF loaded: ${pdf.numPages} pages`)
+
+    const maxPages = Math.min(pdf.numPages, 25)
+    let fullText = ""
+
+    for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+      try {
+        const page = await pdf.getPage(pageNum)
+        const textContent = await page.getTextContent()
+        const pageText = textContent.items
+          .map((item) => item.str || "")
+          .join(" ")
+          .trim()
+
+        if (pageText) {
+          fullText += `\n\n[PAGE ${pageNum}]\n${pageText}`
+        }
+
+        if (fullText.length > 100000) {
+          console.log("⚠️ Text limit reached, stopping extraction")
+          break
+        }
+      } catch (pageError) {
+        console.warn(`⚠️ Error extracting page ${pageNum}:`, pageError)
+      }
+    }
+
+    await pdf.destroy()
+
+    if (fullText.length === 0) {
+      return "[PDF parsed but no selectable text found. This may be a scanned image PDF.]"
+    }
+
+    console.log(`✅ Successfully extracted ${fullText.length} characters from PDF`)
+    return fullText.length > 25000 ? fullText.slice(0, 25000) + "…[truncated]" : fullText
+
+  } catch (error) {
+    console.error("❌ All PDF extraction methods failed:", error)
+    
+    // Final fallback: basic text decode
+    try {
+      const arrayBuffer = await file.arrayBuffer()
+      const fallbackText = new TextDecoder("utf-8", { fatal: false })
+        .decode(new Uint8Array(arrayBuffer))
+        .replace(/[^\u0009\u000A\u000D\u0020-\u007E]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+
+      if (fallbackText && fallbackText.length > 100) {
+        console.log("✅ Fallback extraction succeeded")
+        return fallbackText.length > 10000 ? fallbackText.slice(0, 10000) + "…[truncated]" : fallbackText
+      }
+    } catch (fallbackError) {
+      console.error("❌ Fallback extraction failed:", fallbackError)
+    }
+
+    return `[PDF extraction failed: ${error.message}]`
+  }
+}
+
+// ✅ Enhanced DOCX extraction with Google AI fallback
+const extractFromDOCX = async (file) => {
+  try {
+    console.log("📝 Attempting DOCX extraction with Mammoth...")
+    const arrayBuffer = await file.arrayBuffer()
+    const { value } = await mammoth.extractRawText({ arrayBuffer })
+    
+    if (value && value.length > 100) {
+      console.log("✅ DOCX extracted successfully with Mammoth")
+      return value.length > 20000 ? value.slice(0, 20000) + "…[truncated]" : value
+    }
+    
+    // Fallback to Google AI if Mammoth fails
+    console.log("🔄 Falling back to Google AI for DOCX...")
+    const aiText = await extractWithGoogleAI(file, "Word Document")
+    return aiText
+    
+  } catch (error) {
+    console.error("❌ DOCX extraction failed:", error)
+    
+    // Final fallback to Google AI
+    try {
+      const aiText = await extractWithGoogleAI(file, "Word Document")
+      return aiText
+    } catch (aiError) {
+      return "[DOCX file - extraction incomplete]"
+    }
+  }
+}
+
+// ✅ Enhanced image processing with Google AI
+const extractFromImage = async (file) => {
+  try {
+    console.log("🖼️ Extracting text from image with Google AI...")
+    const aiText = await extractWithGoogleAI(file, "Pitch Deck Image")
+    
+    if (aiText && aiText.length > 50) {
+      console.log("✅ Image text extraction successful")
+      return `[IMAGE TEXT EXTRACTED]\n${aiText}`
+    }
+    
+    return `[Image file ${file.name} - Limited text extraction. Consider uploading PDF/DOCX for better analysis.]`
+    
+  } catch (error) {
+    console.error("❌ Image extraction failed:", error)
+    return `[Image file ${file.name} - Text extraction failed. Please upload PDF/DOCX for pitch analysis.]`
+  }
+}
+
+// ✅ Enhanced Excel processing
+let xlsxLib = null
+
+const ensureXlsx = async () => {
+  if (!xlsxLib) {
+    try {
+      xlsxLib = await import("xlsx")
+    } catch {
+      xlsxLib = null
+    }
+  }
+  return xlsxLib
+}
+
+const extractFromXLS = async (file) => {
+  try {
+    const XLSX = await ensureXlsx()
+    if (!XLSX) {
+      // Fallback to Google AI for Excel files
+      const aiText = await extractWithGoogleAI(file, "Excel Spreadsheet with Financial Data")
+      return aiText || "[Excel file - xlsx parser not installed]"
+    }
+    
+    const arrayBuffer = await file.arrayBuffer()
+    const wb = XLSX.read(arrayBuffer, { type: "array" })
+    const sheetNames = wb.SheetNames.slice(0, 5)
+    let out = []
+    
+    for (const s of sheetNames) {
+      const ws = wb.Sheets[s]
+      const csv = XLSX.utils.sheet_to_csv(ws, { FS: " | " })
+      out.push(`[SHEET: ${s}]\n${csv}`)
+      if (out.join("\n").length > 25000) break
+    }
+    
+    const result = out.join("\n\n")
+    return result.length > 25000 ? result.slice(0, 25000) + "…[truncated]" : result
+    
+  } catch (error) {
+    console.error("❌ Excel extraction failed:", error)
+    
+    // Fallback to Google AI
+    try {
+      const aiText = await extractWithGoogleAI(file, "Excel Spreadsheet")
+      return aiText
+    } catch (aiError) {
+      return "[Excel file - extraction failed]"
+    }
+  }
+}
+
+// ✅ Enhanced text file processing
+const extractFromText = async (file) => {
+  try {
+    const text = await file.text()
+    return text.length > 20000 ? text.slice(0, 20000) + "…[truncated]" : text
+  } catch (error) {
+    console.error("❌ Text file extraction failed:", error)
+    return "[Text file - reading failed]"
+  }
+}
+
+// ✅ File processing utilities
+const ext = (name = "") => name.split(".").pop()?.toLowerCase() || ""
+
+// ✅ Main extraction function with better file type handling
+const extractTextFromFile = async (file) => {
+  const fileExt = ext(file.name)
+  const type = file.type || ""
+  const sizeMb = file.size / (1024 * 1024)
+  
+  if (sizeMb > 25) {
+    return `[${file.name}] skipped - file too large (${sizeMb.toFixed(1)} MB). Max supported ~25 MB.`
+  }
+
+  try {
+    console.log(`🔍 Processing ${file.name} (${fileExt})...`)
+
+    // Handle different file types with appropriate methods
+    switch (fileExt) {
+      case "pdf":
+        return await extractFromPDF(file)
+        
+      case "docx":
+        return await extractFromDOCX(file)
+        
+      case "doc":
+        // For .doc files, use Google AI directly
+        return await extractWithGoogleAI(file, "Legacy Word Document")
+        
+      case "xlsx":
+      case "xls":
+        return await extractFromXLS(file)
+        
+      case "jpg":
+      case "jpeg":
+      case "png":
+        return await extractFromImage(file)
+        
+      case "txt":
+      case "md":
+        return await extractFromText(file)
+        
+      default:
+        // For unknown types, try Google AI
+        console.log(`🔄 Unknown file type ${fileExt}, trying Google AI...`)
+        return await extractWithGoogleAI(file, "Unknown Document Type")
+    }
+
+  } catch (error) {
+    console.error(`❌ Error processing ${file.name}:`, error)
+    
+    // Final fallback: try basic Google AI extraction
+    try {
+      console.log("🔄 Attempting final fallback with Google AI...")
+      const fallbackText = await extractWithGoogleAI(file, "Document of unknown type")
+      return fallbackText || `[Extraction failed: ${error.message}]`
+    } catch (finalError) {
+      return `[Error extracting content from ${file.name}: ${error.message}]`
+    }
+  }
+}
+
+// ✅ NEW: Pitch deck analysis with Gemini AI
+const analyzeWithGeminiAI = async (extractedTexts, fileInfo, profileData, stageLabel) => {
+  try {
+    const prompt = `
+PITCH DECK FUNDABILITY ANALYSIS REQUEST:
+
+You are evaluating a startup pitch using the BIG Fundability Scorecard (Pitch Deck). Score each item 0–5 with 1-2 sentence justification per line. Then provide a total weighted score out of 100 based on the startup's current stage: ${stageLabel}.
+
+Startup Summary:
+Stage: ${stageLabel}
+Description: ${profileData?.entityOverview?.businessDescription || "Not provided"}
+
+Use these 9 main criteria for the weighted score:
+1. Problem Clarity
+2. Solution Fit
+3. Market Understanding (TAM, SAM)
+4. Competitive Landscape and Advantage
+5. Revenue Streams
+6. Financial Projections
+7. Traction
+8. MVP (Minimum Viable Product) Maturity
+9. Investor IRR
+
+ADDITIONAL EVALUATION (not included in main score):
+10. Operational Strength & Operating Model Clarity
+
+Weighting by stage (for main 9 criteria only):
+
+For Pre-seed:
+- Problem Clarity: 3%, Solution Fit: 3%, Market: 2%, Competition: 2%, Revenue: 2%, Financials: 2%, Traction: 2%, MVP Maturity: 3%, IRR: 1%
+
+For Growth:
+- Problem Clarity: 2%, Solution Fit: 2%, Market: 2%, Competition: 2%, Revenue: 2%, Financials: 2%, Traction: 1%, MVP Maturity: 1%, IRR: 1%
+
+For Maturity:
+- Problem Clarity: 1%, Solution Fit: 1%, Market: 1%, Competition: 1%, Revenue: 1%, Financials: 2%, Traction: 1%, MVP Maturity: 1%, IRR: 1%
+
+DOCUMENTS TO ANALYZE:
+${fileInfo.map((file, index) => `
+--- DOCUMENT ${index + 1} ---
+FILE: ${file.name}
+CONTENT:
+${file.text}
+`).join('\n')}
+
+RESPONSE FORMAT:
+- Score each of the 9 main items from 0–5 with short justification
+- Calculate a weighted total out of 100 using the stage-adjusted weights above
+- Score item 10 (Operational Strength & Operating Model Clarity) separately from 0–5 with justification
+- Label the main result: "Investment-Ready", "Fundable with Support", "Emerging Potential", or "Not Yet Ready"
+- Suggest 2–3 priority improvements in weak areas (score ≤ 3)
+- Clearly indicate: "Operational Strength Score: X/5" at the end
+- Include the final score clearly as "BIG Fundability Score: X/100"
+
+IMPORTANT: Provide a comprehensive analysis that investors would find valuable.
+`
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ parts: [{ text: prompt }] }]
+    })
+
+    return response.text
+
+  } catch (error) {
+    console.error("Gemini AI analysis failed:", error)
+    throw new Error(`AI analysis failed: ${error.message}`)
+  }
+}
+
+export default function PitchDeckGPT({ files = [], onEvaluationComplete }) {
   const [input, setInput] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [response, setResponse] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [extractedScore, setExtractedScore] = useState(null);
   const [fundabilityLabel, setFundabilityLabel] = useState('');
-  const [aiEvaluation, setAiEvaluation] = useState(null); // Store AI response
-
+  const [aiEvaluation, setAiEvaluation] = useState(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
   useEffect(() => {
     if (files && files.length > 0) {
       const validFile = files.some(file => {
         if (!file || !file.name) return false;
         const ext = file.name.split('.').pop().toLowerCase();
-        return ['pdf', 'docx', 'txt', 'md'].includes(ext);
+        return ['pdf', 'docx', 'txt', 'md', 'jpg', 'jpeg', 'png', 'xlsx', 'xls'].includes(ext);
       });
 
       if (!validFile) {
-        alert("Invalid or unsupported file format. Please upload a PDF, DOCX, TXT, or MD file.");
+        alert("Invalid or unsupported file format. Please upload a PDF, DOCX, TXT, MD, Image, or Excel file.");
         return;
       }
 
       handleIncomingFiles(files);
     }
   }, [files]);
-
-
 
   const extractScoreFromResponse = (responseText) => {
     try {
@@ -135,14 +496,12 @@ export default function PitchDeckGPT({ files = [], onEvaluationComplete ,apiKey}
     }
   };
 
-
   const getFundabilityLabel = (score) => {
     if (score >= 85) return 'Investment-Ready';
     if (score >= 65) return 'Fundable with Support';
     if (score >= 50) return 'Emerging Potential';
     return 'Not Yet Ready';
   };
-
 
   const handleIncomingFiles = async (incomingFiles) => {
     if (!incomingFiles || incomingFiles.length === 0) {
@@ -156,7 +515,7 @@ export default function PitchDeckGPT({ files = [], onEvaluationComplete ,apiKey}
     try {
       for (const file of incomingFiles) {
         const fileType = file.name.split('.').pop().toLowerCase();
-        const allowedTypes = ['txt', 'docx', 'md', 'pdf'];
+        const allowedTypes = ['txt', 'docx', 'md', 'pdf', 'jpg', 'jpeg', 'png', 'xlsx', 'xls'];
 
         if (!allowedTypes.includes(fileType)) {
           console.warn(`Unsupported file type: ${file.name}`);
@@ -176,8 +535,9 @@ export default function PitchDeckGPT({ files = [], onEvaluationComplete ,apiKey}
             name: file.name,
             size: file.size,
             type: file.type,
-            content,
-            id: Date.now() + Math.random()
+            content: content,
+            id: Date.now() + Math.random(),
+            extractionMethod: "google_ai_enhanced"
           });
 
         } catch (error) {
@@ -203,440 +563,177 @@ export default function PitchDeckGPT({ files = [], onEvaluationComplete ,apiKey}
     }
   };
 
+  const performEvaluation = async (filesToEvaluate) => {
+    const profileData = await fetchUserProfile();
+    const stage = (profileData?.entityOverview?.operationStage || "").toLowerCase();
 
-const performEvaluation = async (filesToEvaluate) => {
-  const profileData = await fetchUserProfile();
-  const stage = (profileData?.entityOverview?.operationStage || "").toLowerCase();
-
-  const stageLabel = ["pre-seed", "preseed"].includes(stage) ? "Pre-seed"
-                    : ["growth", "scale-up", "scaling"].includes(stage) ? "Growth"
-                    : "Maturity";
-
-  let prompt = `
-You are evaluating a startup pitch using the BIG Fundability Scorecard (Pitch Deck). Score each item 0–5 with 1-2 sentence justification per line. Then provide a total weighted score out of 100 based on the startup's current stage: ${stageLabel}.
-
-Startup Summary:
-Stage: ${stageLabel}
-Description: ${profileData?.entityOverview?.businessDescription || "Not provided"}
-
-Use these 9 main criteria for the weighted score:
-1. Problem Clarity
-2. Solution Fit
-3. Market Understanding (TAM, SAM)
-4. Competitive Landscape and Advantage
-5. Revenue Streams
-6. Financial Projections
-7. Traction
-8. MVP (Minimum Viable Product) Maturity
-9. Investor IRR
-
-ADDITIONAL EVALUATION (not included in main score):
-10. Operational Strength & Operating Model Clarity
-
-Weighting by stage (for main 9 criteria only):
-
-For Pre-seed:
-- Problem Clarity: 3%, Solution Fit: 3%, Market: 2%, Competition: 2%, Revenue: 2%, Financials: 2%, Traction: 2%, MVP Maturity: 3%, IRR: 1%
-
-For Growth:
-- Problem Clarity: 2%, Solution Fit: 2%, Market: 2%, Competition: 2%, Revenue: 2%, Financials: 2%, Traction: 1%, MVP Maturity: 1%, IRR: 1%
-
-For Maturity:
-- Problem Clarity: 1%, Solution Fit: 1%, Market: 1%, Competition: 1%, Revenue: 1%, Financials: 2%, Traction: 1%, MVP Maturity: 1%, IRR: 1%
-
-Instructions:
-- Score each of the 9 main items from 0–5 with short justification.
-- Calculate a weighted total out of 100 using the stage-adjusted weights above.
-- Score item 10 (Operational Strength & Operating Model Clarity) separately from 0–5 with justification.
-- Label the main result: "Investment-Ready", "Fundable with Support", "Emerging Potential", or "Not Yet Ready".
-- Suggest 2–3 priority improvements in weak areas (score ≤ 3).
-- Clearly indicate: "Operational Strength Score: X/5" at the end.
-
-Evaluate the following pitch content:
-`;
-
-  filesToEvaluate.forEach((file, index) => {
-    prompt += `\n\nFile ${index + 1}: ${file.name}\n${file.content}\n`;
-  });
-
-  try {
-    const reply = await sendMessageToChatGPT(prompt,apiKey);
-    setResponse(reply);
-
-    const score = extractScoreFromResponse(reply);
-    const operationalScore = extractOperationalScoreFromResponse(reply);
-const operationalSummary = extractOperationalSummaryFromResponse(reply); // ✅ NEW
-
-    if (score !== null) {
-      setExtractedScore(score);
-      const label = getFundabilityLabel(score);
-      setFundabilityLabel(label);
-
-      if (onEvaluationComplete) {
-        onEvaluationComplete(reply, score, label, operationalScore);
-      }
-
-      // ✅ Save with stage and operational score
-    await saveDataToFirebase(reply, score, label, stageLabel, operationalScore, operationalSummary);
-
-
-      console.log("Score:", score, "Label:", label, "Stage:", stageLabel, "Operational Score:", operationalScore);
-    } else {
-      console.warn("No score extracted");
-      setExtractedScore(null);
-      setFundabilityLabel('');
-    }
-  } catch (error) {
-    console.error("Evaluation error:", error);
-  }
-};
-
-// Add this new function to extract operational score
-// Improved operational score extraction with multiple fallback patterns
-const extractOperationalScoreFromResponse = (responseText) => {
-  try {
-    console.log("Extracting from response:", responseText.substring(0, 500) + "...");
-    
-    // Multiple patterns to try in order of preference
-    const patterns = [
-      // Pattern 1: **10. Operational Strength** **Score: X/5**
-      /\*\*10\.\s*Operational\s+Strength.*?\*\*\s*\*\*Score:\s*(\d(?:\.\d)?)\/5\*\*/is,
-      
-      // Pattern 2: 10. Operational Strength & Operating Model Clarity Score: X/5
-      /10\.\s*Operational\s+Strength.*?Score:\s*(\d(?:\.\d)?)\/5/is,
-      
-      // Pattern 3: Operational Strength Score: X/5 (anywhere in text)
-      /Operational\s+Strength\s+Score:\s*(\d(?:\.\d)?)\/5/i,
-      
-      // Pattern 4: **Operational Strength Score: X/5**
-      /\*\*Operational\s+Strength\s+Score:\s*(\d(?:\.\d)?)\/5\*\*/i,
-      
-      // Pattern 5: Score: X/5 (after "Operational" keyword)
-      /Operational.*?Score:\s*(\d(?:\.\d)?)\/5/is,
-      
-      // Pattern 6: Just look for X/5 after "10." or "Operational"
-      /(?:10\.|Operational).*?(\d(?:\.\d)?)\/5/is,
-      
-      // Pattern 7: Very loose - any number/5 after operational mention
-      /operational.*?(\d(?:\.\d)?)\s*\/\s*5/is
-    ];
-
-    for (let i = 0; i < patterns.length; i++) {
-      const match = responseText.match(patterns[i]);
-      if (match && match[1]) {
-        const score = parseFloat(match[1]);
-        console.log(`Pattern ${i + 1} matched: ${score}`);
-        if (score >= 0 && score <= 5) {
-          return score;
-        }
-      }
-    }
-
-    console.log("No operational score pattern matched");
-    return null;
-  } catch (error) {
-    console.error("Error extracting operational score:", error);
-    return null;
-  }
-};
-
-// Improved operational summary extraction
-const extractOperationalSummaryFromResponse = (responseText) => {
-  try {
-    console.log("Extracting operational summary...");
-    
-    const patterns = [
-      // Pattern 1: After **10. Operational Strength** until next section
-      /\*\*10\.\s*Operational\s+Strength.*?\*\*\s*\*\*Score:\s*\d\/5\*\*\s*(.*?)(?=\n\s*---|\n\s*\*\*Priority|\n\s*###|\*\*\d+\.|\n\s*$)/is,
-      
-      // Pattern 2: After "10. Operational" until next numbered item
-      /10\.\s*Operational\s+Strength.*?Score:\s*\d\/5[^\n]*\n(.*?)(?=\n\s*\*\*Priority|\n\s*---|\n\s*\d+\.|\n\s*$)/is,
-      
-      // Pattern 3: Look for text after operational score
-      /Operational\s+Strength\s+Score:\s*\d\/5[^\n]*\n(.*?)(?=\n\s*\*\*|\n\s*---|\n\s*Priority|\n\s*$)/is,
-      
-      // Pattern 4: Very loose - text after "operational" keyword
-      /10\..*?operational.*?(\d\/5)[^\n]*\n(.*?)(?=\n\s*\*\*|\n\s*---|\n\s*Priority|\n\s*\d+\.|\n\s*$)/is
-    ];
-
-    for (let i = 0; i < patterns.length; i++) {
-      const match = responseText.match(patterns[i]);
-      if (match) {
-        let summary = match[match.length - 1]; // Get the last capture group
-        if (summary && summary.trim().length > 10) {
-          // Clean up the summary
-          summary = summary
-            .trim()
-            .replace(/\*\*/g, '') // Remove markdown formatting
-            .replace(/^\s*[-•]\s*/, '') // Remove bullet points
-            .replace(/\n\s*[-•]\s*/g, '\n') // Clean up bullet points
-            .substring(0, 500); // Limit length
-          
-          console.log(`Summary pattern ${i + 1} matched`);
-          return summary;
-        }
-      }
-    }
-
-    console.log("No operational summary pattern matched");
-    return null;
-  } catch (error) {
-    console.error('Error extracting operational summary:', error);
-    return null;
-  }
-};
-
-// Debug function to help you see what's in the response
-const debugOperationalExtraction = (responseText) => {
-  console.log("=== DEBUG OPERATIONAL EXTRACTION ===");
-  console.log("Response length:", responseText.length);
-  
-  // Look for any mention of "operational"
-  const operationalMentions = responseText.match(/operational[^.\n]*[.\n]/gi);
-  console.log("Operational mentions:", operationalMentions);
-  
-  // Look for any X/5 patterns
-  const scorePatterns = responseText.match(/\d+(?:\.\d+)?\/5/g);
-  console.log("All X/5 patterns found:", scorePatterns);
-  
-  // Look for "10." patterns
-  const tenPatterns = responseText.match(/10\..*$/gm);
-  console.log("Lines starting with '10.':", tenPatterns);
-  
-  console.log("=== END DEBUG ===");
-};
-
-
-// Update the saveDataToFirebase function
-const saveDataToFirebase = async (response, score, label, growthStage, operationalScore , operationalSummary) => {
-
-  try {
-    setIsLoading(true);
-    const userId = auth.currentUser?.uid;
-    if (!userId) throw new Error("User not logged in.");
-    if (!response) throw new Error("No evaluation data to save");
-
- const dataToSave = {
-  evaluation: {
-    content: response,
-    score,
-    label,
-    operationalScore,
-    operationalSummary, // ✅ NEW
-    evaluatedAt: new Date().toISOString(),
-    modelVersion: "GPT-4",
-    growthStage,
-  },
-      userId,
-      createdAt: new Date().toISOString(),
-      files: uploadedFiles.map(file => ({
-        name: file.name,
-        size: file.size,
-        type: file.type
-      }))
-    };
-
-    const evaluationsRef = collection(db, "aiPitchEvaluations");
-    const q = query(evaluationsRef, where("userId", "==", userId));
-    const querySnapshot = await getDocs(q);
-
-    if (!querySnapshot.empty) {
-      const docRef = querySnapshot.docs[0].ref;
-      await setDoc(docRef, dataToSave, { merge: true });
-    } else {
-      const docRef = await addDoc(evaluationsRef, dataToSave);
-    }
-
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 3000);
-  } catch (err) {
-    console.error("Firebase save error:", err);
-    throw err;
-  } finally {
-    setIsLoading(false);
-  }
-};
-
-  const extractTextFromFile = async (file) => {
-    const fileType = file.name.split('.').pop().toLowerCase();
-
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-
-      reader.onload = async (event) => {
-        const result = event.target.result;
-
-        try {
-          if (fileType === 'txt' || fileType === 'md') {
-            resolve(result);
-          } else if (fileType === 'pdf') {
-            // For this demo, we'll use a simple text extraction
-            // In a real implementation, you'd use pdf.js
-            try {
-              const text = new TextDecoder().decode(new Uint8Array(result));
-              resolve(text.slice(0, 1000) + '... [PDF content extracted]');
-            } catch {
-              resolve('[PDF file detected - content extraction would require pdf.js library]');
-            }
-          } else if (fileType === 'docx') {
-            try {
-              const arrayBuffer = result;
-              const { value } = await mammoth.extractRawText({ arrayBuffer });
-              resolve(value);
-            } catch (error) {
-              resolve('[DOCX file detected - using mammoth for extraction]');
-            }
-          } else {
-            reject('Unsupported file type');
-          }
-        } catch (err) {
-          reject(err);
-        }
-      };
-
-      reader.onerror = () => reject('Failed to read file');
-
-      if (['pdf', 'docx'].includes(fileType)) {
-        reader.readAsArrayBuffer(file);
-      } else {
-        reader.readAsText(file);
-      }
-    });
-  };
-
-  const handleFileChange = async (e) => {
-    const files = Array.from(e.target.files);
-    if (files.length === 0) return;
-
-    setIsLoading(true);
-    const newFiles = [];
+    const stageLabel = ["pre-seed", "preseed"].includes(stage) ? "Pre-seed"
+                      : ["growth", "scale-up", "scaling"].includes(stage) ? "Growth"
+                      : "Maturity";
 
     try {
-      for (const file of files) {
-        try {
-          const content = await extractTextFromFile(file);
-          newFiles.push({
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            content: content,
-            id: Date.now() + Math.random()
-          });
-        } catch (error) {
-          console.error(`Error extracting ${file.name}:`, error);
-          newFiles.push({
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            content: `[Error extracting content from ${file.name}]`,
-            id: Date.now() + Math.random(),
-            error: true
-          });
+      const reply = await analyzeWithGeminiAI(
+        filesToEvaluate.map(f => f.content),
+        filesToEvaluate.map(f => ({ 
+          name: f.name, 
+          type: f.type, 
+          text: f.content
+        })),
+        profileData,
+        stageLabel
+      );
+
+      setResponse(reply);
+
+      const score = extractScoreFromResponse(reply);
+      const operationalScore = extractOperationalScoreFromResponse(reply);
+      const operationalSummary = extractOperationalSummaryFromResponse(reply);
+
+      if (score !== null) {
+        setExtractedScore(score);
+        const label = getFundabilityLabel(score);
+        setFundabilityLabel(label);
+
+        if (onEvaluationComplete) {
+          onEvaluationComplete(reply, score, label, operationalScore);
         }
+
+        // ✅ Save with stage and operational score
+        await saveDataToFirebase(reply, score, label, stageLabel, operationalScore, operationalSummary);
+
+        console.log("Score:", score, "Label:", label, "Stage:", stageLabel, "Operational Score:", operationalScore);
+      } else {
+        console.warn("No score extracted");
+        setExtractedScore(null);
+        setFundabilityLabel('');
       }
-
-      setUploadedFiles(prev => [...prev, ...newFiles]);
-
-      // Auto-trigger evaluation for manually uploaded files too
-      await performEvaluation(newFiles);
-
     } catch (error) {
-      console.error('File processing or API error:', error);
-      alert('Failed to process some files or get AI response.');
-    } finally {
-      setIsLoading(false);
-      e.target.value = '';
+      console.error("Evaluation error:", error);
     }
   };
 
+  // Operational score extraction functions (keep your existing ones)
+  const extractOperationalScoreFromResponse = (responseText) => {
+    try {
+      console.log("Extracting from response:", responseText.substring(0, 500) + "...");
+      
+      const patterns = [
+        /\*\*10\.\s*Operational\s+Strength.*?\*\*\s*\*\*Score:\s*(\d(?:\.\d)?)\/5\*\*/is,
+        /10\.\s*Operational\s+Strength.*?Score:\s*(\d(?:\.\d)?)\/5/is,
+        /Operational\s+Strength\s+Score:\s*(\d(?:\.\d)?)\/5/i,
+        /\*\*Operational\s+Strength\s+Score:\s*(\d(?:\.\d)?)\/5\*\*/i,
+        /Operational.*?Score:\s*(\d(?:\.\d)?)\/5/is,
+        /(?:10\.|Operational).*?(\d(?:\.\d)?)\/5/is,
+        /operational.*?(\d(?:\.\d)?)\s*\/\s*5/is
+      ];
 
-  const removeFile = (fileId) => {
-    setUploadedFiles(prev => prev.filter(file => file.id !== fileId));
+      for (let i = 0; i < patterns.length; i++) {
+        const match = responseText.match(patterns[i]);
+        if (match && match[1]) {
+          const score = parseFloat(match[1]);
+          console.log(`Pattern ${i + 1} matched: ${score}`);
+          if (score >= 0 && score <= 5) {
+            return score;
+          }
+        }
+      }
+
+      console.log("No operational score pattern matched");
+      return null;
+    } catch (error) {
+      console.error("Error extracting operational score:", error);
+      return null;
+    }
   };
 
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  const extractOperationalSummaryFromResponse = (responseText) => {
+    try {
+      console.log("Extracting operational summary...");
+      
+      const patterns = [
+        /\*\*10\.\s*Operational\s+Strength.*?\*\*\s*\*\*Score:\s*\d\/5\*\*\s*(.*?)(?=\n\s*---|\n\s*\*\*Priority|\n\s*###|\*\*\d+\.|\n\s*$)/is,
+        /10\.\s*Operational\s+Strength.*?Score:\s*\d\/5[^\n]*\n(.*?)(?=\n\s*\*\*Priority|\n\s*---|\n\s*\d+\.|\n\s*$)/is,
+        /Operational\s+Strength\s+Score:\s*\d\/5[^\n]*\n(.*?)(?=\n\s*\*\*|\n\s*---|\n\s*Priority|\n\s*$)/is,
+        /10\..*?operational.*?(\d\/5)[^\n]*\n(.*?)(?=\n\s*\*\*|\n\s*---|\n\s*Priority|\n\s*\d+\.|\n\s*$)/is
+      ];
+
+      for (let i = 0; i < patterns.length; i++) {
+        const match = responseText.match(patterns[i]);
+        if (match) {
+          let summary = match[match.length - 1];
+          if (summary && summary.trim().length > 10) {
+            summary = summary
+              .trim()
+              .replace(/\*\*/g, '')
+              .replace(/^\s*[-•]\s*/, '')
+              .replace(/\n\s*[-•]\s*/g, '\n')
+              .substring(0, 500);
+            
+            console.log(`Summary pattern ${i + 1} matched`);
+            return summary;
+          }
+        }
+      }
+
+      console.log("No operational summary pattern matched");
+      return null;
+    } catch (error) {
+      console.error('Error extracting operational summary:', error);
+      return null;
+    }
   };
 
+  const saveDataToFirebase = async (response, score, label, growthStage, operationalScore, operationalSummary) => {
+    try {
+      setIsLoading(true);
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error("User not logged in.");
+      if (!response) throw new Error("No evaluation data to save");
 
+      const dataToSave = {
+        evaluation: {
+          content: response,
+          score,
+          label,
+          operationalScore,
+          operationalSummary,
+          evaluatedAt: new Date().toISOString(),
+          modelVersion: "Gemini-2.5-Flash", // ✅ Updated to Gemini
+          growthStage,
+        },
+        userId,
+        createdAt: new Date().toISOString(),
+        files: uploadedFiles.map(file => ({
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          extractionMethod: file.extractionMethod
+        }))
+      };
 
+      const evaluationsRef = collection(db, "aiPitchEvaluations");
+      const q = query(evaluationsRef, where("userId", "==", userId));
+      const querySnapshot = await getDocs(q);
 
+      if (!querySnapshot.empty) {
+        const docRef = querySnapshot.docs[0].ref;
+        await setDoc(docRef, dataToSave, { merge: true });
+      } else {
+        const docRef = await addDoc(evaluationsRef, dataToSave);
+      }
 
-  const clearAll = () => {
-    setInput('');
-    setUploadedFiles([]);
-    setResponse('');
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err) {
+      console.error("Firebase save error:", err);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
   };
-
 
   return (
     <div className="max-w-4xl mx-auto p-6 bg-white min-h-screen">
-      {/* <h1 className="text-3xl font-bold text-gray-800 mb-6">ChatGPT File Uploader</h1> */}
-
-
-      {/* File Upload */}
-      {/* <div className="mb-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Upload Files (supports .txt, .md, .pdf, .docx)
-        </label>
-        <input
-          type="file"
-          accept=".txt,.md,.pdf,.docx"
-          onChange={handleFileChange}
-          multiple
-          className="w-full p-2 border border-gray-300 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-        />
-      </div> */}
-
-      {/* Uploaded Files List */}
-      {/* {uploadedFiles.length > 0 && (
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-3">
-            Uploaded Files ({uploadedFiles.length})
-          </h3>
-          <div className="space-y-2 max-h-60 overflow-y-auto">
-            {uploadedFiles.map((file) => (
-              <div
-                key={file.id}
-                className={`flex items-center justify-between p-3 border rounded-lg ${
-                  file.error ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-gray-50'
-                }`}
-              >
-                <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-medium ${file.error ? 'text-red-800' : 'text-gray-900'}`}>
-                    {file.name}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {formatFileSize(file.size)} • {file.content.length} characters extracted
-                  </p>
-                </div>
-                <button
-                  onClick={() => removeFile(file.id)}
-                  className="ml-2 p-1 text-red-600 hover:text-red-800 hover:bg-red-100 rounded"
-                  title="Remove file"
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )} */}
-
-      {/* Action Buttons */}
-      {/* <div className="flex gap-3 mb-6">
-    
-        <button
-          onClick={clearAll}
-          className="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 font-medium"
-        >
-          Clear All
-        </button>
-      </div> */}
       {extractedScore !== null && (
         <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <h3 className="text-lg font-semibold text-blue-800 mb-2">BIG Fundability Assessment</h3>
@@ -652,7 +749,6 @@ const saveDataToFirebase = async (response, score, label, growthStage, operation
               {fundabilityLabel}
             </div>
           </div>
-          {/* Success message will go here */}
           {saveSuccess && (
             <div className="mt-2 text-green-600 text-sm">
               Evaluation saved successfully!
@@ -661,17 +757,6 @@ const saveDataToFirebase = async (response, score, label, growthStage, operation
         </div>
       )}
 
-      {/* Response */}
-      {/* {response && (
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-gray-800 mb-3">ChatGPT Response:</h3>
-          <div className="text-gray-700 whitespace-pre-wrap bg-white p-3 rounded border">
-            {response}
-          </div>
-        </div>
-      )} */}
-
-      {/* Loading Indicator */}
       {isLoading && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-lg">

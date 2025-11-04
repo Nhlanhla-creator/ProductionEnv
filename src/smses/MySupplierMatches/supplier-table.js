@@ -23,7 +23,6 @@ import { useNavigate } from "react-router-dom"
 import emailjs from '@emailjs/browser'
 import { API_KEYS } from "../../API"
 import SupplierDetailsModal from './SupplierDetailsModal'
-
 import { findSynonyms, expandSearchTerms, containsTermOrSynonyms } from '../../utils/synonyms';
 
 // Status definitions with brown color scheme
@@ -64,48 +63,71 @@ const STAGE_COLORS = {
   Rejected: { backgroundColor: "#FFEBEE", color: "#D32F2F" },
 }
 
-// Enhanced matching criteria with better weights
-const ENHANCED_MATCHING_CRITERIA = {
-  // Primary matching (60%)
-  CATEGORY_MATCH: {
-    weight: 0.4,
-    description: "Product/Service Category Alignment",
-  },
-  BBBEE_LEVEL: {
-    weight: 0.1,
-    description: "BBBEE Level Compliance",
-  },
-  LOCATION: {
-    weight: 0.1,
-    description: "Geographic Location Match",
+// Enhanced matching criteria with dual scoring system
+const MATCHING_SYSTEM = {
+  PRIMARY_WEIGHT: 0.6,
+  SECONDARY_WEIGHT: 0.4,
+
+  PRIMARY_CRITERIA: {
+    CATEGORY_MATCH: { weight: 0.3, description: "Business Category Alignment" },
+    LOCATION_MATCH: { weight: 0.2, description: "Geographic Location Match" },
+    BBBEE_MATCH: { weight: 0.15, description: "BBBEE Level Compliance" },
+    DELIVERY_MATCH: { weight: 0.15, description: "Delivery Mode Compatibility" },
+    BUDGET_MATCH: { weight: 0.1, description: "Budget Range Fit" },
+    OWNERSHIP_MATCH: { weight: 0.1, description: "Ownership Preferences Match" },
   },
 
-  // Secondary matching (40%)
-  DELIVERY_MODE: {
-    weight: 0.1,
-    description: "Delivery Mode Compatibility",
+  SECONDARY_CRITERIA: {
+    PRODUCT_SERVICE_MATCH: { weight: 0.4, description: "Product/Service Compatibility" },
+    KEYWORD_MATCH: { weight: 0.25, description: "Semantic Keyword Alignment" },
+    PURPOSE_MATCH: { weight: 0.2, description: "Purpose & Description Alignment" },
+    TARGET_MARKET_MATCH: { weight: 0.15, description: "Target Market Compatibility" },
+  }
+};
+
+// Semantic matching utilities
+const SEMANTIC_MATCHING = {
+  normalizeText: (text) => {
+    if (!text) return '';
+    return text
+      .toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   },
-  BUDGET_RANGE: {
-    weight: 0.1,
-    description: "Budget Fit",
+
+  extractKeyPhrases: (text) => {
+    const normalized = SEMANTIC_MATCHING.normalizeText(text);
+    const words = normalized.split(' ');
+
+    const stopWords = new Set(['the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'a', 'an']);
+    const meaningfulWords = words.filter(word =>
+      word.length > 2 && !stopWords.has(word)
+    );
+
+    const phrases = [...meaningfulWords];
+    for (let i = 0; i < meaningfulWords.length - 1; i++) {
+      phrases.push(`${meaningfulWords[i]} ${meaningfulWords[i + 1]}`);
+    }
+
+    return [...new Set(phrases)];
   },
-  OWNERSHIP_PREFS: {
-    weight: 0.05,
-    description: "Ownership Preferences Match",
-  },
-  URGENCY_LEAD_TIME: {
-    weight: 0.05,
-    description: "Delivery Timeframe & Urgency Match",
-  },
-  EXPERIENCE: {
-    weight: 0.05,
-    description: "Sector Experience Match",
-  },
-  RATING: {
-    weight: 0.05,
-    description: "Supplier Rating",
-  },
-}
+
+  calculateTextSimilarity: (text1, text2) => {
+    if (!text1 || !text2) return 0;
+
+    const phrases1 = SEMANTIC_MATCHING.extractKeyPhrases(text1);
+    const phrases2 = SEMANTIC_MATCHING.extractKeyPhrases(text2);
+
+    if (phrases1.length === 0 || phrases2.length === 0) return 0;
+
+    const matches = phrases1.filter(phrase =>
+      phrases2.some(p2 => p2.includes(phrase) || phrase.includes(p2))
+    );
+
+    return matches.length / Math.max(phrases1.length, phrases2.length);
+  }
+};
 
 const TruncatedText = ({ text, maxLength = 20 }) => {
   const [isExpanded, setIsExpanded] = useState(false)
@@ -158,8 +180,6 @@ const getStageStyle = (stage) => {
 
 function getDeliveryModeMatches(appModes, supplyModes) {
   const matches = []
-
-  // Check if either has Hybrid for full compatibility
   const appHasHybrid = appModes.includes("Hybrid")
   const supplyHasHybrid = supplyModes.includes("Hybrid")
 
@@ -172,7 +192,6 @@ function getDeliveryModeMatches(appModes, supplyModes) {
       note: "Hybrid delivery provides full compatibility with all modes"
     })
   } else {
-    // Standard exact matching
     appModes.forEach((appMode) => {
       supplyModes.forEach((supplyMode) => {
         if (appMode === supplyMode) {
@@ -193,13 +212,11 @@ function getDeliveryModeMatches(appModes, supplyModes) {
 const getFirstCategory = (productsServices) => {
   if (!productsServices) return "Not specified"
 
-  // Check productCategories first
   if (Array.isArray(productsServices.productCategories) && productsServices.productCategories.length > 0) {
     const firstProductCat = productsServices.productCategories[0]
     return typeof firstProductCat === "string" ? firstProductCat : firstProductCat?.name || "Not specified"
   }
 
-  // Check serviceCategories if productCategories is empty
   if (Array.isArray(productsServices.serviceCategories) && productsServices.serviceCategories.length > 0) {
     const firstServiceCat = productsServices.serviceCategories[0]
     return typeof firstServiceCat === "string" ? firstServiceCat : firstServiceCat?.name || "Not specified"
@@ -208,29 +225,237 @@ const getFirstCategory = (productsServices) => {
   return "Not specified"
 }
 
-function convertToDays(value, unit) {
-  const numericValue = parseInt(value) || 0
-  switch (unit) {
-    case 'hours':
-      return numericValue / 24
-    case 'days':
-      return numericValue
-    case 'weeks':
-      return numericValue * 7
-    case 'months':
-      return numericValue * 30 // Approximate
-    default:
-      return numericValue // Default to days
+// PRIMARY MATCHING FUNCTIONS
+function calculatePrimaryMatchScore(application, supplier, ratingsData = null) {
+  let totalScore = 0
+  const breakdown = {}
+
+  // Category Match (30%)
+  const categoryScore = calculateCategoryMatch(application, supplier)
+  totalScore += categoryScore.score * MATCHING_SYSTEM.PRIMARY_CRITERIA.CATEGORY_MATCH.weight * 100
+  breakdown.categoryMatch = {
+    score: categoryScore.score * 100,
+    description: MATCHING_SYSTEM.PRIMARY_CRITERIA.CATEGORY_MATCH.description,
+    matches: categoryScore.matches
+  }
+
+  // Location Match (20%)
+  const locationScore = calculateLocationMatch(application, supplier)
+  totalScore += locationScore * MATCHING_SYSTEM.PRIMARY_CRITERIA.LOCATION_MATCH.weight * 100
+  breakdown.locationMatch = {
+    score: locationScore * 100,
+    description: MATCHING_SYSTEM.PRIMARY_CRITERIA.LOCATION_MATCH.description,
+  }
+
+  // BBBEE Match (15%)
+  const bbbeeScore = calculateBBBEEEMatch(application, supplier)
+  totalScore += bbbeeScore * MATCHING_SYSTEM.PRIMARY_CRITERIA.BBBEE_MATCH.weight * 100
+  breakdown.bbbeeMatch = {
+    score: bbbeeScore * 100,
+    description: MATCHING_SYSTEM.PRIMARY_CRITERIA.BBBEE_MATCH.description,
+  }
+
+  // Delivery Match (15%)
+  const deliveryScore = calculateDeliveryMatch(application, supplier)
+  totalScore += deliveryScore * MATCHING_SYSTEM.PRIMARY_CRITERIA.DELIVERY_MATCH.weight * 100
+  breakdown.deliveryMatch = {
+    score: deliveryScore * 100,
+    description: MATCHING_SYSTEM.PRIMARY_CRITERIA.DELIVERY_MATCH.description,
+  }
+
+  // Budget Match (10%)
+  const budgetScore = calculateBudgetMatch(application, supplier)
+  totalScore += budgetScore * MATCHING_SYSTEM.PRIMARY_CRITERIA.BUDGET_MATCH.weight * 100
+  breakdown.budgetMatch = {
+    score: budgetScore * 100,
+    description: MATCHING_SYSTEM.PRIMARY_CRITERIA.BUDGET_MATCH.description,
+  }
+
+  // Ownership Match (10%)
+  const ownershipScore = calculateOwnershipMatch(application, supplier)
+  totalScore += ownershipScore * MATCHING_SYSTEM.PRIMARY_CRITERIA.OWNERSHIP_MATCH.weight * 100
+  breakdown.ownershipMatch = {
+    score: ownershipScore * 100,
+    description: MATCHING_SYSTEM.PRIMARY_CRITERIA.OWNERSHIP_MATCH.description,
+  }
+
+  return {
+    totalScore: Math.round(totalScore),
+    breakdown,
   }
 }
 
-// Enhanced match calculation functions
+// SECONDARY MATCHING FUNCTIONS
+function calculateSecondaryMatchScore(customerRequest, supplierProfile) {
+  let totalScore = 0
+  const breakdown = {}
+
+  // Product/Service Match (40%)
+  const productServiceScore = calculateProductServiceMatch(customerRequest, supplierProfile)
+  totalScore += productServiceScore.score * MATCHING_SYSTEM.SECONDARY_CRITERIA.PRODUCT_SERVICE_MATCH.weight * 100
+  breakdown.productServiceMatch = {
+    score: productServiceScore.score * 100,
+    description: MATCHING_SYSTEM.SECONDARY_CRITERIA.PRODUCT_SERVICE_MATCH.description,
+    matches: productServiceScore.matches || []
+  }
+
+  // Keyword Match (25%)
+  const keywordScore = calculateKeywordSemanticMatch(customerRequest, supplierProfile)
+  totalScore += keywordScore.score * MATCHING_SYSTEM.SECONDARY_CRITERIA.KEYWORD_MATCH.weight * 100
+  breakdown.keywordMatch = {
+    score: keywordScore.score * 100,
+    description: MATCHING_SYSTEM.SECONDARY_CRITERIA.KEYWORD_MATCH.description,
+    matches: keywordScore.matches || []
+  }
+
+  // Purpose Match (20%)
+  const purposeScore = calculatePurposeMatch(customerRequest, supplierProfile)
+  totalScore += purposeScore.score * MATCHING_SYSTEM.SECONDARY_CRITERIA.PURPOSE_MATCH.weight * 100
+  breakdown.purposeMatch = {
+    score: purposeScore.score * 100,
+    description: MATCHING_SYSTEM.SECONDARY_CRITERIA.PURPOSE_MATCH.description,
+    matches: purposeScore.matches || []
+  }
+
+  // Target Market Match (15%)
+  const marketScore = calculateTargetMarketMatch(customerRequest, supplierProfile)
+  totalScore += marketScore * MATCHING_SYSTEM.SECONDARY_CRITERIA.TARGET_MARKET_MATCH.weight * 100
+  breakdown.marketMatch = {
+    score: marketScore * 100,
+    description: MATCHING_SYSTEM.SECONDARY_CRITERIA.TARGET_MARKET_MATCH.description,
+  }
+
+  return {
+    totalScore: Math.round(totalScore),
+    breakdown
+  }
+}
+
+// Enhanced Product/Service Matching
+function calculateProductServiceMatch(customerRequest, supplierProfile) {
+  const requestCategories = customerRequest.requestOverview?.categories || [];
+  const requestSubcategories = customerRequest.requestOverview?.subcategories || [];
+
+  const supplierProductCats = supplierProfile.productsServices?.productCategories || [];
+  const supplierServiceCats = supplierProfile.productsServices?.serviceCategories || [];
+  const supplierTargetMarket = supplierProfile.productsServices?.targetMarket || '';
+
+  if (requestCategories.length === 0) return { score: 0, matches: [] };
+
+  let matches = [];
+  let totalPossibleMatches = requestCategories.length + requestSubcategories.length;
+
+  // Check main category matches
+  requestCategories.forEach(reqCat => {
+    const hasExactMatch = supplierProductCats.some(cat =>
+      cat.name?.toLowerCase() === reqCat.toLowerCase()
+    ) || supplierServiceCats.some(cat =>
+      cat.name?.toLowerCase() === reqCat.toLowerCase()
+    );
+
+    if (hasExactMatch) {
+      matches.push(`Category: ${reqCat}`);
+    } else {
+      const semanticMatch = SEMANTIC_MATCHING.calculateTextSimilarity(
+        reqCat,
+        supplierTargetMarket + ' ' + supplierProductCats.map(c => c.name).join(' ') + ' ' + supplierServiceCats.map(c => c.name).join(' ')
+      );
+
+      if (semanticMatch > 0.3) {
+        matches.push(`Category (semantic): ${reqCat}`);
+      }
+    }
+  });
+
+  // Check subcategory matches
+  requestSubcategories.forEach(reqSubcat => {
+    const allSupplierText = [
+      ...supplierProductCats.flatMap(cat =>
+        [cat.name, ...(cat.products || []).map(p => p.name + ' ' + p.description)]
+      ),
+      ...supplierServiceCats.flatMap(cat =>
+        [cat.name, ...(cat.services || []).map(s => s.name + ' ' + s.description)]
+      ),
+      supplierTargetMarket
+    ].join(' ');
+
+    const semanticMatch = SEMANTIC_MATCHING.calculateTextSimilarity(reqSubcat, allSupplierText);
+    if (semanticMatch > 0.4) {
+      matches.push(`Subcategory: ${reqSubcat}`);
+    }
+  });
+
+  const score = totalPossibleMatches > 0 ? matches.length / totalPossibleMatches : 0;
+  return { score: Math.min(score, 1), matches };
+}
+
+// Enhanced Keyword Matching
+function calculateKeywordSemanticMatch(customerRequest, supplierProfile) {
+  const requestKeywords = customerRequest.requestOverview?.keywords || '';
+  const requestPurpose = customerRequest.requestOverview?.purpose || '';
+
+  if (!requestKeywords && !requestPurpose) return { score: 0, matches: [] };
+
+  const supplierText = extractSupplierDescriptiveText(supplierProfile);
+  if (!supplierText) return { score: 0, matches: [] };
+
+  const combinedRequestText = `${requestKeywords} ${requestPurpose}`;
+  const similarity = SEMANTIC_MATCHING.calculateTextSimilarity(combinedRequestText, supplierText);
+
+  const requestPhrases = SEMANTIC_MATCHING.extractKeyPhrases(combinedRequestText);
+  const supplierPhrases = SEMANTIC_MATCHING.extractKeyPhrases(supplierText);
+
+  const matchingPhrases = requestPhrases.filter(reqPhrase =>
+    supplierPhrases.some(supPhrase =>
+      supPhrase.includes(reqPhrase) || reqPhrase.includes(supPhrase)
+    )
+  );
+
+  return {
+    score: similarity,
+    matches: matchingPhrases.slice(0, 5)
+  };
+}
+
+// Purpose Matching
+function calculatePurposeMatch(customerRequest, supplierProfile) {
+  const requestPurpose = customerRequest.requestOverview?.purpose || '';
+  if (!requestPurpose) return { score: 0, matches: [] };
+
+  const supplierText = extractSupplierDescriptiveText(supplierProfile);
+  const similarity = SEMANTIC_MATCHING.calculateTextSimilarity(requestPurpose, supplierText);
+
+  const purposePhrases = SEMANTIC_MATCHING.extractKeyPhrases(requestPurpose);
+  const supplierPhrases = SEMANTIC_MATCHING.extractKeyPhrases(supplierText);
+
+  const matchingPhrases = purposePhrases.filter(purposePhrase =>
+    supplierPhrases.some(supPhrase => supPhrase.includes(purposePhrase))
+  );
+
+  return {
+    score: similarity,
+    matches: matchingPhrases.slice(0, 3)
+  };
+}
+
+// Target Market Matching
+function calculateTargetMarketMatch(customerRequest, supplierProfile) {
+  const supplierTargetMarket = supplierProfile.productsServices?.targetMarket || '';
+  if (!supplierTargetMarket) return 0.5;
+
+  const requestPurpose = customerRequest.requestOverview?.purpose || '';
+  const requestKeywords = customerRequest.requestOverview?.keywords || '';
+
+  const combinedRequestText = `${requestPurpose} ${requestKeywords}`;
+  return SEMANTIC_MATCHING.calculateTextSimilarity(combinedRequestText, supplierTargetMarket);
+}
+
+// EXISTING PRIMARY MATCHING FUNCTIONS (updated for dual system)
 function calculateCategoryMatch(application, supplier) {
   const appCategories = application.productsServices?.categories || [];
   const appKeywords = application.keywords?.toLowerCase() || "";
   const appPurpose = application.purpose?.toLowerCase() || "";
 
-  // Extract all descriptive text from supplier
   const supplierText = extractSupplierDescriptiveText(supplier);
 
   if ((appCategories.length === 0 && !appKeywords && !appPurpose) || !supplierText) {
@@ -241,7 +466,6 @@ function calculateCategoryMatch(application, supplier) {
   const matchedTerms = [];
   const totalTerms = [];
 
-  // Check category matches with synonyms
   appCategories.forEach(appCat => {
     totalTerms.push(appCat);
     const expandedCategories = expandSearchTerms([appCat.toLowerCase()]);
@@ -256,7 +480,6 @@ function calculateCategoryMatch(application, supplier) {
     }
   });
 
-  // Check keyword matches from application with synonyms
   if (appKeywords || appPurpose) {
     const combinedText = `${appKeywords} ${appPurpose}`;
     const words = combinedText.split(/\s+/).filter(word => word.length > 3);
@@ -277,11 +500,7 @@ function calculateCategoryMatch(application, supplier) {
   }
 
   const score = totalTerms.length > 0 ? matches / totalTerms.length : 0;
-
-  return {
-    score: Math.min(score * 1.3, 1), // Boost for semantic matches
-    matches: matchedTerms
-  };
+  return { score: Math.min(score * 1.3, 1), matches: matchedTerms };
 }
 
 function calculateLocationMatch(application, supplier) {
@@ -302,7 +521,6 @@ function calculateDeliveryMatch(application, supplier) {
 
   if (appModes.length === 0 || supplierModes.length === 0) return 0.5
 
-  // Check if either party has Hybrid for full compatibility
   const appHasHybrid = appModes.includes("Hybrid")
   const supplyHasHybrid = supplierModes.includes("Hybrid")
 
@@ -310,7 +528,6 @@ function calculateDeliveryMatch(application, supplier) {
     return 1
   }
 
-  // Standard matching for non-Hybrid cases
   const deliveryMatches = appModes.filter(appMode =>
     supplierModes.includes(appMode)
   )
@@ -383,7 +600,6 @@ function calculateRatingMatch(supplier, ratingsData) {
 function extractSupplierDescriptiveText(supplier) {
   let text = "";
 
-  // Product descriptions
   if (supplier.productsServices?.productCategories) {
     supplier.productsServices.productCategories.forEach(category => {
       text += ` ${category.name || ""} `;
@@ -395,7 +611,6 @@ function extractSupplierDescriptiveText(supplier) {
     });
   }
 
-  // Service descriptions
   if (supplier.productsServices?.serviceCategories) {
     supplier.productsServices.serviceCategories.forEach(category => {
       text += ` ${category.name || ""} `;
@@ -407,116 +622,58 @@ function extractSupplierDescriptiveText(supplier) {
     });
   }
 
-  // Target market and other relevant fields
   text += ` ${supplier.productsServices?.targetMarket || ""} `;
+
+  if (supplier.productsServices?.keyClients) {
+    supplier.productsServices.keyClients.forEach(client => {
+      text += ` ${client.name || ""} ${client.industry || ""} `;
+    });
+  }
 
   return text.toLowerCase().trim();
 }
 
+// MAIN ENHANCED MATCH FUNCTION
 function calculateEnhancedMatchScore(application, supplier, ratingsData = null) {
   if (!application || !supplier) {
     return {
       totalScore: 0,
+      primaryScore: 0,
+      secondaryScore: 0,
       breakdown: {},
     }
   }
 
-  let totalScore = 0
-  const breakdown = {}
+  const primaryResult = calculatePrimaryMatchScore(application, supplier, ratingsData);
+  const secondaryResult = calculateSecondaryMatchScore(application, supplier);
 
-  // Category Match (40%)
-  const categoryMatch = calculateCategoryMatch(application, supplier)
-  totalScore += categoryMatch.score * ENHANCED_MATCHING_CRITERIA.CATEGORY_MATCH.weight * 100
-  breakdown.categoryMatch = {
-    score: categoryMatch.score * 100,
-    description: ENHANCED_MATCHING_CRITERIA.CATEGORY_MATCH.description,
-    matches: categoryMatch.matches
-  }
-
-  // BBBEE Match (10%)
-  const bbbeeScore = calculateBBBEEEMatch(application, supplier)
-  totalScore += bbbeeScore * ENHANCED_MATCHING_CRITERIA.BBBEE_LEVEL.weight * 100
-  breakdown.bbbeeMatch = {
-    score: bbbeeScore * 100,
-    description: ENHANCED_MATCHING_CRITERIA.BBBEE_LEVEL.description,
-  }
-
-  // Location Match (10%)
-  const locationScore = calculateLocationMatch(application, supplier)
-  totalScore += locationScore * ENHANCED_MATCHING_CRITERIA.LOCATION.weight * 100
-  breakdown.locationMatch = {
-    score: locationScore * 100,
-    description: ENHANCED_MATCHING_CRITERIA.LOCATION.description,
-  }
-
-  // Delivery Match (10%)
-  const deliveryScore = calculateDeliveryMatch(application, supplier)
-  totalScore += deliveryScore * ENHANCED_MATCHING_CRITERIA.DELIVERY_MODE.weight * 100
-  breakdown.deliveryMatch = {
-    score: deliveryScore * 100,
-    description: ENHANCED_MATCHING_CRITERIA.DELIVERY_MODE.description,
-  }
-
-  // Budget Match (10%)
-  const budgetScore = calculateBudgetMatch(application, supplier)
-  totalScore += budgetScore * ENHANCED_MATCHING_CRITERIA.BUDGET_RANGE.weight * 100
-  breakdown.budgetMatch = {
-    score: budgetScore * 100,
-    description: ENHANCED_MATCHING_CRITERIA.BUDGET_RANGE.description,
-  }
-
-  // Ownership Preferences (5%)
-  const ownershipScore = calculateOwnershipMatch(application, supplier)
-  totalScore += ownershipScore * ENHANCED_MATCHING_CRITERIA.OWNERSHIP_PREFS.weight * 100
-  breakdown.ownershipMatch = {
-    score: ownershipScore * 100,
-    description: ENHANCED_MATCHING_CRITERIA.OWNERSHIP_PREFS.description,
-  }
-
-  // Rating Match (5%)
-  const ratingScore = calculateRatingMatch(supplier, ratingsData)
-  totalScore += ratingScore * ENHANCED_MATCHING_CRITERIA.RATING.weight * 100
-  breakdown.ratingMatch = {
-    score: ratingScore * 100,
-    description: ENHANCED_MATCHING_CRITERIA.RATING.description,
-  }
-
-  // Experience Match (5%) - Simplified for now
-  const experienceScore = 0.5
-  totalScore += experienceScore * ENHANCED_MATCHING_CRITERIA.EXPERIENCE.weight * 100
-  breakdown.experienceMatch = {
-    score: experienceScore * 100,
-    description: ENHANCED_MATCHING_CRITERIA.EXPERIENCE.description,
-  }
-
-  // Urgency/Lead Time Match (5%) - Simplified for now
-  const urgencyScore = 0.5
-  totalScore += urgencyScore * ENHANCED_MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100
-  breakdown.urgencyLeadTimeMatch = {
-    score: urgencyScore * 100,
-    description: ENHANCED_MATCHING_CRITERIA.URGENCY_LEAD_TIME.description,
-  }
+  const totalScore = Math.round(
+    (primaryResult.totalScore * MATCHING_SYSTEM.PRIMARY_WEIGHT) +
+    (secondaryResult.totalScore * MATCHING_SYSTEM.SECONDARY_WEIGHT)
+  );
 
   return {
-    totalScore: Math.round(totalScore),
-    breakdown,
+    totalScore,
+    primaryScore: primaryResult.totalScore,
+    secondaryScore: secondaryResult.totalScore,
+    breakdown: {
+      primary: primaryResult.breakdown,
+      secondary: secondaryResult.breakdown
+    },
   }
 }
 
-// Helper function to calculate string similarity
+// Helper functions (keep existing ones)
 function calculateSimilarity(str1, str2) {
   const longer = str1.length > str2.length ? str1 : str2
   const shorter = str1.length > str2.length ? str2 : str1
-
   if (longer.length === 0) return 1.0
-
   return (longer.length - editDistance(longer, shorter)) / parseFloat(longer.length)
 }
 
 function editDistance(s1, s2) {
   s1 = s1.toLowerCase()
   s2 = s2.toLowerCase()
-
   const costs = []
   for (let i = 0; i <= s1.length; i++) {
     let lastValue = i
@@ -537,7 +694,6 @@ function editDistance(s1, s2) {
   return costs[s2.length]
 }
 
-// Helper function to calculate ownership percentages from shareholder data
 function calculateOwnershipPercentages(ownershipManagement) {
   const result = {
     blackOwnership: 0,
@@ -576,6 +732,7 @@ function calculateOwnershipPercentages(ownershipManagement) {
 
   return result
 }
+
 
 export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSupplierAccepted }) {
   const [showFilters, setShowFilters] = useState(false)
@@ -794,10 +951,7 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
     }
   }
 
-  const handleShowMatchBreakdown = (supplier) => {
-    setMatchBreakdownData(supplier)
-    setShowMatchBreakdown(true)
-  }
+
 
   useEffect(() => {
     setMounted(true)
@@ -855,7 +1009,6 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
         setLoading(true)
         setError(null)
 
-        // Fetch universal profiles (suppliers)
         const profilesSnapshot = await getDocs(collection(db, "universalProfiles"))
         const profilesData = profilesSnapshot.docs.map((doc) => {
           const data = doc.data()
@@ -873,14 +1026,11 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
 
         const ratingsData = await fetchSupplierRatings()
 
-        // Calculate matches using enhanced matching
+        // Calculate matches using DUAL matching system
         const suppliersWithMatches = profilesData.map((supplier) => {
           const matchScore = calculateEnhancedMatchScore(currentUserApplication, supplier, ratingsData)
 
-          // Get first category name or default
           const firstCategory = getFirstCategory(supplier.productsServices)
-
-          // Get the actual rating
           const supplierRatingData = ratingsData[supplier.id] || {
             average: 0,
             count: 0,
@@ -891,12 +1041,14 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
           return {
             ...supplier,
             matchPercentage: matchScore.totalScore,
+            primaryMatch: matchScore.primaryScore,
+            secondaryMatch: matchScore.secondaryScore,
             matchDetails: matchScore.breakdown,
             status: getStatusBasedOnScore(matchScore.totalScore),
             rating: actualRating,
             avgResponseTime: "1-2 days",
             lastActivity: new Date().toLocaleDateString(),
-            urgency: supplier.applicationOverview?.urgency || "1 month", // ← CHANGED LINE
+            urgency: supplier.applicationOverview?.urgency || "1 month",
             dealSize: supplier.financialOverview?.annualRevenue || "Not specified",
             serviceCategory: firstCategory,
             currentStage: "Potential Supplier",
@@ -908,7 +1060,6 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
           }
         })
 
-        // Filter out suppliers with 0% match and sort by match percentage
         const relevantSuppliers = suppliersWithMatches
           .filter(supplier => supplier.matchPercentage > 0 && supplier.id !== currentUser?.uid)
           .sort((a, b) => b.matchPercentage - a.matchPercentage)
@@ -917,7 +1068,6 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
         setAllSuppliers(relevantSuppliers)
         setFilteredSuppliers(relevantSuppliers)
 
-        // Notify parent component of the update
         if (onSuppliersUpdate) {
           onSuppliersUpdate(relevantSuppliers, relevantSuppliers)
         }
@@ -932,6 +1082,277 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
 
     fetchData()
   }, [currentUserApplication])
+
+  // UPDATED MATCH BREAKDOWN MODAL
+  const handleShowMatchBreakdown = (supplier) => {
+    setMatchBreakdownData(supplier)
+    setShowMatchBreakdown(true)
+  }
+
+  // UPDATED MATCH BREAKDOWN RENDER
+  const renderMatchBreakdownModal = () => {
+    if (!matchBreakdownData) return null
+
+    return (
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(0,0,0,0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000,
+        }}
+      >
+        <div
+          style={{
+            background: "white",
+            borderRadius: "12px",
+            maxWidth: "1000px",
+            width: "95%",
+            maxHeight: "90vh",
+            overflowY: "auto",
+            boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
+          }}
+        >
+          <div style={modalHeaderStyle}>
+            <h3 style={modalTitleStyle}>
+              Match Breakdown -{" "}
+              {matchBreakdownData?.entityOverview?.tradingName ||
+                matchBreakdownData?.entityOverview?.registeredName}
+            </h3>
+            <button onClick={() => setShowMatchBreakdown(false)} style={modalCloseButtonStyle}>
+              ✖
+            </button>
+          </div>
+          <div style={modalBodyStyle}>
+            {/* Overall Score */}
+            <div style={{
+              textAlign: "center",
+              marginBottom: "2rem",
+              paddingBottom: "1rem",
+              borderBottom: "2px solid #E8D5C4",
+            }}>
+              <div style={{
+                fontSize: "3rem",
+                fontWeight: "bold",
+                color: getMatchScoreClass(matchBreakdownData?.matchPercentage).color,
+                marginBottom: "0.5rem",
+              }}>
+                {matchBreakdownData?.matchPercentage}%
+              </div>
+              <div style={{
+                display: "flex",
+                justifyContent: "center",
+                gap: "2rem",
+                fontSize: "1rem",
+                color: "#8D6E63",
+              }}>
+                <div>
+                  <strong>Primary:</strong> {matchBreakdownData?.primaryMatch || 0}%
+                </div>
+                <div>
+                  <strong>Secondary:</strong> {matchBreakdownData?.secondaryMatch || 0}%
+                </div>
+              </div>
+            </div>
+
+            {/* Primary Match Breakdown */}
+            <div style={{ marginBottom: "2rem" }}>
+              <h4 style={{ color: "#5D2A0A", marginBottom: "1rem" }}>Primary Match (Business Fundamentals)</h4>
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))",
+                gap: "1rem",
+              }}>
+                {matchBreakdownData?.matchDetails?.primary &&
+                  Object.entries(matchBreakdownData.matchDetails.primary).map(([key, details]) => (
+                    <MatchBreakdownCard
+                      key={key}
+                      criteria={key}
+                      details={details}
+                      type="primary"
+                    />
+                  ))
+                }
+              </div>
+            </div>
+
+            {/* Secondary Match Breakdown */}
+            <div style={{ marginBottom: "2rem" }}>
+              <h4 style={{ color: "#5D2A0A", marginBottom: "1rem" }}>Secondary Match (Product/Service Compatibility)</h4>
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))",
+                gap: "1rem",
+              }}>
+                {matchBreakdownData?.matchDetails?.secondary &&
+                  Object.entries(matchBreakdownData.matchDetails.secondary).map(([key, details]) => (
+                    <MatchBreakdownCard
+                      key={key}
+                      criteria={key}
+                      details={details}
+                      type="secondary"
+                    />
+                  ))
+                }
+              </div>
+            </div>
+
+            <div style={{
+              display: "flex",
+              justifyContent: "center",
+              paddingTop: "1.5rem",
+              borderTop: "1px solid #E8D5C4",
+            }}>
+              <button
+                style={{
+                  padding: "0.75rem 2rem",
+                  background: "#5D2A0A",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  fontSize: "0.875rem",
+                  fontWeight: "500",
+                  cursor: "pointer",
+                }}
+                onClick={() => setShowMatchBreakdown(false)}
+              >
+                Close Breakdown
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Match Breakdown Card Component
+  const MatchBreakdownCard = ({ criteria, details, type }) => {
+    const criteriaWeights = type === 'primary'
+      ? MATCHING_SYSTEM.PRIMARY_CRITERIA
+      : MATCHING_SYSTEM.SECONDARY_CRITERIA;
+
+    const weight = criteriaWeights[criteria]?.weight * 100 || 0;
+    const scoreColor = details.score >= 80 ? "#388E3C" : details.score >= 50 ? "#F57C00" : "#D32F2F";
+
+    return (
+      <div style={{
+        background: "#FEFCFA",
+        border: "1px solid #E8D5C4",
+        borderRadius: "8px",
+        padding: "1.25rem",
+        borderLeft: `4px solid ${scoreColor}`,
+      }}>
+        <div style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          marginBottom: "0.75rem",
+        }}>
+          <h4 style={{
+            fontSize: "0.875rem",
+            fontWeight: "600",
+            color: "#5D2A0A",
+            margin: "0",
+            lineHeight: "1.3",
+            flex: "1",
+          }}>
+            {details.description}
+          </h4>
+          <span style={{
+            fontSize: "1.25rem",
+            fontWeight: "bold",
+            color: scoreColor,
+            marginLeft: "1rem",
+          }}>
+            {Math.round(details.score)}%
+          </span>
+        </div>
+
+        <div style={{
+          background: "#E8D5C4",
+          borderRadius: "4px",
+          height: "8px",
+          overflow: "hidden",
+          marginBottom: "0.5rem",
+        }}>
+          <div style={{
+            height: "100%",
+            background: scoreColor,
+            width: `${details.score}%`,
+            transition: "width 0.3s ease",
+          }} />
+        </div>
+
+        <div style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "0.5rem",
+        }}>
+          <span style={{ fontSize: "0.75rem", color: "#8D6E63" }}>
+            Weight: {weight}%
+          </span>
+          <span style={{ fontSize: "0.75rem", color: "#8D6E63" }}>
+            Contribution: {Math.round((details.score * weight) / 100)}%
+          </span>
+        </div>
+
+        {/* Show matching items for semantic matches */}
+        {details.matches && details.matches.length > 0 && (
+          <div style={{
+            marginTop: '0.75rem',
+            paddingTop: '0.75rem',
+            borderTop: '1px solid #E8D5C4'
+          }}>
+            <span style={{
+              fontSize: "0.75rem",
+              color: "#8D6E63",
+              fontWeight: "600",
+              display: "block",
+              marginBottom: "0.25rem"
+            }}>
+              Matched Items:
+            </span>
+            <div style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '0.25rem'
+            }}>
+              {details.matches.slice(0, 3).map((match, idx) => (
+                <span
+                  key={idx}
+                  style={{
+                    background: '#E8F5E8',
+                    color: '#388E3C',
+                    padding: '0.25rem 0.5rem',
+                    borderRadius: '12px',
+                    fontSize: '0.7rem',
+                  }}
+                >
+                  {match}
+                </span>
+              ))}
+              {details.matches.length > 3 && (
+                <span style={{
+                  color: '#6b7280',
+                  fontSize: '0.7rem',
+                  fontStyle: 'italic'
+                }}>
+                  +{details.matches.length - 3} more
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // Determine status based on match score
   const getStatusBasedOnScore = (score) => {
@@ -1121,7 +1542,7 @@ BIG Marketplace Africa Team`;
         await updateContactedApplication(currentUserApplication.id, supplier.id)
       }
 
-      // ... REST OF YOUR EXISTING handleConnectClick CODE
+      // Update supplier stage
       const supplierRef = doc(db, "universalProfiles", supplier.id)
       await updateDoc(supplierRef, {
         currentStage: "Contact Initiated",
@@ -1158,35 +1579,88 @@ BIG Marketplace Africa Team`;
         return path.split(".").reduce((acc, key) => acc?.[key] ?? defaultValue, obj)
       }
 
+      // Updated formatMatchBreakdown for dual scoring system
       const formatMatchBreakdown = (matchDetails) => {
         if (!matchDetails) return null
 
-        return Object.entries(matchDetails).reduce((acc, [key, details]) => {
-          acc[key] = {
-            score: details.score,
-            description: details.description,
-            weight: ENHANCED_MATCHING_CRITERIA[key]?.weight * 100 || 0,
-          }
-          return acc
-        }, {})
+        const formatted = {
+          primary: {},
+          secondary: {}
+        }
+
+        // Format primary match breakdown
+        if (matchDetails.primary) {
+          Object.entries(matchDetails.primary).forEach(([key, details]) => {
+            const criteriaInfo = MATCHING_SYSTEM.PRIMARY_CRITERIA[key]
+            formatted.primary[key] = {
+              score: details.score,
+              description: details.description,
+              weight: criteriaInfo ? criteriaInfo.weight * 100 : 0,
+              matches: details.matches || []
+            }
+          })
+        }
+
+        // Format secondary match breakdown
+        if (matchDetails.secondary) {
+          Object.entries(matchDetails.secondary).forEach(([key, details]) => {
+            const criteriaInfo = MATCHING_SYSTEM.SECONDARY_CRITERIA[key]
+            formatted.secondary[key] = {
+              score: details.score,
+              description: details.description,
+              weight: criteriaInfo ? criteriaInfo.weight * 100 : 0,
+              matches: details.matches || []
+            }
+          })
+        }
+
+        return formatted
       }
 
-      // Prepare the complete application payload
+      // Prepare criteria weights for both primary and secondary
+      const formatCriteriaWeights = () => {
+        const weights = {
+          primary: {},
+          secondary: {}
+        }
+
+        // Primary criteria weights
+        Object.entries(MATCHING_SYSTEM.PRIMARY_CRITERIA).forEach(([key, criteria]) => {
+          weights.primary[key] = {
+            weight: criteria.weight * 100,
+            description: criteria.description,
+          }
+        })
+
+        // Secondary criteria weights
+        Object.entries(MATCHING_SYSTEM.SECONDARY_CRITERIA).forEach(([key, criteria]) => {
+          weights.secondary[key] = {
+            weight: criteria.weight * 100,
+            description: criteria.description,
+          }
+        })
+
+        return weights
+      }
+
+      // Prepare the complete application payload with dual scoring
       const applicationPayload = {
         applicationSource: "supplier-directory",
         status: "Pending",
         matchPercentage: supplier.matchPercentage || 0,
+        primaryMatchScore: supplier.primaryMatch || 0,
+        secondaryMatchScore: supplier.secondaryMatch || 0,
         matchBreakdown: {
           totalScore: supplier.matchPercentage || 0,
+          primaryScore: supplier.primaryMatch || 0,
+          secondaryScore: supplier.secondaryMatch || 0,
           breakdown: formatMatchBreakdown(supplier.matchDetails),
           calculatedAt: serverTimestamp(),
-          criteriaWeights: Object.entries(ENHANCED_MATCHING_CRITERIA).reduce((acc, [key, criteria]) => {
-            acc[key] = {
-              weight: criteria.weight * 100,
-              description: criteria.description,
-            }
-            return acc
-          }, {}),
+          criteriaWeights: formatCriteriaWeights(),
+          systemWeights: {
+            primary: MATCHING_SYSTEM.PRIMARY_WEIGHT * 100,
+            secondary: MATCHING_SYSTEM.SECONDARY_WEIGHT * 100
+          }
         },
 
         createdAt: serverTimestamp(),
@@ -1224,6 +1698,9 @@ BIG Marketplace Africa Team`;
             ? `By ${currentUserApplication.requestOverview.endDate}`
             : "Not specified",
           purpose: currentUserApplication?.requestOverview?.purpose || "Not specified",
+          categories: currentUserApplication?.requestOverview?.categories || [],
+          subcategories: currentUserApplication?.requestOverview?.subcategories || [],
+          keywords: currentUserApplication?.requestOverview?.keywords || "",
         },
         currentStage: "Contact Initiated",
         nextStage: "Proposal Sent",
@@ -1231,6 +1708,9 @@ BIG Marketplace Africa Team`;
         supplierOffer: {
           productCategories: Array.isArray(supplierData.productsServices?.productCategories)
             ? supplierData.productsServices.productCategories
+            : [],
+          serviceCategories: Array.isArray(supplierData.productsServices?.serviceCategories)
+            ? supplierData.productsServices.serviceCategories
             : [],
           serviceCategory: getFirstCategory(supplierData.productsServices),
           bbbeeLevel: supplierData.legalCompliance?.bbbeeLevel || "Not specified",
@@ -1242,6 +1722,10 @@ BIG Marketplace Africa Team`;
           products: Array.isArray(supplierData.productsServices?.products)
             ? supplierData.productsServices.products
             : [],
+          services: Array.isArray(supplierData.productsServices?.services)
+            ? supplierData.productsServices.services
+            : [],
+          targetMarket: supplierData.productsServices?.targetMarket || "Not specified",
         },
         customerProfileData: {
           contactName: getSafeValue(customerData, "contactDetails.contactName") || "Not specified",
@@ -1297,7 +1781,7 @@ BIG Marketplace Africa Team`;
       setTimeout(() => setNotification(null), 3000)
     }
   }
-
+  
   const loadContactedRequest = (contactedApp) => {
     setCurrentUserApplication(contactedApp.data)
     setSuppliers(contactedApp.matches)
@@ -1581,12 +2065,7 @@ BIG Marketplace Africa Team`;
                                 style={{
                                   ...progressFillStyle,
                                   width: `${supplier.matchPercentage}%`,
-                                  background:
-                                    supplier.matchPercentage > 75
-                                      ? "#48BB78"
-                                      : supplier.matchPercentage > 50
-                                        ? "#F6AD55"
-                                        : "#F56565",
+                                  background: getMatchScoreClass(supplier.matchPercentage).color,
                                 }}
                               />
                             </div>
@@ -1594,12 +2073,7 @@ BIG Marketplace Africa Team`;
                               <span
                                 style={{
                                   ...matchScoreStyle,
-                                  color:
-                                    supplier.matchPercentage > 75
-                                      ? "#48BB78"
-                                      : supplier.matchPercentage > 50
-                                        ? "#D69E2E"
-                                        : "#E53E3E",
+                                  color: getMatchScoreClass(supplier.matchPercentage).color,
                                 }}
                               >
                                 {supplier.matchPercentage}%
@@ -1613,6 +2087,9 @@ BIG Marketplace Africa Team`;
                                 onClick={() => handleShowMatchBreakdown(supplier)}
                                 title="View match breakdown"
                               />
+                            </div>
+                            <div style={{ fontSize: "0.6rem", color: "#8D6E63", marginTop: "2px" }}>
+                              P: {supplier.primaryMatch || 0}% • S: {supplier.secondaryMatch || 0}%
                             </div>
                           </div>
                         </td>
@@ -1836,303 +2313,10 @@ BIG Marketplace Africa Team`;
         </div>
 
         {/* Match Breakdown Modal */}
-        {mounted &&
-          showMatchBreakdown &&
-          createPortal(
-            <div
-              style={{
-                position: "fixed",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundColor: "rgba(0,0,0,0.5)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                zIndex: 1000,
-              }}
-            >
-              <div
-                style={{
-                  background: "white",
-                  borderRadius: "12px",
-                  maxWidth: "800px",
-                  width: "95%",
-                  maxHeight: "90vh",
-                  overflowY: "auto",
-                  boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-                }}
-              >
-                <div style={modalHeaderStyle}>
-                  <h3 style={modalTitleStyle}>
-                    Match Breakdown -{" "}
-                    {matchBreakdownData?.entityOverview?.tradingName ||
-                      matchBreakdownData?.entityOverview?.registeredName}
-                  </h3>
-                  <button onClick={() => setShowMatchBreakdown(false)} style={modalCloseButtonStyle}>
-                    ✖
-                  </button>
-                </div>
-                <div style={modalBodyStyle}>
-                  <div
-                    style={{
-                      textAlign: "center",
-                      marginBottom: "2rem",
-                      paddingBottom: "1rem",
-                      borderBottom: "2px solid #E8D5C4",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: "3rem",
-                        fontWeight: "bold",
-                        color:
-                          matchBreakdownData?.matchPercentage >= 80
-                            ? "#388E3C"
-                            : matchBreakdownData?.matchPercentage >= 60
-                              ? "#F57C00"
-                              : "#D32F2F",
-                        marginBottom: "0.5rem",
-                      }}
-                    >
-                      {matchBreakdownData?.matchPercentage}%
-                    </div>
-                    <p
-                      style={{
-                        fontSize: "1rem",
-                        color: "#8D6E63",
-                        margin: "0",
-                      }}
-                    >
-                      Overall Match Score
-                    </p>
-                  </div>
-
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))",
-                      gap: "1rem",
-                      marginBottom: "2rem",
-                    }}
-                  >
-                    {matchBreakdownData?.matchDetails &&
-                      Object.entries(matchBreakdownData.matchDetails).map(([key, details]) => {
-                        const criteriaInfo = ENHANCED_MATCHING_CRITERIA[key]
-                        const weight = criteriaInfo ? criteriaInfo.weight * 100 : 0
-                        const scoreColor = details.score >= 80 ? "#388E3C" : details.score >= 50 ? "#F57C00" : "#D32F2F"
-
-                        return (
-                          <div
-                            key={key}
-                            style={{
-                              background: "#FEFCFA",
-                              border: "1px solid #E8D5C4",
-                              borderRadius: "8px",
-                              padding: "1.25rem",
-                              borderLeft: `4px solid ${scoreColor}`,
-                            }}
-                          >
-                            <div
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "flex-start",
-                                marginBottom: "0.75rem",
-                              }}
-                            >
-                              <h4
-                                style={{
-                                  fontSize: "0.875rem",
-                                  fontWeight: "600",
-                                  color: "#5D2A0A",
-                                  margin: "0",
-                                  lineHeight: "1.3",
-                                  flex: "1",
-                                }}
-                              >
-                                {details.description}
-                              </h4>
-                              <span
-                                style={{
-                                  fontSize: "1.25rem",
-                                  fontWeight: "bold",
-                                  color: scoreColor,
-                                  marginLeft: "1rem",
-                                }}
-                              >
-                                {Math.round(details.score)}%
-                              </span>
-                            </div>
-
-                            <div
-                              style={{
-                                background: "#E8D5C4",
-                                borderRadius: "4px",
-                                height: "8px",
-                                overflow: "hidden",
-                                marginBottom: "0.5rem",
-                              }}
-                            >
-                              <div
-                                style={{
-                                  height: "100%",
-                                  background: scoreColor,
-                                  width: `${details.score}%`,
-                                  transition: "width 0.3s ease",
-                                }}
-                              />
-                            </div>
-
-                            <div
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                              }}
-                            >
-                              <span
-                                style={{
-                                  fontSize: "0.75rem",
-                                  color: "#8D6E63",
-                                }}
-                              >
-                                Weight: {weight}%
-                              </span>
-                              <span
-                                style={{
-                                  fontSize: "0.75rem",
-                                  color: "#8D6E63",
-                                }}
-                              >
-                                Contribution: {Math.round((details.score * weight) / 100)}%
-                              </span>
-                            </div>
-
-                            {/* Show matched categories for category match */}
-                            {key === 'categoryMatch' && details.matches && details.matches.length > 0 && (
-                              <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #E8D5C4' }}>
-                                <span style={{ fontSize: "0.75rem", color: "#8D6E63", fontWeight: "600" }}>
-                                  Matched Categories:
-                                </span>
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', marginTop: '0.25rem' }}>
-                                  {details.matches.map((category, idx) => (
-                                    <span
-                                      key={idx}
-                                      style={{
-                                        background: '#E8F5E8',
-                                        color: '#388E3C',
-                                        padding: '0.25rem 0.5rem',
-                                        borderRadius: '12px',
-                                        fontSize: '0.7rem',
-                                      }}
-                                    >
-                                      {category}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                  </div>
-
-                  <div
-                    style={{
-                      background: "#F5EBE0",
-                      border: "1px solid #E8D5C4",
-                      borderRadius: "8px",
-                      padding: "1.5rem",
-                      marginBottom: "2rem",
-                    }}
-                  >
-                    <h4
-                      style={{
-                        fontSize: "1rem",
-                        fontWeight: "600",
-                        color: "#5D2A0A",
-                        margin: "0 0 1rem 0",
-                      }}
-                    >
-                      How to Improve Your Match Score:
-                    </h4>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-                        gap: "1rem",
-                      }}
-                    >
-                      {matchBreakdownData?.matchDetails &&
-                        Object.entries(matchBreakdownData.matchDetails)
-                          .filter(([key, details]) => details.score < 70)
-                          .map(([key, details]) => (
-                            <div
-                              key={key}
-                              style={{
-                                background: "white",
-                                border: "1px solid #E8D5C4",
-                                borderRadius: "6px",
-                                padding: "1rem",
-                              }}
-                            >
-                              <h5
-                                style={{
-                                  fontSize: "0.875rem",
-                                  fontWeight: "600",
-                                  color: "#D32F2F",
-                                  margin: "0 0 0.5rem 0",
-                                }}
-                              >
-                                {details.description}
-                              </h5>
-                              <p
-                                style={{
-                                  fontSize: "0.8rem",
-                                  color: "#5D2A0A",
-                                  margin: "0",
-                                  lineHeight: "1.4",
-                                }}
-                              >
-                                {getImprovementSuggestion(key, details.score)}
-                              </p>
-                            </div>
-                          ))}
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "center",
-                      paddingTop: "1.5rem",
-                      borderTop: "1px solid #E8D5C4",
-                    }}
-                  >
-                    <button
-                      style={{
-                        padding: "0.75rem 2rem",
-                        background: "#5D2A0A",
-                        color: "white",
-                        border: "none",
-                        borderRadius: "6px",
-                        fontSize: "0.875rem",
-                        fontWeight: "500",
-                        cursor: "pointer",
-                        transition: "all 0.2s",
-                      }}
-                      onClick={() => setShowMatchBreakdown(false)}
-                    >
-                      Close Breakdown
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>,
-            document.body,
-          )}
+        {mounted && showMatchBreakdown && createPortal(
+          renderMatchBreakdownModal(),
+          document.body,
+        )}
 
         {/* Filter Modal */}
         {mounted &&

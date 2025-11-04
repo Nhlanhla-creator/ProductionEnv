@@ -3,6 +3,8 @@ import "./UniversalProfile.css"
 import FormField from "./form-field";
 import FileUpload from "./file-upload";
 import { profitabilityOptions } from "./applicationOptions";
+import CreditGPT from './aiCreditReport'; // Add this import at the top
+import { useApiKey } from "../SMSEDashboard/callapi"
 
 // Currency formatter function
 const formatCurrency = (value) => {
@@ -18,6 +20,37 @@ const FinancialOverview = ({ data, updateData }) => {
     currentValuation: data.currentValuation || '',
     existingDebt: data.existingDebt || ''
   });
+  const apiKey =useApiKey()
+console.log(apiKey)
+    const [aiEvaluation, setAiEvaluation] = useState(null);
+  
+ const handleAiResponse = (response, score, label) => {
+    const evaluationData = {
+      response,
+      score,
+      label,
+      timestamp: new Date().toISOString()
+    };
+
+
+
+    setAiEvaluation(evaluationData);
+    updateData({
+      ...data,
+      aiEvaluation: evaluationData
+    });
+  };
+
+const handleCreditAnalysisComplete = (analysis, score, rating) => {
+  // Update the credit score in the form data
+  updateData("financialOverview", { 
+    creditScore: score,
+    creditRating: rating,
+    creditAnalysis: analysis 
+  });
+  
+  console.log("Credit analysis completed:", { score, rating });
+};
 
   // Simple handler for all inputs
   const handleInputChange = (field, value) => {
@@ -282,18 +315,31 @@ const FinancialOverview = ({ data, updateData }) => {
             </div>
           </FormField>
 
-          {data.hasCreditReport === "yes" && (
-            <div style={{ marginTop: "1rem" }}>
-              <FileUpload
-                label="Upload Credit Report"
-                accept=".pdf,.jpg,.jpeg,.png"
-                onChange={(files) => handleFileChange("creditReportDocs", files)}
-                value={data.creditReportDocs || []}
-                tooltip="Upload your recent credit report (PDF, JPG, PNG). This helps us assess your creditworthiness."
-                required={data.hasCreditReport === "yes"}
-              />
-            </div>
-          )}
+         {data.hasCreditReport === "yes" && (
+  <div style={{ marginTop: "1rem" }}>
+    <FileUpload
+             label="Upload Financials"
+             accept=".pdf,.xlsx,.xls,.doc,.docx"
+             required
+             onChange={(files) => handleFileChange("financialsFile", files)}
+             value={data.financialsFile || []}
+           />
+   
+                     {Array.isArray(data.financialsFile) &&
+                     data.financialsFile.length > 0 &&
+                     !data.financialsFile.some(file =>
+                       typeof file === "string" ||
+                       (file?.url && file.url.startsWith("https://firebasestorage.googleapis.com"))
+                     ) && (
+                       <CreditGPT
+                         files={data.financialsFile}
+                         onEvaluationComplete={handleAiResponse}
+                          apiKey={apiKey} //added keys
+                       />
+                     )}
+   
+         </div>
+       )}
         </div>
 
         <div>

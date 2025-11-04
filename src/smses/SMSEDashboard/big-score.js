@@ -4,6 +4,7 @@ import { ChevronDown, CheckCircle, TrendingUp, AlertCircle, FileText } from "luc
 import { doc, updateDoc, setDoc, serverTimestamp } from "firebase/firestore"
 import { db } from "../../firebaseConfig"
 import NeedHelp from "../../NeedHelp"
+import { useNavigate } from "react-router-dom"
 
 export function BigScoreCard({
   styles,
@@ -23,7 +24,9 @@ export function BigScoreCard({
   const [showScoreBreakdown, setShowScoreBreakdown] = useState(false)
   const [showDetailedAnalysis, setShowDetailedAnalysis] = useState(false)
   const [showBoostScoreModal, setShowBoostScoreModal] = useState(false)
-
+const navigate = useNavigate()
+// Add this state for the catalyst popup (add to your existing useState declarations)
+const [showCatalystPopup, setShowCatalystPopup] = useState(false)
   useEffect(() => {
     if (showModal) {
       document.body.classList.add("modal-open")
@@ -95,6 +98,18 @@ export function BigScoreCard({
       }).catch((err) => console.error("Failed to update BIG Score in Firestore:", err))
     }
   }, [complianceScore, legitimacyScore, fundabilityScore, pisScore, leadershipScore, profileData, onScoreUpdate])
+useEffect(() => {
+  // Check if user has dismissed the popup in this session
+  const hasDismissedCatalystPopup = sessionStorage.getItem('catalystPopupDismissed')
+  
+  if (bigScore !== null && bigScore < 50 && !hasDismissedCatalystPopup) {
+    // Small delay to ensure the component is fully loaded
+    const timer = setTimeout(() => {
+      setShowCatalystPopup(true)
+    }, 1000)
+    return () => clearTimeout(timer)
+  }
+}, [bigScore])
 
   // Generate smart recommendations based on scores - UPDATED
   const getRecommendations = () => {
@@ -1407,6 +1422,237 @@ export function BigScoreCard({
           </div>
         </div>
       )}
+      {showCatalystPopup && (
+  <div
+    style={{
+      position: "fixed",
+      top: "0",
+      left: "0",
+      right: "0",
+      bottom: "0",
+      backgroundColor: "rgba(0, 0, 0, 0.6)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: "999999",
+      padding: "20px",
+    }}
+    onClick={(e) => {
+      if (e.target === e.currentTarget) {
+        setShowCatalystPopup(false)
+        sessionStorage.setItem('catalystPopupDismissed', 'true')
+      }
+    }}
+  >
+    <div
+      style={{
+        position: "relative",
+        backgroundColor: "#ffffff",
+        borderRadius: "16px",
+        boxShadow: "0 20px 40px rgba(0, 0, 0, 0.2)",
+        zIndex: "999999",
+        maxWidth: "500px",
+        width: "100%",
+        border: "2px solid #8D6E63",
+        overflow: "hidden",
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* Header */}
+      <div
+        style={{
+          background: "linear-gradient(135deg, #8D6E63 0%, #6D4C41 100%)",
+          padding: "24px 30px 20px 30px",
+          color: "white",
+          textAlign: "center",
+          position: "relative",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            top: "-30px",
+            right: "-30px",
+            width: "100px",
+            height: "100px",
+            background: "rgba(255, 255, 255, 0.1)",
+            borderRadius: "50%",
+          }}
+        ></div>
+        <h3
+          style={{
+            margin: "0 0 8px 0",
+            fontSize: "24px",
+            fontWeight: "700",
+            letterSpacing: "0.5px",
+          }}
+        >
+          🚀 Boost Your Score
+        </h3>
+        <p
+          style={{
+            margin: "0",
+            fontSize: "14px",
+            opacity: "0.9",
+            fontWeight: "400",
+          }}
+        >
+          Unlock your business potential with personalized support
+        </p>
+      </div>
+
+      {/* Content */}
+      <div style={{ padding: "30px" }}>
+        <div
+          style={{
+            textAlign: "center",
+            marginBottom: "24px",
+          }}
+        >
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "80px",
+              height: "80px",
+              backgroundColor: "#F3E8DC",
+              borderRadius: "50%",
+              marginBottom: "16px",
+              border: "3px solid #8D6E63",
+            }}
+          >
+            <span
+              style={{
+                fontSize: "32px",
+                fontWeight: "800",
+                color: "#8D6E63",
+              }}
+            >
+              {bigScore}%
+            </span>
+          </div>
+          <p
+            style={{
+              fontSize: "16px",
+              color: "#5D4037",
+              margin: "0 0 16px 0",
+              lineHeight: "1.5",
+            }}
+          >
+            Your current BIG Score indicates significant growth opportunities. Our <strong>Catalyst Program</strong> can help you rapidly improve your business readiness.
+          </p>
+        </div>
+
+        <div
+          style={{
+            backgroundColor: "#F8F5F2",
+            padding: "20px",
+            borderRadius: "12px",
+            border: "2px solid #E8D8CF",
+            marginBottom: "24px",
+          }}
+        >
+          <p
+            style={{
+              fontSize: "14px",
+              color: "#6D4C41",
+              margin: "0 0 12px 0",
+              fontWeight: "600",
+            }}
+          >
+            📈 With Catalyst Support You'll Get:
+          </p>
+          <ul
+            style={{
+              margin: "0",
+              paddingLeft: "20px",
+              color: "#5D4037",
+              fontSize: "14px",
+              lineHeight: "1.6",
+            }}
+          >
+            <li>Personalized business development guidance</li>
+            <li>Access to specialized growth tools and resources</li>
+            <li>Mentorship from industry experts</li>
+            <li>Priority support for compliance and funding readiness</li>
+            <li>Customized action plan to boost your BIG Score</li>
+          </ul>
+        </div>
+
+        {/* Action Buttons */}
+        <div
+          style={{
+            display: "flex",
+            gap: "12px",
+            flexDirection: "column",
+          }}
+        >
+         <button
+  onClick={() => {
+    navigate("/support-program-matches")
+    setShowCatalystPopup(false)
+    sessionStorage.setItem('catalystPopupDismissed', 'true')
+  }}
+  style={{
+    padding: "16px 24px",
+    borderRadius: "10px",
+    background: "linear-gradient(135deg, #8D6E63 0%, #6D4C41 100%)",
+    color: "white",
+    border: "none",
+    fontWeight: "700",
+    fontSize: "15px",
+    cursor: "pointer",
+    transition: "all 0.3s ease",
+    boxShadow: "0 6px 20px rgba(141, 110, 99, 0.4)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+  }}
+  onMouseOver={(e) => {
+    e.target.style.transform = "translateY(-2px)"
+    e.target.style.boxShadow = "0 8px 25px rgba(141, 110, 99, 0.5)"
+  }}
+  onMouseOut={(e) => {
+    e.target.style.transform = "translateY(0px)"
+    e.target.style.boxShadow = "0 6px 20px rgba(141, 110, 99, 0.4)"
+  }}
+>
+  <span>Apply for Catalyst Program</span>
+  <TrendingUp size={18} />
+</button>
+
+          <button
+            onClick={() => {
+              setShowCatalystPopup(false)
+              sessionStorage.setItem('catalystPopupDismissed', 'true')
+            }}
+            style={{
+              padding: "12px 24px",
+              borderRadius: "10px",
+              background: "transparent",
+              color: "#8D6E63",
+              border: "2px solid #8D6E63",
+              fontWeight: "600",
+              fontSize: "14px",
+              cursor: "pointer",
+              transition: "all 0.3s ease",
+            }}
+            onMouseOver={(e) => {
+              e.target.style.backgroundColor = "#F8F5F2"
+            }}
+            onMouseOut={(e) => {
+              e.target.style.backgroundColor = "transparent"
+            }}
+          >
+            Maybe Later
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
 
       <style jsx>{`
         @keyframes spin {
