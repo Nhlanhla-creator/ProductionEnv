@@ -73,6 +73,8 @@ const PnLSnapshot = ({
   const [firebaseChartData, setFirebaseChartData] = useState({})
   const [loading, setLoading] = useState(false)
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
+  const [selectedFinancialYearStart, setSelectedFinancialYearStart] = useState("Jan")
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
 
   useEffect(() => {
     if (user) {
@@ -109,6 +111,14 @@ const PnLSnapshot = ({
 
         if (firebaseData.chartNotes) {
           setChartNotes(firebaseData.chartNotes)
+        }
+
+        if (firebaseData.financialYearStart) {
+          setSelectedFinancialYearStart(firebaseData.financialYearStart)
+        }
+
+        if (firebaseData.year) {
+          setSelectedYear(firebaseData.year)
         }
 
         processFirebaseDataForCharts(firebaseData)
@@ -181,7 +191,7 @@ const PnLSnapshot = ({
 
   const generateLabels = () => {
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    const startMonthIndex = months.indexOf(financialYearStart)
+    const startMonthIndex = months.indexOf(selectedFinancialYearStart)
     const orderedMonths = [...months.slice(startMonthIndex), ...months.slice(0, startMonthIndex)]
 
     if (viewMode === "month") {
@@ -239,6 +249,8 @@ const PnLSnapshot = ({
         depreciationBudget: pnlDetails.depreciationBudget.map((val) => Number.parseFloat(val) || 0),
         notes: pnlDetails.notes,
         chartNotes: chartNotes,
+        financialYearStart: selectedFinancialYearStart,
+        year: selectedYear,
         lastUpdated: new Date().toISOString(),
       }
 
@@ -366,6 +378,67 @@ const PnLSnapshot = ({
 
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
+  // Generate year options (current year ± 10 years)
+  const generateYearOptions = () => {
+    const currentYear = new Date().getFullYear()
+    const years = []
+    for (let i = currentYear - 10; i <= currentYear + 10; i++) {
+      years.push(i)
+    }
+    return years
+  }
+
+  const updatePnlDetailValue = (category, monthIndex, value) => {
+    setPnlDetails(prev => ({
+      ...prev,
+      [category]: prev[category].map((val, idx) => idx === monthIndex ? value : val)
+    }))
+  }
+
+  const renderMonthlyInputs = (category, label) => {
+    const startMonthIndex = months.indexOf(selectedFinancialYearStart)
+    const orderedMonths = [...months.slice(startMonthIndex), ...months.slice(0, startMonthIndex)]
+    
+    return (
+      <div style={{ marginBottom: "20px" }}>
+        <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>{label}</h5>
+        <div style={{ 
+          display: "grid", 
+          gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", 
+          gap: "10px" 
+        }}>
+          {orderedMonths.map((month, displayIndex) => {
+            const actualIndex = months.indexOf(month)
+            return (
+              <div key={month} style={{ display: "flex", flexDirection: "column" }}>
+                <label style={{ 
+                  fontSize: "12px", 
+                  color: "#72542b", 
+                  marginBottom: "5px", 
+                  fontWeight: "500" 
+                }}>
+                  {month}
+                </label>
+                <input
+                  type="number"
+                  value={pnlDetails[category][actualIndex] || ""}
+                  onChange={(e) => updatePnlDetailValue(category, actualIndex, e.target.value)}
+                  placeholder="0"
+                  style={{
+                    padding: "8px",
+                    borderRadius: "4px",
+                    border: "1px solid #e8ddd4",
+                    fontSize: "14px",
+                  }}
+                />
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       style={{
@@ -386,23 +459,38 @@ const PnLSnapshot = ({
           gap: "15px",
         }}
       >
-        {!isInvestorView && (
-          <button
-            onClick={handleAddDetails}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: "#5d4037",
-              color: "#fdfcfb",
-              border: "none",
+        <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
+          {!isInvestorView && (
+            <button
+              onClick={handleAddDetails}
+              style={{
+                padding: "10px 20px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "14px",
+              }}
+            >
+              Add P&L Details
+            </button>
+          )}
+          
+          {selectedYear && (
+            <div style={{
+              padding: "8px 16px",
+              backgroundColor: "#f7f3f0",
               borderRadius: "6px",
-              cursor: "pointer",
-              fontWeight: "600",
-              fontSize: "14px",
-            }}
-          >
-            Add P&L Details
-          </button>
-        )}
+              border: "1px solid #e8ddd4",
+            }}>
+              <span style={{ color: "#5d4037", fontWeight: "600", fontSize: "14px" }}>
+                Data Year: {selectedYear}
+              </span>
+            </div>
+          )}
+        </div>
 
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
           <button
@@ -807,288 +895,93 @@ const PnLSnapshot = ({
               backgroundColor: "#fdfcfb",
               padding: "30px",
               borderRadius: "8px",
-              maxWidth: "900px",
+              maxWidth: "1200px",
               maxHeight: "90vh",
               overflow: "auto",
-              width: "90%",
+              width: "95%",
             }}
           >
             <h3 style={{ color: "#5d4037", marginBottom: "20px" }}>Add P&L Details</h3>
-            <p style={{ color: "#72542b", marginBottom: "20px", fontSize: "14px" }}>
-              Enter data for all 12 months separated by commas. Example: 100, 120, 110, 130, 140, 135, 145, 150, 160,
-              165, 170, 180
-            </p>
+            
+            <div style={{ 
+              display: "grid", 
+              gridTemplateColumns: "1fr 1fr", 
+              gap: "20px", 
+              marginBottom: "25px" 
+            }}>
+              <div>
+                <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                  Financial Year Start:
+                </label>
+                <select
+                  value={selectedFinancialYearStart}
+                  onChange={(e) => setSelectedFinancialYearStart(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    borderRadius: "4px",
+                    border: "1px solid #e8ddd4",
+                    fontSize: "14px",
+                    backgroundColor: "#fdfcfb",
+                    color: "#5d4037",
+                    cursor: "pointer",
+                  }}
+                >
+                  {months.map((month) => (
+                    <option key={month} value={month}>
+                      {month}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            <div style={{ marginBottom: "20px" }}>
-              <h4 style={{ color: "#5d4037", marginBottom: "10px" }}>Actual Data</h4>
-
-              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
-                Sales Revenue (12 months, comma separated):
-              </label>
-              <input
-                type="text"
-                value={pnlDetails.sales.join(", ")}
-                onChange={(e) =>
-                  setPnlDetails({
-                    ...pnlDetails,
-                    sales: e.target.value.split(",").map((v) => v.trim()),
-                  })
-                }
-                placeholder="e.g., 100, 120, 110, 130, 140, 135, 145, 150, 160, 165, 170, 180"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  marginBottom: "15px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                }}
-              />
-
-              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
-                Cost of Goods Sold (12 months, comma separated):
-              </label>
-              <input
-                type="text"
-                value={pnlDetails.cogs.join(", ")}
-                onChange={(e) =>
-                  setPnlDetails({
-                    ...pnlDetails,
-                    cogs: e.target.value.split(",").map((v) => v.trim()),
-                  })
-                }
-                placeholder="e.g., 80, 85, 90, 87, 92, 88, 95, 97, 100, 102, 105, 108"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  marginBottom: "15px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                }}
-              />
-
-              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
-                Operating Expenses (12 months, comma separated):
-              </label>
-              <input
-                type="text"
-                value={pnlDetails.opex.join(", ")}
-                onChange={(e) =>
-                  setPnlDetails({
-                    ...pnlDetails,
-                    opex: e.target.value.split(",").map((v) => v.trim()),
-                  })
-                }
-                placeholder="e.g., 90, 93, 91, 95, 97, 93, 91, 95, 97, 95, 97, 97"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  marginBottom: "15px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                }}
-              />
-
-              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
-                Tax (12 months, comma separated):
-              </label>
-              <input
-                type="text"
-                value={pnlDetails.tax.join(", ")}
-                onChange={(e) =>
-                  setPnlDetails({
-                    ...pnlDetails,
-                    tax: e.target.value.split(",").map((v) => v.trim()),
-                  })
-                }
-                placeholder="e.g., 5, 6, 5, 7, 8, 7, 8, 9, 10, 10, 11, 12"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  marginBottom: "15px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                }}
-              />
-
-              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
-                Interest Expense (12 months, comma separated):
-              </label>
-              <input
-                type="text"
-                value={pnlDetails.interestExpense.join(", ")}
-                onChange={(e) =>
-                  setPnlDetails({
-                    ...pnlDetails,
-                    interestExpense: e.target.value.split(",").map((v) => v.trim()),
-                  })
-                }
-                placeholder="e.g., 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  marginBottom: "15px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                }}
-              />
-
-              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
-                Depreciation (12 months, comma separated):
-              </label>
-              <input
-                type="text"
-                value={pnlDetails.depreciation.join(", ")}
-                onChange={(e) =>
-                  setPnlDetails({
-                    ...pnlDetails,
-                    depreciation: e.target.value.split(",").map((v) => v.trim()),
-                  })
-                }
-                placeholder="e.g., 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  marginBottom: "15px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                }}
-              />
+              <div>
+                <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                  Data Year:
+                </label>
+                <select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    borderRadius: "4px",
+                    border: "1px solid #e8ddd4",
+                    fontSize: "14px",
+                    backgroundColor: "#fdfcfb",
+                    color: "#5d4037",
+                    cursor: "pointer",
+                  }}
+                >
+                  {generateYearOptions().map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            <div style={{ marginBottom: "20px" }}>
-              <h4 style={{ color: "#5d4037", marginBottom: "10px" }}>Budget Data</h4>
+            <div style={{ marginBottom: "30px" }}>
+              <h4 style={{ color: "#5d4037", marginBottom: "20px", fontSize: "18px" }}>Actual Data</h4>
+              
+              {renderMonthlyInputs("sales", "Sales Revenue")}
+              {renderMonthlyInputs("cogs", "Cost of Goods Sold")}
+              {renderMonthlyInputs("opex", "Operating Expenses")}
+              {renderMonthlyInputs("tax", "Tax")}
+              {renderMonthlyInputs("interestExpense", "Interest Expense")}
+              {renderMonthlyInputs("depreciation", "Depreciation")}
+            </div>
 
-              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
-                Sales Revenue Budget (12 months, comma separated):
-              </label>
-              <input
-                type="text"
-                value={pnlDetails.salesBudget.join(", ")}
-                onChange={(e) =>
-                  setPnlDetails({
-                    ...pnlDetails,
-                    salesBudget: e.target.value.split(",").map((v) => v.trim()),
-                  })
-                }
-                placeholder="e.g., 110, 125, 115, 135, 145, 140, 150, 155, 165, 170, 175, 185"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  marginBottom: "15px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                }}
-              />
-
-              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
-                COGS Budget (12 months, comma separated):
-              </label>
-              <input
-                type="text"
-                value={pnlDetails.cogsBudget.join(", ")}
-                onChange={(e) =>
-                  setPnlDetails({
-                    ...pnlDetails,
-                    cogsBudget: e.target.value.split(",").map((v) => v.trim()),
-                  })
-                }
-                placeholder="e.g., 75, 80, 85, 82, 87, 83, 90, 92, 95, 97, 100, 103"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  marginBottom: "15px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                }}
-              />
-
-              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
-                OPEX Budget (12 months, comma separated):
-              </label>
-              <input
-                type="text"
-                value={pnlDetails.opexBudget.join(", ")}
-                onChange={(e) =>
-                  setPnlDetails({
-                    ...pnlDetails,
-                    opexBudget: e.target.value.split(",").map((v) => v.trim()),
-                  })
-                }
-                placeholder="e.g., 85, 88, 86, 90, 92, 88, 86, 90, 92, 90, 92, 92"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  marginBottom: "15px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                }}
-              />
-
-              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
-                Tax Budget (12 months, comma separated):
-              </label>
-              <input
-                type="text"
-                value={pnlDetails.taxBudget.join(", ")}
-                onChange={(e) =>
-                  setPnlDetails({
-                    ...pnlDetails,
-                    taxBudget: e.target.value.split(",").map((v) => v.trim()),
-                  })
-                }
-                placeholder="e.g., 6, 7, 6, 8, 9, 8, 9, 10, 11, 11, 12, 13"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  marginBottom: "15px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                }}
-              />
-
-              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
-                Interest Expense Budget (12 months, comma separated):
-              </label>
-              <input
-                type="text"
-                value={pnlDetails.interestExpenseBudget.join(", ")}
-                onChange={(e) =>
-                  setPnlDetails({
-                    ...pnlDetails,
-                    interestExpenseBudget: e.target.value.split(",").map((v) => v.trim()),
-                  })
-                }
-                placeholder="e.g., 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  marginBottom: "15px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                }}
-              />
-
-              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
-                Depreciation Budget (12 months, comma separated):
-              </label>
-              <input
-                type="text"
-                value={pnlDetails.depreciationBudget.join(", ")}
-                onChange={(e) =>
-                  setPnlDetails({
-                    ...pnlDetails,
-                    depreciationBudget: e.target.value.split(",").map((v) => v.trim()),
-                  })
-                }
-                placeholder="e.g., 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3"
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  marginBottom: "15px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                }}
-              />
+            <div style={{ marginBottom: "30px" }}>
+              <h4 style={{ color: "#5d4037", marginBottom: "20px", fontSize: "18px" }}>Budget Data</h4>
+              
+              {renderMonthlyInputs("salesBudget", "Sales Revenue Budget")}
+              {renderMonthlyInputs("cogsBudget", "COGS Budget")}
+              {renderMonthlyInputs("opexBudget", "OPEX Budget")}
+              {renderMonthlyInputs("taxBudget", "Tax Budget")}
+              {renderMonthlyInputs("interestExpenseBudget", "Interest Expense Budget")}
+              {renderMonthlyInputs("depreciationBudget", "Depreciation Budget")}
             </div>
 
             <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
@@ -1435,12 +1328,12 @@ const BalanceSheet = ({
     notes: "",
   })
   const [healthDetails, setHealthDetails] = useState({
-    receivables: "",
-    payables: "",
-    receivablesDays: "",
-    payablesDays: "",
-    inventory: "",
-    inventoryDays: "",
+    receivables: Array(12).fill(""),
+    payables: Array(12).fill(""),
+    receivablesDays: Array(12).fill(""),
+    payablesDays: Array(12).fill(""),
+    inventory: Array(12).fill(""),
+    inventoryDays: Array(12).fill(""),
     date: "",
     notes: "",
   })
@@ -1595,31 +1488,25 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
     const inventoryDaysData = chartData.inventoryDays?.actual || []
 
     setHealthDetails({
-      receivables: receivablesData.join(",") || "",
-      payables: payablesData.join(",") || "",
-      receivablesDays: receivablesDaysData.join(",") || "",
-      payablesDays: payablesDaysData.join(",") || "",
-      inventory: inventoryData.join(",") || "",
-      inventoryDays: inventoryDaysData.join(",") || "",
+      receivables: receivablesData.length > 0 ? receivablesData.map(String) : Array(12).fill(""),
+      payables: payablesData.length > 0 ? payablesData.map(String) : Array(12).fill(""),
+      receivablesDays: receivablesDaysData.length > 0 ? receivablesDaysData.map(String) : Array(12).fill(""),
+      payablesDays: payablesDaysData.length > 0 ? payablesDaysData.map(String) : Array(12).fill(""),
+      inventory: inventoryData.length > 0 ? inventoryData.map(String) : Array(12).fill(""),
+      inventoryDays: inventoryDaysData.length > 0 ? inventoryDaysData.map(String) : Array(12).fill(""),
       date: chartData.balanceSheetHealth?.date || "",
       notes: chartData.balanceSheetHealth?.notes || "",
     })
   }
 
   const handleSaveHealthDetails = async () => {
-    const parseDataArray = (dataString) => {
-      const values = dataString.split(",").map((val) => Number.parseFloat(val.trim()) || 0)
-      while (values.length < 12) values.push(0)
-      return values.slice(0, 12)
-    }
-
     const updatedData = {
-      receivables: { actual: parseDataArray(healthDetails.receivables) },
-      payables: { actual: parseDataArray(healthDetails.payables) },
-      receivablesDays: { actual: parseDataArray(healthDetails.receivablesDays) },
-      payablesDays: { actual: parseDataArray(healthDetails.payablesDays) },
-      inventory: { actual: parseDataArray(healthDetails.inventory) },
-      inventoryDays: { actual: parseDataArray(healthDetails.inventoryDays) },
+      receivables: { actual: healthDetails.receivables.map((val) => Number.parseFloat(val) || 0) },
+      payables: { actual: healthDetails.payables.map((val) => Number.parseFloat(val) || 0) },
+      receivablesDays: { actual: healthDetails.receivablesDays.map((val) => Number.parseFloat(val) || 0) },
+      payablesDays: { actual: healthDetails.payablesDays.map((val) => Number.parseFloat(val) || 0) },
+      inventory: { actual: healthDetails.inventory.map((val) => Number.parseFloat(val) || 0) },
+      inventoryDays: { actual: healthDetails.inventoryDays.map((val) => Number.parseFloat(val) || 0) },
       balanceSheetHealth: {
         date: healthDetails.date,
         notes: healthDetails.notes,
@@ -1814,6 +1701,51 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
         },
       },
     },
+  }
+
+  const updateHealthDetailValue = (category, monthIndex, value) => {
+    setHealthDetails(prev => ({
+      ...prev,
+      [category]: prev[category].map((val, idx) => idx === monthIndex ? value : val)
+    }))
+  }
+
+  const renderHealthMonthlyInputs = (category, label) => {
+    return (
+      <div style={{ marginBottom: "20px" }}>
+        <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>{label}</h5>
+        <div style={{ 
+          display: "grid", 
+          gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", 
+          gap: "10px" 
+        }}>
+          {months.map((month, index) => (
+            <div key={month} style={{ display: "flex", flexDirection: "column" }}>
+              <label style={{ 
+                fontSize: "12px", 
+                color: "#72542b", 
+                marginBottom: "5px", 
+                fontWeight: "500" 
+              }}>
+                {month}
+              </label>
+              <input
+                type="number"
+                value={healthDetails[category][index] || ""}
+                onChange={(e) => updateHealthDetailValue(category, index, e.target.value)}
+                placeholder="0"
+                style={{
+                  padding: "8px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                }}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -2183,14 +2115,14 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
                   labels: displayLabels,
                   datasets: [
                     {
-                      label: "Actual",
+                      label: "Receivables",
                       data: aggregateDataForView(receivablesData),
                       backgroundColor: "rgba(93, 64, 55, 0.6)",
                       borderColor: "rgb(93, 64, 55)",
                       borderWidth: 2,
                     },
                     {
-                      label: "Budget",
+                      label: "Payables",
                       data: aggregateDataForView(payablesData),
                       backgroundColor: "rgba(139, 105, 20, 0.6)",
                       borderColor: "rgb(139, 105, 20)",
@@ -2208,14 +2140,14 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
                   labels: displayLabels,
                   datasets: [
                     {
-                      label: "Actual",
+                      label: "Receivables Days",
                       data: aggregateDataForView(receivablesDaysData),
                       backgroundColor: "rgba(114, 84, 43, 0.6)",
                       borderColor: "rgb(114, 84, 43)",
                       borderWidth: 2,
                     },
                     {
-                      label: "Budget",
+                      label: "Payables Days",
                       data: aggregateDataForView(payablesDaysData),
                       backgroundColor: "rgba(156, 124, 95, 0.6)",
                       borderColor: "rgb(156, 124, 95)",
@@ -2233,7 +2165,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
                   labels: displayLabels,
                   datasets: [
                     {
-                      label: "Actual",
+                      label: "Inventory",
                       data: aggregateDataForView(inventoryData),
                       backgroundColor: "rgba(76, 175, 80, 0.6)",
                       borderColor: "rgb(76, 175, 80)",
@@ -2241,7 +2173,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
                       yAxisID: "y",
                     },
                     {
-                      label: "Budget",
+                      label: "Inventory Days",
                       data: aggregateDataForView(inventoryDaysData),
                       backgroundColor: "rgba(139, 105, 20, 0.6)",
                       borderColor: "rgb(139, 105, 20)",
@@ -2696,118 +2628,20 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
               backgroundColor: "#fdfcfb",
               padding: "30px",
               borderRadius: "8px",
-              maxWidth: "800px",
+              maxWidth: "1200px",
               maxHeight: "90vh",
               overflow: "auto",
-              width: "90%",
+              width: "95%",
             }}
           >
             <h3 style={{ color: "#5d4037", marginBottom: "20px" }}>Add Balance Sheet Health Details</h3>
-            <p style={{ color: "#72542b", marginBottom: "20px", fontSize: "14px" }}>
-              Tip: Enter data for all 12 months separated by commas.
-            </p>
 
-            <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
-              Receivables (12 months, comma separated):
-            </label>
-            <input
-              type="text"
-              value={healthDetails.receivables}
-              onChange={(e) => setHealthDetails({ ...healthDetails, receivables: e.target.value })}
-              placeholder="e.g., 100, 120, 110, 130, 140, 135, 145, 150, 160, 165"
-              style={{
-                width: "100%",
-                padding: "10px",
-                marginBottom: "15px",
-                borderRadius: "4px",
-                border: "1px solid #e8ddd4",
-              }}
-            />
-
-            <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
-              Payables (12 months, comma separated):
-            </label>
-            <input
-              type="text"
-              value={healthDetails.payables}
-              onChange={(e) => setHealthDetails({ ...healthDetails, payables: e.target.value })}
-              placeholder="e.g., 80, 85, 90, 88, 92, 87, 95, 97, 93, 95, 97, 97"
-              style={{
-                width: "100%",
-                padding: "10px",
-                marginBottom: "15px",
-                borderRadius: "4px",
-                border: "1px solid #e8ddd4",
-              }}
-            />
-
-            <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
-              Receivables Days (12 months, comma separated):
-            </label>
-            <input
-              type="text"
-              value={healthDetails.receivablesDays}
-              onChange={(e) => setHealthDetails({ ...healthDetails, receivablesDays: e.target.value })}
-              placeholder="e.g., 30, 32, 28, 33, 31, 29, 34, 36, 38, 40, 42"
-              style={{
-                width: "100%",
-                padding: "10px",
-                marginBottom: "15px",
-                borderRadius: "4px",
-                border: "1px solid #e8ddd4",
-              }}
-            />
-
-            <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
-              Payables Days (12 months, comma separated):
-            </label>
-            <input
-              type="text"
-              value={healthDetails.payablesDays}
-              onChange={(e) => setHealthDetails({ ...healthDetails, payablesDays: e.target.value })}
-              placeholder="e.g., 28, 27, 24, 26, 28, 23, 29, 31, 34, 35, 37"
-              style={{
-                width: "100%",
-                padding: "10px",
-                marginBottom: "15px",
-                borderRadius: "4px",
-                border: "1px solid #e8ddd4",
-              }}
-            />
-
-            <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
-              Inventory (12 months, comma separated):
-            </label>
-            <input
-              type="text"
-              value={healthDetails.inventory}
-              onChange={(e) => setHealthDetails({ ...healthDetails, inventory: e.target.value })}
-              placeholder="e.g., 50, 55, 52, 58, 60, 57, 61, 63, 65, 67"
-              style={{
-                width: "100%",
-                padding: "10px",
-                marginBottom: "15px",
-                borderRadius: "4px",
-                border: "1px solid #e8ddd4",
-              }}
-            />
-
-            <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
-              Inventory Days (12 months, comma separated):
-            </label>
-            <input
-              type="text"
-              value={healthDetails.inventoryDays}
-              onChange={(e) => setHealthDetails({ ...healthDetails, inventoryDays: e.target.value })}
-              placeholder="e.g., 45, 48, 42, 47, 44, 41, 53, 50, 53, 57, 59"
-              style={{
-                width: "100%",
-                padding: "10px",
-                marginBottom: "15px",
-                borderRadius: "4px",
-                border: "1px solid #e8ddd4",
-              }}
-            />
+            {renderHealthMonthlyInputs("receivables", "Receivables")}
+            {renderHealthMonthlyInputs("payables", "Payables")}
+            {renderHealthMonthlyInputs("receivablesDays", "Receivables Days")}
+            {renderHealthMonthlyInputs("payablesDays", "Payables Days")}
+            {renderHealthMonthlyInputs("inventory", "Inventory")}
+            {renderHealthMonthlyInputs("inventoryDays", "Inventory Days")}
 
             <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>Date:</label>
             <input

@@ -483,18 +483,6 @@ const BusinessModelCanvas = ({ activeSection, currentUser, isInvestorView }) => 
     }
   }
 
-  const sections = [
-    { key: "keyPartners", label: "Key Partners" },
-    { key: "keyActivities", label: "Key Activities" },
-    { key: "keyResources", label: "Key Resources" },
-    { key: "valuePropositions", label: "Value Propositions" },
-    { key: "customerRelationships", label: "Customer Relationships" },
-    { key: "channels", label: "Channels" },
-    { key: "customerSegments", label: "Customer Segments" },
-    { key: "costStructure", label: "Cost Structure" },
-    { key: "revenueStreams", label: "Revenue Streams" },
-  ]
-
   return (
     <div
       style={{
@@ -869,14 +857,27 @@ const BusinessModelCanvas = ({ activeSection, currentUser, isInvestorView }) => 
 }
 
 const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, currentUser, isInvestorView }) => {
+  // Updated categories array to match the goalDomains
+  const categories = [
+    { key: "Strategic Growth & Product Development", name: "Strategic Growth & Product Development", color: "#a67c52" },
+    { key: "Marketing, Brand & Customer Acquisition", name: "Marketing, Brand & Customer Acquisition", color: "#7d5a50" },
+    { key: "Finance", name: "Finance", color: "#c8b6a6" },
+    { key: "Operations", name: "Operations", color: "#e6d7c3" },
+    { key: "Systems & Technology", name: "Systems & Technology", color: "#f5f0e1" },
+    { key: "People, Capability & Knowledge", name: "People, Capability & Knowledge", color: "#d4c4b0" },
+    { key: "Governance, Impact & Ecosystem Building", name: "Governance, Impact & Ecosystem Building", color: "#b8a491" },
+  ]
+
   const [visibleCategories, setVisibleCategories] = useState({
-    Growth: true,
-    Finance: true,
-    Operations: true,
-    People: true,
-    Systems: true,
-    Customers: true,
+    "Strategic Growth & Product Development": true,
+    "Marketing, Brand & Customer Acquisition": true,
+    "Finance": true,
+    "Operations": true,
+    "Systems & Technology": true,
+    "People, Capability & Knowledge": true,
+    "Governance, Impact & Ecosystem Building": true,
   })
+  
   const [showMilestoneModal, setShowMilestoneModal] = useState(false)
   const [editingMilestone, setEditingMilestone] = useState(null)
   const [filterBy, setFilterBy] = useState("all")
@@ -1023,15 +1024,6 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
       },
     },
   }
-
-  const categories = [
-    { key: "Growth", name: "Growth", color: "#a67c52" },
-    { key: "Finance", name: "Finance", color: "#7d5a50" },
-    { key: "Operations", name: "Operations", color: "#c8b6a6" },
-    { key: "People", name: "People", color: "#e6d7c3" },
-    { key: "Systems", name: "Systems", color: "#f5f0e1" },
-    { key: "Customers", name: "Customers", color: "#a67c52" },
-  ]
 
   const goalDomains = [
     "Strategic Growth & Product Development",
