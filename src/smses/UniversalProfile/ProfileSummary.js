@@ -1201,209 +1201,6 @@ const ProfileSummary = ({ data, onEdit }) => {
                       </div>
                     )}
                   </div>
-
-                  {/* Transparency & Reporting Section */}
-                  <div style={{ marginTop: "24px" }}>
-                    <h3
-                      style={{
-                        fontSize: "16px",
-                        fontWeight: "700",
-                        color: "#4a352f",
-                        marginBottom: "16px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                      }}
-                    >
-                      <FileCheck size={18} color="#a67c52" />
-                      Transparency & Reporting
-                    </h3>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                        gap: "16px",
-                      }}
-                    >
-                      {[
-                        { label: "Stakeholder Reporting Frequency", value: data?.ownershipManagement?.stakeholderReportingFrequency },
-                        { label: "Performance Review Cycle", value: data?.ownershipManagement?.performanceReviewCycle },
-                      ].map((item, i) => (
-                        <div
-                          key={i}
-                          style={{
-                            background: "rgba(250, 247, 242, 0.8)",
-                            borderRadius: "12px",
-                            padding: "16px",
-                            border: "1px solid rgba(200, 182, 166, 0.2)",
-                          }}
-                        >
-                          <span
-                            style={{
-                              display: "block",
-                              fontSize: "12px",
-                              color: "#7d5a50",
-                              marginBottom: "6px",
-                              fontWeight: "600",
-                              textTransform: "uppercase",
-                              letterSpacing: "0.5px",
-                            }}
-                          >
-                            {item.label}
-                          </span>
-                          <span
-                            style={{
-                              fontSize: "14px",
-                              color: "#4a352f",
-                              fontWeight: "500",
-                            }}
-                          >
-                            {item.value || "Not provided"}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div
-                      style={{
-                        background: "rgba(166, 124, 82, 0.1)",
-                        borderRadius: "12px",
-                        padding: "16px",
-                        border: "1px solid rgba(166, 124, 82, 0.2)",
-                        marginTop: "16px",
-                      }}
-                    >
-                      <span
-                        style={{
-                          display: "block",
-                          fontSize: "12px",
-                          color: "#7d5a50",
-                          marginBottom: "8px",
-                          fontWeight: "700",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.5px",
-                        }}
-                      >
-                        Stakeholder Communication Methods
-                      </span>
-                      <p
-                        style={{
-                          fontSize: "14px",
-                          color: "#4a352f",
-                          lineHeight: "1.6",
-                          margin: 0,
-                          fontWeight: "400",
-                        }}
-                      >
-                        {data?.ownershipManagement?.stakeholderCommunicationMethods || "Not provided"}
-                      </p>
-                    </div>
-
-                    <div
-                      style={{
-                        background: "rgba(166, 124, 82, 0.1)",
-                        borderRadius: "12px",
-                        padding: "16px",
-                        border: "1px solid rgba(166, 124, 82, 0.2)",
-                        marginTop: "12px",
-                      }}
-                    >
-                      <span
-                        style={{
-                          display: "block",
-                          fontSize: "12px",
-                          color: "#7d5a50",
-                          marginBottom: "8px",
-                          fontWeight: "700",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.5px",
-                        }}
-                      >
-                        Performance Review & KPI Monitoring Process
-                      </span>
-                      <p
-                        style={{
-                          fontSize: "14px",
-                          color: "#4a352f",
-                          lineHeight: "1.6",
-                          margin: 0,
-                          fontWeight: "400",
-                        }}
-                      >
-                        {data?.ownershipManagement?.performanceReviewProcess || "Not provided"}
-                      </p>
-                    </div>
-
-                    <div
-                      style={{
-                        background: "rgba(166, 124, 82, 0.1)",
-                        borderRadius: "12px",
-                        padding: "16px",
-                        border: "1px solid rgba(166, 124, 82, 0.2)",
-                        marginTop: "12px",
-                      }}
-                    >
-                      <span
-                        style={{
-                          display: "block",
-                          fontSize: "12px",
-                          color: "#7d5a50",
-                          marginBottom: "8px",
-                          fontWeight: "700",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.5px",
-                        }}
-                      >
-                        Compliance Monitoring & Risk Management
-                      </span>
-                      <p
-                        style={{
-                          fontSize: "14px",
-                          color: "#4a352f",
-                          lineHeight: "1.6",
-                          margin: 0,
-                          fontWeight: "400",
-                        }}
-                      >
-                        {data?.ownershipManagement?.complianceProcedures || "Not provided"}
-                      </p>
-                    </div>
-
-                    <div
-                      style={{
-                        background: "rgba(166, 124, 82, 0.1)",
-                        borderRadius: "12px",
-                        padding: "16px",
-                        border: "1px solid rgba(166, 124, 82, 0.2)",
-                        marginTop: "12px",
-                      }}
-                    >
-                      <span
-                        style={{
-                          display: "block",
-                          fontSize: "12px",
-                          color: "#7d5a50",
-                          marginBottom: "8px",
-                          fontWeight: "700",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.5px",
-                        }}
-                      >
-                        Data Management & Privacy Policies
-                      </span>
-                      <p
-                        style={{
-                          fontSize: "14px",
-                          color: "#4a352f",
-                          lineHeight: "1.6",
-                          margin: 0,
-                          fontWeight: "400",
-                        }}
-                      >
-                        {data?.ownershipManagement?.dataManagementPolicies || "Not provided"}
-                      </p>
-                    </div>
-                  </div>
                 </div>
               )}
             </div>
@@ -2522,7 +2319,7 @@ const ProfileSummary = ({ data, onEdit }) => {
                     </div>
                   </div>
 
-                  {/* Conflict Resolution / Ethics Section */}
+                  {/* Ethics & Conflict Resolution Section */}
                   <h3
                     style={{
                       fontSize: "16px",
@@ -2542,6 +2339,7 @@ const ProfileSummary = ({ data, onEdit }) => {
                       display: "grid",
                       gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
                       gap: "16px",
+                      marginBottom: "24px",
                     }}
                   >
                     <div
@@ -2718,6 +2516,207 @@ const ProfileSummary = ({ data, onEdit }) => {
                         {data?.governance?.lastEthicsTrainingDate || "Not specified"}
                       </span>
                     </div>
+                  </div>
+
+                  {/* Transparency & Reporting Section - MOVED FROM OWNERSHIP */}
+                  <h3
+                    style={{
+                      fontSize: "16px",
+                      fontWeight: "700",
+                      color: "#4a352f",
+                      marginBottom: "16px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                    }}
+                  >
+                    <FileCheck size={18} color="#a67c52" />
+                    Transparency & Reporting
+                  </h3>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                      gap: "16px",
+                    }}
+                  >
+                    {[
+                      { label: "Stakeholder Reporting Frequency", value: data?.governance?.stakeholderReportingFrequency },
+                      { label: "Performance Review Cycle", value: data?.governance?.performanceReviewCycle },
+                    ].map((item, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          background: "rgba(250, 247, 242, 0.8)",
+                          borderRadius: "12px",
+                          padding: "16px",
+                          border: "1px solid rgba(200, 182, 166, 0.2)",
+                        }}
+                      >
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: "12px",
+                            color: "#7d5a50",
+                            marginBottom: "6px",
+                            fontWeight: "600",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.5px",
+                          }}
+                        >
+                          {item.label}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: "14px",
+                            color: "#4a352f",
+                            fontWeight: "500",
+                          }}
+                        >
+                          {item.value || "Not provided"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div
+                    style={{
+                      background: "rgba(166, 124, 82, 0.1)",
+                      borderRadius: "12px",
+                      padding: "16px",
+                      border: "1px solid rgba(166, 124, 82, 0.2)",
+                      marginTop: "16px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "12px",
+                        color: "#7d5a50",
+                        marginBottom: "8px",
+                        fontWeight: "700",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.5px",
+                      }}
+                    >
+                      Stakeholder Communication Methods
+                    </span>
+                    <p
+                      style={{
+                        fontSize: "14px",
+                        color: "#4a352f",
+                        lineHeight: "1.6",
+                        margin: 0,
+                        fontWeight: "400",
+                      }}
+                    >
+                      {data?.governance?.stakeholderCommunicationMethods || "Not provided"}
+                    </p>
+                  </div>
+
+                  <div
+                    style={{
+                      background: "rgba(166, 124, 82, 0.1)",
+                      borderRadius: "12px",
+                      padding: "16px",
+                      border: "1px solid rgba(166, 124, 82, 0.2)",
+                      marginTop: "12px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "12px",
+                        color: "#7d5a50",
+                        marginBottom: "8px",
+                        fontWeight: "700",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.5px",
+                      }}
+                    >
+                      Performance Review & KPI Monitoring Process
+                    </span>
+                    <p
+                      style={{
+                        fontSize: "14px",
+                        color: "#4a352f",
+                        lineHeight: "1.6",
+                        margin: 0,
+                        fontWeight: "400",
+                      }}
+                    >
+                      {data?.governance?.performanceReviewProcess || "Not provided"}
+                    </p>
+                  </div>
+
+                  <div
+                    style={{
+                      background: "rgba(166, 124, 82, 0.1)",
+                      borderRadius: "12px",
+                      padding: "16px",
+                      border: "1px solid rgba(166, 124, 82, 0.2)",
+                      marginTop: "12px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "12px",
+                        color: "#7d5a50",
+                        marginBottom: "8px",
+                        fontWeight: "700",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.5px",
+                      }}
+                    >
+                      Compliance Monitoring & Risk Management
+                    </span>
+                    <p
+                      style={{
+                        fontSize: "14px",
+                        color: "#4a352f",
+                        lineHeight: "1.6",
+                        margin: 0,
+                        fontWeight: "400",
+                      }}
+                    >
+                      {data?.governance?.complianceProcedures || "Not provided"}
+                    </p>
+                  </div>
+
+                  <div
+                    style={{
+                      background: "rgba(166, 124, 82, 0.1)",
+                      borderRadius: "12px",
+                      padding: "16px",
+                      border: "1px solid rgba(166, 124, 82, 0.2)",
+                      marginTop: "12px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "12px",
+                        color: "#7d5a50",
+                        marginBottom: "8px",
+                        fontWeight: "700",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.5px",
+                      }}
+                    >
+                      Data Management & Privacy Policies
+                    </span>
+                    <p
+                      style={{
+                        fontSize: "14px",
+                        color: "#4a352f",
+                        lineHeight: "1.6",
+                        margin: 0,
+                        fontWeight: "400",
+                      }}
+                    >
+                      {data?.governance?.dataManagementPolicies || "Not provided"}
+                    </p>
                   </div>
                 </div>
               )}

@@ -93,6 +93,13 @@ const Governance = ({ data, updateData }) => {
     whistleblowingPolicyDocs: [],
     ethicsTrainingFrequency: "",
     lastEthicsTrainingDate: "",
+    // Transparency & Reporting (moved from OwnershipManagement)
+    stakeholderReportingFrequency: "",
+    performanceReviewCycle: "",
+    stakeholderCommunicationMethods: "",
+    performanceReviewProcess: "",
+    complianceProcedures: "",
+    dataManagementPolicies: "",
   })
   const [isLoading, setIsLoading] = useState(true)
   const [uploadingDocs, setUploadingDocs] = useState({})
@@ -114,12 +121,10 @@ const Governance = ({ data, updateData }) => {
               // Initialize with default structure
               const initialData = {
                 governanceChecklist: {},
-                // Advisory
                 hasAdvisoryStructure: "",
                 advisoryStructureDocs: [],
                 hasPolicyControls: "",
                 policyControlsDocs: [],
-                // Conflict Resolution / Ethics
                 hasEthicsPolicy: "",
                 ethicsPolicyDocs: [],
                 hasConflictResolution: "",
@@ -128,6 +133,12 @@ const Governance = ({ data, updateData }) => {
                 whistleblowingPolicyDocs: [],
                 ethicsTrainingFrequency: "",
                 lastEthicsTrainingDate: "",
+                stakeholderReportingFrequency: "",
+                performanceReviewCycle: "",
+                stakeholderCommunicationMethods: "",
+                performanceReviewProcess: "",
+                complianceProcedures: "",
+                dataManagementPolicies: "",
               }
               setFormData(initialData)
               updateData("governance", initialData)
@@ -148,6 +159,12 @@ const Governance = ({ data, updateData }) => {
               whistleblowingPolicyDocs: [],
               ethicsTrainingFrequency: "",
               lastEthicsTrainingDate: "",
+              stakeholderReportingFrequency: "",
+              performanceReviewCycle: "",
+              stakeholderCommunicationMethods: "",
+              performanceReviewProcess: "",
+              complianceProcedures: "",
+              dataManagementPolicies: "",
             }
             setFormData(initialData)
             updateData("governance", initialData)
@@ -548,6 +565,108 @@ const Governance = ({ data, updateData }) => {
               </p>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Transparency & Reporting Section */}
+      <div className="mb-8">
+        <h3 className="text-xl font-semibold text-brown-700 mt-6 mb-6 border-b border-brown-200 pb-2">
+          Transparency & Reporting
+        </h3>
+
+        {/* Stakeholder Reporting */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <div>
+            <FormField label="Stakeholder Reporting Frequency">
+              <select
+                name="stakeholderReportingFrequency"
+                value={formData.stakeholderReportingFrequency || ""}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+              >
+                <option value="">Select frequency</option>
+                <option value="monthly">Monthly</option>
+                <option value="quarterly">Quarterly</option>
+                <option value="biannually">Bi-annually</option>
+                <option value="annually">Annually</option>
+                <option value="as_needed">As needed</option>
+              </select>
+            </FormField>
+          </div>
+
+          <div>
+            <FormField label="Performance Review Cycle">
+              <select
+                name="performanceReviewCycle"
+                value={formData.performanceReviewCycle || ""}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+              >
+                <option value="">Select cycle</option>
+                <option value="monthly">Monthly</option>
+                <option value="quarterly">Quarterly</option>
+                <option value="biannually">Bi-annually</option>
+                <option value="annually">Annually</option>
+                <option value="as_needed">As needed</option>
+              </select>
+            </FormField>
+          </div>
+        </div>
+
+        {/* Reporting Methods */}
+        <div className="mb-6">
+          <FormField label="Stakeholder Communication Methods">
+            <textarea
+              name="stakeholderCommunicationMethods"
+              value={formData.stakeholderCommunicationMethods || ""}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+              placeholder="Describe how you communicate with stakeholders (e.g., annual reports, quarterly meetings, digital dashboards, newsletters)"
+              rows={3}
+            />
+          </FormField>
+        </div>
+
+        {/* Performance Review Process */}
+        <div className="mb-6">
+          <FormField label="Performance Review & KPI Monitoring Process">
+            <textarea
+              name="performanceReviewProcess"
+              value={formData.performanceReviewProcess || ""}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+              placeholder="Describe your performance review process, key performance indicators (KPIs), and how progress is measured and reported"
+              rows={4}
+            />
+          </FormField>
+        </div>
+
+        {/* Compliance Procedures */}
+        <div className="mb-6">
+          <FormField label="Compliance Monitoring & Risk Management Procedures">
+            <textarea
+              name="complianceProcedures"
+              value={formData.complianceProcedures || ""}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+              placeholder="Describe your compliance monitoring procedures, risk management framework, audit processes, and regulatory reporting requirements"
+              rows={4}
+            />
+          </FormField>
+        </div>
+
+        {/* Data Management & Privacy */}
+        <div className="mb-6">
+          <FormField label="Data Management & Privacy Policies">
+            <textarea
+              name="dataManagementPolicies"
+              value={formData.dataManagementPolicies || ""}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+              placeholder="Describe your data management practices, privacy policies, and information security measures"
+              rows={3}
+            />
+          </FormField>
         </div>
       </div>
 
