@@ -316,22 +316,51 @@ Based on PIS level:
 
 Current Stage: ${pisCalc.totalPIS < 100 ? 'Advisors Stage' : pisCalc.totalPIS < 350 ? 'Emerging Board Stage' : 'Full Board Stage'}
 
-3. For each category in the appropriate rubric (plus Policies & Documentation):
-   - Score from 0 to max points
-   - Provide short rationale for the score (2-3 sentences)
-   - FOR EACH CATEGORY, include a "How to Improve" section with 3-5 specific, actionable steps
+## PLATFORM-SPECIFIC REQUIREMENTS:
+When providing improvement advice, focus on ACTUAL STEPS the user can take WITHIN OUR PLATFORM:
 
-4. POLICIES & DOCUMENTATION CATEGORY:
+1. **For Board Structure improvements:**
+   - Go to Ownership Management → Add Directors/Advisors
+   - Complete board composition templates
+   - Set up meeting frequency in Enterprise Readiness
+   - Document board roles and responsibilities
+
+2. **For Policies & Documentation:**
+   - Navigate to Legal Compliance → Compliance Checklist
+   - Complete missing policies from the 17 available templates
+   - Use document generator for Employment Contracts, NDAs, etc.
+   - Upload existing policies to Document Vault
+
+3. **For Strategic Planning:**
+   - Use Business Plan templates in Strategic Planning section
+   - Complete SWOT analysis tool
+   - Set up KPI tracking in Performance Metrics
+   - Document strategic objectives with timelines
+
+4. **For Risk Management:**
+   - Complete Risk Assessment questionnaire
+   - Use Risk Register template
+   - Set up compliance calendar alerts
+   - Document mitigation strategies
+
+## EVALUATION INSTRUCTIONS:
+
+For each category in the appropriate rubric (plus Policies & Documentation):
+- Score from 0 to max points based on ACTUAL data provided
+- Provide short rationale for the score (2-3 sentences)
+- FOR EACH CATEGORY, include a "How to Improve" section with 3-5 SPECIFIC, ACTIONABLE steps that the user can actually implement ON OUR PLATFORM
+
+5. POLICIES & DOCUMENTATION CATEGORY:
    Current Policies: ${policiesData.completed}/${policiesData.total} completed (${policiesData.score}%)
-   - Evaluate the completeness of their policy documentation
-   - Consider which essential policies are missing
-   - Provide specific recommendations for policy development
+   - Evaluate based on their actual policy completion status
+   - Recommend SPECIFIC policies to complete next from our 17-template checklist
+   - Provide platform-specific steps to improve documentation
 
-5. Finally, provide:
+6. Finally, provide:
    - Overall governance score (0-100%)
    - Governance stage
    - Clear recommendation
-   - Actionable improvement suggestions
+   - Actionable improvement suggestions tied to platform features
 
 Input Data:
 ${evaluationData}
@@ -345,22 +374,22 @@ Governance Score: [score]%
 ### Category Breakdown:
 ### 1. [Category Name]
 **Score:** [score]/[max]
-**Rationale:** [2-3 sentence explanation]
+**Rationale:** [2-3 sentence explanation based on actual data]
 **How to Improve:** 
-• [Specific action 1 with timeline]
-• [Specific action 2 with measurable goal]
-• [Specific action 3 with concrete steps]
+• [Specific platform action 1 with exact navigation path]
+• [Specific platform action 2 with measurable goal]
+• [Specific platform action 3 using our templates/tools]
 
 ### 2. Policies & Documentation
 **Score:** [evaluate 0-100 based on policy completeness]
-**Rationale:** [2-3 sentence explanation focusing on their ${policiesData.score}% completion rate]
+**Rationale:** [2-3 sentence explanation focusing on their ${policiesData.score}% completion rate and which specific policies are missing]
 **How to Improve:** 
-• [Specific action 1 - prioritize missing essential policies]
-• [Specific action 2 - implementation timeline]
-• [Specific action 3 - documentation improvement]
+• [Complete [specific missing policy] in Legal Compliance → Compliance Checklist]
+• [Use our [template name] generator for [document type]]
+• [Set up automated reminders for policy reviews in Compliance Calendar]
 
 ### Overall Assessment
-**Final Analysis:** [Brief overall assessment with key recommendations]`;
+**Final Analysis:** [Brief overall assessment with key platform-specific recommendations]`;
 
       const result = await sendMessageToChatGPT(prompt);
       const parsed = parseAiEvaluation(result);
