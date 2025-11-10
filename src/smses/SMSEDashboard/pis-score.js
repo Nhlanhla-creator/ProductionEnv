@@ -1162,28 +1162,7 @@ Governance Score: [score]%
                     </div>
 
                     {/* Governance Stages */}
-                    <div style={{
-                      backgroundColor: "#efebe9",
-                      padding: "16px",
-                      borderRadius: "8px",
-                      marginBottom: "0",
-                      borderLeft: "4px solid #8d6e63"
-                    }}>
-                      <p style={{ fontWeight: "bold", marginBottom: "12px", color: "#6d4c41", fontSize: "15px" }}>
-                        Governance Stages:
-                      </p>
-                      <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037", lineHeight: "1.8" }}>
-                        <li style={{ marginBottom: "8px" }}>
-                          <strong>PIS &lt; 100:</strong> Advisors Stage - light governance structures suitable for smaller operations
-                        </li>
-                        <li style={{ marginBottom: "8px" }}>
-                          <strong>PIS 100-349:</strong> Emerging Board Stage - informal board recommended for growing businesses
-                        </li>
-                        <li style={{ marginBottom: "0" }}>
-                          <strong>PIS ≥ 350:</strong> Full Board Stage - formal board strongly recommended for complex operations
-                        </li>
-                      </ul>
-                    </div>
+                   
                   </div>
                 )}
               </div>
