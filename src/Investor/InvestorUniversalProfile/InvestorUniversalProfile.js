@@ -18,7 +18,7 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
 import { auth, db, storage } from "../../firebaseConfig"
 import { useNavigate } from "react-router-dom"
 
-import { documentsList } from "./documentsconfig"
+import { documentsList } from "./DocumentUpload"
 
 const sections = [
   { id: "instructions", label: "Instructions" },
@@ -279,7 +279,7 @@ export default function UniversalProfile() {
     fundManageOverview: false,
     generalInvestmentPreference: false,
     contactDetails: false,
-    legalCompliance: false,
+    // legalCompliance: false,
     fundDetails: false,
     applicationBrief: false,
     documentUpload: false,
