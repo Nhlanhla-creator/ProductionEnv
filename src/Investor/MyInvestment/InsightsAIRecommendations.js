@@ -1,11 +1,28 @@
 // tabs/InsightsAIRecommendations.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FiEye, FiArrowUp, FiAlertTriangle } from 'react-icons/fi';
+import { Loader } from 'lucide-react';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { db, auth } from '../../firebaseConfig';
 
 // Styles for InsightsAIRecommendations
 const styles = `
 .insights-ai {
   width: 100%;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  gap: 16px;
+}
+
+.loading-text {
+  color: #7d5a50;
+  font-size: 16px;
 }
 
 .time-view-controls {
@@ -342,6 +359,28 @@ const styles = `
   margin-top: 20px;
 }
 
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #7d5a50;
+  text-align: center;
+  padding: 20px;
+}
+
+.empty-state-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.empty-state-text {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 /* Responsive Design */
 @media (max-width: 992px) {
   .insights-charts-grid {
@@ -396,6 +435,10 @@ const styles = `
     font-size: 10px;
   }
 }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 `;
 
 // Add styles to document
@@ -405,6 +448,283 @@ document.head.appendChild(styleSheet);
 
 const InsightsAIRecommendations = ({ openPopup }) => {
   const [portfolioTrendView, setPortfolioTrendView] = useState('Quarterly');
+  const [loading, setLoading] = useState(true);
+  const [insightsData, setInsightsData] = useState({
+    topPerformers: [],
+    atRiskSMEs: [],
+    trendAlerts: []
+  });
+
+  useEffect(() => {
+    fetchInsightsData();
+  }, [portfolioTrendView]);
+
+  const fetchInsightsData = async () => {
+    try {
+      setLoading(true);
+      const currentUser = auth.currentUser;
+      
+      if (!currentUser) {
+        console.log("No authenticated user");
+        setLoading(false);
+        return;
+      }
+
+      // Fetch all investor's applications (all stages)
+      const applicationsQuery = query(
+        collection(db, "investorApplications"),
+        where("funderId", "==", currentUser.uid)
+      );
+
+      const applicationsSnapshot = await getDocs(applicationsQuery);
+      console.log("Found applications:", applicationsSnapshot.docs.length);
+
+      // Process all applications to get SME data
+      const smeDataPromises = applicationsSnapshot.docs.map(async (appDoc) => {
+        const appData = appDoc.data();
+        
+        try {
+          let profileData = {};
+          let bigScore = 0;
+
+          // Fetch SME profile
+          if (appData.smeId) {
+            const profileRef = doc(db, "universalProfiles", appData.smeId);
+            const profileSnap = await getDoc(profileRef);
+
+            if (profileSnap.exists()) {
+              profileData = profileSnap.data();
+              bigScore = profileData.bigScore || 0;
+            }
+          }
+
+          const smeName =
+            profileData.entityOverview?.tradingName ||
+            profileData.entityOverview?.registeredName ||
+            appData.companyName ||
+            appData.smeName ||
+            "Unnamed Business";
+
+          const dealAmount = appData.fundingDetails?.amountApproved || appData.fundingRequired || 0;
+          const pipelineStage = appData.pipelineStage || "Application";
+          
+          // Calculate days since last update
+          const lastUpdate = appData.updatedAt ? new Date(appData.updatedAt) : new Date(appData.createdAt);
+          const daysSinceUpdate = Math.floor((new Date() - lastUpdate) / (1000 * 60 * 60 * 24));
+
+          return {
+            id: appDoc.id,
+            smeId: appData.smeId || appData.userId,
+            smeName,
+            dealAmount,
+            bigScore,
+            pipelineStage,
+            sector: profileData.entityOverview?.economicSectors?.[0] || "Not specified",
+            location: profileData.entityOverview?.location || "Not specified",
+            createdAt: appData.createdAt,
+            updatedAt: appData.updatedAt,
+            daysSinceUpdate,
+            status: appData.status,
+            fundingDetails: appData.fundingDetails || {},
+            // Risk indicators
+            missedReports: daysSinceUpdate > 90 ? Math.floor(daysSinceUpdate / 45) : 0,
+            isStagnant: daysSinceUpdate > 180,
+            isDeclined: pipelineStage?.toLowerCase().includes('decline'),
+            profileData
+          };
+        } catch (error) {
+          console.error("Error processing SME:", error);
+          return null;
+        }
+      });
+
+      const allSMEData = (await Promise.all(smeDataPromises)).filter(sme => sme !== null);
+      console.log("Processed SME data:", allSMEData.length);
+
+      // Calculate insights
+      const insights = calculateInsights(allSMEData);
+      setInsightsData(insights);
+
+      setLoading(false);
+    } catch (error) {
+      console.error("Error fetching insights data:", error);
+      setLoading(false);
+    }
+  };
+
+  const calculateInsights = (smeData) => {
+    // 1. Top 5 High Performers (based on BIG Score and deal progress)
+    const activeDeals = smeData.filter(sme => 
+      !sme.isDeclined && 
+      sme.pipelineStage !== "withdrawn"
+    );
+
+    const topPerformers = [...activeDeals]
+      .sort((a, b) => {
+        // Sort by BIG Score first, then by deal amount
+        if (b.bigScore !== a.bigScore) {
+          return b.bigScore - a.bigScore;
+        }
+        const amountA = parseFloat(String(a.dealAmount).replace(/[^0-9.]/g, '')) || 0;
+        const amountB = parseFloat(String(b.dealAmount).replace(/[^0-9.]/g, '')) || 0;
+        return amountB - amountA;
+      })
+      .slice(0, 5)
+      .map(sme => {
+        const amount = parseFloat(String(sme.dealAmount).replace(/[^0-9.]/g, '')) || 0;
+        
+        return {
+          smeName: sme.smeName,
+          score: sme.bigScore || 0,
+          growth: calculateGrowthPercentage(sme),
+          ask: formatCurrency(amount),
+          reason: getPerformanceReason(sme)
+        };
+      });
+
+    // 2. At-Risk / Watchlist SMEs
+    const atRiskSMEs = smeData
+      .filter(sme => {
+        // Identify at-risk SMEs based on various criteria
+        return (
+          sme.missedReports > 0 ||
+          sme.isStagnant ||
+          sme.bigScore < 50 ||
+          (sme.pipelineStage === "Under Review" && sme.daysSinceUpdate > 60) ||
+          (sme.pipelineStage === "Due Diligence" && sme.daysSinceUpdate > 90)
+        );
+      })
+      .slice(0, 5)
+      .map(sme => ({
+        smeName: sme.smeName,
+        riskFlag: getRiskFlag(sme),
+        action: getRecommendedAction(sme)
+      }));
+
+    // 3. Portfolio Trend Alerts
+    const trendAlerts = calculateTrendAlerts(smeData);
+
+    return {
+      topPerformers,
+      atRiskSMEs,
+      trendAlerts
+    };
+  };
+
+  const calculateGrowthPercentage = (sme) => {
+    // Calculate growth based on pipeline progression
+    const stageWeights = {
+      'application': 20,
+      'under review': 40,
+      'due diligence': 60,
+      'funding approved': 80,
+      'termsheet': 90,
+      'deal complete': 100
+    };
+
+    const currentWeight = stageWeights[sme.pipelineStage?.toLowerCase()] || 0;
+    const timeBonus = Math.min(sme.daysSinceUpdate < 30 ? 10 : 0, 10);
+    const scoreBonus = Math.min(Math.floor(sme.bigScore / 10), 10);
+
+    return Math.min(currentWeight + timeBonus + scoreBonus - 20, 99);
+  };
+
+  const getPerformanceReason = (sme) => {
+    if (sme.bigScore >= 80) return "Excellent fundability score";
+    if (sme.bigScore >= 70) return "Strong growth potential";
+    if (sme.pipelineStage === "Deal Complete") return "Successfully closed deal";
+    if (sme.pipelineStage === "Funding Approved") return "Approved for funding";
+    if (sme.sector?.toLowerCase().includes("tech")) return "High-growth sector";
+    return "Promising opportunity";
+  };
+
+  const getRiskFlag = (sme) => {
+    if (sme.missedReports >= 2) return `Missed ${sme.missedReports} reports`;
+    if (sme.isStagnant) return "Pipeline stagnation (>6mo)";
+    if (sme.bigScore < 40) return "Low fundability score";
+    if (sme.bigScore < 50) return "Below target score";
+    if (sme.daysSinceUpdate > 90) return "No recent updates";
+    return "Requires attention";
+  };
+
+  const getRecommendedAction = (sme) => {
+    if (sme.missedReports >= 2) return "Follow up immediately";
+    if (sme.isStagnant) return "Review and decide";
+    if (sme.bigScore < 40) return "Request improvements";
+    if (sme.bigScore < 50) return "Monitor progress";
+    if (sme.daysSinceUpdate > 90) return "Request status update";
+    return "Schedule review";
+  };
+
+  const calculateTrendAlerts = (smeData) => {
+    const totalSMEs = smeData.length;
+    if (totalSMEs === 0) {
+      return [
+        {
+          title: "Portfolio Status",
+          value: "No Data",
+          description: "Start building your portfolio",
+          isPositive: true
+        }
+      ];
+    }
+
+    // Calculate various metrics
+    const declined = smeData.filter(sme => sme.isDeclined).length;
+    const declineRate = ((declined / totalSMEs) * 100).toFixed(1);
+
+    const avgBigScore = (smeData.reduce((sum, sme) => sum + (sme.bigScore || 0), 0) / totalSMEs).toFixed(1);
+    const highScorers = smeData.filter(sme => sme.bigScore >= 70).length;
+    const scoreImprovement = ((highScorers / totalSMEs) * 100).toFixed(1);
+
+    const stagnantCount = smeData.filter(sme => sme.isStagnant).length;
+    const activeDeals = smeData.filter(sme => 
+      sme.pipelineStage === "Under Review" || 
+      sme.pipelineStage === "Due Diligence" ||
+      sme.pipelineStage === "Funding Approved"
+    ).length;
+
+    const completedDeals = smeData.filter(sme => 
+      sme.pipelineStage === "Deal Complete"
+    ).length;
+    const successRate = totalSMEs > 0 ? ((completedDeals / totalSMEs) * 100).toFixed(1) : 0;
+
+    return [
+      {
+        title: "Decline Rate",
+        value: `${declineRate}%`,
+        description: declined > 0 ? `${declined} applications declined` : "No declines in portfolio",
+        isPositive: parseFloat(declineRate) < 15
+      },
+      {
+        title: "Avg BIG Score",
+        value: avgBigScore,
+        description: `${scoreImprovement}% of portfolio above 70`,
+        isPositive: parseFloat(avgBigScore) >= 60
+      },
+      {
+        title: "Pipeline Activity",
+        value: `${activeDeals} active`,
+        description: stagnantCount > 0 ? `${stagnantCount} SMEs stagnant` : "All deals progressing",
+        isPositive: stagnantCount === 0
+      },
+      {
+        title: "Success Rate",
+        value: `${successRate}%`,
+        description: `${completedDeals} deals successfully closed`,
+        isPositive: parseFloat(successRate) >= 20
+      }
+    ];
+  };
+
+  const formatCurrency = (amount) => {
+    if (!amount || amount === 0) return "Not specified";
+    const numAmount = parseFloat(String(amount).replace(/[^0-9.]/g, '')) || 0;
+    if (numAmount >= 1000000) {
+      return `R${(numAmount / 1000000).toFixed(1)}m`;
+    }
+    return `R${numAmount.toLocaleString()}`;
+  };
 
   // Time View Selector Component
   const TimeViewSelector = ({ currentView, onViewChange, views = ['Monthly', 'Quarterly', 'Yearly'] }) => (
@@ -423,7 +743,7 @@ const InsightsAIRecommendations = ({ openPopup }) => {
   );
 
   // Trend Alert Card Component
-  const TrendAlertCard = ({ title, value, description, trend, isPositive = true }) => (
+  const TrendAlertCard = ({ title, value, description, isPositive = true }) => (
     <div className={`trend-alert-card ${isPositive ? 'positive' : 'negative'}`}>
       <div className="trend-alert-header">
         <div className="trend-alert-title">{title}</div>
@@ -436,6 +756,17 @@ const InsightsAIRecommendations = ({ openPopup }) => {
     </div>
   );
 
+  if (loading) {
+    return (
+      <div className="insights-ai">
+        <div className="loading-container">
+          <Loader size={48} style={{ color: "#a67c52", animation: "spin 1s linear infinite" }} />
+          <p className="loading-text">Loading portfolio insights...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="insights-ai">
       <div className="time-view-controls">
@@ -446,67 +777,51 @@ const InsightsAIRecommendations = ({ openPopup }) => {
       </div>
       
       <div className="insights-charts-grid">
+        {/* Top 5 High Performers */}
         <div className="chart-container full-width">
           <div className="chart-header">
-            <h3 className="chart-title">Top 5 High-Performers</h3>
+            <h3 className="chart-title">Top 5 High-Performers in Your Portfolio</h3>
             <button 
               className="breakdown-icon-btn"
               onClick={() => openPopup(
                 <div className="popup-content">
                   <h3>Top 5 High-Performers</h3>
                   <div className="popup-description">
-                    SMEs showing exceptional performance and growth potential
+                    SMEs in your portfolio showing exceptional performance and strong fundability scores
                   </div>
-                  <div className="table-container-popup">
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>SME</th>
-                          <th>Score</th>
-                          <th>Growth %</th>
-                          <th>Ask</th>
-                          <th>Reason</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <td>FemmeTech Labs</td>
-                          <td>88</td>
-                          <td>+32%</td>
-                          <td>R15m</td>
-                          <td>Market leader in sector</td>
-                        </tr>
-                        <tr>
-                          <td>Green Agro</td>
-                          <td>85</td>
-                          <td>+28%</td>
-                          <td>R8m</td>
-                          <td>Sustainable practices</td>
-                        </tr>
-                        <tr>
-                          <td>Tech Innovate</td>
-                          <td>87</td>
-                          <td>+45%</td>
-                          <td>R12m</td>
-                          <td>High growth potential</td>
-                        </tr>
-                        <tr>
-                          <td>Urban Solutions</td>
-                          <td>82</td>
-                          <td>+25%</td>
-                          <td>R6m</td>
-                          <td>Strong management</td>
-                        </tr>
-                        <tr>
-                          <td>EduTech SA</td>
-                          <td>84</td>
-                          <td>+38%</td>
-                          <td>R10m</td>
-                          <td>Social impact focus</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
+                  {insightsData.topPerformers.length > 0 ? (
+                    <div className="table-container-popup">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>SME</th>
+                            <th>BIG Score</th>
+                            <th>Progress</th>
+                            <th>Investment</th>
+                            <th>Reason</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {insightsData.topPerformers.map((performer, idx) => (
+                            <tr key={idx}>
+                              <td>{performer.smeName}</td>
+                              <td>{performer.score}</td>
+                              <td>+{performer.growth}%</td>
+                              <td>{performer.ask}</td>
+                              <td>{performer.reason}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="empty-state">
+                      <div className="empty-state-icon">📊</div>
+                      <div className="empty-state-text">
+                        No high-performing SMEs in your portfolio yet
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               title="View details"
@@ -515,57 +830,42 @@ const InsightsAIRecommendations = ({ openPopup }) => {
             </button>
           </div>
           <div className="table-container">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>SME</th>
-                  <th>Score</th>
-                  <th>Growth %</th>
-                  <th>Ask</th>
-                  <th>Reason</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>FemmeTech Labs</td>
-                  <td>88</td>
-                  <td>+32%</td>
-                  <td>R15m</td>
-                  <td>Market leader in sector</td>
-                </tr>
-                <tr>
-                  <td>Green Agro</td>
-                  <td>85</td>
-                  <td>+28%</td>
-                  <td>R8m</td>
-                  <td>Sustainable practices</td>
-                </tr>
-                <tr>
-                  <td>Tech Innovate</td>
-                  <td>87</td>
-                  <td>+45%</td>
-                  <td>R12m</td>
-                  <td>High growth potential</td>
-                </tr>
-                <tr>
-                  <td>Urban Solutions</td>
-                  <td>82</td>
-                  <td>+25%</td>
-                  <td>R6m</td>
-                  <td>Strong management</td>
-                </tr>
-                <tr>
-                  <td>EduTech SA</td>
-                  <td>84</td>
-                  <td>+38%</td>
-                  <td>R10m</td>
-                  <td>Social impact focus</td>
-                </tr>
-              </tbody>
-            </table>
+            {insightsData.topPerformers.length > 0 ? (
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>SME</th>
+                    <th>BIG Score</th>
+                    <th>Progress</th>
+                    <th>Investment</th>
+                    <th>Reason</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {insightsData.topPerformers.map((performer, idx) => (
+                    <tr key={idx}>
+                      <td>{performer.smeName}</td>
+                      <td>{performer.score}</td>
+                      <td style={{ color: '#4CAF50', fontWeight: '600' }}>+{performer.growth}%</td>
+                      <td>{performer.ask}</td>
+                      <td>{performer.reason}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="empty-state">
+                <div className="empty-state-icon">📊</div>
+                <div className="empty-state-text">
+                  No high-performing SMEs in your portfolio yet.<br/>
+                  As you invest in more companies, top performers will appear here.
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
+        {/* At-Risk / Watchlist SMEs */}
         <div className="chart-container full-width">
           <div className="chart-header">
             <h3 className="chart-title">At-Risk / Watchlist SMEs</h3>
@@ -575,41 +875,37 @@ const InsightsAIRecommendations = ({ openPopup }) => {
                 <div className="popup-content">
                   <h3>At-Risk / Watchlist SMEs</h3>
                   <div className="popup-description">
-                    SMEs requiring attention due to performance or compliance issues
+                    SMEs in your portfolio requiring attention due to performance or activity concerns
                   </div>
-                  <div className="table-container-popup">
-                    <table className="data-table risk-table">
-                      <thead>
-                        <tr>
-                          <th>SME</th>
-                          <th>Risk Flag</th>
-                          <th>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <td>Coastal Retail</td>
-                          <td>Missed 2 reports</td>
-                          <td>Follow up required</td>
-                        </tr>
-                        <tr>
-                          <td>Manufacturing Co</td>
-                          <td>Revenue decline</td>
-                          <td>Performance review</td>
-                        </tr>
-                        <tr>
-                          <td>Service Provider</td>
-                          <td>Compliance issues</td>
-                          <td>Audit needed</td>
-                        </tr>
-                        <tr>
-                          <td>Urban Solutions</td>
-                          <td>Market volatility</td>
-                          <td>Monitor closely</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
+                  {insightsData.atRiskSMEs.length > 0 ? (
+                    <div className="table-container-popup">
+                      <table className="data-table risk-table">
+                        <thead>
+                          <tr>
+                            <th>SME</th>
+                            <th>Risk Flag</th>
+                            <th>Recommended Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {insightsData.atRiskSMEs.map((sme, idx) => (
+                            <tr key={idx}>
+                              <td>{sme.smeName}</td>
+                              <td>{sme.riskFlag}</td>
+                              <td>{sme.action}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="empty-state">
+                      <div className="empty-state-icon">✅</div>
+                      <div className="empty-state-text">
+                        No at-risk SMEs detected. Your portfolio is healthy!
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               title="View details"
@@ -618,40 +914,38 @@ const InsightsAIRecommendations = ({ openPopup }) => {
             </button>
           </div>
           <div className="table-container">
-            <table className="data-table risk-table">
-              <thead>
-                <tr>
-                  <th>SME</th>
-                  <th>Risk Flag</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>Coastal Retail</td>
-                  <td>Missed 2 reports</td>
-                  <td>Follow up required</td>
-                </tr>
-                <tr>
-                  <td>Manufacturing Co</td>
-                  <td>Revenue decline</td>
-                  <td>Performance review</td>
-                </tr>
-                <tr>
-                  <td>Service Provider</td>
-                  <td>Compliance issues</td>
-                  <td>Audit needed</td>
-                </tr>
-                <tr>
-                  <td>Urban Solutions</td>
-                  <td>Market volatility</td>
-                  <td>Monitor closely</td>
-                </tr>
-              </tbody>
-            </table>
+            {insightsData.atRiskSMEs.length > 0 ? (
+              <table className="data-table risk-table">
+                <thead>
+                  <tr>
+                    <th>SME</th>
+                    <th>Risk Flag</th>
+                    <th>Recommended Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {insightsData.atRiskSMEs.map((sme, idx) => (
+                    <tr key={idx}>
+                      <td>{sme.smeName}</td>
+                      <td style={{ color: '#f44336', fontWeight: '600' }}>{sme.riskFlag}</td>
+                      <td>{sme.action}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="empty-state">
+                <div className="empty-state-icon">✅</div>
+                <div className="empty-state-text">
+                  No at-risk SMEs detected in your portfolio.<br/>
+                  All companies are performing within acceptable parameters.
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
+        {/* Portfolio Trend Alerts */}
         <div className="chart-container full-width">
           <div className="chart-header">
             <h3 className="chart-title">Portfolio Trend Alerts</h3>
@@ -661,37 +955,18 @@ const InsightsAIRecommendations = ({ openPopup }) => {
                 <div className="popup-content">
                   <h3>Portfolio Trend Alerts</h3>
                   <div className="popup-description">
-                    Key performance indicators and trend analysis across the portfolio
+                    Key performance indicators and trend analysis across your portfolio
                   </div>
                   <div className="trend-alerts-grid-popup">
-                    <TrendAlertCard 
-                      title="Defaults" 
-                      value="↓ to 4.2%" 
-                      description="Significant improvement in portfolio health"
-                      trend="down"
-                      isPositive={true}
-                    />
-                    <TrendAlertCard 
-                      title="ESG Scores" 
-                      value="↑ 5.6%" 
-                      description="Improved environmental performance"
-                      trend="up"
-                      isPositive={true}
-                    />
-                    <TrendAlertCard 
-                      title="Pipeline Aging" 
-                      value="10 SMEs >6mo" 
-                      description="Increased pipeline stagnation risk"
-                      trend="up"
-                      isPositive={false}
-                    />
-                    <TrendAlertCard 
-                      title="Revenue Growth" 
-                      value="↑ 12%" 
-                      description="Strong quarter-over-quarter performance"
-                      trend="up"
-                      isPositive={true}
-                    />
+                    {insightsData.trendAlerts.map((alert, idx) => (
+                      <TrendAlertCard 
+                        key={idx}
+                        title={alert.title}
+                        value={alert.value}
+                        description={alert.description}
+                        isPositive={alert.isPositive}
+                      />
+                    ))}
                   </div>
                 </div>
               )}
@@ -701,34 +976,15 @@ const InsightsAIRecommendations = ({ openPopup }) => {
             </button>
           </div>
           <div className="trend-alerts-grid">
-            <TrendAlertCard 
-              title="Defaults" 
-              value="↓ to 4.2%" 
-              description="Significant improvement in portfolio health"
-              trend="down"
-              isPositive={true}
-            />
-            <TrendAlertCard 
-              title="ESG Scores" 
-              value="↑ 5.6%" 
-              description="Improved environmental performance"
-              trend="up"
-              isPositive={true}
-            />
-            <TrendAlertCard 
-              title="Pipeline Aging" 
-              value="10 SMEs >6mo" 
-              description="Increased pipeline stagnation risk"
-              trend="up"
-              isPositive={false}
-            />
-            <TrendAlertCard 
-              title="Revenue Growth" 
-              value="↑ 12%" 
-              description="Strong quarter-over-quarter performance"
-              trend="up"
-              isPositive={true}
-            />
+            {insightsData.trendAlerts.map((alert, idx) => (
+              <TrendAlertCard 
+                key={idx}
+                title={alert.title}
+                value={alert.value}
+                description={alert.description}
+                isPositive={alert.isPositive}
+              />
+            ))}
           </div>
         </div>
       </div>

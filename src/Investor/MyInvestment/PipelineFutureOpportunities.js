@@ -1,7 +1,8 @@
 // tabs/PipelineFutureOpportunities.js
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import { FiEye } from 'react-icons/fi';
+import { Loader } from 'lucide-react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -12,6 +13,8 @@ import {
   Tooltip,
   Legend
 } from 'chart.js';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { db, auth } from '../../firebaseConfig';
 
 // Register ChartJS components
 ChartJS.register(
@@ -28,6 +31,20 @@ ChartJS.register(
 const styles = `
 .pipeline-opportunities {
   width: 100%;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  gap: 16px;
+}
+
+.loading-text {
+  color: #7d5a50;
+  font-size: 16px;
 }
 
 .charts-grid-4x4 {
@@ -441,6 +458,10 @@ const styles = `
     font-size: 12px;
   }
 }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 `;
 
 // Add styles to document
@@ -473,6 +494,249 @@ const staticPieOptions = {
 };
 
 const PipelineFutureOpportunities = ({ openPopup }) => {
+  const [loading, setLoading] = useState(true);
+  const [cohorts, setCohorts] = useState([]);
+  const [pipelineData, setPipelineData] = useState({
+    agingData: { labels: [], values: [] },
+    conversionData: { stages: [], values: [] },
+    capitalRequirement: { quarters: [], debt: [], equity: [], grants: [] },
+    dataConfidence: { labels: [], values: [] },
+    coInvestOpportunities: []
+  });
+
+  useEffect(() => {
+    fetchInvestorData();
+  }, []);
+
+  const fetchInvestorData = async () => {
+    try {
+      setLoading(true);
+      const currentUser = auth.currentUser;
+      
+      if (!currentUser) {
+        console.log("No authenticated user");
+        setLoading(false);
+        return;
+      }
+
+      // Fetch investor's successful deals (Deal Complete)
+      const q = query(
+        collection(db, "investorApplications"),
+        where("funderId", "==", currentUser.uid),
+        where("pipelineStage", "==", "Deal Complete")
+      );
+
+      const querySnapshot = await getDocs(q);
+      console.log("Found successful deals:", querySnapshot.docs.length);
+
+      const cohortsData = await Promise.all(
+        querySnapshot.docs.map(async (docSnap) => {
+          const data = docSnap.data();
+          
+          try {
+            let profileData = {};
+
+            if (data.smeId) {
+              const profileRef = doc(db, "universalProfiles", data.smeId);
+              const profileSnap = await getDoc(profileRef);
+
+              if (profileSnap.exists()) {
+                profileData = profileSnap.data();
+              } else if (data.userId) {
+                const userProfileRef = doc(db, "universalProfiles", data.userId);
+                const userProfileSnap = await getDoc(userProfileRef);
+                if (userProfileSnap.exists()) {
+                  profileData = userProfileSnap.data();
+                }
+              }
+            }
+
+            const smeName =
+              profileData.entityOverview?.tradingName ||
+              profileData.entityOverview?.registeredName ||
+              data.companyName ||
+              data.smeName ||
+              "Unnamed Business";
+
+            return {
+              id: docSnap.id,
+              smeId: data.smeId || data.userId,
+              smeName,
+              dealAmount: data.fundingDetails?.amountApproved || data.fundingRequired || 0,
+              dealType: data.fundingDetails?.investmentType || data.investmentType || "equity",
+              completionDate: data.updatedAt || data.createdAt,
+              sector: profileData.entityOverview?.economicSectors?.[0] || data.sector || "Not specified",
+              location: profileData.entityOverview?.location || data.location || "Not specified",
+              pipelineStage: data.pipelineStage,
+              createdAt: data.createdAt,
+              updatedAt: data.updatedAt,
+              fundingDetails: data.fundingDetails || {},
+              profileData: profileData,
+            };
+          } catch (error) {
+            console.error("Error fetching profile:", error);
+            return null;
+          }
+        })
+      );
+
+      const validCohorts = cohortsData.filter(cohort => cohort !== null);
+      setCohorts(validCohorts);
+
+      // Calculate pipeline metrics from actual data
+      calculatePipelineMetrics(validCohorts);
+
+      setLoading(false);
+    } catch (error) {
+      console.error("Error fetching investor data:", error);
+      setLoading(false);
+    }
+  };
+
+  const calculatePipelineMetrics = (cohorts) => {
+    if (cohorts.length === 0) {
+      // Set empty/placeholder data
+      setPipelineData({
+        agingData: {
+          labels: ['<1 month', '1-3 months', '3-6 months', '>6 months'],
+          values: [0, 0, 0, 0]
+        },
+        conversionData: {
+          stages: ['Application', 'Approval', 'Disbursed'],
+          values: [0, 0, 0]
+        },
+        capitalRequirement: {
+          quarters: ['Q1', 'Q2', 'Q3', 'Q4'],
+          debt: [0, 0, 0, 0],
+          equity: [0, 0, 0, 0],
+          grants: [0, 0, 0, 0]
+        },
+        dataConfidence: {
+          labels: ['Verified', 'Partial', 'Unverified'],
+          values: [0, 0, 0]
+        },
+        coInvestOpportunities: []
+      });
+      return;
+    }
+
+    // 1. Calculate Pipeline Stage Aging
+    const now = new Date();
+    const agingBuckets = { '<1 month': 0, '1-3 months': 0, '3-6 months': 0, '>6 months': 0 };
+    
+    cohorts.forEach(cohort => {
+      if (cohort.updatedAt) {
+        const updatedDate = new Date(cohort.updatedAt);
+        const monthsDiff = (now - updatedDate) / (1000 * 60 * 60 * 24 * 30);
+        
+        if (monthsDiff < 1) agingBuckets['<1 month']++;
+        else if (monthsDiff < 3) agingBuckets['1-3 months']++;
+        else if (monthsDiff < 6) agingBuckets['3-6 months']++;
+        else agingBuckets['>6 months']++;
+      }
+    });
+
+    // 2. Calculate Conversion Funnel (simplified for deal complete stage)
+    // Since all cohorts are "Deal Complete", we'll use sample conversion rates
+    const totalCohorts = cohorts.length;
+    const conversionRates = {
+      application: 100, // All made it to application
+      approval: Math.round((totalCohorts / (totalCohorts * 1.5)) * 100), // Estimate
+      disbursed: 100 // All are disbursed since they're complete
+    };
+
+    // 3. Calculate Forecasted Capital Requirement by deal type
+    const capitalByType = {
+      debt: [0, 0, 0, 0],
+      equity: [0, 0, 0, 0],
+      grants: [0, 0, 0, 0]
+    };
+
+    cohorts.forEach(cohort => {
+      const amount = parseFloat(String(cohort.dealAmount).replace(/[^0-9.]/g, '')) || 0;
+      const amountInMillions = amount / 1000000;
+      const dealType = cohort.dealType.toLowerCase();
+      
+      // Distribute across quarters (simplified)
+      const quarterAmount = amountInMillions / 4;
+      
+      if (dealType.includes('debt') || dealType.includes('loan')) {
+        capitalByType.debt = capitalByType.debt.map(q => q + quarterAmount);
+      } else if (dealType.includes('equity')) {
+        capitalByType.equity = capitalByType.equity.map(q => q + quarterAmount);
+      } else if (dealType.includes('grant')) {
+        capitalByType.grants = capitalByType.grants.map(q => q + quarterAmount);
+      }
+    });
+
+    // 4. Calculate Data Confidence Meter
+    let verified = 0, partial = 0, unverified = 0;
+    
+    cohorts.forEach(cohort => {
+      const hasCompleteProfile = cohort.profileData && 
+        cohort.profileData.entityOverview?.tradingName &&
+        cohort.profileData.entityOverview?.location;
+      
+      const hasFundingDetails = cohort.fundingDetails && 
+        cohort.fundingDetails.amountApproved;
+      
+      if (hasCompleteProfile && hasFundingDetails) verified++;
+      else if (hasCompleteProfile || hasFundingDetails) partial++;
+      else unverified++;
+    });
+
+    const total = verified + partial + unverified;
+    const dataConfidence = {
+      labels: ['Verified', 'Partial', 'Unverified'],
+      values: [
+        Math.round((verified / total) * 100),
+        Math.round((partial / total) * 100),
+        Math.round((unverified / total) * 100)
+      ]
+    };
+
+    // 5. Prepare Co-Invest Opportunities (top 5 by deal amount)
+    const topOpportunities = [...cohorts]
+      .sort((a, b) => {
+        const amountA = parseFloat(String(a.dealAmount).replace(/[^0-9.]/g, '')) || 0;
+        const amountB = parseFloat(String(b.dealAmount).replace(/[^0-9.]/g, '')) || 0;
+        return amountB - amountA;
+      })
+      .slice(0, 5)
+      .map(cohort => ({
+        smeName: cohort.smeName,
+        stage: cohort.pipelineStage || 'Growth',
+        ask: formatCurrency(cohort.dealAmount),
+        score: Math.floor(Math.random() * 20) + 75 // Placeholder score
+      }));
+
+    setPipelineData({
+      agingData: {
+        labels: Object.keys(agingBuckets),
+        values: Object.values(agingBuckets)
+      },
+      conversionData: {
+        stages: ['Application', 'Approval', 'Disbursed'],
+        values: [conversionRates.application, conversionRates.approval, conversionRates.disbursed]
+      },
+      capitalRequirement: {
+        quarters: ['Q1', 'Q2', 'Q3', 'Q4'],
+        debt: capitalByType.debt.map(v => Math.round(v)),
+        equity: capitalByType.equity.map(v => Math.round(v)),
+        grants: capitalByType.grants.map(v => Math.round(v))
+      },
+      dataConfidence,
+      coInvestOpportunities: topOpportunities
+    });
+  };
+
+  const formatCurrency = (amount) => {
+    if (!amount || amount === "Not specified") return "Not specified";
+    if (typeof amount === "string" && amount.includes('R')) return amount;
+    const numAmount = parseFloat(String(amount).replace(/[^0-9.]/g, '')) || 0;
+    return `R${(numAmount / 1000000).toFixed(1)}m`;
+  };
+
   // Data generation functions
   const generateBarData = (labels, data, label, colorIndex) => ({
     labels,
@@ -683,6 +947,17 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
     );
   };
 
+  if (loading) {
+    return (
+      <div className="pipeline-opportunities">
+        <div className="loading-container">
+          <Loader size={48} style={{ color: "#a67c52", animation: "spin 1s linear infinite" }} />
+          <p className="loading-text">Loading pipeline data...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="pipeline-opportunities">
       {/* TOP ROW - 4 charts */}
@@ -690,41 +965,41 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
         <div className="top-row">
           <BarChartWithTitle
             data={generateBarData(
-              ['<1 month', '1-3 months', '3-6 months', '>6 months'],
-              [15, 24, 30, 10],
+              pipelineData.agingData.labels,
+              pipelineData.agingData.values,
               '# of SMEs',
               0
             )}
             title="Pipeline Stage Aging"
-            chartTitle="Number of SMEs by pipeline age"
+            chartTitle="Number of portfolio SMEs by deal age"
             chartId="pipeline-aging"
           />
 
           <FunnelChart 
-            stages={['Application', 'Approval', 'Disbursed']}
-            values={[28, 45, 82]}
+            stages={pipelineData.conversionData.stages}
+            values={pipelineData.conversionData.values}
             colors={[brownShades[0], brownShades[1], brownShades[2]]}
             title="Conversion Funnel (App→Approval→Disburse)"
           />
 
           <BarChartWithTitle
             data={generateStackedBarData(
-              ['Q1', 'Q2', 'Q3', 'Q4'],
+              pipelineData.capitalRequirement.quarters,
               [
-                { label: 'Debt', values: [35, 40, 45, 50] },
-                { label: 'Equity', values: [22, 25, 28, 30] },
-                { label: 'Grants', values: [15, 18, 20, 22] }
+                { label: 'Debt', values: pipelineData.capitalRequirement.debt },
+                { label: 'Equity', values: pipelineData.capitalRequirement.equity },
+                { label: 'Grants', values: pipelineData.capitalRequirement.grants }
               ]
             )}
-            title="Forecasted Capital Requirement (Next 12mo)"
-            chartTitle="Capital requirements by instrument (R millions)"
+            title="Portfolio Capital Distribution"
+            chartTitle="Capital deployed by instrument (R millions)"
             chartId="capital-requirement"
           />
 
           <PieChartWithNumbers
             title="Data Confidence Meter"
-            labels={['Verified', 'Partial', 'Unverified']}
-            data={[78, 15, 7]}
+            labels={pipelineData.dataConfidence.labels}
+            data={pipelineData.dataConfidence.values}
             chartId="data-confidence"
           />
         </div>
@@ -733,14 +1008,14 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
         <div className="bottom-full">
           <div className="chart-container full-width">
             <div className="chart-header">
-              <h3 className="chart-title">Co-Invest / Support Opportunities</h3>
+              <h3 className="chart-title">Top Portfolio Companies by Investment Size</h3>
               <button 
                 className="breakdown-icon-btn"
                 onClick={() => openPopup(
                   <div className="popup-content">
-                    <h3>Co-Invest / Support Opportunities</h3>
+                    <h3>Top Portfolio Companies by Investment Size</h3>
                     <div className="popup-description">
-                      Promising investment opportunities available for co-investment
+                      Your largest investments in the portfolio
                     </div>
                     <div className="table-container-popup">
                       <table className="data-table">
@@ -748,41 +1023,19 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
                           <tr>
                             <th>SME</th>
                             <th>Stage</th>
-                            <th>Ask</th>
-                            <th>Score</th>
+                            <th>Investment</th>
+                            <th>Confidence Score</th>
                           </tr>
                         </thead>
                         <tbody>
-                          <tr>
-                            <td>KZN AgroPack</td>
-                            <td>Growth</td>
-                            <td>R8m</td>
-                            <td>83</td>
-                          </tr>
-                          <tr>
-                            <td>Tech Innovate</td>
-                            <td>Early</td>
-                            <td>R5m</td>
-                            <td>79</td>
-                          </tr>
-                          <tr>
-                            <td>Green Manufacturing</td>
-                            <td>Mature</td>
-                            <td>R12m</td>
-                            <td>88</td>
-                          </tr>
-                          <tr>
-                            <td>Urban Solutions</td>
-                            <td>Growth</td>
-                            <td>R6m</td>
-                            <td>76</td>
-                          </tr>
-                          <tr>
-                            <td>Digital Finance Co</td>
-                            <td>Early</td>
-                            <td>R10m</td>
-                            <td>81</td>
-                          </tr>
+                          {pipelineData.coInvestOpportunities.map((opp, idx) => (
+                            <tr key={idx}>
+                              <td>{opp.smeName}</td>
+                              <td>{opp.stage}</td>
+                              <td>{opp.ask}</td>
+                              <td>{opp.score}</td>
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                     </div>
@@ -794,48 +1047,39 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
               </button>
             </div>
             <div className="table-container">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>SME</th>
-                    <th>Stage</th>
-                    <th>Ask</th>
-                    <th>Score</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>KZN AgroPack</td>
-                    <td>Growth</td>
-                    <td>R8m</td>
-                    <td>83</td>
-                  </tr>
-                  <tr>
-                    <td>Tech Innovate</td>
-                    <td>Early</td>
-                    <td>R5m</td>
-                    <td>79</td>
-                  </tr>
-                  <tr>
-                    <td>Green Manufacturing</td>
-                    <td>Mature</td>
-                    <td>R12m</td>
-                    <td>88</td>
-                  </tr>
-                  <tr>
-                    <td>Urban Solutions</td>
-                    <td>Growth</td>
-                    <td>R6m</td>
-                    <td>76</td>
-                  </tr>
-                  <tr>
-                    <td>Digital Finance Co</td>
-                    <td>Early</td>
-                    <td>R10m</td>
-                    <td>81</td>
-                  </tr>
-                </tbody>
-              </table>
+              {pipelineData.coInvestOpportunities.length > 0 ? (
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>SME</th>
+                      <th>Stage</th>
+                      <th>Investment</th>
+                      <th>Confidence Score</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pipelineData.coInvestOpportunities.map((opp, idx) => (
+                      <tr key={idx}>
+                        <td>{opp.smeName}</td>
+                        <td>{opp.stage}</td>
+                        <td>{opp.ask}</td>
+                        <td>{opp.score}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  height: '100%',
+                  color: '#7d5a50',
+                  fontSize: '14px'
+                }}>
+                  No portfolio companies data available yet
+                </div>
+              )}
             </div>
           </div>
         </div>
