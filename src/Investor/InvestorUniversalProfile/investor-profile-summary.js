@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import { ChevronDown, ChevronUp, Edit, Printer, Check, Star, Shield, TrendingUp, User, Mail, Building, Briefcase, FileText, CheckSquare } from 'lucide-react'
 import { createPortal } from 'react-dom'
-
+import {documentsList} from "./DocumentUpload"
 import VerificationScoreCard from './VerificationScoreCard'
 
 const InvestorProfileSummary = ({ data, onEdit }) => {
@@ -17,10 +17,20 @@ const InvestorProfileSummary = ({ data, onEdit }) => {
 
   const toggle = (key) => setExpanded((prev) => ({ ...prev, [key]: !prev[key] }))
 
-  const formatFiles = (files) => {
-    if (!files || !files.length) return "None"
-    return files.map((file) => (typeof file === "string" ? file : file.name)).join(", ")
+const formatFiles = (files) => {
+  if (!files) return "None"
+  
+  // Handle object with file URLs (your current structure)
+  if (typeof files === 'object' && !Array.isArray(files)) {
+    const fileCount = Object.values(files).filter(url => !!url).length
+    return fileCount > 0 ? `${fileCount} file(s) uploaded` : "None"
   }
+  
+  // Handle array of files (previous structure)
+  const filesArray = Array.isArray(files) ? files : []
+  if (!filesArray.length) return "None"
+  return filesArray.map((file) => (typeof file === "string" ? file : file.name)).join(", ")
+}
 
   const formatArray = (arr) => {
     if (!arr || !arr.length) return "None specified"
@@ -37,100 +47,113 @@ const InvestorProfileSummary = ({ data, onEdit }) => {
     // Add your navigation logic here
   }
 
-  const renderDocsStatus = () => {
-    // Use the same documents list as the upload component
-    const documentsList = [
-      { id: 'registrationDocs', label: 'Company Registration Documents', required: true },
-      { id: 'idOffund', label: 'ID of Fund Lead', required: true },
-      { id: 'fundMandate', label: 'Investment Mandate or Programme Brochures', required: true },
-    ]
+const renderDocsStatus = () => {
+  // Use the same documents list as the upload component
+  // const documentsList = [
+  //   { id: 'registrationDocs', label: 'Company Registration Documents', required: true },
+  //   { id: 'idOffund', label: 'ID of Fund Lead', required: true },
+  //   { id: 'fundMandate', label: 'Investment Mandate/Programme Brochures', required: true },
+  // ]
 
-    return documentsList
-      .filter((doc) => doc.required)
-      .map((doc, idx) => {
-        const uploadedFiles = data?.documentUpload?.[doc.id]
-        const isUploaded = uploadedFiles && uploadedFiles.length > 0
+  return documentsList
+    .filter((doc) => doc.required)
+    .map((doc, idx) => {
+      // Get the uploaded file URL from your data structure
+      const fileUrl = data?.documentUpload?.[doc.id]
+      const isUploaded = !!fileUrl // Check if URL exists
 
-        return (
-          <div key={idx} style={{
-            background: 'rgba(250, 247, 242, 0.8)',
-            borderRadius: '12px',
-            padding: '20px',
-            border: '1px solid rgba(200, 182, 166, 0.2)',
-            transition: 'all 0.3s ease'
+      return (
+        <div key={idx} style={{
+          background: 'rgba(250, 247, 242, 0.8)',
+          borderRadius: '12px',
+          padding: '20px',
+          border: '1px solid rgba(200, 182, 166, 0.2)',
+          transition: 'all 0.3s ease'
+        }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-1px)'
+            e.currentTarget.style.boxShadow = '0 4px 16px rgba(74, 53, 47, 0.08)'
           }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-1px)'
-              e.currentTarget.style.boxShadow = '0 4px 16px rgba(74, 53, 47, 0.08)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)'
-              e.currentTarget.style.boxShadow = 'none'
-            }}>
-            <span style={{
-              display: "block",
-              fontSize: "13px",
-              color: "#7d5a50",
-              marginBottom: "8px",
-              fontWeight: '600',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px'
-            }}>
-              {doc.label}
-            </span>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginBottom: isUploaded ? '8px' : '0'
-            }}>
-              {isUploaded ? (
-                <>
-                  <Check size={16} color="#a67c52" />
-                  <span style={{ color: '#4a352f', fontWeight: '500' }}>Uploaded</span>
-                </>
-              ) : (
-                <span style={{ color: '#7d5a50', fontStyle: 'italic' }}>Not uploaded</span>
-              )}
-            </div>
-
-            {/* Show uploaded file names */}
-            {isUploaded && (
-              <div style={{
-                marginTop: '8px',
-                padding: '8px',
-                backgroundColor: 'rgba(166, 124, 82, 0.1)',
-                borderRadius: '6px'
-              }}>
-                <span style={{
-                  fontSize: "12px",
-                  color: "#7d5a50",
-                  fontWeight: "500",
-                  display: "block",
-                  marginBottom: "4px"
-                }}>
-                  Uploaded files:
-                </span>
-                {uploadedFiles.map((file, fileIndex) => (
-                  <div key={fileIndex} style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    fontSize: '11px',
-                    color: '#4a352f',
-                    marginBottom: '2px'
-                  }}>
-                    <FileText size={12} />
-                    <span>{file.name || `File ${fileIndex + 1}`}</span>
-                  </div>
-                ))}
-              </div>
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)'
+            e.currentTarget.style.boxShadow = 'none'
+          }}>
+          <span style={{
+            display: "block",
+            fontSize: "13px",
+            color: "#7d5a50",
+            marginBottom: "8px",
+            fontWeight: '600',
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px'
+          }}>
+            {doc.label}
+          </span>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: isUploaded ? '8px' : '0'
+          }}>
+            {isUploaded ? (
+              <>
+                <Check size={16} color="#a67c52" />
+                <span style={{ color: '#4a352f', fontWeight: '500' }}>Uploaded</span>
+              </>
+            ) : (
+              <span style={{ color: '#7d5a50', fontStyle: 'italic' }}>Not uploaded</span>
             )}
           </div>
-        )
-      })
-  }
 
+          {/* Show uploaded file information */}
+          {isUploaded && (
+            <div style={{
+              marginTop: '8px',
+              padding: '8px',
+              backgroundColor: 'rgba(166, 124, 82, 0.1)',
+              borderRadius: '6px'
+            }}>
+              <span style={{
+                fontSize: "12px",
+                color: "#7d5a50",
+                fontWeight: "500",
+                display: "block",
+                marginBottom: "4px"
+              }}>
+                Uploaded file:
+              </span>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '11px',
+                color: '#4a352f',
+                marginBottom: '2px'
+              }}>
+                <FileText size={12} />
+                <span>{doc.label}</span>
+              </div>
+              {/* Optional: Add a download link */}
+              <a 
+                href={fileUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{
+                  fontSize: '11px',
+                  color: '#a67c52',
+                  textDecoration: 'underline',
+                  marginTop: '4px',
+                  display: 'inline-block'
+                }}
+              >
+                View/Download File
+              </a>
+            </div>
+          )}
+        </div>
+      )
+    })
+}
   return (
     <>
       <style>{`
