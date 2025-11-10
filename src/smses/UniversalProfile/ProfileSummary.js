@@ -137,28 +137,40 @@ const ProfileSummary = ({ data, onEdit }) => {
   }
 
   const renderDocumentsList = (files, documentName) => {
-    if (!files || files.length === 0) {
-      return (
-        <div style={{ fontSize: "14px", color: "#7d5a50", fontStyle: "italic" }}>
-          No documents uploaded
-        </div>
-      )
-    }
-
+  // Handle cases where files is not an array
+  if (!files) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-        {files.map((file, index) => {
-          const fileUrl = typeof file === "string" ? file : file.url
-          const fileName = typeof file === "string" ? `${documentName} ${index + 1}` : file.name
-          return (
-            <div key={index}>
-              {renderDocumentLink(fileUrl, fileName)}
-            </div>
-          )
-        })}
+      <div style={{ fontSize: "14px", color: "#7d5a50", fontStyle: "italic" }}>
+        No documents uploaded
       </div>
     )
   }
+
+  // Convert single file to array if needed
+  const filesArray = Array.isArray(files) ? files : [files]
+
+  if (filesArray.length === 0) {
+    return (
+      <div style={{ fontSize: "14px", color: "#7d5a50", fontStyle: "italic" }}>
+        No documents uploaded
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      {filesArray.map((file, index) => {
+        const fileUrl = typeof file === "string" ? file : file.url
+        const fileName = typeof file === "string" ? `${documentName} ${index + 1}` : file.name
+        return (
+          <div key={index}>
+            {renderDocumentLink(fileUrl, fileName)}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
   return (
     <div>
@@ -2800,11 +2812,11 @@ const ProfileSummary = ({ data, onEdit }) => {
                     }}
                   >
                     {[
-                      { label: "Registration Certificate", files: data?.documents?.registrationCertificate },
-                      { label: "Certified IDs", files: data?.documents?.certifiedIds },
-                      { label: "Share Register", files: data?.documents?.shareRegister },
-                      { label: "Proof of Address", files: data?.documents?.proofOfAddress },
-                      { label: "Tax Clearance Certificate", files: data?.documents?.taxClearanceCert },
+                      { label: "Registration Certificate", files: data?.documents?.registrationCertificate || {} },
+                      { label: "Certified IDs", files: data?.documents?.certifiedIds || {} },
+                      { label: "Share Register", files: data?.documents?.shareRegister || {} },
+                      { label: "Proof of Address", files: data?.documents?.proofOfAddress || {} },
+                      { label: "Tax Clearance Certificate", files: data?.documents?.taxClearanceCert || {} },
                     ].map((item, i) => (
                       <div
                         key={i}
@@ -2856,12 +2868,12 @@ const ProfileSummary = ({ data, onEdit }) => {
                     }}
                   >
                     {[
-                      { label: "VAT Certificate", files: data?.documents?.vatCertificate },
-                      { label: "B-BBEE Certificate", files: data?.documents?.bbbeeCert },
-                      { label: "Other Certificates", files: data?.documents?.otherCerts },
-                      { label: "Industry Accreditation Documents", files: data?.documents?.industryAccreditationDocs },
-                      { label: "Company Profile", files: data?.documents?.companyProfile },
-                      { label: "Client References", files: data?.documents?.clientReferences },
+                      { label: "VAT Certificate", files: data?.documents?.vatCertificate || {}},
+                      { label: "B-BBEE Certificate", files: data?.documents?.bbbeeCert || {} },
+                      { label: "Other Certificates", files: data?.documents?.otherCerts || {} },
+                      { label: "Industry Accreditation Documents", files: data?.documents?.industryAccreditationDocs || {} },
+                      { label: "Company Profile", files: data?.documents?.companyProfile || {}},
+                      { label: "Client References", files: data?.documents?.clientReferences || {}},
                     ].map((item, i) => (
                       <div
                         key={i}

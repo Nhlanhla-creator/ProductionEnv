@@ -343,9 +343,15 @@ When providing improvement advice, focus on ACTUAL STEPS the user can take WITHI
    - Set up compliance calendar alerts
    - Document mitigation strategies
 
+5. **For Transparency and Reporting:**
+   - Set up regular financial reporting schedules
+   - Document stakeholder communication protocols
+   - Use reporting templates in Financial Overview
+   - Establish audit trail practices
+
 ## EVALUATION INSTRUCTIONS:
 
-For each category in the appropriate rubric (plus Policies & Documentation):
+For each category in the appropriate rubric (plus Policies & Documentation and Transparency and Reporting):
 - Score from 0 to max points based on ACTUAL data provided
 - Provide short rationale for the score (2-3 sentences)
 - FOR EACH CATEGORY, include a "How to Improve" section with 3-5 SPECIFIC, ACTIONABLE steps that the user can actually implement ON OUR PLATFORM
@@ -356,7 +362,13 @@ For each category in the appropriate rubric (plus Policies & Documentation):
    - Recommend SPECIFIC policies to complete next from our 17-template checklist
    - Provide platform-specific steps to improve documentation
 
-6. Finally, provide:
+6. TRANSPARENCY AND REPORTING CATEGORY:
+   - Evaluate financial reporting practices and disclosure standards
+   - Assess stakeholder communication quality and frequency
+   - Review reporting to boards, shareholders, and authorities
+   - Provide platform-specific steps to improve transparency
+
+7. Finally, provide:
    - Overall governance score (0-100%)
    - Governance stage
    - Clear recommendation
@@ -387,6 +399,14 @@ Governance Score: [score]%
 • [Complete [specific missing policy] in Legal Compliance → Compliance Checklist]
 • [Use our [template name] generator for [document type]]
 • [Set up automated reminders for policy reviews in Compliance Calendar]
+
+### 3. Transparency and Reporting
+**Score:** [evaluate 0-100 based on reporting practices]
+**Rationale:** [2-3 sentence explanation focusing on current reporting standards and disclosure practices]
+**How to Improve:** 
+• [Set up [specific reporting schedule] in Financial Overview]
+• [Use [template name] for stakeholder communications]
+• [Establish [specific audit practice] using our compliance tools]
 
 ### Overall Assessment
 **Final Analysis:** [Brief overall assessment with key platform-specific recommendations]`;
@@ -1083,6 +1103,18 @@ Governance Score: [score]%
                       <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037", lineHeight: "1.8" }}>
                         <li style={{ marginBottom: "12px" }}>
                           <strong>Board Structure and Functionality:</strong> Evaluates the composition, roles, and effectiveness of your board or advisory structure. Assesses whether you have the right governance oversight for your business size and complexity.
+                          <ul style={{ marginTop: "8px", paddingLeft: "20px", fontSize: "14px", color: "#6d4c41" }}>
+                            <li style={{ marginBottom: "4px" }}>PIS &lt; 100: Advisors Stage - light governance structures suitable for smaller operations</li>
+                            <li style={{ marginBottom: "4px" }}>PIS 100-349: Emerging Board Stage - informal board recommended for growing businesses</li>
+                            <li>PIS ≥ 350: Full Board Stage - formal board strongly recommended for complex operations</li>
+                          </ul>
+                          <div style={{ marginTop: "8px", fontSize: "14px", color: "#6d4c41" }}>
+                            <strong>PIS Calculation:</strong>
+                            <ul style={{ marginTop: "4px", paddingLeft: "20px" }}>
+                              <li style={{ marginBottom: "4px" }}>PIS = Employees + (Turnover/R1m) + (Liabilities/R1m) + Shareholders</li>
+                              <li>Higher PIS indicates greater public interest and governance requirements</li>
+                            </ul>
+                          </div>
                         </li>
                         <li style={{ marginBottom: "12px" }}>
                           <strong>Strategic Planning:</strong> Reviews your long-term vision, business plans, and decision-making processes. Examines whether you have clear strategic direction and regularly review performance against goals.
@@ -1091,7 +1123,40 @@ Governance Score: [score]%
                           <strong>Risk Management:</strong> Analyzes how you identify, assess, and mitigate business risks. Evaluates your preparedness for crises and ability to protect business continuity.
                         </li>
                         <li style={{ marginBottom: "12px" }}>
+                          <strong>Transparency and Reporting:</strong> Evaluates your financial reporting practices, stakeholder communication, and disclosure standards. Assesses the quality and frequency of reporting to boards, shareholders, and relevant authorities.
+                        </li>
+                        <li style={{ marginBottom: "12px" }}>
                           <strong>Policies & Documentation:</strong> Reviews essential business policies, employment contracts, and compliance documentation. Assesses completeness of your policy framework and legal protection measures.
+                        </li>
+                      </ul>
+                    </div>
+
+                    {/* Score Interpretation */}
+                    <div style={{
+                      backgroundColor: "#efebe9",
+                      padding: "16px",
+                      borderRadius: "8px",
+                      marginBottom: "16px",
+                      borderLeft: "4px solid #8d6e63"
+                    }}>
+                      <p style={{ fontWeight: "bold", marginBottom: "12px", color: "#6d4c41", fontSize: "15px" }}>
+                        Score Interpretation:
+                      </p>
+                      <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037", lineHeight: "1.8" }}>
+                        <li style={{ marginBottom: "8px" }}>
+                          <strong>91-100% (Governance Excellence):</strong> Your business demonstrates exceptional governance maturity with comprehensive structures, robust oversight, and industry-leading practices that inspire stakeholder confidence.
+                        </li>
+                        <li style={{ marginBottom: "8px" }}>
+                          <strong>81-90% (Strong Governance):</strong> Well-established governance framework with effective oversight mechanisms, clear accountability structures, and strong compliance practices that meet investor expectations.
+                        </li>
+                        <li style={{ marginBottom: "8px" }}>
+                          <strong>61-80% (Developing Governance):</strong> Good governance foundations in place with room for refinement. Key structures exist but could be strengthened to enhance oversight and accountability.
+                        </li>
+                        <li style={{ marginBottom: "8px" }}>
+                          <strong>41-60% (Emerging Governance):</strong> Basic governance elements established but significant gaps exist in oversight, reporting, or policy frameworks that need addressing for stakeholder confidence.
+                        </li>
+                        <li style={{ marginBottom: "0" }}>
+                          <strong>0-40% (Foundational Stage):</strong> Governance structures require substantial development. Focus on implementing basic oversight mechanisms, essential policies, and accountability frameworks.
                         </li>
                       </ul>
                     </div>
@@ -1101,7 +1166,7 @@ Governance Score: [score]%
                       backgroundColor: "#efebe9",
                       padding: "16px",
                       borderRadius: "8px",
-                      marginBottom: "16px",
+                      marginBottom: "0",
                       borderLeft: "4px solid #8d6e63"
                     }}>
                       <p style={{ fontWeight: "bold", marginBottom: "12px", color: "#6d4c41", fontSize: "15px" }}>
@@ -1114,29 +1179,8 @@ Governance Score: [score]%
                         <li style={{ marginBottom: "8px" }}>
                           <strong>PIS 100-349:</strong> Emerging Board Stage - informal board recommended for growing businesses
                         </li>
-                        <li style={{ marginBottom: "8px" }}>
-                          <strong>PIS ≥ 350:</strong> Full Board Stage - formal board strongly recommended for complex operations
-                        </li>
-                      </ul>
-                    </div>
-
-                    {/* PIS Calculation */}
-                    <div style={{
-                      backgroundColor: "#efebe9",
-                      padding: "16px",
-                      borderRadius: "8px",
-                      marginBottom: "0",
-                      borderLeft: "4px solid #8d6e63"
-                    }}>
-                      <p style={{ fontWeight: "bold", marginBottom: "12px", color: "#6d4c41", fontSize: "15px" }}>
-                        PIS Calculation:
-                      </p>
-                      <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037", lineHeight: "1.8" }}>
-                        <li style={{ marginBottom: "8px" }}>
-                          <strong>PIS = Employees + (Turnover/R1m) + (Liabilities/R1m) + Shareholders</strong>
-                        </li>
                         <li style={{ marginBottom: "0" }}>
-                          Higher PIS indicates greater public interest and governance requirements
+                          <strong>PIS ≥ 350:</strong> Full Board Stage - formal board strongly recommended for complex operations
                         </li>
                       </ul>
                     </div>
