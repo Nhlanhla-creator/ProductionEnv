@@ -1,7 +1,8 @@
 // tabs/ESGImpactPerformance.js
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import { FiEye } from 'react-icons/fi';
+import { Loader } from 'lucide-react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -12,6 +13,8 @@ import {
   Tooltip,
   Legend
 } from 'chart.js';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { db, auth } from '../../firebaseConfig';
 
 // Register ChartJS components
 ChartJS.register(
@@ -28,6 +31,20 @@ ChartJS.register(
 const styles = `
 .esg-impact {
   width: 100%;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  gap: 16px;
+}
+
+.loading-text {
+  color: #7d5a50;
+  font-size: 16px;
 }
 
 .esg-charts-grid {
@@ -159,6 +176,28 @@ const styles = `
   transform: none !important;
   animation: none !important;
   transition: none !important;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #7d5a50;
+  text-align: center;
+  padding: 20px;
+}
+
+.empty-state-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.empty-state-text {
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 /* Popup Styles */
@@ -315,6 +354,10 @@ const styles = `
     padding: 8px;
   }
 }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 `;
 
 // Add styles to document
@@ -347,6 +390,323 @@ const staticPieOptions = {
 };
 
 const ESGImpactPerformance = ({ openPopup }) => {
+  const [loading, setLoading] = useState(true);
+  const [esgData, setEsgData] = useState({
+    pillarScores: { environmental: 0, social: 0, governance: 0 },
+    sdgAlignment: {},
+    governanceCompliance: { compliant: 0, partial: 0, atRisk: 0 },
+    topContributors: []
+  });
+
+  useEffect(() => {
+    fetchESGData();
+  }, []);
+
+  const fetchESGData = async () => {
+    try {
+      setLoading(true);
+      const currentUser = auth.currentUser;
+      
+      if (!currentUser) {
+        console.log("No authenticated user");
+        setLoading(false);
+        return;
+      }
+
+      // Fetch investor's portfolio SMEs
+      const applicationsQuery = query(
+        collection(db, "investorApplications"),
+        where("funderId", "==", currentUser.uid)
+      );
+
+      const applicationsSnapshot = await getDocs(applicationsQuery);
+      console.log("Found applications for ESG analysis:", applicationsSnapshot.docs.length);
+
+      // Process each SME's ESG/Impact data
+      const esgPromises = applicationsSnapshot.docs.map(async (appDoc) => {
+        const appData = appDoc.data();
+        
+        try {
+          let profileData = {};
+
+          // Fetch SME profile
+          if (appData.smeId) {
+            const profileRef = doc(db, "universalProfiles", appData.smeId);
+            const profileSnap = await getDoc(profileRef);
+
+            if (profileSnap.exists()) {
+              profileData = profileSnap.data();
+            }
+          }
+
+          const smeName =
+            profileData.entityOverview?.tradingName ||
+            profileData.entityOverview?.registeredName ||
+            appData.companyName ||
+            appData.smeName ||
+            "Unnamed Business";
+
+          // Extract ESG/Impact metrics from profile
+          const impactMeasurement = profileData.impactMeasurement || {};
+          const legalCompliance = profileData.legalCompliance || {};
+          const entityOverview = profileData.entityOverview || {};
+          const ownershipManagement = profileData.ownershipManagement || {};
+          const complianceScore = profileData.complianceScore || 0;
+          const governanceScore = profileData.governanceScore || 0;
+
+          return {
+            id: appDoc.id,
+            smeId: appData.smeId,
+            smeName,
+            // Environmental metrics
+            environmental: {
+              carbonFootprint: impactMeasurement.carbonFootprint || 0,
+              renewableEnergy: impactMeasurement.renewableEnergyUsage || 0,
+              wasteReduction: impactMeasurement.wasteReduction || 0,
+              score: calculateEnvironmentalScore(impactMeasurement)
+            },
+            // Social metrics
+            social: {
+              jobsCreated: impactMeasurement.jobsCreated || entityOverview.employeeCount || 0,
+              womenEmployment: ownershipManagement.femaleOwnership || 0,
+              youthEmployment: impactMeasurement.youthEmployed || 0,
+              trainingHours: impactMeasurement.trainingHoursProvided || 0,
+              communityImpact: impactMeasurement.communityBenefit || '',
+              score: calculateSocialScore(impactMeasurement, entityOverview, ownershipManagement)
+            },
+            // Governance metrics
+            governance: {
+              complianceScore: complianceScore,
+              governanceScore: governanceScore,
+              bbbeeLevel: legalCompliance.bbbeeLevel || 'Not rated',
+              boardDiversity: ownershipManagement.femaleOwnership > 25 ? 'High' : 'Medium',
+              auditStatus: legalCompliance.lastAuditDate ? 'Current' : 'Pending',
+              score: calculateGovernanceScore(complianceScore, governanceScore, legalCompliance)
+            },
+            // SDG alignment
+            sdgs: impactMeasurement.sdgsTargeted || [],
+            // Overall ESG score
+            overallESGScore: calculateOverallESGScore(impactMeasurement, complianceScore, governanceScore, entityOverview, ownershipManagement)
+          };
+        } catch (error) {
+          console.error("Error processing SME ESG data:", error);
+          return null;
+        }
+      });
+
+      const allESGData = (await Promise.all(esgPromises)).filter(data => data !== null);
+      console.log("Processed ESG data:", allESGData.length);
+
+      // Calculate portfolio-wide metrics
+      const metrics = calculatePortfolioMetrics(allESGData);
+      setEsgData(metrics);
+
+      setLoading(false);
+    } catch (error) {
+      console.error("Error fetching ESG data:", error);
+      setLoading(false);
+    }
+  };
+
+  const calculateEnvironmentalScore = (impactMeasurement) => {
+    let score = 0;
+    let factors = 0;
+
+    // Carbon footprint tracking
+    if (impactMeasurement.carbonFootprint) {
+      score += 30;
+      factors++;
+    }
+
+    // Renewable energy usage
+    const renewableUsage = parseFloat(impactMeasurement.renewableEnergyUsage || 0);
+    if (renewableUsage > 0) {
+      score += Math.min(renewableUsage, 100) * 0.4; // Up to 40 points
+      factors++;
+    }
+
+    // Waste reduction efforts
+    if (impactMeasurement.wasteReduction) {
+      score += 30;
+      factors++;
+    }
+
+    return factors > 0 ? Math.round(score / factors) : 0;
+  };
+
+  const calculateSocialScore = (impactMeasurement, entityOverview, ownershipManagement) => {
+    let score = 0;
+    let factors = 0;
+
+    // Job creation
+    const jobsCreated = parseInt(impactMeasurement.jobsCreated || entityOverview.employeeCount || 0);
+    if (jobsCreated > 0) {
+      score += Math.min((jobsCreated / 10) * 20, 30); // Up to 30 points based on jobs
+      factors++;
+    }
+
+    // Women employment/ownership
+    const womenOwnership = parseFloat(ownershipManagement.femaleOwnership || 0);
+    if (womenOwnership > 0) {
+      score += Math.min(womenOwnership, 100) * 0.25; // Up to 25 points
+      factors++;
+    }
+
+    // Youth employment
+    if (impactMeasurement.youthEmployed && impactMeasurement.youthEmployed > 0) {
+      score += 20;
+      factors++;
+    }
+
+    // Training and development
+    if (impactMeasurement.trainingHoursProvided && impactMeasurement.trainingHoursProvided > 0) {
+      score += 25;
+      factors++;
+    }
+
+    return factors > 0 ? Math.round(score / factors) : 0;
+  };
+
+  const calculateGovernanceScore = (complianceScore, governanceScore, legalCompliance) => {
+    let score = 0;
+    let factors = 0;
+
+    // Compliance score
+    if (complianceScore > 0) {
+      score += complianceScore * 0.4; // Up to 40 points
+      factors++;
+    }
+
+    // Governance score
+    if (governanceScore > 0) {
+      score += governanceScore * 0.4; // Up to 40 points
+      factors++;
+    }
+
+    // B-BBEE certification
+    if (legalCompliance.bbbeeLevel) {
+      score += 20;
+      factors++;
+    }
+
+    return factors > 0 ? Math.round(score / factors) : 0;
+  };
+
+  const calculateOverallESGScore = (impactMeasurement, complianceScore, governanceScore, entityOverview, ownershipManagement) => {
+    const envScore = calculateEnvironmentalScore(impactMeasurement);
+    const socScore = calculateSocialScore(impactMeasurement, entityOverview, ownershipManagement);
+    const govScore = calculateGovernanceScore(complianceScore, governanceScore, {});
+
+    return Math.round((envScore + socScore + govScore) / 3);
+  };
+
+  const calculatePortfolioMetrics = (allESGData) => {
+    if (allESGData.length === 0) {
+      return {
+        pillarScores: { environmental: 0, social: 0, governance: 0 },
+        sdgAlignment: {},
+        governanceCompliance: { compliant: 0, partial: 0, atRisk: 0 },
+        topContributors: []
+      };
+    }
+
+    // Calculate average pillar scores
+    const avgEnvironmental = Math.round(
+      allESGData.reduce((sum, sme) => sum + sme.environmental.score, 0) / allESGData.length
+    );
+    const avgSocial = Math.round(
+      allESGData.reduce((sum, sme) => sum + sme.social.score, 0) / allESGData.length
+    );
+    const avgGovernance = Math.round(
+      allESGData.reduce((sum, sme) => sum + sme.governance.score, 0) / allESGData.length
+    );
+
+    // Calculate SDG alignment
+    const sdgCounts = {};
+    allESGData.forEach(sme => {
+      if (Array.isArray(sme.sdgs)) {
+        sme.sdgs.forEach(sdg => {
+          sdgCounts[sdg] = (sdgCounts[sdg] || 0) + 1;
+        });
+      }
+    });
+
+    // Convert to percentages
+    const sdgAlignment = {};
+    Object.keys(sdgCounts).forEach(sdg => {
+      sdgAlignment[sdg] = Math.round((sdgCounts[sdg] / allESGData.length) * 100);
+    });
+
+    // Calculate governance compliance breakdown
+    let compliant = 0;
+    let partial = 0;
+    let atRisk = 0;
+
+    allESGData.forEach(sme => {
+      const govScore = sme.governance.score;
+      if (govScore >= 80) compliant++;
+      else if (govScore >= 50) partial++;
+      else atRisk++;
+    });
+
+    const total = allESGData.length;
+    const governanceCompliance = {
+      compliant: Math.round((compliant / total) * 100),
+      partial: Math.round((partial / total) * 100),
+      atRisk: Math.round((atRisk / total) * 100)
+    };
+
+    // Identify top ESG contributors
+    const topContributors = [...allESGData]
+      .sort((a, b) => b.overallESGScore - a.overallESGScore)
+      .slice(0, 5)
+      .map(sme => {
+        // Determine primary strength
+        let pillar = 'Governance';
+        let stat = `${sme.governance.score} governance score`;
+
+        if (sme.environmental.score > sme.social.score && sme.environmental.score > sme.governance.score) {
+          pillar = 'Environmental';
+          if (sme.environmental.renewableEnergy > 0) {
+            stat = `${sme.environmental.renewableEnergy}% renewable energy`;
+          } else if (sme.environmental.carbonFootprint) {
+            stat = `Carbon footprint tracking`;
+          } else {
+            stat = `${sme.environmental.score} environmental score`;
+          }
+        } else if (sme.social.score > sme.governance.score) {
+          pillar = 'Social';
+          if (sme.social.jobsCreated > 0) {
+            stat = `${sme.social.jobsCreated} jobs created`;
+          } else if (sme.social.trainingHours > 0) {
+            stat = `${sme.social.trainingHours}+ training hours`;
+          } else if (sme.social.womenEmployment > 0) {
+            stat = `${sme.social.womenEmployment}% women ownership`;
+          } else {
+            stat = `${sme.social.score} social score`;
+          }
+        }
+
+        return {
+          smeName: sme.smeName,
+          pillar,
+          stat,
+          overallScore: sme.overallESGScore
+        };
+      });
+
+    return {
+      pillarScores: {
+        environmental: avgEnvironmental,
+        social: avgSocial,
+        governance: avgGovernance
+      },
+      sdgAlignment,
+      governanceCompliance,
+      topContributors
+    };
+  };
+
   // Data generation functions
   const generateBarData = (labels, data, label, colorIndex) => ({
     labels,
@@ -471,37 +831,74 @@ const ESGImpactPerformance = ({ openPopup }) => {
     );
   };
 
+  if (loading) {
+    return (
+      <div className="esg-impact">
+        <div className="loading-container">
+          <Loader size={48} style={{ color: "#a67c52", animation: "spin 1s linear infinite" }} />
+          <p className="loading-text">Loading ESG & impact data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Prepare SDG data for chart
+  const sdgLabels = Object.keys(esgData.sdgAlignment).slice(0, 4);
+  const sdgValues = sdgLabels.map(sdg => esgData.sdgAlignment[sdg]);
+
   return (
     <div className="esg-impact">
       <div className="esg-charts-grid">
         <BarChartWithTitle
           data={generateBarData(
             ['Environmental', 'Social', 'Governance'],
-            [62, 81, 74],
+            [
+              esgData.pillarScores.environmental,
+              esgData.pillarScores.social,
+              esgData.pillarScores.governance
+            ],
             'Score (0-100)',
             1
           )}
           title="ESG Pillar Scores (E, S, G)"
-          chartTitle="ESG pillar performance scores (0-100)"
+          chartTitle="Portfolio average ESG pillar scores (0-100)"
           chartId="esg-pillar"
         />
 
-        <BarChartWithTitle
-          data={generateBarData(
-            ['SDG8', 'SDG9', 'SDG5', 'SDG11'],
-            [64, 41, 38, 32],
-            '% of portfolio',
-            2
-          )}
-          title="SDG Alignment"
-          chartTitle="Portfolio alignment with SDGs (%)"
-          chartId="sdg-alignment"
-        />
+        {sdgLabels.length > 0 ? (
+          <BarChartWithTitle
+            data={generateBarData(
+              sdgLabels,
+              sdgValues,
+              '% of portfolio',
+              2
+            )}
+            title="SDG Alignment"
+            chartTitle="Portfolio alignment with SDGs (%)"
+            chartId="sdg-alignment"
+          />
+        ) : (
+          <div className="chart-container">
+            <div className="chart-header">
+              <h3 className="chart-title">SDG Alignment</h3>
+            </div>
+            <div className="empty-state">
+              <div className="empty-state-icon">🎯</div>
+              <div className="empty-state-text">
+                No SDG alignment data available yet
+              </div>
+            </div>
+          </div>
+        )}
 
         <PieChartWithNumbers
           title="Governance Compliance Health"
           labels={['Compliant', 'Partial', 'At Risk']}
-          data={[72, 21, 7]}
+          data={[
+            esgData.governanceCompliance.compliant,
+            esgData.governanceCompliance.partial,
+            esgData.governanceCompliance.atRisk
+          ]}
           chartId="governance-compliance"
         />
 
@@ -514,46 +911,39 @@ const ESGImpactPerformance = ({ openPopup }) => {
                 <div className="popup-content">
                   <h3>Top 5 ESG Contributors</h3>
                   <div className="popup-description">
-                    Leading SMEs in environmental, social, and governance performance
+                    Leading SMEs in your portfolio for environmental, social, and governance performance
                   </div>
-                  <div className="table-container-popup">
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>SME</th>
-                          <th>Pillar</th>
-                          <th>Supporting Stat</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <td>FemmeTech Labs</td>
-                          <td>Social</td>
-                          <td>68 new jobs created</td>
-                        </tr>
-                        <tr>
-                          <td>Green Agro</td>
-                          <td>Environmental</td>
-                          <td>120t CO2 reduced annually</td>
-                        </tr>
-                        <tr>
-                          <td>EduTech SA</td>
-                          <td>Social</td>
-                          <td>500+ training hours delivered</td>
-                        </tr>
-                        <tr>
-                          <td>Clean Energy Co</td>
-                          <td>Environmental</td>
-                          <td>100% renewable energy usage</td>
-                        </tr>
-                        <tr>
-                          <td>Community Build</td>
-                          <td>Governance</td>
-                          <td>100% compliance rating</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
+                  {esgData.topContributors.length > 0 ? (
+                    <div className="table-container-popup">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>SME</th>
+                            <th>Primary Pillar</th>
+                            <th>Key Metric</th>
+                            <th>ESG Score</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {esgData.topContributors.map((contributor, idx) => (
+                            <tr key={idx}>
+                              <td>{contributor.smeName}</td>
+                              <td>{contributor.pillar}</td>
+                              <td>{contributor.stat}</td>
+                              <td>{contributor.overallScore}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="empty-state">
+                      <div className="empty-state-icon">🌱</div>
+                      <div className="empty-state-text">
+                        No ESG contributors data available
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               title="View details"
@@ -562,42 +952,34 @@ const ESGImpactPerformance = ({ openPopup }) => {
             </button>
           </div>
           <div className="table-container">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>SME</th>
-                  <th>Pillar</th>
-                  <th>Supporting Stat</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>FemmeTech Labs</td>
-                  <td>Social</td>
-                  <td>68 new jobs created</td>
-                </tr>
-                <tr>
-                  <td>Green Agro</td>
-                  <td>Environmental</td>
-                  <td>120t CO2 reduced annually</td>
-                </tr>
-                <tr>
-                  <td>EduTech SA</td>
-                  <td>Social</td>
-                  <td>500+ training hours delivered</td>
-                </tr>
-                <tr>
-                  <td>Clean Energy Co</td>
-                  <td>Environmental</td>
-                  <td>100% renewable energy usage</td>
-                </tr>
-                <tr>
-                  <td>Community Build</td>
-                  <td>Governance</td>
-                  <td>100% compliance rating</td>
-                </tr>
-              </tbody>
-            </table>
+            {esgData.topContributors.length > 0 ? (
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>SME</th>
+                    <th>Primary Pillar</th>
+                    <th>Key Metric</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {esgData.topContributors.map((contributor, idx) => (
+                    <tr key={idx}>
+                      <td>{contributor.smeName}</td>
+                      <td>{contributor.pillar}</td>
+                      <td>{contributor.stat}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="empty-state">
+                <div className="empty-state-icon">🌱</div>
+                <div className="empty-state-text">
+                  No ESG contribution data available yet.<br/>
+                  ESG metrics will appear here as SMEs complete their impact assessments.
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
