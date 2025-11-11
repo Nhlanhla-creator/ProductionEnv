@@ -6,6 +6,8 @@ import { Info } from "lucide-react"
 import styles from "./InvestorUniversalProfile.module.css"
 import { db, auth } from "../../firebaseConfig"
 import { doc, getDoc, updateDoc } from "firebase/firestore"
+import { ref, deleteObject } from "firebase/storage";
+import { storage } from "../../firebaseConfig"; 
 
 export const documentsList = [
   {
@@ -15,7 +17,7 @@ export const documentsList = [
     required: true,
     multiple: false,
     description: "Official company registration documents",
-    dataPath: "ownershipManagement.registrationDocs"
+    dataPath: "documentUpload.registrationDocs"
   },
   {
     id: "idOffund",
@@ -24,7 +26,7 @@ export const documentsList = [
     required: true,
     multiple: false,
     description: "ID Documents for the fund leader",
-    dataPath: "legalCompliance.taxClearanceCert"
+    dataPath: "documentUpload.idOffund"
   },
   {
     id: "fundMandate",
@@ -33,7 +35,7 @@ export const documentsList = [
     required: true,
     multiple: false,
     description: "Official investment mandate document or Brochure",
-    dataPath: "productsServices.fundMandate"
+    dataPath: "documentUpload.fundMandate"
   },
 ]
 
@@ -43,86 +45,100 @@ export default function InvestorDocumentUpload({ data = {}, updateData }) {
   const [uploadStatus, setUploadStatus] = useState({})
   const [uploadingFiles, setUploadingFiles] = useState({})
 
-  // Load data from Firebase when component mounts
-  useEffect(() => {
-    const loadDocuments = async () => {
-      try {
-        setIsLoading(true)
-        const userId = auth.currentUser?.uid
+// Load data from Firebase when component mounts
+// Load data from Firebase when component mounts
+useEffect(() => {
+  const loadDocuments = async () => {
+    try {
+      setIsLoading(true)
+      const userId = auth.currentUser?.uid
 
-        if (!userId) {
-          setIsLoading(false)
-          return
-        }
-
-        // Load from the universalProfiles collection
-        const docRef = doc(db, "MyuniversalProfiles", userId)
-        const docSnap = await getDoc(docRef)
-
-        if (docSnap.exists()) {
-          const profileData = docSnap.data()
-
-          // Collect all document fields from different sections using the correct paths
-          const documentsData = {}
-
-          // Map documents based on their actual data paths
-          if (profileData.documentUpload?.shareRegister) {
-            documentsData.shareRegister = profileData.documentUpload.shareRegister
-          }
-          if (profileData.documentUpload?.registrationDocs) {
-            documentsData.registrationDocs = profileData.documentUpload.registrationDocs
-          }
-          if (profileData.documentUpload?.taxClearanceCert) {
-            documentsData.taxClearanceCert = profileData.documentUpload.taxClearanceCert
-          }
-          if (profileData.documentUpload?.bbbeeCert) {
-            documentsData.bbbeeCert = profileData.documentUpload.bbbeeCert
-          }
-          if (profileData.documentUpload?.industryAccreditationDocs) {
-            documentsData.industryAccreditationDocs = profileData.documentUpload.industryAccreditationDocs
-          }
-          if (profileData.documentUpload?.fundMandate) {
-            documentsData.fundMandate = profileData.documentUpload.fundMandate
-          }
-          if (profileData.documentUpload?.fundProspectus) {
-            documentsData.fundProspectus = profileData.documentUpload.fundProspectus
-          }
-          if (profileData.documentUpload?.bankLetter) {
-            documentsData.bankLetter = profileData.documentUpload.bankLetter
-          }
-
-          setFormData(documentsData)
-          updateData(documentsData)
-
-          // Update upload status
-          const status = {}
-          documentsList.forEach(doc => {
-            const files = documentsData[doc.id] || []
-            status[doc.id] = files.length > 0 ? 'success' : 'pending'
-          })
-          setUploadStatus(status)
-
-        } else {
-          // Initialize with passed data
-          setFormData(data)
-          const status = {}
-          documentsList.forEach(doc => {
-            const files = data[doc.id] || []
-            status[doc.id] = files.length > 0 ? 'success' : 'pending'
-          })
-          setUploadStatus(status)
-        }
-      } catch (error) {
-        console.error("Error loading documents:", error)
-        setFormData(data)
-      } finally {
+      if (!userId) {
         setIsLoading(false)
+        return
       }
+
+      // Load from the universalProfiles collection
+      const docRef = doc(db, "MyuniversalProfiles", userId)
+      const docSnap = await getDoc(docRef)
+
+      if (docSnap.exists()) {
+        const profileData = docSnap.data()
+        console.log("Full Firebase data:", profileData)
+
+        // Access the formData from Firebase
+        const formDataFromFirebase = profileData.formData || {}
+        console.log("formData from Firebase:", formDataFromFirebase)
+
+        // Access documentUpload from formData (this is where your documents are stored)
+        const documentUpload = formDataFromFirebase.documentUpload || {}
+        console.log("documentUpload from formData:", documentUpload)
+
+        // Collect only the 3 specific documents we want
+        const documentsData = {}
+
+        // Check for each of the 3 specific documents in documentUpload
+        documentsList.forEach(docItem => {
+          const documentValue = documentUpload[docItem.id]
+          console.log(`Checking ${docItem.id} in documentUpload:`, documentValue)
+
+          if (documentValue) {
+            // If it's a string URL (from Firebase storage)
+            if (typeof documentValue === 'string') {
+              // Create a file-like object with the URL for display
+              documentsData[docItem.id] = [{
+                name: `${docItem.label}`,
+                url: documentValue,
+                type: 'application/pdf', // Default type
+                fromFirebase: true
+              }]
+            } 
+            // If it's already an array (from current session)
+            else if (Array.isArray(documentValue)) {
+              documentsData[docItem.id] = documentValue
+            } 
+            // If it's a single object
+            else {
+              documentsData[docItem.id] = [documentValue]
+            }
+          } else {
+            documentsData[docItem.id] = []
+          }
+        })
+
+        console.log("Final documents data for component:", documentsData)
+        setFormData(documentsData)
+        updateData(documentsData)
+
+        // Update upload status
+        const status = {}
+        documentsList.forEach(docItem => {
+          const files = documentsData[docItem.id] || []
+          status[docItem.id] = files.length > 0 ? 'success' : 'pending'
+        })
+        setUploadStatus(status)
+
+      } else {
+        console.log("No document found in Firebase")
+        // Initialize with passed data
+        setFormData(data || {})
+        const status = {}
+        documentsList.forEach(docItem => {
+          const files = data[docItem.id] || []
+          status[docItem.id] = files.length > 0 ? 'success' : 'pending'
+        })
+        setUploadStatus(status)
+      }
+    } catch (error) {
+      console.error("Error loading documents:", error)
+      setFormData(data || {})
+    } finally {
+      setIsLoading(false)
     }
+  }
 
-    loadDocuments()
-  }, [])
-
+  loadDocuments()
+}, [])
   // Sync formData with external data prop
   useEffect(() => {
     if (data && Object.keys(data).length > 0) {
@@ -136,34 +152,46 @@ export default function InvestorDocumentUpload({ data = {}, updateData }) {
     }
   }, [data])
 
-  const handleFileChange = async (documentId, files) => {
-    // Set uploading state
-    setUploadingFiles(prev => ({ ...prev, [documentId]: true }))
+const handleFileChange = async (documentId, files) => {
+  // Set uploading state
+  setUploadingFiles(prev => ({ ...prev, [documentId]: true }))
 
-    try {
-      const updatedData = { ...formData, [documentId]: files }
-      setFormData(updatedData)
+  try {
+    const updatedData = { ...formData, [documentId]: files }
+    setFormData(updatedData)
 
-      // Call updateData and wait for it to complete
-      await updateData(updatedData)
+    // Call updateData and wait for it to complete
+    await updateData(updatedData)
 
-      // Update status after successful upload
-      setUploadStatus(prev => ({
-        ...prev,
-        [documentId]: files.length > 0 ? 'success' : 'pending'
-      }))
+    // Update status after successful upload
+    setUploadStatus(prev => ({
+      ...prev,
+      [documentId]: files.length > 0 ? 'success' : 'pending'
+    }))
 
-      // Add a small delay to show the upload completed
-      setTimeout(() => {
-        setUploadingFiles(prev => ({ ...prev, [documentId]: false }))
-      }, 1000)
-
-    } catch (error) {
-      console.error("Error uploading file:", error)
+    // Add a small delay to show the upload completed
+    setTimeout(() => {
       setUploadingFiles(prev => ({ ...prev, [documentId]: false }))
-      // Optionally show an error message
-    }
+    }, 1000)
+
+  } catch (error) {
+    console.error("Error uploading file:", error)
+    setUploadingFiles(prev => ({ ...prev, [documentId]: false }))
+    // Optionally show an error message
   }
+}
+
+// Update the file display to handle both File objects and URL objects
+const getFileDisplayName = (file) => {
+  if (file.name) {
+    return file.name
+  } else if (file.url) {
+    // Extract filename from URL or use a default name
+    const urlParts = file.url.split('/')
+    return urlParts[urlParts.length - 1].split('?')[0] || 'Download File'
+  }
+  return 'Unknown File'
+}
 
   const getStatusBadge = (documentId, document) => {
     const isUploading = uploadingFiles[documentId]
@@ -225,21 +253,113 @@ export default function InvestorDocumentUpload({ data = {}, updateData }) {
     }
   }
 
-  const handleDeleteFile = async (documentId, fileIndex) => {
-    const currentFiles = formData[documentId] || []
-    const updatedFiles = currentFiles.filter((_, index) => index !== fileIndex)
+const handleDeleteFile = async (documentId, fileIndex) => {
+  const currentFiles = formData[documentId] || [];
+  const fileToDelete = currentFiles[fileIndex];
+  
+  console.log("=== DELETE FILE DEBUG ===");
+  console.log("Document ID:", documentId);
+  console.log("File Index:", fileIndex);
+  console.log("File to delete:", fileToDelete);
+  console.log("Type of fileToDelete:", typeof fileToDelete);
+  
+  // Show confirmation dialog
+  const isConfirmed = window.confirm(
+    `Are you sure you want to delete this file?\n\nThis action will permanently remove the file and cannot be undone.`
+  );
+  
+  if (!isConfirmed) {
+    console.log("Delete cancelled by user");
+    return;
+  }
+
+  try {
+    // Show deleting state
+    setUploadingFiles(prev => ({ ...prev, [documentId]: true }));
+
+    const userId = auth.currentUser?.uid;
+    console.log("User ID:", userId);
     
-    // Update local state
-    const updatedData = { ...formData, [documentId]: updatedFiles }
-    setFormData(updatedData)
-    await updateData(updatedData)
+    // Check if fileToDelete is a string URL (from Firebase storage)
+    if (typeof fileToDelete === 'string' && fileToDelete.includes('firebasestorage.googleapis.com')) {
+      console.log("Found Firebase storage URL");
+      
+      try {
+        // Method 1: Extract path from URL and create proper storage reference
+        console.log("=== METHOD 1: URL Path Extraction ===");
+        const url = new URL(fileToDelete);
+        console.log("Full URL object:", url);
+        console.log("URL pathname:", url.pathname);
+        
+        // Extract the path after /o/
+        const pathAfterO = url.pathname.split('/o/')[1];
+        console.log("Path after /o/:", pathAfterO);
+        
+        if (pathAfterO) {
+          const decodedPath = decodeURIComponent(pathAfterO);
+          console.log("Decoded path:", decodedPath);
+          
+          try {
+            const urlRef = ref(storage, decodedPath);
+            console.log("URL-based storage ref path:", decodedPath);
+            await deleteObject(urlRef);
+            console.log("✅ Successfully deleted via URL path method");
+          } catch (urlError) {
+            console.error("❌ URL path deletion failed:", urlError);
+            console.log("Error code:", urlError.code);
+            console.log("Error message:", urlError.message);
+          }
+        }
+
+        // Method 2: Also try to delete from the full path location
+        console.log("=== METHOD 2: Full Path Deletion ===");
+        if (userId) {
+          const fullPath = `MyuniversalProfile/${userId}/full/documentUpload/${documentId}/0`;
+          console.log("Trying full path:", fullPath);
+          try {
+            const fullPathRef = ref(storage, fullPath);
+            await deleteObject(fullPathRef);
+            console.log("✅ Successfully deleted from full path");
+          } catch (fullPathError) {
+            console.log("❌ Full path deletion failed:", fullPathError.message);
+          }
+        }
+
+      } catch (storageError) {
+        console.error("❌ Overall storage deletion error:", storageError);
+      }
+    } else {
+      console.log("Not a Firebase storage URL or wrong type, skipping storage deletion");
+      console.log("File type:", typeof fileToDelete);
+      console.log("File value:", fileToDelete);
+    }
+
+    // Update local state - remove the file from the array
+    console.log("Updating local state...");
+    const updatedFiles = currentFiles.filter((_, index) => index !== fileIndex);
+    const updatedData = { ...formData, [documentId]: updatedFiles };
+    
+    setFormData(updatedData);
+    await updateData(updatedData);
     
     // Update upload status
     setUploadStatus(prev => ({
       ...prev,
       [documentId]: updatedFiles.length > 0 ? 'success' : 'pending'
-    }))
+    }));
+
+    console.log("✅ Local state updated successfully");
+
+  } catch (error) {
+    console.error("❌ Overall delete error:", error);
+    alert("Failed to delete the file. Please try again.");
+  } finally {
+    setUploadingFiles(prev => ({ ...prev, [documentId]: false }));
+    console.log("=== DELETE PROCESS COMPLETED ===");
   }
+};
+
+
 
   const getProgressStats = () => {
     const required = documentsList.filter(doc => doc.required)
@@ -550,45 +670,67 @@ export default function InvestorDocumentUpload({ data = {}, updateData }) {
                         gap: "2px",
                         marginTop: "4px"
                       }}>
-                       {(Array.isArray(formData[document.id]) ? formData[document.id] : [formData[document.id]])
+{(Array.isArray(formData[document.id]) ? formData[document.id] : [formData[document.id]])
   .filter(Boolean)
-  .map((file, fileIndex) => (
-                          <div key={fileIndex} style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "4px",
-                            padding: "2px 4px",
-                            backgroundColor: "#efebe9",
-                            borderRadius: "4px",
-                            fontSize: "9px",
-                            color: "#5d4037"
-                          }}>
-                            <FileText style={{ width: "10px", height: "10px" }} />
-                            <span style={{ 
-                              maxWidth: "80px", 
-                              overflow: "hidden", 
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap"
-                            }}>
-                              {file.name || `File ${fileIndex + 1}`}
-                            </span>
-                            <button
-                              onClick={() => handleDeleteFile(document.id, fileIndex)}
-                              style={{
-                                background: "none",
-                                border: "none",
-                                color: "#c62828",
-                                cursor: "pointer",
-                                padding: "0",
-                                display: "flex",
-                                alignItems: "center"
-                              }}
-                              title="Delete file"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))}
+  .map((file, fileIndex) => {
+    const displayName = getFileDisplayName(file);
+    const fileUrl = typeof file === 'string' ? file : file.url;
+    
+    return (
+      <div key={fileIndex} style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "4px",
+        padding: "2px 4px",
+        backgroundColor: "#efebe9",
+        borderRadius: "4px",
+        fontSize: "9px",
+        color: "#5d4037"
+      }}>
+        <FileText style={{ width: "10px", height: "10px" }} />
+        <span style={{ 
+          maxWidth: "80px", 
+          overflow: "hidden", 
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap"
+        }}>
+          {displayName}
+        </span>
+        {fileUrl ? (
+          <a 
+            href={fileUrl} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            style={{
+              color: "#1976d2",
+              textDecoration: "none",
+              marginRight: "4px",
+              fontSize: "8px"
+            }}
+            title="View file"
+          >
+            👁️
+          </a>
+        ) : null}
+        <button
+          onClick={() => handleDeleteFile(document.id, fileIndex)}
+          style={{
+            background: "none",
+            border: "none",
+            color: uploadingFiles[document.id] ? "#999" : "#c62828",
+            cursor: uploadingFiles[document.id] ? "not-allowed" : "pointer",
+            padding: "0",
+            display: "flex",
+            alignItems: "center"
+          }}
+          title="Delete file"
+          disabled={uploadingFiles[document.id]}
+        >
+          {uploadingFiles[document.id] ? "..." : "×"}
+        </button>
+      </div>
+    );
+  })}
                       </div>
                     )}
                   </div>
