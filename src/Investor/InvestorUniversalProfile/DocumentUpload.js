@@ -341,7 +341,34 @@ const handleDeleteFile = async (documentId, fileIndex) => {
     
     setFormData(updatedData);
     await updateData(updatedData);
+    // Add this right after: await updateData(updatedData);
+// And before: // Update upload status
+
+// Direct Firestore update to ensure the file reference is completely removed
+try {
+  const userId = auth.currentUser?.uid;
+  if (userId) {
+    const docRef = doc(db, "MyuniversalProfiles", userId);
     
+    // Update the specific document field in Firestore
+    await updateDoc(docRef, {
+      [`formData.documentUpload.${documentId}`]: updatedFiles.length > 0 ? updatedFiles : null
+    });
+    
+    console.log("✅ File reference removed from Firestore");
+    
+    // Also update the completedSections if this was the last file
+    if (updatedFiles.length === 0) {
+      await updateDoc(docRef, {
+        [`completedSections.documentUpload`]: false
+      });
+      console.log("✅ Document upload section marked as incomplete");
+    }
+  }
+} catch (firestoreError) {
+  console.error("❌ Firestore update failed:", firestoreError);
+  // Don't throw error here - we still want to update local state
+}
     // Update upload status
     setUploadStatus(prev => ({
       ...prev,
