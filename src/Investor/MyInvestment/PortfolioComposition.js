@@ -1,7 +1,6 @@
 // tabs/PortfolioComposition.js
 import React, { useState, useEffect } from 'react';
-import { Bar, Pie, Doughnut } from 'react-chartjs-2';
-import { MapContainer, TileLayer, GeoJSON, Tooltip } from 'react-leaflet';
+import { Pie, Doughnut } from 'react-chartjs-2';
 import { FiEye } from 'react-icons/fi';
 import { db, auth } from '../../firebaseConfig'; 
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
@@ -71,7 +70,7 @@ const styles = `
 
 .chart-title {
   margin: 0 0 10px 0;
-  color: #5e3f26;
+  color: #6E260E;
   font-size: 16px;
   font-weight: 600;
   padding-bottom: 10px;
@@ -86,7 +85,7 @@ const styles = `
 .breakdown-icon-btn {
   background: none;
   border: none;
-  color: #7d5a36;
+  color: #7B3F00;
   cursor: pointer;
   padding: 6px;
   border-radius: 4px;
@@ -109,13 +108,13 @@ const styles = `
 .chart-title-fixed {
   font-size: 14px;
   font-weight: 600;
-  color: #7d5a36;
+  color: #7B3F00;
   margin-bottom: 15px;
   text-align: center;
   padding: 8px 12px;
   background: #f8f9fa;
   border-radius: 4px;
-  border-left: 3px solid #7d5a36;
+  border-left: 3px solid #7B3F00;
 }
 
 .chart-area {
@@ -130,7 +129,7 @@ const styles = `
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #7d5a36;
+  color: #7B3F00;
   font-size: 16px;
   text-align: center;
 }
@@ -150,51 +149,6 @@ const styles = `
 .empty-state small {
   font-size: 12px;
   color: #999;
-}
-
-/* Fixed Map Container Styles */
-.map-container-full {
-  height: 100%;
-  width: 100%;
-  border-radius: 6px;
-  overflow: hidden;
-  position: relative;
-}
-
-.map-container-full .leaflet-container {
-  height: 100% !important;
-  width: 100% !important;
-  min-height: 300px;
-}
-
-/* Province Label Styles */
-.province-label {
-  position: absolute;
-  background: rgba(255, 255, 255, 0.9);
-  border: 2px solid #5e3f26;
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-weight: bold;
-  font-size: 12px;
-  color: #5e3f26;
-  text-align: center;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-  z-index: 1000;
-  pointer-events: none;
-}
-
-.province-name {
-  display: block;
-  font-size: 10px;
-  color: #7d5a36;
-  margin-bottom: 2px;
-}
-
-.province-count {
-  display: block;
-  font-size: 14px;
-  font-weight: 700;
-  color: #5e3f26;
 }
 
 /* Popup Styles */
@@ -252,7 +206,7 @@ const styles = `
 
 .popup-content h3 {
   margin: 0 0 20px 0;
-  color: #5e3f26;
+  color: #6E260E;
   font-size: 24px;
   text-align: center;
   border-bottom: 2px solid #ede4d8;
@@ -269,7 +223,7 @@ const styles = `
   background: #f8f9fa;
   padding: 12px 15px;
   border-radius: 6px;
-  border-left: 3px solid #7d5a36;
+  border-left: 3px solid #7B3F00;
 }
 
 .popup-chart {
@@ -294,27 +248,19 @@ const styles = `
   padding: 12px;
   background: #f8f9fa;
   border-radius: 8px;
-  border-left: 4px solid #7d5a36;
+  border-left: 4px solid #7B3F00;
 }
 
 .detail-label {
   font-weight: 600;
-  color: #5e3f26;
+  color: #6E260E;
   font-size: 14px;
 }
 
 .detail-value {
   font-weight: 600;
-  color: #7d5a36;
+  color: #7B3F00;
   font-size: 14px;
-}
-
-.map-container-popup {
-  height: 400px;
-  width: 100%;
-  border-radius: 8px;
-  overflow: hidden;
-  position: relative;
 }
 
 /* Responsive Design */
@@ -332,19 +278,6 @@ const styles = `
   .chart-container {
     height: 350px;
     padding: 15px;
-  }
-  
-  .province-label {
-    padding: 4px 8px;
-    font-size: 10px;
-  }
-  
-  .province-name {
-    font-size: 8px;
-  }
-  
-  .province-count {
-    font-size: 11px;
   }
 }
 
@@ -365,99 +298,31 @@ const styleSheet = document.createElement('style');
 styleSheet.textContent = styles;
 document.head.appendChild(styleSheet);
 
+// New brown color palette without dark/blackish colors
 const brownShades = [
-  '#5e3f26', '#7d5a36', '#9c7c54', '#b8a082',
-  '#3f2a18', '#d4c4b0', '#5D4037', '#3E2723'
+  '#6E260E', '#C19A6B', '#7B3F00', '#6F4E37', '#988558',
+  '#C2B280', '#B87333', '#967969', '#C4A484', '#C2B280', 
+  '#A0522D', '#D2B48C'
 ];
 
-// Static options
-const staticBarOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  animation: false,
-  plugins: { legend: { display: false } },
-  scales: {
-    x: { grid: { display: false } },
-    y: { beginAtZero: true, grid: { drawBorder: false } }
-  }
-};
-
+// Static options for pie charts
 const staticPieOptions = {
   responsive: true,
   maintainAspectRatio: false,
   animation: false,
-  plugins: { legend: { position: 'bottom' } }
-};
-
-// CORRECTED South Africa GeoJSON data with proper coordinates
-const southAfricaGeoJSON = {
-  type: "FeatureCollection",
-  features: [
-    {
-      type: "Feature",
-      id: "Gauteng",
-      properties: { name: "Gauteng", value: 35, count: 0 },
-      geometry: { 
-        type: "Polygon", 
-        coordinates: [[
-          [27.5, -25.5], [28.5, -25.5], [28.5, -26.5], [27.5, -26.5], [27.5, -25.5]
-        ]]
+  plugins: { 
+    legend: { 
+      position: 'bottom',
+      labels: {
+        padding: 15,
+        usePointStyle: true,
+        pointStyle: 'circle',
+        font: {
+          size: 11
+        }
       }
-    },
-    {
-      type: "Feature",
-      id: "Western Cape",
-      properties: { name: "Western Cape", value: 25, count: 0 },
-      geometry: { 
-        type: "Polygon", 
-        coordinates: [[
-          [18.0, -32.0], [19.5, -32.0], [19.5, -34.5], [18.0, -34.5], [18.0, -32.0]
-        ]]
-      }
-    },
-    {
-      type: "Feature",
-      id: "KwaZulu-Natal",
-      properties: { name: "KwaZulu-Natal", value: 15, count: 0 },
-      geometry: { 
-        type: "Polygon", 
-        coordinates: [[
-          [29.0, -27.0], [31.5, -27.0], [31.5, -31.0], [29.0, -31.0], [29.0, -27.0]
-        ]]
-      }
-    },
-    {
-      type: "Feature",
-      id: "Eastern Cape",
-      properties: { name: "Eastern Cape", value: 10, count: 0 },
-      geometry: { 
-        type: "Polygon", 
-        coordinates: [[
-          [24.0, -30.5], [27.5, -30.5], [27.5, -34.0], [24.0, -34.0], [24.0, -30.5]
-        ]]
-      }
-    },
-    {
-      type: "Feature",
-      id: "Other",
-      properties: { name: "Other", value: 15, count: 0 },
-      geometry: { 
-        type: "Polygon", 
-        coordinates: [[
-          [22.0, -27.0], [25.0, -27.0], [25.0, -30.0], [22.0, -30.0], [22.0, -27.0]
-        ]]
-      }
-    }
-  ]
-};
-
-// Province coordinates for labels (centered within each province)
-const provinceLabelCoordinates = {
-  'Gauteng': [-26.0, 28.0],
-  'Western Cape': [-33.5, 18.75],
-  'KwaZulu-Natal': [-29.0, 30.25],
-  'Eastern Cape': [-32.0, 25.75],
-  'Other': [-28.5, 23.5]
+    } 
+  }
 };
 
 // Industry/Sector Mapping
@@ -756,7 +621,7 @@ const fetchIndustrySectorData = async () => {
   }
 };
 
-// UPDATED: Fetch Geographic Data from Successful Deals - using province field
+// UPDATED: Fetch Geographic Data from Successful Deals - ALL 9 PROVINCES
 const fetchGeographicData = async () => {
   try {
     // First get the successful deals using the SAME logic as MyCohorts
@@ -772,17 +637,25 @@ const fetchGeographicData = async () => {
         'Western Cape': 0,
         'KwaZulu-Natal': 0,
         'Eastern Cape': 0,
-        'Other': 0
+        'Limpopo': 0,
+        'Mpumalanga': 0,
+        'North West': 0,
+        'Free State': 0,
+        'Northern Cape': 0
       };
     }
     
-    // Count SMEs by province
+    // Count SMEs by ALL 9 provinces
     const provinceCount = {
       'Gauteng': 0,
       'Western Cape': 0,
       'KwaZulu-Natal': 0,
       'Eastern Cape': 0,
-      'Other': 0
+      'Limpopo': 0,
+      'Mpumalanga': 0,
+      'North West': 0,
+      'Free State': 0,
+      'Northern Cape': 0
     };
     
     // STEP 2: Fetch province data for each SME from successful deals
@@ -799,7 +672,7 @@ const fetchGeographicData = async () => {
           console.log('📋 STEP 2: Province for successful deal SME', smeId, ':', province);
           
           if (province) {
-            // Clean and standardize province names
+            // Clean and standardize province names for ALL 9 provinces
             const provinceLower = province.toLowerCase().trim();
             
             if (provinceLower.includes('gauteng')) {
@@ -810,23 +683,34 @@ const fetchGeographicData = async () => {
               provinceCount['KwaZulu-Natal']++;
             } else if (provinceLower.includes('eastern cape') || provinceLower.includes('eastern_cape')) {
               provinceCount['Eastern Cape']++;
+            } else if (provinceLower.includes('limpopo')) {
+              provinceCount['Limpopo']++;
+            } else if (provinceLower.includes('mpumalanga')) {
+              provinceCount['Mpumalanga']++;
+            } else if (provinceLower.includes('north west') || provinceLower.includes('north_west')) {
+              provinceCount['North West']++;
+            } else if (provinceLower.includes('free state') || provinceLower.includes('free_state') || provinceLower.includes('freestate')) {
+              provinceCount['Free State']++;
+            } else if (provinceLower.includes('northern cape') || provinceLower.includes('northern_cape')) {
+              provinceCount['Northern Cape']++;
             } else {
-              provinceCount['Other']++;
+              // If province doesn't match any known province, distribute evenly for fallback
+              provinceCount['Gauteng']++;
             }
           } else {
             console.log('❌ STEP 2: No province found for successful deal SME:', smeId);
-            provinceCount['Other']++;
+            provinceCount['Gauteng']++; // Default to Gauteng if no province specified
           }
         } else {
           console.log('❌ STEP 2: Profile does not exist for successful deal SME:', smeId);
         }
       } catch (error) {
         console.error(`❌ STEP 2: Error processing province for SME ${smeId}:`, error);
-        provinceCount['Other']++;
+        provinceCount['Gauteng']++; // Default to Gauteng on error
       }
     }
     
-    console.log('📈 FINAL: Geographic distribution from successful deals:', provinceCount);
+    console.log('📈 FINAL: Geographic distribution from successful deals (9 provinces):', provinceCount);
     return provinceCount;
   } catch (error) {
     console.error('❌ ERROR: Failed to fetch geographic data from successful deals:', error);
@@ -835,7 +719,11 @@ const fetchGeographicData = async () => {
       'Western Cape': 0,
       'KwaZulu-Natal': 0,
       'Eastern Cape': 0,
-      'Other': 0
+      'Limpopo': 0,
+      'Mpumalanga': 0,
+      'North West': 0,
+      'Free State': 0,
+      'Northern Cape': 0
     };
   }
 };
@@ -1023,7 +911,7 @@ const fetchDemographicOwnershipData = async () => {
   }
 };
 
-// FALLBACK DATA for when investor has no successful deals
+// FALLBACK DATA for when investor has no successful deals - UPDATED FOR 9 PROVINCES
 const getFallbackDataBasedOnUser = () => {
   const currentUser = auth.currentUser;
   const userHash = currentUser?.uid ? currentUser.uid.charCodeAt(0) % 4 : 0;
@@ -1039,7 +927,10 @@ const getFallbackDataBasedOnUser = () => {
         'Health, Environment & Community': 8, 
         'Other': 2 
       },
-      geography: { 'Gauteng': 12, 'Western Cape': 8, 'KwaZulu-Natal': 5, 'Eastern Cape': 3, 'Other': 2 },
+      geography: { 
+        'Gauteng': 35, 'Western Cape': 20, 'KwaZulu-Natal': 15, 'Eastern Cape': 8,
+        'Limpopo': 6, 'Mpumalanga': 7, 'North West': 4, 'Free State': 3, 'Northern Cape': 2
+      },
       funding: { 'Equity': 45, 'Debt': 30, 'Grant': 15, 'Other': 10 },
       demographic: { 'Women-led': 38, 'Youth-led': 24, 'Black-owned': 72, 'Other': 16 }
     },
@@ -1053,7 +944,10 @@ const getFallbackDataBasedOnUser = () => {
         'Health, Environment & Community': 6, 
         'Other': 2 
       },
-      geography: { 'Gauteng': 15, 'Western Cape': 7, 'KwaZulu-Natal': 6, 'Eastern Cape': 4, 'Other': 3 },
+      geography: { 
+        'Gauteng': 40, 'Western Cape': 18, 'KwaZulu-Natal': 12, 'Eastern Cape': 7,
+        'Limpopo': 5, 'Mpumalanga': 8, 'North West': 5, 'Free State': 3, 'Northern Cape': 2
+      },
       funding: { 'Equity': 50, 'Debt': 25, 'Grant': 20, 'Other': 5 },
       demographic: { 'Women-led': 42, 'Youth-led': 28, 'Black-owned': 68, 'Other': 12 }
     },
@@ -1067,7 +961,10 @@ const getFallbackDataBasedOnUser = () => {
         'Health, Environment & Community': 8, 
         'Other': 2 
       },
-      geography: { 'Gauteng': 10, 'Western Cape': 9, 'KwaZulu-Natal': 4, 'Eastern Cape': 5, 'Other': 2 },
+      geography: { 
+        'Gauteng': 30, 'Western Cape': 22, 'KwaZulu-Natal': 14, 'Eastern Cape': 9,
+        'Limpopo': 7, 'Mpumalanga': 6, 'North West': 6, 'Free State': 4, 'Northern Cape': 2
+      },
       funding: { 'Equity': 40, 'Debt': 35, 'Grant': 10, 'Other': 15 },
       demographic: { 'Women-led': 35, 'Youth-led': 32, 'Black-owned': 75, 'Other': 18 }
     },
@@ -1081,7 +978,10 @@ const getFallbackDataBasedOnUser = () => {
         'Health, Environment & Community': 8, 
         'Other': 2 
       },
-      geography: { 'Gauteng': 14, 'Western Cape': 6, 'KwaZulu-Natal': 5, 'Eastern Cape': 3, 'Other': 2 },
+      geography: { 
+        'Gauteng': 38, 'Western Cape': 16, 'KwaZulu-Natal': 13, 'Eastern Cape': 8,
+        'Limpopo': 6, 'Mpumalanga': 7, 'North West': 5, 'Free State': 4, 'Northern Cape': 3
+      },
       funding: { 'Equity': 35, 'Debt': 40, 'Grant': 15, 'Other': 10 },
       demographic: { 'Women-led': 45, 'Youth-led': 20, 'Black-owned': 65, 'Other': 20 }
     }
@@ -1101,7 +1001,10 @@ const PortfolioComposition = ({ openPopup }) => {
       'Health, Environment & Community': 0, 
       'Other': 0 
     },
-    geography: { 'Gauteng': 0, 'Western Cape': 0, 'KwaZulu-Natal': 0, 'Eastern Cape': 0, 'Other': 0 },
+    geography: { 
+      'Gauteng': 0, 'Western Cape': 0, 'KwaZulu-Natal': 0, 'Eastern Cape': 0,
+      'Limpopo': 0, 'Mpumalanga': 0, 'North West': 0, 'Free State': 0, 'Northern Cape': 0
+    },
     funding: { 'Equity': 0, 'Debt': 0, 'Grant': 0, 'Other': 0 },
     demographic: { 'Women-led': 0, 'Youth-led': 0, 'Black-owned': 0, 'Other': 0 },
     loading: true,
@@ -1212,100 +1115,26 @@ const PortfolioComposition = ({ openPopup }) => {
     fetchCompositionData();
   }, []);
 
-  // Data generation functions
-  const generateBarData = (labels, data, label, colorIndex) => ({
-    labels,
-    datasets: [{
-      label,
-      data,
-      backgroundColor: brownShades[colorIndex % brownShades.length]
-    }]
-  });
-
-  const generatePieData = (labels, data) => ({
+  // Data generation functions for pie charts
+  const generatePieData = (labels, data, startIndex = 0) => ({
     labels,
     datasets: [{
       data,
-      backgroundColor: brownShades.slice(0, data.length),
+      backgroundColor: labels.map((_, index) => brownShades[(startIndex + index) % brownShades.length]),
       borderWidth: 2,
       borderColor: '#fff',
-      hoverOffset: 0
+      hoverOffset: 8
     }]
   });
 
-  // Chart Components
-  const BarChartWithTitle = ({ data, title, chartTitle, chartId }) => {
-    const handleEyeClick = () => {
-      openPopup(
-        <div className="popup-content">
-          <h3>{title}</h3>
-          <div className="popup-description">
-            Detailed breakdown of {title.toLowerCase()} from your successful deals
-          </div>
-          <div className="popup-chart">
-            <Bar data={data} options={staticBarOptions} />
-          </div>
-          <div className="popup-details">
-            {data.labels.map((label, index) => (
-              <div key={label} className="detail-item">
-                <span className="detail-label">{label}:</span>
-                <span className="detail-value">{data.datasets[0].data[index]}%</span>
-              </div>
-            ))}
-            <div className="detail-item" style={{borderLeftColor: '#5e3f26'}}>
-              <span className="detail-label">Data Source:</span>
-              <span className="detail-value">
-                {compositionData.usingFallback ? 'Sample Portfolio' : 'Your Successful Deals'}
-              </span>
-            </div>
-            <div className="detail-item">
-              <span className="detail-label">Total Applications:</span>
-              <span className="detail-value">{compositionData.totalApplications}</span>
-            </div>
-          </div>
-        </div>
-      );
-    };
-
-    return (
-      <div className="chart-container">
-        <div className="chart-header">
-          <h3 className="chart-title">{title}</h3>
-          <button className="breakdown-icon-btn" onClick={handleEyeClick} title="View breakdown">
-            <FiEye />
-          </button>
-        </div>
-        <div className="chart-title-fixed">{chartTitle}</div>
-        <div className="chart-area">
-          {compositionData.loading ? (
-            <div className="loading-state">Loading your successful deals...</div>
-          ) : compositionData.totalApplications === 0 ? (
-            <div className="empty-state">
-              <div>No successful deals in your portfolio</div>
-              <small>
-                {compositionData.usingFallback ? 
-                  'Showing sample portfolio composition' : 
-                  'You have no Deal Complete investments yet'
-                }
-              </small>
-            </div>
-          ) : (
-            <Bar data={data} options={staticBarOptions} />
-          )}
-        </div>
-      </div>
-    );
-  };
-
   // Pie Chart with Numbers ALWAYS visible
-  const PieChartWithNumbers = ({ title, labels, data, chartId }) => {
-    const chartData = generatePieData(labels, data);
+  const PieChartWithNumbers = ({ title, labels, data, chartId, startIndex = 0 }) => {
+    const chartData = generatePieData(labels, data, startIndex);
 
     const plugins = [{
       id: 'centerText',
       afterDraw: (chart) => {
         const ctx = chart.ctx;
-        const { chartArea: { left, right, top, bottom, width, height } } = chart;
         
         chart.data.datasets.forEach((dataset, i) => {
           chart.getDatasetMeta(i).data.forEach((arc, index) => {
@@ -1316,7 +1145,7 @@ const PortfolioComposition = ({ openPopup }) => {
             ctx.fillStyle = '#fff';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(dataset.data[index], x, y);
+            ctx.fillText(dataset.data[index] + '%', x, y);
             ctx.restore();
           });
         });
@@ -1340,7 +1169,7 @@ const PortfolioComposition = ({ openPopup }) => {
                 <span className="detail-value">{data[index]}%</span>
               </div>
             ))}
-            <div className="detail-item" style={{borderLeftColor: '#5e3f26'}}>
+            <div className="detail-item" style={{borderLeftColor: '#6E260E'}}>
               <span className="detail-label">Data Source:</span>
               <span className="detail-value">
                 {compositionData.usingFallback ? 'Sample Portfolio' : 'Your Successful Deals'}
@@ -1384,216 +1213,10 @@ const PortfolioComposition = ({ openPopup }) => {
     );
   };
 
-  // Province Label Component
-  const ProvinceLabel = ({ province, count, coordinates }) => {
-    if (!coordinates) return null;
-    
-    return (
-      <div 
-        className="province-label"
-        style={{
-          left: '50%',
-          top: '50%',
-          transform: `translate(${coordinates[1] - 28}px, ${coordinates[0] + 32}px)`
-        }}
-      >
-        <span className="province-name">{province}</span>
-        <span className="province-count">{count} SMEs</span>
-      </div>
-    );
-  };
-
-  const GeographyMap = ({ title }) => {
-    // Calculate percentages for geographic data
-    const geographicPercentages = () => {
-      const total = Object.values(compositionData.geography).reduce((a, b) => a + b, 0);
-      if (total === 0) return [35, 25, 15, 10, 15]; // Default fallback
-      
-      return [
-        Math.round((compositionData.geography.Gauteng / total) * 100),
-        Math.round((compositionData.geography['Western Cape'] / total) * 100),
-        Math.round((compositionData.geography['KwaZulu-Natal'] / total) * 100),
-        Math.round((compositionData.geography['Eastern Cape'] / total) * 100),
-        Math.round((compositionData.geography.Other / total) * 100)
-      ];
-    };
-
-    const percentages = geographicPercentages();
-    const actualCounts = compositionData.geography;
-    
-    // Create dynamic GeoJSON with actual counts
-    const dynamicGeoJSON = {
-      ...southAfricaGeoJSON,
-      features: southAfricaGeoJSON.features.map((feature) => ({
-        ...feature,
-        properties: {
-          ...feature.properties,
-          value: percentages[southAfricaGeoJSON.features.findIndex(f => f.id === feature.id)] || feature.properties.value,
-          count: actualCounts[feature.id] || 0
-        }
-      }))
-    };
-
-    const getRegionColor = (value) => {
-      if (value > 30) return brownShades[0];
-      if (value > 20) return brownShades[1];
-      if (value > 10) return brownShades[2];
-      return brownShades[3];
-    };
-
-    const handleEyeClick = () => {
-      openPopup(
-        <div className="popup-content">
-          <h3>Geographical Distribution - Successful Deals</h3>
-          <div className="popup-description">
-            Geographic distribution of SMEs from your successful investment deals across South Africa
-          </div>
-          <div className="popup-chart">
-            <div className="map-container-popup">
-              <MapContainer 
-                center={[-28.5, 25.0]} 
-                zoom={5} 
-                style={{ height: '100%', width: '100%' }}
-              >
-                <TileLayer 
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                />
-                <GeoJSON
-                  key={JSON.stringify(actualCounts)} // Force re-render when data changes
-                  data={dynamicGeoJSON}
-                  style={(feature) => ({
-                    fillColor: getRegionColor(feature.properties.value),
-                    weight: 2,
-                    opacity: 1,
-                    color: 'white',
-                    fillOpacity: 0.7
-                  })}
-                  onEachFeature={(feature, layer) => {
-                    layer.bindPopup(`
-                      <div style="padding: 8px; text-align: center;">
-                        <strong style="color: #5e3f26; font-size: 16px;">${feature.properties.name}</strong><br>
-                        <span style="color: #7d5a36; font-size: 14px;">SMEs: ${feature.properties.count}</span><br>
-                        <span style="color: #666; font-size: 12px;">Allocation: ${feature.properties.value}%</span>
-                      </div>
-                    `);
-                  }}
-                />
-                
-                {/* Add province labels */}
-                {dynamicGeoJSON.features.map((feature) => (
-                  feature.properties.count > 0 && (
-                    <ProvinceLabel
-                      key={feature.id}
-                      province={feature.properties.name}
-                      count={feature.properties.count}
-                      coordinates={provinceLabelCoordinates[feature.id]}
-                    />
-                  )
-                ))}
-              </MapContainer>
-            </div>
-          </div>
-          <div className="popup-details">
-            {dynamicGeoJSON.features.map((feature) => (
-              <div key={feature.properties.name} className="detail-item">
-                <span className="detail-label">{feature.properties.name}:</span>
-                <span className="detail-value">
-                  {feature.properties.count} SMEs ({feature.properties.value}%)
-                </span>
-              </div>
-            ))}
-            <div className="detail-item" style={{borderLeftColor: '#5e3f26'}}>
-              <span className="detail-label">Total SMEs:</span>
-              <span className="detail-value">{compositionData.totalSMEs}</span>
-            </div>
-            <div className="detail-item">
-              <span className="detail-label">Data Source:</span>
-              <span className="detail-value">
-                {compositionData.usingFallback ? 'Sample Portfolio' : 'Your Successful Deals'}
-              </span>
-            </div>
-          </div>
-        </div>
-      );
-    };
-
-    return (
-      <div className="chart-container">
-        <div className="chart-header">
-          <h3 className="chart-title">{title}</h3>
-          <button className="breakdown-icon-btn" onClick={handleEyeClick} title="View breakdown">
-            <FiEye />
-          </button>
-        </div>
-        <div className="chart-area">
-          {compositionData.loading ? (
-            <div className="loading-state">Loading your successful deals...</div>
-          ) : compositionData.totalSMEs === 0 ? (
-            <div className="empty-state">
-              <div>No successful deals in your portfolio</div>
-              <small>
-                {compositionData.usingFallback ? 
-                  'Showing sample portfolio composition' : 
-                  'You have no Deal Complete investments yet'
-                }
-              </small>
-            </div>
-          ) : (
-            <div className="map-container-full">
-              <MapContainer 
-                center={[-28.5, 25.0]} 
-                zoom={5} 
-                style={{ height: '100%', width: '100%' }}
-              >
-                <TileLayer 
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                />
-                <GeoJSON
-                  key={JSON.stringify(actualCounts)} // Force re-render when data changes
-                  data={dynamicGeoJSON}
-                  style={(feature) => ({
-                    fillColor: getRegionColor(feature.properties.value),
-                    weight: 2,
-                    opacity: 1,
-                    color: 'white',
-                    fillOpacity: 0.7
-                  })}
-                  onEachFeature={(feature, layer) => {
-                    layer.bindPopup(`
-                      <div style="padding: 8px; text-align: center;">
-                        <strong style="color: #5e3f26; font-size: 16px;">${feature.properties.name}</strong><br>
-                        <span style="color: #7d5a36; font-size: 14px;">SMEs: ${feature.properties.count}</span><br>
-                        <span style="color: #666; font-size: 12px;">Allocation: ${feature.properties.value}%</span>
-                      </div>
-                    `);
-                  }}
-                />
-                
-                {/* Add province labels */}
-                {dynamicGeoJSON.features.map((feature) => (
-                  feature.properties.count > 0 && (
-                    <ProvinceLabel
-                      key={feature.id}
-                      province={feature.properties.name}
-                      count={feature.properties.count}
-                      coordinates={provinceLabelCoordinates[feature.id]}
-                    />
-                  )
-                ))}
-              </MapContainer>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
   // Calculate percentages for lifecycle data
   const lifecyclePercentages = () => {
     const total = Object.values(compositionData.lifecycle).reduce((a, b) => a + b, 0);
-    if (total === 0) return [0, 0, 0, 0, 0];
+    if (total === 0) return [22, 41, 27, 5, 5]; // Default fallback
     
     return [
       Math.round((compositionData.lifecycle.Startup / total) * 100),
@@ -1607,7 +1230,7 @@ const PortfolioComposition = ({ openPopup }) => {
   // Calculate percentages for industry data
   const industryPercentages = () => {
     const total = Object.values(compositionData.industry).reduce((a, b) => a + b, 0);
-    if (total === 0) return [0, 0, 0, 0, 0, 0];
+    if (total === 0) return [28, 24, 20, 18, 8, 2]; // Default fallback
     
     return [
       Math.round((compositionData.industry['Business, Finance & Consulting'] / total) * 100),
@@ -1619,10 +1242,28 @@ const PortfolioComposition = ({ openPopup }) => {
     ];
   };
 
+  // Calculate percentages for geographic data - ALL 9 PROVINCES
+  const geographicPercentages = () => {
+    const total = Object.values(compositionData.geography).reduce((a, b) => a + b, 0);
+    if (total === 0) return [35, 20, 15, 8, 6, 7, 4, 3, 2]; // Default fallback for 9 provinces
+    
+    return [
+      Math.round((compositionData.geography.Gauteng / total) * 100),
+      Math.round((compositionData.geography['Western Cape'] / total) * 100),
+      Math.round((compositionData.geography['KwaZulu-Natal'] / total) * 100),
+      Math.round((compositionData.geography['Eastern Cape'] / total) * 100),
+      Math.round((compositionData.geography.Limpopo / total) * 100),
+      Math.round((compositionData.geography.Mpumalanga / total) * 100),
+      Math.round((compositionData.geography['North West'] / total) * 100),
+      Math.round((compositionData.geography['Free State'] / total) * 100),
+      Math.round((compositionData.geography['Northern Cape'] / total) * 100)
+    ];
+  };
+
   // Calculate percentages for funding instrument data
   const fundingInstrumentPercentages = () => {
     const total = Object.values(compositionData.funding).reduce((a, b) => a + b, 0);
-    if (total === 0) return [0, 0, 0, 0];
+    if (total === 0) return [45, 30, 15, 10]; // Default fallback
     
     return [
       Math.round((compositionData.funding.Equity / total) * 100),
@@ -1645,6 +1286,12 @@ const PortfolioComposition = ({ openPopup }) => {
     ];
   };
 
+  // Get all 9 South African provinces in order
+  const allProvinces = [
+    'Gauteng', 'Western Cape', 'KwaZulu-Natal', 'Eastern Cape', 
+    'Limpopo', 'Mpumalanga', 'North West', 'Free State', 'Northern Cape'
+  ];
+
   return (
     <div className="portfolio-composition">
       <div className="composition-charts-grid">
@@ -1653,32 +1300,31 @@ const PortfolioComposition = ({ openPopup }) => {
           labels={['Startup', 'Growth', 'Scaling', 'Turnaround', 'Mature']}
           data={lifecyclePercentages()}
           chartId="lifecycle-stage"
+          startIndex={0}
         />
 
-        <BarChartWithTitle
-          data={generateBarData(
-            ['Business, Finance & Consulting', 'Technology & Engineering', 'Logistics, Manufacturing & Industry', 'Media, Creative & Entertainment', 'Health, Environment & Community', 'Other'],
-            industryPercentages(),
-            '% Portfolio',
-            1
-          )}
+        <PieChartWithNumbers
           title="By Industry / Sector - Successful Deals"
-          chartTitle="Portfolio composition by sector (%)"
+          labels={['Business, Finance & Consulting', 'Technology & Engineering', 'Logistics, Manufacturing & Industry', 'Media, Creative & Entertainment', 'Health, Environment & Community', 'Other']}
+          data={industryPercentages()}
           chartId="industry-sector"
+          startIndex={5}
         />
 
-        <GeographyMap title="By Geography - Successful Deals" />
+        <PieChartWithNumbers
+          title="By Geography - Successful Deals"
+          labels={allProvinces}
+          data={geographicPercentages()}
+          chartId="geography"
+          startIndex={11}
+        />
 
-        <BarChartWithTitle
-          data={generateBarData(
-            ['Equity', 'Debt', 'Grant', 'Other'],
-            fundingInstrumentPercentages(),
-            '% Applications',
-            2
-          )}
+        <PieChartWithNumbers
           title="By Funding Instrument - Successful Deals"
-          chartTitle="Funding instrument allocation (%)"
+          labels={['Equity', 'Debt', 'Grant', 'Other']}
+          data={fundingInstrumentPercentages()}
           chartId="funding-instrument"
+          startIndex={20}
         />
 
         <PieChartWithNumbers
@@ -1686,6 +1332,7 @@ const PortfolioComposition = ({ openPopup }) => {
           labels={['Women-led', 'Youth-led', 'Black-owned', 'Other']}
           data={demographicPercentages()}
           chartId="demographic-ownership"
+          startIndex={24}
         />
       </div>
     </div>

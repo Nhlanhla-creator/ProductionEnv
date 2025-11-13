@@ -97,6 +97,21 @@ const howDidYouHearOptions = [
   { value: "Other", label: "Other" },
 ]
 
+const financialYearMonths = [
+  { value: "January", label: "January" },
+  { value: "February", label: "February" },
+  { value: "March", label: "March" },
+  { value: "April", label: "April" },
+  { value: "May", label: "May" },
+  { value: "June", label: "June" },
+  { value: "July", label: "July" },
+  { value: "August", label: "August" },
+  { value: "September", label: "September" },
+  { value: "October", label: "October" },
+  { value: "November", label: "November" },
+  { value: "December", label: "December" },
+]
+
 // MultiSelectDropdown component
 function MultiSelectDropdown({
   options,
@@ -279,8 +294,6 @@ export default function EntityOverview({ data = {}, updateData }) {
           </FormField>
         </div>
 
-
-
         <div className={styles.gridContainer}>
           <FormField label="Registration Number" required>
             <input
@@ -291,6 +304,23 @@ export default function EntityOverview({ data = {}, updateData }) {
               className={styles.formInput}
               required
             />
+          </FormField>
+
+          <FormField label="Financial Year Start Month" required>
+            <select
+              name="financialYearStart"
+              value={data.financialYearStart || ""}
+              onChange={handleChange}
+              className={styles.formSelect}
+              required
+            >
+              <option value="">Select Financial Year Start Month</option>
+              {financialYearMonths.map((month) => (
+                <option key={month.value} value={month.value}>
+                  {month.label}
+                </option>
+              ))}
+            </select>
           </FormField>
 
           <FormField label="Regulatory License Number">
@@ -485,7 +515,7 @@ export default function EntityOverview({ data = {}, updateData }) {
             />
             
             {/* Other specification field for Additional Support */}
-            {data.additionalSupport && data.additionalSupport.includes("other") && (
+            {data.additionalSupport && data.additionalSupport.includes("Other") && (
               <div style={{ marginTop: "8px" }}>
                 <input
                   type="text"
@@ -510,7 +540,7 @@ export default function EntityOverview({ data = {}, updateData }) {
             />
             
             {/* Other specification field for Additional Services */}
-            {data.additionalServices && data.additionalServices.includes("other") && (
+            {data.additionalServices && data.additionalServices.includes("Other") && (
               <div style={{ marginTop: "8px" }}>
                 <input
                   type="text"
@@ -519,7 +549,6 @@ export default function EntityOverview({ data = {}, updateData }) {
                   onChange={handleChange}
                   className={styles.formInput}
                   placeholder="Please specify other additional services..."
-                  required
                 />
               </div>
             )}
@@ -543,7 +572,7 @@ export default function EntityOverview({ data = {}, updateData }) {
               ))}
             </select>
             
-            {data.howDidYouHear === "other" && (
+            {data.howDidYouHear === "Other" && (
               <div style={{ marginTop: "8px" }}>
                 <input
                   type="text"
