@@ -193,13 +193,12 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
     let totalScore = 0
     let maxScore = 0
 
-    const documents = rubric.map((doc) => {
-      let verified = false
-      let weight = doc.weights[weightKey]
+     const documents = rubric.map((doc) => {
+    let verified = false
+    let weight = doc.weights[weightKey]
 
-      if (doc.condition && !doc.condition()) {
-        // If the condition fails (e.g. VAT not applicable), skip this score entirely
-        weight = 0
+    if (doc.condition && !doc.condition()) {
+      weight = 0
       } else if (doc.isProfileScore) {
         const totalSections = [
           "instructions",
@@ -223,25 +222,19 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
         // Consider 80%+ as verified ✅
         verified = completionRatio >= 0.8
       } else if (doc.verifyFn) {
-        // Use custom verification function if provided
-        verified = doc.verifyFn(data)
-      } else if (doc.documentId || doc.fundingDocumentId) {
-        // Check in documents section first, then funding documents, then fall back to original path
-        if (doc.fundingDocumentId) {
-          verified = checkFieldExistsInFundingDocuments(data, doc.fundingDocumentId)
-        } else if (doc.documentId) {
-          verified = checkFieldExistsInDocuments(data, doc.documentId)
-        } else {
-          verified = checkFieldExists(data, doc.path)
-        }
-      } else {
-        verified = checkFieldExists(data, doc.path)
-      }
+      verified = doc.verifyFn(data)
+    } else if (doc.documentId) {
+      // Check AI validation status
+      const verification = data.verification?.[doc.documentId];
+      verified = verification && verification.status === "verified";
+    } else {
+      verified = checkFieldExists(data, doc.path)
+    }
 
-      if (weight > 0) {
-        maxScore += weight
-        if (verified) totalScore += weight
-      }
+         if (weight > 0) {
+      maxScore += weight
+      if (verified) totalScore += weight
+    }
 
       return {
         path: doc.path,

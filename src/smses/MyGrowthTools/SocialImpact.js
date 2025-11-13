@@ -24,6 +24,198 @@ import ChartDataLabels from "chartjs-plugin-datalabels"
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend, PointElement, LineElement)
 
+// B-BBEE Level Component - NOW FIRST
+const BbbeeLevel = ({ activeSection, fundingData }) => {
+  const handleDownloadCSV = () => {
+    const blackOwnership = Number.parseFloat(fundingData?.socialImpact?.blackOwnership || 0)
+    const womenOwnership = Number.parseFloat(fundingData?.socialImpact?.womenOwnership || 0)
+    const youthOwnership = Number.parseFloat(fundingData?.socialImpact?.youthOwnership || 0)
+    const disabledOwnership = Number.parseFloat(fundingData?.socialImpact?.disabledOwnership || 0)
+    const totalHDI = blackOwnership + womenOwnership + youthOwnership + disabledOwnership
+
+    let estimatedLevel = 8
+    if (totalHDI >= 300) estimatedLevel = 1
+    else if (totalHDI >= 250) estimatedLevel = 2
+    else if (totalHDI >= 200) estimatedLevel = 3
+    else if (totalHDI >= 150) estimatedLevel = 4
+    else if (totalHDI >= 120) estimatedLevel = 5
+    else if (totalHDI >= 90) estimatedLevel = 6
+    else if (totalHDI >= 60) estimatedLevel = 7
+
+    const csvContent = [
+      ["Metric", "Value"],
+      ["Estimated B-BBEE Level", estimatedLevel],
+      ["Black Ownership %", blackOwnership],
+      ["Women Ownership %", womenOwnership],
+      ["Youth Ownership %", youthOwnership],
+      ["Disabled Ownership %", disabledOwnership],
+      ["Total HDI Score", totalHDI],
+      ["Note", "Simplified estimation based on ownership data only"],
+    ]
+      .map((row) => row.join(","))
+      .join("\n")
+
+    const blob = new Blob([csvContent], { type: "text/csv" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "bbbee-level-data.csv"
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  if (activeSection !== "bbbee-level") return null
+
+  const blackOwnership = Number.parseFloat(fundingData?.socialImpact?.blackOwnership || 0)
+  const womenOwnership = Number.parseFloat(fundingData?.socialImpact?.womenOwnership || 0)
+  const youthOwnership = Number.parseFloat(fundingData?.socialImpact?.youthOwnership || 0)
+  const disabledOwnership = Number.parseFloat(fundingData?.socialImpact?.disabledOwnership || 0)
+  const totalHDI = blackOwnership + womenOwnership + youthOwnership + disabledOwnership
+
+  let estimatedLevel = 8
+  if (totalHDI >= 300) estimatedLevel = 1
+  else if (totalHDI >= 250) estimatedLevel = 2
+  else if (totalHDI >= 200) estimatedLevel = 3
+  else if (totalHDI >= 150) estimatedLevel = 4
+  else if (totalHDI >= 120) estimatedLevel = 5
+  else if (totalHDI >= 90) estimatedLevel = 6
+  else if (totalHDI >= 60) estimatedLevel = 7
+
+  const levels = [1, 2, 3, 4, 5, 6, 7, 8]
+
+  return (
+    <div
+      style={{
+        backgroundColor: "#faf7f2",
+        padding: "20px",
+        margin: "20px 0",
+        borderRadius: "8px",
+        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "20px",
+        }}
+      >
+        <h2 style={{ color: "#4a352f", margin: 0 }}>B-BBEE Level (Estimated)</h2>
+        <button
+          onClick={handleDownloadCSV}
+          style={{
+            padding: "8px 12px",
+            backgroundColor: "#a67c52",
+            color: "#faf7f2",
+            border: "none",
+            borderRadius: "6px",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: "5px",
+          }}
+        >
+          <Download size={16} />
+          Download CSV
+        </button>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          marginTop: "30px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+          }}
+        >
+          <div
+            style={{
+              width: "120px",
+              height: "120px",
+              borderRadius: "50%",
+              backgroundColor: "#a67c52",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "white",
+              fontSize: "48px",
+              fontWeight: "bold",
+              marginBottom: "20px",
+            }}
+          >
+            {estimatedLevel}
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: "5px",
+              marginBottom: "20px",
+            }}
+          >
+            {levels.map((level) => (
+              <div
+                key={level}
+                style={{
+                  width: "35px",
+                  height: "35px",
+                  borderRadius: "50%",
+                  backgroundColor: level <= estimatedLevel ? "#a67c52" : "#e6d7c3",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: level <= estimatedLevel ? "white" : "#4a352f",
+                  fontWeight: "bold",
+                  fontSize: "14px",
+                }}
+              >
+                {level}
+              </div>
+            ))}
+          </div>
+
+          <div
+            style={{
+              backgroundColor: "#f5f0e1",
+              padding: "20px",
+              borderRadius: "6px",
+              textAlign: "center",
+              maxWidth: "400px",
+            }}
+          >
+            <h3 style={{ color: "#7d5a50", margin: "0 0 15px 0" }}>Ownership Summary</h3>
+            <div style={{ color: "#4a352f", fontSize: "14px", textAlign: "left" }}>
+              <div>Black Ownership: {blackOwnership}%</div>
+              <div>Women Ownership: {womenOwnership}%</div>
+              <div>Youth Ownership: {youthOwnership}%</div>
+              <div>Disabled Ownership: {disabledOwnership}%</div>
+              <hr style={{ margin: "10px 0", border: "1px solid #c8b6a6" }} />
+              <div style={{ fontWeight: "bold" }}>Total HDI Score: {totalHDI}</div>
+            </div>
+            <div
+              style={{
+                marginTop: "15px",
+                fontSize: "12px",
+                color: "#7d5a50",
+                fontStyle: "italic",
+              }}
+            >
+              *Simplified estimation based on ownership data only
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Jobs Created Component
 const JobsCreated = ({ activeSection, fundingData }) => {
   const handleDownloadCSV = () => {
@@ -303,7 +495,6 @@ const HDIFunding = ({ activeSection, fundingData }) => {
                   position: "right",
                 },
                 datalabels: {
-                  // ← KEEP this configuration
                   color: "#fff",
                   font: {
                     weight: "bold",
@@ -315,7 +506,7 @@ const HDIFunding = ({ activeSection, fundingData }) => {
                 },
               },
             }}
-            plugins={[ChartDataLabels]} // ← ADD THIS LINE (after options)
+            plugins={[ChartDataLabels]}
           />
         </div>
         <div>
@@ -455,201 +646,9 @@ const CSISpend = ({ activeSection, fundingData }) => {
   )
 }
 
-// B-BBEE Level Component
-const BbbeeLevel = ({ activeSection, fundingData }) => {
-  const handleDownloadCSV = () => {
-    const blackOwnership = Number.parseFloat(fundingData?.socialImpact?.blackOwnership || 0)
-    const womenOwnership = Number.parseFloat(fundingData?.socialImpact?.womenOwnership || 0)
-    const youthOwnership = Number.parseFloat(fundingData?.socialImpact?.youthOwnership || 0)
-    const disabledOwnership = Number.parseFloat(fundingData?.socialImpact?.disabledOwnership || 0)
-    const totalHDI = blackOwnership + womenOwnership + youthOwnership + disabledOwnership
-
-    let estimatedLevel = 8
-    if (totalHDI >= 300) estimatedLevel = 1
-    else if (totalHDI >= 250) estimatedLevel = 2
-    else if (totalHDI >= 200) estimatedLevel = 3
-    else if (totalHDI >= 150) estimatedLevel = 4
-    else if (totalHDI >= 120) estimatedLevel = 5
-    else if (totalHDI >= 90) estimatedLevel = 6
-    else if (totalHDI >= 60) estimatedLevel = 7
-
-    const csvContent = [
-      ["Metric", "Value"],
-      ["Estimated B-BBEE Level", estimatedLevel],
-      ["Black Ownership %", blackOwnership],
-      ["Women Ownership %", womenOwnership],
-      ["Youth Ownership %", youthOwnership],
-      ["Disabled Ownership %", disabledOwnership],
-      ["Total HDI Score", totalHDI],
-      ["Note", "Simplified estimation based on ownership data only"],
-    ]
-      .map((row) => row.join(","))
-      .join("\n")
-
-    const blob = new Blob([csvContent], { type: "text/csv" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "bbbee-level-data.csv"
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-
-  if (activeSection !== "bbbee-level") return null
-
-  const blackOwnership = Number.parseFloat(fundingData?.socialImpact?.blackOwnership || 0)
-  const womenOwnership = Number.parseFloat(fundingData?.socialImpact?.womenOwnership || 0)
-  const youthOwnership = Number.parseFloat(fundingData?.socialImpact?.youthOwnership || 0)
-  const disabledOwnership = Number.parseFloat(fundingData?.socialImpact?.disabledOwnership || 0)
-  const totalHDI = blackOwnership + womenOwnership + youthOwnership + disabledOwnership
-
-  let estimatedLevel = 8
-  if (totalHDI >= 300) estimatedLevel = 1
-  else if (totalHDI >= 250) estimatedLevel = 2
-  else if (totalHDI >= 200) estimatedLevel = 3
-  else if (totalHDI >= 150) estimatedLevel = 4
-  else if (totalHDI >= 120) estimatedLevel = 5
-  else if (totalHDI >= 90) estimatedLevel = 6
-  else if (totalHDI >= 60) estimatedLevel = 7
-
-  const levels = [1, 2, 3, 4, 5, 6, 7, 8]
-
-  return (
-    <div
-      style={{
-        backgroundColor: "#faf7f2",
-        padding: "20px",
-        margin: "20px 0",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "20px",
-        }}
-      >
-        <h2 style={{ color: "#4a352f", margin: 0 }}>B-BBEE Level (Estimated)</h2>
-        <button
-          onClick={handleDownloadCSV}
-          style={{
-            padding: "8px 12px",
-            backgroundColor: "#a67c52",
-            color: "#faf7f2",
-            border: "none",
-            borderRadius: "6px",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: "5px",
-          }}
-        >
-          <Download size={16} />
-          Download CSV
-        </button>
-      </div>
-
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          marginTop: "30px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-          }}
-        >
-          <div
-            style={{
-              width: "120px",
-              height: "120px",
-              borderRadius: "50%",
-              backgroundColor: "#a67c52",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "white",
-              fontSize: "48px",
-              fontWeight: "bold",
-              marginBottom: "20px",
-            }}
-          >
-            {estimatedLevel}
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              gap: "5px",
-              marginBottom: "20px",
-            }}
-          >
-            {levels.map((level) => (
-              <div
-                key={level}
-                style={{
-                  width: "35px",
-                  height: "35px",
-                  borderRadius: "50%",
-                  backgroundColor: level <= estimatedLevel ? "#a67c52" : "#e6d7c3",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: level <= estimatedLevel ? "white" : "#4a352f",
-                  fontWeight: "bold",
-                  fontSize: "14px",
-                }}
-              >
-                {level}
-              </div>
-            ))}
-          </div>
-
-          <div
-            style={{
-              backgroundColor: "#f5f0e1",
-              padding: "20px",
-              borderRadius: "6px",
-              textAlign: "center",
-              maxWidth: "400px",
-            }}
-          >
-            <h3 style={{ color: "#7d5a50", margin: "0 0 15px 0" }}>Ownership Summary</h3>
-            <div style={{ color: "#4a352f", fontSize: "14px", textAlign: "left" }}>
-              <div>Black Ownership: {blackOwnership}%</div>
-              <div>Women Ownership: {womenOwnership}%</div>
-              <div>Youth Ownership: {youthOwnership}%</div>
-              <div>Disabled Ownership: {disabledOwnership}%</div>
-              <hr style={{ margin: "10px 0", border: "1px solid #c8b6a6" }} />
-              <div style={{ fontWeight: "bold" }}>Total HDI Score: {totalHDI}</div>
-            </div>
-            <div
-              style={{
-                marginTop: "15px",
-                fontSize: "12px",
-                color: "#7d5a50",
-                fontStyle: "italic",
-              }}
-            >
-              *Simplified estimation based on ownership data only
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // Main SocialImpact Component
 const SocialImpact = () => {
-  const [activeSection, setActiveSection] = useState("jobs-created")
+  const [activeSection, setActiveSection] = useState("bbbee-level") // Changed default to B-BBEE Level
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [fundingData, setFundingData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -726,11 +725,12 @@ const SocialImpact = () => {
     boxSizing: "border-box",
   })
 
+  // Changed order to have B-BBEE Level first
   const sectionButtons = [
+    { id: "bbbee-level", label: "B-BBEE Level" },
     { id: "jobs-created", label: "Jobs Created" },
     { id: "hdi-funding", label: "HDI Ownership" },
     { id: "csi-spend", label: "CSI/CSR Spend" },
-    { id: "bbbee-level", label: "B-BBEE Level" },
   ]
 
   if (loading) {
@@ -849,10 +849,10 @@ const SocialImpact = () => {
             ))}
           </div>
 
+          <BbbeeLevel activeSection={activeSection} fundingData={fundingData} />
           <JobsCreated activeSection={activeSection} fundingData={fundingData} />
           <HDIFunding activeSection={activeSection} fundingData={fundingData} />
           <CSISpend activeSection={activeSection} fundingData={fundingData} />
-          <BbbeeLevel activeSection={activeSection} fundingData={fundingData} />
         </div>
       </div>
     </div>

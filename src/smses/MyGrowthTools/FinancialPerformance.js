@@ -75,10 +75,18 @@ const PnLSnapshot = ({
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
   const [selectedFinancialYearStart, setSelectedFinancialYearStart] = useState("Jan")
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [showAddKPIModal, setShowAddKPIModal] = useState(false)
+  const [newKPI, setNewKPI] = useState({
+    name: "",
+    type: "bar",
+    dataType: "currency",
+  })
+  const [customKPIs, setCustomKPIs] = useState({})
 
   useEffect(() => {
     if (user) {
       loadPnLDataFromFirebase()
+      loadCustomKPIs()
     }
   }, [user])
 
@@ -130,6 +138,34 @@ const PnLSnapshot = ({
       console.error("Error loading PnL data from Firebase:", error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadCustomKPIs = async () => {
+    if (!user) return
+
+    try {
+      const kpiQuery = query(
+        collection(db, "financialData"),
+        where("userId", "==", user.uid),
+        where("isCustomKPI", "==", true)
+      )
+      const querySnapshot = await getDocs(kpiQuery)
+      
+      const kpis = {}
+      querySnapshot.forEach((doc) => {
+        const data = doc.data()
+        kpis[data.chartName] = data
+        // Add to visible charts
+        setVisibleCharts(prev => ({
+          ...prev,
+          [data.chartName]: true
+        }))
+      })
+      
+      setCustomKPIs(kpis)
+    } catch (error) {
+      console.error("Error loading custom KPIs:", error)
     }
   }
 
@@ -199,7 +235,8 @@ const PnLSnapshot = ({
     } else if (viewMode === "quarter") {
       return ["Q1", "Q2", "Q3", "Q4"]
     } else {
-      return ["2020", "2021", "2022", "2023", "2024", "2025"]
+      // Fixed: Use the selected year for yearly view instead of hardcoded years
+      return [selectedYear.toString()]
     }
   }
 
@@ -214,6 +251,7 @@ const PnLSnapshot = ({
       }
       return quarters
     } else {
+      // For yearly view, return the annual total
       return [data.reduce((acc, val) => acc + val, 0)]
     }
   }
@@ -335,6 +373,54 @@ const PnLSnapshot = ({
     }
   }
 
+  const createCustomKPIChartData = (kpiData) => {
+    const actualData = aggregateDataForView(kpiData.actual || [])
+    const budgetData = aggregateDataForView(kpiData.budget || [])
+    const varianceData = actualData.map((val, i) => val - budgetData[i])
+
+    if (showVariance) {
+      return {
+        labels,
+        datasets: [
+          {
+            type: "bar",
+            label: "Variance",
+            data: varianceData,
+            backgroundColor: varianceData.map((v) => (v >= 0 ? "rgba(139, 105, 20, 0.6)" : "rgba(160, 82, 45, 0.6)")),
+            borderColor: varianceData.map((v) => (v >= 0 ? "rgb(139, 105, 20)" : "rgb(160, 82, 45)")),
+            borderWidth: 2,
+          },
+        ],
+      }
+    }
+
+    return {
+      labels,
+      datasets: [
+        {
+          type: kpiData.type === "line" ? "line" : "bar",
+          label: "Actual",
+          data: actualData,
+          backgroundColor: kpiData.type === "line" ? "rgba(93, 64, 55, 0.1)" : "rgba(93, 64, 55, 0.6)",
+          borderColor: "rgb(93, 64, 55)",
+          borderWidth: 2,
+          fill: kpiData.type === "line",
+          tension: 0.1,
+        },
+        {
+          type: "line",
+          label: "Budget",
+          data: budgetData,
+          borderColor: "#8b6914",
+          backgroundColor: "rgba(139, 105, 20, 0.1)",
+          borderWidth: 2,
+          tension: 0.1,
+          fill: false,
+        },
+      ],
+    }
+  }
+
   const chartOptions = (title, isPercentage = false) => ({
     responsive: true,
     plugins: {
@@ -357,6 +443,51 @@ const PnLSnapshot = ({
             return isPercentage
               ? `${context.dataset.label}: ${value.toFixed(2)}%`
               : `${context.dataset.label}: R${value.toFixed(2)}m`
+          },
+        },
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        title: {
+          display: false,
+        },
+      },
+      x: {
+        title: {
+          display: false,
+        },
+      },
+    },
+  })
+
+  const customKPIOptions = (title, dataType = "currency") => ({
+    responsive: true,
+    plugins: {
+      legend: {
+        display: true,
+        position: "top",
+      },
+      title: {
+        display: true,
+        text: title,
+        color: "#5d4037",
+        font: {
+          size: 16,
+        },
+      },
+      tooltip: {
+        callbacks: {
+          label: (context) => {
+            const value = context.raw
+            if (dataType === "percentage") {
+              return `${context.dataset.label}: ${value.toFixed(2)}%`
+            } else if (dataType === "currency") {
+              return `${context.dataset.label}: R${value.toFixed(2)}m`
+            } else {
+              return `${context.dataset.label}: ${value.toFixed(2)}`
+            }
           },
         },
       },
@@ -439,6 +570,113 @@ const PnLSnapshot = ({
     )
   }
 
+  const handleAddKPI = () => {
+    setShowAddKPIModal(true)
+  }
+
+  const handleSaveKPI = async () => {
+    if (!user || !newKPI.name.trim()) {
+      alert("Please enter a name for the new KPI")
+      return
+    }
+
+    try {
+      const chartName = newKPI.name.toLowerCase().replace(/\s+/g, '_')
+      const kpiData = {
+        userId: user.uid,
+        chartName: chartName,
+        name: newKPI.name,
+        type: newKPI.type,
+        dataType: newKPI.dataType,
+        actual: Array(12).fill(0),
+        budget: Array(12).fill(0),
+        isCustomKPI: true,
+        lastUpdated: new Date().toISOString(),
+      }
+
+      await setDoc(doc(db, "financialData", `${user.uid}_${chartName}`), kpiData)
+      console.log("New KPI saved to Firebase")
+
+      // Add the new KPI to visible charts and custom KPIs
+      setCustomKPIs(prev => ({
+        ...prev,
+        [chartName]: kpiData
+      }))
+
+      setVisibleCharts(prev => ({
+        ...prev,
+        [chartName]: true
+      }))
+
+      setShowAddKPIModal(false)
+      setNewKPI({
+        name: "",
+        type: "bar",
+        dataType: "currency",
+      })
+
+      alert(`KPI "${newKPI.name}" added successfully!`)
+    } catch (error) {
+      console.error("Error saving new KPI:", error)
+      alert("Error saving new KPI. Please try again.")
+    }
+  }
+
+  const handleYearChange = (year) => {
+    setSelectedYear(year)
+    // Clear the form when year changes
+    setPnlDetails({
+      sales: Array(12).fill(""),
+      cogs: Array(12).fill(""),
+      opex: Array(12).fill(""),
+      tax: Array(12).fill(""),
+      interestExpense: Array(12).fill(""),
+      depreciation: Array(12).fill(""),
+      salesBudget: Array(12).fill(""),
+      cogsBudget: Array(12).fill(""),
+      opexBudget: Array(12).fill(""),
+      taxBudget: Array(12).fill(""),
+      interestExpenseBudget: Array(12).fill(""),
+      depreciationBudget: Array(12).fill(""),
+      notes: "",
+    })
+    setChartNotes({
+      sales: "",
+      cogs: "",
+      opex: "",
+      grossProfit: "",
+      netProfit: "",
+      ebitda: "",
+      gpMargin: "",
+      npMargin: "",
+    })
+  }
+
+  const handleFinancialYearStartChange = (month) => {
+    setSelectedFinancialYearStart(month)
+    // Clear the form when financial year start changes
+    setPnlDetails({
+      sales: Array(12).fill(""),
+      cogs: Array(12).fill(""),
+      opex: Array(12).fill(""),
+      tax: Array(12).fill(""),
+      interestExpense: Array(12).fill(""),
+      depreciation: Array(12).fill(""),
+      salesBudget: Array(12).fill(""),
+      cogsBudget: Array(12).fill(""),
+      opexBudget: Array(12).fill(""),
+      taxBudget: Array(12).fill(""),
+      interestExpenseBudget: Array(12).fill(""),
+      depreciationBudget: Array(12).fill(""),
+      notes: "",
+    })
+  }
+
+  const handleEditKPI = (kpiName) => {
+    // Navigate to KPI edit modal or page
+    alert(`Edit functionality for ${kpiName} would go here`)
+  }
+
   return (
     <div
       style={{
@@ -478,18 +716,30 @@ const PnLSnapshot = ({
             </button>
           )}
           
-          {selectedYear && (
-            <div style={{
-              padding: "8px 16px",
-              backgroundColor: "#f7f3f0",
-              borderRadius: "6px",
-              border: "1px solid #e8ddd4",
-            }}>
-              <span style={{ color: "#5d4037", fontWeight: "600", fontSize: "14px" }}>
-                Data Year: {selectedYear}
-              </span>
-            </div>
-          )}
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <label style={{ color: "#5d4037", fontWeight: "600", fontSize: "14px" }}>
+              Data Year:
+            </label>
+            <select
+              value={selectedYear}
+              onChange={(e) => handleYearChange(parseInt(e.target.value))}
+              style={{
+                padding: "8px 12px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+                backgroundColor: "#fdfcfb",
+                color: "#5d4037",
+                cursor: "pointer",
+                fontSize: "14px",
+              }}
+            >
+              {generateYearOptions().map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
@@ -508,6 +758,24 @@ const PnLSnapshot = ({
           >
             {showVariance ? "Show Actual vs Budget" : "Show Variance"}
           </button>
+          
+          {!isInvestorView && (
+            <button
+              onClick={handleAddKPI}
+              style={{
+                padding: "10px 20px",
+                backgroundColor: "#8b6914",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "14px",
+              }}
+            >
+              Add KPI
+            </button>
+          )}
         </div>
 
         {!isInvestorView && (
@@ -873,6 +1141,77 @@ const PnLSnapshot = ({
             )}
           </div>
         )}
+
+        {/* Custom KPI Charts */}
+        {Object.keys(customKPIs).map((kpiName) => {
+          if (!visibleCharts[kpiName]) return null
+          
+          const kpiData = customKPIs[kpiName]
+          return (
+            <div key={kpiName}>
+              <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
+                {kpiData.type === "line" ? (
+                  <Line
+                    data={createCustomKPIChartData(kpiData)}
+                    options={customKPIOptions(`${kpiData.name} (${kpiData.dataType === "currency" ? "R m" : kpiData.dataType === "percentage" ? "%" : ""})`, kpiData.dataType)}
+                  />
+                ) : (
+                  <Bar
+                    data={createCustomKPIChartData(kpiData)}
+                    options={customKPIOptions(`${kpiData.name} (${kpiData.dataType === "currency" ? "R m" : kpiData.dataType === "percentage" ? "%" : ""})`, kpiData.dataType)}
+                  />
+                )}
+              </div>
+              <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+                <button
+                  onClick={() => toggleNotes(kpiName)}
+                  style={{
+                    padding: "6px 12px",
+                    backgroundColor: "#e8ddd4",
+                    color: "#5d4037",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontSize: "12px",
+                  }}
+                >
+                  {expandedNotes[kpiName] ? "Hide Notes" : "Show Notes"}
+                </button>
+                {!isInvestorView && (
+                  <button
+                    onClick={() => handleEditKPI(kpiData.name)}
+                    style={{
+                      padding: "6px 12px",
+                      backgroundColor: "#8b6914",
+                      color: "#fdfcfb",
+                      border: "none",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                      fontSize: "12px",
+                    }}
+                  >
+                    Edit KPI
+                  </button>
+                )}
+              </div>
+              {expandedNotes[kpiName] && (
+                <textarea
+                  value={chartNotes[kpiName] || ""}
+                  onChange={(e) => updateChartNote(kpiName, e.target.value)}
+                  placeholder={`Add notes/comments for ${kpiData.name}...`}
+                  style={{
+                    width: "100%",
+                    marginTop: "10px",
+                    padding: "10px",
+                    borderRadius: "4px",
+                    border: "1px solid #e8ddd4",
+                    minHeight: "80px",
+                  }}
+                />
+              )}
+            </div>
+          )
+        })}
       </div>
 
       {showModal && (
@@ -915,7 +1254,7 @@ const PnLSnapshot = ({
                 </label>
                 <select
                   value={selectedFinancialYearStart}
-                  onChange={(e) => setSelectedFinancialYearStart(e.target.value)}
+                  onChange={(e) => handleFinancialYearStartChange(e.target.value)}
                   style={{
                     width: "100%",
                     padding: "10px",
@@ -941,7 +1280,7 @@ const PnLSnapshot = ({
                 </label>
                 <select
                   value={selectedYear}
-                  onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                  onChange={(e) => handleYearChange(parseInt(e.target.value))}
                   style={{
                     width: "100%",
                     padding: "10px",
@@ -1031,6 +1370,132 @@ const PnLSnapshot = ({
                 }}
               >
                 {loading ? "Saving..." : "Save Details"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAddKPIModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "#fdfcfb",
+              padding: "30px",
+              borderRadius: "8px",
+              maxWidth: "500px",
+              width: "90%",
+            }}
+          >
+            <h3 style={{ color: "#5d4037", marginBottom: "20px" }}>Add New KPI</h3>
+            
+            <div style={{ marginBottom: "20px" }}>
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                KPI Name:
+              </label>
+              <input
+                type="text"
+                value={newKPI.name}
+                onChange={(e) => setNewKPI({ ...newKPI, name: e.target.value })}
+                placeholder="Enter KPI name (e.g., Customer Acquisition Cost)"
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: "20px" }}>
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Chart Type:
+              </label>
+              <select
+                value={newKPI.type}
+                onChange={(e) => setNewKPI({ ...newKPI, type: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                  backgroundColor: "#fdfcfb",
+                  color: "#5d4037",
+                  cursor: "pointer",
+                }}
+              >
+                <option value="bar">Bar Chart</option>
+                <option value="line">Line Chart</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: "20px" }}>
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Data Type:
+              </label>
+              <select
+                value={newKPI.dataType}
+                onChange={(e) => setNewKPI({ ...newKPI, dataType: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                  backgroundColor: "#fdfcfb",
+                  color: "#5d4037",
+                  cursor: "pointer",
+                }}
+              >
+                <option value="currency">Currency (R m)</option>
+                <option value="percentage">Percentage (%)</option>
+                <option value="number">Number</option>
+              </select>
+            </div>
+
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setShowAddKPIModal(false)}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveKPI}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                }}
+              >
+                Create KPI
               </button>
             </div>
           </div>
