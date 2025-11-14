@@ -1263,7 +1263,7 @@ const fetchFundingReadyPercentage = async () => {
   }
 };
 
-// Portfolio Value Calculation with Financial Year Quarters
+// Portfolio Value Calculation with Financial Year Quarters - FIXED YEARLY DATA
 const fetchPortfolioValueData = async () => {
   try {
     const currentUser = auth.currentUser;
@@ -1272,6 +1272,8 @@ const fetchPortfolioValueData = async () => {
       return {
         currentValue: 0,
         quarterlyData: [0, 0, 0, 0],
+        monthlyData: [0, 0, 0, 0, 0, 0],
+        yearlyData: [0], // Only current year
         totalDeals: 0,
         totalInvestment: 0,
         financialYearStartMonth: 6 // Default to July
@@ -1285,7 +1287,7 @@ const fetchPortfolioValueData = async () => {
     const successfulDeals = await fetchInvestorSuccessfulDeals();
     const { applications } = successfulDeals;
     
-    console.log('💰 STEP 1: Calculating portfolio value from successful deals with FINANCIAL YEAR quarterly allocation');
+    console.log('💰 STEP 1: Calculating portfolio value from successful deals with FINANCIAL YEAR allocation');
     console.log('📊 STEP 1: Number of successful applications:', applications.length);
     
     if (applications.length === 0) {
@@ -1293,18 +1295,25 @@ const fetchPortfolioValueData = async () => {
       return {
         currentValue: 0,
         quarterlyData: [0, 0, 0, 0],
+        monthlyData: [0, 0, 0, 0, 0, 0],
+        yearlyData: [0], // Only current year
         totalDeals: 0,
         totalInvestment: 0,
         financialYearStartMonth
       };
     }
     
-    // Initialize quarterly data
+    // Initialize data arrays
     const quarterlyData = [0, 0, 0, 0];
+    const monthlyData = [0, 0, 0, 0, 0, 0]; // First 6 months of financial year
     let totalInvestment = 0;
     const quarterlyBreakdown = [[], [], [], []]; // Store individual investments per quarter
+    const monthlyBreakdown = [[], [], [], [], [], []]; // Store individual investments per month
     
-    // STEP 2: Process each application and allocate to correct financial year quarter
+    // Track investments by calendar year
+    const investmentsByYear = {};
+    
+    // STEP 2: Process each application and allocate to correct financial year quarter and month
     for (const application of applications) {
       try {
         // Parse amount from string like "R800,000" to number
@@ -1319,12 +1328,26 @@ const fetchPortfolioValueData = async () => {
             const approvalDate = new Date(approvedAt);
             
             if (!isNaN(approvalDate.getTime())) {
+              const approvalYear = approvalDate.getFullYear();
+              
+              // Track investment by calendar year
+              if (!investmentsByYear[approvalYear]) {
+                investmentsByYear[approvalYear] = 0;
+              }
+              investmentsByYear[approvalYear] += investmentAmount;
+              
               // Calculate quarter based on FINANCIAL YEAR start month
               const quarter = getQuarterFromDate(approvalDate, financialYearStartMonth);
               
+              // Calculate month in financial year (0-11)
+              const approvalMonth = approvalDate.getMonth();
+              const financialYearMonth = (approvalMonth - financialYearStartMonth + 12) % 12;
+              
               console.log(`📅 STEP 2: Processing application approved at:`, approvedAt, {
-                approvalMonth: approvalDate.getMonth() + 1,
+                approvalYear,
+                approvalMonth: approvalMonth + 1,
                 financialYearStartMonth: financialYearStartMonth + 1,
+                financialYearMonth: financialYearMonth + 1,
                 quarter: quarter + 1,
                 investmentAmount
               });
@@ -1334,10 +1357,22 @@ const fetchPortfolioValueData = async () => {
               quarterlyBreakdown[quarter].push({
                 amount: investmentAmount,
                 date: approvedAt,
-                smeId: application.smeId
+                smeId: application.smeId,
+                year: approvalYear
               });
               
-              console.log(`✅ STEP 2: Allocated R${investmentAmount} to Financial Year Q${quarter + 1}`);
+              // Add investment to the correct month (first 6 months only for display)
+              if (financialYearMonth < 6) {
+                monthlyData[financialYearMonth] += investmentAmount;
+                monthlyBreakdown[financialYearMonth].push({
+                  amount: investmentAmount,
+                  date: approvedAt,
+                  smeId: application.smeId,
+                  year: approvalYear
+                });
+              }
+              
+              console.log(`✅ STEP 2: Allocated R${investmentAmount} to Financial Year Q${quarter + 1}, Month ${financialYearMonth + 1}, Year ${approvalYear}`);
               
             } else {
               console.log('❌ STEP 2: Invalid approval date:', approvedAt);
@@ -1352,10 +1387,22 @@ const fetchPortfolioValueData = async () => {
                   note: 'Distributed evenly - invalid date'
                 });
               });
+              
+              // Distribute evenly across months
+              const monthlyEqualAmount = investmentAmount / 6;
+              monthlyData.forEach((_, index) => {
+                monthlyData[index] += monthlyEqualAmount;
+                monthlyBreakdown[index].push({
+                  amount: monthlyEqualAmount,
+                  date: approvedAt,
+                  smeId: application.smeId,
+                  note: 'Distributed evenly - invalid date'
+                });
+              });
             }
           } catch (dateError) {
             console.error('❌ STEP 2: Error parsing approval date:', approvedAt, dateError);
-            // If date parsing fails, distribute evenly across quarters
+            // If date parsing fails, distribute evenly across quarters and months
             const equalAmount = investmentAmount / 4;
             quarterlyData.forEach((_, index) => {
               quarterlyData[index] += equalAmount;
@@ -1366,15 +1413,36 @@ const fetchPortfolioValueData = async () => {
                 note: 'Distributed evenly - date parsing error'
               });
             });
+            
+            const monthlyEqualAmount = investmentAmount / 6;
+            monthlyData.forEach((_, index) => {
+              monthlyData[index] += monthlyEqualAmount;
+              monthlyBreakdown[index].push({
+                amount: monthlyEqualAmount,
+                date: approvedAt,
+                smeId: application.smeId,
+                note: 'Distributed evenly - date parsing error'
+              });
+            });
           }
         } else {
           console.log('❌ STEP 2: No approvedAt date found for application, distributing evenly');
-          // If no approval date, distribute evenly across quarters
+          // If no approval date, distribute evenly across quarters and months
           const equalAmount = investmentAmount / 4;
           quarterlyData.forEach((_, index) => {
             quarterlyData[index] += equalAmount;
             quarterlyBreakdown[index].push({
               amount: equalAmount,
+              smeId: application.smeId,
+              note: 'Distributed evenly - no approval date'
+            });
+          });
+          
+          const monthlyEqualAmount = investmentAmount / 6;
+          monthlyData.forEach((_, index) => {
+            monthlyData[index] += monthlyEqualAmount;
+            monthlyBreakdown[index].push({
+              amount: monthlyEqualAmount,
               smeId: application.smeId,
               note: 'Distributed evenly - no approval date'
             });
@@ -1385,8 +1453,48 @@ const fetchPortfolioValueData = async () => {
       }
     }
     
+    // Calculate yearly data - ONLY include years where we actually have investments
+    const currentYear = new Date().getFullYear();
+    const yearlyData = [];
+    const yearlyLabels = [];
+    
+    // Get all years with investments, sorted
+    const investmentYears = Object.keys(investmentsByYear)
+      .map(year => parseInt(year))
+      .sort((a, b) => a - b);
+    
+    console.log('📊 Investment years found:', investmentYears);
+    
+    if (investmentYears.length > 0) {
+      // Only show current year if we have investments in current year
+      if (investmentYears.includes(currentYear)) {
+        yearlyData.push(investmentsByYear[currentYear]);
+        yearlyLabels.push(`${currentYear}`);
+      }
+      
+      // If we have previous years, show them too (but only if we have actual data)
+      investmentYears.forEach(year => {
+        if (year !== currentYear) {
+          yearlyData.push(investmentsByYear[year]);
+          yearlyLabels.push(`${year}`);
+        }
+      });
+    } else {
+      // Fallback: just show current year total
+      yearlyData.push(totalInvestment);
+      yearlyLabels.push(`${currentYear}`);
+    }
+    
     // Convert to R millions and ensure proper formatting
     const quarterlyDataInMillions = quarterlyData.map(amount => 
+      parseFloat((amount / 1000000).toFixed(1))
+    );
+    
+    const monthlyDataInMillions = monthlyData.map(amount => 
+      parseFloat((amount / 1000000).toFixed(1))
+    );
+    
+    const yearlyDataInMillions = yearlyData.map(amount => 
       parseFloat((amount / 1000000).toFixed(1))
     );
     
@@ -1395,28 +1503,40 @@ const fetchPortfolioValueData = async () => {
     const result = {
       currentValue,
       quarterlyData: quarterlyDataInMillions,
+      monthlyData: monthlyDataInMillions,
+      yearlyData: yearlyDataInMillions,
+      yearlyLabels: yearlyLabels,
       totalDeals: applications.length,
       totalInvestment: totalInvestment,
       financialYearStartMonth,
-      quarterlyBreakdown: quarterlyBreakdown
+      quarterlyBreakdown: quarterlyBreakdown,
+      monthlyBreakdown: monthlyBreakdown,
+      investmentsByYear: investmentsByYear,
+      investmentYears: investmentYears
     };
     
-    console.log('📈 FINAL: Portfolio value with FINANCIAL YEAR quarterly allocation:', result);
+    console.log('📈 FINAL: Portfolio value with accurate yearly data:', result);
     return result;
   } catch (error) {
     console.error('❌ ERROR: Failed to fetch portfolio value data from successful deals:', error);
     return {
       currentValue: 0,
       quarterlyData: [0, 0, 0, 0],
+      monthlyData: [0, 0, 0, 0, 0, 0],
+      yearlyData: [0],
+      yearlyLabels: [`${new Date().getFullYear()}`],
       totalDeals: 0,
       totalInvestment: 0,
       financialYearStartMonth: 6,
-      quarterlyBreakdown: [[], [], [], []]
+      quarterlyBreakdown: [[], [], [], []],
+      monthlyBreakdown: [[], [], [], [], [], []],
+      investmentsByYear: {},
+      investmentYears: []
     };
   }
 };
 
-// Time to Fund Calculation with Financial Year Quarters
+// Time to Fund Calculation with Financial Year Quarters - FIXED YEARLY DATA
 const fetchAverageTimeToFund = async () => {
   try {
     const currentUser = auth.currentUser;
@@ -1425,6 +1545,9 @@ const fetchAverageTimeToFund = async () => {
       return {
         averageDays: 0,
         timeToFundData: [0, 0, 0, 0],
+        monthlyTimeToFundData: [0, 0, 0, 0, 0, 0],
+        yearlyTimeToFundData: [0], // Only current year
+        yearlyTimeToFundLabels: [`${new Date().getFullYear()}`],
         totalSMEs: 0,
         allProcessingTimes: [],
         financialYearStartMonth: 6,
@@ -1446,6 +1569,9 @@ const fetchAverageTimeToFund = async () => {
       return {
         averageDays: 0,
         timeToFundData: [0, 0, 0, 0],
+        monthlyTimeToFundData: [0, 0, 0, 0, 0, 0],
+        yearlyTimeToFundData: [0],
+        yearlyTimeToFundLabels: [`${new Date().getFullYear()}`],
         totalSMEs: 0,
         allProcessingTimes: [],
         financialYearStartMonth: 6,
@@ -1454,12 +1580,15 @@ const fetchAverageTimeToFund = async () => {
     }
     
     const quarterlyProcessingTimes = [[], [], [], []]; // Arrays to store processing times per quarter
+    const monthlyProcessingTimes = [[], [], [], [], [], []]; // Arrays for first 6 months
+    const processingTimesByYear = {}; // Store processing times by calendar year
     const processingDetails = [[], [], [], []]; // Store detailed processing info per quarter
+    const monthlyProcessingDetails = [[], [], [], [], [], []]; // Store detailed processing info per month
     let totalDays = 0;
     let count = 0;
     const allProcessingTimes = [];
     
-    // STEP 2: Process each application to calculate processing time and allocate to FINANCIAL YEAR quarter
+    // STEP 2: Process each application to calculate processing time and allocate to FINANCIAL YEAR quarter, month, and year
     for (const application of applications) {
       try {
         // Get application date and approval date
@@ -1489,15 +1618,25 @@ const fetchAverageTimeToFund = async () => {
               const timeDiff = approvalDate.getTime() - applicationDate.getTime();
               const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
               
-              console.log(`⏱️ STEP 2: Time to fund for application: ${daysDiff} days`);
+              const approvalYear = approvalDate.getFullYear();
+              
+              console.log(`⏱️ STEP 2: Time to fund for application: ${daysDiff} days in year ${approvalYear}`);
               
               if (daysDiff > 0 && daysDiff < 365) { // Reasonable validation
                 totalDays += daysDiff;
                 count++;
                 allProcessingTimes.push(daysDiff);
                 
-                // Determine quarter based on FINANCIAL YEAR using approval date
+                // Track by calendar year
+                if (!processingTimesByYear[approvalYear]) {
+                  processingTimesByYear[approvalYear] = [];
+                }
+                processingTimesByYear[approvalYear].push(daysDiff);
+                
+                // Determine quarter and month based on FINANCIAL YEAR using approval date
                 const quarter = getQuarterFromDate(approvalDate, financialYearStartMonth);
+                const approvalMonth = approvalDate.getMonth();
+                const financialYearMonth = (approvalMonth - financialYearStartMonth + 12) % 12;
                 
                 // Add to quarterly processing times
                 quarterlyProcessingTimes[quarter].push(daysDiff);
@@ -1508,78 +1647,180 @@ const fetchAverageTimeToFund = async () => {
                   approvalDate: approvalDateStr,
                   applicationMonth: applicationDate.getMonth() + 1,
                   approvalMonth: approvalDate.getMonth() + 1,
-                  financialYearQuarter: quarter + 1
+                  financialYearQuarter: quarter + 1,
+                  year: approvalYear
                 });
                 
-                console.log(`✅ STEP 2: Allocated ${daysDiff} days to Financial Year Q${quarter + 1}`);
+                // Add to monthly processing times (first 6 months only)
+                if (financialYearMonth < 6) {
+                  monthlyProcessingTimes[financialYearMonth].push(daysDiff);
+                  monthlyProcessingDetails[financialYearMonth].push({
+                    smeId: application.smeId,
+                    days: daysDiff,
+                    applicationDate: applicationDateStr,
+                    approvalDate: approvalDateStr,
+                    financialYearMonth: financialYearMonth + 1,
+                    year: approvalYear
+                  });
+                }
+                
+                console.log(`✅ STEP 2: Allocated ${daysDiff} days to Financial Year Q${quarter + 1}, Month ${financialYearMonth + 1}, Year ${approvalYear}`);
               } else {
                 console.log('⚠️ STEP 2: Invalid day difference calculated:', daysDiff);
-                // Use default and allocate to current quarter
+                // Use default and allocate to current quarter, month, and year
                 const defaultDays = 45;
                 totalDays += defaultDays;
                 count++;
                 allProcessingTimes.push(defaultDays);
-                // Allocate to most recent quarter
+                
                 const currentDate = new Date();
+                const currentYear = currentDate.getFullYear();
+                
+                if (!processingTimesByYear[currentYear]) {
+                  processingTimesByYear[currentYear] = [];
+                }
+                processingTimesByYear[currentYear].push(defaultDays);
+                
+                // Allocate to most recent quarter and month
                 const currentQuarter = getQuarterFromDate(currentDate, financialYearStartMonth);
+                const currentMonth = (currentDate.getMonth() - financialYearStartMonth + 12) % 12;
+                
                 quarterlyProcessingTimes[currentQuarter].push(defaultDays);
                 processingDetails[currentQuarter].push({
                   smeId: application.smeId,
                   days: defaultDays,
                   note: 'Used default - invalid day difference',
-                  financialYearQuarter: currentQuarter + 1
+                  financialYearQuarter: currentQuarter + 1,
+                  year: currentYear
                 });
+                
+                if (currentMonth < 6) {
+                  monthlyProcessingTimes[currentMonth].push(defaultDays);
+                  monthlyProcessingDetails[currentMonth].push({
+                    smeId: application.smeId,
+                    days: defaultDays,
+                    note: 'Used default - invalid day difference',
+                    financialYearMonth: currentMonth + 1,
+                    year: currentYear
+                  });
+                }
               }
             } else {
               console.log('❌ STEP 2: Invalid date parsing for application');
-              // Use default and allocate to current quarter
+              // Use default and allocate to current quarter, month, and year
               const defaultDays = 45;
               totalDays += defaultDays;
               count++;
               allProcessingTimes.push(defaultDays);
+              
               const currentDate = new Date();
+              const currentYear = currentDate.getFullYear();
+              
+              if (!processingTimesByYear[currentYear]) {
+                processingTimesByYear[currentYear] = [];
+              }
+              processingTimesByYear[currentYear].push(defaultDays);
+              
               const currentQuarter = getQuarterFromDate(currentDate, financialYearStartMonth);
+              const currentMonth = (currentDate.getMonth() - financialYearStartMonth + 12) % 12;
+              
               quarterlyProcessingTimes[currentQuarter].push(defaultDays);
               processingDetails[currentQuarter].push({
                 smeId: application.smeId,
                 days: defaultDays,
                 note: 'Used default - invalid date parsing',
-                financialYearQuarter: currentQuarter + 1
+                financialYearQuarter: currentQuarter + 1,
+                year: currentYear
               });
+              
+              if (currentMonth < 6) {
+                monthlyProcessingTimes[currentMonth].push(defaultDays);
+                monthlyProcessingDetails[currentMonth].push({
+                  smeId: application.smeId,
+                  days: defaultDays,
+                  note: 'Used default - invalid date parsing',
+                  financialYearMonth: currentMonth + 1,
+                  year: currentYear
+                });
+              }
             }
           } catch (dateError) {
             console.error(`❌ STEP 2: Date parsing error:`, dateError);
-            // Use default and allocate to current quarter
+            // Use default and allocate to current quarter, month, and year
             const defaultDays = 45;
             totalDays += defaultDays;
             count++;
             allProcessingTimes.push(defaultDays);
+            
             const currentDate = new Date();
+            const currentYear = currentDate.getFullYear();
+            
+            if (!processingTimesByYear[currentYear]) {
+              processingTimesByYear[currentYear] = [];
+            }
+            processingTimesByYear[currentYear].push(defaultDays);
+            
             const currentQuarter = getQuarterFromDate(currentDate, financialYearStartMonth);
+            const currentMonth = (currentDate.getMonth() - financialYearStartMonth + 12) % 12;
+            
             quarterlyProcessingTimes[currentQuarter].push(defaultDays);
             processingDetails[currentQuarter].push({
               smeId: application.smeId,
               days: defaultDays,
               note: 'Used default - date parsing error',
-              financialYearQuarter: currentQuarter + 1
+              financialYearQuarter: currentQuarter + 1,
+              year: currentYear
             });
+            
+            if (currentMonth < 6) {
+              monthlyProcessingTimes[currentMonth].push(defaultDays);
+              monthlyProcessingDetails[currentMonth].push({
+                smeId: application.smeId,
+                days: defaultDays,
+                note: 'Used default - date parsing error',
+                financialYearMonth: currentMonth + 1,
+                year: currentYear
+              });
+            }
           }
         } else {
           console.log('❌ STEP 2: Missing dates for application');
-          // Use default and allocate to current quarter
+          // Use default and allocate to current quarter, month, and year
           const defaultDays = 45;
           totalDays += defaultDays;
           count++;
           allProcessingTimes.push(defaultDays);
+          
           const currentDate = new Date();
+          const currentYear = currentDate.getFullYear();
+          
+          if (!processingTimesByYear[currentYear]) {
+            processingTimesByYear[currentYear] = [];
+          }
+          processingTimesByYear[currentYear].push(defaultDays);
+          
           const currentQuarter = getQuarterFromDate(currentDate, financialYearStartMonth);
+          const currentMonth = (currentDate.getMonth() - financialYearStartMonth + 12) % 12;
+          
           quarterlyProcessingTimes[currentQuarter].push(defaultDays);
           processingDetails[currentQuarter].push({
             smeId: application.smeId,
             days: defaultDays,
             note: 'Used default - missing dates',
-            financialYearQuarter: currentQuarter + 1
+            financialYearQuarter: currentQuarter + 1,
+            year: currentYear
           });
+          
+          if (currentMonth < 6) {
+            monthlyProcessingTimes[currentMonth].push(defaultDays);
+            monthlyProcessingDetails[currentMonth].push({
+              smeId: application.smeId,
+              days: defaultDays,
+              note: 'Used default - missing dates',
+              financialYearMonth: currentMonth + 1,
+              year: currentYear
+            });
+          }
         }
       } catch (error) {
         console.error(`❌ STEP 2: Error processing application:`, error);
@@ -1593,43 +1834,95 @@ const fetchAverageTimeToFund = async () => {
       return Math.round(quarterAvg);
     });
     
+    // Calculate average days per month
+    const monthlyTimeToFundData = monthlyProcessingTimes.map(monthTimes => {
+      if (monthTimes.length === 0) return 0;
+      const monthAvg = monthTimes.reduce((sum, days) => sum + days, 0) / monthTimes.length;
+      return Math.round(monthAvg);
+    });
+    
+    // Calculate yearly data - ONLY include years where we actually have processing times
+    const currentYear = new Date().getFullYear();
+    const yearlyTimeToFundData = [];
+    const yearlyTimeToFundLabels = [];
+    
+    // Get all years with processing times, sorted
+    const processingYears = Object.keys(processingTimesByYear)
+      .map(year => parseInt(year))
+      .sort((a, b) => a - b);
+    
+    console.log('📊 Processing years found:', processingYears);
+    
+    if (processingYears.length > 0) {
+      processingYears.forEach(year => {
+        const yearTimes = processingTimesByYear[year];
+        if (yearTimes.length > 0) {
+          const yearAvg = yearTimes.reduce((sum, days) => sum + days, 0) / yearTimes.length;
+          yearlyTimeToFundData.push(Math.round(yearAvg));
+          yearlyTimeToFundLabels.push(`${year}`);
+        }
+      });
+    } else {
+      // Fallback: just show current year average
+      yearlyTimeToFundData.push(averageDays);
+      yearlyTimeToFundLabels.push(`${currentYear}`);
+    }
+    
     const averageDays = count > 0 ? Math.round(totalDays / count) : 0;
     
-    console.log('📈 FINAL: Average time to fund with FINANCIAL YEAR quarterly allocation:', {
+    console.log('📈 FINAL: Average time to fund with accurate yearly data:', {
       averageDays,
       timeToFundData,
+      monthlyTimeToFundData,
+      yearlyTimeToFundData,
+      yearlyTimeToFundLabels,
       totalSMEs: count,
       quarterlyCounts: quarterlyProcessingTimes.map(q => q.length),
+      monthlyCounts: monthlyProcessingTimes.map(m => m.length),
+      processingYears,
       financialYearStartMonth: financialYearStartMonth + 1,
       allProcessingTimes
     });
-    console.log('🔍 FINAL: Processing details by quarter:', processingDetails);
     
     return {
       averageDays,
       timeToFundData,
+      monthlyTimeToFundData,
+      yearlyTimeToFundData,
+      yearlyTimeToFundLabels,
       totalSMEs: count,
       allProcessingTimes,
       financialYearStartMonth,
-      processingDetails
+      processingDetails,
+      monthlyProcessingDetails,
+      processingTimesByYear,
+      processingYears
     };
   } catch (error) {
     console.error('❌ ERROR: Failed to fetch average time to fund from successful deals:', error);
     return {
       averageDays: 0,
       timeToFundData: [0, 0, 0, 0],
+      monthlyTimeToFundData: [0, 0, 0, 0, 0, 0],
+      yearlyTimeToFundData: [0],
+      yearlyTimeToFundLabels: [`${new Date().getFullYear()}`],
       totalSMEs: 0,
       allProcessingTimes: [],
       financialYearStartMonth: 6,
-      processingDetails: []
+      processingDetails: [],
+      monthlyProcessingDetails: [[], [], [], [], [], []],
+      processingTimesByYear: {},
+      processingYears: []
     };
   }
 };
 
-// FALLBACK DATA for when investor has no successful deals
+// FALLBACK DATA for when investor has no successful deals - FIXED YEARLY DATA
 const getFallbackDataBasedOnUser = () => {
   const currentUser = auth.currentUser;
   const userHash = currentUser?.uid ? currentUser.uid.charCodeAt(0) % 4 : 0;
+  
+  const currentYear = new Date().getFullYear();
   
   const fallbackOptions = [
     { 
@@ -1643,8 +1936,24 @@ const getFallbackDataBasedOnUser = () => {
         { smeId: 'sme1', companyName: 'Tech Startup A', score: 82 },
         { smeId: 'sme4', companyName: 'Innovation Labs', score: 85 }
       ] },
-      portfolioValue: { currentValue: 187, quarterlyData: [45, 42, 48, 52], financialYearStartMonth: 6 },
-      timeToFund: { averageDays: 35, timeToFundData: [38, 36, 34, 32], totalSMEs: 29, allProcessingTimes: [32, 35, 38, 40, 33, 36, 34, 37], financialYearStartMonth: 6 }
+      portfolioValue: { 
+        currentValue: 187, 
+        quarterlyData: [45, 42, 48, 52], 
+        monthlyData: [15, 18, 22, 20, 25, 28],
+        yearlyData: [187], // Only current year
+        yearlyLabels: [`${currentYear}`],
+        financialYearStartMonth: 6 
+      },
+      timeToFund: { 
+        averageDays: 35, 
+        timeToFundData: [38, 36, 34, 32], 
+        monthlyTimeToFundData: [40, 38, 37, 36, 35, 34],
+        yearlyTimeToFundData: [35], // Only current year
+        yearlyTimeToFundLabels: [`${currentYear}`],
+        totalSMEs: 29, 
+        allProcessingTimes: [32, 35, 38, 40, 33, 36, 34, 37], 
+        financialYearStartMonth: 6 
+      }
     },
     { 
       activeSMEs: { 'Micro': 8, 'Small': 10, 'Medium': 6, 'Large': 4 }, 
@@ -1656,8 +1965,24 @@ const getFallbackDataBasedOnUser = () => {
       fundingReadyPercentage: { fundingReadyPercentage: 60, fundingReadyCount: 17, totalCount: 28, fundingReadySMEs: [
         { smeId: 'sme5', companyName: 'Retail Chain D', score: 78 }
       ] },
-      portfolioValue: { currentValue: 215, quarterlyData: [52, 51, 55, 57], financialYearStartMonth: 6 },
-      timeToFund: { averageDays: 32, timeToFundData: [35, 34, 32, 29], totalSMEs: 28, allProcessingTimes: [30, 32, 34, 31, 33, 32, 30, 35], financialYearStartMonth: 6 }
+      portfolioValue: { 
+        currentValue: 215, 
+        quarterlyData: [52, 51, 55, 57], 
+        monthlyData: [18, 20, 25, 22, 28, 30],
+        yearlyData: [215], // Only current year
+        yearlyLabels: [`${currentYear}`],
+        financialYearStartMonth: 6 
+      },
+      timeToFund: { 
+        averageDays: 32, 
+        timeToFundData: [35, 34, 32, 29], 
+        monthlyTimeToFundData: [36, 35, 34, 33, 32, 31],
+        yearlyTimeToFundData: [32], // Only current year
+        yearlyTimeToFundLabels: [`${currentYear}`],
+        totalSMEs: 28, 
+        allProcessingTimes: [30, 32, 34, 31, 33, 32, 30, 35], 
+        financialYearStartMonth: 6 
+      }
     },
     { 
       activeSMEs: { 'Micro': 5, 'Small': 14, 'Medium': 9, 'Large': 2 }, 
@@ -1670,8 +1995,24 @@ const getFallbackDataBasedOnUser = () => {
         { smeId: 'sme8', companyName: 'Healthcare G', score: 84 },
         { smeId: 'sme9', companyName: 'Education Tech H', score: 79 }
       ] },
-      portfolioValue: { currentValue: 198, quarterlyData: [48, 47, 50, 53], financialYearStartMonth: 6 },
-      timeToFund: { averageDays: 38, timeToFundData: [42, 40, 37, 35], totalSMEs: 30, allProcessingTimes: [36, 38, 40, 37, 39, 38, 36, 41], financialYearStartMonth: 6 }
+      portfolioValue: { 
+        currentValue: 198, 
+        quarterlyData: [48, 47, 50, 53], 
+        monthlyData: [16, 19, 23, 21, 26, 29],
+        yearlyData: [198], // Only current year
+        yearlyLabels: [`${currentYear}`],
+        financialYearStartMonth: 6 
+      },
+      timeToFund: { 
+        averageDays: 38, 
+        timeToFundData: [42, 40, 37, 35], 
+        monthlyTimeToFundData: [44, 42, 41, 39, 38, 37],
+        yearlyTimeToFundData: [38], // Only current year
+        yearlyTimeToFundLabels: [`${currentYear}`],
+        totalSMEs: 30, 
+        allProcessingTimes: [36, 38, 40, 37, 39, 38, 36, 41], 
+        financialYearStartMonth: 6 
+      }
     },
     { 
       activeSMEs: { 'Micro': 7, 'Small': 11, 'Medium': 7, 'Large': 5 }, 
@@ -1683,8 +2024,24 @@ const getFallbackDataBasedOnUser = () => {
       fundingReadyPercentage: { fundingReadyPercentage: 68, fundingReadyCount: 21, totalCount: 31, fundingReadySMEs: [
         { smeId: 'sme11', companyName: 'Real Estate J', score: 81 }
       ] },
-      portfolioValue: { currentValue: 232, quarterlyData: [56, 58, 57, 61], financialYearStartMonth: 6 },
-      timeToFund: { averageDays: 29, timeToFundData: [32, 31, 29, 26], totalSMEs: 31, allProcessingTimes: [27, 29, 31, 28, 30, 29, 27, 32], financialYearStartMonth: 6 }
+      portfolioValue: { 
+        currentValue: 232, 
+        quarterlyData: [56, 58, 57, 61], 
+        monthlyData: [20, 22, 27, 25, 30, 33],
+        yearlyData: [232], // Only current year
+        yearlyLabels: [`${currentYear}`],
+        financialYearStartMonth: 6 
+      },
+      timeToFund: { 
+        averageDays: 29, 
+        timeToFundData: [32, 31, 29, 26], 
+        monthlyTimeToFundData: [34, 33, 32, 31, 30, 29],
+        yearlyTimeToFundData: [29], // Only current year
+        yearlyTimeToFundLabels: [`${currentYear}`],
+        totalSMEs: 31, 
+        allProcessingTimes: [27, 29, 31, 28, 30, 29, 27, 32], 
+        financialYearStartMonth: 6 
+      }
     }
   ];
   
@@ -1699,8 +2056,34 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
     activeSMEs: { 'Micro': 0, 'Small': 0, 'Medium': 0, 'Large': 0 },
     averageBIGScore: { averageScore: 0, individualScores: [], totalSMEs: 0 },
     fundingReadyPercentage: { fundingReadyPercentage: 0, fundingReadyCount: 0, totalCount: 0, fundingReadySMEs: [], notFundingReadySMEs: [] },
-    portfolioValue: { currentValue: 0, quarterlyData: [0, 0, 0, 0], totalDeals: 0, totalInvestment: 0, financialYearStartMonth: 6, quarterlyBreakdown: [[], [], [], []] },
-    timeToFund: { averageDays: 0, timeToFundData: [0, 0, 0, 0], totalSMEs: 0, allProcessingTimes: [], financialYearStartMonth: 6, processingDetails: [] },
+    portfolioValue: { 
+      currentValue: 0, 
+      quarterlyData: [0, 0, 0, 0], 
+      monthlyData: [0, 0, 0, 0, 0, 0],
+      yearlyData: [0],
+      yearlyLabels: [`${new Date().getFullYear()}`],
+      totalDeals: 0, 
+      totalInvestment: 0, 
+      financialYearStartMonth: 6, 
+      quarterlyBreakdown: [[], [], [], []],
+      monthlyBreakdown: [[], [], [], [], [], []],
+      investmentsByYear: {},
+      investmentYears: []
+    },
+    timeToFund: { 
+      averageDays: 0, 
+      timeToFundData: [0, 0, 0, 0], 
+      monthlyTimeToFundData: [0, 0, 0, 0, 0, 0],
+      yearlyTimeToFundData: [0],
+      yearlyTimeToFundLabels: [`${new Date().getFullYear()}`],
+      totalSMEs: 0, 
+      allProcessingTimes: [], 
+      financialYearStartMonth: 6, 
+      processingDetails: [],
+      monthlyProcessingDetails: [[], [], [], [], [], []],
+      processingTimesByYear: {},
+      processingYears: []
+    },
     loading: true,
     usingFallback: false
   });
@@ -1751,7 +2134,9 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
           totalInvestment: portfolioValueData.totalInvestment,
           financialYearStartMonth: portfolioValueData.financialYearStartMonth,
           timeToFund: timeToFundData.averageDays,
-          timeToFundSMEs: timeToFundData.totalSMEs
+          timeToFundSMEs: timeToFundData.totalSMEs,
+          investmentYears: portfolioValueData.investmentYears,
+          processingYears: timeToFundData.processingYears
         });
         
         if (hasRealData) {
@@ -1835,29 +2220,42 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
     return months;
   };
 
-  // Time view data - now using real data from successful deals with FINANCIAL YEAR quarterly allocation
+  // Time view data - now using real data from successful deals with FINANCIAL YEAR allocation
   const timeToFundData = {
-    Monthly: portfolioData.timeToFund.timeToFundData.length > 0 ? [
-      Math.round(portfolioData.timeToFund.timeToFundData[0] * 1.1),
-      Math.round(portfolioData.timeToFund.timeToFundData[0] * 1.05),
-      Math.round(portfolioData.timeToFund.timeToFundData[0] * 1.02),
-      portfolioData.timeToFund.timeToFundData[0],
-      Math.round(portfolioData.timeToFund.timeToFundData[1] * 1.02),
-      portfolioData.timeToFund.timeToFundData[1]
-    ] : [0, 0, 0, 0, 0, 0],
+    Monthly: portfolioData.timeToFund.monthlyTimeToFundData,
     Quarterly: portfolioData.timeToFund.timeToFundData,
-    Yearly: portfolioData.timeToFund.timeToFundData.length > 0 ? [
-      portfolioData.timeToFund.timeToFundData[0],
-      portfolioData.timeToFund.averageDays
-    ] : [0, 0]
+    Yearly: portfolioData.timeToFund.yearlyTimeToFundData
   };
 
-  const getTimeData = (view, monthlyData, quarterlyData, yearlyData) => {
+  // Portfolio value data for different time views
+  const portfolioValueData = {
+    Monthly: portfolioData.portfolioValue.monthlyData,
+    Quarterly: portfolioData.portfolioValue.quarterlyData,
+    Yearly: portfolioData.portfolioValue.yearlyData
+  };
+
+  const getTimeData = (view, dataObject) => {
+    return dataObject[view] || dataObject.Quarterly;
+  };
+
+  const getTimeLabels = (view, financialYearStartMonth) => {
     switch (view) {
-      case 'Monthly': return monthlyData;
-      case 'Quarterly': return quarterlyData;
-      case 'Yearly': return yearlyData;
-      default: return quarterlyData;
+      case 'Monthly':
+        return getFinancialYearMonths(financialYearStartMonth);
+      case 'Quarterly':
+        return getQuarterLabels(financialYearStartMonth);
+      case 'Yearly':
+        // Use the actual years we have data for
+        if (view === 'Yearly') {
+          if (timeToFundView === 'Yearly') {
+            return portfolioData.timeToFund.yearlyTimeToFundLabels;
+          } else {
+            return portfolioData.portfolioValue.yearlyLabels;
+          }
+        }
+        return portfolioData.portfolioValue.yearlyLabels;
+      default:
+        return getQuarterLabels(financialYearStartMonth);
     }
   };
 
@@ -2290,17 +2688,17 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
     );
   };
 
-  // Chart Components (other components remain the same)
+  // UPDATED: BarChartWithTitle to support all time views with accurate yearly data
   const BarChartWithTitle = ({ data, title, chartTitle, chartId }) => {
     const handleEyeClick = () => {
-      const quarterLabels = getQuarterLabels(portfolioData.portfolioValue.financialYearStartMonth);
-      const { quarterlyBreakdown } = portfolioData.portfolioValue;
+      const { quarterlyBreakdown, monthlyBreakdown, investmentsByYear, investmentYears } = portfolioData.portfolioValue;
+      const currentYear = new Date().getFullYear();
       
       openPopup(
         <div className="popup-content">
           <h3>{title}</h3>
           <div className="popup-description">
-            Portfolio value growth from your successful investment deals with financial year quarterly allocation based on approval dates
+            Portfolio value growth from your successful investment deals with accurate yearly data based on actual investment dates
           </div>
           <div className="popup-chart">
             <Bar data={data} options={staticBarOptions} />
@@ -2308,7 +2706,7 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
           <div className="popup-details">
             {data.labels.map((label, index) => (
               <div key={label} className="detail-item">
-                <span className="detail-label">{quarterLabels[index]}:</span>
+                <span className="detail-label">{label}:</span>
                 <span className="detail-value">R {data.datasets[0].data[index]} million</span>
               </div>
             ))}
@@ -2336,9 +2734,31 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
                 {portfolioData.usingFallback ? 'Sample Portfolio' : 'Your Successful Deals'}
               </span>
             </div>
+            <div className="detail-item">
+              <span className="detail-label">Time View:</span>
+              <span className="detail-value">{timeToFundView}</span>
+            </div>
             
-            {/* Show quarterly breakdown */}
-            {quarterlyBreakdown && quarterlyBreakdown.some(q => q.length > 0) && (
+            {/* Show investment years breakdown */}
+            {investmentYears && investmentYears.length > 0 && (
+              <>
+                <div className="detail-item" style={{borderLeftColor: '#4CAF50', marginTop: '15px'}}>
+                  <span className="detail-label" style={{fontSize: '16px', fontWeight: '700'}}>Investments by Calendar Year:</span>
+                  <span className="detail-value" style={{fontSize: '16px', fontWeight: '700'}}></span>
+                </div>
+                {investmentYears.map(year => (
+                  <div key={year} className="detail-item">
+                    <span className="detail-label">{year}:</span>
+                    <span className="detail-value">
+                      R {((investmentsByYear[year] || 0) / 1000000).toFixed(1)} million
+                    </span>
+                  </div>
+                ))}
+              </>
+            )}
+            
+            {/* Show quarterly breakdown for quarterly view */}
+            {timeToFundView === 'Quarterly' && quarterlyBreakdown && quarterlyBreakdown.some(q => q.length > 0) && (
               <>
                 <div className="detail-item" style={{borderLeftColor: '#4CAF50', marginTop: '15px'}}>
                   <span className="detail-label" style={{fontSize: '16px', fontWeight: '700'}}>Quarterly Investment Breakdown:</span>
@@ -2346,9 +2766,9 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
                 </div>
                 {quarterlyBreakdown.map((quarter, index) => (
                   <div key={index} className="detail-item">
-                    <span className="detail-label">{quarterLabels[index]}:</span>
+                    <span className="detail-label">{getQuarterLabels(portfolioData.portfolioValue.financialYearStartMonth)[index]}:</span>
                     <span className="detail-value">
-                      {quarter.length} deals, R {data.datasets[0].data[index]}M
+                      {quarter.length} deals, R {portfolioData.portfolioValue.quarterlyData[index]}M
                     </span>
                   </div>
                 ))}
@@ -2524,16 +2944,12 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
     );
   };
 
-  // Time to Fund Chart
+  // UPDATED: Time to Fund Chart to support all time views with accurate yearly data
   const TimeToFundChart = ({ value, target, data, title }) => {
-    const quarterLabels = getQuarterLabels(portfolioData.timeToFund.financialYearStartMonth);
+    const labels = getTimeLabels(timeToFundView, portfolioData.timeToFund.financialYearStartMonth);
     
     const chartData = {
-      labels: data.map((_, index) => {
-        if (timeToFundView === 'Monthly') return `M${index + 1}`;
-        if (timeToFundView === 'Yearly') return `Y${index + 1}`;
-        return quarterLabels[index];
-      }),
+      labels: labels,
       datasets: [
         {
           label: 'Days to Fund',
@@ -2587,13 +3003,13 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
     };
 
     const handleEyeClick = () => {
-      const { processingDetails } = portfolioData.timeToFund;
+      const { processingDetails, monthlyProcessingDetails, processingTimesByYear, processingYears } = portfolioData.timeToFund;
       
       openPopup(
         <div className="popup-content">
           <h3>Time to Fund - Successful Deals</h3>
           <div className="popup-description">
-            Average funding time calculated from your successful deals (application date to approval date) with financial year quarterly allocation
+            Average funding time calculated from your successful deals (application date to approval date) with accurate yearly data based on actual processing dates
           </div>
           <div className="popup-chart">
             <Line data={chartData} options={options} />
@@ -2628,12 +3044,35 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
               <span className="detail-value">Application Date → Approval Date</span>
             </div>
             <div className="detail-item">
-              <span className="detail-label">Quarter Allocation:</span>
-              <span className="detail-value">Based on financial year quarters</span>
+              <span className="detail-label">Time View:</span>
+              <span className="detail-value">{timeToFundView}</span>
             </div>
             
-            {/* Show processing details by quarter */}
-            {processingDetails && processingDetails.some(q => q.length > 0) && (
+            {/* Show processing years breakdown */}
+            {processingYears && processingYears.length > 0 && (
+              <>
+                <div className="detail-item" style={{borderLeftColor: '#4CAF50', marginTop: '15px'}}>
+                  <span className="detail-label" style={{fontSize: '16px', fontWeight: '700'}}>Processing Times by Calendar Year:</span>
+                  <span className="detail-value" style={{fontSize: '16px', fontWeight: '700'}}></span>
+                </div>
+                {processingYears.map(year => {
+                  const yearTimes = processingTimesByYear[year] || [];
+                  const yearAvg = yearTimes.length > 0 ? 
+                    Math.round(yearTimes.reduce((sum, days) => sum + days, 0) / yearTimes.length) : 0;
+                  return (
+                    <div key={year} className="detail-item">
+                      <span className="detail-label">{year}:</span>
+                      <span className="detail-value">
+                        {yearAvg} days ({yearTimes.length} SMEs)
+                      </span>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+            
+            {/* Show processing details based on current view */}
+            {timeToFundView === 'Quarterly' && processingDetails && processingDetails.some(q => q.length > 0) && (
               <>
                 <div className="detail-item" style={{borderLeftColor: '#4CAF50', marginTop: '15px'}}>
                   <span className="detail-label" style={{fontSize: '16px', fontWeight: '700'}}>Processing Details by Quarter:</span>
@@ -2641,7 +3080,7 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
                 </div>
                 {processingDetails.map((quarter, index) => (
                   <div key={index} className="detail-item">
-                    <span className="detail-label">{quarterLabels[index]}:</span>
+                    <span className="detail-label">{getQuarterLabels(portfolioData.timeToFund.financialYearStartMonth)[index]}:</span>
                     <span className="detail-value">
                       {quarter.length} SMEs, Avg: {data[index]} days
                     </span>
@@ -2650,13 +3089,21 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
               </>
             )}
             
-            {portfolioData.timeToFund.allProcessingTimes && portfolioData.timeToFund.allProcessingTimes.length > 0 && (
-              <div className="detail-item">
-                <span className="detail-label">Individual Processing Times:</span>
-                <span className="detail-value">
-                  {portfolioData.timeToFund.allProcessingTimes.join(', ')} days
-                </span>
-              </div>
+            {timeToFundView === 'Monthly' && monthlyProcessingDetails && monthlyProcessingDetails.some(m => m.length > 0) && (
+              <>
+                <div className="detail-item" style={{borderLeftColor: '#4CAF50', marginTop: '15px'}}>
+                  <span className="detail-label" style={{fontSize: '16px', fontWeight: '700'}}>Processing Details by Month:</span>
+                  <span className="detail-value" style={{fontSize: '16px', fontWeight: '700'}}></span>
+                </div>
+                {monthlyProcessingDetails.map((month, index) => (
+                  <div key={index} className="detail-item">
+                    <span className="detail-label">{getFinancialYearMonths(portfolioData.timeToFund.financialYearStartMonth)[index]}:</span>
+                    <span className="detail-value">
+                      {month.length} SMEs, Avg: {data[index]} days
+                    </span>
+                  </div>
+                ))}
+              </>
             )}
           </div>
         </div>
@@ -2925,13 +3372,13 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
         <div className="top-row">
           <BarChartWithTitle
             data={generateBarData(
-              getQuarterLabels(portfolioData.portfolioValue.financialYearStartMonth),
-              portfolioData.portfolioValue.quarterlyData,
+              getTimeLabels(timeToFundView, portfolioData.portfolioValue.financialYearStartMonth),
+              getTimeData(timeToFundView, portfolioValueData),
               'Portfolio Value (R millions)',
               0
             )}
             title="Your Successful Deals Portfolio Value"
-            chartTitle="Investment values from successful deals (R millions)"
+            chartTitle={`Investment values from successful deals (${timeToFundView.toLowerCase()} view in R millions)`}
             chartId="total-portfolio-value"
           />
 
@@ -2961,7 +3408,7 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
           <TimeToFundChart
             value={portfolioData.timeToFund.averageDays}
             target={30}
-            data={getTimeData(timeToFundView, timeToFundData.Monthly, timeToFundData.Quarterly, timeToFundData.Yearly)}
+            data={getTimeData(timeToFundView, timeToFundData)}
             title="Avg. Time-to-Fund - Successful Deals"
           />
 
