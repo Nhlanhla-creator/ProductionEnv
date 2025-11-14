@@ -438,7 +438,33 @@ const MyInvestments = () => {
   const [showDownloadOptions, setShowDownloadOptions] = useState(false);
   const [popupContent, setPopupContent] = useState(null);
   const [showPopup, setShowPopup] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
   const sectionRef = useRef(null);
+
+  // Get current user from Firebase auth or your auth context
+  useEffect(() => {
+    // This should be replaced with your actual authentication logic
+    const getCurrentUser = () => {
+      // Example: Get user from Firebase auth
+      // import { getAuth, onAuthStateChanged } from 'firebase/auth';
+      // const auth = getAuth();
+      // onAuthStateChanged(auth, (user) => {
+      //   if (user) {
+      //     setCurrentUser(user);
+      //   }
+      // });
+      
+      // For now, using a mock user - replace this with your actual auth logic
+      const mockUser = {
+        uid: "investor-user-id-123",
+        email: "investor@example.com",
+        displayName: "Test Investor"
+      };
+      setCurrentUser(mockUser);
+    };
+
+    getCurrentUser();
+  }, []);
 
   useEffect(() => {
     const checkSidebarState = () => {
@@ -587,52 +613,88 @@ const MyInvestments = () => {
     );
   };
 
-  // Section data mapping
+  // Section data mapping - UPDATED to include currentUser prop
   const sectionData = {
     'Portfolio Overview': {
       icon: <FiEye />,
       purpose: 'Provide a high-level snapshot of overall performance and exposure at a glance',
-      component: <PortfolioOverview openPopup={openPopup} downloadSectionAsPDF={downloadSectionAsPDF} />
+      component: <PortfolioOverview 
+        openPopup={openPopup} 
+        downloadSectionAsPDF={downloadSectionAsPDF} 
+        currentUser={currentUser}
+      />
     },
     'Portfolio Composition': {
       icon: <FiComposition />,
       purpose: 'Show diversification and concentration by sector, stage, location, etc.',
-      component: <PortfolioComposition openPopup={openPopup} downloadSectionAsPDF={downloadSectionAsPDF} />
+      component: <PortfolioComposition 
+        openPopup={openPopup} 
+        downloadSectionAsPDF={downloadSectionAsPDF} 
+        currentUser={currentUser}
+      />
     },
     'Exit & Liquidity Metrics': {
       icon: <FiLiquidity />,
       purpose: 'Measure realized outcomes, repayments, and liquidity flow',
-      component: <ExitLiquidityMetrics openPopup={openPopup} downloadSectionAsPDF={downloadSectionAsPDF} />
+      component: <ExitLiquidityMetrics 
+        openPopup={openPopup} 
+        downloadSectionAsPDF={downloadSectionAsPDF} 
+        currentUser={currentUser}
+      />
     },
     'Funder Health & Efficiency': {
       icon: <FiHeart />,
       purpose: 'Track funder/catalyst performance and operational efficiency',
-      component: <FunderHealthEfficiency openPopup={openPopup} downloadSectionAsPDF={downloadSectionAsPDF} />
+      component: <FunderHealthEfficiency 
+        openPopup={openPopup} 
+        downloadSectionAsPDF={downloadSectionAsPDF} 
+        currentUser={currentUser}
+      />
     },
     'Performance & Risk Dashboard': {
       icon: <FiBarChart2 />,
       purpose: 'Assess growth, risk, and inclusion performance of portfolio',
-      component: <PerformanceRiskDashboard openPopup={openPopup} downloadSectionAsPDF={downloadSectionAsPDF} />
+      component: <PerformanceRiskDashboard 
+        openPopup={openPopup} 
+        downloadSectionAsPDF={downloadSectionAsPDF} 
+        currentUser={currentUser}
+      />
     },
     'ESG & Impact Performance': {
       icon: <FiGlobe />,
       purpose: 'Measure environmental, social, and governance outcomes',
-      component: <ESGImpactPerformance openPopup={openPopup} downloadSectionAsPDF={downloadSectionAsPDF} />
+      component: <ESGImpactPerformance 
+        openPopup={openPopup} 
+        downloadSectionAsPDF={downloadSectionAsPDF} 
+        currentUser={currentUser}
+      />
     },
     'Data Integrity & Trust Layer': {
       icon: <FiShield />,
       purpose: 'Ensure transparency, compliance, and auditability',
-      component: <DataIntegrityTrustLayer openPopup={openPopup} downloadSectionAsPDF={downloadSectionAsPDF} />
+      component: <DataIntegrityTrustLayer 
+        openPopup={openPopup} 
+        downloadSectionAsPDF={downloadSectionAsPDF} 
+        currentUser={currentUser}
+      />
     },
     'Insights & AI Recommendations': {
       icon: <FiActivity />,
       purpose: 'Provide AI-driven opportunities, risks, and alerts',
-      component: <InsightsAIRecommendations openPopup={openPopup} downloadSectionAsPDF={downloadSectionAsPDF} />
+      component: <InsightsAIRecommendations 
+        openPopup={openPopup} 
+        downloadSectionAsPDF={downloadSectionAsPDF} 
+        currentUser={currentUser}
+      />
     },
     'Pipeline & Future Opportunities': {
       icon: <FiTarget />,
       purpose: 'Show pipeline strength and forecast future capital needs',
-      component: <PipelineFutureOpportunities openPopup={openPopup} downloadSectionAsPDF={downloadSectionAsPDF} />
+      component: <PipelineFutureOpportunities 
+        openPopup={openPopup} 
+        downloadSectionAsPDF={downloadSectionAsPDF} 
+        currentUser={currentUser}
+      />
     }
   };
 
