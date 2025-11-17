@@ -43,11 +43,17 @@ const Header = ({ onLoginClick }) => {
     };
   }, [isMobileMenuOpen]);
 
-  const handleRegisterClick = () => {
+  const handleLoginClick = () => {
+    // First close mobile menu if open
+    setIsMobileMenuOpen(false);
+    
+    // If parent component provided a handler, use it
     if (onLoginClick) {
       onLoginClick();
+    } else {
+      // Otherwise, navigate directly to loginRegister page
+      navigate('/loginRegister');
     }
-    setIsMobileMenuOpen(false);
   };
 
   const handleNavigation = (path) => {
@@ -271,6 +277,13 @@ const Header = ({ onLoginClick }) => {
             >
               BIG score
             </button>
+            <button 
+              className="nav-button"
+              onClick={() => handleNavigation('/CharmSchool')}
+              style={styles.navButton}
+            >
+              CSI @BIG
+            </button>
             
             <button 
               className="nav-button"
@@ -279,6 +292,7 @@ const Header = ({ onLoginClick }) => {
             >
               Insights
             </button>
+
             
             <button 
               className="nav-button"
@@ -302,7 +316,7 @@ const Header = ({ onLoginClick }) => {
         <div style={styles.desktopLoginContainer}>
           <button 
             className="login-button"
-            onClick={handleRegisterClick}
+            onClick={handleLoginClick}
             style={styles.loginButton}
           >
             Login/Register
@@ -358,6 +372,13 @@ const Header = ({ onLoginClick }) => {
         
         <button 
           style={styles.mobileNavButton}
+          onClick={() => handleNavigation('/CharmSchool')}
+        >
+          CSI @BIG
+        </button>
+        
+        <button 
+          style={styles.mobileNavButton}
           onClick={() => handleNavigation('/InsightsPage')}
         >
           Insights
@@ -379,7 +400,7 @@ const Header = ({ onLoginClick }) => {
         
         <button 
           style={styles.mobileLoginButton}
-          onClick={handleRegisterClick}
+          onClick={handleLoginClick}
         >
           Login/Register
         </button>
