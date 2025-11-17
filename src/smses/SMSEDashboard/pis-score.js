@@ -291,6 +291,22 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
       const policiesData = calculatePoliciesScore();
       const pisCalc = calculatePIS();
 
+      // Determine stage based on PIS
+      let stage, recommendation, stageContext;
+      if (pisCalc.totalPIS < 100) {
+        stage = "Advisors Stage";
+        recommendation = "Advisors sufficient";
+        stageContext = "foundational small business operations";
+      } else if (pisCalc.totalPIS < 350) {
+        stage = "Emerging Board Stage";
+        recommendation = "Informal board recommended";
+        stageContext = "growing business with increasing complexity";
+      } else {
+        stage = "Full Board Stage";
+        recommendation = "Formal board strongly recommended";
+        stageContext = "complex enterprise-level operations";
+      }
+
       const prompt = `Evaluate the business's governance readiness using the Public Interest Score (PIS) system.
 
 IMPORTANT: Use the exact PIS calculation provided below.
@@ -307,109 +323,111 @@ PIS = ${pisCalc.employees} + ${pisCalc.turnoverComponent} + ${pisCalc.liabilitie
 PIS = ${pisCalc.totalPIS}
 
 PIS Score: ${pisCalc.totalPIS}
+Governance Stage: ${stage}
+Business Context: ${stageContext}
 
-## GOVERNANCE EVALUATION:
-Based on PIS level:
-- PIS < 100: Advisors Stage rubric
-- PIS 100-349: Emerging Board Stage rubric  
-- PIS ≥ 350: Full Board Stage rubric
+## EVALUATION APPROACH:
+Evaluate each governance category APPROPRIATELY for the business's current stage (${stage}). 
+A ${stageContext} should be held to DIFFERENT standards than a large enterprise.
 
-Current Stage: ${pisCalc.totalPIS < 100 ? 'Advisors Stage' : pisCalc.totalPIS < 350 ? 'Emerging Board Stage' : 'Full Board Stage'}
+## STAGE-SPECIFIC EXPECTATIONS:
+
+### For Strategic Planning:
+- ${pisCalc.totalPIS < 100 ? "Advisors Stage: Look for basic business planning, simple goal-setting, foundational vision" :
+          pisCalc.totalPIS < 350 ? "Emerging Board Stage: Expect structured business plans, clear objectives, regular performance reviews" :
+            "Full Board Stage: Require comprehensive strategic frameworks, detailed KPIs, sophisticated planning processes"}
+
+### For Risk Management:
+- ${pisCalc.totalPIS < 100 ? "Advisors Stage: Basic risk awareness, simple mitigation, essential insurance coverage" :
+          pisCalc.totalPIS < 350 ? "Emerging Board Stage: Documented risk assessment, formal mitigation strategies, business continuity planning" :
+            "Full Board Stage: Enterprise risk management framework, sophisticated risk modeling, comprehensive crisis management"}
+
+### For Transparency and Reporting:
+- ${pisCalc.totalPIS < 100 ? "Advisors Stage: Basic financial tracking, simple stakeholder updates, foundational record-keeping" :
+          pisCalc.totalPIS < 350 ? "Emerging Board Stage: Regular financial reporting, structured stakeholder communication, compliance documentation" :
+            "Full Board Stage: Comprehensive reporting systems, sophisticated stakeholder engagement, audit-ready documentation"}
+
+### For Policies & Documentation:
+- ${pisCalc.totalPIS < 100 ? "Advisors Stage: Essential policies only (employment, basic compliance), simple documentation" :
+          pisCalc.totalPIS < 350 ? "Emerging Board Stage: Core policy framework, documented procedures, compliance systems" :
+            "Full Board Stage: Comprehensive policy suite, sophisticated documentation, advanced compliance frameworks"}
 
 ## PLATFORM-SPECIFIC REQUIREMENTS:
-When providing improvement advice, focus on ACTUAL STEPS the user can take WITHIN OUR PLATFORM:
-
-1. **For Board Structure improvements:**
-   - Go to Ownership Management → Add Directors/Advisors
-   - Complete board composition templates
-   - Set up meeting frequency in Enterprise Readiness
-   - Document board roles and responsibilities
-
-2. **For Policies & Documentation:**
-   - Navigate to Legal Compliance → Compliance Checklist
-   - Complete missing policies from the 17 available templates
-   - Use document generator for Employment Contracts, NDAs, etc.
-   - Upload existing policies to Document Vault
-
-3. **For Strategic Planning:**
-   - Use Business Plan templates in Strategic Planning section
-   - Complete SWOT analysis tool
-   - Set up KPI tracking in Performance Metrics
-   - Document strategic objectives with timelines
-
-4. **For Risk Management:**
-   - Complete Risk Assessment questionnaire
-   - Use Risk Register template
-   - Set up compliance calendar alerts
-   - Document mitigation strategies
-
-5. **For Transparency and Reporting:**
-   - Set up regular financial reporting schedules
-   - Document stakeholder communication protocols
-   - Use reporting templates in Financial Overview
-   - Establish audit trail practices
+When providing improvement advice, focus on ACTUAL STEPS the user can take WITHIN OUR PLATFORM that are APPROPRIATE for their ${stage}.
 
 ## EVALUATION INSTRUCTIONS:
 
-For each category in the appropriate rubric (plus Policies & Documentation and Transparency and Reporting):
-- Score from 0 to max points based on ACTUAL data provided
-- Provide short rationale for the score (2-3 sentences)
-- FOR EACH CATEGORY, include a "How to Improve" section with 3-5 SPECIFIC, ACTIONABLE steps that the user can actually implement ON OUR PLATFORM
-
-5. POLICIES & DOCUMENTATION CATEGORY:
-   Current Policies: ${policiesData.completed}/${policiesData.total} completed (${policiesData.score}%)
-   - Evaluate based on their actual policy completion status
-   - Recommend SPECIFIC policies to complete next from our 17-template checklist
-   - Provide platform-specific steps to improve documentation
-
-6. TRANSPARENCY AND REPORTING CATEGORY:
-   - Evaluate financial reporting practices and disclosure standards
-   - Assess stakeholder communication quality and frequency
-   - Review reporting to boards, shareholders, and authorities
-   - Provide platform-specific steps to improve transparency
-
-7. Finally, provide:
-   - Overall governance score (0-100%)
-   - Governance stage
-   - Clear recommendation
-   - Actionable improvement suggestions tied to platform features
-
-Input Data:
-${evaluationData}
-
-OUTPUT FORMAT:
-PIS Score: ${pisCalc.totalPIS}
-Governance Stage: [stage]
-Governance Recommendation: [recommendation]
-Governance Score: [score]%
-
-### Category Breakdown:
-### 1. [Category Name]
-**Score:** [score]/[max]
-**Rationale:** [2-3 sentence explanation based on actual data]
+### 1. Strategic Planning
+**Evaluation Context:** ${stage} - ${pisCalc.totalPIS < 100 ? "Focus on foundational planning suitable for small operations" :
+          pisCalc.totalPIS < 350 ? "Evaluate structured planning appropriate for growth stage" :
+            "Assess comprehensive strategic frameworks for complex operations"}
+**Score:** 0-100 (based on ${stage} expectations)
+**Rationale:** [2-3 sentence explanation assessing their planning maturity FOR THEIR STAGE]
 **How to Improve:** 
-• [Specific platform action 1 with exact navigation path]
-• [Specific platform action 2 with measurable goal]
-• [Specific platform action 3 using our templates/tools]
+• [Stage-appropriate platform action 1]
+• [Stage-appropriate platform action 2]
+• [Stage-appropriate platform action 3]
 
-### 2. Policies & Documentation
-**Score:** [evaluate 0-100 based on policy completeness]
-**Rationale:** [2-3 sentence explanation focusing on their ${policiesData.score}% completion rate and which specific policies are missing]
+### 2. Risk Management
+**Evaluation Context:** ${stage} - ${pisCalc.totalPIS < 100 ? "Assess basic risk awareness and simple protections" :
+          pisCalc.totalPIS < 350 ? "Evaluate documented risk processes for growing business" :
+            "Analyze sophisticated risk management for enterprise operations"}
+**Score:** 0-100 (based on ${stage} expectations)
+**Rationale:** [2-3 sentence explanation assessing their risk management FOR THEIR STAGE]
 **How to Improve:** 
-• [Complete [specific missing policy] in Legal Compliance → Compliance Checklist]
-• [Use our [template name] generator for [document type]]
-• [Set up automated reminders for policy reviews in Compliance Calendar]
+• [Stage-appropriate risk action 1]
+• [Stage-appropriate risk action 2]
+• [Stage-appropriate risk action 3]
 
 ### 3. Transparency and Reporting
-**Score:** [evaluate 0-100 based on reporting practices]
-**Rationale:** [2-3 sentence explanation focusing on current reporting standards and disclosure practices]
+**Evaluation Context:** ${stage} - ${pisCalc.totalPIS < 100 ? "Evaluate basic reporting and communication practices" :
+          pisCalc.totalPIS < 350 ? "Assess structured reporting for stakeholders" :
+            "Analyze comprehensive transparency systems"}
+**Score:** 0-100 (based on ${stage} expectations)
+**Rationale:** [2-3 sentence explanation assessing their transparency FOR THEIR STAGE]
 **How to Improve:** 
-• [Set up [specific reporting schedule] in Financial Overview]
-• [Use [template name] for stakeholder communications]
-• [Establish [specific audit practice] using our compliance tools]
+• [Stage-appropriate reporting action 1]
+• [Stage-appropriate reporting action 2]
+• [Stage-appropriate reporting action 3]
+
+### 4. Policies & Documentation
+**Evaluation Context:** ${stage} - ${pisCalc.totalPIS < 100 ? "Focus on essential policy completion (${policiesData.completed}/${policiesData.total})" :
+          pisCalc.totalPIS < 350 ? "Evaluate core policy framework development" :
+            "Assess comprehensive policy suite implementation"}
+Current Completion: ${policiesData.completed}/${policiesData.total} policies (${policiesData.score}%)
+**Score:** 0-100 (based on ${stage} expectations for policy maturity)
+**Rationale:** [2-3 sentence explanation assessing their policy framework FOR THEIR STAGE]
+**How to Improve:** 
+• [Complete stage-appropriate priority policies]
+• [Use appropriate templates for their size]
+• [Set up stage-suitable compliance tracking]
+
+${pisCalc.totalPIS >= 350 ? `### 5. Board Structure and Functionality
+**Evaluation Context:** ${stage} - Formal board requirements for complex operations
+**Score:** 0-100
+**Rationale:** [2-3 sentence explanation based on actual board structure data]
+**How to Improve:** 
+• [Formal board composition steps]
+• [Board governance templates]
+• [Director accountability frameworks]` : `### 5. Advisory Structure
+**Evaluation Context:** ${stage} - ${pisCalc.totalPIS < 100 ? "Light advisory support for small operations" : "Informal board guidance for growing business"}
+**Score:** 0-100
+**Rationale:** [2-3 sentence explanation assessing advisory setup FOR THEIR STAGE]
+**How to Improve:** 
+• [Stage-appropriate advisory recommendations]
+• [Advisor role documentation]
+• [Meeting frequency for their needs]`}
+
+## FINAL OUTPUT:
+Overall Governance Score: [calculate weighted average 0-100]% - SCORE SHOULD REFLECT THEIR READINESS FOR THEIR CURRENT STAGE
+Governance Stage: ${stage}
+Governance Recommendation: ${recommendation}
 
 ### Overall Assessment
-**Final Analysis:** [Brief overall assessment with key platform-specific recommendations]`;
+**Final Analysis:** [Brief overall assessment with stage-appropriate recommendations. Focus on what they need NOW for their ${stage}, not enterprise-level requirements.]
+
+Input Data:
+${evaluationData}`;
 
       const result = await sendMessageToChatGPT(prompt);
       const parsed = parseAiEvaluation(result);
@@ -1162,7 +1180,7 @@ Governance Score: [score]%
                     </div>
 
                     {/* Governance Stages */}
-                   
+
                   </div>
                 )}
               </div>
