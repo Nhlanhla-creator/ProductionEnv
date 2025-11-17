@@ -1022,8 +1022,6 @@ export function CustomerTable() {
       }
     }
 
-    fetchCurrentUserApplication()
-
     const fetchUniversalProfiles = async () => {
       try {
         const profilesSnapshot = await getDocs(collection(db, "universalProfiles"))
@@ -1032,6 +1030,7 @@ export function CustomerTable() {
           ...doc.data(),
         }))
         setUniversalProfiles(profilesData)
+        console.log("Fetched universal profiles:", profilesData.length); // Debug log
         return profilesData
       } catch (error) {
         console.error("Error fetching universal profiles:", error)
@@ -1045,7 +1044,6 @@ export function CustomerTable() {
       q,
       async (querySnapshot) => {
         const profiles = await fetchUniversalProfiles()
-
         const ratingsData = await fetchSupplierRatings()
 
         const apps = await Promise.all(
@@ -1062,11 +1060,8 @@ export function CustomerTable() {
             const docSnap = await getDoc(docRef)
             const product = docSnap.data()
             setProductProfiles(product)
-            // Note: 'product' variable seems to be undefined - you might want docSnap.data()
-            console.log(product) // Changed from 'product' to docSnap.data()
-            console.log(supplierProfile)
+
             if (product && supplierProfile) {
-              // Pass the ratings data directly to calculateMatchScore
               const matchResult = calculateMatchScore(product, supplierProfile, ratingsData)
               matchPercentage = matchResult.totalScore
               matchDetails = matchResult.breakdown
@@ -1075,8 +1070,8 @@ export function CustomerTable() {
             return {
               id: doc.id,
               ...data,
-              matchPercentage, // Add calculated match percentage
-              matchDetails, // Add match breakdown details
+              matchPercentage,
+              matchDetails,
               createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : null,
               updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : null,
             }
@@ -1092,6 +1087,8 @@ export function CustomerTable() {
         setLoading(false)
       },
     )
+
+    fetchCurrentUserApplication()
 
     return () => unsubscribe()
   }, [currentCustomerId])
@@ -1223,9 +1220,48 @@ export function CustomerTable() {
     }
   })
 
-  const handleViewDetails = (application) => {
-    setSelectedCustomer(application)
-    setShowCustomerModal(true)
+  const handleViewDetails = async (application) => {
+    try {
+      // First, find the complete customer profile from universalProfiles
+      const customerProfile = universalProfiles.find(profile => profile.id === application.customerId);
+
+      if (customerProfile) {
+        // Merge the application data with the complete customer profile
+        setSelectedCustomer({
+          ...application,
+          // Add the complete customer profile data
+          entityOverview: customerProfile.entityOverview || {},
+          productsServices: customerProfile.productsServices || {},
+          legalCompliance: customerProfile.legalCompliance || {},
+          financialOverview: customerProfile.financialOverview || {},
+          ownershipManagement: customerProfile.ownershipManagement || {},
+          contactDetails: customerProfile.contactDetails || {},
+          documents: customerProfile.documents || {},
+          applicationOverview: customerProfile.applicationOverview || {}
+        });
+      } else {
+        // If no profile found, use the application data with fallbacks
+        setSelectedCustomer({
+          ...application,
+          entityOverview: {},
+          productsServices: {},
+          legalCompliance: {},
+          financialOverview: {},
+          ownershipManagement: {},
+          contactDetails: {},
+          documents: {},
+          applicationOverview: {}
+        });
+      }
+
+      setShowCustomerModal(true);
+    } catch (error) {
+      console.error("Error fetching customer details:", error);
+      setNotification({
+        type: "error",
+        message: "Failed to load customer details"
+      });
+    }
   }
 
   const handleViewDocuments = (application) => {
@@ -1235,8 +1271,7 @@ export function CustomerTable() {
 
   const handleMessage = (application) => {
     setSelectedApplication(application)
-    setMessageText("")
-    setShowMessageModal(true)
+    setShowModal(true)  // This will open the customer details modal
   }
 
   const handleOpenProposalModal = (application) => {
