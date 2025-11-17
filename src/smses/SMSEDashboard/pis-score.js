@@ -307,6 +307,8 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
         stageContext = "complex enterprise-level operations";
       }
 
+      const needsBoardEvaluation = pisCalc.totalPIS >= 350;
+
       const prompt = `Evaluate the business's governance readiness using the Public Interest Score (PIS) system.
 
 IMPORTANT: Use the exact PIS calculation provided below.
@@ -326,42 +328,26 @@ PIS Score: ${pisCalc.totalPIS}
 Governance Stage: ${stage}
 Business Context: ${stageContext}
 
-## EVALUATION APPROACH:
-Evaluate each governance category APPROPRIATELY for the business's current stage (${stage}). 
-A ${stageContext} should be held to DIFFERENT standards than a large enterprise.
+## SCORING METHODOLOGY:
+${needsBoardEvaluation ?
+          '5 categories, each weighted equally at 20%: Strategic Planning, Risk Management, Transparency & Reporting, Policies & Documentation, Board Structure' :
+          '4 categories, each weighted equally at 25%: Strategic Planning, Risk Management, Transparency & Reporting, Policies & Documentation'
+        }
 
-## STAGE-SPECIFIC EXPECTATIONS:
+## FINAL SCORE CALCULATION:
+${needsBoardEvaluation ?
+          'Overall Score = (Strategic Planning + Risk Management + Transparency & Reporting + Policies & Documentation + Board Structure) / 5' :
+          'Overall Score = (Strategic Planning + Risk Management + Transparency & Reporting + Policies & Documentation) / 4'
+        }
 
-### For Strategic Planning:
-- ${pisCalc.totalPIS < 100 ? "Advisors Stage: Look for basic business planning, simple goal-setting, foundational vision" :
-          pisCalc.totalPIS < 350 ? "Emerging Board Stage: Expect structured business plans, clear objectives, regular performance reviews" :
-            "Full Board Stage: Require comprehensive strategic frameworks, detailed KPIs, sophisticated planning processes"}
-
-### For Risk Management:
-- ${pisCalc.totalPIS < 100 ? "Advisors Stage: Basic risk awareness, simple mitigation, essential insurance coverage" :
-          pisCalc.totalPIS < 350 ? "Emerging Board Stage: Documented risk assessment, formal mitigation strategies, business continuity planning" :
-            "Full Board Stage: Enterprise risk management framework, sophisticated risk modeling, comprehensive crisis management"}
-
-### For Transparency and Reporting:
-- ${pisCalc.totalPIS < 100 ? "Advisors Stage: Basic financial tracking, simple stakeholder updates, foundational record-keeping" :
-          pisCalc.totalPIS < 350 ? "Emerging Board Stage: Regular financial reporting, structured stakeholder communication, compliance documentation" :
-            "Full Board Stage: Comprehensive reporting systems, sophisticated stakeholder engagement, audit-ready documentation"}
-
-### For Policies & Documentation:
-- ${pisCalc.totalPIS < 100 ? "Advisors Stage: Essential policies only (employment, basic compliance), simple documentation" :
-          pisCalc.totalPIS < 350 ? "Emerging Board Stage: Core policy framework, documented procedures, compliance systems" :
-            "Full Board Stage: Comprehensive policy suite, sophisticated documentation, advanced compliance frameworks"}
-
-## PLATFORM-SPECIFIC REQUIREMENTS:
-When providing improvement advice, focus on ACTUAL STEPS the user can take WITHIN OUR PLATFORM that are APPROPRIATE for their ${stage}.
-
-## EVALUATION INSTRUCTIONS:
+## EVALUATION CATEGORIES:
 
 ### 1. Strategic Planning
+**Weight:** ${needsBoardEvaluation ? '20%' : '25%'}
 **Evaluation Context:** ${stage} - ${pisCalc.totalPIS < 100 ? "Focus on foundational planning suitable for small operations" :
           pisCalc.totalPIS < 350 ? "Evaluate structured planning appropriate for growth stage" :
             "Assess comprehensive strategic frameworks for complex operations"}
-**Score:** 0-100 (based on ${stage} expectations)
+**Score:** [0-100]
 **Rationale:** [2-3 sentence explanation assessing their planning maturity FOR THEIR STAGE]
 **How to Improve:** 
 • [Stage-appropriate platform action 1]
@@ -369,10 +355,11 @@ When providing improvement advice, focus on ACTUAL STEPS the user can take WITHI
 • [Stage-appropriate platform action 3]
 
 ### 2. Risk Management
+**Weight:** ${needsBoardEvaluation ? '20%' : '25%'}
 **Evaluation Context:** ${stage} - ${pisCalc.totalPIS < 100 ? "Assess basic risk awareness and simple protections" :
           pisCalc.totalPIS < 350 ? "Evaluate documented risk processes for growing business" :
             "Analyze sophisticated risk management for enterprise operations"}
-**Score:** 0-100 (based on ${stage} expectations)
+**Score:** [0-100]
 **Rationale:** [2-3 sentence explanation assessing their risk management FOR THEIR STAGE]
 **How to Improve:** 
 • [Stage-appropriate risk action 1]
@@ -380,10 +367,11 @@ When providing improvement advice, focus on ACTUAL STEPS the user can take WITHI
 • [Stage-appropriate risk action 3]
 
 ### 3. Transparency and Reporting
+**Weight:** ${needsBoardEvaluation ? '20%' : '25%'}
 **Evaluation Context:** ${stage} - ${pisCalc.totalPIS < 100 ? "Evaluate basic reporting and communication practices" :
           pisCalc.totalPIS < 350 ? "Assess structured reporting for stakeholders" :
             "Analyze comprehensive transparency systems"}
-**Score:** 0-100 (based on ${stage} expectations)
+**Score:** [0-100]
 **Rationale:** [2-3 sentence explanation assessing their transparency FOR THEIR STAGE]
 **How to Improve:** 
 • [Stage-appropriate reporting action 1]
@@ -391,40 +379,40 @@ When providing improvement advice, focus on ACTUAL STEPS the user can take WITHI
 • [Stage-appropriate reporting action 3]
 
 ### 4. Policies & Documentation
+**Weight:** ${needsBoardEvaluation ? '20%' : '25%'}
 **Evaluation Context:** ${stage} - ${pisCalc.totalPIS < 100 ? "Focus on essential policy completion (${policiesData.completed}/${policiesData.total})" :
           pisCalc.totalPIS < 350 ? "Evaluate core policy framework development" :
             "Assess comprehensive policy suite implementation"}
 Current Completion: ${policiesData.completed}/${policiesData.total} policies (${policiesData.score}%)
-**Score:** 0-100 (based on ${stage} expectations for policy maturity)
+**Score:** [0-100]
 **Rationale:** [2-3 sentence explanation assessing their policy framework FOR THEIR STAGE]
 **How to Improve:** 
 • [Complete stage-appropriate priority policies]
 • [Use appropriate templates for their size]
 • [Set up stage-suitable compliance tracking]
 
-${pisCalc.totalPIS >= 350 ? `### 5. Board Structure and Functionality
+${needsBoardEvaluation ? `
+### 5. Board Structure and Functionality
+**Weight:** 20%
 **Evaluation Context:** ${stage} - Formal board requirements for complex operations
-**Score:** 0-100
-**Rationale:** [2-3 sentence explanation based on actual board structure data]
+**Score:** [0-100]
+**Rationale:** [2-3 sentence explanation based on actual board structure data - assess composition, roles, meeting frequency, oversight effectiveness]
 **How to Improve:** 
-• [Formal board composition steps]
-• [Board governance templates]
-• [Director accountability frameworks]` : `### 5. Advisory Structure
-**Evaluation Context:** ${stage} - ${pisCalc.totalPIS < 100 ? "Light advisory support for small operations" : "Informal board guidance for growing business"}
-**Score:** 0-100
-**Rationale:** [2-3 sentence explanation assessing advisory setup FOR THEIR STAGE]
-**How to Improve:** 
-• [Stage-appropriate advisory recommendations]
-• [Advisor role documentation]
-• [Meeting frequency for their needs]`}
+• [Formal board composition steps using Ownership Management tools]
+• [Board governance templates for roles and responsibilities]
+• [Meeting frequency and documentation in Enterprise Readiness]
+• [Director accountability and performance evaluation frameworks]` : ''}
 
 ## FINAL OUTPUT:
-Overall Governance Score: [calculate weighted average 0-100]% - SCORE SHOULD REFLECT THEIR READINESS FOR THEIR CURRENT STAGE
+${needsBoardEvaluation ?
+          'Overall Governance Score = (Strategic Planning + Risk Management + Transparency & Reporting + Policies & Documentation + Board Structure) / 5 = [calculated score]%' :
+          'Overall Governance Score = (Strategic Planning + Risk Management + Transparency & Reporting + Policies & Documentation) / 4 = [calculated score]%'
+        }
 Governance Stage: ${stage}
 Governance Recommendation: ${recommendation}
 
 ### Overall Assessment
-**Final Analysis:** [Brief overall assessment with stage-appropriate recommendations. Focus on what they need NOW for their ${stage}, not enterprise-level requirements.]
+**Final Analysis:** [Brief overall assessment with stage-appropriate recommendations. ${needsBoardEvaluation ? 'Pay special attention to board structure readiness.' : 'Focus on core operational governance improvements.'}]
 
 Input Data:
 ${evaluationData}`;
