@@ -157,6 +157,8 @@ import HowWorksProgram from "main_pages/ProgramSponsor/HowWorksProgram"
 import BIGscoreProgram from "main_pages/ProgramSponsor/BIGscoreProgram"
 import HeaderProgram from "main_pages/ProgramSponsor/HeaderProgram"
 import BookSession from "main_pages/BookSession"
+import HomePageAdvisor from "main_pages/Advisors/HomePageAdvisor"
+import CharmSchool from "main_pages/CSI"
 // Auth Components
 import AuthForm from "./smses/LoginRegister"
 import LoginRegister from "./smses/LoginRegister"
@@ -749,6 +751,8 @@ function App() {
         <Route path="/HowWorksProgram" element={<HowWorksProgram />} />
         <Route path="/HeaderProgram" element={<HeaderProgram />} />
         <Route path="/BookSession" element={<BookSession />} />
+        <Route path="/HomePageAdvisor" element={<HomePageAdvisor />} />
+        <Route path="/CharmSchool" element={<CharmSchool />} />
         {/* Admin Dashboard Routes - NEW */}
         <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
         <Route path="/admin/dashboard" element={renderAdminRoute(AdminDashboard)} />
