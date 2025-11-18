@@ -3,7 +3,6 @@ import "./UniversalProfile.css"
 import FormField from "./form-field";
 import FileUpload from "./file-upload";
 import { profitabilityOptions } from "./applicationOptions";
-import CreditGPT from './aiCreditReport'; // Add this import at the top
 import { useApiKey } from "../SMSEDashboard/callapi"
 
 // Currency formatter function
@@ -20,37 +19,6 @@ const FinancialOverview = ({ data, updateData }) => {
     currentValuation: data.currentValuation || '',
     existingDebt: data.existingDebt || ''
   });
-  const apiKey =useApiKey()
-console.log(apiKey)
-    const [aiEvaluation, setAiEvaluation] = useState(null);
-  
- const handleAiResponse = (response, score, label) => {
-    const evaluationData = {
-      response,
-      score,
-      label,
-      timestamp: new Date().toISOString()
-    };
-
-
-
-    setAiEvaluation(evaluationData);
-    updateData({
-      ...data,
-      aiEvaluation: evaluationData
-    });
-  };
-
-const handleCreditAnalysisComplete = (analysis, score, rating) => {
-  // Update the credit score in the form data
-  updateData("financialOverview", { 
-    creditScore: score,
-    creditRating: rating,
-    creditAnalysis: analysis 
-  });
-  
-  console.log("Credit analysis completed:", { score, rating });
-};
 
   // Simple handler for all inputs
   const handleInputChange = (field, value) => {
@@ -167,7 +135,7 @@ const handleCreditAnalysisComplete = (analysis, score, rating) => {
                   onChange={(e) => {
                     handleInputChange("hasAccountingSoftware", e.target.value);
                     if (e.target.value === 'no') {
-                      handleInputChange("accountingSoftwareDocs", []);
+                      handleInputChange("accountingSoftwareName", "");
                     }
                   }}
                   className="form-radio"
@@ -178,15 +146,17 @@ const handleCreditAnalysisComplete = (analysis, score, rating) => {
           </FormField>
 
           {data.hasAccountingSoftware === "yes" && (
-            <div style={{ marginTop: "1rem" }}>
-              <FileUpload
-                label="Upload Accounting Software Reports"
-                accept=".pdf,.xlsx,.xls,.csv"
-                onChange={(files) => handleFileChange("accountingSoftwareDocs", files)}
-                value={data.accountingSoftwareDocs || []}
-                tooltip="Upload reports or screenshots from your accounting software (e.g., QuickBooks, Xero, Sage)"
+            <FormField label="Which accounting software do you use?" required>
+              <input
+                type="text"
+                name="accountingSoftwareName"
+                value={data.accountingSoftwareName || ""}
+                onChange={(e) => handleInputChange("accountingSoftwareName", e.target.value)}
+                className="form-input"
+                placeholder="e.g., QuickBooks, Xero, Sage, Pastel"
+                required={data.hasAccountingSoftware === "yes"}
               />
-            </div>
+            </FormField>
           )}
         </div>
 
@@ -270,102 +240,6 @@ const handleCreditAnalysisComplete = (analysis, score, rating) => {
                 ></textarea>
               </div>
             )}
-          </FormField>
-        </div>
-      </div>
-
-      {/* Credit Report Section */}
-      <div className="section-divider">
-        <h3>Credit Information</h3>
-      </div>
-
-      <div className="grid-container">
-        <div>
-          <FormField label="Do you have a recent credit report?" required>
-            <div className="radio-group">
-              <label className="form-radio-label">
-                <input
-                  type="radio"
-                  name="hasCreditReport"
-                  value="yes"
-                  checked={data.hasCreditReport === "yes"}
-                  onChange={(e) => {
-                    handleInputChange("hasCreditReport", e.target.value);
-                  }}
-                  className="form-radio"
-                />
-                <span>Yes</span>
-              </label>
-              <label className="form-radio-label">
-                <input
-                  type="radio"
-                  name="hasCreditReport"
-                  value="no"
-                  checked={data.hasCreditReport === "no"}
-                  onChange={(e) => {
-                    handleInputChange("hasCreditReport", e.target.value);
-                    if (e.target.value === 'no') {
-                      handleInputChange("creditReportDocs", []);
-                    }
-                  }}
-                  className="form-radio"
-                />
-                <span>No</span>
-              </label>
-            </div>
-          </FormField>
-
-         {data.hasCreditReport === "yes" && (
-  <div style={{ marginTop: "1rem" }}>
-    <FileUpload
-             label="Upload Financials"
-             accept=".pdf,.xlsx,.xls,.doc,.docx"
-             required
-             onChange={(files) => handleFileChange("financialsFile", files)}
-             value={data.financialsFile || []}
-           />
-   
-                     {Array.isArray(data.financialsFile) &&
-                     data.financialsFile.length > 0 &&
-                     !data.financialsFile.some(file =>
-                       typeof file === "string" ||
-                       (file?.url && file.url.startsWith("https://firebasestorage.googleapis.com"))
-                     ) && (
-                       <CreditGPT
-                         files={data.financialsFile}
-                         onEvaluationComplete={handleAiResponse}
-                          apiKey={apiKey} //added keys
-                       />
-                     )}
-   
-         </div>
-       )}
-        </div>
-
-        <div>
-          <FormField label="Credit Score (if known)">
-            <input
-              type="number"
-              name="creditScore"
-              value={data.creditScore || ""}
-              onChange={(e) => handleInputChange("creditScore", e.target.value)}
-              className="form-input"
-              placeholder="Enter your credit score"
-              min="300"
-              max="850"
-              style={{ color: data.creditScore ? 'black' : '#9CA3AF' }}
-            />
-          </FormField>
-
-          <FormField label="Any outstanding credit issues?">
-            <textarea
-              name="creditIssues"
-              value={data.creditIssues || ""}
-              onChange={(e) => handleInputChange("creditIssues", e.target.value)}
-              className="form-textarea"
-              placeholder="Please describe any outstanding credit issues, defaults, or concerns"
-              rows={3}
-            ></textarea>
           </FormField>
         </div>
       </div>

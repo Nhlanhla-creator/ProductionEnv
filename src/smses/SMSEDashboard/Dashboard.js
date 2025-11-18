@@ -1618,7 +1618,7 @@ export function Dashboard() {
               {/* Row 1 - BIG Score, Customer Reviews, and wider Summary Report */}
               <section className="big-score-reviews-row" style={{
                 display: 'grid',
-                gridTemplateColumns: '1fr 1fr 2fr', // BIG Score (1 unit), Customer Reviews (1 unit), Summary Report (2 units)
+                gridTemplateColumns: '1fr 1fr 1.5fr',
                 gap: '20px',
                 marginBottom: '20px'
               }}>
@@ -1627,10 +1627,11 @@ export function Dashboard() {
                   profileData={profileData}
                   complianceScore={complianceScore}
                   legitimacyScore={legitimacyScore}
-                  leadershipScore={leadershipScore} // Added leadershipScore prop
+                  leadershipScore={leadershipScore}
                   fundabilityScore={fundabilityScore}
                   pisScore={pisScore}
                   onScoreUpdate={score => console.log("Updated BIG Score:", score)}
+                  setActiveTab={setActiveTab}
                 />
 
                 <CustomerReviewsCard styles={styles} />

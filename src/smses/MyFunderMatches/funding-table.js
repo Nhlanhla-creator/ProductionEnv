@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
-import { Eye, Check, Filter,X } from "lucide-react"
+import { Eye, Check, Filter, X } from 'lucide-react'
 import { createPortal } from "react-dom"
 import { db, storage } from "../../firebaseConfig"
 import {
@@ -19,8 +19,8 @@ import { getAuth } from "firebase/auth"
 import { DOCUMENT_PATHS } from "../../utils/documentUtils"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
 import get from "lodash.get"
+import styles from "./funding.module.css"
 import { useNavigate } from "react-router-dom"
-import styles from "./funding.module.css";
 const ADJACENT_INDUSTRIES = {
   ict: ["technology", "software", "digital services"],
   education: ["e-learning", "training", "edtech"],
@@ -43,7 +43,7 @@ const stageMap = {
 
 const normalizeStage = (raw) => {
   const clean = raw?.toString().toLowerCase().replace(/\s+/g, " ")
-  return stageMap[clean] || normalizeText(raw) // fallback
+  return stageMap[clean] || normalizeText(raw)
 }
 
 const FUNDING_STAGES = ["Pre-Seed", "Seed", "Series A", "Series B", "Growth"]
@@ -62,16 +62,15 @@ const formatWaitingTime = (value) => {
     .trim()
 }
 
-// Pipeline stage definitions with colors and next stages
 const PIPELINE_STAGES = {
   MATCH: {
     label: "Match",
-    color: "#F5EBE0", // Light cream/beige brown
+    color: "#F5EBE0",
     next: "Application Sent",
   },
   APPLICATION_SENT: {
     label: "Application Sent",
-    color: "#FFE0B2", // light orange
+    color: "#FFE0B2",
     next: "Application Received",
   },
   APPLICATION_RECEIVED: {
@@ -86,53 +85,52 @@ const PIPELINE_STAGES = {
   },
   FUNDING_APPROVED: {
     label: "Funding Approved",
-    color: "#C8E6C9", // Light green
+    color: "#C8E6C9",
     next: "Termsheet",
   },
   TERM_SHEET: {
     label: "Termsheet",
-    color: "#A5D6A7", // Medium green
+    color: "#A5D6A7",
     next: "Deal Complete",
   },
   DEAL_COMPLETE: {
     label: "Deal Complete",
-    color: "#81C784", // Green
+    color: "#81C784",
     next: "Closed",
   },
   DEAL_CLOSED: {
     label: "Closed",
-    color: "#4CAF50", // Dark green
-    next: "Closed", // Terminal state
+    color: "#4CAF50",
+    next: "Closed",
   },
   DEAL_DECLINED: {
     label: "Deal Declined",
-    color: "#FFCDD2", // Light red
+    color: "#FFCDD2",
     next: "Closed",
   },
   DECLINED: {
     label: "Declined",
-    color: "#FFCDD2", // Light red
+    color: "#FFCDD2",
     next: "Closed",
   },
 }
 
-// Simplified statuses
 const APPLICATION_STATUSES = {
   NO_APPLICATION: {
     label: "Application not sent",
-    color: "#E0E0E0", // Light gray
+    color: "#E0E0E0",
   },
   PENDING: {
     label: "Pending",
-    color: "#FFE082", // Amber
+    color: "#FFE082",
   },
   ACCEPTED: {
     label: "Accepted",
-    color: "#81C784", // Green
+    color: "#81C784",
   },
   DECLINED: {
     label: "Declined",
-    color: "#E57373", // Red
+    color: "#E57373",
   },
 }
 
@@ -212,7 +210,6 @@ const formatSectorLabel = (value) => {
     .split(",")
     .map((item) => item.trim())
     .map((sector) => {
-      // Replace underscores with spaces and capitalize each word
       return sector
         .split("_")
         .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
@@ -226,11 +223,10 @@ const formatTicketSize = (min, max) => {
     if (!value) return 0
     if (typeof value === "number") return value
 
-    // Handle string values - remove currency symbols, commas, and non-numeric chars
     const cleanValue = value
       .toString()
-      .replace(/[R$,\s]/g, "") // Remove R, $, commas, spaces
-      .replace(/[^\d.]/g, "") // Keep only digits and decimal points
+      .replace(/[R$,\s]/g, "")
+      .replace(/[^\d.]/g, "")
 
     return Number.parseFloat(cleanValue) || 0
   }
@@ -254,7 +250,6 @@ const formatTicketSize = (min, max) => {
 const formatLocation = (locations) => {
   if (!locations || !Array.isArray(locations)) return "Global"
 
-  // Handle case where string was split into characters
   if (locations.length > 0 && typeof locations[0] === "string" && locations[0].length === 1) {
     const joined = locations.join("")
     if (joined.includes(",")) {
@@ -292,7 +287,6 @@ const formatSingleLocation = (loc) => {
 const formatSupport = (support) => {
   if (!support) return "Not specified"
 
-  // Handle case where it's an array with "none"
   if (Array.isArray(support) && support.includes("none")) return "None"
 
   const supportMap = {
@@ -324,7 +318,6 @@ const formatSupport = (support) => {
 const formatSectors = (sectors) => {
   if (!sectors || !Array.isArray(sectors)) return "Generalist"
 
-  // Handle case where string was split into characters
   if (sectors.length > 0 && typeof sectors[0] === "string" && sectors[0].length === 1) {
     const joined = sectors.join("")
     if (joined.includes(",")) {
@@ -499,7 +492,7 @@ const expandSectorsWithSynonyms = (sectors) => {
   const expanded = new Set()
 
   sectors.forEach((sector) => {
-    if (!sector) return // skip empty/null
+    if (!sector) return
 
     expanded.add(sector)
 
@@ -565,15 +558,14 @@ export const FundingTable = ({ filters = {}, onInsightsData, onPrimaryMatchCount
   const [showFilterModal, setShowFilterModal] = useState(false)
   const [scoreBreakdowns, setScoreBreakdowns] = useState({})
   const [showBreakdownModal, setShowBreakdownModal] = useState(false)
-  const [existingApplications, setExistingApplications] = useState({})
+ const [existingApplications, setExistingApplications] = useState({})
  const navigate = useNavigate()
 const [showBigScoreWarning, setShowBigScoreWarning] = useState(false);
   const [currentBreakdown, setCurrentBreakdown] = useState(null)
   // Filter states
 // Add this state to track the big score
 const [bigScore, setBigScore] = useState(null);
-
-
+  // Filter states
   const [tableFilters, setTableFilters] = useState({
     funderName: "",
     location: "",
@@ -588,8 +580,30 @@ const [bigScore, setBigScore] = useState(null);
     supportOffered: "",
   })
 
+  // Get unique values for filter dropdowns
+  const getUniqueValues = (key) => {
+    const values = new Set()
+    allFunders.forEach((funder) => {
+      const value = funder[key]
+      if (value) {
+        if (typeof value === "string") {
+          value.split(",").forEach((v) => values.add(v.trim()))
+        } else {
+          values.add(value)
+        }
+      }
+    })
+    return Array.from(values).sort()
+  }
 
-useEffect(() => {
+  const uniqueLocations = getUniqueValues("geographicFocus")
+  const uniqueSectors = getUniqueValues("sectorFocus")
+  const uniqueStages = getUniqueValues("targetStage")
+  const uniqueTypes = getUniqueValues("investmentType")
+  const uniquePipelineStages = getUniqueValues("pipelineStage")
+  const uniqueSupport = getUniqueValues("supportOffered")
+
+  useEffect(() => {
   const fetchBigScore = async () => {
     try {
       const auth = getAuth();
@@ -622,7 +636,7 @@ useEffect(() => {
   fetchBigScore();
 }, []);
 
-const BigScoreIndicator = () => {
+  const BigScoreIndicator = () => {
   if (bigScore === null) {
     return (
       <div style={{
@@ -664,12 +678,7 @@ const BigScoreIndicator = () => {
       </div>
       {!isEligible && (
         <button
-          onClick={() => {
-            const event = new CustomEvent("showAdvisorHelp", {
-              detail: { bigScore, message: "Improve your BigScore to apply for funding" }
-            });
-            window.dispatchEvent(event);
-          }}
+          onClick={() => setShowBigScoreWarning(true)}
           style={{
             padding: "0.25rem 0.5rem",
             background: "#007BFF",
@@ -686,9 +695,308 @@ const BigScoreIndicator = () => {
     </div>
   );
 };
-  // Add this useEffect to listen for application status changes
-  // Add this useEffect after your existing useEffects, around line 500-600
+  const BigScoreWarningModal = () => {
+    if (!showBigScoreWarning) return null;
 
+    const handleGetHelpClick = () => {
+      setShowBigScoreWarning(false);
+      navigate("/find-advisors");
+    };
+
+    const handleCatalystClick = () => {
+      setShowBigScoreWarning(false);
+      navigate("/support-program-matches");
+    }
+
+    return createPortal(
+      <div style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(74, 53, 47, 0.7)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 2000,
+        backdropFilter: "blur(4px)",
+      }}>
+        <div style={{
+          background: "linear-gradient(135deg, #faf7f2 0%, #f5f0e1 100%)",
+          borderRadius: "20px",
+          padding: "40px",
+          maxWidth: "500px",
+          width: "90%",
+          boxShadow: "0 20px 60px rgba(74, 53, 47, 0.3), 0 0 0 1px rgba(166, 124, 82, 0.2)",
+          border: "2px solid #7d5a50",
+          textAlign: "center",
+          position: "relative",
+          animation: "slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)"
+        }}>
+          {/* Warning Icon */}
+          <div style={{
+            width: "80px",
+            height: "80px",
+            background: "linear-gradient(135deg, #7d5a50 0%, #4a352f 100%)",
+            borderRadius: "50%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            margin: "0 auto 20px",
+            boxShadow: "0 8px 20px rgba(125, 90, 80, 0.4)"
+          }}>
+            <span style={{
+              fontSize: "40px",
+              color: "white",
+              fontWeight: "bold"
+            }}>!</span>
+          </div>
+
+          {/* Title */}
+          <h2 style={{
+            color: "#4a352f",
+            fontSize: "28px",
+            fontWeight: "800",
+            margin: "0 0 15px 0",
+            textShadow: "0 2px 4px rgba(0,0,0,0.1)"
+          }}>
+            Need Help Getting Started?
+          </h2>
+
+          {/* Message */}
+          <div style={{
+            background: "rgba(255, 255, 255, 0.8)",
+            borderRadius: "12px",
+            padding: "20px",
+            margin: "20px 0",
+            border: "1px solid #c8b6a6"
+          }}>
+            <p style={{
+              color: "#4a352f",
+              fontSize: "16px",
+              lineHeight: "1.6",
+              margin: "0 0 15px 0",
+              fontWeight: "600"
+            }}>
+              Your score indicates you may benefit from incubation or acceleration support to strengthen your business foundation.
+            </p>
+            
+            <p style={{
+              color: "#4a352f",
+              fontSize: "16px",
+              lineHeight: "1.6",
+              margin: "0 0 15px 0"
+            }}>
+              Your current <strong>BigScore is {bigScore}%</strong>, which is below the minimum requirement of <strong>75%</strong> needed to apply for funding.
+            </p>
+            
+           
+          </div>
+
+          {/* Score Visualization */}
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            background: "rgba(255, 255, 255, 0.9)",
+            borderRadius: "10px",
+            padding: "15px",
+            margin: "20px 0",
+            border: "1px solid #c8b6a6"
+          }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{
+                color: "#7d5a50",
+                fontSize: "14px",
+                fontWeight: "600",
+                marginBottom: "5px"
+              }}>Your Score</div>
+              <div style={{
+                color: "#4a352f",
+                fontSize: "24px",
+                fontWeight: "800"
+              }}>{bigScore}%</div>
+            </div>
+            
+            <div style={{
+              flex: 1,
+              margin: "0 20px",
+              position: "relative"
+            }}>
+              <div style={{
+                width: "100%",
+                height: "12px",
+                background: "linear-gradient(to right, #c8b6a6 0%, #a67c52 50%, #4CAF50 100%)",
+                borderRadius: "6px",
+                position: "relative"
+              }}>
+                <div style={{
+                  position: "absolute",
+                  left: `${bigScore}%`,
+                  top: "-5px",
+                  width: "4px",
+                  height: "22px",
+                  background: "#4a352f",
+                  borderRadius: "2px",
+                  transform: "translateX(-50%)"
+                }} />
+              </div>
+              <div style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginTop: "5px",
+                fontSize: "12px",
+                color: "#c8b6a6"
+              }}>
+                <span>0%</span>
+                <span style={{ color: "#4CAF50", fontWeight: "600" }}>75% Required</span>
+                <span>100%</span>
+              </div>
+            </div>
+            
+            <div style={{ textAlign: "center" }}>
+              <div style={{
+                color: "#4CAF50",
+                fontSize: "14px",
+                fontWeight: "600",
+                marginBottom: "5px"
+              }}>Goal</div>
+              <div style={{
+                color: "#4CAF50",
+                fontSize: "24px",
+                fontWeight: "800"
+              }}>75%</div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div style={{
+            display: "flex",
+            gap: "15px",
+            justifyContent: "center",
+            marginTop: "25px"
+          }}>
+            <button
+              onClick={() => setShowBigScoreWarning(false)}
+              style={{
+                flex: 1,
+                padding: "15px 25px",
+                background: "linear-gradient(135deg, #e6d7c3 0%, #c8b6a6 100%)",
+                color: "#4a352f",
+                border: "none",
+                borderRadius: "12px",
+                fontSize: "16px",
+                fontWeight: "600",
+                cursor: "pointer",
+                transition: "all 0.3s ease",
+                boxShadow: "0 4px 12px rgba(200, 182, 166, 0.3)"
+              }}
+              onMouseOver={(e) => {
+                e.target.style.transform = "translateY(-2px)";
+                e.target.style.boxShadow = "0 6px 16px rgba(200, 182, 166, 0.4)";
+              }}
+              onMouseOut={(e) => {
+                e.target.style.transform = "translateY(0)";
+                e.target.style.boxShadow = "0 4px 12px rgba(200, 182, 166, 0.3)";
+              }}
+            >
+              Close
+            </button>
+            
+            <button
+              onClick={handleGetHelpClick}
+              style={{
+                flex: 1,
+                padding: "15px 25px",
+                background: "linear-gradient(135deg, #a67c52 0%, #7d5a50 100%)",
+                color: "white",
+                border: "none",
+                borderRadius: "12px",
+                fontSize: "16px",
+                fontWeight: "600",
+                cursor: "pointer",
+                transition: "all 0.3s ease",
+                boxShadow: "0 4px 12px rgba(166, 124, 82, 0.4)"
+              }}
+              onMouseOver={(e) => {
+                e.target.style.transform = "translateY(-2px)";
+                e.target.style.boxShadow = "0 6px 16px rgba(166, 124, 82, 0.5)";
+              }}
+              onMouseOut={(e) => {
+                e.target.style.transform = "translateY(0)";
+                e.target.style.boxShadow = "0 4px 12px rgba(166, 124, 82, 0.4)";
+              }}
+            >
+              Find Advisors
+            </button>
+
+            <button
+              onClick={handleCatalystClick}
+              style={{
+                flex: 1,
+                padding: "15px 25px",
+                background: "linear-gradient(135deg, #7d5a50 0%, #4a352f 100%)",
+                color: "white",
+                border: "none",
+                borderRadius: "12px",
+                fontSize: "16px",
+                fontWeight: "600",
+                cursor: "pointer",
+                transition: "all 0.3s ease",
+                boxShadow: "0 4px 12px rgba(125, 90, 80, 0.4)"
+              }}
+              onMouseOver={(e) => {
+                e.target.style.transform = "translateY(-2px)";
+                e.target.style.boxShadow = "0 6px 16px rgba(125, 90, 80, 0.5)";
+              }}
+              onMouseOut={(e) => {
+                e.target.style.transform = "translateY(0)";
+                e.target.style.boxShadow = "0 4px 12px rgba(125, 90, 80, 0.4)";
+              }}
+            >
+              Find Catalyst
+            </button>
+          </div>
+
+          {/* Close Button */}
+          <button
+            onClick={() => setShowBigScoreWarning(false)}
+            style={{
+              position: "absolute",
+              top: "15px",
+              right: "15px",
+              background: "rgba(255, 255, 255, 0.9)",
+              border: "none",
+              borderRadius: "50%",
+              width: "40px",
+              height: "40px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              fontSize: "20px",
+              color: "#4a352f",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+              transition: "all 0.3s ease"
+            }}
+            onMouseOver={(e) => {
+              e.target.style.background = "#7d5a50";
+              e.target.style.color = "white";
+            }}
+            onMouseOut={(e) => {
+              e.target.style.background = "rgba(255, 255, 255, 0.9)";
+              e.target.style.color = "#4a352f";
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      </div>,
+      document.body
+    );
+  };
+  // Add this useEffect to listen for application status changes
   useEffect(() => {
     const updatePipelineStagesFromApplications = async () => {
       const auth = getAuth()
@@ -707,7 +1015,6 @@ const BigScoreIndicator = () => {
 
         applicationsSnapshot.forEach((doc) => {
           const data = doc.data()
-          // Use consistent key format: funderId_fundName
           const fundKey = `${data.funderId}_${data.fundName}`
 
           applicationStatusMap[fundKey] = data.status || "Pending"
@@ -716,16 +1023,13 @@ const BigScoreIndicator = () => {
           applicationWaitingTimeMap[fundKey] = data.waitingTime || "3-5 days"
         })
 
-        // Update state with application data
         setStatuses(applicationStatusMap)
         setPipelineStages(applicationPipelineMap)
         setApplicationDates(applicationDateMap)
         setWaitingTimes(applicationWaitingTimeMap)
 
-        // Update funders with hasApplication status and current pipeline stage
         setAllFunders((prevFunders) =>
           prevFunders.map((funder) => {
-            // Use consistent key format here too
             const fundKey = `${funder.funderId}_${funder.name}`
             const hasApplication = !!applicationStatusMap[fundKey]
             const currentPipelineStage = applicationPipelineMap[fundKey] || "Match"
@@ -738,7 +1042,6 @@ const BigScoreIndicator = () => {
           }),
         )
 
-        // Also update filteredFunders if they exist
         setFilteredFunders((prevFiltered) =>
           prevFiltered.map((funder) => {
             const fundKey = `${funder.funderId}_${funder.name}`
@@ -760,7 +1063,7 @@ const BigScoreIndicator = () => {
     if (allFunders.length > 0) {
       updatePipelineStagesFromApplications()
     }
-  }, [allFunders.length]) // Only depend on length to avoid infinite loops
+  }, [allFunders.length])
 
   const getRequiredDocs = (funder) => {
     if (!funder.fullProfile?.productsServices?.funds) return []
@@ -775,27 +1078,88 @@ const BigScoreIndicator = () => {
   // Apply table filters
   useEffect(() => {
     const filtered = allFunders.filter((funder) => {
-      return (
-        (!tableFilters.funderName || funder.name?.toLowerCase().includes(tableFilters.funderName.toLowerCase())) &&
-        (!tableFilters.location ||
-          funder.geographicFocus?.toLowerCase().includes(tableFilters.location.toLowerCase())) &&
-        (!tableFilters.sector || funder.sectorFocus?.toLowerCase().includes(tableFilters.sector.toLowerCase())) &&
-        (!tableFilters.fundingStage ||
-          funder.targetStage?.toLowerCase().includes(tableFilters.fundingStage.toLowerCase())) &&
-        (!tableFilters.fundingType ||
-          funder.investmentType?.toLowerCase().includes(tableFilters.fundingType.toLowerCase())) &&
-        (!tableFilters.minTicket ||
-          (funder.minInvestment && funder.minInvestment >= Number.parseInt(tableFilters.minTicket))) &&
-        (!tableFilters.maxTicket ||
-          (funder.maxInvestment && funder.maxInvestment <= Number.parseInt(tableFilters.maxTicket))) &&
-        funder.matchPercentage >= tableFilters.minMatch &&
-        funder.matchPercentage <= tableFilters.maxMatch &&
-        (!tableFilters.currentStage ||
-          funder.pipelineStage?.toLowerCase().includes(tableFilters.currentStage.toLowerCase())) &&
-        (!tableFilters.supportOffered ||
-          funder.supportOffered?.toLowerCase().includes(tableFilters.supportOffered.toLowerCase()))
-      )
+      // Funder name filter
+      if (
+        tableFilters.funderName &&
+        !funder.name?.toLowerCase().includes(tableFilters.funderName.toLowerCase())
+      ) {
+        return false
+      }
+
+      // Location filter
+      if (
+        tableFilters.location &&
+        !funder.geographicFocus?.toLowerCase().includes(tableFilters.location.toLowerCase())
+      ) {
+        return false
+      }
+
+      // Sector filter
+      if (
+        tableFilters.sector &&
+        !funder.sectorFocus?.toLowerCase().includes(tableFilters.sector.toLowerCase())
+      ) {
+        return false
+      }
+
+      // Funding stage filter
+      if (
+        tableFilters.fundingStage &&
+        !funder.targetStage?.toLowerCase().includes(tableFilters.fundingStage.toLowerCase())
+      ) {
+        return false
+      }
+
+      // Funding type filter
+      if (
+        tableFilters.fundingType &&
+        !funder.investmentType?.toLowerCase().includes(tableFilters.fundingType.toLowerCase())
+      ) {
+        return false
+      }
+
+      // Min ticket filter
+      if (
+        tableFilters.minTicket &&
+        funder.minInvestment &&
+        funder.minInvestment < Number.parseInt(tableFilters.minTicket)
+      ) {
+        return false
+      }
+
+      // Max ticket filter
+      if (
+        tableFilters.maxTicket &&
+        funder.maxInvestment &&
+        funder.maxInvestment > Number.parseInt(tableFilters.maxTicket)
+      ) {
+        return false
+      }
+
+      // Match percentage filter
+      if (funder.matchPercentage < tableFilters.minMatch || funder.matchPercentage > tableFilters.maxMatch) {
+        return false
+      }
+
+      // Current stage filter
+      if (
+        tableFilters.currentStage &&
+        !funder.pipelineStage?.toLowerCase().includes(tableFilters.currentStage.toLowerCase())
+      ) {
+        return false
+      }
+
+      // Support offered filter
+      if (
+        tableFilters.supportOffered &&
+        !funder.supportOffered?.toLowerCase().includes(tableFilters.supportOffered.toLowerCase())
+      ) {
+        return false
+      }
+
+      return true
     })
+
     setFilteredFunders(filtered)
   }, [tableFilters, allFunders])
 
@@ -827,55 +1191,24 @@ const BigScoreIndicator = () => {
       case "Declined":
         return "Closed"
       case "Closed":
-        return "Closed" // Terminal state
+        return "Closed"
       default:
         return "Pending"
     }
   }
 
-  // Updated getNextStage function to replace the existing one
-  const getNextStage = (currentStage) => {
-    if (!currentStage) return "Send Application"
-
-    // Handle the case where user hasn't applied yet
-    if (currentStage === "Match") {
-      return "Send Application"
-    }
-
-    // Find the stage object
-    const stageEntry = Object.values(PIPELINE_STAGES).find(
-      (stage) => stage.label.toLowerCase() === currentStage.toLowerCase(),
-    )
-
-    if (!stageEntry) {
-      // Fallback to deriveNextStage for stages not in PIPELINE_STAGES
-      return deriveNextStage(currentStage)
-    }
-
-    // Handle terminal stages
-    if (["Closed", "Deal Declined", "Declined"].includes(stageEntry.label)) {
-      return stageEntry.label // No next stage for terminal states
-    }
-
-    return stageEntry.next || deriveNextStage(currentStage)
-  }
-
-  // Additional helper function to check if a stage is terminal
   const isTerminalStage = (stage) => {
     return ["Closed", "Deal Declined", "Declined"].includes(stage)
   }
 
-  // Helper function to get stage progression path
   const getStageProgressionPath = (currentStage) => {
     const path = []
     let stage = currentStage
 
     while (stage && !isTerminalStage(stage) && path.length < 10) {
-      // Prevent infinite loops
       path.push(stage)
       stage = deriveNextStage(stage)
 
-      // Break if we reach a stage we've already seen
       if (path.includes(stage)) break
     }
 
@@ -886,28 +1219,6 @@ const BigScoreIndicator = () => {
     return path
   }
 
-  // Updated stage color function
-  const getStageColor = (stage) => {
-    if (!stage) return "#E0E0E0"
-
-    const stageKey = Object.keys(PIPELINE_STAGES).find(
-      (key) => PIPELINE_STAGES[key].label.toLowerCase() === stage.toLowerCase(),
-    )
-
-    if (stageKey) {
-      return PIPELINE_STAGES[stageKey].color
-    }
-
-    // Fallback colors for stages not in PIPELINE_STAGES
-    const fallbackColors = {
-      pending: "#FFE082", // Amber
-      "funding approved": "#C8E6C9", // Light green
-      "deal complete": "#81C784", // Green
-      closed: "#4CAF50", // Dark green
-    }
-
-    return fallbackColors[stage.toLowerCase()] || "#E0E0E0"
-  }
   const clearFilters = () => {
     setTableFilters({
       funderName: "",
@@ -925,10 +1236,20 @@ const BigScoreIndicator = () => {
   }
 
   const getActiveFilterCount = () => {
-    return Object.values(tableFilters).filter((value) => value !== "" && value !== 0 && value !== 100).length
+    let count = 0
+    if (tableFilters.funderName) count++
+    if (tableFilters.location) count++
+    if (tableFilters.sector) count++
+    if (tableFilters.fundingStage) count++
+    if (tableFilters.fundingType) count++
+    if (tableFilters.minTicket) count++
+    if (tableFilters.maxTicket) count++
+    if (tableFilters.minMatch !== 0 || tableFilters.maxMatch !== 100) count++
+    if (tableFilters.currentStage) count++
+    if (tableFilters.supportOffered) count++
+    return count
   }
 
-  // Modify the handleApplyClick function to check for existing applications
   useEffect(() => {
     const checkExistingApplications = async () => {
       const auth = getAuth()
@@ -936,7 +1257,6 @@ const BigScoreIndicator = () => {
       if (!user) return
 
       try {
-        // Query both collections for existing applications
         const [smeAppsSnapshot, investorAppsSnapshot] = await Promise.all([
           getDocs(query(collection(db, "smeApplications"), where("smeId", "==", user.uid))),
           getDocs(query(collection(db, "investorApplications"), where("smeId", "==", user.uid))),
@@ -948,7 +1268,6 @@ const BigScoreIndicator = () => {
         const applicationDateMap = {}
         const waitingTimeMap = {}
 
-        // Process smeApplications - this is our source of truth for pipeline stages
         smeAppsSnapshot.forEach((doc) => {
           const data = doc.data()
           const key = `${data.funderId}_${data.fundName}`
@@ -959,7 +1278,6 @@ const BigScoreIndicator = () => {
           waitingTimeMap[key] = data.waitingTime || "3-5 days"
         })
 
-        // Process investorApplications - just for existence check
         investorAppsSnapshot.forEach((doc) => {
           const data = doc.data()
           const key = `${data.funderId}_${data.fundName}`
@@ -972,7 +1290,6 @@ const BigScoreIndicator = () => {
         setApplicationDates(applicationDateMap)
         setWaitingTimes(waitingTimeMap)
 
-        // Update funders with the latest pipeline stages
         setAllFunders((prevFunders) =>
           prevFunders.map((funder) => {
             const key = `${funder.funderId}_${funder.name}`
@@ -1001,13 +1318,10 @@ const BigScoreIndicator = () => {
 
     checkExistingApplications()
   }, [])
-  useEffect(() => {
-    const auth = getAuth()
-    const user = auth.currentUser
-    if (!user) return
 
+  useEffect(() => {
     const unsubscribe = onSnapshot(
-      query(collection(db, "smeApplications"), where("smeId", "==", user.uid)),
+      query(collection(db, "smeApplications"), where("smeId", "==", getAuth().currentUser?.uid)),
       (snapshot) => {
         const updatedPipelineStages = {}
         const updatedStatuses = {}
@@ -1028,7 +1342,6 @@ const BigScoreIndicator = () => {
         setApplicationDates((prev) => ({ ...prev, ...updatedDates }))
         setWaitingTimes((prev) => ({ ...prev, ...updatedWaitingTimes }))
 
-        // Update funders with the latest pipeline stages
         setAllFunders((prevFunders) =>
           prevFunders.map((funder) => {
             const key = `${funder.funderId}_${funder.name}`
@@ -1056,13 +1369,12 @@ const BigScoreIndicator = () => {
 
     return () => unsubscribe()
   }, [])
-  // Modify the handleApplyClick function to check for existing applications
+
   const handleApplyClick = async (funder) => {
     try {
-      const auth = getAuth();
-      const user = auth.currentUser;
-      if (!user) throw new Error("User not authenticated");
-
+      const auth = getAuth()
+      const user = auth.currentUser
+      if (!user) throw new Error("User not authenticated")
  if (bigScore === null) {
       setNotification({ 
         type: "info", 
@@ -1071,63 +1383,64 @@ const BigScoreIndicator = () => {
       return;
     }
 
-    // If BigScore is still loading, show a message
    if (bigScore < 75) {
       setShowBigScoreWarning(true);
       return;
     }
      
-      // Check if application already exists in either collection
-      const applicationKey = `${funder.funderId}_${funder.name}`; 
+      const applicationKey = `${funder.funderId}_${funder.name}`
       if (existingApplications[applicationKey]) {
-        setNotification({ 
-          type: "warning", 
-          message: "You've already submitted an application to this funder." 
-        });
-        return;
+        setNotification({
+          type: "warning",
+          message: "You've already submitted an application to this funder.",
+        })
+        return
       }
 
       const [funderSnap, profileSnap] = await Promise.all([
         getDoc(doc(db, "MyuniversalProfiles", funder.funderId)),
-        getDoc(doc(db, "universalProfiles", user.uid))
-      ]);
+        getDoc(doc(db, "universalProfiles", user.uid)),
+      ])
 
       if (!funderSnap.exists() || !profileSnap.exists()) {
-        throw new Error("Missing funder or profile data");
+        throw new Error("Missing funder or profile data")
       }
 
-      const funderData = funderSnap.data();
-      const profile = profileSnap.data();
-      const coreDocs = funderData.formData?.applicationBrief?.coreDocuments || [];
-      const docUploadMap = profile.documentUpload || {};
-      const submitted = [];
+      const funderData = funderSnap.data()
+      const profile = profileSnap.data()
+      const coreDocs = funderData.formData?.applicationBrief?.coreDocuments || []
+      const docUploadMap = profile.documentUpload || {}
+      const submitted = []
 
-      const normalize = (str) =>
-        str?.toLowerCase().replace(/[\s_-]/g, "").trim();
+      const normalize = (str) => str?.toLowerCase().replace(/[\s_-]/g, "").trim()
 
       coreDocs.forEach((docLabel) => {
-        const normalizedLabel = normalize(docLabel);
+        const normalizedLabel = normalize(docLabel)
         const isSubmitted = Object.entries(docUploadMap).some(([key, urls]) => {
-          return normalize(key) === normalizedLabel && Array.isArray(urls) && urls.length > 0 && urls.some(url => typeof url === 'string' && url.startsWith('http'));
-        });
+          return (
+            normalize(key) === normalizedLabel &&
+            Array.isArray(urls) &&
+            urls.length > 0 &&
+            urls.some((url) => typeof url === "string" && url.startsWith("http"))
+          )
+        })
 
-        if (isSubmitted) submitted.push(docLabel);
-      });
+        if (isSubmitted) submitted.push(docLabel)
+      })
 
-      setProfileData(profile);
-      setSubmittedDocuments(submitted);
-      setSelectedDocs([]);
+      setProfileData(profile)
+      setSubmittedDocuments(submitted)
+      setSelectedDocs([])
       setApplyingFunder({
         ...funder,
         fullProfile: funderData.formData,
-        requiredDocuments: coreDocs
-      });
+        requiredDocuments: coreDocs,
+      })
     } catch (err) {
-      console.error("Error in handleApplyClick:", err);
-      setNotification({ type: "error", message: "Failed to load application requirements." });
+      console.error("Error in handleApplyClick:", err)
+      setNotification({ type: "error", message: "Failed to load application requirements." })
     }
-  };
-
+  }
 
   const handleUpload = async (docLabel, file) => {
     const auth = getAuth()
@@ -1146,7 +1459,7 @@ const BigScoreIndicator = () => {
       const timestampField = `${path}UpdatedAt`
 
       await updateDoc(profileRef, {
-        [path]: [downloadURL], // Store as array
+        [path]: [downloadURL],
         [timestampField]: serverTimestamp(),
       })
 
@@ -1172,8 +1485,6 @@ const BigScoreIndicator = () => {
       const user = auth.currentUser
       if (!user || !currentBusiness) throw new Error("Missing user or business")
 
-       
-      // Double-check if application already exists
       const existingAppQuery = query(
         collection(db, "smeApplications"),
         where("smeId", "==", user.uid),
@@ -1192,7 +1503,6 @@ const BigScoreIndicator = () => {
 
       const applicationDate = new Date().toISOString().split("T")[0]
 
-      // Construct the shared metadata
       const baseApplicationData = {
         smeId: user.uid,
         funderId: funder.funderId,
@@ -1216,7 +1526,6 @@ const BigScoreIndicator = () => {
         waitingTime: "unspecified",
       }
 
-      // Gather document URLs for the investor
       const documentURLs = {}
       selectedDocs.forEach((docLabel) => {
         const path = DOCUMENT_PATHS[docLabel]
@@ -1226,7 +1535,6 @@ const BigScoreIndicator = () => {
         }
       })
 
-      // Separate application records for investor and SME
       const investorApplicationData = {
         ...baseApplicationData,
         documentURLs,
@@ -1243,22 +1551,19 @@ const BigScoreIndicator = () => {
         fundTicketSize: formatTicketSize(funder.minInvestment, funder.maxInvestment),
       }
 
-      // Write both documents
       await Promise.all([
         addDoc(collection(db, "investorApplications"), investorApplicationData),
         addDoc(collection(db, "smeApplications"), smeApplicationData),
       ])
 
-      // Update UI state
       setStatuses((prev) => ({ ...prev, [funder.id]: "Pending" }))
       setPipelineStages((prev) => ({ ...prev, [funder.id]: "Application Sent" }))
       setApplicationDates((prev) => ({ ...prev, [funder.id]: applicationDate }))
       setWaitingTimes((prev) => ({ ...prev, [funder.id]: "3-5 days" }))
 
-      // Trigger notification with more robust event dispatch
       const dispatchNotification = () => {
         const notificationMessage = `Application to ${funder.name} submitted successfully`
-        console.log("Dispatching notification:", notificationMessage) // Debug log
+        console.log("Dispatching notification:", notificationMessage)
 
         const event = new CustomEvent("newNotification", {
           detail: {
@@ -1271,21 +1576,14 @@ const BigScoreIndicator = () => {
           composed: true,
         })
 
-        // Dispatch with a small delay to ensure proper propagation
         setTimeout(() => {
           window.dispatchEvent(event)
-          console.log("Notification event dispatched") // Debug log
+          console.log("Notification event dispatched")
         }, 100)
       }
 
       dispatchNotification()
 
-      setStatuses((prev) => ({ ...prev, [funder.id]: "Pending" }))
-      setPipelineStages((prev) => ({ ...prev, [funder.id]: "Application Sent" }))
-      setApplicationDates((prev) => ({ ...prev, [funder.id]: applicationDate }))
-      setWaitingTimes((prev) => ({ ...prev, [funder.id]: "3-5 days" }))
-
-      // Update the funders list
       setAllFunders((prevFunders) => prevFunders.map((f) => (f.id === funder.id ? { ...f, hasApplication: true } : f)))
 
       setNotification({ type: "success", message: "Application submitted!" })
@@ -1293,7 +1591,6 @@ const BigScoreIndicator = () => {
     } catch (err) {
       console.error("Application submission error:", err)
 
-      // Dispatch error notification
       const errorEvent = new CustomEvent("newNotification", {
         detail: {
           message: `Failed to submit application: ${err.message}`,
@@ -1306,6 +1603,7 @@ const BigScoreIndicator = () => {
       setNotification({ type: "error", message: err.message })
     }
   }
+
   useEffect(() => {
     if (!filters) return
     const fetchData = async () => {
@@ -1333,20 +1631,16 @@ const BigScoreIndicator = () => {
         const appStatusMap = {}
         const pipelineStageMap = {}
         const applicationDateMap = {}
-        let currentStage = ""
-        let pkey = ""
+
         appSnapshot.forEach((doc) => {
           const data = doc.data()
           const key = `${data.funderId}_${data.fundName}`
           applicationsMap[key] = true
           pipelineStageMap[key] = data.pipelineStage || "Application Sent"
-          pkey = `${data.funderId}_${data.fundName}`
           appStatusMap[key] = data.status || "Pending"
-          currentStage = data.pipelineStage || "Application Sent"
           applicationDateMap[key] = data.applicationDate || new Date().toISOString().split("T")[0]
         })
 
-        console.log(pipelineStageMap[pkey])
         investorsSnapshot.forEach((docSnap) => {
           const investor = docSnap.data()
           const generalPrefs = investor.formData?.generalInvestmentPreference || {}
@@ -1359,29 +1653,28 @@ const BigScoreIndicator = () => {
             const estimatedReviewTime = investor.formData?.applicationBrief?.equityDocuments?.estimatedReviewTime || "-"
 
             let minTicket =
-  fundProfile?.minimumTicket ??
-  fundProfile?.minTicket ??
-  fund.minimumTicket ??
-  fund.minTicket ??
-  investor.formData?.fundDetails?.minimumTicket
+              fundProfile?.minimumTicket ??
+              fundProfile?.minTicket ??
+              fund.minimumTicket ??
+              fund.minTicket ??
+              investor.formData?.fundDetails?.minimumTicket
 
-let maxTicket =
-  fundProfile?.maximumTicket ??
-  fundProfile?.maxTicket ??
-  fund.maximumTicket ??
-  fund.maxTicket ??
-  investor.formData?.fundDetails?.maximumTicket
+            let maxTicket =
+              fundProfile?.maximumTicket ??
+              fundProfile?.maxTicket ??
+              fund.maximumTicket ??
+              fund.maxTicket ??
+              investor.formData?.fundDetails?.maximumTicket
 
-if (!minTicket) {
-  const ticketInfo = fundProfile?.ticketSize || fund.ticketSize || {}
-  minTicket = ticketInfo.min || ticketInfo.minimum || 0
-}
+            if (!minTicket) {
+              const ticketInfo = fundProfile?.ticketSize || fund.ticketSize || {}
+              minTicket = ticketInfo.min || ticketInfo.minimum || 0
+            }
 
-if (!maxTicket) {
-  const ticketInfo = fundProfile?.ticketSize || fund.ticketSize || {}
-  maxTicket = ticketInfo.max || ticketInfo.maximum || fund.size || 0
-}
-
+            if (!maxTicket) {
+              const ticketInfo = fundProfile?.ticketSize || fund.ticketSize || {}
+              maxTicket = ticketInfo.max || ticketInfo.maximum || fund.size || 0
+            }
 
             const instruments = generalPrefs.investmentFocus
               ? Array.isArray(generalPrefs.investmentFocus)
@@ -1429,14 +1722,13 @@ if (!maxTicket) {
                 matchPercentage: scoreResult.score,
                 investmentType: enrichedFund.type.join(", ") || "Various",
                 targetStage: enrichedFund.stages.join(", ") || "Various",
-                ticketSize: formatTicketSize(minTicket, maxTicket) ,
+                ticketSize: formatTicketSize(minTicket, maxTicket),
                 minInvestment: minTicket,
                 maxInvestment: maxTicket,
                 sectorFocus: enrichedFund.sectorFocus.join(", ") || "Various",
                 geographicFocus: [...enrichedFund.geographicFocus, ...enrichedFund.saProvinces].join(", ") || "Various",
                 supportOffered: enrichedFund.supportOffered.join(", ") || "Not specified",
                 website: contact.website || "#",
-                pipe: pipelineStageMap[pkey],
                 deadline: entityOverview.deadline || "-",
                 waitingTime: investor.formData?.applicationBrief?.estimatedReviewTime || "-",
                 hasApplication: !!applicationsMap[fundKey],
@@ -1460,7 +1752,6 @@ if (!maxTicket) {
         setAllFunders(matchedFunds)
         setFilteredFunders(matchedFunds)
 
-        // Apply original filters
         let filteredFunders = [...matchedFunds]
         if (filters.showOnly === "matches") {
           filteredFunders = filteredFunders.filter((funder) => !funder.hasApplication)
@@ -1475,7 +1766,6 @@ if (!maxTicket) {
         }
         setFunders(filteredFunders)
 
-        // Generate insights (same as before)
         const useBreakdown = {}
         const typeBreakdown = {}
         const sectorMatchCount = {}
@@ -1578,7 +1868,6 @@ if (!maxTicket) {
           const profile = profileSnap.data()
           setProfileData(profile)
 
-          // Check which required documents are already uploaded
           if (applyingFunder && applyingFunder.requiredDocuments) {
             const existingDocs = applyingFunder.requiredDocuments.filter((docLabel) => {
               const path = DOCUMENT_PATHS[docLabel]
@@ -1600,11 +1889,10 @@ if (!maxTicket) {
     if (!value) return 0
     if (typeof value === "number") return value
 
-    // Handle string values more robustly
     const cleanValue = value
       .toString()
-      .replace(/[R$,\s]/g, "") // Remove currency symbols, commas, spaces
-      .replace(/[^\d.]/g, "") // Keep only digits and decimal points
+      .replace(/[R$,\s]/g, "")
+      .replace(/[^\d.]/g, "")
 
     return Number.parseFloat(cleanValue) || 0
   }
@@ -1614,7 +1902,6 @@ if (!maxTicket) {
     const funds = profile.useOfFunds || {}
     const app = profile.applicationOverview || {}
 
-    // Normalize helper for arrays
     const normalizeArray = (value) => {
       if (!value) return []
       if (Array.isArray(value)) return value.map(normalizeText)
@@ -1622,23 +1909,12 @@ if (!maxTicket) {
     }
 
     return {
-      // 📍 Location: general + province
       location: normalizeText(entity.location),
       province: normalizeText(entity.province),
-
-      // 🧠 Sector: normalize list of economic sectors
       economicSectors: normalizeArray(entity.economicSectors),
-
-      // 🏗️ Stage: used to compare to investmentStage (in lowercase underscore form)
       applicationStage: normalizeStage(app.fundingStage),
-
-      // 💸 Funding amount (ticket size match)
       amountRequested: normalizeAmount(funds.amountRequested),
-
-      // ⚙️ Instruments (like SAFE, convertible note, etc)
       instruments: normalizeArray(funds.fundingInstruments),
-
-      // Optional: can be used for deeper matching or filtering
       supportNeeded: normalizeArray(profile.productsServices?.support),
     }
   }
@@ -1655,7 +1931,7 @@ if (!maxTicket) {
 
       return Number.parseFloat(cleanValue) || 0
     }
-    console.log(fund.stages)
+
     const normalizeArray = (value) => {
       if (!value) return []
       if (Array.isArray(value)) return value.map(normalizeText)
@@ -1664,33 +1940,21 @@ if (!maxTicket) {
 
     return {
       fundName: fund.name?.trim() || "Unnamed Fund",
-
-      // 📍 Location match: includes general and specific targeting
       locations: [
         ...(fund.geographicFocus || []),
         ...(fund.selectedProvinces || []),
         ...(fund.selectedCountries || []),
       ].map(normalizeText),
-
-      // 🏗️ Investment stage match (multi)
       stages: Array.isArray(fund.stages)
         ? fund.stages.map((stage) => normalizeStage(stage))
         : normalizeArray(fund.stages),
-
-      // 🌱 Sector matching
       sectors: normalizeArray(fund.sectorFocus),
       excludedSectors: normalizeArray(fund.sectorExclusions),
-
-      // ⚙️ Instrument/Type match
       instruments: Array.isArray(fund.instruments)
         ? fund.instruments.map((i) => i.toLowerCase().trim())
         : [fund.instruments?.toLowerCase().trim()].filter(Boolean),
-
-      // 💰 Ticket range parsing
       ticketMin: getTicketValue(fund.minimumTicket),
       ticketMax: getTicketValue(fund.maximumTicket),
-
-      // Optional
       supportOffered: normalizeArray(fund.supportOffered),
       decisionTime: fund.dueDiligenceTimeline || "-",
     }
@@ -1714,7 +1978,6 @@ if (!maxTicket) {
       type: { score: 0, smeInstruments: [], investorInstruments: [], matchedInstruments: [] },
     }
 
-    // 🌱 Sector match with synonym support
     const smeSectorsExpanded = expandSectorsWithSynonyms(sme.economicSectors)
     const matchedSectors = smeSectorsExpanded.filter((s) => fund.sectors.includes(s))
     const hasExclusion = fund.excludedSectors.some((ex) => smeSectorsExpanded.includes(ex))
@@ -1722,11 +1985,11 @@ if (!maxTicket) {
     let sectorScore = 0
     if (matchedSectors.length && !hasExclusion) {
       const matchRatio = matchedSectors.length / sme.economicSectors.length
-      sectorScore =10 
+      sectorScore = 10
     }
     score += sectorScore * weights.sector
     breakdown.sector = {
-      score: sectorScore * 10, // Convert to percentage
+      score: sectorScore * 10,
       matched: matchedSectors,
       smeSectors: sme.economicSectors,
       investorSectors: fund.sectors,
@@ -1734,18 +1997,16 @@ if (!maxTicket) {
       weight: weights.sector,
     }
 
-    // 🏗️ Stage match
     const stageMatch = fund.stages.includes(sme.applicationStage) ? 10 : 0
     score += stageMatch * weights.stage
     breakdown.stage = {
-      score: stageMatch * 10, // Convert to percentage
+      score: stageMatch * 10,
       smeStage: sme.applicationStage,
       investorStages: fund.stages,
       matched: fund.stages.includes(sme.applicationStage),
       weight: weights.stage,
     }
 
-    // ⚙️ Type (instrument) match
     const matchedInstruments = fund.instruments.filter((inst) =>
       sme.instruments.some((smeInst) => smeInst.toLowerCase() === inst.toLowerCase()),
     )
@@ -1759,7 +2020,6 @@ if (!maxTicket) {
       weight: weights.type,
     }
 
-    // 💰 Ticket match — full score if in range, else scale down
     let ticketScore = 0
     const { ticketMin, ticketMax } = fund
     const { amountRequested } = sme
@@ -1768,13 +2028,13 @@ if (!maxTicket) {
       ticketScore = 10
     } else {
       const distance = amountRequested < ticketMin ? ticketMin - amountRequested : amountRequested - ticketMax
-      const range = ticketMax - ticketMin || 1 // prevent div-by-zero
+      const range = ticketMax - ticketMin || 1
       const penalty = Math.min((distance / range) * 10, 10)
       ticketScore = Math.max(0, 10 - penalty)
     }
     score += ticketScore * weights.ticket
     breakdown.ticket = {
-      score: ticketScore * 10, // Convert to percentage
+      score: ticketScore * 10,
       smeAmount: amountRequested,
       minTicket: ticketMin,
       maxTicket: ticketMax,
@@ -1783,12 +2043,11 @@ if (!maxTicket) {
     }
 
     return {
-      score: Math.round(score * 10), // return as percentage 0–100
+      score: Math.round(score * 10),
       breakdown,
     }
   }
 
-  
   const handleViewClick = async (funder) => {
     try {
       const docSnap = await getDoc(doc(db, "MyuniversalProfiles", funder.funderId))
@@ -1797,7 +2056,7 @@ if (!maxTicket) {
       setModalFunder({
         name: funder.name,
         data: data.formData,
-        matchPercentage: funder.matchPercentage, // Add this line
+        matchPercentage: funder.matchPercentage,
       })
       funder.fullProfile = data.formData
     } catch (err) {
@@ -1834,35 +2093,33 @@ if (!maxTicket) {
     position: "relative",
   }
 
-  // Add this function to handle viewing investor details
   const handleViewInvestorDetails = async (funder) => {
     try {
-      setLoading(true);
-      const docRef = doc(db, "MyuniversalProfiles", funder.funderId);
-      const docSnap = await getDoc(docRef);
+      setLoading(true)
+      const docRef = doc(db, "MyuniversalProfiles", funder.funderId)
+      const docSnap = await getDoc(docRef)
 
       if (docSnap.exists()) {
-        const data = docSnap.data();
+        const data = docSnap.data()
         setModalFunder({
           ...funder,
-          fullProfile: data.formData || {}, // Fallback to empty object
+          fullProfile: data.formData || {},
           matchPercentage: funder.matchPercentage,
-        });
+        })
       } else {
         setModalFunder({
           ...funder,
-          fullProfile: null, // Explicitly mark as missing
-        });
+          fullProfile: null,
+        })
       }
     } catch (err) {
-      console.error("Error loading funder profile", err);
-      setModalFunder(null); // Reset on error
-      setNotification({ type: "error", message: "Failed to load investor details" });
+      console.error("Error loading funder profile", err)
+      setModalFunder(null)
+      setNotification({ type: "error", message: "Failed to load investor details" })
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
-
+  }
 
   const handleUpdateNextStage = async (funder) => {
     try {
@@ -1874,7 +2131,6 @@ if (!maxTicket) {
       const currentStage = pipelineStages[applicationKey] || "Match"
       const nextStage = getNextStage(currentStage)
 
-      // Find the application document
       const applicationQuery = query(
         collection(db, "smeApplications"),
         where("smeId", "==", user.uid),
@@ -1890,13 +2146,11 @@ if (!maxTicket) {
 
       const applicationDoc = applicationSnapshot.docs[0]
 
-      // Update the pipeline stage
       await updateDoc(applicationDoc.ref, {
         pipelineStage: nextStage,
         lastUpdated: new Date().toISOString(),
       })
 
-      // Update local state
       setPipelineStages((prev) => ({
         ...prev,
         [applicationKey]: nextStage,
@@ -1915,306 +2169,6 @@ if (!maxTicket) {
 
   const [mounted, setMounted] = useState(false)
 
-
-const BigScoreWarningModal = () => {
-  if (!showBigScoreWarning) return null;
-
-  const handleGetHelpClick = () => {
-    setShowBigScoreWarning(false);
-    // Navigate to advisor matches page
-    navigate("/find-advisors");
-  };
-
-  return createPortal(
-    <div style={{
-      position: "fixed",
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: "rgba(0, 0, 0, 0.7)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      zIndex: 2000,
-      backdropFilter: "blur(4px)",
-    }}>
-      <div style={{
-        background: "linear-gradient(135deg, #FFF9C4 0%, #FFECB3 100%)",
-        borderRadius: "20px",
-        padding: "40px",
-        maxWidth: "500px",
-        width: "90%",
-        boxShadow: "0 20px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 152, 0, 0.2)",
-        border: "2px solid #412c21ff",
-        textAlign: "center",
-        position: "relative",
-        animation: "slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)"
-      }}>
-        {/* Warning Icon */}
-        <div style={{
-          width: "80px",
-          height: "80px",
-          background: "linear-gradient(135deg, #e30909ff 0%, #d04e0eff 100%)",
-          borderRadius: "50%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          margin: "0 auto 20px",
-          boxShadow: "0 8px 20px rgba(219, 55, 14, 0.98)"
-        }}>
-          <span style={{
-            fontSize: "40px",
-            color: "white",
-            fontWeight: "bold"
-          }}>!</span>
-        </div>
-
-        {/* Title */}
-        <h2 style={{
-          color: "#2c1b12ff",
-          fontSize: "28px",
-          fontWeight: "800",
-          margin: "0 0 15px 0",
-          textShadow: "0 2px 4px rgba(0,0,0,0.1)"
-        }}>
-          BigScore Too Low
-        </h2>
-
-        {/* Message */}
-        <div style={{
-          background: "rgba(255, 255, 255, 0.8)",
-          borderRadius: "12px",
-          padding: "20px",
-          margin: "20px 0",
-          border: "1px solid #412c21ff"
-        }}>
-          <p style={{
-            color: "#5D4037",
-            fontSize: "16px",
-            lineHeight: "1.6",
-            margin: "0 0 15px 0"
-          }}>
-            Your current <strong>BigScore is {bigScore}%</strong>, which is below the minimum requirement of <strong>75%</strong> needed to apply for funding.
-          </p>
-          
-          <div style={{
-            background: "linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%)",
-            borderRadius: "8px",
-            padding: "15px",
-            border: "1px solid #FFB74D"
-          }}>
-            <h4 style={{
-              color: "#412c21ff",
-              margin: "0 0 10px 0",
-              fontSize: "16px"
-            }}>
-              🚀 How to Improve Your Score:
-            </h4>
-            <ul style={{
-              textAlign: "left",
-              color: "#5D4037",
-              fontSize: "14px",
-              lineHeight: "1.5",
-              margin: 0,
-              paddingLeft: "20px"
-            }}>
-              <li>Complete your business profile</li>
-              <li>Upload all required documents</li>
-              <li>Improve your financial metrics</li>
-              <li>Connect with business advisors</li>
-              <li>Participate in catalyst programs</li>
-            </ul>
-          </div>
-        </div>
-
-        {/* Score Visualization */}
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          background: "rgba(255, 255, 255, 0.9)",
-          borderRadius: "10px",
-          padding: "15px",
-          margin: "20px 0",
-          border: "1px solid #4d3324ff"
-        }}>
-          <div style={{ textAlign: "center" }}>
-            <div style={{
-              color: "#412c21ff",
-              fontSize: "14px",
-              fontWeight: "600",
-              marginBottom: "5px"
-            }}>Your Score</div>
-            <div style={{
-              color: "#412c21ff",
-              fontSize: "24px",
-              fontWeight: "800"
-            }}>{bigScore}%</div>
-          </div>
-          
-          <div style={{
-            flex: 1,
-            margin: "0 20px",
-            position: "relative"
-          }}>
-            <div style={{
-              width: "100%",
-              height: "12px",
-              background: "linear-gradient(to right, #E65100 0%, #FF9800 50%, #4CAF50 100%)",
-              borderRadius: "6px",
-              position: "relative"
-            }}>
-              <div style={{
-                position: "absolute",
-                left: `${bigScore}%`,
-                top: "-5px",
-                width: "4px",
-                height: "22px",
-                background: "#5D2A0A",
-                borderRadius: "2px",
-                transform: "translateX(-50%)"
-              }} />
-            </div>
-            <div style={{
-              display: "flex",
-              justifyContent: "space-between",
-              marginTop: "5px",
-              fontSize: "12px",
-              color: "#8D6E63"
-            }}>
-              <span>0%</span>
-              <span style={{ color: "#4CAF50", fontWeight: "600" }}>75% Required</span>
-              <span>100%</span>
-            </div>
-          </div>
-          
-          <div style={{ textAlign: "center" }}>
-            <div style={{
-              color: "#4CAF50",
-              fontSize: "14px",
-              fontWeight: "600",
-              marginBottom: "5px"
-            }}>Goal</div>
-            <div style={{
-              color: "#4CAF50",
-              fontSize: "24px",
-              fontWeight: "800"
-            }}>75%</div>
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div style={{
-          display: "flex",
-          gap: "15px",
-          justifyContent: "center",
-          marginTop: "25px"
-        }}>
-          <button
-            onClick={() => setShowBigScoreWarning(false)}
-            style={{
-              flex: 1,
-              padding: "15px 25px",
-              background: "linear-gradient(135deg, #78909C 0%, #546E7A 100%)",
-              color: "white",
-              border: "none",
-              borderRadius: "12px",
-              fontSize: "16px",
-              fontWeight: "600",
-              cursor: "pointer",
-              transition: "all 0.3s ease",
-              boxShadow: "0 4px 12px rgba(84, 110, 122, 0.3)"
-            }}
-            onMouseOver={(e) => {
-              e.target.style.transform = "translateY(-2px)";
-              e.target.style.boxShadow = "0 6px 16px rgba(84, 110, 122, 0.4)";
-            }}
-            onMouseOut={(e) => {
-              e.target.style.transform = "translateY(0)";
-              e.target.style.boxShadow = "0 4px 12px rgba(84, 110, 122, 0.3)";
-            }}
-          >
-            Close
-          </button>
-          
-          <button
-            onClick={handleGetHelpClick}
-            style={{
-              flex: 1,
-              padding: "15px 25px",
-              background: "linear-gradient(135deg, #3e3a34ff 0%, #291e1483 100%)",
-              color: "white",
-              border: "none",
-              borderRadius: "12px",
-              fontSize: "16px",
-              fontWeight: "600",
-              cursor: "pointer",
-              transition: "all 0.3s ease",
-              boxShadow: "0 4px 12px rgba(255, 152, 0, 0.4)"
-            }}
-            onMouseOver={(e) => {
-              e.target.style.transform = "translateY(-2px)";
-              e.target.style.boxShadow = "0 6px 16px  rgba(62, 39, 35, 0.5)";
-            }}
-            onMouseOut={(e) => {
-              e.target.style.transform = "translateY(0)";
-              e.target.style.boxShadow = "0 4px 12px rgba(62, 39, 35, 0.5)";
-            }}
-          >
-            Find Advisors
-          </button>
-        </div>
-
-        {/* Close Button */}
-        <button
-          onClick={() => setShowBigScoreWarning(false)}
-          style={{
-            position: "absolute",
-            top: "15px",
-            right: "15px",
-            background: "rgba(255, 255, 255, 0.9)",
-            border: "none",
-            borderRadius: "50%",
-            width: "40px",
-            height: "40px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            fontSize: "20px",
-            color: "#412c21ff",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-            transition: "all 0.3s ease"
-          }}
-          onMouseOver={(e) => {
-            e.target.style.background = "#412c21ff";
-            e.target.style.color = "white";
-          }}
-          onMouseOut={(e) => {
-            e.target.style.background = "rgba(255, 255, 255, 0.9)";
-            e.target.style.color = "#412c21ff";
-          }}
-        >
-          ✕
-        </button>
-      </div>
-    </div>,
-    document.body
-  );
-};
-
-
-// Add the styles to the document head
-useEffect(() => {
-  const styleSheet = document.createElement("style");
-  styleSheet.innerText = styles;
-  document.head.appendChild(styleSheet);
-  return () => {
-    document.head.removeChild(styleSheet);
-  };
-}, []);
-
   useEffect(() => {
     setMounted(true)
     return () => setMounted(false)
@@ -2230,9 +2184,8 @@ useEffect(() => {
           filter: showFilterModal || showBreakdownModal || modalFunder ? "blur(2px)" : "none",
           transition: "filter 0.2s ease",
         }}
-
       >
-            <BigScoreIndicator />
+         <BigScoreIndicator />
                <BigScoreWarningModal />
         {notification && (
           <div
@@ -2254,11 +2207,17 @@ useEffect(() => {
         )}
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
             <button onClick={() => setShowFilterModal(true)} style={filterButtonStyle}>
               <Filter size={16} />
-              Filter
+              Filter {getActiveFilterCount() > 0 && `(${getActiveFilterCount()})`}
             </button>
+            {getActiveFilterCount() > 0 && (
+              <button onClick={clearFilters} style={{ ...filterButtonStyle, background: "#FFCDD2", color: "#C62828" }}>
+                <X size={16} />
+                Clear Filters
+              </button>
+            )}
           </div>
         </div>
 
@@ -2269,9 +2228,11 @@ useEffect(() => {
                 ? "No funders match your filters. Try adjusting your criteria."
                 : "No matching funders found. Try adjusting your profile."}
             </p>
-            <button onClick={clearFilters} style={clearFiltersButtonStyle}>
-              Clear All Filters
-            </button>
+            {getActiveFilterCount() > 0 && (
+              <button onClick={clearFilters} style={clearFiltersButtonStyle}>
+                Clear All Filters
+              </button>
+            )}
           </div>
         ) : (
           <div style={tableContainerStyle}>
@@ -2306,13 +2267,10 @@ useEffect(() => {
               </thead>
               <tbody>
                 {filteredFunders.map((funder) => {
-                  // Use consistent key format
                   const applicationKey = `${funder.funderId}_${funder.name}`
-
                   const status = statuses[applicationKey] || "Application not sent"
                   const hasApplication = existingApplications[applicationKey] || funder.hasApplication
 
-                  // Get the pipeline stage using the consistent key
                   const currentStage = hasApplication
                     ? pipelineStages[applicationKey] || funder.pipelineStage || "Application Sent"
                     : "Match"
@@ -2324,7 +2282,7 @@ useEffect(() => {
                       <td style={tableCellStyle}>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
                           <div>
-                            <span   onClick={() => handleViewInvestorDetails(funder)} style={funderNameStyle}>
+                            <span onClick={() => handleViewInvestorDetails(funder)} style={funderNameStyle}>
                               <TruncatedText text={funder.name} maxLength={15} />
                             </span>
                           </div>
@@ -2562,24 +2520,27 @@ useEffect(() => {
         </div>
       </div>
 
-       {modalFunder && (
+      {modalFunder && (
         <div style={modalOverlayStyle} onClick={() => setModalFunder(null)}>
           <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
-            {/* Modal Header */}
-            <div style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "32px",
-              paddingBottom: "24px",
-              borderBottom: "3px solid #8d6e63"
-            }}>
-              <h2 style={{
-                fontSize: "32px",
-                fontWeight: "800",
-                color: "#3e2723",
-                margin: 0
-              }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "32px",
+                paddingBottom: "24px",
+                borderBottom: "3px solid #8d6e63",
+              }}
+            >
+              <h2
+                style={{
+                  fontSize: "32px",
+                  fontWeight: "800",
+                  color: "#3e2723",
+                  margin: 0,
+                }}
+              >
                 {modalFunder.name} Investor Profile
               </h2>
               <button
@@ -2590,7 +2551,7 @@ useEffect(() => {
                   fontSize: "24px",
                   cursor: "pointer",
                   color: "#666",
-                  padding: "8px"
+                  padding: "8px",
                 }}
               >
                 <X size={24} />
@@ -2598,37 +2559,45 @@ useEffect(() => {
             </div>
 
             {/* General Information Section */}
-            <div style={{
-              marginBottom: "40px",
-              backgroundColor: "#fff",
-              borderRadius: "16px",
-              padding: "32px",
-              boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)",
-              border: "1px solid #e8e8e8",
-            }}>
-              <h3 style={{
-                margin: "0 0 24px 0",
-                fontSize: "24px",
-                fontWeight: "700",
-                color: "#3e2723",
-                paddingBottom: "16px",
-                borderBottom: "3px solid #8d6e63",
-              }}>
+            <div
+              style={{
+                marginBottom: "40px",
+                backgroundColor: "#fff",
+                borderRadius: "16px",
+                padding: "32px",
+                boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)",
+                border: "1px solid #e8e8e8",
+              }}
+            >
+              <h3
+                style={{
+                  margin: "0 0 24px 0",
+                  fontSize: "24px",
+                  fontWeight: "700",
+                  color: "#3e2723",
+                  paddingBottom: "16px",
+                  borderBottom: "3px solid #8d6e63",
+                }}
+              >
                 General Information
               </h3>
-              <div style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-                gap: "24px",
-              }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                  gap: "24px",
+                }}
+              >
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Firm Type:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -2636,13 +2605,15 @@ useEffect(() => {
                   </span>
                 </div>
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Legal Entity Type:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -2650,13 +2621,15 @@ useEffect(() => {
                   </span>
                 </div>
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Registered Name:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -2664,13 +2637,15 @@ useEffect(() => {
                   </span>
                 </div>
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Trading Name:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -2678,13 +2653,15 @@ useEffect(() => {
                   </span>
                 </div>
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Registration Number:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -2692,13 +2669,15 @@ useEffect(() => {
                   </span>
                 </div>
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Tax Number:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -2706,13 +2685,15 @@ useEffect(() => {
                   </span>
                 </div>
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     VAT Number:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -2720,13 +2701,15 @@ useEffect(() => {
                   </span>
                 </div>
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Years in Operation:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -2737,37 +2720,45 @@ useEffect(() => {
             </div>
 
             {/* Fund Management Overview Section */}
-            <div style={{
-              marginBottom: "40px",
-              backgroundColor: "#fff",
-              borderRadius: "16px",
-              padding: "32px",
-              boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)",
-              border: "1px solid #e8e8e8",
-            }}>
-              <h3 style={{
-                margin: "0 0 24px 0",
-                fontSize: "24px",
-                fontWeight: "700",
-                color: "#3e2723",
-                paddingBottom: "16px",
-                borderBottom: "3px solid #8d6e63",
-              }}>
+            <div
+              style={{
+                marginBottom: "40px",
+                backgroundColor: "#fff",
+                borderRadius: "16px",
+                padding: "32px",
+                boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)",
+                border: "1px solid #e8e8e8",
+              }}
+            >
+              <h3
+                style={{
+                  margin: "0 0 24px 0",
+                  fontSize: "24px",
+                  fontWeight: "700",
+                  color: "#3e2723",
+                  paddingBottom: "16px",
+                  borderBottom: "3px solid #8d6e63",
+                }}
+              >
                 Fund Management Overview
               </h3>
-              <div style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-                gap: "24px",
-              }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                  gap: "24px",
+                }}
+              >
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Brief Description:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -2775,13 +2766,15 @@ useEffect(() => {
                   </span>
                 </div>
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Investor Role:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -2789,13 +2782,15 @@ useEffect(() => {
                   </span>
                 </div>
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Number of Investments:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -2803,13 +2798,15 @@ useEffect(() => {
                   </span>
                 </div>
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Value Deployed:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -2817,13 +2814,15 @@ useEffect(() => {
                   </span>
                 </div>
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Number of Executives:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -2831,13 +2830,15 @@ useEffect(() => {
                   </span>
                 </div>
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Portfolio Companies:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -2845,13 +2846,15 @@ useEffect(() => {
                   </span>
                 </div>
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Additional Services:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -2859,13 +2862,15 @@ useEffect(() => {
                   </span>
                 </div>
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Additional Support:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -2877,261 +2882,276 @@ useEffect(() => {
 
             {/* Fund Details Section */}
             {modalFunder.fullProfile?.fundDetails?.funds?.map((fund, index) => (
-              <div key={index} style={{
-                marginBottom: "40px",
-                backgroundColor: "#fff",
-                borderRadius: "16px",
-                padding: "32px",
-                boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)",
-                border: "1px solid #e8e8e8",
-              }}>
-                <h3 style={{
-                  margin: "0 0 24px 0",
-                  fontSize: "24px",
-                  fontWeight: "700",
-                  color: "#3e2723",
-                  paddingBottom: "16px",
-                  borderBottom: "3px solid #8d6e63",
-                }}>
-                  Fund Details {modalFunder.fullProfile?.fundDetails?.funds?.length > 1 ? `#${index + 1}` : ''}
+              <div
+                key={index}
+                style={{
+                  marginBottom: "40px",
+                  backgroundColor:"#fff",
+                  borderRadius: "16px",
+                  padding: "32px",
+                  boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)",
+                  border: "1px solid #e8e8e8",
+                }}
+              >
+                <h3
+                  style={{
+                    margin: "0 0 24px 0",
+                    fontSize: "24px",
+                    fontWeight: "700",
+                    color: "#3e2723",
+                    paddingBottom: "16px",
+                    borderBottom: "3px solid #8d6e63",
+                  }}
+                >
+                  Fund Details {modalFunder.fullProfile?.fundDetails?.funds?.length > 1 ? `#${index + 1}` : ""}
                 </h3>
-                <div style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-                  gap: "24px",
-                }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                    gap: "24px",
+                  }}
+                >
                   <div>
-                    <span style={{
-                      display: "block",
-                      fontSize: "16px",
-                      fontWeight: "600",
-                      color: "#5d4037",
-                      marginBottom: "8px",
-                    }}>
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        color: "#5d4037",
+                        marginBottom: "8px",
+                      }}
+                    >
                       Fund Name:
                     </span>
-                    <span style={{ fontSize: "16px", color: "#333" }}>
-                      {fund.name}
-                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>{fund.name}</span>
                   </div>
                   <div>
-                    <span style={{
-                      display: "block",
-                      fontSize: "16px",
-                      fontWeight: "600",
-                      color: "#5d4037",
-                      marginBottom: "8px",
-                    }}>
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        color: "#5d4037",
+                        marginBottom: "8px",
+                      }}
+                    >
                       Fund Size:
                     </span>
-                    <span style={{ fontSize: "16px", color: "#333" }}>
-                      {fund.size}
-                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>{fund.size}</span>
                   </div>
                   <div>
-                    <span style={{
-                      display: "block",
-                      fontSize: "16px",
-                      fontWeight: "600",
-                      color: "#5d4037",
-                      marginBottom: "8px",
-                    }}>
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        color: "#5d4037",
+                        marginBottom: "8px",
+                      }}
+                    >
                       Fund Structure:
                     </span>
-                    <span style={{ fontSize: "16px", color: "#333" }}>
-                      {fund.fundStructure}
-                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>{fund.fundStructure}</span>
                   </div>
                   <div>
-                    <span style={{
-                      display: "block",
-                      fontSize: "16px",
-                      fontWeight: "600",
-                      color: "#5d4037",
-                      marginBottom: "8px",
-                    }}>
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        color: "#5d4037",
+                        marginBottom: "8px",
+                      }}
+                    >
                       Legal Structure:
                     </span>
-                    <span style={{ fontSize: "16px", color: "#333" }}>
-                      {fund.fundLegalStructure}
-                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>{fund.fundLegalStructure}</span>
                   </div>
                   <div>
-                    <span style={{
-                      display: "block",
-                      fontSize: "16px",
-                      fontWeight: "600",
-                      color: "#5d4037",
-                      marginBottom: "8px",
-                    }}>
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        color: "#5d4037",
+                        marginBottom: "8px",
+                      }}
+                    >
                       Minimum Ticket:
                     </span>
-                    <span style={{ fontSize: "16px", color: "#333" }}>
-                      {fund.minimumTicket}
-                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>{fund.minimumTicket}</span>
                   </div>
                   <div>
-                    <span style={{
-                      display: "block",
-                      fontSize: "16px",
-                      fontWeight: "600",
-                      color: "#5d4037",
-                      marginBottom: "8px",
-                    }}>
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        color: "#5d4037",
+                        marginBottom: "8px",
+                      }}
+                    >
                       Maximum Ticket:
                     </span>
-                    <span style={{ fontSize: "16px", color: "#333" }}>
-                      {fund.maximumTicket}
-                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>{fund.maximumTicket}</span>
                   </div>
                   <div>
-                    <span style={{
-                      display: "block",
-                      fontSize: "16px",
-                      fontWeight: "600",
-                      color: "#5d4037",
-                      marginBottom: "8px",
-                    }}>
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        color: "#5d4037",
+                        marginBottom: "8px",
+                      }}
+                    >
                       Average Deal Size:
                     </span>
-                    <span style={{ fontSize: "16px", color: "#333" }}>
-                      {fund.averageDealSize}
-                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>{fund.averageDealSize}</span>
                   </div>
                   <div>
-                    <span style={{
-                      display: "block",
-                      fontSize: "16px",
-                      fontWeight: "600",
-                      color: "#5d4037",
-                      marginBottom: "8px",
-                    }}>
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        color: "#5d4037",
+                        marginBottom: "8px",
+                      }}
+                    >
                       Revenue Threshold:
                     </span>
-                    <span style={{ fontSize: "16px", color: "#333" }}>
-                      {fund.revenueThreshold}
-                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>{fund.revenueThreshold}</span>
                   </div>
                   <div>
-                    <span style={{
-                      display: "block",
-                      fontSize: "16px",
-                      fontWeight: "600",
-                      color: "#5d4037",
-                      marginBottom: "8px",
-                    }}>
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        color: "#5d4037",
+                        marginBottom: "8px",
+                      }}
+                    >
                       Follow-on Percentage:
                     </span>
-                    <span style={{ fontSize: "16px", color: "#333" }}>
-                      {fund.followOnPercentage}%
-                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>{fund.followOnPercentage}%</span>
                   </div>
                   <div>
-                    <span style={{
-                      display: "block",
-                      fontSize: "16px",
-                      fontWeight: "600",
-                      color: "#5d4037",
-                      marginBottom: "8px",
-                    }}>
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        color: "#5d4037",
+                        marginBottom: "8px",
+                      }}
+                    >
                       Pro Rata Rights:
                     </span>
-                    <span style={{ fontSize: "16px", color: "#333" }}>
-                      {fund.proRataRights ? "Yes" : "No"}
-                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>{fund.proRataRights ? "Yes" : "No"}</span>
                   </div>
                   <div>
-                    <span style={{
-                      display: "block",
-                      fontSize: "16px",
-                      fontWeight: "600",
-                      color: "#5d4037",
-                      marginBottom: "8px",
-                    }}>
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        color: "#5d4037",
+                        marginBottom: "8px",
+                      }}
+                    >
                       Reserves for Follow-on:
                     </span>
-                    <span style={{ fontSize: "16px", color: "#333" }}>
-                      {fund.reservesForFollowOn ? "Yes" : "No"}
-                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>{fund.reservesForFollowOn ? "Yes" : "No"}</span>
                   </div>
                   <div>
-                    <span style={{
-                      display: "block",
-                      fontSize: "16px",
-                      fontWeight: "600",
-                      color: "#5d4037",
-                      marginBottom: "8px",
-                    }}>
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        color: "#5d4037",
+                        marginBottom: "8px",
+                      }}
+                    >
                       Captive Fund:
                     </span>
-                    <span style={{ fontSize: "16px", color: "#333" }}>
-                      {fund.captiveFund ? "Yes" : "No"}
-                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>{fund.captiveFund ? "Yes" : "No"}</span>
                   </div>
                   <div>
-                    <span style={{
-                      display: "block",
-                      fontSize: "16px",
-                      fontWeight: "600",
-                      color: "#5d4037",
-                      marginBottom: "8px",
-                    }}>
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        color: "#5d4037",
+                        marginBottom: "8px",
+                      }}
+                    >
                       LP Composition:
                     </span>
-                    <span style={{ fontSize: "16px", color: "#333" }}>
-                      {fund.lpComposition}
-                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>{fund.lpComposition}</span>
                   </div>
                   <div>
-                    <span style={{
-                      display: "block",
-                      fontSize: "16px",
-                      fontWeight: "600",
-                      color: "#5d4037",
-                      marginBottom: "8px",
-                    }}>
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        color: "#5d4037",
+                        marginBottom: "8px",
+                      }}
+                    >
                       Target Investor Type:
                     </span>
-                    <span style={{ fontSize: "16px", color: "#333" }}>
-                      {fund.targetInvestorType}
-                    </span>
+                    <span style={{ fontSize: "16px", color: "#333" }}>{fund.targetInvestorType}</span>
                   </div>
                 </div>
               </div>
             ))}
 
             {/* Investment Preferences Section */}
-            <div style={{
-              marginBottom: "40px",
-              backgroundColor: "#fff",
-              borderRadius: "16px",
-              padding: "32px",
-              boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)",
-              border: "1px solid #e8e8e8",
-            }}>
-              <h3 style={{
-                margin: "0 0 24px 0",
-                fontSize: "24px",
-                fontWeight: "700",
-                color: "#3e2723",
-                paddingBottom: "16px",
-                borderBottom: "3px solid #8d6e63",
-              }}>
+            <div
+              style={{
+                marginBottom: "40px",
+                backgroundColor: "#fff",
+                borderRadius: "16px",
+                padding: "32px",
+                boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)",
+                border: "1px solid #e8e8e8",
+              }}
+            >
+              <h3
+                style={{
+                  margin: "0 0 24px 0",
+                  fontSize: "24px",
+                  fontWeight: "700",
+                  color: "#3e2723",
+                  paddingBottom: "16px",
+                  borderBottom: "3px solid #8d6e63",
+                }}
+              >
                 Investment Preferences
               </h3>
-              <div style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-                gap: "24px",
-              }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                  gap: "24px",
+                }}
+              >
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Investment Focus:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -3139,13 +3159,15 @@ useEffect(() => {
                   </span>
                 </div>
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Investment Stage:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -3153,13 +3175,15 @@ useEffect(() => {
                   </span>
                 </div>
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Sector Focus:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -3167,13 +3191,15 @@ useEffect(() => {
                   </span>
                 </div>
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Geographic Focus:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -3181,13 +3207,15 @@ useEffect(() => {
                   </span>
                 </div>
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Risk Appetite:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -3195,13 +3223,15 @@ useEffect(() => {
                   </span>
                 </div>
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Legal Entity Fit:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -3212,37 +3242,45 @@ useEffect(() => {
             </div>
 
             {/* Application Brief Section */}
-            <div style={{
-              marginBottom: "40px",
-              backgroundColor: "#fff",
-              borderRadius: "16px",
-              padding: "32px",
-              boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)",
-              border: "1px solid #e8e8e8",
-            }}>
-              <h3 style={{
-                margin: "0 0 24px 0",
-                fontSize: "24px",
-                fontWeight: "700",
-                color: "#3e2723",
-                paddingBottom: "16px",
-                borderBottom: "3px solid #8d6e63",
-              }}>
+            <div
+              style={{
+                marginBottom: "40px",
+                backgroundColor: "#fff",
+                borderRadius: "16px",
+                padding: "32px",
+                boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)",
+                border: "1px solid #e8e8e8",
+              }}
+            >
+              <h3
+                style={{
+                  margin: "0 0 24px 0",
+                  fontSize: "24px",
+                  fontWeight: "700",
+                  color: "#3e2723",
+                  paddingBottom: "16px",
+                  borderBottom: "3px solid #8d6e63",
+                }}
+              >
                 Application Process
               </h3>
-              <div style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-                gap: "24px",
-              }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                  gap: "24px",
+                }}
+              >
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Application Window:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -3250,13 +3288,15 @@ useEffect(() => {
                   </span>
                 </div>
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Typical Deal Closing Time:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -3264,13 +3304,15 @@ useEffect(() => {
                   </span>
                 </div>
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Estimated Review Time:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -3278,13 +3320,15 @@ useEffect(() => {
                   </span>
                 </div>
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Overview & Objectives:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -3292,13 +3336,15 @@ useEffect(() => {
                   </span>
                 </div>
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Evaluation Criteria:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -3306,13 +3352,15 @@ useEffect(() => {
                   </span>
                 </div>
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Impact Alignment:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -3320,13 +3368,15 @@ useEffect(() => {
                   </span>
                 </div>
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Instructions for Applying:
                   </span>
                   <span style={{ fontSize: "16px", color: "#333" }}>
@@ -3334,13 +3384,15 @@ useEffect(() => {
                   </span>
                 </div>
                 <div>
-                  <span style={{
-                    display: "block",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#5d4037",
-                    marginBottom: "8px",
-                  }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#5d4037",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Required Documents:
                   </span>
                   <div style={{ fontSize: "16px", color: "#333" }}>
@@ -3350,20 +3402,24 @@ useEffect(() => {
                           <li key={index}>{doc}</li>
                         ))}
                       </ul>
-                    ) : "N/A"}
+                    ) : (
+                      "N/A"
+                    )}
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Modal Footer */}
-            <div style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              marginTop: "40px",
-              paddingTop: "24px",
-              borderTop: "1px solid #e0e0e0"
-            }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                marginTop: "40px",
+                paddingTop: "24px",
+                borderTop: "1px solid #e0e0e0",
+              }}
+            >
               <button
                 onClick={() => setModalFunder(null)}
                 style={{
@@ -3837,8 +3893,6 @@ useEffect(() => {
           document.body,
         )}
 
-        
-
       {mounted &&
         showFilterModal &&
         createPortal(
@@ -3874,34 +3928,247 @@ useEffect(() => {
                 </button>
               </div>
               <div style={modalBodyStyle}>
-                {/* Filter content - keeping existing filter logic but updating styles */}
                 <div
                   style={{
-                    textAlign: "center",
-                    marginBottom: "2rem",
-                    paddingBottom: "1rem",
-                    borderBottom: "2px solid #E8D5C4",
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+                    gap: "1.5rem",
                   }}
                 >
-                  <h1
-                    style={{
-                      fontSize: "1.5rem",
-                      fontWeight: "bold",
-                      color: "#5D2A0A",
-                      margin: "0 0 0.5rem 0",
-                    }}
-                  >
-                    Filter Funders
-                  </h1>
-                  <p
-                    style={{
-                      fontSize: "1rem",
-                      color: "#8D6E63",
-                      margin: "0",
-                    }}
-                  >
-                    Find the perfect funders for your business needs
-                  </p>
+                  {/* Funder Name Filter */}
+                  <div>
+                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#5D2A0A" }}>
+                      Funder Name
+                    </label>
+                    <input
+                      type="text"
+                      value={tableFilters.funderName}
+                      onChange={(e) => handleFilterChange("funderName", e.target.value)}
+                      placeholder="Search by name..."
+                      style={{
+                        width: "100%",
+                        padding: "0.75rem",
+                        border: "1px solid #E8D5C4",
+                        borderRadius: "6px",
+                        fontSize: "0.875rem",
+                      }}
+                    />
+                  </div>
+
+                  {/* Location Filter */}
+                  <div>
+                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#5D2A0A" }}>
+                      Location
+                    </label>
+                    <select
+                      value={tableFilters.location}
+                      onChange={(e) => handleFilterChange("location", e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "0.75rem",
+                        border: "1px solid #E8D5C4",
+                        borderRadius: "6px",
+                        fontSize: "0.875rem",
+                      }}
+                    >
+                      <option value="">All Locations</option>
+                      {uniqueLocations.map((loc) => (
+                        <option key={loc} value={loc}>
+                          {formatSingleLocation(loc)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Sector Filter */}
+                  <div>
+                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#5D2A0A" }}>
+                      Sector
+                    </label>
+                    <select
+                      value={tableFilters.sector}
+                      onChange={(e) => handleFilterChange("sector", e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "0.75rem",
+                        border: "1px solid #E8D5C4",
+                        borderRadius: "6px",
+                        fontSize: "0.875rem",
+                      }}
+                    >
+                      <option value="">All Sectors</option>
+                      {uniqueSectors.map((sector) => (
+                        <option key={sector} value={sector}>
+                          {formatSectorLabel(sector)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Funding Stage Filter */}
+                  <div>
+                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#5D2A0A" }}>
+                      Funding Stage
+                    </label>
+                    <select
+                      value={tableFilters.fundingStage}
+                      onChange={(e) => handleFilterChange("fundingStage", e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "0.75rem",
+                        border: "1px solid #E8D5C4",
+                        borderRadius: "6px",
+                        fontSize: "0.875rem",
+                      }}
+                    >
+                      <option value="">All Stages</option>
+                      {uniqueStages.map((stage) => (
+                        <option key={stage} value={stage}>
+                          {formatInvestmentStage(stage)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Funding Type Filter */}
+                  <div>
+                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#5D2A0A" }}>
+                      Funding Type
+                    </label>
+                    <select
+                      value={tableFilters.fundingType}
+                      onChange={(e) => handleFilterChange("fundingType", e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "0.75rem",
+                        border: "1px solid #E8D5C4",
+                        borderRadius: "6px",
+                        fontSize: "0.875rem",
+                      }}
+                    >
+                      <option value="">All Types</option>
+                      {uniqueTypes.map((type) => (
+                        <option key={type} value={type}>
+                          {formatLabel(type)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Minimum Ticket Filter */}
+                  <div>
+                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#5D2A0A" }}>
+                      Minimum Ticket Size (R)
+                    </label>
+                    <input
+                      type="number"
+                      value={tableFilters.minTicket}
+                      onChange={(e) => handleFilterChange("minTicket", e.target.value)}
+                      placeholder="e.g., 100000"
+                      style={{
+                        width: "100%",
+                        padding: "0.75rem",
+                        border: "1px solid #E8D5C4",
+                        borderRadius: "6px",
+                        fontSize: "0.875rem",
+                      }}
+                    />
+                  </div>
+
+                  {/* Maximum Ticket Filter */}
+                  <div>
+                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#5D2A0A" }}>
+                      Maximum Ticket Size (R)
+                    </label>
+                    <input
+                      type="number"
+                      value={tableFilters.maxTicket}
+                      onChange={(e) => handleFilterChange("maxTicket", e.target.value)}
+                      placeholder="e.g., 5000000"
+                      style={{
+                        width: "100%",
+                        padding: "0.75rem",
+                        border: "1px solid #E8D5C4",
+                        borderRadius: "6px",
+                        fontSize: "0.875rem",
+                      }}
+                    />
+                  </div>
+
+                  {/* Match Percentage Range */}
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#5D2A0A" }}>
+                      Match Percentage: {tableFilters.minMatch}% - {tableFilters.maxMatch}%
+                    </label>
+                    <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={tableFilters.minMatch}
+                        onChange={(e) => handleFilterChange("minMatch", Number.parseInt(e.target.value))}
+                        style={{ flex: 1 }}
+                      />
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={tableFilters.maxMatch}
+                        onChange={(e) => handleFilterChange("maxMatch", Number.parseInt(e.target.value))}
+                        style={{ flex: 1 }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Current Stage Filter */}
+                  <div>
+                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#5D2A0A" }}>
+                      Current Pipeline Stage
+                    </label>
+                    <select
+                      value={tableFilters.currentStage}
+                      onChange={(e) => handleFilterChange("currentStage", e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "0.75rem",
+                        border: "1px solid #E8D5C4",
+                        borderRadius: "6px",
+                        fontSize: "0.875rem",
+                      }}
+                    >
+                      <option value="">All Stages</option>
+                      {uniquePipelineStages.map((stage) => (
+                        <option key={stage} value={stage}>
+                          {stage}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Support Offered Filter */}
+                  <div>
+                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#5D2A0A" }}>
+                      Support Offered
+                    </label>
+                    <select
+                      value={tableFilters.supportOffered}
+                      onChange={(e) => handleFilterChange("supportOffered", e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "0.75rem",
+                        border: "1px solid #E8D5C4",
+                        borderRadius: "6px",
+                        fontSize: "0.875rem",
+                      }}
+                    >
+                      <option value="">All Support Types</option>
+                      {uniqueSupport.map((support) => (
+                        <option key={support} value={support}>
+                          {formatSupport(support)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div
@@ -3910,6 +4177,7 @@ useEffect(() => {
                     justifyContent: "space-between",
                     gap: "1rem",
                     paddingTop: "1.5rem",
+                    marginTop: "1.5rem",
                     borderTop: "1px solid #E8D5C4",
                   }}
                 >
@@ -3954,7 +4222,7 @@ useEffect(() => {
           document.body,
         )}
 
-          {applyingFunder && (
+      {applyingFunder && (
         <div className={styles.modalOverlay}>
           <div className={styles.modal}>
             <div className={styles.modalHeader}>
@@ -3969,13 +4237,13 @@ useEffect(() => {
 
                 <div className={styles.documentsList}>
                   {applyingFunder.requiredDocuments?.map((docLabel) => {
-                    const submitted = submittedDocuments.includes(docLabel);
-                    const path = DOCUMENT_PATHS[docLabel];
-                    const docUrl = profileData && get(profileData, path)?.[0];
-                    const lastUpdated = profileData && get(profileData, `${path}UpdatedAt`);
+                    const submitted = submittedDocuments.includes(docLabel)
+                    const path = DOCUMENT_PATHS[docLabel]
+                    const docUrl = profileData && get(profileData, path)?.[0]
+                    const lastUpdated = profileData && get(profileData, `${path}UpdatedAt`)
                     const formattedDate = lastUpdated?.seconds
                       ? new Date(lastUpdated.seconds * 1000).toLocaleDateString()
-                      : null;
+                      : null
 
                     return (
                       <div key={docLabel} className={styles.documentItem}>
@@ -3987,23 +4255,14 @@ useEffect(() => {
                             onChange={() => toggleDocumentSelection(docLabel)}
                             className={styles.checkbox}
                           />
-                          <span className={styles.documentName}>
-                            {formatDocumentLabel(docLabel)}
-                          </span>
+                          <span className={styles.documentName}>{formatDocumentLabel(docLabel)}</span>
                           {submitted && formattedDate && (
-                            <span className={styles.documentDate}>
-                              (Uploaded {formattedDate})
-                            </span>
+                            <span className={styles.documentDate}>(Uploaded {formattedDate})</span>
                           )}
                         </div>
 
                         {submitted ? (
-                          <a
-                            href={docUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={styles.viewLink}
-                          >
+                          <a href={docUrl} target="_blank" rel="noopener noreferrer" className={styles.viewLink}>
                             <Eye size={16} /> View
                           </a>
                         ) : (
@@ -4015,16 +4274,13 @@ useEffect(() => {
                               accept=".pdf,.doc,.docx"
                               className={styles.fileInput}
                             />
-                            <label
-                              htmlFor={`file-upload-${docLabel}`}
-                              className={styles.uploadButton}
-                            >
+                            <label htmlFor={`file-upload-${docLabel}`} className={styles.uploadButton}>
                               Upload
                             </label>
                           </div>
                         )}
                       </div>
-                    );
+                    )
                   })}
                 </div>
               </div>
@@ -4038,10 +4294,7 @@ useEffect(() => {
               >
                 Submit Application
               </button>
-              <button
-                onClick={() => setApplyingFunder(null)}
-                className={styles.cancelButton}
-              >
+              <button onClick={() => setApplyingFunder(null)} className={styles.cancelButton}>
                 Cancel
               </button>
             </div>
@@ -4123,7 +4376,7 @@ const statusBadgeStyle = {
 }
 
 const tableHeaderStyle = {
-  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+  background: "linear-gradient(135deg, #4e2106 0%, #37271f 100%)",
   color: "#FEFCFA",
   padding: "0.75rem 0.4rem",
   textAlign: "left",
