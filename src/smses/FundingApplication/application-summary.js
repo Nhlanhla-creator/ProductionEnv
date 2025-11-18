@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { ChevronDown, ChevronUp, Edit, ExternalLink, FileText, FileBarChart, TrendingUp, DollarSign, Building, Users, Heart, CheckSquare } from "lucide-react"
+import { ChevronDown, ChevronUp, Edit, ExternalLink, FileText, FileBarChart, TrendingUp, DollarSign, Building, Users, Heart, CheckSquare, Shield } from "lucide-react"
 import FundabilityScoreCard from './FundabilityScoreCard'
 
 const ApplicationSummary = ({ formData, onEdit }) => {
@@ -632,7 +632,7 @@ const ApplicationSummary = ({ formData, onEdit }) => {
               )}
             </div>
 
-            {/* Enterprise Readiness */}
+            {/* Enterprise Readiness - WITH CREDIT INFORMATION ADDED */}
             <div style={{
               background: 'linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))',
               backdropFilter: 'blur(20px)',
@@ -702,6 +702,14 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                         label: "Has MVP/Prototype",
                         value: formatValue(formData?.enterpriseReadiness?.hasMvp, "No"),
                         detail: formData?.enterpriseReadiness?.hasMvp === "yes" ? formData?.enterpriseReadiness?.mvpDetails : null
+                      },
+                      {
+                        label: "Has Credit Report",
+                        value: formatValue(formData?.enterpriseReadiness?.hasCreditReport, "No")
+                      },
+                      {
+                        label: "Credit Score",
+                        value: formatValue(formData?.enterpriseReadiness?.creditScore, "Not provided")
                       },
                       {
                         label: "Has Traction",
@@ -794,6 +802,78 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                     ))}
                   </div>
 
+                  {/* CREDIT INFORMATION SECTION - NEW */}
+                  <h3 style={{
+                    fontSize: "18px",
+                    fontWeight: "700",
+                    color: "#4a352f",
+                    marginBottom: "16px",
+                    marginTop: "24px",
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    <Shield size={20} color="#a67c52" />
+                    Credit Information
+                  </h3>
+                  <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+                    gap: "20px",
+                    marginBottom: "24px"
+                  }}>
+                    {[
+                      {
+                        label: "Credit Report Available",
+                        value: formatValue(formData?.enterpriseReadiness?.hasCreditReport, "No"),
+                      },
+                      {
+                        label: "Credit Score",
+                        value: formatValue(formData?.enterpriseReadiness?.creditScore, "Not provided"),
+                      },
+                      {
+                        label: "Credit Issues",
+                        value: formatValue(formData?.enterpriseReadiness?.creditIssues, "None reported"),
+                      }
+                    ].map((item, i) => (
+                      <div key={i} style={{
+                        background: 'rgba(250, 247, 242, 0.8)',
+                        borderRadius: '12px',
+                        padding: '20px',
+                        border: '1px solid rgba(200, 182, 166, 0.2)',
+                        transition: 'all 0.3s ease'
+                      }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'translateY(-1px)'
+                          e.currentTarget.style.boxShadow = '0 4px 16px rgba(74, 53, 47, 0.08)'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'translateY(0)'
+                          e.currentTarget.style.boxShadow = 'none'
+                        }}>
+                        <span style={{
+                          display: "block",
+                          fontSize: "13px",
+                          color: "#7d5a50",
+                          marginBottom: "8px",
+                          fontWeight: '600',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px'
+                        }}>
+                          {item.label}
+                        </span>
+                        <span style={{
+                          fontSize: "15px",
+                          color: "#4a352f",
+                          fontWeight: "500",
+                          lineHeight: '1.4'
+                        }}>
+                          {item.value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
                   {/* AI Evaluation Section */}
                   {formData?.enterpriseReadiness?.aiEvaluation && (
                     <div style={{
@@ -855,7 +935,7 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                     </div>
                   )}
 
-                  {/* Document Links */}
+                  {/* Document Links - UPDATED WITH CREDIT REPORT */}
                   <div style={{
                     marginTop: '24px',
                     background: 'rgba(166, 124, 82, 0.1)',
@@ -882,6 +962,7 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                         { label: "Business Plan", url: formData?.enterpriseReadiness?.businessPlanFile },
                         { label: "Pitch Deck", url: formData?.enterpriseReadiness?.pitchDeckFile },
                         { label: "Financials", url: formData?.enterpriseReadiness?.financialsFile },
+                        { label: "Credit Report", url: formData?.enterpriseReadiness?.creditReportDocs },
                         { label: "Guarantee/Contract", url: formData?.enterpriseReadiness?.guaranteeFile }
                       ].map((doc, i) => (
                         <div key={i} style={{ padding: '12px' }}>

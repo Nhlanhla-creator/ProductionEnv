@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
-import { ChevronDown, CheckCircle, TrendingUp, AlertCircle, FileText } from "lucide-react"
+import { ChevronDown, CheckCircle, TrendingUp, AlertCircle, FileText } from 'lucide-react'
 import { doc, updateDoc, setDoc, serverTimestamp } from "firebase/firestore"
 import { db } from "../../firebaseConfig"
 import NeedHelp from "../../NeedHelp"
@@ -15,7 +15,7 @@ export function BigScoreCard({
   pisScore,
   leadershipScore,
   onScoreUpdate,
-  onTabChange, // Add this prop to handle tab switching
+  setActiveTab, // Changed from onTabChange
 }) {
   const [showModal, setShowModal] = useState(false)
   const [bigScore, setBigScore] = useState(null)
@@ -25,8 +25,8 @@ export function BigScoreCard({
   const [showDetailedAnalysis, setShowDetailedAnalysis] = useState(false)
   const [showBoostScoreModal, setShowBoostScoreModal] = useState(false)
 const navigate = useNavigate()
-// Add this state for the catalyst popup (add to your existing useState declarations)
 const [showCatalystPopup, setShowCatalystPopup] = useState(false)
+
   useEffect(() => {
     if (showModal) {
       document.body.classList.add("modal-open")
@@ -98,12 +98,11 @@ const [showCatalystPopup, setShowCatalystPopup] = useState(false)
       }).catch((err) => console.error("Failed to update BIG Score in Firestore:", err))
     }
   }, [complianceScore, legitimacyScore, fundabilityScore, pisScore, leadershipScore, profileData, onScoreUpdate])
+
 useEffect(() => {
-  // Check if user has dismissed the popup in this session
   const hasDismissedCatalystPopup = sessionStorage.getItem('catalystPopupDismissed')
   
   if (bigScore !== null && bigScore < 50 && !hasDismissedCatalystPopup) {
-    // Small delay to ensure the component is fully loaded
     const timer = setTimeout(() => {
       setShowCatalystPopup(true)
     }, 1000)
@@ -308,9 +307,9 @@ useEffect(() => {
     if (rec.url) {
       // External URL - navigate normally
       window.location.href = rec.url
-    } else if (rec.tab && onTabChange) {
+    } else if (rec.tab && setActiveTab) {
       // Switch to tools tab and set the category
-      onTabChange("tools", rec.tab)
+      setActiveTab("tools", rec.tab)
     }
   }
 
@@ -534,7 +533,11 @@ useEffect(() => {
               <ChevronDown size={16} />
             </button>
             <button
-              onClick={() => setShowBoostScoreModal(true)}
+              onClick={() => {
+                if (setActiveTab) {
+                  setActiveTab("tools")
+                }
+              }}
               disabled={bigScore === null}
               style={{
                 flex: "1",
@@ -571,7 +574,7 @@ useEffect(() => {
                 }
               }}
             >
-              <span>Boost your score</span>
+              <span>Improve your score</span>
             </button>
           </div>
         </div>
@@ -1422,6 +1425,7 @@ useEffect(() => {
           </div>
         </div>
       )}
+      {/* Low Score Popup for scores < 50% */}
       {showCatalystPopup && (
   <div
     style={{
@@ -1487,7 +1491,7 @@ useEffect(() => {
             letterSpacing: "0.5px",
           }}
         >
-          🚀 Boost Your Score
+          Need Help Getting Started?
         </h3>
         <p
           style={{
@@ -1497,7 +1501,7 @@ useEffect(() => {
             fontWeight: "400",
           }}
         >
-          Unlock your business potential with personalized support
+          We're here to support your business journey
         </p>
       </div>
 
@@ -1540,7 +1544,7 @@ useEffect(() => {
               lineHeight: "1.5",
             }}
           >
-            Your current BIG Score indicates significant growth opportunities. Our <strong>Catalyst Program</strong> can help you rapidly improve your business readiness.
+            Your score indicates you may benefit from incubation or acceleration support to strengthen your business foundation.
           </p>
         </div>
 
@@ -1561,7 +1565,7 @@ useEffect(() => {
               fontWeight: "600",
             }}
           >
-            📈 With Catalyst Support You'll Get:
+            How We Can Help:
           </p>
           <ul
             style={{
@@ -1572,15 +1576,11 @@ useEffect(() => {
               lineHeight: "1.6",
             }}
           >
-            <li>Personalized business development guidance</li>
-            <li>Access to specialized growth tools and resources</li>
-            <li>Mentorship from industry experts</li>
-            <li>Priority support for compliance and funding readiness</li>
-            <li>Customized action plan to boost your BIG Score</li>
+            <li><strong>Find Advisors:</strong> Connect with experienced advisors who can guide your business growth</li>
+            <li><strong>Catalyst Program:</strong> Get incubation or acceleration support to strengthen your foundation</li>
           </ul>
         </div>
 
-        {/* Action Buttons */}
         <div
           style={{
             display: "flex",
@@ -1590,7 +1590,7 @@ useEffect(() => {
         >
          <button
   onClick={() => {
-    navigate("/support-program-matches")
+    navigate("/find-advisors")
     setShowCatalystPopup(false)
     sessionStorage.setItem('catalystPopupDismissed', 'true')
   }}
@@ -1619,7 +1619,41 @@ useEffect(() => {
     e.target.style.boxShadow = "0 6px 20px rgba(141, 110, 99, 0.4)"
   }}
 >
-  <span>Apply for Catalyst Program</span>
+  <span>Find Advisors</span>
+</button>
+
+<button
+  onClick={() => {
+    navigate("/support-program-matches")
+    setShowCatalystPopup(false)
+    sessionStorage.setItem('catalystPopupDismissed', 'true')
+  }}
+  style={{
+    padding: "16px 24px",
+    borderRadius: "10px",
+    background: "linear-gradient(135deg, #A67C52 0%, #8D6E63 100%)",
+    color: "white",
+    border: "none",
+    fontWeight: "700",
+    fontSize: "15px",
+    cursor: "pointer",
+    transition: "all 0.3s ease",
+    boxShadow: "0 6px 20px rgba(166, 124, 82, 0.4)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+  }}
+  onMouseOver={(e) => {
+    e.target.style.transform = "translateY(-2px)"
+    e.target.style.boxShadow = "0 8px 25px rgba(166, 124, 82, 0.5)"
+  }}
+  onMouseOut={(e) => {
+    e.target.style.transform = "translateY(0px)"
+    e.target.style.boxShadow = "0 6px 20px rgba(166, 124, 82, 0.4)"
+  }}
+>
+  <span>Catalyst Program</span>
   <TrendingUp size={18} />
 </button>
 

@@ -14,6 +14,7 @@ import PitchDeckGPT from './PitchdeckAi';
 // ChatGPT API function - replace YOUR_API_KEY with your actual OpenAI API key
 import GPT from "./AiBusinessPlan"
 import FinancialsGPT from "./FinancialsAI"
+import CreditGPT from './aiCreditReport';
 
 // Component for Enterprise Readiness
 const EnterpriseReadiness = ({ data = {}, updateData, apiKey}) => {
@@ -28,8 +29,6 @@ const EnterpriseReadiness = ({ data = {}, updateData, apiKey}) => {
       label,
       timestamp: new Date().toISOString()
     };
-
-
 
     setAiEvaluation(evaluationData);
     updateData({
@@ -49,6 +48,7 @@ const EnterpriseReadiness = ({ data = {}, updateData, apiKey}) => {
     handleAiResponse // Pass the function as fourth parameter
   )
 }
+
 // Rendering function for Enterprise Readiness
 export const renderEnterpriseReadiness = (data, updateFormData, apiKey, handleAiResponse) => {
   const handleChange = (e) => {
@@ -56,7 +56,6 @@ export const renderEnterpriseReadiness = (data, updateFormData, apiKey, handleAi
     updateFormData("enterpriseReadiness", { [name]: type === "checkbox" ? checked : value })
   }
   
-console.log(apiKey)
   const handleMultiSelect = (e) => {
     const { value, checked } = e.target
     let barriers = [...(data.barriers || [])]
@@ -76,7 +75,6 @@ console.log(apiKey)
 
   // Check if "other" is selected in barriers
   const isOtherBarrierSelected = (data.barriers || []).includes("other")
-
 
   return (
     <div className="enterprise-readiness-container">
@@ -128,14 +126,11 @@ console.log(apiKey)
                     <GPT
                       files={data.businessPlanFile}
                       onEvaluationComplete={handleAiResponse}
-                                            apiKey={apiKey} //added keys
+                      apiKey={apiKey}
                     />
                   )}
-
-
               </div>
             )}
-
           </FormField>
         </div>
 
@@ -211,19 +206,18 @@ console.log(apiKey)
           value={data.financialsFile || []}
         />
 
-                  {Array.isArray(data.financialsFile) &&
-                  data.financialsFile.length > 0 &&
-                  !data.financialsFile.some(file =>
-                    typeof file === "string" ||
-                    (file?.url && file.url.startsWith("https://firebasestorage.googleapis.com"))
-                  ) && (
-                    <FinancialsGPT
-                      files={data.financialsFile}
-                      onEvaluationComplete={handleAiResponse}
-                       apiKey={apiKey} //added keys
-                    />
-                  )}
-
+        {Array.isArray(data.financialsFile) &&
+          data.financialsFile.length > 0 &&
+          !data.financialsFile.some(file =>
+            typeof file === "string" ||
+            (file?.url && file.url.startsWith("https://firebasestorage.googleapis.com"))
+          ) && (
+            <FinancialsGPT
+              files={data.financialsFile}
+              onEvaluationComplete={handleAiResponse}
+              apiKey={apiKey}
+            />
+          )}
       </div>
     )}
   </FormField>
@@ -277,10 +271,9 @@ console.log(apiKey)
                     <PitchDeckGPT
                       files={data.pitchDeckFile}
                       onEvaluationComplete={handleAiResponse}
-                       apiKey={apiKey} //added keys
+                      apiKey={apiKey}
                     />
                   )}
-
               </div>
             )}
           </FormField>
@@ -328,6 +321,97 @@ console.log(apiKey)
         </div>
       </div>
 
+      {/* Credit Report Section - MOVED FROM FINANCIAL OVERVIEW */}
+      <div className="section-divider">
+        <h3>Credit Information</h3>
+      </div>
+
+      <div className="form-row">
+        <div className="form-column">
+          <FormField label="Do you have a recent credit report?" required>
+            <div className="radio-group">
+              <label className="form-radio-label">
+                <input
+                  type="radio"
+                  name="hasCreditReport"
+                  value="yes"
+                  checked={data.hasCreditReport === "yes"}
+                  onChange={handleChange}
+                  className="form-radio"
+                />
+                <span>Yes</span>
+              </label>
+              <label className="form-radio-label">
+                <input
+                  type="radio"
+                  name="hasCreditReport"
+                  value="no"
+                  checked={data.hasCreditReport === "no"}
+                  onChange={(e) => {
+                    handleChange(e);
+                    if (e.target.value === 'no') {
+                      handleFileChange("creditReportDocs", []);
+                    }
+                  }}
+                  className="form-radio"
+                />
+                <span>No</span>
+              </label>
+            </div>
+          </FormField>
+
+          {data.hasCreditReport === "yes" && (
+            <div className="conditional-field">
+              <FileUpload
+                label="Upload Credit Report"
+                accept=".pdf,.xlsx,.xls,.doc,.docx"
+                required
+                onChange={(files) => handleFileChange("creditReportDocs", files)}
+                value={data.creditReportDocs || []}
+              />
+   
+              {Array.isArray(data.creditReportDocs) &&
+                data.creditReportDocs.length > 0 &&
+                !data.creditReportDocs.some(file =>
+                  typeof file === "string" ||
+                  (file?.url && file.url.startsWith("https://firebasestorage.googleapis.com"))
+                ) && (
+                  <CreditGPT
+                    files={data.creditReportDocs}
+                    onEvaluationComplete={handleAiResponse}
+                    apiKey={apiKey}
+                  />
+                )}
+            </div>
+          )}
+        </div>
+
+        <div className="form-column">
+          <FormField label="Credit Score (if known)">
+            <input
+              type="number"
+              name="creditScore"
+              value={data.creditScore || ""}
+              onChange={handleChange}
+              className="form-input"
+              placeholder="Enter your credit score"
+              min="300"
+              max="850"
+            />
+          </FormField>
+
+          <FormField label="Any outstanding credit issues?">
+            <textarea
+              name="creditIssues"
+              value={data.creditIssues || ""}
+              onChange={handleChange}
+              className="form-textarea"
+              placeholder="Please describe any outstanding credit issues, defaults, or concerns"
+              rows={3}
+            ></textarea>
+          </FormField>
+        </div>
+      </div>
 
       {/* Third Row: Traction + Guarantees */}
       <div className="form-row">
@@ -683,18 +767,6 @@ console.log(apiKey)
           )}
         </FormField>
       </div>
-
-      {/* <div className="section-divider">
-        <h3>Required Documents</h3>
-        <div className="documents-section">
-          <FileUpload
-            label="Previous Program Reports (if applicable)"
-            accept=".pdf,.doc,.docx"
-            onChange={(files) => handleFileChange("programReports", files)}
-            value={data.programReports || []}
-          />
-        </div>
-      </div> */}
     </div>
   )
 }
