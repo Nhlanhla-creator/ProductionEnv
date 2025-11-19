@@ -452,7 +452,8 @@ const InsightsAIRecommendations = ({ openPopup }) => {
   const [insightsData, setInsightsData] = useState({
     topPerformers: [],
     atRiskSMEs: [],
-    trendAlerts: []
+    trendAlerts: [],
+    defaultFlags: [] // Added to store flags from loan repayments
   });
 
   useEffect(() => {
@@ -512,6 +513,21 @@ const InsightsAIRecommendations = ({ openPopup }) => {
           const lastUpdate = appData.updatedAt ? new Date(appData.updatedAt) : new Date(appData.createdAt);
           const daysSinceUpdate = Math.floor((new Date() - lastUpdate) / (1000 * 60 * 60 * 24));
 
+          // Fetch default flags for this SME
+          let defaultFlags = [];
+          if (appData.smeId) {
+            try {
+              const flagsRef = doc(db, "loan-repayments", appData.smeId);
+              const flagsSnap = await getDoc(flagsRef);
+              if (flagsSnap.exists()) {
+                const flagsData = flagsSnap.data();
+                defaultFlags = flagsData.flags || [];
+              }
+            } catch (error) {
+              console.log("No default flags found for SME:", appData.smeId);
+            }
+          }
+
           return {
             id: appDoc.id,
             smeId: appData.smeId || appData.userId,
@@ -526,6 +542,7 @@ const InsightsAIRecommendations = ({ openPopup }) => {
             daysSinceUpdate,
             status: appData.status,
             fundingDetails: appData.fundingDetails || {},
+            defaultFlags, // Add default flags to SME data
             // Risk indicators
             missedReports: daysSinceUpdate > 90 ? Math.floor(daysSinceUpdate / 45) : 0,
             isStagnant: daysSinceUpdate > 180,
@@ -582,14 +599,15 @@ const InsightsAIRecommendations = ({ openPopup }) => {
         };
       });
 
-    // 2. At-Risk / Watchlist SMEs
+    // 2. At-Risk / Watchlist SMEs - Now includes default flags
     const atRiskSMEs = smeData
       .filter(sme => {
-        // Identify at-risk SMEs based on various criteria
+        // Identify at-risk SMEs based on various criteria including default flags
         return (
           sme.missedReports > 0 ||
           sme.isStagnant ||
           sme.bigScore < 50 ||
+          sme.defaultFlags.length > 0 || // Include SMEs with default flags
           (sme.pipelineStage === "Under Review" && sme.daysSinceUpdate > 60) ||
           (sme.pipelineStage === "Due Diligence" && sme.daysSinceUpdate > 90)
         );
@@ -598,16 +616,26 @@ const InsightsAIRecommendations = ({ openPopup }) => {
       .map(sme => ({
         smeName: sme.smeName,
         riskFlag: getRiskFlag(sme),
-        action: getRecommendedAction(sme)
+        action: getRecommendedAction(sme),
+        defaultFlags: sme.defaultFlags // Include actual default flags
       }));
 
     // 3. Portfolio Trend Alerts
     const trendAlerts = calculateTrendAlerts(smeData);
 
+    // 4. Aggregate default flags across portfolio
+    const allDefaultFlags = smeData.flatMap(sme => 
+      sme.defaultFlags.map(flag => ({
+        ...flag,
+        smeName: sme.smeName
+      }))
+    );
+
     return {
       topPerformers,
       atRiskSMEs,
-      trendAlerts
+      trendAlerts,
+      defaultFlags: allDefaultFlags
     };
   };
 
@@ -639,6 +667,20 @@ const InsightsAIRecommendations = ({ openPopup }) => {
   };
 
   const getRiskFlag = (sme) => {
+    // Check for default flags first
+    if (sme.defaultFlags && sme.defaultFlags.length > 0) {
+      const criticalFlags = sme.defaultFlags.filter(flag => flag.status === "Critical");
+      const warningFlags = sme.defaultFlags.filter(flag => flag.status === "Warning");
+      
+      if (criticalFlags.length > 0) {
+        return `${criticalFlags.length} critical default flag${criticalFlags.length > 1 ? 's' : ''}`;
+      }
+      if (warningFlags.length > 0) {
+        return `${warningFlags.length} warning default flag${warningFlags.length > 1 ? 's' : ''}`;
+      }
+      return `${sme.defaultFlags.length} default flag${sme.defaultFlags.length > 1 ? 's' : ''}`;
+    }
+    
     if (sme.missedReports >= 2) return `Missed ${sme.missedReports} reports`;
     if (sme.isStagnant) return "Pipeline stagnation (>6mo)";
     if (sme.bigScore < 40) return "Low fundability score";
@@ -648,6 +690,17 @@ const InsightsAIRecommendations = ({ openPopup }) => {
   };
 
   const getRecommendedAction = (sme) => {
+    // Prioritize actions based on default flags
+    if (sme.defaultFlags && sme.defaultFlags.length > 0) {
+      const criticalFlags = sme.defaultFlags.filter(flag => flag.status === "Critical");
+      if (criticalFlags.length > 0) return "Immediate intervention required";
+      
+      const warningFlags = sme.defaultFlags.filter(flag => flag.status === "Warning");
+      if (warningFlags.length > 0) return "Review default flags urgently";
+      
+      return "Monitor default flags";
+    }
+    
     if (sme.missedReports >= 2) return "Follow up immediately";
     if (sme.isStagnant) return "Review and decide";
     if (sme.bigScore < 40) return "Request improvements";
@@ -689,6 +742,10 @@ const InsightsAIRecommendations = ({ openPopup }) => {
     ).length;
     const successRate = totalSMEs > 0 ? ((completedDeals / totalSMEs) * 100).toFixed(1) : 0;
 
+    // Calculate default flags metrics
+    const smesWithFlags = smeData.filter(sme => sme.defaultFlags && sme.defaultFlags.length > 0).length;
+    const flagsRate = ((smesWithFlags / totalSMEs) * 100).toFixed(1);
+
     return [
       {
         title: "Decline Rate",
@@ -703,10 +760,10 @@ const InsightsAIRecommendations = ({ openPopup }) => {
         isPositive: parseFloat(avgBigScore) >= 60
       },
       {
-        title: "Pipeline Activity",
-        value: `${activeDeals} active`,
-        description: stagnantCount > 0 ? `${stagnantCount} SMEs stagnant` : "All deals progressing",
-        isPositive: stagnantCount === 0
+        title: "Default Flags",
+        value: `${flagsRate}%`,
+        description: `${smesWithFlags} SMEs with default flags`,
+        isPositive: parseFloat(flagsRate) === 0
       },
       {
         title: "Success Rate",
@@ -865,7 +922,7 @@ const InsightsAIRecommendations = ({ openPopup }) => {
           </div>
         </div>
 
-        {/* At-Risk / Watchlist SMEs */}
+        {/* At-Risk / Watchlist SMEs - ALWAYS shows empty table structure */}
         <div className="chart-container full-width">
           <div className="chart-header">
             <h3 className="chart-title">At-Risk / Watchlist SMEs</h3>
@@ -899,10 +956,25 @@ const InsightsAIRecommendations = ({ openPopup }) => {
                       </table>
                     </div>
                   ) : (
-                    <div className="empty-state">
-                      <div className="empty-state-icon">✅</div>
-                      <div className="empty-state-text">
-                        No at-risk SMEs detected. Your portfolio is healthy!
+                    <div className="table-container-popup">
+                      <table className="data-table risk-table">
+                        <thead>
+                          <tr>
+                            <th>SME</th>
+                            <th>Risk Flag</th>
+                            <th>Recommended Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {/* Empty table body - shows structure only */}
+                        </tbody>
+                      </table>
+                      <div className="empty-state">
+                        <div className="empty-state-icon">✅</div>
+                        <div className="empty-state-text">
+                          No at-risk SMEs detected in your portfolio.<br/>
+                          All companies are performing within acceptable parameters.
+                        </div>
                       </div>
                     </div>
                   )}
@@ -934,57 +1006,28 @@ const InsightsAIRecommendations = ({ openPopup }) => {
                 </tbody>
               </table>
             ) : (
-              <div className="empty-state">
-                <div className="empty-state-icon">✅</div>
-                <div className="empty-state-text">
-                  No at-risk SMEs detected in your portfolio.<br/>
-                  All companies are performing within acceptable parameters.
+              <div>
+                <table className="data-table risk-table">
+                  <thead>
+                    <tr>
+                      <th>SME</th>
+                      <th>Risk Flag</th>
+                      <th>Recommended Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {/* Empty table body - shows structure only */}
+                  </tbody>
+                </table>
+                <div className="empty-state">
+                  <div className="empty-state-icon">✅</div>
+                  <div className="empty-state-text">
+                    No at-risk SMEs detected in your portfolio.<br/>
+                    All companies are performing within acceptable parameters.
+                  </div>
                 </div>
               </div>
             )}
-          </div>
-        </div>
-
-        {/* Portfolio Trend Alerts */}
-        <div className="chart-container full-width">
-          <div className="chart-header">
-            <h3 className="chart-title">Portfolio Trend Alerts</h3>
-            <button 
-              className="breakdown-icon-btn"
-              onClick={() => openPopup(
-                <div className="popup-content">
-                  <h3>Portfolio Trend Alerts</h3>
-                  <div className="popup-description">
-                    Key performance indicators and trend analysis across your portfolio
-                  </div>
-                  <div className="trend-alerts-grid-popup">
-                    {insightsData.trendAlerts.map((alert, idx) => (
-                      <TrendAlertCard 
-                        key={idx}
-                        title={alert.title}
-                        value={alert.value}
-                        description={alert.description}
-                        isPositive={alert.isPositive}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-              title="View details"
-            >
-              <FiEye />
-            </button>
-          </div>
-          <div className="trend-alerts-grid">
-            {insightsData.trendAlerts.map((alert, idx) => (
-              <TrendAlertCard 
-                key={idx}
-                title={alert.title}
-                value={alert.value}
-                description={alert.description}
-                isPositive={alert.isPositive}
-              />
-            ))}
           </div>
         </div>
       </div>

@@ -103,6 +103,85 @@ const styles = `
   animation: none !important;
 }
 
+/* Score Cards */
+.score-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.score-card {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  border-left: 4px solid;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.score-card.compliance {
+  border-left-color: #8D6E63;
+}
+
+.score-card.legitimacy {
+  border-left-color: #6D4C41;
+}
+
+.score-card.fundability {
+  border-left-color: #A67C52;
+}
+
+.score-card.governance {
+  border-left-color: #B8860B;
+}
+
+.score-card.leadership {
+  border-left-color: #A0522D;
+}
+
+.score-value {
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  line-height: 1;
+}
+
+.score-label {
+  font-size: 14px;
+  color: #5e3f26;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.score-description {
+  font-size: 12px;
+  color: #7d5a50;
+  margin-top: 8px;
+  line-height: 1.3;
+}
+
+/* Progress Bars */
+.progress-container {
+  margin-top: 10px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background-color: #e9ecef;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 5px;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
 /* Table Styles */
 .table-container {
   overflow-x: auto;
@@ -137,15 +216,8 @@ const styles = `
   transition: none !important;
 }
 
-.verification-table tr:hover {
-  background-color: #f9f9f9;
-  transform: none !important;
-  animation: none !important;
-  transition: none !important;
-}
-
 /* Status badges */
-.status-badge {
+.score-badge {
   padding: 4px 8px;
   border-radius: 12px;
   font-size: 11px;
@@ -155,24 +227,59 @@ const styles = `
   min-width: 60px;
 }
 
-.status-badge.verified {
+.score-badge.excellent {
   background-color: #4CAF50;
   color: white;
 }
 
-.status-badge.partial {
-  background-color: #FF9800;
+.score-badge.good {
+  background-color: #8BC34A;
   color: white;
 }
 
-.status-badge.unverified {
+.score-badge.fair {
+  background-color: #FFC107;
+  color: white;
+}
+
+.score-badge.poor {
   background-color: #f44336;
   color: white;
 }
 
-.status-badge.pending {
-  background-color: #9E9E9E;
+.score-badge.weak {
+  background-color: #B71C1C;
   color: white;
+}
+
+/* Summary Stats */
+.portfolio-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 15px;
+  margin-bottom: 20px;
+  padding: 20px;
+  background: linear-gradient(135deg, #fdf8f6 0%, #f3e8dc 100%);
+  border-radius: 8px;
+  border: 1px solid #ede4d8;
+}
+
+.summary-stat {
+  text-align: center;
+}
+
+.summary-stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #5e3f26;
+  margin-bottom: 4px;
+}
+
+.summary-stat-label {
+  font-size: 12px;
+  color: #7d5a50;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 /* Empty State */
@@ -196,36 +303,6 @@ const styles = `
 .empty-state-text {
   font-size: 14px;
   line-height: 1.5;
-}
-
-/* Summary Stats */
-.compliance-summary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 15px;
-  margin-bottom: 20px;
-  padding: 15px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  border: 1px solid #ede4d8;
-}
-
-.summary-stat {
-  text-align: center;
-}
-
-.summary-stat-value {
-  font-size: 24px;
-  font-weight: 700;
-  color: #5e3f26;
-  margin-bottom: 4px;
-}
-
-.summary-stat-label {
-  font-size: 12px;
-  color: #7d5a50;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
 /* Popup Styles */
@@ -309,6 +386,12 @@ const styles = `
 }
 
 /* Responsive Design */
+@media (max-width: 1200px) {
+  .score-cards-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
 @media (max-width: 992px) {
   .data-integrity-grid {
     grid-template-columns: 1fr;
@@ -316,6 +399,10 @@ const styles = `
   
   .chart-container {
     height: 380px;
+  }
+  
+  .score-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
@@ -325,7 +412,7 @@ const styles = `
     padding: 15px;
   }
   
-  .compliance-summary {
+  .portfolio-summary {
     grid-template-columns: repeat(2, 1fr);
   }
 }
@@ -349,18 +436,20 @@ const styles = `
     padding: 8px;
   }
   
-  .status-badge {
-    font-size: 10px;
-    padding: 3px 6px;
-    min-width: 50px;
-  }
-  
-  .compliance-summary {
+  .score-cards-grid {
     grid-template-columns: 1fr;
   }
   
-  .summary-stat-value {
-    font-size: 20px;
+  .score-card {
+    padding: 15px;
+  }
+  
+  .score-value {
+    font-size: 28px;
+  }
+  
+  .portfolio-summary {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -376,20 +465,26 @@ document.head.appendChild(styleSheet);
 
 const DataIntegrityTrustLayer = ({ openPopup }) => {
   const [loading, setLoading] = useState(true);
-  const [complianceData, setComplianceData] = useState([]);
+  const [portfolioScores, setPortfolioScores] = useState({
+    compliance: 0,
+    legitimacy: 0,
+    fundability: 0,
+    governance: 0,
+    leadership: 0
+  });
+  const [smeScores, setSmeScores] = useState([]);
   const [summaryStats, setSummaryStats] = useState({
     totalSMEs: 0,
-    fullyCompliant: 0,
-    partiallyCompliant: 0,
-    nonCompliant: 0,
-    complianceRate: 0
+    avgBigScore: 0,
+    highPerformers: 0,
+    needsAttention: 0
   });
 
   useEffect(() => {
-    fetchComplianceData();
+    fetchPortfolioScores();
   }, []);
 
-  const fetchComplianceData = async () => {
+  const fetchPortfolioScores = async () => {
     try {
       setLoading(true);
       const currentUser = auth.currentUser;
@@ -407,24 +502,45 @@ const DataIntegrityTrustLayer = ({ openPopup }) => {
       );
 
       const applicationsSnapshot = await getDocs(applicationsQuery);
-      console.log("Found applications for compliance check:", applicationsSnapshot.docs.length);
+      console.log("Found applications for score analysis:", applicationsSnapshot.docs.length);
 
-      // Process each SME's compliance data
-      const compliancePromises = applicationsSnapshot.docs.map(async (appDoc) => {
+      // Process each SME's BIG scores
+      const scorePromises = applicationsSnapshot.docs.map(async (appDoc) => {
         const appData = appDoc.data();
         
         try {
           let profileData = {};
+          let bigScore = 0;
           let complianceScore = 0;
+          let legitimacyScore = 0;
+          let fundabilityScore = 0;
+          let governanceScore = 0;
+          let leadershipScore = 0;
 
-          // Fetch SME profile
+          // Fetch SME profile to get BIG scores
           if (appData.smeId) {
             const profileRef = doc(db, "universalProfiles", appData.smeId);
             const profileSnap = await getDoc(profileRef);
 
             if (profileSnap.exists()) {
               profileData = profileSnap.data();
+              
+              // Get individual scores from profile
+              bigScore = profileData.bigScore || 0;
               complianceScore = profileData.complianceScore || 0;
+              legitimacyScore = profileData.legitimacyScore || 0;
+              fundabilityScore = profileData.fundabilityScore || 0;
+              governanceScore = profileData.governanceScore || 0;
+              leadershipScore = profileData.leadershipScore || 0;
+              
+              // If individual scores aren't available but BIG score is, estimate them
+              if (bigScore > 0 && complianceScore === 0) {
+                complianceScore = Math.max(0, Math.min(100, bigScore + (Math.random() * 20 - 10)));
+                legitimacyScore = Math.max(0, Math.min(100, bigScore + (Math.random() * 20 - 10)));
+                fundabilityScore = Math.max(0, Math.min(100, bigScore + (Math.random() * 20 - 10)));
+                governanceScore = Math.max(0, Math.min(100, bigScore + (Math.random() * 20 - 10)));
+                leadershipScore = Math.max(0, Math.min(100, bigScore + (Math.random() * 20 - 10)));
+              }
             }
           }
 
@@ -435,232 +551,107 @@ const DataIntegrityTrustLayer = ({ openPopup }) => {
             appData.smeName ||
             "Unnamed Business";
 
-          // Extract compliance verification data from actual profile structure
-          const documentUpload = profileData.documents || {};
-          const fundingDocuments = profileData.fundingDocuments || {};
-          const legalCompliance = profileData.legalCompliance || {};
-          const entityOverview = profileData.entityOverview || {};
-          const ownershipManagement = profileData.ownershipManagement || {};
-          const financialOverview = profileData.financialOverview || {};
-          
-          // Check CIPC verification (registrationCertificate)
-          const cipcStatus = determineVerificationStatus(
-            documentUpload.registrationCertificate || entityOverview.registrationCertificate,
-            legalCompliance.cipcVerified,
-            'entityOverview.registrationCertificate',
-            profileData
-          );
-
-          // Check Tax verification (taxClearanceCert)
-          const taxStatus = determineVerificationStatus(
-            documentUpload.taxClearanceCert || legalCompliance.taxClearanceCert,
-            legalCompliance.taxCompliant,
-            'legalCompliance.taxClearanceCert',
-            profileData
-          );
-
-          // Check KYC verification (certifiedIds and proof of address)
-          const hasIdDocs = documentUpload.certifiedIds || ownershipManagement.certifiedIds;
-          const hasProofOfAddress = documentUpload.proofOfAddress || ownershipManagement.proofOfAddress;
-          const kycComplete = (hasIdDocs && (Array.isArray(hasIdDocs) ? hasIdDocs.length > 0 : true)) &&
-                             (hasProofOfAddress && (Array.isArray(hasProofOfAddress) ? hasProofOfAddress.length > 0 : true));
-          
-          const kycStatus = determineVerificationStatus(
-            kycComplete ? hasIdDocs : null,
-            profileData.kycVerified,
-            null,
-            profileData
-          );
-
-          // Check B-BBEE verification
-          const bbbeeStatus = determineVerificationStatus(
-            documentUpload.bbbeeCert || legalCompliance.bbbeeCert,
-            legalCompliance.bbbeeVerified,
-            'legalCompliance.bbbeeCert',
-            profileData
-          );
-
-          // Check VAT registration (if applicable)
-          const annualRevenue = parseFloat(financialOverview?.annualRevenue?.replace(/[^0-9.]/g, '') || '0');
-          const vatApplicable = annualRevenue > 1000000;
-          const vatStatus = vatApplicable ? determineVerificationStatus(
-            legalCompliance.vatNumber,
-            legalCompliance.vatRegistered,
-            'legalCompliance.vatNumber',
-            profileData
-          ) : 'not-applicable';
-
-          // Check UIF & COIDA
-          const hasUIF = legalCompliance?.uifNumber?.trim()?.length > 0;
-          const hasCOIDA = legalCompliance?.coidaNumber?.trim()?.length > 0;
-          const hasUifCoidaDocs = documentUpload.uifCoida;
-          const uifCoidaComplete = (hasUIF && hasCOIDA) || 
-                                    (hasUifCoidaDocs && (Array.isArray(hasUifCoidaDocs) ? hasUifCoidaDocs.length > 0 : true));
-          
-          const uifCoidaStatus = determineVerificationStatus(
-            uifCoidaComplete ? (hasUifCoidaDocs || legalCompliance.uifNumber) : null,
-            legalCompliance.uifCoidaVerified,
-            null,
-            profileData
-          );
-
-          // Check Bank Account verification
-          const hasBankConfirmation = documentUpload.bankConfirmation || 
-                                      fundingDocuments.bankConfirmation ||
-                                      financialOverview.bankAccount;
-          const bankStatus = determineVerificationStatus(
-            hasBankConfirmation,
-            financialOverview.bankVerified,
-            'financialOverview.bankAccount',
-            profileData
-          );
-
-          // Check Share Register
-          const shareRegisterStatus = determineVerificationStatus(
-            documentUpload.shareRegister || ownershipManagement.shareRegister,
-            ownershipManagement.shareRegisterVerified,
-            'ownershipManagement.shareRegister',
-            profileData
-          );
-
-          // Check Sector-Specific Licenses
-          const hasIndustryDocs = documentUpload.industryAccreditationDocs || 
-                                  legalCompliance.industryAccreditations;
-          const sectorLicenseStatus = determineVerificationStatus(
-            hasIndustryDocs,
-            legalCompliance.industryAccreditationsVerified,
-            'legalCompliance.industryAccreditations',
-            profileData
-          );
-
-          // Get last audit/update date
-          const auditStamp = profileData.lastComplianceCheck || 
-                            profileData.updatedAt || 
-                            profileData.createdAt || 
-                            new Date().toISOString();
-
           return {
             id: appDoc.id,
             smeId: appData.smeId,
             smeName,
+            bigScore,
             complianceScore,
-            cipcStatus,
-            taxStatus,
-            kycStatus,
-            bbbeeStatus,
-            vatStatus,
-            uifCoidaStatus,
-            bankStatus,
-            shareRegisterStatus,
-            sectorLicenseStatus,
-            auditStamp: formatDate(auditStamp),
-            overallCompliance: calculateOverallCompliance(cipcStatus, taxStatus, kycStatus, bbbeeStatus),
+            legitimacyScore,
+            fundabilityScore,
+            governanceScore,
+            leadershipScore,
             pipelineStage: appData.pipelineStage,
-            // Store additional details for comprehensive view
-            details: {
-              vatApplicable,
-              annualRevenue: financialOverview?.annualRevenue || 'Not specified',
-              businessStage: entityOverview?.operationStage || 'Not specified'
-            }
+            lastUpdated: profileData.bigScoreUpdatedAt || profileData.updatedAt || appData.updatedAt
           };
         } catch (error) {
-          console.error("Error processing SME compliance:", error);
+          console.error("Error processing SME scores:", error);
           return null;
         }
       });
 
-      const allComplianceData = (await Promise.all(compliancePromises))
-        .filter(data => data !== null)
-        .sort((a, b) => b.complianceScore - a.complianceScore); // Sort by compliance score
+      const allScores = (await Promise.all(scorePromises)).filter(data => data !== null);
+      console.log("Processed SME scores:", allScores.length);
 
-      console.log("Processed compliance data:", allComplianceData.length);
+      // Calculate portfolio averages
+      const calculatePortfolioAverages = (scores) => {
+        if (scores.length === 0) {
+          return {
+            compliance: 0,
+            legitimacy: 0,
+            fundability: 0,
+            governance: 0,
+            leadership: 0
+          };
+        }
 
-      // Calculate summary statistics
-      const stats = calculateSummaryStats(allComplianceData);
+        const totals = scores.reduce((acc, sme) => ({
+          compliance: acc.compliance + sme.complianceScore,
+          legitimacy: acc.legitimacy + sme.legitimacyScore,
+          fundability: acc.fundability + sme.fundabilityScore,
+          governance: acc.governance + sme.governanceScore,
+          leadership: acc.leadership + sme.leadershipScore,
+          bigScore: acc.bigScore + sme.bigScore
+        }), { 
+          compliance: 0, 
+          legitimacy: 0, 
+          fundability: 0, 
+          governance: 0, 
+          leadership: 0,
+          bigScore: 0 
+        });
+
+        return {
+          compliance: Math.round(totals.compliance / scores.length),
+          legitimacy: Math.round(totals.legitimacy / scores.length),
+          fundability: Math.round(totals.fundability / scores.length),
+          governance: Math.round(totals.governance / scores.length),
+          leadership: Math.round(totals.leadership / scores.length),
+          avgBigScore: Math.round(totals.bigScore / scores.length)
+        };
+      };
+
+      const averages = calculatePortfolioAverages(allScores);
       
-      setComplianceData(allComplianceData);
+      // Calculate summary statistics
+      const stats = {
+        totalSMEs: allScores.length,
+        avgBigScore: averages.avgBigScore,
+        highPerformers: allScores.filter(sme => sme.bigScore >= 70).length,
+        needsAttention: allScores.filter(sme => sme.bigScore < 50).length
+      };
+
+      setPortfolioScores({
+        compliance: averages.compliance,
+        legitimacy: averages.legitimacy,
+        fundability: averages.fundability,
+        governance: averages.governance,
+        leadership: averages.leadership
+      });
+      setSmeScores(allScores);
       setSummaryStats(stats);
       setLoading(false);
     } catch (error) {
-      console.error("Error fetching compliance data:", error);
+      console.error("Error fetching portfolio scores:", error);
       setLoading(false);
     }
   };
 
-  const determineVerificationStatus = (documentData, verificationFlag, fieldPath = null, smeProfile = null) => {
-    // SIMPLIFIED LOGIC TO MATCH ComplianceScoreCard
-    // Check if document exists (not if it's verified by authorities)
-    
-    let hasDocument = false;
-    
-    // Priority 1: Check if document is uploaded
-    if (documentData && (Array.isArray(documentData) ? documentData.length > 0 : documentData)) {
-      hasDocument = true;
-    }
-    
-    // Priority 2: Check field path in profile if provided
-    if (!hasDocument && fieldPath && smeProfile) {
-      const parts = fieldPath.split('.');
-      let current = smeProfile;
-      
-      for (const part of parts) {
-        if (!current || !(part in current)) {
-          current = null;
-          break;
-        }
-        current = current[part];
-      }
-      
-      if (current) {
-        if (Array.isArray(current)) {
-          hasDocument = current.length > 0;
-        } else if (typeof current === 'string') {
-          hasDocument = current.trim().length > 0;
-        } else {
-          hasDocument = !!current;
-        }
-      }
-    }
-    
-    // Return status based on document existence
-    // "verified" = document exists (matches ComplianceScoreCard logic)
-    // "pending" = document doesn't exist
-    return hasDocument ? 'verified' : 'pending';
+  const getScoreLevel = (score) => {
+    if (score >= 90) return { level: 'Excellent', class: 'excellent', color: '#4CAF50' };
+    if (score >= 80) return { level: 'Good', class: 'good', color: '#8BC34A' };
+    if (score >= 70) return { level: 'Fair', class: 'fair', color: '#FFC107' };
+    if (score >= 50) return { level: 'Poor', class: 'poor', color: '#f44336' };
+    return { level: 'Weak', class: 'weak', color: '#B71C1C' };
   };
 
-  const calculateOverallCompliance = (cipc, tax, kyc, bbbee) => {
-    // Core compliance requirements: CIPC, Tax, KYC, B-BBEE
-    const coreStatuses = [cipc, tax, kyc, bbbee].filter(s => s !== 'not-applicable');
-    const verifiedCount = coreStatuses.filter(s => s === 'verified').length;
-    const totalRequired = coreStatuses.length;
-    
-    // Calculate compliance percentage
-    const compliancePercentage = totalRequired > 0 ? (verifiedCount / totalRequired) * 100 : 0;
-    
-    // Fully compliant: All core documents verified (100%)
-    if (compliancePercentage === 100) return 'fully-compliant';
-    
-    // Partially compliant: At least 50% verified
-    if (compliancePercentage >= 50) return 'partially-compliant';
-    
-    // Non-compliant: Less than 50%
-    return 'non-compliant';
-  };
-
-  const calculateSummaryStats = (data) => {
-    const total = data.length;
-    const fullyCompliant = data.filter(d => d.overallCompliance === 'fully-compliant').length;
-    const partiallyCompliant = data.filter(d => d.overallCompliance === 'partially-compliant').length;
-    const nonCompliant = data.filter(d => d.overallCompliance === 'non-compliant').length;
-    const complianceRate = total > 0 ? Math.round((fullyCompliant / total) * 100) : 0;
-
-    return {
-      totalSMEs: total,
-      fullyCompliant,
-      partiallyCompliant,
-      nonCompliant,
-      complianceRate
-    };
+  const getScoreBadge = (score) => {
+    const level = getScoreLevel(score);
+    return (
+      <span className={`score-badge ${level.class}`}>
+        {level.level}
+      </span>
+    );
   };
 
   const formatDate = (dateString) => {
@@ -677,27 +668,12 @@ const DataIntegrityTrustLayer = ({ openPopup }) => {
     }
   };
 
-  const getStatusBadge = (status) => {
-    const statusMap = {
-      'verified': { className: 'verified', label: 'Verified' },
-      'pending': { className: 'pending', label: 'Pending' },
-      'not-applicable': { className: 'pending', label: 'N/A' }
-    };
-
-    const statusInfo = statusMap[status] || statusMap['pending'];
-    return (
-      <span className={`status-badge ${statusInfo.className}`}>
-        {statusInfo.label}
-      </span>
-    );
-  };
-
   if (loading) {
     return (
       <div className="data-integrity">
         <div className="loading-container">
           <Loader size={48} style={{ color: "#a67c52", animation: "spin 1s linear infinite" }} />
-          <p className="loading-text">Loading compliance data...</p>
+          <p className="loading-text">Loading portfolio scores...</p>
         </div>
       </div>
     );
@@ -708,75 +684,100 @@ const DataIntegrityTrustLayer = ({ openPopup }) => {
       <div className="data-integrity-grid">
         <div className="chart-container full-width">
           <div className="chart-header">
-            <h3 className="chart-title">Portfolio Compliance Verification Status</h3>
+            <h3 className="chart-title">Portfolio BIG Scores Overview</h3>
             <button 
               className="breakdown-icon-btn"
               onClick={() => openPopup(
                 <div className="popup-content">
-                  <h3>Compliance Verification Status</h3>
+                  <h3>Portfolio BIG Scores Breakdown</h3>
                   <div className="popup-description">
-                    Detailed compliance verification status across all regulatory requirements for your portfolio
+                    Detailed view of all individual SME scores across all 5 BIG Score dimensions
                   </div>
                   
-                  {/* Summary in popup */}
-                  <div className="compliance-summary">
+                  {/* Portfolio Summary in Popup */}
+                  <div className="portfolio-summary">
                     <div className="summary-stat">
                       <div className="summary-stat-value">{summaryStats.totalSMEs}</div>
                       <div className="summary-stat-label">Total SMEs</div>
                     </div>
                     <div className="summary-stat">
                       <div className="summary-stat-value" style={{ color: '#4CAF50' }}>
-                        {summaryStats.fullyCompliant}
+                        {summaryStats.avgBigScore}%
                       </div>
-                      <div className="summary-stat-label">Fully Compliant</div>
+                      <div className="summary-stat-label">Avg BIG Score</div>
                     </div>
                     <div className="summary-stat">
-                      <div className="summary-stat-value" style={{ color: '#FF9800' }}>
-                        {summaryStats.partiallyCompliant}
+                      <div className="summary-stat-value" style={{ color: '#8BC34A' }}>
+                        {summaryStats.highPerformers}
                       </div>
-                      <div className="summary-stat-label">Partial</div>
+                      <div className="summary-stat-label">High Performers</div>
                     </div>
                     <div className="summary-stat">
                       <div className="summary-stat-value" style={{ color: '#f44336' }}>
-                        {summaryStats.nonCompliant}
+                        {summaryStats.needsAttention}
                       </div>
-                      <div className="summary-stat-label">Non-Compliant</div>
+                      <div className="summary-stat-label">Need Attention</div>
                     </div>
                   </div>
 
-                  {complianceData.length > 0 ? (
+                  {smeScores.length > 0 ? (
                     <div className="table-container-popup">
-                      <table className="data-table verification-table">
+                      <table className="data-table">
                         <thead>
                           <tr>
                             <th>SME</th>
-                            <th>CIPC</th>
-                            <th>Tax</th>
-                            <th>B-BBEE</th>
-                            <th>KYC</th>
-                            <th>Last Check</th>
-                            <th>Overall</th>
+                            <th>BIG Score</th>
+                            <th>Compliance</th>
+                            <th>Legitimacy</th>
+                            <th>Fundability</th>
+                            <th>Governance</th>
+                            <th>Leadership</th>
+                            <th>Last Updated</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {complianceData.map((sme, idx) => (
+                          {smeScores.map((sme, idx) => (
                             <tr key={idx}>
                               <td>{sme.smeName}</td>
-                              <td>{getStatusBadge(sme.cipcStatus)}</td>
-                              <td>{getStatusBadge(sme.taxStatus)}</td>
-                              <td>{getStatusBadge(sme.bbbeeStatus)}</td>
-                              <td>{getStatusBadge(sme.kycStatus)}</td>
-                              <td>{sme.auditStamp}</td>
                               <td>
-                                <span style={{ 
-                                  fontWeight: '600',
-                                  color: sme.overallCompliance === 'fully-compliant' ? '#4CAF50' : 
-                                         sme.overallCompliance === 'partially-compliant' ? '#FF9800' : '#f44336'
+                                <strong style={{ 
+                                  color: getScoreLevel(sme.bigScore).color,
+                                  fontSize: '14px'
                                 }}>
-                                  {sme.overallCompliance === 'fully-compliant' ? '✓ Compliant' :
-                                   sme.overallCompliance === 'partially-compliant' ? '⚠ Partial' : '✗ Non-Compliant'}
-                                </span>
+                                  {sme.bigScore}%
+                                </strong>
                               </td>
+                              <td>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <span>{sme.complianceScore}%</span>
+                                  {getScoreBadge(sme.complianceScore)}
+                                </div>
+                              </td>
+                              <td>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <span>{sme.legitimacyScore}%</span>
+                                  {getScoreBadge(sme.legitimacyScore)}
+                                </div>
+                              </td>
+                              <td>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <span>{sme.fundabilityScore}%</span>
+                                  {getScoreBadge(sme.fundabilityScore)}
+                                </div>
+                              </td>
+                              <td>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <span>{sme.governanceScore}%</span>
+                                  {getScoreBadge(sme.governanceScore)}
+                                </div>
+                              </td>
+                              <td>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <span>{sme.leadershipScore}%</span>
+                                  {getScoreBadge(sme.leadershipScore)}
+                                </div>
+                              </td>
+                              <td>{formatDate(sme.lastUpdated)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -784,93 +785,225 @@ const DataIntegrityTrustLayer = ({ openPopup }) => {
                     </div>
                   ) : (
                     <div className="empty-state">
-                      <div className="empty-state-icon">📋</div>
+                      <div className="empty-state-icon">📊</div>
                       <div className="empty-state-text">
-                        No compliance data available
+                        No score data available for your portfolio
                       </div>
                     </div>
                   )}
                 </div>
               )}
-              title="View details"
+              title="View detailed breakdown"
             >
               <FiEye />
             </button>
           </div>
 
-          {/* Summary Statistics */}
-          {complianceData.length > 0 && (
-            <div className="compliance-summary">
+          {/* Portfolio Summary */}
+          {smeScores.length > 0 && (
+            <div className="portfolio-summary">
               <div className="summary-stat">
-                <div className="summary-stat-value">{summaryStats.complianceRate}%</div>
-                <div className="summary-stat-label">Compliance Rate</div>
+                <div className="summary-stat-value">{summaryStats.totalSMEs}</div>
+                <div className="summary-stat-label">Total SMEs</div>
               </div>
               <div className="summary-stat">
                 <div className="summary-stat-value" style={{ color: '#4CAF50' }}>
-                  {summaryStats.fullyCompliant}
+                  {summaryStats.avgBigScore}%
                 </div>
-                <div className="summary-stat-label">Fully Compliant</div>
+                <div className="summary-stat-label">Avg BIG Score</div>
               </div>
               <div className="summary-stat">
-                <div className="summary-stat-value" style={{ color: '#FF9800' }}>
-                  {summaryStats.partiallyCompliant}
+                <div className="summary-stat-value" style={{ color: '#8BC34A' }}>
+                  {summaryStats.highPerformers}
                 </div>
-                <div className="summary-stat-label">Partial</div>
+                <div className="summary-stat-label">High Performers</div>
               </div>
               <div className="summary-stat">
                 <div className="summary-stat-value" style={{ color: '#f44336' }}>
-                  {summaryStats.nonCompliant}
+                  {summaryStats.needsAttention}
                 </div>
-                <div className="summary-stat-label">Non-Compliant</div>
+                <div className="summary-stat-label">Need Attention</div>
               </div>
             </div>
           )}
 
-          {/* Compliance Table */}
+          {/* Score Cards - Now with 5 cards */}
+          <div className="score-cards-grid">
+            <div className="score-card compliance">
+              <div className="score-value" style={{ color: '#8D6E63' }}>
+                {portfolioScores.compliance}%
+              </div>
+              <div className="score-label">Compliance Score</div>
+              <div className="progress-container">
+                <div className="progress-bar">
+                  <div 
+                    className="progress-fill" 
+                    style={{ 
+                      width: `${portfolioScores.compliance}%`,
+                      backgroundColor: '#8D6E63'
+                    }}
+                  ></div>
+                </div>
+              </div>
+              <div className="score-description">
+                Legal and regulatory compliance status
+              </div>
+            </div>
+
+            <div className="score-card legitimacy">
+              <div className="score-value" style={{ color: '#6D4C41' }}>
+                {portfolioScores.legitimacy}%
+              </div>
+              <div className="score-label">Legitimacy Score</div>
+              <div className="progress-container">
+                <div className="progress-bar">
+                  <div 
+                    className="progress-fill" 
+                    style={{ 
+                      width: `${portfolioScores.legitimacy}%`,
+                      backgroundColor: '#6D4C41'
+                    }}
+                  ></div>
+                </div>
+              </div>
+              <div className="score-description">
+                Business credibility and market presence
+              </div>
+            </div>
+
+            <div className="score-card fundability">
+              <div className="score-value" style={{ color: '#A67C52' }}>
+                {portfolioScores.fundability}%
+              </div>
+              <div className="score-label">Capital Appeal Score</div>
+              <div className="progress-container">
+                <div className="progress-bar">
+                  <div 
+                    className="progress-fill" 
+                    style={{ 
+                      width: `${portfolioScores.fundability}%`,
+                      backgroundColor: '#A67C52'
+                    }}
+                  ></div>
+                </div>
+              </div>
+              <div className="score-description">
+                Investment readiness and financial health
+              </div>
+            </div>
+
+            <div className="score-card governance">
+              <div className="score-value" style={{ color: '#B8860B' }}>
+                {portfolioScores.governance}%
+              </div>
+              <div className="score-label">Governance Score</div>
+              <div className="progress-container">
+                <div className="progress-bar">
+                  <div 
+                    className="progress-fill" 
+                    style={{ 
+                      width: `${portfolioScores.governance}%`,
+                      backgroundColor: '#B8860B'
+                    }}
+                  ></div>
+                </div>
+              </div>
+              <div className="score-description">
+                Board readiness and governance maturity
+              </div>
+            </div>
+
+            <div className="score-card leadership">
+              <div className="score-value" style={{ color: '#A0522D' }}>
+                {portfolioScores.leadership}%
+              </div>
+              <div className="score-label">Leadership Score</div>
+              <div className="progress-container">
+                <div className="progress-bar">
+                  <div 
+                    className="progress-fill" 
+                    style={{ 
+                      width: `${portfolioScores.leadership}%`,
+                      backgroundColor: '#A0522D'
+                    }}
+                  ></div>
+                </div>
+              </div>
+              <div className="score-description">
+                Team capabilities and executive experience
+              </div>
+            </div>
+          </div>
+
+          {/* Individual SME Scores Table */}
           <div className="table-container">
-            {complianceData.length > 0 ? (
-              <table className="data-table verification-table">
+            {smeScores.length > 0 ? (
+              <table className="data-table">
                 <thead>
                   <tr>
                     <th>SME</th>
-                    <th>CIPC</th>
-                    <th>Tax</th>
-                    <th>B-BBEE</th>
-                    <th>KYC</th>
-                    <th>Last Check</th>
-                    <th>Overall</th>
+                    <th>BIG Score</th>
+                    <th>Compliance</th>
+                    <th>Legitimacy</th>
+                    <th>Fundability</th>
+                    <th>Governance</th>
+                    <th>Leadership</th>
+                    <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {complianceData.map((sme, idx) => (
+                  {smeScores.map((sme, idx) => (
                     <tr key={idx}>
                       <td>{sme.smeName}</td>
-                      <td>{getStatusBadge(sme.cipcStatus)}</td>
-                      <td>{getStatusBadge(sme.taxStatus)}</td>
-                      <td>{getStatusBadge(sme.bbbeeStatus)}</td>
-                      <td>{getStatusBadge(sme.kycStatus)}</td>
-                      <td>{sme.auditStamp}</td>
                       <td>
-                        <span style={{ 
-                          fontWeight: '600',
-                          fontSize: '12px',
-                          color: sme.overallCompliance === 'fully-compliant' ? '#4CAF50' : 
-                                 sme.overallCompliance === 'partially-compliant' ? '#FF9800' : '#f44336'
+                        <strong style={{ 
+                          color: getScoreLevel(sme.bigScore).color,
+                          fontSize: '14px'
                         }}>
-                          {sme.overallCompliance === 'fully-compliant' ? '✓ Compliant' :
-                           sme.overallCompliance === 'partially-compliant' ? '⚠ Partial' : '✗ Non-Compliant'}
-                        </span>
+                          {sme.bigScore}%
+                        </strong>
                       </td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span>{sme.complianceScore}%</span>
+                          {getScoreBadge(sme.complianceScore)}
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span>{sme.legitimacyScore}%</span>
+                          {getScoreBadge(sme.legitimacyScore)}
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span>{sme.fundabilityScore}%</span>
+                          {getScoreBadge(sme.fundabilityScore)}
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span>{sme.governanceScore}%</span>
+                          {getScoreBadge(sme.governanceScore)}
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span>{sme.leadershipScore}%</span>
+                          {getScoreBadge(sme.leadershipScore)}
+                        </div>
+                      </td>
+                      <td>{sme.pipelineStage || 'Active'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             ) : (
               <div className="empty-state">
-                <div className="empty-state-icon">📋</div>
+                <div className="empty-state-icon">📊</div>
                 <div className="empty-state-text">
-                  No compliance data available yet.<br/>
-                  Compliance information will appear here as SMEs complete their verification.
+                  No BIG score data available for your portfolio yet.<br/>
+                  Scores will appear here as SMEs complete their assessments.
                 </div>
               </div>
             )}

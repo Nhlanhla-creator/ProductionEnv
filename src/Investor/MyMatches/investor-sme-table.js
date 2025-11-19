@@ -1874,7 +1874,7 @@ const modalOverlayStyle = {
               <th>Sector</th>
               <th>Stage</th>
               <th>Funding Required</th>
-              <th>Equity Offered</th>
+              <th>Funding Instrument</th>
               <th>Gurantees</th>
               <th>Support Required</th>
               <th>Application Date</th>

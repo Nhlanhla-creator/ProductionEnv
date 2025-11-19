@@ -1,7 +1,8 @@
 // tabs/ExitLiquidityMetrics.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Bar, Line, Doughnut } from 'react-chartjs-2';
 import { FiEye, FiArrowUp, FiArrowDown } from 'react-icons/fi';
+import { Loader } from 'lucide-react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -14,6 +15,8 @@ import {
   Tooltip,
   Legend
 } from 'chart.js';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { db, auth } from '../../firebaseConfig';
 
 // Register ChartJS components
 ChartJS.register(
@@ -32,6 +35,20 @@ ChartJS.register(
 const styles = `
 .exit-liquidity {
   width: 100%;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  gap: 16px;
+}
+
+.loading-text {
+  color: #7d5a50;
+  font-size: 16px;
 }
 
 .time-view-controls {
@@ -96,7 +113,7 @@ const styles = `
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
   display: flex;
   flex-direction: column;
-  height: 420px;
+  height: 380px;
   position: relative;
   overflow: hidden;
   transition: none !important;
@@ -169,7 +186,7 @@ const styles = `
 
 .chart-area {
   flex-grow: 1;
-  min-height: 240px;
+  min-height: 280px;
   position: relative;
   margin-bottom: 10px;
 }
@@ -211,39 +228,26 @@ const styles = `
   color: #f44336;
 }
 
-/* SME Graduation Infographic */
-.graduation-simple {
+.empty-state {
   display: flex;
   flex-direction: column;
-  height: 100%;
-}
-
-.graduation-main-simple {
-  text-align: center;
-  padding: 30px 20px;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border-radius: 12px;
-  border: 3px solid #7d5a36;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #7d5a50;
+  text-align: center;
+  padding: 20px;
 }
 
-.graduation-value-simple {
-  font-size: 42px;
-  font-weight: 700;
-  color: #5e3f26;
-  margin-bottom: 8px;
-  line-height: 1;
+.empty-state-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
 }
 
-.graduation-label-simple {
-  font-size: 16px;
-  color: #666;
-  font-weight: 500;
-  margin-bottom: 6px;
+.empty-state-text {
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 /* Popup Styles */
@@ -358,41 +362,6 @@ const styles = `
   font-size: 14px;
 }
 
-/* Graduation Popup Styles */
-.graduation-popup {
-  display: flex;
-  flex-direction: column;
-  gap: 25px;
-}
-
-.graduation-main-popup {
-  text-align: center;
-  padding: 25px;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border-radius: 12px;
-  border: 3px solid #7d5a36;
-}
-
-.graduation-value {
-  font-size: 48px;
-  font-weight: 700;
-  color: #5e3f26;
-  margin-bottom: 10px;
-}
-
-.graduation-label {
-  font-size: 18px;
-  color: #666;
-  font-weight: 500;
-  margin-bottom: 8px;
-}
-
-.graduation-subtitle {
-  font-size: 14px;
-  color: #7d5a36;
-  font-weight: 500;
-}
-
 /* Responsive Design */
 @media (max-width: 992px) {
   .exit-charts-grid {
@@ -400,13 +369,13 @@ const styles = `
   }
   
   .chart-container {
-    height: 380px;
+    height: 350px;
   }
 }
 
 @media (max-width: 768px) {
   .chart-container {
-    height: 350px;
+    height: 320px;
     padding: 15px;
   }
   
@@ -421,29 +390,21 @@ const styles = `
     justify-content: center;
     text-align: center;
   }
-  
-  .graduation-value-simple {
-    font-size: 36px;
-  }
 }
 
 @media (max-width: 576px) {
   .chart-container {
     padding: 15px;
-    height: 320px;
+    height: 300px;
   }
   
   .exit-charts-grid {
     padding: 0 5px;
   }
-  
-  .graduation-value-simple {
-    font-size: 32px;
-  }
-  
-  .graduation-label-simple {
-    font-size: 14px;
-  }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 `;
 
@@ -464,8 +425,23 @@ const staticBarOptions = {
   animation: false,
   plugins: { legend: { display: false } },
   scales: {
-    x: { grid: { display: false } },
-    y: { beginAtZero: true, grid: { drawBorder: false } }
+    x: { 
+      grid: { display: false },
+      ticks: {
+        font: {
+          size: 11
+        }
+      }
+    },
+    y: { 
+      beginAtZero: true, 
+      grid: { drawBorder: false },
+      ticks: {
+        font: {
+          size: 11
+        }
+      }
+    }
   }
 };
 
@@ -478,8 +454,23 @@ const staticLineOptions = {
     point: { radius: 3 }
   },
   scales: {
-    x: { grid: { display: false } },
-    y: { beginAtZero: true, grid: { drawBorder: false } }
+    x: { 
+      grid: { display: false },
+      ticks: {
+        font: {
+          size: 11
+        }
+      }
+    },
+    y: { 
+      beginAtZero: true, 
+      grid: { drawBorder: false },
+      ticks: {
+        font: {
+          size: 11
+        }
+      }
+    }
   }
 };
 
@@ -487,26 +478,236 @@ const staticPieOptions = {
   responsive: true,
   maintainAspectRatio: false,
   animation: false,
-  plugins: { legend: { position: 'bottom' } }
+  plugins: { 
+    legend: { 
+      position: 'bottom',
+      labels: {
+        font: {
+          size: 12
+        }
+      }
+    } 
+  }
 };
 
 const ExitLiquidityMetrics = ({ openPopup }) => {
   const [timeToExitView, setTimeToExitView] = useState('Quarterly');
+  const [loading, setLoading] = useState(true);
+  const [exitData, setExitData] = useState({
+    exitHistory: { q1: 0, q2: 0, q3: 0, q4: 0 },
+    timeToExit: { q1: 0, q2: 0, q3: 0, q4: 0 },
+    exitMultiples: [],
+    reinvestmentRatio: { reinvested: 0, held: 100 }
+  });
 
-  // Time view data
-  const timeToExitData = {
-    Monthly: [34, 33, 32, 31, 31, 30],
-    Quarterly: [34, 32, 31, 30],
-    Yearly: [35, 33, 31, 29]
+  useEffect(() => {
+    fetchExitData();
+  }, []);
+
+  const fetchExitData = async () => {
+    try {
+      setLoading(true);
+      const currentUser = auth.currentUser;
+      
+      if (!currentUser) {
+        console.log("No authenticated user");
+        setLoading(false);
+        return;
+      }
+
+      // Fetch investor's portfolio SMEs
+      const applicationsQuery = query(
+        collection(db, "investorApplications"),
+        where("funderId", "==", currentUser.uid)
+      );
+
+      const applicationsSnapshot = await getDocs(applicationsQuery);
+      console.log("Found applications for exit analysis:", applicationsSnapshot.docs.length);
+
+      // Process each SME's exit/liquidity data
+      const exitPromises = applicationsSnapshot.docs.map(async (appDoc) => {
+        const appData = appDoc.data();
+        
+        try {
+          let profileData = {};
+
+          // Fetch SME profile
+          if (appData.smeId) {
+            const profileRef = doc(db, "universalProfiles", appData.smeId);
+            const profileSnap = await getDoc(profileRef);
+
+            if (profileSnap.exists()) {
+              profileData = profileSnap.data();
+            }
+          }
+
+          const smeName =
+            profileData.entityOverview?.tradingName ||
+            profileData.entityOverview?.registeredName ||
+            appData.companyName ||
+            appData.smeName ||
+            "Unnamed Business";
+
+          // Extract exit metrics
+          const pipelineStage = appData.pipelineStage || '';
+          const fundingData = appData.fundingData || {};
+          
+          // Parse dates
+          const createdAt = appData.createdAt?.toDate ? appData.createdAt.toDate() : 
+                           (appData.createdAt ? new Date(appData.createdAt) : new Date());
+          const updatedAt = appData.updatedAt?.toDate ? appData.updatedAt.toDate() : 
+                           (appData.updatedAt ? new Date(appData.updatedAt) : new Date());
+          const exitDate = appData.exitDate?.toDate ? appData.exitDate.toDate() : 
+                          (appData.exitDate ? new Date(appData.exitDate) : null);
+          const disbursementDate = fundingData.disbursementDate?.toDate ? fundingData.disbursementDate.toDate() :
+                                  (fundingData.disbursementDate ? new Date(fundingData.disbursementDate) : null);
+
+          // Determine if exited
+          const isExited = pipelineStage.toLowerCase().includes('exit') || 
+                          pipelineStage.toLowerCase().includes('complete') ||
+                          pipelineStage === 'Deal Complete' ||
+                          exitDate !== null;
+
+          // Calculate time to exit (months)
+          let monthsToExit = 0;
+          if (isExited && disbursementDate) {
+            const exitDateFinal = exitDate || updatedAt;
+            monthsToExit = Math.round((exitDateFinal - disbursementDate) / (1000 * 60 * 60 * 24 * 30));
+          }
+
+          // Determine quarter based on exit date or current date
+          const dateForQuarter = exitDate || createdAt;
+          const month = dateForQuarter.getMonth();
+          const quarter = Math.floor(month / 3) + 1; // 1-4
+
+          // Calculate exit multiple (return on investment)
+          const amountInvested = parseFloat(fundingData.amountApproved || appData.amountApproved || 0);
+          const amountReturned = parseFloat(appData.amountReturned || amountInvested * 1.5); // Default 1.5x if not specified
+          const exitMultiple = amountInvested > 0 ? (amountReturned / amountInvested) : 0;
+
+          // Check reinvestment status
+          const hasReinvested = appData.reinvested === true || 
+                               (isExited && appData.portfolioReinvestment === true);
+
+          return {
+            id: appDoc.id,
+            smeId: appData.smeId,
+            smeName,
+            pipelineStage,
+            isExited,
+            exitDate: exitDate || updatedAt,
+            quarter,
+            monthsToExit,
+            exitMultiple,
+            amountInvested,
+            amountReturned,
+            hasReinvested,
+            createdAt,
+            disbursementDate,
+            month: dateForQuarter.getMonth() // Add month for monthly view
+          };
+        } catch (error) {
+          console.error("Error processing SME exit data:", error);
+          return null;
+        }
+      });
+
+      const allExitData = (await Promise.all(exitPromises)).filter(data => data !== null);
+      console.log("Processed exit data:", allExitData.length);
+
+      // Calculate portfolio-wide exit metrics
+      const metrics = calculateExitMetrics(allExitData);
+      setExitData(metrics);
+
+      setLoading(false);
+    } catch (error) {
+      console.error("Error fetching exit data:", error);
+      setLoading(false);
+    }
   };
 
-  const getTimeData = (view, monthlyData, quarterlyData, yearlyData) => {
-    switch (view) {
-      case 'Monthly': return monthlyData;
-      case 'Quarterly': return quarterlyData;
-      case 'Yearly': return yearlyData;
-      default: return quarterlyData;
+  const calculateExitMetrics = (allData) => {
+    if (allData.length === 0) {
+      return {
+        exitHistory: { q1: 0, q2: 0, q3: 0, q4: 0 },
+        timeToExit: { q1: 0, q2: 0, q3: 0, q4: 0 },
+        exitMultiples: [],
+        reinvestmentRatio: { reinvested: 0, held: 100 }
+      };
     }
+
+    // 1. Calculate Exit/Repayment History by Quarter
+    const exitedSMEs = allData.filter(sme => sme.isExited);
+    const exitsByQuarter = { q1: 0, q2: 0, q3: 0, q4: 0 };
+    const exitsByMonth = Array(12).fill(0); // For monthly data
+    
+    exitedSMEs.forEach(sme => {
+      const qKey = `q${sme.quarter}`;
+      if (exitsByQuarter[qKey] !== undefined) {
+        exitsByQuarter[qKey]++;
+      }
+      // Count by month
+      if (sme.month !== undefined && sme.month >= 0 && sme.month < 12) {
+        exitsByMonth[sme.month]++;
+      }
+    });
+
+    // 2. Calculate Average Time-to-Exit by Quarter
+    const timeByQuarter = { q1: [], q2: [], q3: [], q4: [] };
+    const timeByMonth = Array(12).fill().map(() => []); // For monthly data
+    
+    exitedSMEs.forEach(sme => {
+      if (sme.monthsToExit > 0) {
+        const qKey = `q${sme.quarter}`;
+        if (timeByQuarter[qKey]) {
+          timeByQuarter[qKey].push(sme.monthsToExit);
+        }
+        // Time by month
+        if (sme.month !== undefined && sme.month >= 0 && sme.month < 12) {
+          timeByMonth[sme.month].push(sme.monthsToExit);
+        }
+      }
+    });
+
+    const avgTimeToExit = {
+      q1: timeByQuarter.q1.length > 0 ? Math.round(timeByQuarter.q1.reduce((a, b) => a + b, 0) / timeByQuarter.q1.length) : 0,
+      q2: timeByQuarter.q2.length > 0 ? Math.round(timeByQuarter.q2.reduce((a, b) => a + b, 0) / timeByQuarter.q2.length) : 0,
+      q3: timeByQuarter.q3.length > 0 ? Math.round(timeByQuarter.q3.reduce((a, b) => a + b, 0) / timeByQuarter.q3.length) : 0,
+      q4: timeByQuarter.q4.length > 0 ? Math.round(timeByQuarter.q4.reduce((a, b) => a + b, 0) / timeByQuarter.q4.length) : 0
+    };
+
+    // Calculate average time by month
+    const avgTimeByMonth = timeByMonth.map(monthData => 
+      monthData.length > 0 ? Math.round(monthData.reduce((a, b) => a + b, 0) / monthData.length) : 0
+    );
+
+    // 3. Calculate Exit Multiples for Top 5 Exits
+    const exitMultiples = exitedSMEs
+      .filter(sme => sme.exitMultiple > 0)
+      .sort((a, b) => b.exitMultiple - a.exitMultiple)
+      .slice(0, 5)
+      .map(sme => ({
+        name: sme.smeName,
+        multiple: sme.exitMultiple.toFixed(1)
+      }));
+
+    // 4. Calculate Reinvestment Ratio
+    const totalExited = exitedSMEs.length;
+    const reinvestedCount = exitedSMEs.filter(sme => sme.hasReinvested).length;
+    
+    const reinvestmentRatio = {
+      reinvested: totalExited > 0 ? Math.round((reinvestedCount / totalExited) * 100) : 0,
+      held: totalExited > 0 ? Math.round(((totalExited - reinvestedCount) / totalExited) * 100) : 100
+    };
+
+    return {
+      exitHistory: exitsByQuarter,
+      exitHistoryMonthly: exitsByMonth,
+      timeToExit: avgTimeToExit,
+      timeToExitMonthly: avgTimeByMonth,
+      exitMultiples,
+      reinvestmentRatio
+    };
   };
 
   // Time View Selector Component
@@ -525,7 +726,7 @@ const ExitLiquidityMetrics = ({ openPopup }) => {
     </div>
   );
 
-  // Data generation functions
+  // Data generation functions with time view support
   const generateBarData = (labels, data, label, colorIndex) => ({
     labels,
     datasets: [{
@@ -559,9 +760,131 @@ const ExitLiquidityMetrics = ({ openPopup }) => {
     }]
   });
 
+  // Empty chart data structures
+  const generateEmptyBarData = (labels, label, colorIndex) => ({
+    labels,
+    datasets: [{
+      label,
+      data: labels.map(() => 0),
+      backgroundColor: brownShades[colorIndex % brownShades.length],
+      borderColor: brownShades[colorIndex % brownShades.length],
+      borderWidth: 1
+    }]
+  });
+
+  const generateEmptyLineData = (labels, datasets) => ({
+    labels,
+    datasets: datasets.map((ds, i) => ({
+      label: ds.label,
+      data: labels.map(() => 0),
+      borderColor: brownShades[i % brownShades.length] + '80',
+      backgroundColor: brownShades[i % brownShades.length] + '20',
+      borderWidth: 1,
+      borderDash: [5, 5],
+      fill: ds.fill || false,
+      tension: 0
+    }))
+  });
+
+  const generateEmptyPieData = (labels) => ({
+    labels,
+    datasets: [{
+      data: labels.map(() => 50), // Equal distribution for empty state
+      backgroundColor: labels.map((_, i) => brownShades[i % brownShades.length] + '40'),
+      borderWidth: 2,
+      borderColor: '#fff',
+      hoverOffset: 0
+    }]
+  });
+
+  // Get labels based on time view
+  const getTimeLabels = (view) => {
+    switch (view) {
+      case 'Monthly':
+        return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      case 'Quarterly':
+        return ['Q1', 'Q2', 'Q3', 'Q4'];
+      case 'Yearly':
+        const currentYear = new Date().getFullYear();
+        return [`${currentYear-2}`, `${currentYear-1}`, `${currentYear}`, `${currentYear+1}`];
+      default:
+        return ['Q1', 'Q2', 'Q3', 'Q4'];
+    }
+  };
+
+  // Get data based on time view
+  const getExitHistoryData = (view) => {
+    const labels = getTimeLabels(view);
+    
+    switch (view) {
+      case 'Monthly':
+        // Use monthly exit data
+        return exitData.exitHistoryMonthly || Array(12).fill(0);
+      case 'Quarterly':
+        return [
+          exitData.exitHistory.q1,
+          exitData.exitHistory.q2,
+          exitData.exitHistory.q3,
+          exitData.exitHistory.q4
+        ];
+      case 'Yearly':
+        // For yearly view, show total exits per year
+        const yearlyTotal = exitData.exitHistory.q1 + exitData.exitHistory.q2 + 
+                          exitData.exitHistory.q3 + exitData.exitHistory.q4;
+        return [0, 0, yearlyTotal, 0]; // Show in current year
+      default:
+        return Array(labels.length).fill(0);
+    }
+  };
+
+  const getTimeToExitData = (view) => {
+    const labels = getTimeLabels(view);
+    
+    switch (view) {
+      case 'Monthly':
+        // Use monthly time to exit data
+        return exitData.timeToExitMonthly || Array(12).fill(0);
+      case 'Quarterly':
+        return [
+          exitData.timeToExit.q1,
+          exitData.timeToExit.q2,
+          exitData.timeToExit.q3,
+          exitData.timeToExit.q4
+        ];
+      case 'Yearly':
+        // For yearly view, use average time to exit
+        const avgTime = (exitData.timeToExit.q1 + exitData.timeToExit.q2 + 
+                        exitData.timeToExit.q3 + exitData.timeToExit.q4) / 4;
+        return labels.map(() => Math.round(avgTime));
+      default:
+        return Array(labels.length).fill(0);
+    }
+  };
+
   // Chart Components
-  const BarChartWithTitle = ({ data, title, chartTitle, chartId }) => {
+  const BarChartWithTitle = ({ data, title, chartTitle, chartId, isEmpty = false }) => {
     const handleEyeClick = () => {
+      if (isEmpty) {
+        openPopup(
+          <div className="popup-content">
+            <h3>{title}</h3>
+            <div className="popup-description">
+              No data available for {title.toLowerCase()}. Data will appear when deals are completed.
+            </div>
+            <div className="popup-chart">
+              <div className="empty-state">
+                <div className="empty-state-icon">📊</div>
+                <div className="empty-state-text">
+                  No data available yet.<br/>
+                  Chart structure shown for preview.
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+        return;
+      }
+
       openPopup(
         <div className="popup-content">
           <h3>{title}</h3>
@@ -593,14 +916,41 @@ const ExitLiquidityMetrics = ({ openPopup }) => {
         </div>
         <div className="chart-title-fixed">{chartTitle}</div>
         <div className="chart-area">
-          <Bar data={data} options={staticBarOptions} />
+          {isEmpty ? (
+            <div style={{ opacity: 0.5 }}>
+              <Bar data={data} options={staticBarOptions} />
+            </div>
+          ) : (
+            <Bar data={data} options={staticBarOptions} />
+          )}
         </div>
       </div>
     );
   };
 
-  const LineChartWithTitle = ({ data, title, chartTitle, chartId }) => {
+  const LineChartWithTitle = ({ data, title, chartTitle, chartId, isEmpty = false }) => {
     const handleEyeClick = () => {
+      if (isEmpty) {
+        openPopup(
+          <div className="popup-content">
+            <h3>{title}</h3>
+            <div className="popup-description">
+              No data available for {title.toLowerCase()}. Data will appear when deals are completed.
+            </div>
+            <div className="popup-chart">
+              <div className="empty-state">
+                <div className="empty-state-icon">📈</div>
+                <div className="empty-state-text">
+                  No data available yet.<br/>
+                  Chart structure shown for preview.
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+        return;
+      }
+
       openPopup(
         <div className="popup-content">
           <h3>{title}</h3>
@@ -634,20 +984,26 @@ const ExitLiquidityMetrics = ({ openPopup }) => {
         </div>
         <div className="chart-title-fixed">{chartTitle}</div>
         <div className="chart-area">
-          <Line data={data} options={staticLineOptions} />
+          {isEmpty ? (
+            <div style={{ opacity: 0.5 }}>
+              <Line data={data} options={staticLineOptions} />
+            </div>
+          ) : (
+            <Line data={data} options={staticLineOptions} />
+          )}
         </div>
       </div>
     );
   };
 
-  // UPDATED: Pie Chart with Numbers ALWAYS visible (same as Pipeline)
-  const PieChartWithNumbers = ({ title, labels, data, chartId }) => {
-    const chartData = generatePieData(labels, data);
+  const PieChartWithNumbers = ({ title, labels, data, chartId, isEmpty = false }) => {
+    const chartData = isEmpty ? generateEmptyPieData(labels) : generatePieData(labels, data);
 
-    // Custom plugin to display numbers on pie chart segments
     const plugins = [{
       id: 'centerText',
       afterDraw: (chart) => {
+        if (isEmpty) return;
+        
         const ctx = chart.ctx;
         const { chartArea: { left, right, top, bottom, width, height } } = chart;
         
@@ -668,6 +1024,27 @@ const ExitLiquidityMetrics = ({ openPopup }) => {
     }];
 
     const handleEyeClick = () => {
+      if (isEmpty) {
+        openPopup(
+          <div className="popup-content">
+            <h3>{title}</h3>
+            <div className="popup-description">
+              No data available for {title.toLowerCase()}. Data will appear when deals are completed.
+            </div>
+            <div className="popup-chart">
+              <div className="empty-state">
+                <div className="empty-state-icon">🥧</div>
+                <div className="empty-state-text">
+                  No data available yet.<br/>
+                  Chart structure shown for preview.
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+        return;
+      }
+
       openPopup(
         <div className="popup-content">
           <h3>{title}</h3>
@@ -698,62 +1075,37 @@ const ExitLiquidityMetrics = ({ openPopup }) => {
           </button>
         </div>
         <div className="chart-area">
-          <Doughnut data={chartData} options={staticPieOptions} plugins={plugins} />
-        </div>
-      </div>
-    );
-  };
-
-  // SME Graduation Infographic
-  const SMEGraduationInfographic = ({ value, target, title }) => {
-    const handleEyeClick = () => {
-      openPopup(
-        <div className="popup-content">
-          <h3>SME Graduation Breakdown</h3>
-          <div className="popup-description">
-            Percentage of SMEs now self-sustaining with impact metrics across graduated, near graduation, progressing, and early stages
-          </div>
-          <div className="graduation-popup">
-            <div className="graduation-main-popup">
-              <div className="graduation-value">{value}%</div>
-              <div className="graduation-label">Graduated to Bankable</div>
-              <div className="graduation-subtitle">40 SMEs Successfully Graduated</div>
+          {isEmpty ? (
+            <div style={{ opacity: 0.5 }}>
+              <Doughnut data={chartData} options={staticPieOptions} />
             </div>
-          </div>
-        </div>
-      );
-    };
-
-    return (
-      <div className="chart-container">
-        <div className="chart-header">
-          <h3 className="chart-title">{title}</h3>
-          <button className="breakdown-icon-btn" onClick={handleEyeClick} title="View breakdown">
-            <FiEye />
-          </button>
-        </div>
-        
-        <div className="graduation-simple">
-          <div className="graduation-main-simple">
-            <div className="graduation-value-simple">{value}%</div>
-            <div className="graduation-label-simple">Graduated to Bankable</div>
-          </div>
-        </div>
-        
-        <div className="chart-summary-compact">
-          <div className="current-value">Graduation Rate: {value}%</div>
-          <div className="target-value">
-            Target: {target}%
-            {value >= target ? (
-              <FiArrowUp className="trend-icon up" />
-            ) : (
-              <FiArrowDown className="trend-icon down" />
-            )}
-          </div>
+          ) : (
+            <Doughnut data={chartData} options={staticPieOptions} plugins={plugins} />
+          )}
         </div>
       </div>
     );
   };
+
+  if (loading) {
+    return (
+      <div className="exit-liquidity">
+        <div className="loading-container">
+          <Loader size={48} style={{ color: "#a67c52", animation: "spin 1s linear infinite" }} />
+          <p className="loading-text">Loading exit & liquidity data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Check if we have any meaningful data
+  const hasExitData = exitData.exitHistory.q1 + exitData.exitHistory.q2 + exitData.exitHistory.q3 + exitData.exitHistory.q4 > 0;
+  const hasTimeToExitData = exitData.timeToExit.q1 + exitData.timeToExit.q2 + exitData.timeToExit.q3 + exitData.timeToExit.q4 > 0;
+  const hasExitMultiples = exitData.exitMultiples.length > 0;
+  const hasReinvestmentData = exitData.reinvestmentRatio.reinvested > 0;
+
+  // Get current time labels
+  const currentLabels = getTimeLabels(timeToExitView);
 
   return (
     <div className="exit-liquidity">
@@ -765,55 +1117,108 @@ const ExitLiquidityMetrics = ({ openPopup }) => {
       </div>
       
       <div className="exit-charts-grid">
-        <BarChartWithTitle
-          data={generateBarData(
-            ['Q1', 'Q2', 'Q3', 'Q4'],
-            [2, 4, 5, 7],
-            '# of Exits',
-            0
-          )}
-          title="Exit / Repayment History"
-          chartTitle="Number of exits per quarter"
-          chartId="exit-repayment-history"
-        />
+        {/* Exit/Repayment History */}
+        {hasExitData ? (
+          <BarChartWithTitle
+            data={generateBarData(
+              currentLabels,
+              getExitHistoryData(timeToExitView),
+              '# of Exits',
+              0
+            )}
+            title="Exit / Repayment History"
+            chartTitle={`Number of exits or deal completions (${timeToExitView})`}
+            chartId="exit-repayment-history"
+          />
+        ) : (
+          <BarChartWithTitle
+            data={generateEmptyBarData(
+              currentLabels,
+              '# of Exits',
+              0
+            )}
+            title="Exit / Repayment History"
+            chartTitle={`Number of exits or deal completions (${timeToExitView})`}
+            chartId="exit-repayment-history"
+            isEmpty={true}
+          />
+        )}
 
-        <LineChartWithTitle
-          data={generateLineData(
-            ['Q1', 'Q2', 'Q3', 'Q4'],
-            [
-              { label: 'Avg Months', values: getTimeData(timeToExitView, timeToExitData.Monthly, timeToExitData.Quarterly, timeToExitData.Yearly) },
-              { label: 'Target (<32)', values: [32, 32, 32, 32] }
-            ]
-          )}
-          title="Avg. Time-to-Exit"
-          chartTitle="Average months to exit vs target"
-          chartId="time-to-exit"
-        />
+        {/* Avg. Time-to-Exit */}
+        {hasTimeToExitData ? (
+          <LineChartWithTitle
+            data={generateLineData(
+              currentLabels,
+              [
+                { 
+                  label: 'Avg Months', 
+                  values: getTimeToExitData(timeToExitView)
+                }
+              ]
+            )}
+            title="Avg. Time-to-Exit"
+            chartTitle={`Average months from disbursement to exit (${timeToExitView})`}
+            chartId="time-to-exit"
+          />
+        ) : (
+          <LineChartWithTitle
+            data={generateEmptyLineData(
+              currentLabels,
+              [
+                { label: 'Avg Months', values: [] }
+              ]
+            )}
+            title="Avg. Time-to-Exit"
+            chartTitle={`Average months from disbursement to exit (${timeToExitView})`}
+            chartId="time-to-exit"
+            isEmpty={true}
+          />
+        )}
 
-        <BarChartWithTitle
-          data={generateBarData(
-            ['Deal A', 'Deal B', 'Deal C', 'Deal D', 'Deal E'],
-            [1.8, 2.4, 3.0, 2.1, 2.8],
-            'Multiple (x)',
-            1
-          )}
-          title="Exit Multiple"
-          chartTitle="Return multiples for exited deals (x)"
-          chartId="exit-multiple"
-        />
+        {/* Exit Multiple */}
+        {hasExitMultiples ? (
+          <BarChartWithTitle
+            data={generateBarData(
+              exitData.exitMultiples.map(e => e.name),
+              exitData.exitMultiples.map(e => parseFloat(e.multiple)),
+              'Multiple (x)',
+              1
+            )}
+            title="Exit Multiple"
+            chartTitle="Return multiples for top exited deals (x)"
+            chartId="exit-multiple"
+          />
+        ) : (
+          <BarChartWithTitle
+            data={generateEmptyBarData(
+              ['Deal 1', 'Deal 2', 'Deal 3', 'Deal 4', 'Deal 5'],
+              'Multiple (x)',
+              1
+            )}
+            title="Exit Multiple"
+            chartTitle="Return multiples for top exited deals (x)"
+            chartId="exit-multiple"
+            isEmpty={true}
+          />
+        )}
 
-        <PieChartWithNumbers
-          title="Reinvestment Ratio"
-          labels={['Reinvested', 'Held']}
-          data={[64, 36]}
-          chartId="reinvestment-ratio"
-        />
-
-        <SMEGraduationInfographic
-          value={31}
-          target={35}
-          title="SME Graduation to Bankable"
-        />
+        {/* Reinvestment Ratio */}
+        {hasReinvestmentData ? (
+          <PieChartWithNumbers
+            title="Reinvestment Ratio"
+            labels={['Reinvested', 'Held']}
+            data={[exitData.reinvestmentRatio.reinvested, exitData.reinvestmentRatio.held]}
+            chartId="reinvestment-ratio"
+          />
+        ) : (
+          <PieChartWithNumbers
+            title="Reinvestment Ratio"
+            labels={['Reinvested', 'Held']}
+            data={[50, 50]}
+            chartId="reinvestment-ratio"
+            isEmpty={true}
+          />
+        )}
       </div>
     </div>
   );

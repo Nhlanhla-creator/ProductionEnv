@@ -566,7 +566,7 @@ export default function InvestmentTargets({ data = {}, updateData }) {
 
         {/* UPDATED: Investment Focus - NOW MULTI-SELECT */}
         <div>
-          <label style={labelStyle}>Investment Focus</label>
+          <label style={labelStyle}>Funding Instrument Preferred</label>
           <MultiSelect
             options={investmentFocusCategories}
             selected={data.investmentFocus || []}
@@ -577,7 +577,7 @@ export default function InvestmentTargets({ data = {}, updateData }) {
 
         {/* UPDATED: Investment Focus Subtype - Multi-Select with dynamic options */}
         <div>
-          <label style={labelStyle}>Investment Focus Subtype</label>
+          <label style={labelStyle}>Funding Instrument Preferred Subtype</label>
           <MultiSelect
             options={getAvailableInvestmentFocusSubtypes()}
             selected={data.investmentFocusSubtype || []}

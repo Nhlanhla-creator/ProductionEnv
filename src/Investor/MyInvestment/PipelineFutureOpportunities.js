@@ -519,15 +519,14 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
         return;
       }
 
-      // Fetch investor's successful deals (Deal Complete)
+      // Fetch ALL investor applications (not just Deal Complete)
       const q = query(
         collection(db, "investorApplications"),
-        where("funderId", "==", currentUser.uid),
-        where("pipelineStage", "==", "Deal Complete")
+        where("funderId", "==", currentUser.uid)
       );
 
       const querySnapshot = await getDocs(q);
-      console.log("Found successful deals:", querySnapshot.docs.length);
+      console.log("Found all deals:", querySnapshot.docs.length);
 
       const cohortsData = await Promise.all(
         querySnapshot.docs.map(async (docSnap) => {
@@ -572,6 +571,8 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
               updatedAt: data.updatedAt,
               fundingDetails: data.fundingDetails || {},
               profileData: profileData,
+              status: data.status,
+              isComplete: data.pipelineStage === "Deal Complete"
             };
           } catch (error) {
             console.error("Error fetching profile:", error);
@@ -581,10 +582,22 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
       );
 
       const validCohorts = cohortsData.filter(cohort => cohort !== null);
-      setCohorts(validCohorts);
+      
+      // FILTER: Only show deals that are NOT complete (didn't reach the end)
+      const incompleteDeals = validCohorts.filter(cohort => 
+        !cohort.isComplete && 
+        cohort.pipelineStage !== "Deal Complete" &&
+        cohort.pipelineStage !== "declined" &&
+        cohort.pipelineStage !== "withdrawn"
+      );
 
-      // Calculate pipeline metrics from actual data
-      calculatePipelineMetrics(validCohorts);
+      console.log("Incomplete deals:", incompleteDeals.length);
+      console.log("Complete deals:", validCohorts.filter(cohort => cohort.isComplete).length);
+
+      setCohorts(incompleteDeals);
+
+      // Calculate pipeline metrics from INCOMPLETE deals only
+      calculatePipelineMetrics(incompleteDeals);
 
       setLoading(false);
     } catch (error) {
@@ -602,8 +615,8 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
           values: [0, 0, 0, 0]
         },
         conversionData: {
-          stages: ['Application', 'Approval', 'Disbursed'],
-          values: [0, 0, 0]
+          stages: ['Application', 'Under Review', 'Due Diligence', 'Approved'],
+          values: [0, 0, 0, 0]
         },
         capitalRequirement: {
           quarters: ['Q1', 'Q2', 'Q3', 'Q4'],
@@ -620,7 +633,7 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
       return;
     }
 
-    // 1. Calculate Pipeline Stage Aging
+    // 1. Calculate Pipeline Stage Aging for INCOMPLETE deals
     const now = new Date();
     const agingBuckets = { '<1 month': 0, '1-3 months': 0, '3-6 months': 0, '>6 months': 0 };
     
@@ -636,16 +649,29 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
       }
     });
 
-    // 2. Calculate Conversion Funnel (simplified for deal complete stage)
-    // Since all cohorts are "Deal Complete", we'll use sample conversion rates
-    const totalCohorts = cohorts.length;
-    const conversionRates = {
-      application: 100, // All made it to application
-      approval: Math.round((totalCohorts / (totalCohorts * 1.5)) * 100), // Estimate
-      disbursed: 100 // All are disbursed since they're complete
+    // 2. Calculate Current Pipeline Distribution (actual stages of incomplete deals)
+    const stageCounts = {
+      'Application': 0,
+      'Under Review': 0,
+      'Due Diligence': 0,
+      'Funding Approved': 0,
+      'Termsheet': 0
     };
 
-    // 3. Calculate Forecasted Capital Requirement by deal type
+    cohorts.forEach(cohort => {
+      const stage = cohort.pipelineStage;
+      if (stageCounts.hasOwnProperty(stage)) {
+        stageCounts[stage]++;
+      } else if (stage) {
+        stageCounts[stage] = (stageCounts[stage] || 0) + 1;
+      }
+    });
+
+    // Convert to funnel data (showing current pipeline distribution)
+    const currentStages = Object.keys(stageCounts).filter(stage => stageCounts[stage] > 0);
+    const currentValues = currentStages.map(stage => stageCounts[stage]);
+
+    // 3. Calculate Forecasted Capital Requirement by deal type for INCOMPLETE deals
     const capitalByType = {
       debt: [0, 0, 0, 0],
       equity: [0, 0, 0, 0],
@@ -669,7 +695,7 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
       }
     });
 
-    // 4. Calculate Data Confidence Meter
+    // 4. Calculate Data Confidence Meter for INCOMPLETE deals
     let verified = 0, partial = 0, unverified = 0;
     
     cohorts.forEach(cohort => {
@@ -688,15 +714,15 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
     const total = verified + partial + unverified;
     const dataConfidence = {
       labels: ['Verified', 'Partial', 'Unverified'],
-      values: [
+      values: total > 0 ? [
         Math.round((verified / total) * 100),
         Math.round((partial / total) * 100),
         Math.round((unverified / total) * 100)
-      ]
+      ] : [0, 0, 0]
     };
 
-    // 5. Prepare Co-Invest Opportunities (top 5 by deal amount)
-    const topOpportunities = [...cohorts]
+    // 5. Prepare Active Pipeline Opportunities (incomplete deals sorted by deal amount)
+    const activeOpportunities = [...cohorts]
       .sort((a, b) => {
         const amountA = parseFloat(String(a.dealAmount).replace(/[^0-9.]/g, '')) || 0;
         const amountB = parseFloat(String(b.dealAmount).replace(/[^0-9.]/g, '')) || 0;
@@ -705,9 +731,10 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
       .slice(0, 5)
       .map(cohort => ({
         smeName: cohort.smeName,
-        stage: cohort.pipelineStage || 'Growth',
+        stage: cohort.pipelineStage || 'Application',
         ask: formatCurrency(cohort.dealAmount),
-        score: Math.floor(Math.random() * 20) + 75 // Placeholder score
+        score: calculateDealScore(cohort), // Calculate based on actual data
+        daysInStage: calculateDaysInStage(cohort)
       }));
 
     setPipelineData({
@@ -716,25 +743,62 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
         values: Object.values(agingBuckets)
       },
       conversionData: {
-        stages: ['Application', 'Approval', 'Disbursed'],
-        values: [conversionRates.application, conversionRates.approval, conversionRates.disbursed]
+        stages: currentStages,
+        values: currentValues
       },
       capitalRequirement: {
         quarters: ['Q1', 'Q2', 'Q3', 'Q4'],
-        debt: capitalByType.debt.map(v => Math.round(v)),
-        equity: capitalByType.equity.map(v => Math.round(v)),
-        grants: capitalByType.grants.map(v => Math.round(v))
+        debt: capitalByType.debt.map(v => Math.round(v * 10) / 10), // Keep one decimal
+        equity: capitalByType.equity.map(v => Math.round(v * 10) / 10),
+        grants: capitalByType.grants.map(v => Math.round(v * 10) / 10)
       },
       dataConfidence,
-      coInvestOpportunities: topOpportunities
+      coInvestOpportunities: activeOpportunities
     });
+  };
+
+  const calculateDealScore = (cohort) => {
+    // Calculate a score based on data completeness and deal stage
+    let score = 50; // Base score
+    
+    // Add points for data completeness
+    if (cohort.profileData?.entityOverview?.tradingName) score += 10;
+    if (cohort.fundingDetails?.amountApproved) score += 15;
+    if (cohort.profileData?.entityOverview?.location) score += 10;
+    if (cohort.profileData?.entityOverview?.economicSectors?.length > 0) score += 10;
+    
+    // Add points for pipeline stage (later stages get higher scores)
+    const stageWeights = {
+      'Application': 0,
+      'Under Review': 5,
+      'Due Diligence': 10,
+      'Funding Approved': 15,
+      'Termsheet': 20
+    };
+    
+    score += stageWeights[cohort.pipelineStage] || 0;
+    
+    return Math.min(score, 100);
+  };
+
+  const calculateDaysInStage = (cohort) => {
+    if (!cohort.updatedAt) return 'Unknown';
+    const updatedDate = new Date(cohort.updatedAt);
+    const now = new Date();
+    const daysDiff = Math.floor((now - updatedDate) / (1000 * 60 * 60 * 24));
+    return `${daysDiff} days`;
   };
 
   const formatCurrency = (amount) => {
     if (!amount || amount === "Not specified") return "Not specified";
     if (typeof amount === "string" && amount.includes('R')) return amount;
     const numAmount = parseFloat(String(amount).replace(/[^0-9.]/g, '')) || 0;
-    return `R${(numAmount / 1000000).toFixed(1)}m`;
+    if (numAmount >= 1000000) {
+      return `R${(numAmount / 1000000).toFixed(1)}m`;
+    } else if (numAmount >= 1000) {
+      return `R${(numAmount / 1000).toFixed(1)}k`;
+    }
+    return `R${numAmount}`;
   };
 
   // Data generation functions
@@ -877,9 +941,9 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
     const handleEyeClick = () => {
       openPopup(
         <div className="popup-content">
-          <h3>Conversion Funnel Details</h3>
+          <h3>Current Pipeline Distribution</h3>
           <div className="popup-description">
-            Application conversion efficiency from application to approval to disbursement stages
+            Active deals distributed across pipeline stages
           </div>
           <div className="popup-chart">
             <div className="funnel-container-popup">
@@ -895,7 +959,7 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
                       }}
                     >
                       <span className="funnel-label-popup">{stage}</span>
-                      <span className="funnel-value-popup">{values[index]}%</span>
+                      <span className="funnel-value-popup">{values[index]} deals</span>
                     </div>
                   </div>
                 );
@@ -906,7 +970,7 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
             {stages.map((stage, index) => (
               <div key={stage} className="detail-item">
                 <span className="detail-label">{stage}:</span>
-                <span className="detail-value">{values[index]}% conversion rate</span>
+                <span className="detail-value">{values[index]} active deals</span>
               </div>
             ))}
           </div>
@@ -936,7 +1000,7 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
                     }}
                   >
                     <span className="funnel-label">{stage}</span>
-                    <span className="funnel-value">{values[index]}%</span>
+                    <span className="funnel-value">{values[index]}</span>
                   </div>
                 </div>
               );
@@ -967,19 +1031,19 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
             data={generateBarData(
               pipelineData.agingData.labels,
               pipelineData.agingData.values,
-              '# of SMEs',
+              '# of Deals',
               0
             )}
             title="Pipeline Stage Aging"
-            chartTitle="Number of portfolio SMEs by deal age"
+            chartTitle="Active deals by time in current stage"
             chartId="pipeline-aging"
           />
 
           <FunnelChart 
             stages={pipelineData.conversionData.stages}
             values={pipelineData.conversionData.values}
-            colors={[brownShades[0], brownShades[1], brownShades[2]]}
-            title="Conversion Funnel (App→Approval→Disburse)"
+            colors={[brownShades[0], brownShades[1], brownShades[2], brownShades[3]]}
+            title="Current Pipeline Distribution"
           />
 
           <BarChartWithTitle
@@ -991,8 +1055,8 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
                 { label: 'Grants', values: pipelineData.capitalRequirement.grants }
               ]
             )}
-            title="Portfolio Capital Distribution"
-            chartTitle="Capital deployed by instrument (R millions)"
+            title="Forecasted Capital Deployment"
+            chartTitle="Capital required for active pipeline (R millions)"
             chartId="capital-requirement"
           />
 
@@ -1008,23 +1072,24 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
         <div className="bottom-full">
           <div className="chart-container full-width">
             <div className="chart-header">
-              <h3 className="chart-title">Top Portfolio Companies by Investment Size</h3>
+              <h3 className="chart-title">Active Pipeline Opportunities</h3>
               <button 
                 className="breakdown-icon-btn"
                 onClick={() => openPopup(
                   <div className="popup-content">
-                    <h3>Top Portfolio Companies by Investment Size</h3>
+                    <h3>Active Pipeline Opportunities</h3>
                     <div className="popup-description">
-                      Your largest investments in the portfolio
+                      Your current active deals that haven't reached completion
                     </div>
                     <div className="table-container-popup">
                       <table className="data-table">
                         <thead>
                           <tr>
                             <th>SME</th>
-                            <th>Stage</th>
-                            <th>Investment</th>
-                            <th>Confidence Score</th>
+                            <th>Current Stage</th>
+                            <th>Investment Ask</th>
+                            <th>Deal Score</th>
+                            <th>Time in Stage</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1034,6 +1099,7 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
                               <td>{opp.stage}</td>
                               <td>{opp.ask}</td>
                               <td>{opp.score}</td>
+                              <td>{opp.daysInStage}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1052,9 +1118,10 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
                   <thead>
                     <tr>
                       <th>SME</th>
-                      <th>Stage</th>
-                      <th>Investment</th>
-                      <th>Confidence Score</th>
+                      <th>Current Stage</th>
+                      <th>Investment Ask</th>
+                      <th>Deal Score</th>
+                      <th>Time in Stage</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1064,6 +1131,7 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
                         <td>{opp.stage}</td>
                         <td>{opp.ask}</td>
                         <td>{opp.score}</td>
+                        <td>{opp.daysInStage}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1077,7 +1145,7 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
                   color: '#7d5a50',
                   fontSize: '14px'
                 }}>
-                  No portfolio companies data available yet
+                  No active pipeline opportunities found
                 </div>
               )}
             </div>

@@ -317,9 +317,27 @@ const styles = `
   margin-top: 15px;
 }
 
+/* Three Column Layout */
+.three-column-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
 /* Responsive Design */
+@media (max-width: 1200px) {
+  .three-column-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 @media (max-width: 992px) {
   .esg-charts-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .three-column-grid {
     grid-template-columns: 1fr;
   }
   
@@ -378,7 +396,11 @@ const staticBarOptions = {
   plugins: { legend: { display: false } },
   scales: {
     x: { grid: { display: false } },
-    y: { beginAtZero: true, grid: { drawBorder: false } }
+    y: { 
+      beginAtZero: true, 
+      grid: { drawBorder: false },
+      max: 100
+    }
   }
 };
 
@@ -728,9 +750,53 @@ const ESGImpactPerformance = ({ openPopup }) => {
     }]
   });
 
+  // Empty chart data functions
+  const generateEmptyBarData = (labels, label, colorIndex) => ({
+    labels,
+    datasets: [{
+      label,
+      data: labels.map(() => 0),
+      backgroundColor: brownShades[colorIndex % brownShades.length],
+      borderColor: brownShades[colorIndex % brownShades.length],
+      borderWidth: 1
+    }]
+  });
+
+  const generateEmptyPieData = (labels) => ({
+    labels,
+    datasets: [{
+      data: labels.map(() => 33), // Equal distribution for empty state
+      backgroundColor: labels.map((_, i) => brownShades[i % brownShades.length] + '40'),
+      borderWidth: 2,
+      borderColor: '#fff',
+      hoverOffset: 0
+    }]
+  });
+
   // Chart Components
-  const BarChartWithTitle = ({ data, title, chartTitle, chartId }) => {
+  const BarChartWithTitle = ({ data, title, chartTitle, chartId, isEmpty = false }) => {
     const handleEyeClick = () => {
+      if (isEmpty) {
+        openPopup(
+          <div className="popup-content">
+            <h3>{title}</h3>
+            <div className="popup-description">
+              No data available for {title.toLowerCase()}. Data will appear when SMEs complete their ESG assessments.
+            </div>
+            <div className="popup-chart">
+              <div className="empty-state">
+                <div className="empty-state-icon">📊</div>
+                <div className="empty-state-text">
+                  No data available yet.<br/>
+                  Chart structure shown for preview.
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+        return;
+      }
+
       openPopup(
         <div className="popup-content">
           <h3>{title}</h3>
@@ -762,19 +828,27 @@ const ESGImpactPerformance = ({ openPopup }) => {
         </div>
         <div className="chart-title-fixed">{chartTitle}</div>
         <div className="chart-area">
-          <Bar data={data} options={staticBarOptions} />
+          {isEmpty ? (
+            <div style={{ opacity: 0.5 }}>
+              <Bar data={data} options={staticBarOptions} />
+            </div>
+          ) : (
+            <Bar data={data} options={staticBarOptions} />
+          )}
         </div>
       </div>
     );
   };
 
   // Pie Chart with Numbers ALWAYS visible
-  const PieChartWithNumbers = ({ title, labels, data, chartId }) => {
-    const chartData = generatePieData(labels, data);
+  const PieChartWithNumbers = ({ title, labels, data, chartId, isEmpty = false }) => {
+    const chartData = isEmpty ? generateEmptyPieData(labels) : generatePieData(labels, data);
 
     const plugins = [{
       id: 'centerText',
       afterDraw: (chart) => {
+        if (isEmpty) return;
+        
         const ctx = chart.ctx;
         const { chartArea: { left, right, top, bottom, width, height } } = chart;
         
@@ -795,6 +869,27 @@ const ESGImpactPerformance = ({ openPopup }) => {
     }];
 
     const handleEyeClick = () => {
+      if (isEmpty) {
+        openPopup(
+          <div className="popup-content">
+            <h3>{title}</h3>
+            <div className="popup-description">
+              No data available for {title.toLowerCase()}. Data will appear when SMEs complete their ESG assessments.
+            </div>
+            <div className="popup-chart">
+              <div className="empty-state">
+                <div className="empty-state-icon">🥧</div>
+                <div className="empty-state-text">
+                  No data available yet.<br/>
+                  Chart structure shown for preview.
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+        return;
+      }
+
       openPopup(
         <div className="popup-content">
           <h3>{title}</h3>
@@ -825,7 +920,13 @@ const ESGImpactPerformance = ({ openPopup }) => {
           </button>
         </div>
         <div className="chart-area">
-          <Doughnut data={chartData} options={staticPieOptions} plugins={plugins} />
+          {isEmpty ? (
+            <div style={{ opacity: 0.5 }}>
+              <Doughnut data={chartData} options={staticPieOptions} />
+            </div>
+          ) : (
+            <Doughnut data={chartData} options={staticPieOptions} plugins={plugins} />
+          )}
         </div>
       </div>
     );
@@ -842,66 +943,93 @@ const ESGImpactPerformance = ({ openPopup }) => {
     );
   }
 
-  // Prepare SDG data for chart
-  const sdgLabels = Object.keys(esgData.sdgAlignment).slice(0, 4);
-  const sdgValues = sdgLabels.map(sdg => esgData.sdgAlignment[sdg]);
+  // Check if we have meaningful data
+  const hasPillarData = esgData.pillarScores.environmental + esgData.pillarScores.social + esgData.pillarScores.governance > 0;
+  const hasSDGData = Object.keys(esgData.sdgAlignment).length > 0;
+  const hasGovernanceData = esgData.governanceCompliance.compliant + esgData.governanceCompliance.partial + esgData.governanceCompliance.atRisk > 0;
+
+  // Prepare SDG data for chart - always show structure even if no data
+  const sdgLabels = hasSDGData 
+    ? Object.keys(esgData.sdgAlignment).slice(0, 4)
+    : ['SDG 1', 'SDG 8', 'SDG 9', 'SDG 13']; // Default SDG labels for empty state
+  const sdgValues = hasSDGData 
+    ? sdgLabels.map(sdg => esgData.sdgAlignment[sdg])
+    : [0, 0, 0, 0];
 
   return (
     <div className="esg-impact">
-      <div className="esg-charts-grid">
-        <BarChartWithTitle
-          data={generateBarData(
-            ['Environmental', 'Social', 'Governance'],
-            [
-              esgData.pillarScores.environmental,
-              esgData.pillarScores.social,
-              esgData.pillarScores.governance
-            ],
-            'Score (0-100)',
-            1
-          )}
-          title="ESG Pillar Scores (E, S, G)"
-          chartTitle="Portfolio average ESG pillar scores (0-100)"
-          chartId="esg-pillar"
-        />
-
-        {sdgLabels.length > 0 ? (
+      {/* Three Column Grid for First 3 Charts */}
+      <div className="three-column-grid">
+        {/* ESG Pillar Scores */}
+        {hasPillarData ? (
           <BarChartWithTitle
             data={generateBarData(
-              sdgLabels,
-              sdgValues,
-              '% of portfolio',
-              2
+              ['Environmental', 'Social', 'Governance'],
+              [
+                esgData.pillarScores.environmental,
+                esgData.pillarScores.social,
+                esgData.pillarScores.governance
+              ],
+              'Score (0-100)',
+              1
             )}
-            title="SDG Alignment"
-            chartTitle="Portfolio alignment with SDGs (%)"
-            chartId="sdg-alignment"
+            title="ESG Pillar Scores (E, S, G)"
+            chartTitle="Portfolio average ESG pillar scores (0-100)"
+            chartId="esg-pillar"
           />
         ) : (
-          <div className="chart-container">
-            <div className="chart-header">
-              <h3 className="chart-title">SDG Alignment</h3>
-            </div>
-            <div className="empty-state">
-              <div className="empty-state-icon">🎯</div>
-              <div className="empty-state-text">
-                No SDG alignment data available yet
-              </div>
-            </div>
-          </div>
+          <BarChartWithTitle
+            data={generateEmptyBarData(
+              ['Environmental', 'Social', 'Governance'],
+              'Score (0-100)',
+              1
+            )}
+            title="ESG Pillar Scores (E, S, G)"
+            chartTitle="Portfolio average ESG pillar scores (0-100)"
+            chartId="esg-pillar"
+            isEmpty={true}
+          />
         )}
 
-        <PieChartWithNumbers
-          title="Governance Compliance Health"
-          labels={['Compliant', 'Partial', 'At Risk']}
-          data={[
-            esgData.governanceCompliance.compliant,
-            esgData.governanceCompliance.partial,
-            esgData.governanceCompliance.atRisk
-          ]}
-          chartId="governance-compliance"
+        {/* SDG Alignment - ALWAYS shows structure */}
+        <BarChartWithTitle
+          data={generateBarData(
+            sdgLabels,
+            sdgValues,
+            '% of portfolio',
+            2
+          )}
+          title="SDG Alignment"
+          chartTitle="Portfolio alignment with SDGs (%)"
+          chartId="sdg-alignment"
+          isEmpty={!hasSDGData}
         />
 
+        {/* Governance Compliance Health */}
+        {hasGovernanceData ? (
+          <PieChartWithNumbers
+            title="Governance Compliance Health"
+            labels={['Compliant', 'Partial', 'At Risk']}
+            data={[
+              esgData.governanceCompliance.compliant,
+              esgData.governanceCompliance.partial,
+              esgData.governanceCompliance.atRisk
+            ]}
+            chartId="governance-compliance"
+          />
+        ) : (
+          <PieChartWithNumbers
+            title="Governance Compliance Health"
+            labels={['Compliant', 'Partial', 'At Risk']}
+            data={[33, 33, 34]}
+            chartId="governance-compliance"
+            isEmpty={true}
+          />
+        )}
+      </div>
+
+      {/* Full Width Table for Top Contributors */}
+      <div className="esg-charts-grid">
         <div className="chart-container full-width">
           <div className="chart-header">
             <h3 className="chart-title">Top 5 ESG Contributors</h3>
@@ -940,7 +1068,8 @@ const ESGImpactPerformance = ({ openPopup }) => {
                     <div className="empty-state">
                       <div className="empty-state-icon">🌱</div>
                       <div className="empty-state-text">
-                        No ESG contributors data available
+                        No ESG contributors data available yet.<br/>
+                        ESG metrics will appear here as SMEs complete their impact assessments.
                       </div>
                     </div>
                   )}
@@ -959,6 +1088,7 @@ const ESGImpactPerformance = ({ openPopup }) => {
                     <th>SME</th>
                     <th>Primary Pillar</th>
                     <th>Key Metric</th>
+                    <th>ESG Score</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -967,6 +1097,7 @@ const ESGImpactPerformance = ({ openPopup }) => {
                       <td>{contributor.smeName}</td>
                       <td>{contributor.pillar}</td>
                       <td>{contributor.stat}</td>
+                      <td>{contributor.overallScore}</td>
                     </tr>
                   ))}
                 </tbody>
