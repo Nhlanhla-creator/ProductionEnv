@@ -190,7 +190,7 @@ const getFileDisplayName = (file) => {
     const urlParts = file.url.split('/')
     return urlParts[urlParts.length - 1].split('?')[0] || 'Download File'
   }
-  return 'Unknown File'
+  return 'File'
 }
 
   const getStatusBadge = (documentId, document) => {
