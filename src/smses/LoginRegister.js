@@ -253,56 +253,47 @@ export default function LoginRegister() {
   const handleAdvisorCriteriaCancel = () => {
     setShowAdvisorCriteria(false)
   }
+const handleRegister = async () => {
+  setIsLoading(true)
+  const newErrors = {}
+  if (!validateEmail(email)) newErrors.email = "Enter your email"
+  if (username.trim() === "") newErrors.username = "Enter your username"
+  if (password.length < 6) newErrors.password = "Password should be (at least 6 characters)"
+  if (password !== confirmPassword) newErrors.confirmPassword = "Passwords do not match!"
+  if (roles.length === 0) newErrors.role = "Please select at least one role."
+  if (!agreeToTerms) newErrors.terms = "Please agree to the Terms & Conditions"
 
-  const handleRegister = async () => {
-    setIsLoading(true)
-    const newErrors = {}
-    if (!validateEmail(email)) newErrors.email = "Enter your email"
-    if (username.trim() === "") newErrors.username = "Enter your username"
-    if (password.length < 6) newErrors.password = "Password should be (at least 6 characters)"
-    if (password !== confirmPassword) newErrors.confirmPassword = "Passwords do not match!"
-    if (roles.length === 0) newErrors.role = "Please select at least one role."
-    if (!agreeToTerms) newErrors.terms = "Please agree to the Terms & Conditions"
-
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors)
-      setIsLoading(false)
-      return
-    }
-
-    setErrors({})
-    setAuthError("")
-
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password)
-      const user = userCredential.user
-
-      await sendEmailVerification(user)
-      setEmailVerificationSent(true)
-      setCodeSent(true)
-
-      const ndaData = {
-        email: email,
-        username: username,
-        role: roles.join(","),
-        roleArray: roles,
-        password: password,
-        uid: user.uid,
-        termsAccepted: true,
-        termsAcceptedDate: new Date().toISOString(),
-      }
-      setRegistrationData(ndaData)
-    } catch (error) {
-      console.error("Registration error:", error)
-      if (error.code === 'auth/email-already-in-use') {
-        setAuthError("This email is already registered. Try logging in or resetting your password.")
-      } else {
-        setAuthError(error.message)
-      }
-    } finally {
-      setIsLoading(false)
-    }
+  if (Object.keys(newErrors).length > 0) {
+    setErrors(newErrors)
+    setIsLoading(false)
+    return
   }
+
+  setErrors({})
+  setAuthError("")
+
+  try {
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password)
+    const user = userCredential.user
+
+    await sendEmailVerification(user)
+    setEmailVerificationSent(true)
+    setCodeSent(true)
+
+    // DON'T set registrationData or show NDA here
+    // Wait for email verification first
+    
+  } catch (error) {
+    console.error("Registration error:", error)
+    if (error.code === 'auth/email-already-in-use') {
+      setAuthError("This email is already registered. Try logging in or resetting your password.")
+    } else {
+      setAuthError(error.message)
+    }
+  } finally {
+    setIsLoading(false)
+  }
+}
 
  const handleRegistrationComplete = async (ndaData) => {
   if (ndaData.cancelled) {
@@ -408,27 +399,41 @@ const handleReturnToForm = () => {
 };
 
 
-  const handleVerify = async () => {
-    setCheckingVerification(true)
-    setErrors({})
-    try {
-      await auth.currentUser.reload()
-      const user = auth.currentUser
-      if (user.emailVerified) {
-        setIsEmailVerified(true)
-        setShowNDA(true)
-      } else {
-        setErrors({
-          verificationCode: "Please verify your email first. Check your inbox and click the verification link.",
-        })
+const handleVerify = async () => {
+  setCheckingVerification(true)
+  setErrors({})
+  try {
+    await auth.currentUser.reload()
+    const user = auth.currentUser
+    if (user.emailVerified) {
+      setIsEmailVerified(true)
+      
+      // Only now set the registration data and show NDA
+      const ndaData = {
+        email: email,
+        username: username,
+        role: roles.join(","),
+        roleArray: roles,
+        password: password,
+        uid: user.uid,
+        termsAccepted: true,
+        termsAcceptedDate: new Date().toISOString(),
       }
-    } catch (error) {
-      console.error("Verification check error:", error)
-      setErrors({ verificationCode: "Error checking verification status. Please try again." })
-    } finally {
-      setCheckingVerification(false)
+      setRegistrationData(ndaData)
+      setShowNDA(true)
+      
+    } else {
+      setErrors({
+        verificationCode: "Please verify your email first. Check your inbox and click the verification link.",
+      })
     }
+  } catch (error) {
+    console.error("Verification check error:", error)
+    setErrors({ verificationCode: "Error checking verification status. Please try again." })
+  } finally {
+    setCheckingVerification(false)
   }
+}
 
   const resendVerificationEmail = async () => {
     try {
@@ -1189,49 +1194,54 @@ const handleRoleClick = (roleObj) => {
                 )}
 
                 {isVerifying && (
-                  <div
-                    style={{
-                      padding: "12px",
-                      backgroundColor: "#FFF3CD",
-                      border: "1px solid #FFEAA7",
-                      borderRadius: "8px",
-                      marginBottom: "16px",
-                    }}
-                  >
-                    <p
-                      style={{
-                        margin: "0 0 8px 0",
-                        fontSize: "14px",
-                        color: "#856404",
-                        fontWeight: "600",
-                      }}
-                    >
-                      Email verification required
-                    </p>
-                    <p
-                      style={{
-                        margin: "0 0 8px 0",
-                        fontSize: "13px",
-                        color: "#856404",
-                      }}
-                    >
-                      Please check your email and click the verification link before logging in.
-                    </p>
-                    <button
-                      onClick={resendVerificationEmail}
-                      style={{
-                        background: "transparent",
-                        border: "1px solid #856404",
-                        color: "#856404",
-                        padding: "4px 8px",
-                        borderRadius: "4px",
-                        cursor: "pointer",
-                        fontSize: "12px",
-                      }}
-                    >
-                      Resend verification email
-                    </button>
-                  </div>
+                <div className="form-step">
+  <div className="verification-message">
+    <p>✨ Email Verification Required! ✨</p>
+    <p style={{ fontSize: "14px", color: "var(--text-secondary)", marginBottom: "16px" }}>
+      We've sent a verification link to <strong>{email}</strong>. 
+      Please check your inbox and click the verification link to continue.
+    </p>
+    <p style={{ fontSize: "12px", color: "var(--text-secondary)", fontStyle: "italic" }}>
+      You must verify your email before you can complete registration and access your dashboard.
+    </p>
+  </div>
+  
+  {errors.verificationCode && <p className="error-text">{errors.verificationCode}</p>}
+  
+  <button
+    className="primary-btn verify-btn"
+    onClick={handleVerify}
+    disabled={checkingVerification}
+    style={{ marginBottom: "10px" }}
+  >
+    {checkingVerification ? (
+      <>
+        <Loader2 className="animate-spin" size={16} />
+        Checking Verification...
+      </>
+    ) : (
+      <>
+        <CheckCircle size={16} />
+        I've verified my email - Continue
+      </>
+    )}
+  </button>
+  
+  <button
+    onClick={resendVerificationEmail}
+    style={{
+      background: "transparent",
+      border: "1px solid var(--primary)",
+      color: "var(--primary)",
+      padding: "8px 16px",
+      borderRadius: "8px",
+      cursor: "pointer",
+      fontSize: "14px",
+    }}
+  >
+    Resend verification email
+  </button>
+</div>
                 )}
 
                 <button className="primary-btn" onClick={handleLogin} disabled={isLoading}>
@@ -1847,10 +1857,10 @@ const handleRoleClick = (roleObj) => {
         </div>
       </div>
 
-      {/* NDA Popup Component */}
-      {showNDA && registrationData && (
-        <NDASignupPopup registrationData={registrationData} onRegistrationComplete={handleRegistrationComplete} />
-      )}
+    {/* NDA Popup Component - Only show after email verification */}
+{showNDA && registrationData && isEmailVerified && (
+  <NDASignupPopup registrationData={registrationData} onRegistrationComplete={handleRegistrationComplete} />
+)}
 
       {/* Custom CSS for animations and hover effects */}
       <style jsx>{`
