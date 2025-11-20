@@ -1069,7 +1069,7 @@ const AdvisorsContent = ({ isImageLoaded, setIsImageLoaded, onButtonClick }) => 
   );
 };
 
-// Interns Content Component
+// Interns Content Component with BIG Score Integration
 const InternsContent = ({ isImageLoaded, setIsImageLoaded, onButtonClick }) => {
   return (
     <div style={styles.contentSection}>
@@ -1121,6 +1121,10 @@ const InternsContent = ({ isImageLoaded, setIsImageLoaded, onButtonClick }) => {
               <span style={styles.customBullet}>✓</span>
               <span style={styles.listText}>Get verified to enter the BIG Internship pool</span>
             </li>
+            <li style={styles.listItem}>
+              <span style={styles.customBullet}>✓</span>
+              <span style={styles.listText}>Receive your initial BIG Score based on your profile completeness and qualifications</span>
+            </li>
           </ul>
           <p style={styles.stepSubtext}>✅ We verify to ensure safety, readiness, and high-impact matching.</p>
         </motion.div>
@@ -1135,24 +1139,32 @@ const InternsContent = ({ isImageLoaded, setIsImageLoaded, onButtonClick }) => {
             <span style={styles.stepNumber}>2</span>
           </div>
           <div style={styles.stepHeader}>
-            <div style={styles.stepIcon}><FaHandshake size={24} /></div>
-            <h3 style={styles.stepTitle}>Get Matched with a Sponsor</h3>
+            <div style={styles.stepIcon}><FaChartLine size={24} /></div>
+            <h3 style={styles.stepTitle}>Get Your BIG Score & Improve It</h3>
           </div>
           <ul style={styles.stepDetails}>
             <li style={styles.listItem}>
               <span style={styles.customBullet}>✓</span>
-              <span style={styles.listText}>We match you with a sponsor (e.g. SETAs, corporates, government partners)</span>
+              <span style={styles.listText}>Your BIG Score evaluates your employability potential (0-100)</span>
             </li>
             <li style={styles.listItem}>
               <span style={styles.customBullet}>✓</span>
-              <span style={styles.listText}>Sponsors cover your internship stipend and Charm School training</span>
+              <span style={styles.listText}>We assess your skills, qualifications, and profile completeness</span>
             </li>
             <li style={styles.listItem}>
               <span style={styles.customBullet}>✓</span>
-              <span style={styles.listText}>You'll be notified once your funding is confirmed</span>
+              <span style={styles.listText}>Receive personalized feedback on how to improve your score</span>
+            </li>
+            <li style={styles.listItem}>
+              <span style={styles.customBullet}>✓</span>
+              <span style={styles.listText}>Complete additional certifications and training to boost your score</span>
+            </li>
+            <li style={styles.listItem}>
+              <span style={styles.customBullet}>✓</span>
+              <span style={styles.listText}>Higher BIG Scores increase your visibility to top employers</span>
             </li>
           </ul>
-          <p style={styles.stepSubtext}>💡 BIG handles the admin so you can focus on showing up and growing.</p>
+          <p style={styles.stepSubtext}>📈 Your BIG Score grows as you do - track your progress!</p>
         </motion.div>
 
         {/* Step 3 */}
@@ -1165,24 +1177,28 @@ const InternsContent = ({ isImageLoaded, setIsImageLoaded, onButtonClick }) => {
             <span style={styles.stepNumber}>3</span>
           </div>
           <div style={styles.stepHeader}>
-            <div style={styles.stepIcon}><FaUserFriends size={24} /></div>
-            <h3 style={styles.stepTitle}>Get Matched with a Business</h3>
+            <div style={styles.stepIcon}><FaHandshake size={24} /></div>
+            <h3 style={styles.stepTitle}>Get Matched with Sponsors & Businesses</h3>
           </div>
           <ul style={styles.stepDetails}>
             <li style={styles.listItem}>
               <span style={styles.customBullet}>✓</span>
-              <span style={styles.listText}>You'll be matched with an SME based on your skills, goals, and availability</span>
+              <span style={styles.listText}>We match you with sponsors (SETAs, corporates, government partners)</span>
+            </li>
+            <li style={styles.listItem}>
+              <span style={styles.customBullet}>✓</span>
+              <span style={styles.listText}>Sponsors cover your internship stipend and Charm School training</span>
+            </li>
+            <li style={styles.listItem}>
+              <span style={styles.customBullet}>✓</span>
+              <span style={styles.listText}>You'll be matched with SMEs based on your skills, BIG Score, and goals</span>
             </li>
             <li style={styles.listItem}>
               <span style={styles.customBullet}>✓</span>
               <span style={styles.listText}>Businesses review your profile and BIG Score before confirming</span>
             </li>
-            <li style={styles.listItem}>
-              <span style={styles.customBullet}>✓</span>
-              <span style={styles.listText}>Once placed, you'll start working and attending your Charm School sessions</span>
-            </li>
           </ul>
-          <p style={styles.stepSubtext}>📌 Each match is made with your development and employability in mind.</p>
+          <p style={styles.stepSubtext}>💡 Your BIG Score helps ensure the perfect match for your career growth.</p>
         </motion.div>
 
         {/* Step 4 */}
@@ -1196,27 +1212,31 @@ const InternsContent = ({ isImageLoaded, setIsImageLoaded, onButtonClick }) => {
           </div>
           <div style={styles.stepHeader}>
             <div style={styles.stepIcon}><FaChartBar size={24} /></div>
-            <h3 style={styles.stepTitle}>Track Your Progress & Get Support</h3>
+            <h3 style={styles.stepTitle}>Track Progress & Boost Your BIG Score</h3>
           </div>
           <ul style={styles.stepDetails}>
             <li style={styles.listItem}>
               <span style={styles.customBullet}>✓</span>
-              <span style={styles.listText}>Use your intern dashboard to track stipend disbursements, sessions, and performance</span>
+              <span style={styles.listText}>Use your dashboard to track stipends, sessions, and performance</span>
             </li>
             <li style={styles.listItem}>
               <span style={styles.customBullet}>✓</span>
-              <span style={styles.listText}>Attend mandatory Charm School sessions (skills, etiquette, communication, mindset)</span>
+              <span style={styles.listText}>Attend Charm School sessions (skills, etiquette, communication)</span>
             </li>
             <li style={styles.listItem}>
               <span style={styles.customBullet}>✓</span>
-              <span style={styles.listText}>Receive support from the BIG team and sponsors throughout your internship</span>
+              <span style={styles.listText}>Receive employer feedback that impacts your BIG Score positively</span>
             </li>
             <li style={styles.listItem}>
               <span style={styles.customBullet}>✓</span>
-              <span style={styles.listText}>Sponsors can log in to track impact, disbursements, and intern outcomes</span>
+              <span style={styles.listText}>Complete internship milestones to increase your score</span>
+            </li>
+            <li style={styles.listItem}>
+              <span style={styles.customBullet}>✓</span>
+              <span style={styles.listText}>Higher BIG Scores unlock better future opportunities and references</span>
             </li>
           </ul>
-          <p style={styles.stepSubtext}>📊 Your growth journey, supported every step of the way.</p>
+          <p style={styles.stepSubtext}>🚀 Watch your BIG Score rise as you gain real-world experience!</p>
         </motion.div>
       </motion.div>
 
@@ -1234,15 +1254,40 @@ const InternsContent = ({ isImageLoaded, setIsImageLoaded, onButtonClick }) => {
         />
       </motion.div>
 
+      {/* BIG Score Benefits for Interns */}
+      <div style={styles.internshipBenefits}>
+        <h3 style={styles.benefitsTitle}>🎯 Your BIG Score Advantage</h3>
+        <div style={styles.bigScoreGrid}>
+          <div style={styles.bigScoreCard}>
+            <h4 style={styles.bigScoreCardTitle}>Dynamic Scoring</h4>
+            <p style={styles.bigScoreCardText}>Your BIG Score updates in real-time as you complete training, receive feedback, and achieve milestones</p>
+          </div>
+          <div style={styles.bigScoreCard}>
+            <h4 style={styles.bigScoreCardTitle}>Career Visibility</h4>
+            <p style={styles.bigScoreCardText}>Higher scores make you more visible to top employers and increase your chances of permanent placement</p>
+          </div>
+          <div style={styles.bigScoreCard}>
+            <h4 style={styles.bigScoreCardTitle}>Skill Validation</h4>
+            <p style={styles.bigScoreCardText}>Your score validates your skills and readiness to potential employers across the BIG ecosystem</p>
+          </div>
+          <div style={styles.bigScoreCard}>
+            <h4 style={styles.bigScoreCardTitle}>Growth Tracking</h4>
+            <p style={styles.bigScoreCardText}>Monitor your professional development and see tangible proof of your improvement over time</p>
+          </div>
+        </div>
+      </div>
+
       <div style={styles.internshipBenefits}>
         <h3 style={styles.benefitsTitle}>🚀 Join the BIG Internship Network</h3>
         <ul style={styles.benefitsList}>
           <li style={styles.benefitItem}>✅ Fully funded placements</li>
           <li style={styles.benefitItem}>✅ Matched with real businesses</li>
           <li style={styles.benefitItem}>✅ Soft skills training included</li>
+          <li style={styles.benefitItem}>✅ Personal BIG Score tracking</li>
           <li style={styles.benefitItem}>✅ Dashboard tracking and growth support</li>
+          <li style={styles.benefitItem}>✅ Improve your score for better opportunities</li>
         </ul>
-        <p style={styles.benefitsFooter}>It takes less than 10 minutes to apply.</p>
+        <p style={styles.benefitsFooter}>Build your BIG Score while building your career - it takes less than 10 minutes to apply.</p>
       </div>
 
       <motion.button 
@@ -1270,7 +1315,7 @@ const colors = {
   verificationBg: '#F5EFE6'
 };
 
-// Main Styles with Video Styles
+// Main Styles with Video Styles and BIG Score Styles
 const styles = {
   appContainer: {
     position: 'relative',
@@ -1652,6 +1697,32 @@ const styles = {
     color: colors.warmGray,
     fontStyle: 'italic',
     marginTop: '20px'
+  },
+  // BIG Score Grid Styles
+  bigScoreGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, 1fr)',
+    gap: '20px',
+    margin: '30px 0'
+  },
+  bigScoreCard: {
+    backgroundColor: colors.white,
+    padding: '20px',
+    borderRadius: '10px',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+    textAlign: 'center',
+    border: `1px solid ${colors.lightGray}`
+  },
+  bigScoreCardTitle: {
+    fontSize: '1.1rem',
+    color: colors.mediumBrown,
+    marginBottom: '10px',
+    fontWeight: '600'
+  },
+  bigScoreCardText: {
+    fontSize: '0.9rem',
+    color: colors.darkBrown,
+    lineHeight: '1.5'
   },
   ctaButton: {
     display: 'block',

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaUserEdit, FaHandshake, FaUserFriends, FaChartBar } from 'react-icons/fa';
+import { FaUserEdit, FaHandshake, FaUserFriends, FaChartBar, FaChartLine } from 'react-icons/fa';
 import Header from './Header';
 import Footer from './Footer';
 
@@ -8,7 +8,7 @@ const HowItWorksInterns = () => {
   const navigate = useNavigate();
 
   const handleButtonClick = () => {
-    navigate('/login');
+    navigate('/loginRegister');
   };
 
   return (
@@ -21,7 +21,7 @@ const HowItWorksInterns = () => {
         <section style={styles.heroSection}>
           <div style={styles.heroContent}>
             <h1 style={styles.mainTitle}>How BIG Works for Interns</h1>
-            <p style={styles.subTitle}>Empower Your Future. Build Your Experience.</p>
+            <p style={styles.subTitle}>Empower Your Future. Build Your Experience. Grow Your BIG Score.</p>
           </div>
         </section>
 
@@ -38,7 +38,7 @@ const HowItWorksInterns = () => {
                 <div style={styles.stepNumber}>1</div>
                 <div style={styles.stepIcon}><FaUserEdit size={32} /></div>
               </div>
-              <h3 style={styles.stepTitle}>Create Profile</h3>
+              <h3 style={styles.stepTitle}>Create Profile & Get BIG Score</h3>
               <ul style={styles.stepDetails}>
                 <li style={styles.listItem}>
                   <span style={styles.customBullet}>✓</span>
@@ -56,6 +56,10 @@ const HowItWorksInterns = () => {
                   <span style={styles.customBullet}>✓</span>
                   <span style={styles.listText}>Get verified to enter the BIG Internship pool</span>
                 </li>
+                <li style={styles.listItem}>
+                  <span style={styles.customBullet}>✓</span>
+                  <span style={styles.listText}>Receive your initial BIG Score based on profile completeness</span>
+                </li>
               </ul>
               <p style={styles.stepSubtext}>✅ We verify to ensure safety and readiness</p>
             </div>
@@ -64,9 +68,41 @@ const HowItWorksInterns = () => {
             <div style={styles.stepCard}>
               <div style={styles.stepCircle}>
                 <div style={styles.stepNumber}>2</div>
+                <div style={styles.stepIcon}><FaChartLine size={32} /></div>
+              </div>
+              <h3 style={styles.stepTitle}>Boost Your BIG Score</h3>
+              <ul style={styles.stepDetails}>
+                <li style={styles.listItem}>
+                  <span style={styles.customBullet}>✓</span>
+                  <span style={styles.listText}>Your BIG Score evaluates employability (0-100)</span>
+                </li>
+                <li style={styles.listItem}>
+                  <span style={styles.customBullet}>✓</span>
+                  <span style={styles.listText}>Complete additional certifications to improve score</span>
+                </li>
+                <li style={styles.listItem}>
+                  <span style={styles.customBullet}>✓</span>
+                  <span style={styles.listText}>Receive personalized feedback for improvement</span>
+                </li>
+                <li style={styles.listItem}>
+                  <span style={styles.customBullet}>✓</span>
+                  <span style={styles.listText}>Higher scores increase visibility to top employers</span>
+                </li>
+                <li style={styles.listItem}>
+                  <span style={styles.customBullet}>✓</span>
+                  <span style={styles.listText}>Track your progress with real-time score updates</span>
+                </li>
+              </ul>
+              <p style={styles.stepSubtext}>📈 Watch your employability grow with your score</p>
+            </div>
+
+            {/* Step 3 */}
+            <div style={styles.stepCard}>
+              <div style={styles.stepCircle}>
+                <div style={styles.stepNumber}>3</div>
                 <div style={styles.stepIcon}><FaHandshake size={32} /></div>
               </div>
-              <h3 style={styles.stepTitle}>Get Matched with Sponsor</h3>
+              <h3 style={styles.stepTitle}>Get Matched with Sponsors</h3>
               <ul style={styles.stepDetails}>
                 <li style={styles.listItem}>
                   <span style={styles.customBullet}>✓</span>
@@ -80,32 +116,12 @@ const HowItWorksInterns = () => {
                   <span style={styles.customBullet}>✓</span>
                   <span style={styles.listText}>Notified once funding is confirmed</span>
                 </li>
+                <li style={styles.listItem}>
+                  <span style={styles.customBullet}>✓</span>
+                  <span style={styles.listText}>Your BIG Score helps match you with ideal sponsors</span>
+                </li>
               </ul>
               <p style={styles.stepSubtext}>💡 BIG handles the admin for you</p>
-            </div>
-
-            {/* Step 3 */}
-            <div style={styles.stepCard}>
-              <div style={styles.stepCircle}>
-                <div style={styles.stepNumber}>3</div>
-                <div style={styles.stepIcon}><FaUserFriends size={32} /></div>
-              </div>
-              <h3 style={styles.stepTitle}>Get Placed with Business</h3>
-              <ul style={styles.stepDetails}>
-                <li style={styles.listItem}>
-                  <span style={styles.customBullet}>✓</span>
-                  <span style={styles.listText}>Matched with SME based on your skills</span>
-                </li>
-                <li style={styles.listItem}>
-                  <span style={styles.customBullet}>✓</span>
-                  <span style={styles.listText}>Business reviews your profile before confirming</span>
-                </li>
-                <li style={styles.listItem}>
-                  <span style={styles.customBullet}>✓</span>
-                  <span style={styles.listText}>Start working and attending Charm School</span>
-                </li>
-              </ul>
-              <p style={styles.stepSubtext}>📌 Matches made for your development</p>
             </div>
 
             {/* Step 4 */}
@@ -114,7 +130,7 @@ const HowItWorksInterns = () => {
                 <div style={styles.stepNumber}>4</div>
                 <div style={styles.stepIcon}><FaChartBar size={32} /></div>
               </div>
-              <h3 style={styles.stepTitle}>Track Progress</h3>
+              <h3 style={styles.stepTitle}>Track Progress & Grow BIG Score</h3>
               <ul style={styles.stepDetails}>
                 <li style={styles.listItem}>
                   <span style={styles.customBullet}>✓</span>
@@ -126,10 +142,45 @@ const HowItWorksInterns = () => {
                 </li>
                 <li style={styles.listItem}>
                   <span style={styles.customBullet}>✓</span>
-                  <span style={styles.listText}>Receive support from BIG team</span>
+                  <span style={styles.listText}>Receive employer feedback to boost your score</span>
+                </li>
+                <li style={styles.listItem}>
+                  <span style={styles.customBullet}>✓</span>
+                  <span style={styles.listText}>Complete milestones to increase BIG Score</span>
+                </li>
+                <li style={styles.listItem}>
+                  <span style={styles.customBullet}>✓</span>
+                  <span style={styles.listText}>Higher scores unlock better future opportunities</span>
                 </li>
               </ul>
-              <p style={styles.stepSubtext}>📊 Your growth journey supported</p>
+              <p style={styles.stepSubtext}>🚀 Your BIG Score rises with real-world experience</p>
+            </div>
+          </div>
+
+          {/* BIG Score Benefits Section */}
+          <div style={styles.bigScoreSection}>
+            <h2 style={styles.bigScoreTitle}>🎯 Your BIG Score Advantage</h2>
+            <div style={styles.bigScoreGrid}>
+              <div style={styles.bigScoreCard}>
+                <div style={styles.bigScoreIcon}>📊</div>
+                <h3 style={styles.bigScoreCardTitle}>Dynamic Scoring</h3>
+                <p style={styles.bigScoreCardText}>Your BIG Score updates in real-time as you complete training, receive feedback, and achieve milestones</p>
+              </div>
+              <div style={styles.bigScoreCard}>
+                <div style={styles.bigScoreIcon}>👀</div>
+                <h3 style={styles.bigScoreCardTitle}>Career Visibility</h3>
+                <p style={styles.bigScoreCardText}>Higher scores make you more visible to top employers and increase chances of permanent placement</p>
+              </div>
+              <div style={styles.bigScoreCard}>
+                <div style={styles.bigScoreIcon}>✅</div>
+                <h3 style={styles.bigScoreCardTitle}>Skill Validation</h3>
+                <p style={styles.bigScoreCardText}>Your score validates your skills and readiness to potential employers across the BIG ecosystem</p>
+              </div>
+              <div style={styles.bigScoreCard}>
+                <div style={styles.bigScoreIcon}>📈</div>
+                <h3 style={styles.bigScoreCardTitle}>Growth Tracking</h3>
+                <p style={styles.bigScoreCardText}>Monitor your professional development and see tangible proof of your improvement over time</p>
+              </div>
             </div>
           </div>
 
@@ -153,9 +204,19 @@ const HowItWorksInterns = () => {
                 <p style={styles.benefitText}>Charm School soft skills</p>
               </div>
               <div style={styles.benefitCard}>
-                <div style={styles.benefitIcon}>📈</div>
-                <h3 style={styles.benefitCardTitle}>Growth Support</h3>
-                <p style={styles.benefitText}>Dashboard and mentorship</p>
+                <div style={styles.benefitIcon}>📊</div>
+                <h3 style={styles.benefitCardTitle}>BIG Score Tracking</h3>
+                <p style={styles.benefitText}>Personal employability score</p>
+              </div>
+              <div style={styles.benefitCard}>
+                <div style={styles.benefitIcon}>🚀</div>
+                <h3 style={styles.benefitCardTitle}>Career Growth</h3>
+                <p style={styles.benefitText}>Improve score for better opportunities</p>
+              </div>
+              <div style={styles.benefitCard}>
+                <div style={styles.benefitIcon}>🤝</div>
+                <h3 style={styles.benefitCardTitle}>Mentorship</h3>
+                <p style={styles.benefitText}>Dashboard and growth support</p>
               </div>
             </div>
           </div>
@@ -180,8 +241,8 @@ const HowItWorksInterns = () => {
             style={styles.ctaButton}
             onClick={handleButtonClick}
           >
-            Apply Now
-            <div style={styles.ctaSubtext}>It takes less than 10 minutes</div>
+            Start Your Internship Journey
+            <div style={styles.ctaSubtext}>Build your BIG Score while building your career - Apply in 10 minutes</div>
           </button>
         </div>
       </div>
@@ -200,7 +261,8 @@ const colors = {
   lightGray: '#BCAE9C',
   white: '#FFFFFF',
   accent: '#E8A87C',
-  warmGray: '#9E8D7B'
+  warmGray: '#9E8D7B',
+  verificationBg: '#F5EFE6'
 };
 
 const styles = {
@@ -370,6 +432,57 @@ const styles = {
     textAlign: 'left',
     paddingLeft: '20px'
   },
+  // BIG Score Section Styles
+  bigScoreSection: {
+    margin: '40px 0',
+    padding: '30px',
+    backgroundColor: colors.verificationBg,
+    borderRadius: '15px',
+    border: `2px solid ${colors.lightBrown}`,
+    boxShadow: '0 5px 15px rgba(158, 110, 60, 0.1)'
+  },
+  bigScoreTitle: {
+    fontSize: '1.8rem',
+    color: colors.mediumBrown,
+    marginBottom: '30px',
+    fontWeight: '600',
+    textAlign: 'center'
+  },
+  bigScoreGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, 1fr)',
+    gap: '20px',
+    '@media (max-width: 768px)': {
+      gridTemplateColumns: '1fr'
+    }
+  },
+  bigScoreCard: {
+    backgroundColor: colors.white,
+    padding: '25px',
+    borderRadius: '10px',
+    boxShadow: '0 3px 10px rgba(0,0,0,0.05)',
+    transition: 'all 0.3s ease',
+    textAlign: 'center',
+    ':hover': {
+      transform: 'translateY(-5px)',
+      boxShadow: '0 8px 20px rgba(0,0,0,0.1)'
+    }
+  },
+  bigScoreIcon: {
+    fontSize: '2.5rem',
+    marginBottom: '15px'
+  },
+  bigScoreCardTitle: {
+    fontSize: '1.2rem',
+    color: colors.lightBrown,
+    marginBottom: '10px',
+    fontWeight: '600'
+  },
+  bigScoreCardText: {
+    fontSize: '0.9rem',
+    color: colors.darkBrown,
+    lineHeight: '1.5'
+  },
   // Benefits Styles
   benefitsContainer: {
     margin: '40px 0',
@@ -386,7 +499,7 @@ const styles = {
   },
   benefitsGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
+    gridTemplateColumns: 'repeat(3, 1fr)',
     gap: '20px',
     '@media (max-width: 900px)': {
       gridTemplateColumns: 'repeat(2, 1fr)'
@@ -401,6 +514,7 @@ const styles = {
     borderRadius: '10px',
     boxShadow: '0 3px 10px rgba(0,0,0,0.05)',
     transition: 'all 0.3s ease',
+    textAlign: 'center',
     ':hover': {
       transform: 'translateY(-5px)',
       boxShadow: '0 8px 20px rgba(0,0,0,0.1)'
@@ -414,7 +528,8 @@ const styles = {
   benefitCardTitle: {
     fontSize: '1.2rem',
     color: colors.lightBrown,
-    marginBottom: '10px'
+    marginBottom: '10px',
+    fontWeight: '600'
   },
   benefitText: {
     fontSize: '0.9rem',

@@ -37,9 +37,9 @@ const BIGScorePage = () => {
           detailedDescription: "🧱 This is the foundation of your BIG Score — no compliance, no credibility.",
           calculationMethod: "Our AI analyzes official documents, government records, and compliance certifications to verify your business's legal standing. We cross-reference multiple data sources to ensure accuracy and up-to-date information.",
           weightings: {
-            seed: { value: "25%", description: "Focus on basic legal compliance" },
-            growth: { value: "20%", description: "Expanded regulatory requirements" },
-            maturity: { value: "20%", description: "Full compliance expected" }
+            seed: { value: "20%", description: "Focus on basic legal compliance" },
+            growth: { value: "15%", description: "Expanded regulatory requirements" },
+            maturity: { value: "15%", description: "Full compliance expected" }
           },
           subComponents: [
             {
@@ -85,9 +85,9 @@ const BIGScorePage = () => {
           detailedDescription: "🎯 Funders look beyond paperwork. This score shows you mean business.",
           calculationMethod: "We evaluate digital footprint, customer reviews, media presence, and partnership history. Our natural language processing analyzes sentiment and consistency across multiple platforms.",
           weightings: {
-            seed: { value: "30%", description: "Basic legitimacy checks" },
-            growth: { value: "25%", description: "Expanded track record evaluation" },
-            maturity: { value: "20%", description: "Comprehensive reputation analysis" }
+            seed: { value: "20%", description: "Basic legitimacy checks" },
+            growth: { value: "15%", description: "Expanded track record evaluation" },
+            maturity: { value: "15%", description: "Comprehensive reputation analysis" }
           },
           subComponents: [
             {
@@ -159,196 +159,231 @@ const BIGScorePage = () => {
           ]
         },
         {
-          title: "Fundability Score",
-          description: <p><span style={{ fontWeight: 'bold' , color:'#754A2D'}}>What it tells us</span>: Whether your business has the traction, financials, and narrative to attract and secure capital.</p>,
-          image: "https://img.icons8.com/ios-filled/100/754A2D/money-bag.png",
-          detailedDescription: "📊 This isn't about size — it's about investment readiness.",
-          calculationMethod: "Financial statements are analyzed using machine learning models that compare your metrics with industry benchmarks. We assess growth trends, revenue models, and market potential.",
+          title: "Leadership Score",
+          description: <p><span style={{ fontWeight: 'bold' , color:'#754A2D'}}>What it tells us</span>: The leadership capabilities and experience of business owners and key executives.</p>,
+          image: "https://img.icons8.com/ios-filled/100/754A2D/conference.png",
+          detailedDescription: "👑 This score assesses readiness to lead teams, attract investment, and scale operations effectively.",
+          calculationMethod: "We analyze leadership profiles, management experience, team composition, and professional credentials using advanced AI assessment of leadership capabilities.",
           weightings: {
-            seed: { value: "40%", description: "Basic financial viability" },
-            growth: { value: "45%", description: "Detailed financial analysis" },
-            maturity: { value: "50%", description: "Comprehensive investment readiness" }
+            seed: { value: "15%", description: "Founding team evaluation" },
+            growth: { value: "20%", description: "Developing leadership structure" },
+            maturity: { value: "20%", description: "Professional leadership expected" }
           },
           subComponents: [
             {
-              title: "Leadership Strength",
-              description: "Experience and diversity of leadership team",
-              detailedDescription: "Evaluation of leadership experience, diversity, and coachability.",
-              calculationMethod: "AI evaluation of uploaded leadership profiles",
+              title: "Leadership Experience",
+              description: "Years of management experience, positions held, business complexity managed",
+              detailedDescription: "Evaluation of leadership tenure, roles and responsibilities, and complexity of organizations managed.",
+              calculationMethod: "Analysis of leadership profiles and career history",
               weightings: {
-                seed: { value: "15%", description: "Founding team evaluation" },
-                growth: { value: "10%", description: "Developing leadership" },
-                maturity: { value: "5%", description: "Professional leadership" }
+                seed: { value: "32%", description: "Founder experience focus" },
+                growth: { value: "32%", description: "Management experience" },
+                maturity: { value: "32%", description: "Executive experience" }
               }
             },
             {
-              title: "Financial Readiness",
-              description: "Accounting system, up-to-date books, tax compliance",
-              detailedDescription: "Assessment of existence of accounting/ERP system, books being up-to-date and clean, and tax and VAT compliance results.",
-              calculationMethod: "From company profile fields and AI evaluation of financial records",
+              title: "Team Management",
+              description: "Scale of teams led, organizational structure, revenue management success",
+              detailedDescription: "Assessment of team size management, organizational complexity, and revenue responsibility.",
+              calculationMethod: "Evaluation of management scope and team leadership",
               weightings: {
-                seed: { value: "10%", description: "Basic systems" },
-                growth: { value: "15%", description: "Established systems" },
-                maturity: { value: "20%", description: "Professional systems" }
+                seed: { value: "28%", description: "Small team management" },
+                growth: { value: "28%", description: "Growing team management" },
+                maturity: { value: "28%", description: "Large team management" }
               }
             },
             {
-              title: "Financial Strength",
-              description: "Profitability and revenue growth",
-              detailedDescription: "Evaluation of profitability and revenue growth trends.",
-              calculationMethod: "AI evaluation of financial statements",
+              title: "Recognition & Education",
+              description: "Educational qualifications, certifications, awards, industry recognition",
+              detailedDescription: "Assessment of formal education, professional certifications, industry awards, and recognition.",
+              calculationMethod: "Verification of credentials and achievements",
               weightings: {
-                seed: { value: "5%", description: "Early metrics" },
-                growth: { value: "10%", description: "Growing metrics" },
-                maturity: { value: "15%", description: "Strong metrics" }
+                seed: { value: "20%", description: "Basic qualifications" },
+                growth: { value: "20%", description: "Professional development" },
+                maturity: { value: "20%", description: "Advanced credentials" }
               }
             },
             {
-              title: "Operational Strength",
-              description: "Operating model clarity and strength",
-              detailedDescription: "Assessment of operational strength and operating model clarity.",
-              calculationMethod: "AI evaluation of operating model documents",
+              title: "Team & Leadership Visibility",
+              description: "Professional profiles, leadership visibility, team composition credibility",
+              detailedDescription: "Evaluation of leadership team visibility, professional online presence, and team composition.",
+              calculationMethod: "Analysis of leadership visibility and team structure",
               weightings: {
-                seed: { value: "15%", description: "Basic model" },
-                growth: { value: "15%", description: "Developing model" },
-                maturity: { value: "10%", description: "Mature model" }
-              }
-            },
-            {
-              title: "Pitch and Business Plan",
-              description: "Problem clarity, solution fit, market analysis, competitive landscape",
-              detailedDescription: "Evaluation of problem clarity, solution fit, market analysis (TAM, SAM), competitive landscape and advantage, revenue streams, financial projections, traction, MVP maturity, and investor IRR potential.",
-              calculationMethod: "AI evaluation of uploaded pitch deck and business plan",
-              weightings: {
-                seed: { value: "20%", description: "Early stage focus" },
-                growth: { value: "15%", description: "Growth stage focus" },
-                maturity: { value: "10%", description: "Mature stage focus" }
-              },
-              items: [
-                { name: "Problem Clarity", weight: "3% (Seed), 2% (Growth), 1% (Maturity)" },
-                { name: "Solution Fit", weight: "3% (Seed), 2% (Growth), 1% (Maturity)" },
-                { name: "Market Analysis", weight: "2% (Seed), 2% (Growth), 1% (Maturity)" },
-                { name: "Competitive Landscape", weight: "2% (Seed), 2% (Growth), 1% (Maturity)" },
-                { name: "Revenue Streams", weight: "2% (Seed), 2% (Growth), 1% (Maturity)" },
-                { name: "Financial Projections", weight: "2% (Seed), 2% (Growth), 2% (Maturity)" },
-                { name: "Traction", weight: "2% (Seed), 1% (Growth), 1% (Maturity)" },
-                { name: "MVP Maturity", weight: "3% (Seed), 1% (Growth), 1% (Maturity)" },
-                { name: "Investor IRR", weight: "1% (Seed), 1% (Growth), 1% (Maturity)" }
-              ]
-            },
-            {
-              title: "Guarantees",
-              description: "Forward contracts, payment guarantees, government support",
-              detailedDescription: "Evaluation of forward contracts (revenue guarantees), payment of credit guarantees, government or institutional support, asset-backed guarantees, export credit or trade insurance cover, factoring or receivables finance agreements, and personal or third-party guarantees.",
-              calculationMethod: "AI evaluation of uploaded contracts and guarantee documents",
-              weightings: {
-                seed: { value: "10%", description: "Limited guarantees" },
-                growth: { value: "15%", description: "Some guarantees" },
-                maturity: { value: "20%", description: "Strong guarantees" }
-              }
-            },
-            {
-              title: "Impact Proof",
-              description: "Job creation, HDG impact, environmental responsibility",
-              detailedDescription: "Assessment of job creation (number and quality), HDG impact (youth, women, disability inclusion), environmental responsibility (waste management, emissions, sustainability), CSR/CSI investment, and local value creation.",
-              calculationMethod: "Analysis of uploaded impact documentation",
-              weightings: {
-                seed: { value: "10%", description: "Early impact" },
-                growth: { value: "10%", description: "Growing impact" },
-                maturity: { value: "10%", description: "Mature impact" }
-              }
-            },
-            {
-              title: "Governance",
-              description: "Decision-making clarity, policies, conflict resolution",
-              detailedDescription: "Evaluation of decision-making clarity, policies & controls, conflict resolution / ethics, and separation of duties.",
-              calculationMethod: "AI evaluation of governance documents",
-              weightings: {
-                seed: { value: "15%", description: "Basic governance" },
-                growth: { value: "10%", description: "Developing governance" },
-                maturity: { value: "10%", description: "Mature governance" }
+                seed: { value: "20%", description: "Founder visibility" },
+                growth: { value: "20%", description: "Leadership team visibility" },
+                maturity: { value: "20%", description: "Executive team credibility" }
               }
             }
+          ],
+          scoreInterpretation: [
+            { range: "91-100%", level: "Visionary Leadership", description: "Proven ability to lead complex organizations with strategic foresight" },
+            { range: "81-90%", level: "Seasoned Leadership", description: "Excellent management strength and inspiring organizational leadership" },
+            { range: "61-80%", level: "Rising Leadership", description: "Strong foundations with clear potential for scaling influence and impact" },
+            { range: "41-60%", level: "Developing Leadership", description: "Growing experience with opportunities to strengthen leadership depth" },
+            { range: "0-40%", level: "Foundational Stage Leadership", description: "Building the capabilities and credibility needed to inspire teams and investors" }
           ]
         },
         {
-          title: "PIS Score (Public Interest Score)",
-          description: <p><span style={{ fontWeight: 'bold' , color:'#754A2D'}}>What it tells us</span>: How well-governed and structured your business is for long-term scale — even if you're early-stage.</p>,
-          image: "https://img.icons8.com/ios-filled/100/754A2D/conference-call.png",
-          detailedDescription: "🏗  This score tracks your journey from founder-led to board-ready...                                                                                              This score reflects how visible and accountable your business is to regulators, investors, and stakeholders. It's a measure of your companys's size, complexity, and impact-helping you understand when to scale from informal governance to a more insitutional structure. As your PIS increases, your governance needs evolve. A higher PIS signals when it's time to move from relying on advisors to building a formal board of directors and parnters trust your business is ready for growth.",
-          calculationMethod: "We assess team qualifications, governance structures, and sustainability practices. Our algorithms quantify both direct and indirect governance metrics.",
+          title: "Governance Score",
+          description: <p><span style={{ fontWeight: 'bold' , color:'#754A2D'}}>What it tells us</span>: Whether a business is ready to establish or improve its governance structures.</p>,
+          image: "https://img.icons8.com/ios-filled/100/754A2D/government-building.png",
+          detailedDescription: "🏛️ This score combines Public Interest Score with governance maturity assessment for comprehensive oversight evaluation.",
+          calculationMethod: "We assess board structure, strategic planning, risk management, transparency practices, and policy frameworks using AI analysis of governance documentation.",
           weightings: {
-            seed: { value: "5%", description: "Basic governance evaluation" },
-            growth: { value: "10%", description: "Expanded governance measurement" },
-            maturity: { value: "10%", description: "Comprehensive governance assessment" }
+            seed: { value: "15%", description: "Basic governance evaluation" },
+            growth: { value: "20%", description: "Developing governance structures" },
+            maturity: { value: "20%", description: "Mature governance expected" }
           },
           subComponents: [
             {
-              title: "Board Existence",
-              description: "Presence of external advisors providing strategic input",
-              detailedDescription: "Evaluation of whether the business has external advisors providing strategic input.",
-              calculationMethod: "Review of advisor bios, org chart, and strategic meeting notes",
+              title: "Board Structure & Functionality",
+              description: "Composition, roles, and effectiveness of board or advisory structure",
+              detailedDescription: "Evaluation of governance oversight suitable for business size and complexity.",
+              calculationMethod: "Review of board composition, charters, and meeting effectiveness",
               weightings: {
-                seed: { value: "40%", description: "Basic advisory" },
-                growth: { value: "15%", description: "Developing advisory" },
-                maturity: { value: "5%", description: "Mature advisory" }
+                seed: { value: "25%", description: "Advisory stage governance" },
+                growth: { value: "25%", description: "Emerging board stage" },
+                maturity: { value: "25%", description: "Full board stage" }
               }
             },
             {
-              title: "Board Existence & Composition",
-              description: "Existence and structure of board of directors",
-              detailedDescription: "Assessment of whether the business has a board of directors and its structure.",
-              calculationMethod: "Review of org chart, board charter, and minutes",
+              title: "Strategic Planning",
+              description: "Long-term vision, business plans, decision-making processes",
+              detailedDescription: "Assessment of strategic direction clarity and performance review processes.",
+              calculationMethod: "Analysis of business plans and strategic documentation",
               weightings: {
-                seed: { value: "0%", description: "Basic board" },
-                growth: { value: "30%", description: "Developing board" },
-                maturity: { value: "30%", description: "Mature board" }
+                seed: { value: "20%", description: "Basic planning" },
+                growth: { value: "20%", description: "Developing strategy" },
+                maturity: { value: "20%", description: "Mature planning" }
               }
             },
             {
-              title: "Board Committees",
-              description: "Oversight through committees (Audit, Risk, Remuneration)",
-              detailedDescription: "Evaluation of whether the business has board committees for key oversight functions.",
-              calculationMethod: "Review of committee charters and meeting records",
+              title: "Risk Management",
+              description: "Risk identification, assessment, mitigation, and crisis preparedness",
+              detailedDescription: "Evaluation of business risk management and continuity planning.",
+              calculationMethod: "Review of risk frameworks and business continuity plans",
               weightings: {
-                seed: { value: "10%", description: "Basic committees" },
-                growth: { value: "15%", description: "Developing committees" },
-                maturity: { value: "25%", description: "Mature committees" }
-              }
-            },
-            {
-              title: "Ownership & Accountability",
-              description: "Defined responsibilities, delegation, role clarity",
-              detailedDescription: "Assessment of whether responsibilities are clearly defined with proper delegation and role clarity.",
-              calculationMethod: "Review of RACI, DoA, and job descriptions",
-              weightings: {
-                seed: { value: "0%", description: "Basic structure" },
-                growth: { value: "5%", description: "Developing structure" },
-                maturity: { value: "20%", description: "Mature structure" }
+                seed: { value: "20%", description: "Basic risk awareness" },
+                growth: { value: "20%", description: "Developing risk management" },
+                maturity: { value: "20%", description: "Comprehensive risk framework" }
               }
             },
             {
               title: "Transparency & Reporting",
-              description: "Reporting to stakeholders, performance review, compliance",
-              detailedDescription: "Evaluation of reporting to stakeholders, performance review processes, and compliance reporting.",
-              calculationMethod: "Review of board packs, impact reports, and KPIs",
+              description: "Financial reporting, stakeholder communication, disclosure standards",
+              detailedDescription: "Assessment of reporting quality and frequency to stakeholders.",
+              calculationMethod: "Evaluation of reporting practices and stakeholder communications",
               weightings: {
-                seed: { value: "30%", description: "Basic reporting" },
-                growth: { value: "20%", description: "Developing reporting" },
-                maturity: { value: "15%", description: "Mature reporting" }
+                seed: { value: "20%", description: "Basic reporting" },
+                growth: { value: "20%", description: "Developing transparency" },
+                maturity: { value: "20%", description: "Advanced reporting" }
               }
             },
             {
-              title: "Policy Framework",
-              description: "Focused on governance policies (not reporting) to avoid overlap.",
-              detailedDescription: "Evaluation of reporting to stakeholders, performance review processes, and compliance reporting.",
-              calculationMethod: "Review of board packs, impact reports, and KPIs",
+              title: "Policies & Documentation",
+              description: "Essential business policies, employment contracts, compliance documentation",
+              detailedDescription: "Review of policy framework completeness and legal protection measures.",
+              calculationMethod: "Analysis of policy documentation and legal frameworks",
               weightings: {
-                seed: { value: "10%", description: "Basic reporting" },
-                growth: { value: "10%", description: "Developing reporting" },
-                maturity: { value: "10%", description: "Mature reporting" }
+                seed: { value: "15%", description: "Basic policies" },
+                growth: { value: "15%", description: "Developing policy framework" },
+                maturity: { value: "15%", description: "Comprehensive policies" }
               }
             }
+          ],
+          scoreInterpretation: [
+            { range: "91-100%", level: "Governance Excellence", description: "Exceptional governance maturity with comprehensive structures and robust oversight" },
+            { range: "81-90%", level: "Strong Governance", description: "Well-established governance framework with effective oversight mechanisms" },
+            { range: "61-80%", level: "Developing Governance", description: "Good governance foundations with room for refinement in oversight structures" },
+            { range: "41-60%", level: "Emerging Governance", description: "Basic governance elements with significant gaps needing addressing" },
+            { range: "0-40%", level: "Foundational Stage", description: "Governance structures require substantial development and implementation" }
+          ]
+        },
+        {
+          title: "Capital Appeal Score",
+          description: <p><span style={{ fontWeight: 'bold' , color:'#754A2D'}}>What it tells us</span>: How attractive a business is to potential investors and lenders.</p>,
+          image: "https://img.icons8.com/ios-filled/100/754A2D/money-bag.png",
+          detailedDescription: "💰 This score evaluates investment readiness and risk profile across critical funding decision factors.",
+          calculationMethod: "Financial statements are analyzed using machine learning models that compare your metrics with industry benchmarks. We assess growth trends, revenue models, and market potential.",
+          weightings: {
+            seed: { value: "30%", description: "Early-stage investment appeal" },
+            growth: { value: "30%", description: "Growth-stage funding potential" },
+            maturity: { value: "30%", description: "Mature-stage investment readiness" }
+          },
+          subComponents: [
+            {
+              title: "Financial Readiness",
+              description: "Accounting systems, compliance, up-to-date financial records",
+              detailedDescription: "Assessment of financial management systems and compliance status.",
+              calculationMethod: "Evaluation of accounting systems and financial compliance",
+              weightings: {
+                seed: { value: "25%", description: "Basic systems" },
+                growth: { value: "20%", description: "Established systems" },
+                maturity: { value: "15%", description: "Professional systems" }
+              }
+            },
+            {
+              title: "Financial Strength",
+              description: "Revenue growth, profitability, audited financials",
+              detailedDescription: "Evaluation of financial performance and stability metrics.",
+              calculationMethod: "Analysis of financial statements and growth trends",
+              weightings: {
+                seed: { value: "20%", description: "Early metrics" },
+                growth: { value: "25%", description: "Growing metrics" },
+                maturity: { value: "30%", description: "Strong metrics" }
+              }
+            },
+            {
+              title: "Operational Strength",
+              description: "Business processes, infrastructure, operational maturity",
+              detailedDescription: "Assessment of operational efficiency and business model strength.",
+              calculationMethod: "Evaluation of operational systems and processes",
+              weightings: {
+                seed: { value: "20%", description: "Basic operations" },
+                growth: { value: "20%", description: "Developing operations" },
+                maturity: { value: "15%", description: "Mature operations" }
+              }
+            },
+            {
+              title: "Impact Proof",
+              description: "Job creation, HDG inclusion, environmental responsibility, CSR investment",
+              detailedDescription: "Assessment of social and environmental impact metrics.",
+              calculationMethod: "Analysis of impact documentation and sustainability practices",
+              weightings: {
+                seed: { value: "15%", description: "Early impact" },
+                growth: { value: "15%", description: "Growing impact" },
+                maturity: { value: "20%", description: "Mature impact" }
+              }
+            },
+            {
+              title: "Pitch & Business Plan Quality",
+              description: "Investment narrative clarity, market analysis, competitive advantage",
+              detailedDescription: "Evaluation of business plan quality and investment pitch effectiveness.",
+              calculationMethod: "AI assessment of business plans and pitch materials",
+              weightings: {
+                seed: { value: "10%", description: "Basic pitch" },
+                growth: { value: "10%", description: "Developing pitch" },
+                maturity: { value: "10%", description: "Professional pitch" }
+              }
+            },
+            {
+              title: "Guarantees & Security",
+              description: "Forward contracts, payment guarantees, asset-backed security",
+              detailedDescription: "Assessment of financial guarantees and security arrangements.",
+              calculationMethod: "Evaluation of guarantee documentation and security arrangements",
+              weightings: {
+                seed: { value: "10%", description: "Limited guarantees" },
+                growth: { value: "10%", description: "Some guarantees" },
+                maturity: { value: "10%", description: "Strong guarantees" }
+              }
+            }
+          ],
+          scoreInterpretation: [
+            { range: "91-100%", level: "Highly Fundable", description: "Exceptional investment opportunity with strong financials and operations" },
+            { range: "81-90%", level: "Strong Investment Case", description: "Very attractive to funders with solid performance metrics" },
+            { range: "61-80%", level: "Moderate Potential", description: "Some areas need strengthening but shows promise" },
+            { range: "41-60%", level: "Basic Potential", description: "Significant improvements needed across multiple areas" },
+            { range: "0-40%", level: "Needs Development", description: "Fundamental changes required to attract investment" }
           ]
         }
       ]
@@ -372,16 +407,18 @@ const BIGScorePage = () => {
     const componentImages = {
       "Compliance Score": "https://thumbs.dreamstime.com/b/compliance-rules-law-regulation-policy-business-technology-concept-compliance-rules-law-regulation-policy-business-technology-112471593.jpg",
       "Legitimacy Score": "https://thekyb.com/wp-content/uploads/Business-Verification_-Navigating-the-Path-to-Ensure-Company-Legitimacy.jpg",
-      "Fundability Score": "https://c0.wallpaperflare.com/preview/98/565/296/gosclf0t64k3vi9o2podgkh1ev.jpg",
-      "PIS Score (Public Interest Score)": "https://media.istockphoto.com/id/639198068/photo/business-people-finding-solution-together-at-office.jpg?s=612x612&w=0&k=20&c=apxfQgMQ4KfWvTxdtyefbxIRiK0DVk7lFr4GbGSniR8="
+      "Leadership Score": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSmaC4ABRZh3z2sU4tvYq8TTcVv-l0-xAGtXQ&s",
+      "Governance Score": "https://media.istockphoto.com/id/639198068/photo/business-people-finding-solution-together-at-office.jpg?s=612x612&w=0&k=20&c=apxfQgMQ4KfWvTxdtyefbxIRiK0DVk7lFr4GbGSniR8=",
+      "Capital Appeal Score": "https://c0.wallpaperflare.com/preview/98/565/296/gosclf0t64k3vi9o2podgkh1ev.jpg"
     };
 
     // Extract the short name for the button text
     const getShortName = (title) => {
       if (title.includes("Compliance")) return "Compliance";
       if (title.includes("Legitimacy")) return "Legitimacy";
-      if (title.includes("Fundability")) return "Fundability";
-      if (title.includes("PIS")) return "PIS";
+      if (title.includes("Leadership")) return "Leadership";
+      if (title.includes("Governance")) return "Governance";
+      if (title.includes("Capital")) return "Capital";
       return title;
     };
 
@@ -397,12 +434,17 @@ const BIGScorePage = () => {
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        transition: 'all 0.3s ease',
-        ':hover': {
-          transform: 'translateY(-5px)',
-          boxShadow: '0 12px 35px rgba(117, 74, 45, 0.15)'
-        }
-      }}>
+        transition: 'all 0.3s ease'
+      }}
+      onMouseOver={(e) => {
+        e.target.style.transform = 'translateY(-5px)';
+        e.target.style.boxShadow = '0 12px 35px rgba(117, 74, 45, 0.15)';
+      }}
+      onMouseOut={(e) => {
+        e.target.style.transform = 'translateY(0)';
+        e.target.style.boxShadow = '0 8px 30px rgba(117, 74, 45, 0.1)';
+      }}
+      >
         <div style={{
           display: 'flex',
           alignItems: 'flex-start',
@@ -417,6 +459,10 @@ const BIGScorePage = () => {
               width: '40px',
               height: '40px',
               objectFit: 'contain'
+            }}
+            onError={(e) => {
+              // Fallback if image fails to load
+              e.target.src = "https://img.icons8.com/ios-filled/100/754A2D/image.png";
             }}
           />
           <div>
@@ -455,6 +501,10 @@ const BIGScorePage = () => {
               objectFit: 'cover',
               borderRadius: '8px'
             }}
+            onError={(e) => {
+              // Fallback if image fails to load
+              e.target.src = "https://via.placeholder.com/300x120/754A2D/FFFFFF?text=" + component.title;
+            }}
           />
           <p style={{
             fontSize: '0.85rem',
@@ -492,11 +542,15 @@ const BIGScorePage = () => {
               cursor: 'pointer',
               transition: 'all 0.3s ease',
               flex: 1,
-              minWidth: '100px',
-              ':hover': {
-                backgroundColor: '#9E6E3C',
-                color: 'white'
-              }
+              minWidth: '100px'
+            }}
+            onMouseOver={(e) => {
+              e.target.style.backgroundColor = '#9E6E3C';
+              e.target.style.color = 'white';
+            }}
+            onMouseOut={(e) => {
+              e.target.style.backgroundColor = 'transparent';
+              e.target.style.color = '#9E6E3C';
             }}
           >
             View Weightings
@@ -525,11 +579,15 @@ const BIGScorePage = () => {
               cursor: 'pointer',
               transition: 'all 0.3s ease',
               flex: 1,
-              minWidth: '100px',
-              ':hover': {
-                backgroundColor: '#E0D8C8',
-                borderColor: '#E0D8C8'
-              }
+              minWidth: '100px'
+            }}
+            onMouseOver={(e) => {
+              e.target.style.backgroundColor = '#E0D8C8';
+              e.target.style.borderColor = '#E0D8C8';
+            }}
+            onMouseOut={(e) => {
+              e.target.style.backgroundColor = '#F2F0E6';
+              e.target.style.borderColor = '#F2F0E6';
             }}
           >
             See How {shortName} is Calculated
@@ -629,12 +687,17 @@ const BIGScorePage = () => {
                 fontWeight: '600',
                 cursor: 'pointer',
                 boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
-                transition: 'all 0.3s ease',
-                ':hover': {
-                  transform: 'translateY(-3px)',
-                  boxShadow: '0 10px 20px rgba(0,0,0,0.2)',
-                  backgroundColor: '#754A2D'
-                }
+                transition: 'all 0.3s ease'
+              }}
+              onMouseOver={(e) => {
+                e.target.style.transform = 'translateY(-3px)';
+                e.target.style.boxShadow = '0 10px 20px rgba(0,0,0,0.2)';
+                e.target.style.backgroundColor = '#754A2D';
+              }}
+              onMouseOut={(e) => {
+                e.target.style.transform = 'translateY(0)';
+                e.target.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
+                e.target.style.backgroundColor = '#9E6E3C';
               }}
             >
               Get your score now
@@ -699,11 +762,15 @@ const BIGScorePage = () => {
                   textAlign: 'center',
                   boxShadow: '0 5px 15px rgba(0,0,0,0.05)',
                   borderTop: '3px solid #9E6E3C',
-                  transition: 'transform 0.3s ease',
-                  ':hover': {
-                    transform: 'translateY(-5px)'
-                  }
-                }}>
+                  transition: 'transform 0.3s ease'
+                }}
+                onMouseOver={(e) => {
+                  e.target.style.transform = 'translateY(-5px)';
+                }}
+                onMouseOut={(e) => {
+                  e.target.style.transform = 'translateY(0)';
+                }}
+                >
                   <div style={{
                     width: '50px',
                     height: '50px',
@@ -743,6 +810,26 @@ const BIGScorePage = () => {
             }}>
               The BIG Score is more than a number — it's your passport to funders, partners, and opportunity
             </p>
+
+            <div style={{
+              backgroundColor: '#F2F0E6',
+              padding: '25px',
+              borderRadius: '12px',
+              marginTop: '30px',
+              borderLeft: '4px solid #9E6E3C'
+            }}>
+              <p style={{
+                fontSize: '1rem',
+                lineHeight: '1.7',
+                color: '#372C27',
+                textAlign: 'center',
+                margin: 0
+              }}>
+                <strong>Consumer finance has TransUnion and Experian</strong> — global systems (like FICO in the US) that measure personal creditworthiness.<br />
+                <strong>Corporates have Moody's, Fitch, and S&P</strong> — rating frameworks that measure institutional risk<br />
+                <strong>SMEs have "The BIG Score"</strong> — a shared metric that lets funders, corporates, and partners speak the same language of readiness and reliability
+              </p>
+            </div>
           </div>
 
           {/* BIG Score Components Section */}
@@ -771,17 +858,17 @@ const BIGScorePage = () => {
               textAlign: 'center',
               color: '#F2F0E6'
             }}>
-              Our AI-powered framework scores every SME across <strong>four core dimensions</strong> — giving funders, partners, and programs a complete view of business readiness.
+              Our AI-powered framework scores every SME across <strong>five core dimensions</strong> — giving funders, partners, and programs a complete view of business readiness.
             </p>
             
-            {/* Top Row - 2 Cards */}
+            {/* Top Row - 3 Cards */}
             <div style={{ 
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
               gap: '30px',
               marginBottom: '30px'
             }}>
-              {scoreData.bigScore.components.slice(0, 2).map((component, index) => (
+              {scoreData.bigScore.components.slice(0, 3).map((component, index) => (
                 <ScoreBox 
                   key={index}
                   component={component}
@@ -797,7 +884,7 @@ const BIGScorePage = () => {
               gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
               gap: '30px'
             }}>
-              {scoreData.bigScore.components.slice(2, 4).map((component, index) => (
+              {scoreData.bigScore.components.slice(3, 5).map((component, index) => (
                 <ScoreBox 
                   key={index}
                   component={component}
@@ -1096,12 +1183,17 @@ const BIGScorePage = () => {
                   fontWeight: '600',
                   cursor: 'pointer',
                   transition: 'all 0.3s ease',
-                  boxShadow: '0 5px 15px rgba(0,0,0,0.2)',
-                  ':hover': {
-                    backgroundColor: '#1E1915',
-                    transform: 'translateY(-3px)',
-                    boxShadow: '0 8px 20px rgba(0,0,0,0.3)'
-                  }
+                  boxShadow: '0 5px 15px rgba(0,0,0,0.2)'
+                }}
+                onMouseOver={(e) => {
+                  e.target.style.backgroundColor = '#1E1915';
+                  e.target.style.transform = 'translateY(-3px)';
+                  e.target.style.boxShadow = '0 8px 20px rgba(0,0,0,0.3)';
+                }}
+                onMouseOut={(e) => {
+                  e.target.style.backgroundColor = '#372C27';
+                  e.target.style.transform = 'translateY(0)';
+                  e.target.style.boxShadow = '0 5px 15px rgba(0,0,0,0.2)';
                 }}
               >
                 Get Started Now
@@ -1116,13 +1208,19 @@ const BIGScorePage = () => {
                 fontWeight: '600',
                 cursor: 'pointer',
                 transition: 'all 0.3s ease',
-                boxShadow: '0 5px 15px rgba(0,0,0,0.1)',
-                ':hover': {
-                  backgroundColor: '#E0D8C8',
-                  transform: 'translateY(-3px)',
-                  boxShadow: '0 8px 20px rgba(0,0,0,0.2)'
-                }
-              }}>
+                boxShadow: '0 5px 15px rgba(0,0,0,0.1)'
+              }}
+              onMouseOver={(e) => {
+                e.target.style.backgroundColor = '#E0D8C8';
+                e.target.style.transform = 'translateY(-3px)';
+                e.target.style.boxShadow = '0 8px 20px rgba(0,0,0,0.2)';
+              }}
+              onMouseOut={(e) => {
+                e.target.style.backgroundColor = '#F2F0E6';
+                e.target.style.transform = 'translateY(0)';
+                e.target.style.boxShadow = '0 5px 15px rgba(0,0,0,0.1)';
+              }}
+              >
                 See Sample Report
               </button>
             </div>
@@ -1170,11 +1268,15 @@ const BIGScorePage = () => {
                 fontSize: '1.5rem',
                 cursor: 'pointer',
                 color: '#9E6E3C',
-                transition: 'all 0.3s ease',
-                ':hover': {
-                  transform: 'rotate(90deg)',
-                  color: '#754A2D'
-                }
+                transition: 'all 0.3s ease'
+              }}
+              onMouseOver={(e) => {
+                e.target.style.transform = 'rotate(90deg)';
+                e.target.style.color = '#754A2D';
+              }}
+              onMouseOut={(e) => {
+                e.target.style.transform = 'rotate(0)';
+                e.target.style.color = '#9E6E3C';
               }}
             >
               ×
@@ -1271,6 +1373,75 @@ const BIGScorePage = () => {
                   ))}
                 </div>
                 
+                {/* Score Interpretation Section for Leadership, Governance, and Capital Appeal */}
+                {(popupContent.title === "Leadership Score" || popupContent.title === "Governance Score" || popupContent.title === "Capital Appeal Score") && popupContent.scoreInterpretation && (
+                  <div style={{ 
+                    backgroundColor: '#F2F0E6',
+                    padding: '25px',
+                    borderRadius: '12px',
+                    marginBottom: '30px'
+                  }}>
+                    <h3 style={{ 
+                      color: '#754A2D',
+                      fontSize: '1.3rem',
+                      fontWeight: '600',
+                      marginBottom: '15px'
+                    }}>
+                      Score Interpretation
+                    </h3>
+                    <div style={{ 
+                      overflowX: 'auto'
+                    }}>
+                      <table style={{ 
+                        width: '100%',
+                        borderCollapse: 'collapse',
+                        borderRadius: '8px',
+                        overflow: 'hidden',
+                        boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
+                      }}>
+                        <thead>
+                          <tr style={{ 
+                            backgroundColor: '#9E6E3C',
+                            color: 'white'
+                          }}>
+                            <th style={{ padding: '12px 15px', textAlign: 'left' }}>Score Range</th>
+                            <th style={{ padding: '12px 15px', textAlign: 'left' }}>Level</th>
+                            <th style={{ padding: '12px 15px', textAlign: 'left' }}>Description</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {popupContent.scoreInterpretation.map((item, index) => (
+                            <tr key={index} style={{ 
+                              backgroundColor: index % 2 === 0 ? 'white' : '#F9F9F9'
+                            }}>
+                              <td style={{ 
+                                padding: '12px 15px',
+                                fontWeight: '500',
+                                borderBottom: '1px solid #eee'
+                              }}>
+                                {item.range}
+                              </td>
+                              <td style={{ 
+                                padding: '12px 15px',
+                                fontWeight: '600',
+                                borderBottom: '1px solid #eee'
+                              }}>
+                                {item.level}
+                              </td>
+                              <td style={{ 
+                                padding: '12px 15px',
+                                borderBottom: '1px solid #eee'
+                              }}>
+                                {item.description}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+                
                 <div style={{ 
                   backgroundColor: '#F2F0E6',
                   padding: '25px',
@@ -1328,11 +1499,7 @@ const BIGScorePage = () => {
                       <tbody>
                         {popupContent.rubric.map((item, index) => (
                           <tr key={index} style={{ 
-                            backgroundColor: index % 2 === 0 ? 'white' : '#F9F9F9',
-                            transition: 'background-color 0.3s ease',
-                            ':hover': {
-                              backgroundColor: '#F2F0E6'
-                            }
+                            backgroundColor: index % 2 === 0 ? 'white' : '#F9F9F9'
                           }}>
                             <td style={{ 
                               padding: '12px 15px',
