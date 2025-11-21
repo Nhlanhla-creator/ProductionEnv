@@ -1536,7 +1536,13 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
                 action: "Application Received",
                 availableDates: availabilityData,
                 locationFlexibility:
-                  applicationData.locationFlexibility?.[0] || skillsInterests.locationPreference || "Not specified",
+  (applicationData.locationFlexibility && 
+   applicationData.locationFlexibility[0] && 
+   applicationData.locationFlexibility[0] !== "N") 
+    ? applicationData.locationFlexibility[0] 
+    : (skillsInterests.locationPreference && skillsInterests.locationPreference !== "N")
+      ? skillsInterests.locationPreference
+      : "Not specified",
                 matchAnalysis: applicationData.matchAnalysis || null,
 
                 // Profile information
@@ -1655,10 +1661,12 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
                 action: "No Application",
 
                 availableDates: [],
-                locationFlexibility:
-                  (Array.isArray(academicOverview.locationFlexibility) &&
-                    academicOverview.locationFlexibility.join(", ")) ||
-                  "Not specified",
+                locationFlexibility: 
+  (Array.isArray(academicOverview.locationFlexibility) && 
+   academicOverview.locationFlexibility.length > 0 && 
+   academicOverview.locationFlexibility[0] !== "N")
+    ? academicOverview.locationFlexibility.join(", ")
+    : "Not specified",
 
                 matchAnalysis: matchResult,
 
@@ -2693,7 +2701,47 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`;
     display: "inline-block",
     textTransform: "capitalize",
   }
+// Add this filter function near your other filter functions
+const hasTooManyMissingFields = (intern) => {
+  const fieldsToCheck = [
+    intern.internName,
+    intern.location,
+    intern.institution,
+    intern.degree,
+    intern.field,
+    intern.locationFlexibility,
+    intern.role,
+    intern.sponsorName,
+    intern.fundingProgramType,
+    intern.startDate,
+    intern.matchPercentage?.toString(),
+    intern.bigScore?.toString()
+  ];
 
+  const missingCount = fieldsToCheck.filter(field => {
+    if (field === null || field === undefined) return true;
+    
+    const stringField = field.toString().trim();
+    return (
+      stringField === '' ||
+      stringField === '-' ||
+      stringField === 'Not specified' ||
+      stringField === 'Various' ||
+      stringField === 'unspecified' ||
+      stringField === 'Unknown' ||
+      stringField === 'N/A' ||
+stringField === 'Not Provided' ||
+      stringField === '0' || // If scores are 0, consider them missing
+      stringField.toLowerCase() === 'null' ||
+      stringField.toLowerCase().includes('not specified') ||
+      stringField.toLowerCase().includes('unspecified') ||
+      stringField.toLowerCase().includes('tbd') ||
+      stringField.toLowerCase().includes('anonymous')
+    );
+  }).length;
+
+  return missingCount > 4;
+};
   // The useEffect hook must be called at the top level of the component, not conditionally.
   // The original code had it inside the component body but not as a direct child.
   // This has been moved to the top level of the component's scope.
@@ -2701,43 +2749,64 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`;
 
   // Moved the filtering logic directly into the component body, outside of the useEffect.
   // This ensures it runs on every render after `interns` is updated.
-  const applyLocalFilters = () => {
-    let updatedInterns = [...interns]
+ const applyLocalFilters = () => {
+  let updatedInterns = [...interns];
 
-    // Filter by Location
+  // Apply the main filters (user exclusion and missing fields)
+  updatedInterns = updatedInterns.filter((intern) => {
+    // First check if intern UID matches current user - if so, exclude
+    const user = auth.currentUser;
+    if (user && intern.internId === user.uid) {
+      return false;
+    }
+
+    // Then check if too many fields are missing - if so, exclude completely
+    if (hasTooManyMissingFields(intern)) {
+      return false;
+    }
+
+    // Then apply your existing local filters...
     if (localFilters.location) {
-      updatedInterns = updatedInterns.filter((intern) => intern.location === localFilters.location)
-    }
-
-    // Filter by Institution
-    if (localFilters.institution) {
-      updatedInterns = updatedInterns.filter((intern) => intern.institution === localFilters.institution)
-    }
-
-    // Filter by Degree (partial match)
-    if (localFilters.degree) {
-      updatedInterns = updatedInterns.filter((intern) =>
-        intern.degree.toLowerCase().includes(localFilters.degree.toLowerCase()),
-      )
-    }
-
-    // Filter by Match Score
-    updatedInterns = updatedInterns.filter((intern) => intern.matchPercentage >= localFilters.matchScore)
-
-    // Sorting
-    updatedInterns.sort((a, b) => {
-      if (localFilters.sortBy === "matchPercentage") {
-        return b.matchPercentage - a.matchPercentage
-      } else if (localFilters.sortBy === "bigScore") {
-        return b.bigScore - a.bigScore
-      } else if (localFilters.sortBy === "internName") {
-        return a.internName.localeCompare(b.internName)
+      if (!intern.location || !intern.location.toLowerCase().includes(localFilters.location.toLowerCase())) {
+        return false;
       }
-      return 0
-    })
+    }
 
-    setFilteredInterns(updatedInterns)
-  }
+    if (localFilters.institution) {
+      if (!intern.institution || !intern.institution.toLowerCase().includes(localFilters.institution.toLowerCase())) {
+        return false;
+      }
+    }
+
+    if (localFilters.degree) {
+      if (!intern.degree || !intern.degree.toLowerCase().includes(localFilters.degree.toLowerCase())) {
+        return false;
+      }
+    }
+
+    if (localFilters.matchScore > 0) {
+      if (!intern.matchPercentage || intern.matchPercentage < localFilters.matchScore) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  // Sorting
+  updatedInterns.sort((a, b) => {
+    if (localFilters.sortBy === "matchPercentage") {
+      return b.matchPercentage - a.matchPercentage;
+    } else if (localFilters.sortBy === "bigScore") {
+      return b.bigScore - a.bigScore;
+    } else if (localFilters.sortBy === "internName") {
+      return a.internName.localeCompare(b.internName);
+    }
+    return 0;
+  });
+
+  setFilteredInterns(updatedInterns);
+};
 
   useEffect(() => {
     applyLocalFilters()

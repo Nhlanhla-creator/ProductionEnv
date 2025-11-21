@@ -358,6 +358,33 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
     return () => setMounted(false)
   }, [])
 
+  const hasTooManyMissingFields = (accelerator) => {
+  const fieldsToCheck = [
+    accelerator.geographicFocus,
+    accelerator.sectorFocus,
+    accelerator.fundingStage,
+    accelerator.fundingType,
+    accelerator.ticketSize,
+    accelerator.supportOffered,
+    accelerator.servicesOffered,
+    accelerator.deadline,
+    accelerator.speed
+  ];
+
+  const missingCount = fieldsToCheck.filter(field => 
+    !field || 
+    field === '-' || 
+    field === 'Not specified' || 
+    field === 'Various' || 
+    field === 'unspecified' || 
+    field === 'Unknown' ||
+    field === 'N/A'
+  ).length;
+
+  return missingCount > 4; // Hide if more than 4 fields are missing
+};
+
+
   // Function to send email notification to catalyst
   const sendCatalystEmailNotification = async (catalystId, smeData, accelerator) => {
     try {
@@ -476,6 +503,7 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
       if (!user) return
 
       const smeId = user.uid
+      const currentUserId = user.uid
       const smeDoc = await getDoc(doc(db, "universalProfiles", smeId))
       const smeData = smeDoc.exists() ? smeDoc.data() : {}
 
@@ -485,6 +513,10 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
       const profiles = await Promise.all(
         snapshot.docs.flatMap(async (docSnap) => {
           const catalystId = docSnap.id
+          
+if (catalystId === currentUserId) {
+  return []
+}
           const data = docSnap.data()
           const formData = data.formData || {}
           const overview = formData.entityOverview || {}
@@ -1151,6 +1183,11 @@ if (instrumentMatch) {
   const uniqueNextStages = [...new Set(accelerators.map((acc) => acc.nextStage).filter(Boolean))]
 
   const filteredAccelerators = accelerators.filter((accelerator) => {
+      if (hasTooManyMissingFields(accelerator)) {
+    return false;
+  }
+
+ 
     // Filter by geographic focus
     if (
       selectedGeographic.length > 0 &&

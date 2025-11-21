@@ -929,6 +929,44 @@ Best regards,\nBIG Marketplace Africa Team`;
     setShowFilterModal(false)
   }
 
+  // Add this filter function near your other filter functions
+const hasTooManyMissingFields = (advisor) => {
+  const fieldsToCheck = [
+    advisor.name,
+    advisor.headline,
+    advisor.location,
+    advisor.sectorFocus,
+    advisor.functionalExpertise,
+    advisor.fundingStage,
+    advisor.engagementType,
+    advisor.compensationModel,
+    advisor.startDate,
+    advisor.availability,
+    advisor.matchPercentage?.toString()
+  ];
+
+  const missingCount = fieldsToCheck.filter(field => {
+    if (field === null || field === undefined) return true;
+    
+    const stringField = field.toString().trim();
+    return (
+      stringField === '' ||
+      stringField === '-' ||
+      stringField === 'Not specified' ||
+      stringField === 'Various' ||
+      stringField === 'unspecified' ||
+      stringField === 'Unknown' ||
+      stringField === 'N/A' ||
+      stringField === '0' || // If match percentage is 0, consider it missing
+      stringField.toLowerCase() === 'null' ||
+      stringField.toLowerCase().includes('not specified') ||
+      stringField.toLowerCase().includes('unspecified')
+    );
+  }).length;
+
+  return missingCount > 4;
+};
+
   // Get unique values for filter dropdowns
   const uniqueLocations = [...new Set(advisors.map((adv) => adv.location).filter(Boolean))]
   const uniqueSectors = [...new Set(advisors.map((adv) => adv.sectorFocus).filter(Boolean))]
@@ -937,7 +975,15 @@ Best regards,\nBIG Marketplace Africa Team`;
   const uniqueCompensation = [...new Set(advisors.map((adv) => adv.compensationModel).filter(Boolean))]
 
   const filteredAdvisors = advisors.filter((advisor) => {
+      const user = auth.currentUser;
+  if (user && advisor.id === user.uid) {
+    return false;
+  }
     const currentStatus = statuses[advisor.id] || advisor.status
+    
+  if (hasTooManyMissingFields(advisor)) {
+    return false;
+  }
 
     // Filter by location
     if (
