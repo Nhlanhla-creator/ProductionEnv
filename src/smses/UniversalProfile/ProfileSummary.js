@@ -1,5 +1,4 @@
 "use client"
-
 import { useState } from "react"
 import {
   ChevronDown,
@@ -137,81 +136,81 @@ const ProfileSummary = ({ data, onEdit }) => {
   }
 
   const renderDocumentsList = (files, documentName) => {
-  // Handle cases where files is not an array
-  if (!files) {
+    // Handle cases where files is not an array
+    if (!files) {
+      return (
+        <div style={{ fontSize: "14px", color: "#7d5a50", fontStyle: "italic" }}>
+          No documents uploaded
+        </div>
+      )
+    }
+
+    // Convert single file to array if needed
+    const filesArray = Array.isArray(files) ? files : [files]
+
+    if (filesArray.length === 0) {
+      return (
+        <div style={{ fontSize: "14px", color: "#7d5a50", fontStyle: "italic" }}>
+          No documents uploaded
+        </div>
+      )
+    }
+
     return (
-      <div style={{ fontSize: "14px", color: "#7d5a50", fontStyle: "italic" }}>
-        No documents uploaded
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        {filesArray.map((file, index) => {
+          const fileUrl = typeof file === "string" ? file : file.url
+          const fileName = typeof file === "string" ? `${documentName} ${index + 1}` : file.name
+          return (
+            <div key={index}>
+              {renderDocumentLink(fileUrl, fileName)}
+            </div>
+          )
+        })}
       </div>
     )
   }
-
-  // Convert single file to array if needed
-  const filesArray = Array.isArray(files) ? files : [files]
-
-  if (filesArray.length === 0) {
-    return (
-      <div style={{ fontSize: "14px", color: "#7d5a50", fontStyle: "italic" }}>
-        No documents uploaded
-      </div>
-    )
-  }
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-      {filesArray.map((file, index) => {
-        const fileUrl = typeof file === "string" ? file : file.url
-        const fileName = typeof file === "string" ? `${documentName} ${index + 1}` : file.name
-        return (
-          <div key={index}>
-            {renderDocumentLink(fileUrl, fileName)}
-          </div>
-        )
-      })}
-    </div>
-  )
-}
 
   return (
     <div>
       <style>{`
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-  @keyframes slideDown {
-    from { 
-      opacity: 0;
-      transform: translateY(-16px);
-      max-height: 0;
-    }
-    to { 
-      opacity: 1;
-      transform: translateY(0);
-      max-height: 1000px;
-    }
-  }
-  
-  /* ADD THIS NEW RULE */
-  body.sidebar-collapsed .main-container {
-    padding-left: var(--sidebar-collapsed-width) !important;
-  }
-  
-  /* Responsive adjustments for mobile/tablet */
-  @media (max-width: 1024px) {
-    .main-container {
-      padding-left: 16px !important;
-      padding-top: 16px !important;
-    }
-  }
-  
-  @media (max-width: 768px) {
-    .main-container {
-      padding-left: 12px !important;
-      padding-top: 12px !important;
-    }
-  }
-`}</style>
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes slideDown {
+          from { 
+            opacity: 0;
+            transform: translateY(-16px);
+            max-height: 0;
+          }
+          to { 
+            opacity: 1;
+            transform: translateY(0);
+            max-height: 1000px;
+          }
+        }
+        
+        /* ADD THIS NEW RULE */
+        body.sidebar-collapsed .main-container {
+          padding-left: var(--sidebar-collapsed-width) !important;
+        }
+        
+        /* Responsive adjustments for mobile/tablet */
+        @media (max-width: 1024px) {
+          .main-container {
+            padding-left: 16px !important;
+            padding-top: 16px !important;
+          }
+        }
+        
+        @media (max-width: 768px) {
+          .main-container {
+            padding-left: 12px !important;
+            padding-top: 12px !important;
+          }
+        }
+      `}</style>
       <div
         className="main-container"
         style={{
@@ -405,17 +404,15 @@ const ProfileSummary = ({ data, onEdit }) => {
                       { label: "Trading Name", value: data?.entityOverview?.tradingName || "Same as registered name" },
                       { label: "Registration Number", value: data?.entityOverview?.registrationNumber },
                       { label: "Entity Type", value: data?.entityOverview?.entityType },
+                      { label: "Legal Structure", value: data?.entityOverview?.legalStructure },
                       { label: "Entity Size", value: data?.entityOverview?.entitySize },
                       { label: "Financial Year End", value: data?.entityOverview?.financialYearEnd },
                       { label: "Number of Employees", value: data?.entityOverview?.employeeCount },
                       { label: "Years in Operation", value: data?.entityOverview?.yearsInOperation },
                       { label: "Operation Stage", value: formatLabel(data?.entityOverview?.operationStage) },
-                      { label: "Target Market", value: data?.entityOverview?.targetMarket },
-                      { label: "Location", value: formatLabel(data?.entityOverview?.location) },
-                      { label: "City", value: data?.entityOverview?.city || "Not provided" },
-                      ...(data?.entityOverview?.location === "south_africa"
-                        ? [{ label: "Province", value: data?.entityOverview?.province }]
-                        : []),
+                      { label: "Town/City", value: data?.entityOverview?.town || data?.entityOverview?.city || "Not provided" },
+                      { label: "Region/Province", value: data?.entityOverview?.region || "Not provided" },
+                      { label: "Country", value: data?.entityOverview?.country || "Not provided" },
                     ].map((item, i) => (
                       <div
                         key={i}
@@ -523,41 +520,6 @@ const ProfileSummary = ({ data, onEdit }) => {
                       {formatArray(data?.entityOverview?.economicSectors) || "Not provided"}
                     </p>
                   </div>
-
-                  <div
-                    style={{
-                      background: "rgba(166, 124, 82, 0.1)",
-                      borderRadius: "12px",
-                      padding: "16px",
-                      border: "1px solid rgba(166, 124, 82, 0.2)",
-                      marginTop: "12px",
-                    }}
-                  >
-                    <span
-                      style={{
-                        display: "block",
-                        fontSize: "12px",
-                        color: "#7d5a50",
-                        marginBottom: "8px",
-                        fontWeight: "700",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.5px",
-                      }}
-                    >
-                      Company Logo
-                    </span>
-                    <p
-                      style={{
-                        fontSize: "14px",
-                        color: "#4a352f",
-                        lineHeight: "1.6",
-                        margin: 0,
-                        fontWeight: "400",
-                      }}
-                    >
-                      {data?.entityOverview?.companyLogo ? "✅ Uploaded" : "❌ Not provided"}
-                    </p>
-                  </div>
                 </div>
               )}
             </div>
@@ -616,6 +578,46 @@ const ProfileSummary = ({ data, onEdit }) => {
                     animation: "slideDown 0.3s ease-out",
                   }}
                 >
+                  {/* Offering Type */}
+                  <div style={{ marginBottom: "20px" }}>
+                    <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
+                      Business Offering
+                    </h3>
+                    <div
+                      style={{
+                        background: "rgba(250, 247, 242, 0.8)",
+                        borderRadius: "12px",
+                        padding: "16px",
+                        border: "1px solid rgba(200, 182, 166, 0.2)",
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: "12px",
+                          color: "#7d5a50",
+                          marginBottom: "6px",
+                          fontWeight: "600",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                        }}
+                      >
+                        Offering Type
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "14px",
+                          color: "#4a352f",
+                          fontWeight: "500",
+                        }}
+                      >
+                        {data?.productsServices?.offeringType ? 
+                          data.productsServices.offeringType.charAt(0).toUpperCase() + data.productsServices.offeringType.slice(1) 
+                          : "Not provided"}
+                      </span>
+                    </div>
+                  </div>
+
                   {/* Product Categories */}
                   <div style={{ marginBottom: "16px" }}>
                     <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
@@ -824,6 +826,114 @@ const ProfileSummary = ({ data, onEdit }) => {
                     )}
                   </div>
 
+                  {/* Delivery Standards */}
+                  <div style={{ marginBottom: "16px" }}>
+                    <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
+                      Delivery Standards
+                    </h3>
+                    <div
+                      style={{
+                        background: "rgba(250, 247, 242, 0.8)",
+                        borderRadius: "12px",
+                        padding: "16px",
+                        border: "1px solid rgba(200, 182, 166, 0.2)",
+                      }}
+                    >
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px" }}>
+                        <div>
+                          <span
+                            style={{
+                              display: "block",
+                              fontSize: "12px",
+                              color: "#7d5a50",
+                              marginBottom: "6px",
+                              fontWeight: "600",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.5px",
+                            }}
+                          >
+                            Delivery Modes
+                          </span>
+                          <span
+                            style={{
+                              fontSize: "14px",
+                              color: "#4a352f",
+                              fontWeight: "500",
+                            }}
+                          >
+                            {formatArray(data?.productsServices?.deliveryModes) || "Not provided"}
+                          </span>
+                        </div>
+                        <div>
+                          <span
+                            style={{
+                              display: "block",
+                              fontSize: "12px",
+                              color: "#7d5a50",
+                              marginBottom: "6px",
+                              fontWeight: "600",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.5px",
+                            }}
+                          >
+                            Lead Time
+                          </span>
+                          <span
+                            style={{
+                              fontSize: "14px",
+                              color: "#4a352f",
+                              fontWeight: "500",
+                            }}
+                          >
+                            {data?.productsServices?.minLeadTime && data?.productsServices?.maxLeadTime 
+                              ? `${data.productsServices.minLeadTime} ${data.productsServices.minLeadTimeUnit} - ${data.productsServices.maxLeadTime} ${data.productsServices.maxLeadTimeUnit}`
+                              : "Not provided"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Target Market */}
+                  <div style={{ marginBottom: "16px" }}>
+                    <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
+                      Target Market
+                    </h3>
+                    <div
+                      style={{
+                        background: "rgba(250, 247, 242, 0.8)",
+                        borderRadius: "12px",
+                        padding: "16px",
+                        border: "1px solid rgba(200, 182, 166, 0.2)",
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: "12px",
+                          color: "#7d5a50",
+                          marginBottom: "6px",
+                          fontWeight: "600",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                        }}
+                      >
+                        Target Market Description
+                      </span>
+                      <p
+                        style={{
+                          fontSize: "14px",
+                          color: "#4a352f",
+                          lineHeight: "1.6",
+                          margin: 0,
+                          fontWeight: "400",
+                        }}
+                      >
+                        {data?.productsServices?.targetMarket || "Not provided"}
+                      </p>
+                    </div>
+                  </div>
+
                   {/* Key Clients */}
                   <div>
                     <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
@@ -868,6 +978,19 @@ const ProfileSummary = ({ data, onEdit }) => {
                               >
                                 Industry
                               </th>
+                              <th
+                                style={{
+                                  padding: "10px 6px",
+                                  textAlign: "left",
+                                  fontSize: "11px",
+                                  fontWeight: "700",
+                                  color: "#7d5a50",
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.5px",
+                                }}
+                              >
+                                Documents
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
@@ -880,6 +1003,11 @@ const ProfileSummary = ({ data, onEdit }) => {
                                 </td>
                                 <td style={{ padding: "10px 6px", color: "#4a352f", fontSize: "13px" }}>
                                   {client.industry || "Not provided"}
+                                </td>
+                                <td style={{ padding: "10px 6px", color: "#4a352f", fontSize: "13px" }}>
+                                  {client.documents && client.documents.length > 0 
+                                    ? `${client.documents.length} document(s) uploaded`
+                                    : "No documents"}
                                 </td>
                               </tr>
                             ))}
@@ -1021,6 +1149,7 @@ const ProfileSummary = ({ data, onEdit }) => {
                                 "Gender",
                                 "Youth",
                                 "Disabled",
+                                "Also Director",
                               ].map((header, i) => (
                                 <th
                                   key={i}
@@ -1071,6 +1200,9 @@ const ProfileSummary = ({ data, onEdit }) => {
                                 </td>
                                 <td style={{ padding: "10px 6px", color: "#4a352f", fontSize: "13px" }}>
                                   {formatBoolean(shareholder.isDisabled)}
+                                </td>
+                                <td style={{ padding: "10px 6px", color: "#4a352f", fontSize: "13px" }}>
+                                  {formatBoolean(shareholder.isAlsoDirector)}
                                 </td>
                               </tr>
                             ))}
@@ -1853,8 +1985,6 @@ const ProfileSummary = ({ data, onEdit }) => {
                     </div>
                   </div>
 
-    
-
                   {/* Additional Information */}
                   {(data?.financialOverview?.fundraisingHistory || data?.financialOverview?.additionalFinancialNotes) && (
                     <>
@@ -2110,104 +2240,6 @@ const ProfileSummary = ({ data, onEdit }) => {
                     </div>
                   )}
 
-                  {/* Advisory Section */}
-                  <h3
-                    style={{
-                      fontSize: "16px",
-                      fontWeight: "700",
-                      color: "#4a352f",
-                      marginBottom: "16px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    <FileText size={18} color="#a67c52" />
-                    Advisory Structure
-                  </h3>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                      gap: "16px",
-                      marginBottom: "24px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        background: "rgba(250, 247, 242, 0.8)",
-                        borderRadius: "12px",
-                        padding: "16px",
-                        border: "1px solid rgba(200, 182, 166, 0.2)",
-                      }}
-                    >
-                      <span
-                        style={{
-                          display: "block",
-                          fontSize: "12px",
-                          color: "#7d5a50",
-                          marginBottom: "6px",
-                          fontWeight: "600",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.5px",
-                        }}
-                      >
-                        Advisory Structure
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "14px",
-                          color: "#4a352f",
-                          fontWeight: "500",
-                        }}
-                      >
-                        {data?.governance?.hasAdvisoryStructure || "Not specified"}
-                      </span>
-                      {data?.governance?.hasAdvisoryStructure === "Yes" && data?.governance?.advisoryStructureDocs && data.governance.advisoryStructureDocs.length > 0 && (
-                        <div style={{ marginTop: "8px" }}>
-                          {renderDocumentsList(data.governance.advisoryStructureDocs, "Advisory Structure")}
-                        </div>
-                      )}
-                    </div>
-
-                    <div
-                      style={{
-                        background: "rgba(250, 247, 242, 0.8)",
-                        borderRadius: "12px",
-                        padding: "16px",
-                        border: "1px solid rgba(200, 182, 166, 0.2)",
-                      }}
-                    >
-                      <span
-                        style={{
-                          display: "block",
-                          fontSize: "12px",
-                          color: "#7d5a50",
-                          marginBottom: "6px",
-                          fontWeight: "600",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.5px",
-                        }}
-                      >
-                        Policy & Controls
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "14px",
-                          color: "#4a352f",
-                          fontWeight: "500",
-                        }}
-                      >
-                        {data?.governance?.hasPolicyControls || "Not specified"}
-                      </span>
-                      {data?.governance?.hasPolicyControls === "Yes" && data?.governance?.policyControlsDocs && data.governance.policyControlsDocs.length > 0 && (
-                        <div style={{ marginTop: "8px" }}>
-                          {renderDocumentsList(data.governance.policyControlsDocs, "Policy & Controls")}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
                   {/* Ethics & Conflict Resolution Section */}
                   <h3
                     style={{
@@ -2407,7 +2439,7 @@ const ProfileSummary = ({ data, onEdit }) => {
                     </div>
                   </div>
 
-                  {/* Transparency & Reporting Section - MOVED FROM OWNERSHIP */}
+                  {/* Transparency & Reporting Section */}
                   <h3
                     style={{
                       fontSize: "16px",
@@ -2611,7 +2643,7 @@ const ProfileSummary = ({ data, onEdit }) => {
               )}
             </div>
 
-            {/* Documents Section - NEW */}
+            {/* Documents Section */}
             <div
               style={{
                 background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
@@ -3066,7 +3098,7 @@ const ProfileSummary = ({ data, onEdit }) => {
                             letterSpacing: "0.5px",
                           }}
                         >
-                          Team Member
+                            Team Member
                         </span>
                         <span
                           style={{

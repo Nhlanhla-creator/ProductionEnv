@@ -6,45 +6,8 @@ import FileUpload from "./file-upload"
 import './UniversalProfile.css';
 import {deliveryModes} from '../ProductApplication/applicationOptions'
 
-// Updated category options for Products and Services
+// Complete category options for Products and Services (matching industry sectors)
 const categoryOptions = [
-  { value: "Agriculture", label: "Agriculture" },
-  { value: "Alternative Medicine", label: "Alternative Medicine" },
-  { value: "Art", label: "Art" },
-  { value: "Attorneys & Legal Services", label: "Attorneys & Legal Services" },
-  { value: "Automotive", label: "Automotive" },
-  { value: "Beauty & Fitness", label: "Beauty & Fitness" },
-  { value: "Business accelerators", label: "Business accelerators" },
-  { value: "Business and Professional Services", label: "Business and Professional Services" },
-  { value: "Cellphone services", label: "Cellphone services" },
-  { value: "Clothing and Textiles", label: "Clothing and Textiles" },
-  { value: "Computers & Internet", label: "Computers & Internet" },
-  { value: "Construction", label: "Construction" },
-  { value: "Education", label: "Education" },
-  { value: "Entertainment", label: "Entertainment" },
-  { value: "Events", label: "Events" },
-  { value: "Financial services", label: "Financial services" },
-  { value: "Food and hospitality", label: "Food and hospitality" },
-  { value: "Funeral services", label: "Funeral services" },
-  { value: "Health and Wellness", label: "Health and Wellness" },
-  { value: "Home & Garden", label: "Home & Garden" },
-  { value: "Insurance", label: "Insurance" },
-  { value: "Logistics", label: "Logistics" },
-  { value: "Marketing", label: "Marketing" },
-  { value: "Online shopping", label: "Online shopping" },
-  { value: "Pets", label: "Pets" },
-  { value: "Photography", label: "Photography" },
-  { value: "Property", label: "Property" },
-  { value: "Reseller", label: "Reseller" },
-  { value: "Sports & Recreation", label: "Sports & Recreation" },
-  { value: "Technology", label: "Technology" },
-  { value: "Travel & Transport", label: "Travel & Transport" },
-  { value: "Waste and Recycling", label: "Waste and Recycling" },
-  { value: "Wholesale", label: "Wholesale" }
-]
-
-// Industry options for Key Clients/Customers (keeping the original ones)
-const industryOptions = [
   { value: "Generalist", label: "Generalist" },
   { value: "Agriculture", label: "Agriculture" },
   { value: "Automotive", label: "Automotive" },
@@ -83,6 +46,9 @@ const industryOptions = [
   { value: "Transport", label: "Transport" },
   { value: "Utilities (Water, Electricity, Waste)", label: "Utilities (Water, Electricity, Waste)" },
 ]
+
+// Industry options for Key Clients/Customers (same as categories for consistency)
+const industryOptions = categoryOptions
 
 export default function ProductsServices({ data = {}, updateData }) {
   const [showExplanation, setShowExplanation] = useState(false)
@@ -204,12 +170,18 @@ export default function ProductsServices({ data = {}, updateData }) {
 
   const addClient = () => {
     const keyClients = data.keyClients || []
-    updateData({ keyClients: [...keyClients, { name: "", industry: "" }] })
+    updateData({ keyClients: [...keyClients, { name: "", industry: "", documents: [] }] })
   }
 
   const updateClient = (index, field, value) => {
     const keyClients = [...(data.keyClients || [])]
     keyClients[index] = { ...keyClients[index], [field]: value }
+    updateData({ keyClients })
+  }
+
+  const updateClientDocuments = (index, files) => {
+    const keyClients = [...(data.keyClients || [])]
+    keyClients[index] = { ...keyClients[index], documents: files }
     updateData({ keyClients })
   }
 
@@ -367,21 +339,21 @@ export default function ProductsServices({ data = {}, updateData }) {
 
                   {(category.products || []).map((product, productIndex) => (
                     <div key={productIndex} className="flex gap-3 items-start p-3 bg-brown-50 rounded-md">
-                      <div className="flex-1 grid grid-cols-2 gap-3">
+                      <div className="flex-1 space-y-3">
                         <input
                           type="text"
                           value={product.name}
                           onChange={(e) => updateProduct(categoryIndex, productIndex, "name", e.target.value)}
                           placeholder="Product name"
-                          className="px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                          className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
                           required
                         />
-                        <input
-                          type="text"
+                        <textarea
                           value={product.description}
                           onChange={(e) => updateProduct(categoryIndex, productIndex, "description", e.target.value)}
-                          placeholder="Brief description"
-                          className="px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                          placeholder="Brief description of the product, its features, and benefits"
+                          rows={3}
+                          className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500 resize-vertical"
                           required
                         />
                       </div>
@@ -460,21 +432,21 @@ export default function ProductsServices({ data = {}, updateData }) {
 
                   {(category.services || []).map((service, serviceIndex) => (
                     <div key={serviceIndex} className="flex gap-3 items-start p-3 bg-brown-50 rounded-md">
-                      <div className="flex-1 grid grid-cols-2 gap-3">
+                      <div className="flex-1 space-y-3">
                         <input
                           type="text"
                           value={service.name}
                           onChange={(e) => updateService(categoryIndex, serviceIndex, "name", e.target.value)}
                           placeholder="Service name"
-                          className="px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                          className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
                           required
                         />
-                        <input
-                          type="text"
+                        <textarea
                           value={service.description}
                           onChange={(e) => updateService(categoryIndex, serviceIndex, "description", e.target.value)}
-                          placeholder="Brief description"
-                          className="px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                          placeholder="Brief description of the service, what it includes, and its value proposition"
+                          rows={3}
+                          className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500 resize-vertical"
                           required
                         />
                       </div>
@@ -513,7 +485,7 @@ export default function ProductsServices({ data = {}, updateData }) {
           </div>
         </FormField>
 
-        <FormField label="Lead Time" required>
+        <FormField label="Lead Time (from contract award to start)" required>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -611,7 +583,7 @@ export default function ProductsServices({ data = {}, updateData }) {
         <h3 className="text-xl font-semibold text-brown-800 mb-4">Section 4: Key Clients/Customers (Optional)</h3>
         
         <div className="flex justify-between items-center mb-4">
-          <p className="text-sm text-brown-600">List your notable clients or customers</p>
+          <p className="text-sm text-brown-600">List your notable clients or customers with reference documents</p>
           <button
             type="button"
             onClick={addClient}
@@ -622,40 +594,81 @@ export default function ProductsServices({ data = {}, updateData }) {
           </button>
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-4">
           {(data.keyClients || []).map((client, index) => (
-            <div key={index} className="flex gap-3 items-start p-3 bg-white rounded-md border border-brown-200">
-              <div className="flex-1 grid grid-cols-2 gap-3">
-                <input
-                  type="text"
-                  value={client.name}
-                  onChange={(e) => updateClient(index, "name", e.target.value)}
-                  placeholder="Client/Customer name"
-                  className="px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-                />
-                <select
-                  value={client.industry}
-                  onChange={(e) => updateClient(index, "industry", e.target.value)}
-                  className="px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+            <div key={index} className="p-4 bg-white rounded-md border border-brown-200">
+              <div className="flex justify-between items-start mb-3">
+                <h4 className="text-sm font-semibold text-brown-700">Client {index + 1}</h4>
+                <button
+                  type="button"
+                  onClick={() => removeClient(index)}
+                  className="p-1.5 text-red-600 hover:bg-red-50 rounded-md transition-colors"
                 >
-                  <option value="">Select industry</option>
-                  {industryOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => removeClient(index)}
-                className="p-1.5 text-red-600 hover:bg-red-50 rounded-md transition-colors"
-              >
-                <Trash2 className="w-3 h-3" />
-              </button>
+
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-brown-700 mb-1">
+                      Client/Customer Name
+                    </label>
+                    <input
+                      type="text"
+                      value={client.name}
+                      onChange={(e) => updateClient(index, "name", e.target.value)}
+                      placeholder="e.g., ABC Corporation"
+                      className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-brown-700 mb-1">
+                      Industry
+                    </label>
+                    <select
+                      value={client.industry}
+                      onChange={(e) => updateClient(index, "industry", e.target.value)}
+                      className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                    >
+                      <option value="">Select industry</option>
+                      {industryOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-brown-700 mb-2">
+                    Customer References/Reviews
+                    <span className="text-xs font-normal text-brown-500 ml-2">
+                      (Upload reference letters, testimonials, reviews, or case studies)
+                    </span>
+                  </label>
+                  <FileUpload
+                    files={client.documents || []}
+                    onChange={(files) => updateClientDocuments(index, files)}
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                    maxFiles={5}
+                    label="Upload Documents"
+                  />
+                  <p className="text-xs text-brown-500 mt-1">
+                    Accepted formats: PDF, Word documents, Images (Max 5 files per client)
+                  </p>
+                </div>
+              </div>
             </div>
           ))}
         </div>
+
+        {(data.keyClients || []).length === 0 && (
+          <div className="text-center py-8 text-brown-500">
+            <p>No clients added yet. Click "Add Client" to get started.</p>
+          </div>
+        )}
       </div>
     </div>
   )

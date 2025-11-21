@@ -22,7 +22,7 @@ function InvestorHeader({ companyName, profileImage, setProfileImage }) {
   const [selectedRole, setSelectedRole] = useState("");
   const [showAddRole, setShowAddRole] = useState(false);
   const [newRoleInput, setNewRoleInput] = useState("");
-  const ROLE_OPTIONS = ["Investor", "SMEs", "Advisors", "Accelerators"];
+  const ROLE_OPTIONS = ["Investor", "SMSEs", "Advisors", "Accelerators"];
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [user, setUser] = useState(null);
@@ -63,20 +63,33 @@ function InvestorHeader({ companyName, profileImage, setProfileImage }) {
     setSelectedRole(role);
     const userDocRef = doc(db, "users", auth.currentUser.uid);
     await updateDoc(userDocRef, { currentRole: role });
-    switch (role) {
+     switch (role) {
       case "Investor":
         navigate("/investor-profile");
         break;
       case "SMEs":
       case "Small and Medium Social Enterprises":
       case "SME/BUSINESS":
+        case"SMSES":
+        case"SMSEs":
         navigate("/profile");
         break;
-      case "Advisors":
+      case "Advisor":
+        case"Advisors":
         navigate("/advisor-profile");
         break;
-      case "Accelerators":
+      case "Catalyst":
+        case"Catalysts":
+        case"Accelerators":
         navigate("/support-profile");
+        break;
+      case "Program Sponsor":
+        case"ProgramSponsor":
+        navigate("/sponsor-profile");
+        break;
+      case "Intern":
+      case "Interns":
+        navigate("/intern-profile");
         break;
       default:
         navigate("/auth");
