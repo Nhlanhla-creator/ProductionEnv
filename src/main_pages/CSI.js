@@ -5,6 +5,8 @@ import Footer from "./Footer";
 const CharmSchool = () => {
   const [openAccordion, setOpenAccordion] = useState(null);
   const [activeTab, setActiveTab] = useState('graduates');
+  const [activeSponsorTab, setActiveSponsorTab] = useState('graduates');
+  const [activeProgramTab, setActiveProgramTab] = useState('day1');
 
   const toggleAccordion = (index) => {
     setOpenAccordion(openAccordion === index ? null : index);
@@ -23,8 +25,11 @@ const CharmSchool = () => {
             Charm. Confidence. Competence.
           </h1>
           <p style={styles.heroSubtitle}>
-            Let Our Charm School equip graduates and professionals with the<br />
-            confidence and charm to have presence and to thrive in any industry.
+            Preparing Work-Ready Talent to Power South Africa's SMEs.
+          </p>
+          <p style={styles.heroDescription}>
+            The Charm School develops confident, capable graduates who are ready to contribute from Day One — 
+            strengthening SMEs, empowering young professionals, and enabling sponsors to drive real economic impact.
           </p>
           <button 
             style={styles.ctaButton}
@@ -54,15 +59,23 @@ const CharmSchool = () => {
           <div style={styles.twoColumnLayout}>
             <div style={styles.textContent}>
               <p style={styles.sectionText}>
-                At Brown Ivory Group (BIG), we are committed to shaping the next generation of confident, 
-                career-ready professionals. Through our flagship Corporate Social Investment (CSI) initiative—The 
-                Charm School—we empower graduates and aspiring professionals with the soft skills, presence, 
-                and confidence to thrive in any professional setting.
+                The BIG Charm School is a high-impact CSI programme designed to bridge the gap between education 
+                and employability. By equipping graduates with essential soft skills, professional presence, and 
+                workplace readiness, we create a pipeline of polished, confident young professionals prepared to 
+                thrive in fast-paced SME environments.
+              </p>
+              <p style={styles.sectionText}>
+                Through this initiative, graduates gain employability, SMEs gain ready-to-perform talent, and 
+                sponsors play a vital role in building stronger businesses, reducing youth unemployment, and 
+                accelerating South Africa's economic growth.
+              </p>
+              <p style={styles.sectionText}>
+                <strong>Charm School is more than training — it's an ecosystem solution for talent development, SME capacity, and social impact.</strong>
               </p>
               
               <div style={styles.eventCard}>
                 <h3 style={styles.eventTitle}>NEXT EVENT</h3>
-                <p style={styles.eventDetail}><span style={styles.eventLabel}>Date:</span> 10-11 July 2025</p>
+                <p style={styles.eventDetail}><span style={styles.eventLabel}>Date:</span> Coming Soon</p>
                 <p style={styles.eventDetail}><span style={styles.eventLabel}>Location:</span> Johannesburg, South Africa</p>
               </div>
               
@@ -107,7 +120,398 @@ const CharmSchool = () => {
         </div>
       </section>
 
-      {/* Section 2 - THE SECRET TO STANDING OUT */}
+      {/* Section 2 - THE CHARM SCHOOL ADVANTAGE */}
+      <section style={styles.sectionAdvantage}>
+        <div style={styles.sectionContent}>
+          <h2 style={styles.sectionTitle}>
+            THE CHARM SCHOOL ADVANTAGE
+          </h2>
+          
+          <div style={styles.tabNavigation}>
+            <button 
+              style={activeSponsorTab === 'graduates' ? styles.tabButtonActive : styles.tabButton}
+              onClick={() => setActiveSponsorTab('graduates')}
+              onMouseEnter={(e) => {
+                if (activeSponsorTab !== 'graduates') {
+                  e.target.style.backgroundColor = 'rgba(139, 90, 43, 0.1)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (activeSponsorTab !== 'graduates') {
+                  e.target.style.backgroundColor = 'white';
+                }
+              }}
+            >
+              FOR GRADUATES
+            </button>
+            <button 
+              style={activeSponsorTab === 'smes' ? styles.tabButtonActive : styles.tabButton}
+              onClick={() => setActiveSponsorTab('smes')}
+              onMouseEnter={(e) => {
+                if (activeSponsorTab !== 'smes') {
+                  e.target.style.backgroundColor = 'rgba(139, 90, 43, 0.1)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (activeSponsorTab !== 'smes') {
+                  e.target.style.backgroundColor = 'white';
+                }
+              }}
+            >
+              FOR SMEs
+            </button>
+            <button 
+              style={activeSponsorTab === 'sponsors' ? styles.tabButtonActive : styles.tabButton}
+              onClick={() => setActiveSponsorTab('sponsors')}
+              onMouseEnter={(e) => {
+                if (activeSponsorTab !== 'sponsors') {
+                  e.target.style.backgroundColor = 'rgba(139, 90, 43, 0.1)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (activeSponsorTab !== 'sponsors') {
+                  e.target.style.backgroundColor = 'white';
+                }
+              }}
+            >
+              FOR SPONSORS & PARTNERS
+            </button>
+          </div>
+
+          {activeSponsorTab === 'graduates' && (
+            <div style={styles.advantageContent}>
+              <h3 style={styles.advantageSubtitle}>Unlock confidence, executive presence, and workplace readiness to stand out and succeed in your career.</h3>
+              
+              <div style={styles.advantageGrid}>
+                <div style={styles.advantageText}>
+                  <h4 style={styles.advantageHeading}>Charm. Confidence. Competence.<br />Become the kind of professional people remember.</h4>
+                  <p style={styles.advantageParagraph}>
+                    The BIG Charm School is designed to help you stand out, show up with confidence, and thrive in any professional setting. 
+                    Whether you're entering the job market or stepping into the next phase of your career, this programme gives you the soft 
+                    skills and personal power that set you apart.
+                  </p>
+
+                  <h4 style={styles.advantageSectionTitle}>CHARM YOUR WAY TO SUCCESS</h4>
+                  <p style={styles.advantageParagraph}>
+                    Technical skills get you the job — soft skills help you keep it, grow in it, and lead others.
+                  </p>
+                  <p style={styles.advantageParagraph}>
+                    At Brown Ivory Group (BIG), we're committed to shaping the next generation of confident, capable, career-ready graduates. 
+                    Through The Charm School, we empower you with the mindset, presence, and communication skills needed to shine in the workplace.
+                  </p>
+                  <p style={styles.advantageParagraph}>
+                    Whether you're preparing for your first interview, presenting to a team, or stepping into leadership opportunities, 
+                    this programme helps you stand out, inspire confidence, and grow in your career.
+                  </p>
+
+                  <h4 style={styles.advantageSectionTitle}>WHAT YOU WILL LEARN</h4>
+                  <div style={styles.checklist}>
+                    <div style={styles.checkItem}>
+                      <div style={styles.checkIcon}>✓</div>
+                      <span style={styles.checkText}>Executive Presence & Personal Branding - Carry yourself with professionalism and confidence.</span>
+                    </div>
+                    <div style={styles.checkItem}>
+                      <div style={styles.checkIcon}>✓</div>
+                      <span style={styles.checkText}>Public Speaking & Confident Communication - Never shy away from voicing your thoughts or presenting your ideas.</span>
+                    </div>
+                    <div style={styles.checkItem}>
+                      <div style={styles.checkIcon}>✓</div>
+                      <span style={styles.checkText}>Emotional Intelligence & Leadership Skills - Manage pressure, collaborate well, and handle conflict effectively.</span>
+                    </div>
+                    <div style={styles.checkItem}>
+                      <div style={styles.checkIcon}>✓</div>
+                      <span style={styles.checkText}>Networking & Relationship Building - Learn how to build meaningful professional connections.</span>
+                    </div>
+                    <div style={styles.checkItem}>
+                      <div style={styles.checkIcon}>✓</div>
+                      <span style={styles.checkText}>Professional Etiquette & Workplace Readiness - Understand the expectations and behaviours that employers value.</span>
+                    </div>
+                  </div>
+
+                  <h4 style={styles.advantageSectionTitle}>YOUR EXCLUSIVE CHARM SCHOOL TOOLKIT</h4>
+                  <p style={styles.advantageParagraph}>Every participant receives:</p>
+                  <div style={styles.toolkitList}>
+                    <div style={styles.toolkitItem}>📘 Digital Handbook</div>
+                    <div style={styles.toolkitItem}>📇 Networking Directory</div>
+                    <div style={styles.toolkitItem}>🧩 Customisable Templates</div>
+                    <div style={styles.toolkitItem}>🤝 Mentorship 101 Guide</div>
+                    <div style={styles.toolkitItem}>🎓 Charm School Certificate — Your Degree in Charm</div>
+                  </div>
+
+                  <h4 style={styles.advantageSectionTitle}>CHARM SCHOOL EXPERIENCE</h4>
+                  <p style={styles.advantageParagraph}>Dates: Coming Soon | Johannesburg, South Africa</p>
+                  <p style={styles.advantageParagraph}>
+                    A two-day immersive, interactive experience designed to help you unlock your confidence and walk into any workplace with impact.
+                  </p>
+
+                  <h4 style={styles.advantageSectionTitle}>WHY JOIN?</h4>
+                  <ul style={styles.bulletList}>
+                    <li style={styles.bulletItem}>Stand out in interviews</li>
+                    <li style={styles.bulletItem}>Make strong first impressions</li>
+                    <li style={styles.bulletItem}>Build confidence in both formal and informal workplace settings</li>
+                    <li style={styles.bulletItem}>Position yourself as a standout candidate for SME placement through BIG Marketplace</li>
+                    <li style={styles.bulletItem}>Gain a prestigious certification that enhances your professional profile</li>
+                  </ul>
+
+                  <p style={styles.advantageTagline}>
+                    <strong>Become unforgettable.<br />Become career-ready.<br />Become charm-certified.</strong>
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeSponsorTab === 'smes' && (
+            <div style={styles.advantageContent}>
+              <h3 style={styles.advantageSubtitle}>Access polished, high-attitude, job-ready graduates who integrate quickly and add value from Day One.</h3>
+              
+              <div style={styles.advantageGrid}>
+                <div style={styles.advantageText}>
+                  <h4 style={styles.advantageHeading}>FOR SMES: WORK-READY GRADUATES WHO ADD VALUE FROM DAY ONE</h4>
+                  <p style={styles.advantageParagraph}>
+                    Growing SMEs don't just need talent — they need graduates who arrive polished, confident, and ready to contribute immediately.
+                  </p>
+                  <p style={styles.advantageParagraph}>
+                    The Charm School prepares young professionals to thrive in fast-paced SME environments, giving them the soft skills, 
+                    work ethic, and emotional intelligence your business needs to scale.
+                  </p>
+
+                  <h4 style={styles.advantageSectionTitle}>WHY CHOOSE CHARM-CERTIFIED GRADUATES?</h4>
+                  <p style={styles.advantageParagraph}>A Charm-Certified graduate brings:</p>
+                  <div style={styles.checklist}>
+                    <div style={styles.checkItem}>
+                      <div style={styles.checkIcon}>✓</div>
+                      <span style={styles.checkText}>Professional communication</span>
+                    </div>
+                    <div style={styles.checkItem}>
+                      <div style={styles.checkIcon}>✓</div>
+                      <span style={styles.checkText}>Executive presence</span>
+                    </div>
+                    <div style={styles.checkItem}>
+                      <div style={styles.checkIcon}>✓</div>
+                      <span style={styles.checkText}>Emotional intelligence</span>
+                    </div>
+                    <div style={styles.checkItem}>
+                      <div style={styles.checkIcon}>✓</div>
+                      <span style={styles.checkText}>Adaptability</span>
+                    </div>
+                    <div style={styles.checkItem}>
+                      <div style={styles.checkIcon}>✓</div>
+                      <span style={styles.checkText}>Customer service mindset</span>
+                    </div>
+                    <div style={styles.checkItem}>
+                      <div style={styles.checkIcon}>✓</div>
+                      <span style={styles.checkText}>Leadership readiness</span>
+                    </div>
+                    <div style={styles.checkItem}>
+                      <div style={styles.checkIcon}>✓</div>
+                      <span style={styles.checkText}>Strong work ethic</span>
+                    </div>
+                    <div style={styles.checkItem}>
+                      <div style={styles.checkIcon}>✓</div>
+                      <span style={styles.checkText}>Confidence with clients & teams</span>
+                    </div>
+                  </div>
+                  <p style={styles.advantageParagraph}>
+                    <strong>They integrate faster.<br />They need less hand-holding.<br />They embody professionalism from the very first day.</strong>
+                  </p>
+
+                  <h4 style={styles.advantageSectionTitle}>THE BUSINESS VALUE</h4>
+                  <p style={styles.advantageParagraph}>Hiring a Charm-Certified graduate helps SMEs to:</p>
+                  <ul style={styles.bulletList}>
+                    <li style={styles.bulletItem}>Reduce onboarding time and costs</li>
+                    <li style={styles.bulletItem}>Strengthen client-facing professionalism</li>
+                    <li style={styles.bulletItem}>Build a more cohesive, reliable team</li>
+                    <li style={styles.bulletItem}>Improve communication and conflict management</li>
+                    <li style={styles.bulletItem}>Increase overall productivity</li>
+                    <li style={styles.bulletItem}>Reduce HR risks associated with poor soft skills</li>
+                  </ul>
+                  <p style={styles.advantageParagraph}>
+                    Your SME gets a graduate who is job-ready, confident, emotionally mature, and primed to deliver value.
+                  </p>
+
+                  <h4 style={styles.advantageSectionTitle}>SME-SPECIFIC CURRICULUM</h4>
+                  <p style={styles.advantageParagraph}>
+                    The Charm School is designed around what SMEs need most from junior talent:
+                  </p>
+                  <div style={styles.checklist}>
+                    <div style={styles.checkItem}>
+                      <div style={styles.checkIcon}>✓</div>
+                      <span style={styles.checkText}>Executive Presence - Represent your SME with confidence.</span>
+                    </div>
+                    <div style={styles.checkItem}>
+                      <div style={styles.checkIcon}>✓</div>
+                      <span style={styles.checkText}>Communication & Public Speaking - Handle clients, suppliers, and internal teams professionally.</span>
+                    </div>
+                    <div style={styles.checkItem}>
+                      <div style={styles.checkIcon}>✓</div>
+                      <span style={styles.checkText}>Leadership Skills & EI - Show maturity and initiative in a small, agile team.</span>
+                    </div>
+                    <div style={styles.checkItem}>
+                      <div style={styles.checkIcon}>✓</div>
+                      <span style={styles.checkText}>Professional Conduct - Understand workplace behaviour, expectations, and accountability.</span>
+                    </div>
+                    <div style={styles.checkItem}>
+                      <div style={styles.checkIcon}>✓</div>
+                      <span style={styles.checkText}>Problem-Solving & Collaboration - Work well with others and manage pressure effectively.</span>
+                    </div>
+                  </div>
+
+                  <h4 style={styles.advantageSectionTitle}>GET ACCESS TO THE CHARM-CERTIFIED TALENT POOL</h4>
+                  <p style={styles.advantageParagraph}>SMEs on BIG Marketplace can:</p>
+                  <ul style={styles.bulletList}>
+                    <li style={styles.bulletItem}>Select graduates pre-trained for SME environments</li>
+                    <li style={styles.bulletItem}>Sponsor specific graduates for tailored development</li>
+                    <li style={styles.bulletItem}>Participate in workshops or mentorship</li>
+                    <li style={styles.bulletItem}>Build stronger teams using BIG's CSI-developed talent pipeline</li>
+                  </ul>
+
+                  <p style={styles.advantageTagline}>
+                    <strong>SMEs deserve talent that delivers.<br />Charm School prepares them for you.</strong>
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeSponsorTab === 'sponsors' && (
+            <div style={styles.advantageContent}>
+              <h3 style={styles.advantageSubtitle}>Drive measurable CSI/ESD impact by funding talent development that strengthens SMEs and creates employment pathways.</h3>
+              
+              <div style={styles.advantageGrid}>
+                <div style={styles.advantageText}>
+                  <h4 style={styles.advantageHeading}>SPONSOR A GRADUATE. STRENGTHEN SMES. CREATE REAL IMPACT.</h4>
+                  <p style={styles.advantageParagraph}>
+                    Charm School isn't just a training programme — it's a high-impact talent development pipeline that helps 
+                    young graduates build meaningful careers while empowering SMEs to grow.
+                  </p>
+                  <p style={styles.advantageParagraph}>
+                    As a sponsor, you play a direct role in shaping the next generation of professionals who will contribute 
+                    to South Africa's economic growth.
+                  </p>
+
+                  <h4 style={styles.advantageSectionTitle}>WHY SPONSOR CHARM SCHOOL?</h4>
+
+                  <div style={styles.sponsorReason}>
+                    <h5 style={styles.sponsorReasonTitle}>1. Direct, Measurable Social Impact (CSI / CSR Aligned)</h5>
+                    <p style={styles.advantageParagraph}>
+                      Your sponsorship helps a graduate gain confidence, professionalism, and skills that dramatically increase their employability.
+                    </p>
+                    <p style={styles.advantageParagraph}>
+                      <strong>You're not just funding training — you're funding a career.</strong>
+                    </p>
+                  </div>
+
+                  <div style={styles.sponsorReason}>
+                    <h5 style={styles.sponsorReasonTitle}>2. Strengthen High-Growth SMEs</h5>
+                    <p style={styles.advantageParagraph}>
+                      Graduates trained in Charm School are matched with vetted SMEs on BIG Marketplace.
+                    </p>
+                    <p style={styles.advantageParagraph}>Your support helps SMEs gain:</p>
+                    <ul style={styles.bulletList}>
+                      <li style={styles.bulletItem}>Work-ready talent</li>
+                      <li style={styles.bulletItem}>Improved capacity</li>
+                      <li style={styles.bulletItem}>Professional client-facing staff</li>
+                      <li style={styles.bulletItem}>Stronger internal communication</li>
+                      <li style={styles.bulletItem}>Reduced training and onboarding burden</li>
+                    </ul>
+                    <p style={styles.advantageParagraph}>
+                      <strong>You contribute to real economic development, not surface-level CSI.</strong>
+                    </p>
+                  </div>
+
+                  <div style={styles.sponsorReason}>
+                    <h5 style={styles.sponsorReasonTitle}>3. Create Employment Pathways</h5>
+                    <p style={styles.advantageParagraph}>
+                      South Africa's youth unemployment problem is massive.
+                    </p>
+                    <p style={styles.advantageParagraph}>Your sponsorship helps graduates:</p>
+                    <ul style={styles.bulletList}>
+                      <li style={styles.bulletItem}>Enter the workforce</li>
+                      <li style={styles.bulletItem}>Build networks</li>
+                      <li style={styles.bulletItem}>Gain confidence and EQ</li>
+                      <li style={styles.bulletItem}>Secure SME placement</li>
+                      <li style={styles.bulletItem}>Start careers with dignity</li>
+                    </ul>
+                  </div>
+
+                  <div style={styles.sponsorReason}>
+                    <h5 style={styles.sponsorReasonTitle}>4. GET BRAND VISIBILITY & SOCIAL GOOD CREDIBILITY</h5>
+                    <p style={styles.advantageParagraph}>Sponsors receive:</p>
+                    <div style={styles.checklist}>
+                      <div style={styles.checkItem}>
+                        <div style={styles.checkIcon}>✓</div>
+                        <span style={styles.checkText}>Branding on Charm School materials</span>
+                      </div>
+                      <div style={styles.checkItem}>
+                        <div style={styles.checkIcon}>✓</div>
+                        <span style={styles.checkText}>Recognition during events</span>
+                      </div>
+                      <div style={styles.checkItem}>
+                        <div style={styles.checkIcon}>✓</div>
+                        <span style={styles.checkText}>Inclusion in publicity, PR & social media</span>
+                      </div>
+                      <div style={styles.checkItem}>
+                        <div style={styles.checkIcon}>✓</div>
+                        <span style={styles.checkText}>Option to host graduates for site visits or mentorship</span>
+                      </div>
+                      <div style={styles.checkItem}>
+                        <div style={styles.checkIcon}>✓</div>
+                        <span style={styles.checkText}>Impact reports showing outcomes, employment, and SME placements</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={styles.sponsorReason}>
+                    <h5 style={styles.sponsorReasonTitle}>5. Partner with BIG Marketplace's Talent Ecosystem</h5>
+                    <p style={styles.advantageParagraph}>Sponsors gain early access to the talent pool and have the option to:</p>
+                    <ul style={styles.bulletList}>
+                      <li style={styles.bulletItem}>Offer internships</li>
+                      <li style={styles.bulletItem}>Host workplace readiness sessions</li>
+                      <li style={styles.bulletItem}>Upskill their own young employees</li>
+                      <li style={styles.bulletItem}>Build custom pipelines for enterprise supplier development (ESD)</li>
+                    </ul>
+                  </div>
+
+                  <h4 style={styles.advantageSectionTitle}>WHAT YOUR SPONSORSHIP FUNDS</h4>
+                  <p style={styles.advantageParagraph}>Each sponsored graduate receives:</p>
+                  <ul style={styles.bulletList}>
+                    <li style={styles.bulletItem}>Charm School training (2-day immersive programme)</li>
+                    <li style={styles.bulletItem}>Graduation certification</li>
+                    <li style={styles.bulletItem}>Digital handbook & templates</li>
+                    <li style={styles.bulletItem}>Professional development toolkit</li>
+                    <li style={styles.bulletItem}>Access to the BIG Marketplace talent ecosystem</li>
+                    <li style={styles.bulletItem}>Priority SME placement support</li>
+                  </ul>
+                  <p style={styles.advantageParagraph}>
+                    <strong>You fund confidence, dignity, capability, and a future.</strong>
+                  </p>
+
+                  <div style={styles.impactLevels}>
+                    <h4 style={styles.advantageSectionTitle}>SPONSORSHIP = IMPACT AT THREE LEVELS</h4>
+                    <div style={styles.impactGrid}>
+                      <div style={styles.impactItem}>
+                        <h5 style={styles.impactTitle}>1. The Graduate</h5>
+                        <p style={styles.impactText}>Confidence, employability, professionalism.</p>
+                      </div>
+                      <div style={styles.impactItem}>
+                        <h5 style={styles.impactTitle}>2. The SME</h5>
+                        <p style={styles.impactText}>Work-ready junior talent who improves productivity.</p>
+                      </div>
+                      <div style={styles.impactItem}>
+                        <h5 style={styles.impactTitle}>3. The Economy</h5>
+                        <p style={styles.impactText}>Job creation. Stronger SMEs. A skilled workforce.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Section 3 - THE SECRET TO STANDING OUT */}
       <section style={styles.section2}>
         <div style={styles.section2Background}></div>
         <div style={styles.section2Overlay}></div>
@@ -167,7 +571,7 @@ const CharmSchool = () => {
         </div>
       </section>
 
-      {/* Section 3 - CHARM YOUR COMPETITIVE EDGE */}
+      {/* Section 4 - CHARM YOUR COMPETITIVE EDGE */}
       <section style={styles.section3}>
         <div style={styles.sectionContent}>
           <h2 style={styles.sectionTitle}>
@@ -226,428 +630,121 @@ const CharmSchool = () => {
         </div>
       </section>
 
-      {/* Section 4 - BUILDING CONFIDENCE, ONE WORKSHOP AT A TIME */}
+      {/* Section 5 - BECOME A CHAMPION FOR TALENT */}
       <section style={styles.section4}>
         <div style={styles.section4Background}></div>
         <div style={styles.section4Overlay}></div>
         <div style={styles.sectionContent}>
           <h2 style={styles.sectionTitleWhite}>
-            BUILDING CONFIDENCE, ONE WORKSHOP AT A TIME
+            BECOME A CHAMPION FOR TALENT
           </h2>
           
           <p style={styles.section4Subtitle}>
-            The Charm School is an immersive, hands-on experience designed to develop key soft skills through 
-            engaging workshops, interactive exercises, and expert-led sessions.
+            Become a Sponsor of Charm School.<br />
+            Contact us to discuss sponsorship packages, impact reporting, or partnership opportunities.
+          </p>
+          
+          <p style={styles.contactEmail}>
+            📧 hello@bigmarketplace.africa
           </p>
           
           <div style={styles.faqGrid}>
+            {/* Graduates FAQ Column */}
             <div style={styles.faqColumn}>
               <div style={styles.faqHeader}>
-                <h3 style={styles.faqTitle}>Frequently asked questions</h3>
-                <div style={styles.searchBox}>
-                  <input 
-                    type="text" 
-                    placeholder="Looking for something?" 
-                    style={styles.searchInput}
-                  />
-                  <span style={styles.searchIcon}>🔍</span>
-                </div>
-              </div>
-
-              <div style={styles.faqTabs}>
-                <button style={styles.faqTab}>Exclusive Toolkit for Participants</button>
-                <button style={styles.faqTabActive}>WHAT YOU'LL LEARN</button>
+                <h3 style={styles.faqTitle}>For Graduates</h3>
               </div>
 
               <div style={styles.accordionContainer}>
-                <div style={styles.accordionItem}>
-                  <button 
-                    style={styles.accordionButton}
-                    onClick={() => toggleAccordion(0)}
-                  >
-                    <span>Digital Handbook</span>
-                    <span style={styles.accordionIcon}>{openAccordion === 0 ? '−' : '∨'}</span>
-                  </button>
-                  {openAccordion === 0 && (
-                    <div style={styles.accordionContent}>
-                      <p>A comprehensive guide packed with expert tips, best practices, and actionable insights.</p>
-                      <div style={styles.socialIcons}>
-                        <a href="#" style={styles.socialIconLink}>
-                          <svg style={styles.socialIconSvg} fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                          </svg>
-                        </a>
-                        <a href="#" style={styles.socialIconLink}>
-                          <svg style={styles.socialIconSvg} fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
-                          </svg>
-                        </a>
-                        <a href="#" style={styles.socialIconLink}>
-                          <svg style={styles.socialIconSvg} fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                          </svg>
-                        </a>
-                        <a href="#" style={styles.socialIconLink}>
-                          <svg style={styles.socialIconSvg} fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.295-.6.295-.002 0-.003 0-.005 0l.213-3.054 5.56-5.022c.24-.213-.054-.334-.373-.121L7.6 13.858l-2.97-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/>
-                          </svg>
-                        </a>
+                {[
+                  { title: "What is the duration of the Charm School programme?", content: "The Charm School is a comprehensive 2-day immersive programme designed to transform your professional presence and soft skills." },
+                  { title: "Will I receive a certificate after completion?", content: "Yes, all participants receive a Charm School Certificate — Your Degree in Charm, which enhances your professional profile." },
+                  { title: "How will this help me get a job?", content: "The programme makes you stand out in interviews, helps you make strong first impressions, and positions you as a standout candidate for SME placement through BIG Marketplace." },
+                  { title: "What kind of support will I receive after the programme?", content: "You'll receive ongoing access to our networking directory, mentorship opportunities, and priority placement support through BIG Marketplace." },
+                  { title: "Is there any cost to attend?", content: "The Charm School is offered as part of our CSI initiative. Please contact us for specific details about programme fees and sponsorship opportunities." }
+                ].map((item, index) => (
+                  <div key={index} style={styles.accordionItem}>
+                    <button 
+                      style={styles.accordionButton}
+                      onClick={() => toggleAccordion(`grad-${index}`)}
+                    >
+                      <span>{item.title}</span>
+                      <span style={styles.accordionIcon}>{openAccordion === `grad-${index}` ? '−' : '∨'}</span>
+                    </button>
+                    {openAccordion === `grad-${index}` && (
+                      <div style={styles.accordionContent}>
+                        <p>{item.content}</p>
                       </div>
-                    </div>
-                  )}
-                </div>
-
-                <div style={styles.accordionItem}>
-                  <button 
-                    style={styles.accordionButton}
-                    onClick={() => toggleAccordion(1)}
-                  >
-                    <span>Customizable Templates</span>
-                    <span style={styles.accordionIcon}>{openAccordion === 1 ? '−' : '∨'}</span>
-                  </button>
-                  {openAccordion === 1 && (
-                    <div style={styles.accordionContent}>
-                      <p>Ready-to-use CV, cover letter, and email templates to help you present yourself professionally.</p>
-                      <div style={styles.socialIcons}>
-                        <a href="#" style={styles.socialIconLink}>
-                          <svg style={styles.socialIconSvg} fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                          </svg>
-                        </a>
-                        <a href="#" style={styles.socialIconLink}>
-                          <svg style={styles.socialIconSvg} fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
-                          </svg>
-                        </a>
-                        <a href="#" style={styles.socialIconLink}>
-                          <svg style={styles.socialIconSvg} fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                          </svg>
-                        </a>
-                        <a href="#" style={styles.socialIconLink}>
-                          <svg style={styles.socialIconSvg} fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.295-.6.295-.002 0-.003 0-.005 0l.213-3.054 5.56-5.022c.24-.213-.054-.334-.373-.121L7.6 13.858l-2.97-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/>
-                          </svg>
-                        </a>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div style={styles.accordionItem}>
-                  <button 
-                    style={styles.accordionButton}
-                    onClick={() => toggleAccordion(2)}
-                  >
-                    <span>Networking Directory</span>
-                    <span style={styles.accordionIcon}>{openAccordion === 2 ? '−' : '∨'}</span>
-                  </button>
-                  {openAccordion === 2 && (
-                    <div style={styles.accordionContent}>
-                      <p>Access to a curated list of industry professionals, mentors, and fellow participants.</p>
-                      <div style={styles.socialIcons}>
-                        <a href="#" style={styles.socialIconLink}>
-                          <svg style={styles.socialIconSvg} fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                          </svg>
-                        </a>
-                        <a href="#" style={styles.socialIconLink}>
-                          <svg style={styles.socialIconSvg} fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
-                          </svg>
-                        </a>
-                        <a href="#" style={styles.socialIconLink}>
-                          <svg style={styles.socialIconSvg} fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                          </svg>
-                        </a>
-                        <a href="#" style={styles.socialIconLink}>
-                          <svg style={styles.socialIconSvg} fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.295-.6.295-.002 0-.003 0-.005 0l.213-3.054 5.56-5.022c.24-.213-.054-.334-.373-.121L7.6 13.858l-2.97-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/>
-                          </svg>
-                        </a>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div style={styles.accordionItem}>
-                  <button 
-                    style={styles.accordionButton}
-                    onClick={() => toggleAccordion(3)}
-                  >
-                    <span>Mentorship 101</span>
-                    <span style={styles.accordionIcon}>{openAccordion === 3 ? '−' : '∨'}</span>
-                  </button>
-                  {openAccordion === 3 && (
-                    <div style={styles.accordionContent}>
-                      <p>A practical guide on how to find the right mentor, build a strong relationship, and leverage their guidance for career success.</p>
-                      <div style={styles.socialIcons}>
-                        <a href="#" style={styles.socialIconLink}>
-                          <svg style={styles.socialIconSvg} fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                          </svg>
-                        </a>
-                        <a href="#" style={styles.socialIconLink}>
-                          <svg style={styles.socialIconSvg} fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
-                          </svg>
-                        </a>
-                        <a href="#" style={styles.socialIconLink}>
-                          <svg style={styles.socialIconSvg} fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                          </svg>
-                        </a>
-                        <a href="#" style={styles.socialIconLink}>
-                          <svg style={styles.socialIconSvg} fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.295-.6.295-.002 0-.003 0-.005 0l.213-3.054 5.56-5.022c.24-.213-.054-.334-.373-.121L7.6 13.858l-2.97-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/>
-                          </svg>
-                        </a>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div style={styles.accordionItem}>
-                  <button 
-                    style={styles.accordionButton}
-                    onClick={() => toggleAccordion(4)}
-                  >
-                    <span>Charm School Certification – Earn Your Degree in Charm</span>
-                    <span style={styles.accordionIcon}>{openAccordion === 4 ? '−' : '∨'}</span>
-                  </button>
-                  {openAccordion === 4 && (
-                    <div style={styles.accordionContent}>
-                      <p>Climb the ranks from Bachelor of Charm to Doctorate in Philosophy of Charm as you complete sessions and master essential soft skills.</p>
-                      <div style={styles.socialIcons}>
-                        <a href="#" style={styles.socialIconLink}>
-                          <svg style={styles.socialIconSvg} fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                          </svg>
-                        </a>
-                        <a href="#" style={styles.socialIconLink}>
-                          <svg style={styles.socialIconSvg} fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
-                          </svg>
-                        </a>
-                        <a href="#" style={styles.socialIconLink}>
-                          <svg style={styles.socialIconSvg} fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                          </svg>
-                        </a>
-                        <a href="#" style={styles.socialIconLink}>
-                          <svg style={styles.socialIconSvg} fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.295-.6.295-.002 0-.003 0-.005 0l.213-3.054 5.56-5.022c.24-.213-.054-.334-.373-.121L7.6 13.858l-2.97-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/>
-                          </svg>
-                        </a>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
 
+            {/* SMEs FAQ Column */}
             <div style={styles.faqColumn}>
               <div style={styles.faqHeader}>
-                <h3 style={styles.faqTitle}>Frequently asked questions</h3>
-                <div style={styles.searchBox}>
-                  <input 
-                    type="text" 
-                    placeholder="Looking for something?" 
-                    style={styles.searchInput}
-                  />
-                  <span style={styles.searchIcon}>🔍</span>
-                </div>
-              </div>
-
-              <div style={styles.faqTabs}>
-                <button style={styles.faqTab}>Exclusive Toolkit for Participants</button>
-                <button style={styles.faqTabActive}>WHAT YOU'LL LEARN</button>
+                <h3 style={styles.faqTitle}>For SMEs</h3>
               </div>
 
               <div style={styles.accordionContainer}>
-                {[5, 6, 7, 8, 9].map((index) => {
-                  const items = [
-                    { 
-                      title: "Digital Handbook",
-                      content: "A comprehensive guide packed with expert tips, best practices, and actionable insights."
-                    },
-                    { 
-                      title: "Customizable Templates",
-                      content: "Ready-to-use CV, cover letter, and email templates to help you present yourself professionally."
-                    },
-                    { 
-                      title: "Networking Directory",
-                      content: "Access to a curated list of industry professionals, mentors, and fellow participants."
-                    },
-                    { 
-                      title: "Mentorship 101",
-                      content: "A practical guide on how to find the right mentor, build a strong relationship, and leverage their guidance for career success."
-                    },
-                    { 
-                      title: "Charm School Certification – Earn Your Degree in Charm",
-                      content: "Climb the ranks from Bachelor of Charm to Doctorate in Philosophy of Charm as you complete sessions and master essential soft skills."
-                    }
-                  ];
-                  
-                  const item = items[index - 5];
-                  
-                  return (
-                    <div key={index} style={styles.accordionItem}>
-                      <button 
-                        style={styles.accordionButton}
-                        onClick={() => toggleAccordion(index)}
-                      >
-                        <span>{item.title}</span>
-                        <span style={styles.accordionIcon}>{openAccordion === index ? '−' : '∨'}</span>
-                      </button>
-                      {openAccordion === index && (
-                        <div style={styles.accordionContent}>
-                          <p>{item.content}</p>
-                          <div style={styles.socialIcons}>
-                            <a href="#" style={styles.socialIconLink}>
-                              <svg style={styles.socialIconSvg} fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                              </svg>
-                            </a>
-                            <a href="#" style={styles.socialIconLink}>
-                              <svg style={styles.socialIconSvg} fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
-                              </svg>
-                            </a>
-                            <a href="#" style={styles.socialIconLink}>
-                              <svg style={styles.socialIconSvg} fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                              </svg>
-                            </a>
-                            <a href="#" style={styles.socialIconLink}>
-                              <svg style={styles.socialIconSvg} fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.295-.6.295-.002 0-.003 0-.005 0l.213-3.054 5.56-5.022c.24-.213-.054-.334-.373-.121L7.6 13.858l-2.97-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/>
-                              </svg>
-                            </a>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                {[
+                  { title: "How are Charm School graduates different?", content: "Charm School graduates arrive polished, confident, and ready to contribute immediately. They have professional communication skills, emotional intelligence, and workplace readiness that reduces onboarding time." },
+                  { title: "How can I access Charm-Certified graduates?", content: "SMEs registered on BIG Marketplace can select from pre-trained graduates, sponsor specific candidates, or participate in our talent matching programme." },
+                  { title: "What is the cost benefit for my SME?", content: "By hiring Charm-Certified graduates, you reduce onboarding costs, improve team productivity, and gain professionally trained staff who integrate faster and require less hand-holding." },
+                  { title: "Can I request specific training for graduates?", content: "Yes, we offer customised training packages for SMEs looking to develop graduates with specific skill sets aligned with their business needs." },
+                  { title: "How quickly can graduates start adding value?", content: "Charm-Certified graduates are designed to add value from Day One, with most businesses reporting noticeable contributions within the first week of employment." }
+                ].map((item, index) => (
+                  <div key={index} style={styles.accordionItem}>
+                    <button 
+                      style={styles.accordionButton}
+                      onClick={() => toggleAccordion(`sme-${index}`)}
+                    >
+                      <span>{item.title}</span>
+                      <span style={styles.accordionIcon}>{openAccordion === `sme-${index}` ? '−' : '∨'}</span>
+                    </button>
+                    {openAccordion === `sme-${index}` && (
+                      <div style={styles.accordionContent}>
+                        <p>{item.content}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Sponsors FAQ Column */}
+            <div style={styles.faqColumn}>
+              <div style={styles.faqHeader}>
+                <h3 style={styles.faqTitle}>For Sponsors</h3>
+              </div>
+
+              <div style={styles.accordionContainer}>
+                {[
+                  { title: "What are the sponsorship tiers available?", content: "We offer various sponsorship packages tailored to different budget levels and impact goals. Contact us for detailed information about our Bronze, Silver, Gold, and Platinum sponsorship tiers." },
+                  { title: "How is my sponsorship impact measured?", content: "We provide comprehensive impact reports showing graduate employment rates, SME growth metrics, and social return on investment. You'll see exactly how your contribution creates change." },
+                  { title: "Can I sponsor specific graduates or regions?", content: "Yes, we offer targeted sponsorship options where you can support graduates from specific regions, universities, or demographic backgrounds based on your CSI objectives." },
+                  { title: "What branding opportunities are included?", content: "Sponsors receive branding on all Charm School materials, recognition during events, inclusion in PR campaigns, and opportunities for employee engagement through mentorship programmes." },
+                  { title: "How does sponsorship strengthen SMEs?", content: "Your sponsorship creates a pipeline of work-ready talent that SMEs can access, helping them scale faster while reducing their recruitment and training costs." }
+                ].map((item, index) => (
+                  <div key={index} style={styles.accordionItem}>
+                    <button 
+                      style={styles.accordionButton}
+                      onClick={() => toggleAccordion(`sponsor-${index}`)}
+                    >
+                      <span>{item.title}</span>
+                      <span style={styles.accordionIcon}>{openAccordion === `sponsor-${index}` ? '−' : '∨'}</span>
+                    </button>
+                    {openAccordion === `sponsor-${index}` && (
+                      <div style={styles.accordionContent}>
+                        <p>{item.content}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* Section 5 - THE CHARM SCHOOL ADVANTAGE */}
-      <section style={styles.section5}>
-        <div style={styles.sectionContent}>
-          <h2 style={styles.sectionTitle}>
-            THE CHARM SCHOOL ADVANTAGE
-          </h2>
-          
-          <div style={styles.tabNavigation}>
-            <button 
-              style={activeTab === 'graduates' ? styles.tabButtonActive : styles.tabButton}
-              onClick={() => setActiveTab('graduates')}
-              onMouseEnter={(e) => {
-                if (activeTab !== 'graduates') {
-                  e.target.style.backgroundColor = 'rgba(139, 90, 43, 0.1)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (activeTab !== 'graduates') {
-                  e.target.style.backgroundColor = 'white';
-                }
-              }}
-            >
-              For Graduates & Young Professionals
-            </button>
-            <button 
-              style={activeTab === 'sponsors' ? styles.tabButtonActive : styles.tabButton}
-              onClick={() => setActiveTab('sponsors')}
-              onMouseEnter={(e) => {
-                if (activeTab !== 'sponsors') {
-                  e.target.style.backgroundColor = 'rgba(139, 90, 43, 0.1)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (activeTab !== 'sponsors') {
-                  e.target.style.backgroundColor = 'white';
-                }
-              }}
-            >
-              For Partners & Sponsors
-            </button>
-          </div>
-
-          {activeTab === 'graduates' && (
-            <div style={styles.advantageContent}>
-              <h3 style={styles.advantageSubtitle}>For Graduates & Young Professionals</h3>
-              
-              <div style={styles.advantageList}>
-                <div style={styles.bigLogo}>
-                  <img 
-                    src="/BIG.avif" 
-                    alt="Brown Ivory Group" 
-                    style={styles.bigLogoImage}
-                  />
-                </div>
-                <ul style={styles.bulletList}>
-                  <li style={styles.bulletItem}>Develop confidence and executive presence to stand out.</li>
-                  <li style={styles.bulletItem}>Master career-building soft skills that complement technical expertise.</li>
-                  <li style={styles.bulletItem}>Build lasting professional connections to accelerate career growth.</li>
-                </ul>
-              </div>
-
-              <button 
-                style={styles.advantageButton}
-                onMouseEnter={(e) => {
-                  e.target.style.backgroundColor = 'white';
-                  e.target.style.color = '#8B5A2B';
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.backgroundColor = '#8B5A2B';
-                  e.target.style.color = 'white';
-                }}
-              >
-                Join us in building a workforce that is confident, capable, and career-ready
-              </button>
-            </div>
-          )}
-
-          {activeTab === 'sponsors' && (
-            <div style={styles.advantageContent}>
-              <h3 style={styles.advantageSubtitle}>For Partners & Sponsors</h3>
-              
-              <div style={styles.advantageList}>
-                <div style={styles.bigLogo}>
-                  <img 
-                    src="/BIG.avif" 
-                    alt="Brown Ivory Group" 
-                    style={styles.bigLogoImage}
-                  />
-                </div>
-                <ul style={styles.bulletList}>
-                  <li style={styles.bulletItem}>Shape the next generation of career-ready professionals.</li>
-                  <li style={styles.bulletItem}>Engage your employees as facilitators or mentors.</li>
-                  <li style={styles.bulletItem}>Strengthen the local talent pipeline by supporting future business leaders.</li>
-                </ul>
-              </div>
-
-              <button 
-                style={styles.advantageButton}
-                onMouseEnter={(e) => {
-                  e.target.style.backgroundColor = 'white';
-                  e.target.style.color = '#8B5A2B';
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.backgroundColor = '#8B5A2B';
-                  e.target.style.color = 'white';
-                }}
-              >
-                Partner with us to shape the future workforce
-              </button>
-            </div>
-          )}
         </div>
       </section>
 
@@ -676,7 +773,7 @@ const CharmSchool = () => {
 
             <div style={styles.experienceDetails}>
               <div style={styles.eventInfo}>
-                <p style={styles.eventInfoItem}>📅 <strong>DATE:</strong> 10-11 JULY 2025</p>
+                <p style={styles.eventInfoItem}>📅 <strong>DATE:</strong> Coming Soon</p>
                 <p style={styles.eventInfoItem}>🕐 <strong>TIME:</strong> 8:00 AM - 5:00 PM</p>
                 <p style={styles.eventInfoItem}>📍 <strong>LOCATION:</strong> JOHANNESBURG, SOUTH AFRICA</p>
               </div>
@@ -732,49 +829,156 @@ const CharmSchool = () => {
           </p>
 
           <div style={styles.tabNavigation}>
-            <button style={styles.tabButton}>Day 1</button>
-            <button style={styles.tabButtonActive}>Day 2</button>
+            <button 
+              style={activeProgramTab === 'day1' ? styles.tabButtonActive : styles.tabButton}
+              onClick={() => setActiveProgramTab('day1')}
+            >
+              Day 1
+            </button>
+            <button 
+              style={activeProgramTab === 'day2' ? styles.tabButtonActive : styles.tabButton}
+              onClick={() => setActiveProgramTab('day2')}
+            >
+              Day 2
+            </button>
           </div>
 
           <div style={styles.programmeContent}>
-            <h3 style={styles.programmeTitle}>Personal Branding & Professional Presence</h3>
+            {activeProgramTab === 'day1' && (
+              <>
+                <h3 style={styles.programmeTitle}>Day 1: Professional Foundations & Workplace Readiness</h3>
 
-            <div style={styles.scheduleList}>
-              <div style={styles.scheduleItem}>
-                <span style={styles.scheduleTime}>⏰ 8:00 AM – 10:30 AM |</span>
-                <span style={styles.scheduleEvent}>Welcome & Keynote: The Power of Charm in Career Success</span>
-              </div>
+                <div style={styles.scheduleList}>
+                  <div style={styles.scheduleItem}>
+                    <span style={styles.scheduleTime}>⏰ 9:00 AM – 9:30 AM |</span>
+                    <span style={styles.scheduleEvent}>Welcome & Opening Keynote</span>
+                  </div>
 
-              <div style={styles.scheduleItem}>
-                <span style={styles.scheduleTime}>🕐 10:30 AM – 12:00 PM |</span>
-                <span style={styles.scheduleEvent}>Executive Presence & Professional Etiquette</span>
-              </div>
+                  <div style={styles.scheduleItem}>
+                    <span style={styles.scheduleTime}>🕐 9:30 AM – 10:15 AM |</span>
+                    <span style={styles.scheduleEvent}>Slot 1: Professional Etiquette, Time Management, Personal Branding</span>
+                  </div>
 
-              <div style={styles.scheduleItem}>
-                <span style={styles.scheduleTime}>🍴 12:00 PM – 1:00 PM |</span>
-                <span style={styles.scheduleEvent}>Lunch Break & Networking</span>
-              </div>
+                  <div style={styles.scheduleItem}>
+                    <span style={styles.scheduleTime}>🕐 10:15 AM – 11:00 AM |</span>
+                    <span style={styles.scheduleEvent}>Slot 2: Effective Business Writing, Networking, Presentation Skills</span>
+                  </div>
 
-              <div style={styles.scheduleItem}>
-                <span style={styles.scheduleTime}>⏰ 1:00 PM – 2:30 PM |</span>
-                <span style={styles.scheduleEvent}>Confident Communication & Public Speaking</span>
-              </div>
+                  <div style={styles.scheduleItem}>
+                    <span style={styles.scheduleTime}>☕ 11:00 AM – 11:15 AM |</span>
+                    <span style={styles.scheduleEvent}>Morning Break</span>
+                  </div>
 
-              <div style={styles.scheduleItem}>
-                <span style={styles.scheduleTime}>⏰ 2:30 PM – 4:00 PM |</span>
-                <span style={styles.scheduleEvent}>Personal Branding & LinkedIn Optimization</span>
-              </div>
+                  <div style={styles.scheduleItem}>
+                    <span style={styles.scheduleTime}>🕐 11:15 AM – 12:00 PM |</span>
+                    <span style={styles.scheduleEvent}>Slot 3: Financial Literacy, Feedback Skills, Professional Dress</span>
+                  </div>
 
-              <div style={styles.scheduleItem}>
-                <span style={styles.scheduleTime}>⏰ 4:00 PM – 5:30 PM |</span>
-                <span style={styles.scheduleEvent}>Leadership & Emotional Intelligence</span>
-              </div>
+                  <div style={styles.scheduleItem}>
+                    <span style={styles.scheduleTime}>🕐 12:00 PM – 12:45 PM |</span>
+                    <span style={styles.scheduleEvent}>Slot 4: Emotional Intelligence, Stress Management, Problem-Solving</span>
+                  </div>
 
-              <div style={styles.scheduleItem}>
-                <span style={styles.scheduleTime}>⏰ 5:30 PM – 6:00 PM |</span>
-                <span style={styles.scheduleEvent}>Wrap-up & Networking</span>
-              </div>
-            </div>
+                  <div style={styles.scheduleItem}>
+                    <span style={styles.scheduleTime}>🍴 12:45 PM – 1:45 PM |</span>
+                    <span style={styles.scheduleEvent}>Networking Lunch</span>
+                  </div>
+
+                  <div style={styles.scheduleItem}>
+                    <span style={styles.scheduleTime}>🕐 1:45 PM – 2:30 PM |</span>
+                    <span style={styles.scheduleEvent}>Slot 5: Job Search Strategies, Interview Success, Career Planning</span>
+                  </div>
+
+                  <div style={styles.scheduleItem}>
+                    <span style={styles.scheduleTime}>🕐 2:30 PM – 3:15 PM |</span>
+                    <span style={styles.scheduleEvent}>Slot 6: Cross-Cultural Communication, Office Politics, Entrepreneurial Mindset</span>
+                  </div>
+
+                  <div style={styles.scheduleItem}>
+                    <span style={styles.scheduleTime}>☕ 3:15 PM – 3:30 PM |</span>
+                    <span style={styles.scheduleEvent}>Afternoon Break</span>
+                  </div>
+
+                  <div style={styles.scheduleItem}>
+                    <span style={styles.scheduleTime}>🕐 3:30 PM – 4:15 PM |</span>
+                    <span style={styles.scheduleEvent}>Slot 7: Leadership Foundations, Strategic Thinking, Influence Skills</span>
+                  </div>
+
+                  <div style={styles.scheduleItem}>
+                    <span style={styles.scheduleTime}>🕐 4:15 PM – 5:00 PM |</span>
+                    <span style={styles.scheduleEvent}>Closing Workshop & Wrap-Up</span>
+                  </div>
+
+                  <div style={styles.scheduleItem}>
+                    <span style={styles.scheduleTime}>🎉 5:00 PM – 6:00 PM |</span>
+                    <span style={styles.scheduleEvent}>Networking Reception</span>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {activeProgramTab === 'day2' && (
+              <>
+                <h3 style={styles.programmeTitle}>Day 2: Advanced Professional Development</h3>
+
+                <div style={styles.scheduleList}>
+                  <div style={styles.scheduleItem}>
+                    <span style={styles.scheduleTime}>⏰ 8:30 AM – 9:00 AM |</span>
+                    <span style={styles.scheduleEvent}>Morning Welcome & Day 1 Recap</span>
+                  </div>
+
+                  <div style={styles.scheduleItem}>
+                    <span style={styles.scheduleTime}>🕐 9:00 AM – 10:00 AM |</span>
+                    <span style={styles.scheduleEvent}>Advanced Communication Masterclass</span>
+                  </div>
+
+                  <div style={styles.scheduleItem}>
+                    <span style={styles.scheduleTime}>🕐 10:00 AM – 11:00 AM |</span>
+                    <span style={styles.scheduleEvent}>Executive Presence & Leadership Simulation</span>
+                  </div>
+
+                  <div style={styles.scheduleItem}>
+                    <span style={styles.scheduleTime}>☕ 11:00 AM – 11:15 AM |</span>
+                    <span style={styles.scheduleEvent}>Morning Break</span>
+                  </div>
+
+                  <div style={styles.scheduleItem}>
+                    <span style={styles.scheduleTime}>🕐 11:15 AM – 12:15 PM |</span>
+                    <span style={styles.scheduleEvent}>Emotional Intelligence in Practice</span>
+                  </div>
+
+                  <div style={styles.scheduleItem}>
+                    <span style={styles.scheduleTime}>🕐 12:15 PM – 1:15 PM |</span>
+                    <span style={styles.scheduleEvent}>Networking Excellence & Relationship Building</span>
+                  </div>
+
+                  <div style={styles.scheduleItem}>
+                    <span style={styles.scheduleTime}>🍴 1:15 PM – 2:15 PM |</span>
+                    <span style={styles.scheduleEvent}>Lunch & Professional Networking</span>
+                  </div>
+
+                  <div style={styles.scheduleItem}>
+                    <span style={styles.scheduleTime}>🕐 2:15 PM – 3:30 PM |</span>
+                    <span style={styles.scheduleEvent}>Career Acceleration Workshop</span>
+                  </div>
+
+                  <div style={styles.scheduleItem}>
+                    <span style={styles.scheduleTime}>🕐 3:30 PM – 4:30 PM |</span>
+                    <span style={styles.scheduleEvent}>Personal Branding & Digital Presence</span>
+                  </div>
+
+                  <div style={styles.scheduleItem}>
+                    <span style={styles.scheduleTime}>🕐 4:30 PM – 5:00 PM |</span>
+                    <span style={styles.scheduleEvent}>Graduation Ceremony & Certificate Distribution</span>
+                  </div>
+
+                  <div style={styles.scheduleItem}>
+                    <span style={styles.scheduleTime}>🎓 5:00 PM – 6:00 PM |</span>
+                    <span style={styles.scheduleEvent}>Celebration & Final Networking</span>
+                  </div>
+                </div>
+              </>
+            )}
 
             <div style={styles.programmeButtons}>
               <button 
@@ -877,6 +1081,20 @@ const CharmSchool = () => {
         </div>
       </section>
 
+      {/* Partnership Section - Full Width White Background */}
+      <section style={styles.partnershipSection}>
+        <div style={styles.partnershipContent}>
+          <div style={styles.partnershipContainer}>
+            <span style={styles.partnershipLabel}>IN PARTNERSHIP WITH</span>
+            <img 
+              src="./flo.png" 
+              alt="Floconsult" 
+              style={styles.floconsultLogo}
+            />
+          </div>
+        </div>
+      </section>
+
       <Footer />
     </div>
   );
@@ -889,10 +1107,51 @@ const styles = {
     fontFamily: 'system-ui, -apple-system, sans-serif',
   },
   
-  // Hero Section - Fixed text alignment
+  // Partnership Section - Full Width White Background
+  partnershipSection: {
+    width: '100%',
+    backgroundColor: 'white',
+    padding: '3rem 0',
+    borderTop: '1px solid #e5e7eb',
+    height: '100px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  partnershipContent: {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  partnershipContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '2.5rem',
+    maxWidth: '1200px',
+    width: '100%',
+    margin: '0 auto',
+    padding: '0 1rem',
+  },
+  partnershipLabel: {
+    fontSize: '1.1rem',
+    fontWeight: '700',
+    color: '#8B5A2B',
+    textTransform: 'uppercase',
+    letterSpacing: '0.15em',
+    whiteSpace: 'nowrap',
+  },
+  floconsultLogo: {
+    height: '100px',
+    width: 'auto',
+    maxWidth: '250px',
+  },
+  
+  // Hero Section
   heroSection: {
     position: 'relative',
-    height: '70vh',
+    height: '80vh',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -933,9 +1192,16 @@ const styles = {
     lineHeight: '1.2',
   },
   heroSubtitle: {
-    fontSize: '1.5rem',
-    marginBottom: '1.5rem',
+    fontSize: '1.8rem',
+    marginBottom: '1rem',
+    lineHeight: '1.4',
+    fontWeight: '600',
+  },
+  heroDescription: {
+    fontSize: '1.2rem',
+    marginBottom: '2rem',
     lineHeight: '1.6',
+    maxWidth: '800px',
   },
   ctaButton: {
     backgroundColor: '#8B5A2B',
@@ -1082,6 +1348,138 @@ const styles = {
     boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
   },
   
+  // Section Advantage Styles
+  sectionAdvantage: {
+    padding: '4rem 0',
+    backgroundColor: '#fef7ed',
+  },
+  advantageContent: {
+    textAlign: 'left',
+  },
+  advantageSubtitle: {
+    fontSize: '1.5rem',
+    fontWeight: '600',
+    color: '#8B5A2B',
+    marginBottom: '2rem',
+    textAlign: 'center',
+  },
+  advantageGrid: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2rem',
+  },
+  advantageText: {
+    lineHeight: '1.7',
+  },
+  advantageHeading: {
+    fontSize: '1.75rem',
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: '1.5rem',
+  },
+  advantageParagraph: {
+    fontSize: '1.125rem',
+    color: '#374151',
+    marginBottom: '1.5rem',
+  },
+  advantageSectionTitle: {
+    fontSize: '1.5rem',
+    fontWeight: 'bold',
+    color: '#8B5A2B',
+    margin: '2rem 0 1rem 0',
+  },
+  checklist: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1rem',
+    marginBottom: '1.5rem',
+  },
+  checkItem: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '0.75rem',
+  },
+  checkIcon: {
+    width: '24px',
+    height: '24px',
+    backgroundColor: '#8B5A2B',
+    color: 'white',
+    borderRadius: '4px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '14px',
+    fontWeight: 'bold',
+    flexShrink: 0,
+    marginTop: '2px',
+  },
+  checkText: {
+    fontSize: '1.125rem',
+    color: '#374151',
+  },
+  toolkitList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.5rem',
+    marginBottom: '1.5rem',
+  },
+  toolkitItem: {
+    fontSize: '1.125rem',
+    color: '#374151',
+  },
+  bulletList: {
+    listStyle: 'disc',
+    paddingLeft: '1.5rem',
+    marginBottom: '1.5rem',
+  },
+  bulletItem: {
+    fontSize: '1.125rem',
+    color: '#374151',
+    marginBottom: '0.5rem',
+    lineHeight: '1.6',
+  },
+  advantageTagline: {
+    fontSize: '1.25rem',
+    color: '#1f2937',
+    textAlign: 'center',
+    marginTop: '2rem',
+    fontStyle: 'italic',
+  },
+  sponsorReason: {
+    marginBottom: '2rem',
+  },
+  sponsorReasonTitle: {
+    fontSize: '1.25rem',
+    fontWeight: 'bold',
+    color: '#8B5A2B',
+    marginBottom: '0.5rem',
+  },
+  impactLevels: {
+    marginTop: '2rem',
+  },
+  impactGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: '1.5rem',
+    marginTop: '1rem',
+  },
+  impactItem: {
+    textAlign: 'center',
+    padding: '1.5rem',
+    backgroundColor: 'rgba(139, 90, 43, 0.1)',
+    borderRadius: '0.5rem',
+  },
+  impactTitle: {
+    fontSize: '1.125rem',
+    fontWeight: 'bold',
+    color: '#8B5A2B',
+    marginBottom: '0.5rem',
+  },
+  impactText: {
+    fontSize: '1rem',
+    color: '#374151',
+  },
+  
   // Section 2 Styles
   section2: {
     position: 'relative',
@@ -1105,34 +1503,6 @@ const styles = {
     right: 0,
     bottom: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
-  },
-  checklist: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '1rem',
-  },
-  checkItem: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: '0.75rem',
-  },
-  checkIcon: {
-    width: '24px',
-    height: '24px',
-    border: '2px solid white',
-    borderRadius: '4px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '14px',
-    fontWeight: 'bold',
-    flexShrink: 0,
-    marginTop: '2px',
-    color: 'white',
-  },
-  checkText: {
-    fontSize: '1.125rem',
-    color: 'white',
   },
   sectionTextWhite: {
     fontSize: '1.125rem',
@@ -1213,7 +1583,7 @@ const styles = {
     lineHeight: '1.6',
   },
 
-  // Section 4 - Building Confidence
+  // Section 4 - Become a Champion for Talent
   section4: {
     position: 'relative',
     padding: '4rem 0',
@@ -1238,20 +1608,27 @@ const styles = {
     backgroundColor: 'rgba(0, 0, 0, 0.90)',
   },
   section4Subtitle: {
-    fontSize: '1.125rem',
+    fontSize: '1.5rem',
     textAlign: 'center',
-    marginBottom: '3rem',
+    marginBottom: '1rem',
     color: 'white',
     maxWidth: '900px',
     marginLeft: 'auto',
     marginRight: 'auto',
     lineHeight: '1.7',
   },
+  contactEmail: {
+    fontSize: '1.25rem',
+    textAlign: 'center',
+    marginBottom: '3rem',
+    color: 'white',
+    fontWeight: '600',
+  },
 
   // FAQ Grid
   faqGrid: {
     display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
+    gridTemplateColumns: 'repeat(3, 1fr)',
     gap: '2rem',
     marginTop: '2rem',
   },
@@ -1266,56 +1643,10 @@ const styles = {
   },
   faqTitle: {
     color: 'white',
-    fontSize: '1.125rem',
+    fontSize: '1.25rem',
     fontWeight: 'bold',
     marginBottom: '1rem',
-  },
-  searchBox: {
-    position: 'relative',
-    display: 'flex',
-    alignItems: 'center',
-  },
-  searchInput: {
-    width: '100%',
-    padding: '0.5rem 2.5rem 0.5rem 1rem',
-    borderRadius: '0.375rem',
-    border: '1px solid rgba(255, 255, 255, 0.3)',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    color: 'white',
-    fontSize: '0.875rem',
-  },
-  searchIcon: {
-    position: 'absolute',
-    right: '0.75rem',
-    fontSize: '1rem',
-  },
-  faqTabs: {
-    display: 'flex',
-    gap: '0.5rem',
-    marginBottom: '1.5rem',
-    flexWrap: 'wrap',
-  },
-  faqTab: {
-    padding: '0.5rem 1rem',
-    backgroundColor: 'transparent',
-    color: '#d4a574',
-    border: 'none',
-    borderRadius: '0.375rem',
-    fontSize: '0.75rem',
-    cursor: 'pointer',
-    transition: 'all 0.3s ease',
-    whiteSpace: 'nowrap',
-  },
-  faqTabActive: {
-    padding: '0.5rem 1rem',
-    backgroundColor: 'rgba(139, 90, 43, 0.6)',
-    color: 'white',
-    border: 'none',
-    borderRadius: '0.375rem',
-    fontSize: '0.75rem',
-    fontWeight: '600',
-    cursor: 'pointer',
-    whiteSpace: 'nowrap',
+    textAlign: 'center',
   },
 
   // Accordion
@@ -1357,33 +1688,8 @@ const styles = {
     fontSize: '0.875rem',
     lineHeight: '1.6',
   },
-  socialIcons: {
-    display: 'flex',
-    gap: '0.75rem',
-    marginTop: '1rem',
-  },
-  socialIconLink: {
-    width: '36px',
-    height: '36px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: '4px',
-    transition: 'all 0.3s ease',
-    textDecoration: 'none',
-  },
-  socialIconSvg: {
-    width: '20px',
-    height: '20px',
-    fill: 'white',
-  },
 
-  // Section 5 - The Charm School Advantage
-  section5: {
-    padding: '4rem 0',
-    backgroundColor: '#fef7ed',
-  },
+  // Tab Navigation
   tabNavigation: {
     display: 'flex',
     gap: '1rem',
@@ -1409,55 +1715,6 @@ const styles = {
     borderRadius: '2rem',
     fontWeight: '600',
     cursor: 'pointer',
-  },
-  advantageContent: {
-    textAlign: 'center',
-    maxWidth: '800px',
-    margin: '0 auto',
-  },
-  advantageSubtitle: {
-    fontSize: '1.75rem',
-    fontWeight: '600',
-    color: '#8B5A2B',
-    marginBottom: '2rem',
-  },
-  advantageList: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: '2rem',
-    marginBottom: '2rem',
-    textAlign: 'left',
-  },
-  bigLogo: {
-    width: '60px',
-    height: '60px',
-    flexShrink: 0,
-  },
-  bigLogoImage: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'contain',
-  },
-  bulletList: {
-    listStyle: 'disc',
-    paddingLeft: '1.5rem',
-  },
-  bulletItem: {
-    fontSize: '1.125rem',
-    color: '#374151',
-    marginBottom: '1rem',
-    lineHeight: '1.7',
-  },
-  advantageButton: {
-    backgroundColor: '#8B5A2B',
-    color: 'white',
-    padding: '1rem 2rem',
-    borderRadius: '0.5rem',
-    fontWeight: '600',
-    border: '2px solid #8B5A2B',
-    cursor: 'pointer',
-    transition: 'all 0.3s ease',
-    fontSize: '1rem',
   },
 
   // Section 6 - The Upcoming Charm School Experience
@@ -1613,7 +1870,7 @@ const styles = {
   // Section 8 - Be Part of the Charm
   section8: {
     position: 'relative',
-    padding: '4rem 0 0 0',
+    padding: '4rem 0',
     minHeight: '70vh',
   },
   section8Background: {
@@ -1639,7 +1896,7 @@ const styles = {
     gridTemplateColumns: '1fr 1fr',
     gap: '3rem',
     alignItems: 'center',
-    marginBottom: '3rem',
+    marginBottom: '2rem',
   },
   bePartImageContainer: {
     display: 'flex',
@@ -1692,7 +1949,7 @@ const styles = {
   bePartItemText: {
     fontSize: '0.95rem',
     lineHeight: '1.6',
-    opacity: 0.9,
+    opacity: '0.9',
   },
   bePartTagline: {
     fontSize: '1rem',

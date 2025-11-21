@@ -79,11 +79,6 @@ const Tooltip = ({ children, content, position = "top" }) => {
 const Governance = ({ data, updateData }) => {
   const [formData, setFormData] = useState({
     governanceChecklist: {},
-    // Advisory
-    hasAdvisoryStructure: "",
-    advisoryStructureDocs: [],
-    hasPolicyControls: "",
-    policyControlsDocs: [],
     // Conflict Resolution / Ethics
     hasEthicsPolicy: "",
     ethicsPolicyDocs: [],
@@ -121,10 +116,6 @@ const Governance = ({ data, updateData }) => {
               // Initialize with default structure
               const initialData = {
                 governanceChecklist: {},
-                hasAdvisoryStructure: "",
-                advisoryStructureDocs: [],
-                hasPolicyControls: "",
-                policyControlsDocs: [],
                 hasEthicsPolicy: "",
                 ethicsPolicyDocs: [],
                 hasConflictResolution: "",
@@ -147,10 +138,6 @@ const Governance = ({ data, updateData }) => {
             // No profile exists yet, initialize with defaults
             const initialData = {
               governanceChecklist: {},
-              hasAdvisoryStructure: "",
-              advisoryStructureDocs: [],
-              hasPolicyControls: "",
-              policyControlsDocs: [],
               hasEthicsPolicy: "",
               ethicsPolicyDocs: [],
               hasConflictResolution: "",
@@ -362,73 +349,6 @@ const Governance = ({ data, updateData }) => {
               </div>
             </div>
           ))}
-        </div>
-      </div>
-
-      {/* Advisory Section */}
-      <div className="mb-8">
-        <h3 className="text-xl font-semibold text-brown-700 mt-6 mb-6 border-b border-brown-200 pb-2">
-          Advisory
-        </h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <FormField label="Do you have advisory structure?" required>
-              <select
-                name="hasAdvisoryStructure"
-                value={formData.hasAdvisoryStructure || ""}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-                required
-              >
-                <option value="">Select</option>
-                <option value="Yes">Yes</option>
-                <option value="No">No</option>
-              </select>
-            </FormField>
-
-            {formData.hasAdvisoryStructure === "Yes" && (
-              <div className="mt-4">
-                <FileUpload
-                  label="Upload Advisory Structure Documents"
-                  value={formData.advisoryStructureDocs || []}
-                  onChange={(files) => handleFileChange("advisoryStructureDocs", files)}
-                  accept=".pdf,.doc,.docx"
-                  multiple={true}
-                  isUploading={uploadingDocs["advisoryStructureDocs"]}
-                />
-              </div>
-            )}
-          </div>
-
-          <div>
-            <FormField label="Do you have policy and controls?" required>
-              <select
-                name="hasPolicyControls"
-                value={formData.hasPolicyControls || ""}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-                required
-              >
-                <option value="">Select</option>
-                <option value="Yes">Yes</option>
-                <option value="No">No</option>
-              </select>
-            </FormField>
-
-            {formData.hasPolicyControls === "Yes" && (
-              <div className="mt-4">
-                <FileUpload
-                  label="Upload Policy and Controls Documents"
-                  value={formData.policyControlsDocs || []}
-                  onChange={(files) => handleFileChange("policyControlsDocs", files)}
-                  accept=".pdf,.doc,.docx"
-                  multiple={true}
-                  isUploading={uploadingDocs["policyControlsDocs"]}
-                />
-              </div>
-            )}
-          </div>
         </div>
       </div>
 
