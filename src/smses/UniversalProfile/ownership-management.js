@@ -30,6 +30,26 @@ const positionOptions = [
   "Other",
 ];
 
+const executivePositions = [
+  "Chief Executive Officer",
+  "Chief Financial Officer",
+  "Chief Operating Officer",
+  "Chief Technology Officer",
+  "Chief Marketing Officer",
+  "Chief Human Resources Officer",
+  "Chief Information Officer",
+  "Chief Strategy Officer",
+  "Managing Director",
+  "General Manager",
+  "Operations Manager",
+  "Financial Manager",
+  "HR Manager",
+  "Marketing Manager",
+  "IT Manager",
+  "Sales Manager",
+  "Other",
+];
+
 const genderOptions = [
   { value: "Male", label: "Male" },
   { value: "Female", label: "Female" },
@@ -128,8 +148,22 @@ const DEFAULT_DIRECTOR = {
   cv: null,
 };
 
-export default function OwnershipManagement({ data = { shareholders: [], directors: [] }, updateData }) {
-  const [formData, setFormData] = useState({ shareholders: [], directors: [] });
+const DEFAULT_EXECUTIVE = {
+  name: "",
+  position: "",
+  customPosition: "",
+  department: "",
+  nationality: "",
+  linkedin: "",
+  race: "",
+  gender: "",
+  isYouth: false,
+  isDisabled: false,
+  cv: null,
+};
+
+export default function OwnershipManagement({ data = { shareholders: [], directors: [], executives: [] }, updateData }) {
+  const [formData, setFormData] = useState({ shareholders: [], directors: [], executives: [] });
   const [isLoading, setIsLoading] = useState(true);
 
   // Helper functions
@@ -210,6 +244,44 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
     }
   };
 
+  // File upload handler for executive CVs
+  const handleExecutiveCVUpload = async (index, file) => {
+    if (!file) return;
+
+    try {
+      const userId = auth.currentUser?.uid;
+      if (!userId) {
+        console.error("No user authenticated");
+        return;
+      }
+
+      // Create a unique filename
+      const timestamp = Date.now();
+      const fileName = `executives/cv/${userId}/${index}_${timestamp}_${file.name}`;
+      
+      // Create storage reference
+      const storageRef = ref(storage, fileName);
+      
+      // Upload file
+      const uploadResult = await uploadBytes(storageRef, file);
+      
+      // Get download URL
+      const downloadURL = await getDownloadURL(uploadResult.ref);
+      
+      // Update executive with CV URL
+      updateExecutive(index, "cv", {
+        name: file.name,
+        url: downloadURL,
+        uploadedAt: new Date().toISOString()
+      });
+
+      console.log("Executive CV uploaded successfully:", downloadURL);
+    } catch (error) {
+      console.error("Error uploading executive CV:", error);
+      alert("Failed to upload CV. Please try again.");
+    }
+  };
+
   // Data loading
   useEffect(() => {
     const loadOwnershipManagement = async () => {
@@ -231,30 +303,33 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
           if (profileData.ownershipManagement) {
             updateFormData(profileData.ownershipManagement);
           } else {
-            const initData = data.shareholders?.length > 0 || data.directors?.length > 0 
+            const initData = data.shareholders?.length > 0 || data.directors?.length > 0 || data.executives?.length > 0
               ? data 
               : {
                   shareholders: [DEFAULT_SHAREHOLDER],
                   directors: [DEFAULT_DIRECTOR],
+                  executives: [DEFAULT_EXECUTIVE],
                 };
             updateFormData(initData);
           }
         } else {
-          const initData = data.shareholders?.length > 0 || data.directors?.length > 0 
+          const initData = data.shareholders?.length > 0 || data.directors?.length > 0 || data.executives?.length > 0
             ? data 
             : {
                 shareholders: [DEFAULT_SHAREHOLDER],
                 directors: [DEFAULT_DIRECTOR],
+                executives: [DEFAULT_EXECUTIVE],
               };
           updateFormData(initData);
         }
       } catch (error) {
         console.error("Error loading ownership management:", error);
-        const fallbackData = data.shareholders?.length > 0 || data.directors?.length > 0 
+        const fallbackData = data.shareholders?.length > 0 || data.directors?.length > 0 || data.executives?.length > 0
           ? data 
           : {
               shareholders: [DEFAULT_SHAREHOLDER],
               directors: [DEFAULT_DIRECTOR],
+              executives: [DEFAULT_EXECUTIVE],
             };
         updateFormData(fallbackData);
       } finally {
@@ -266,7 +341,7 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
   }, []);
 
   useEffect(() => {
-    if (!isLoading && (!formData.shareholders?.length && !formData.directors?.length)) {
+    if (!isLoading && (!formData.shareholders?.length && !formData.directors?.length && !formData.executives?.length)) {
       setFormData(data);
     }
   }, [data, isLoading]);
@@ -426,6 +501,29 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
     updateFormData({ ...formData, directors: newDirectors });
   };
 
+  // Executive functions
+  const addExecutive = () => {
+    const newExecutives = [...(formData.executives || []), DEFAULT_EXECUTIVE];
+    updateFormData({ ...formData, executives: newExecutives });
+  };
+
+  const updateExecutive = (index, field, value) => {
+    const newExecutives = [...(formData.executives || [])];
+    newExecutives[index] = { ...newExecutives[index], [field]: value };
+    
+    // If position is changed from "Other" to something else, clear customPosition
+    if (field === "position" && value !== "Other") {
+      newExecutives[index].customPosition = "";
+    }
+    
+    updateFormData({ ...formData, executives: newExecutives });
+  };
+
+  const removeExecutive = (index) => {
+    const newExecutives = (formData.executives || []).filter((_, i) => i !== index);
+    updateFormData({ ...formData, executives: newExecutives });
+  };
+
   // Handlers
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -456,6 +554,19 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
     { label: "Nationality", style: { width: "10%" } },
     { label: "LinkedIn & CV", style: { width: "25%", minWidth: "180px" } },
     { label: "Exec/Non-Exec", style: { width: "10%" } },
+    { label: "Race", style: { width: "8%" } },
+    { label: "Gender", style: { width: "8%" } },
+    { label: "Youth?", style: { width: "6%" } },
+    { label: "Disabled?", style: { width: "6%" } },
+    { label: "Actions", style: { width: "60px" } },
+  ];
+
+  const executiveColumns = [
+    { label: "Name", style: { width: "20%", minWidth: "160px" } },
+    { label: "Position", style: { width: "15%", minWidth: "120px" } },
+    { label: "Department", style: { width: "12%" } },
+    { label: "Nationality", style: { width: "10%" } },
+    { label: "LinkedIn & CV", style: { width: "23%", minWidth: "180px" } },
     { label: "Race", style: { width: "8%" } },
     { label: "Gender", style: { width: "8%" } },
     { label: "Youth?", style: { width: "6%" } },
@@ -841,6 +952,204 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
                       className="text-red-500 hover:text-red-700"
                       disabled={director.linkedShareholderId !== null}
                       title={director.linkedShareholderId !== null ? "Uncheck 'Also Director' in shareholder table to remove" : "Remove director"}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Executive Management Table */}
+      <div className="mb-8">
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h3 className="text-lg font-semibold text-brown-700">Executive Management Table</h3>
+            <p className="text-xs text-brown-500 mt-1">
+              Track day-to-day management and operations team
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={addExecutive}
+            className="flex items-center px-3 py-1 bg-brown-100 text-brown-700 rounded-md hover:bg-brown-200"
+          >
+            <Plus className="w-4 h-4 mr-1" /> Add Executive
+          </button>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full bg-white border border-brown-200 rounded-lg">
+            <thead>
+              <tr className="bg-brown-50">
+                {executiveColumns.map((header, i) => (
+                  <th
+                    key={i}
+                    className="px-4 py-2 text-left text-xs font-medium text-brown-700 uppercase tracking-wider border-b"
+                    style={header.style}
+                  >
+                    {header.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(formData.executives || []).map((executive, index) => (
+                <tr key={index} className={index % 2 === 0 ? "bg-white" : "bg-brown-50"}>
+                  <td className="px-4 py-2 border-b">
+                    <input
+                      type="text"
+                      value={executive.name || ""}
+                      onChange={(e) => updateExecutive(index, "name", e.target.value)}
+                      className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500"
+                      placeholder="Full Name"
+                    />
+                  </td>
+                  <td className="px-4 py-2 border-b">
+                    <div className="space-y-1">
+                      <select
+                        value={executive.position || ""}
+                        onChange={(e) => updateExecutive(index, "position", e.target.value)}
+                        className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500"
+                      >
+                        <option value="">Select Position</option>
+                        {executivePositions.map((pos) => (
+                          <option key={pos} value={pos}>
+                            {pos}
+                          </option>
+                        ))}
+                      </select>
+                      {executive.position === "Other" && (
+                        <input
+                          type="text"
+                          placeholder="Specify position"
+                          value={executive.customPosition || ""}
+                          onChange={(e) => updateExecutive(index, "customPosition", e.target.value)}
+                          className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500 text-sm"
+                        />
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-2 border-b">
+                    <input
+                      type="text"
+                      value={executive.department || ""}
+                      onChange={(e) => updateExecutive(index, "department", e.target.value)}
+                      className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500"
+                      placeholder="e.g., Finance"
+                    />
+                  </td>
+                  <td className="px-4 py-2 border-b">
+                    <select
+                      value={executive.nationality || ""}
+                      onChange={(e) => updateExecutive(index, "nationality", e.target.value)}
+                      className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500"
+                    >
+                      <option value="">Select</option>
+                      {africanCountries.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-4 py-2 border-b">
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        placeholder="LinkedIn URL"
+                        value={executive.linkedin || ""}
+                        onChange={(e) => updateExecutive(index, "linkedin", e.target.value)}
+                        className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500"
+                      />
+                      
+                      <div className="flex items-center space-x-2">
+                        {executive.cv ? (
+                          <a
+                            href={executive.cv.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 text-brown-600 hover:text-brown-800 text-xs truncate"
+                            title={`View ${executive.cv.name}`}
+                          >
+                            CV: {executive.cv.name}
+                          </a>
+                        ) : (
+                          <span className="flex-1 text-xs text-gray-400">No CV uploaded</span>
+                        )}
+                        
+                        <label className="cursor-pointer">
+                          <input
+                            type="file"
+                            accept=".pdf,.doc,.docx"
+                            onChange={(e) => {
+                              const file = e.target.files[0];
+                              if (file) {
+                                handleExecutiveCVUpload(index, file);
+                              }
+                            }}
+                            className="hidden"
+                          />
+                          <span className="text-xs text-brown-600 hover:text-brown-800 underline">
+                            {executive.cv ? 'Replace' : 'Upload CV'}
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-2 border-b">
+                    <select
+                      value={executive.race || ""}
+                      onChange={(e) => updateExecutive(index, "race", e.target.value)}
+                      className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500"
+                    >
+                      <option value="">Select</option>
+                      {raceOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-4 py-2 border-b">
+                    <select
+                      value={executive.gender || ""}
+                      onChange={(e) => updateExecutive(index, "gender", e.target.value)}
+                      className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500"
+                    >
+                      <option value="">Select</option>
+                      {genderOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-4 py-2 border-b text-center">
+                    <input
+                      type="checkbox"
+                      checked={executive.isYouth || false}
+                      onChange={(e) => updateExecutive(index, "isYouth", e.target.checked)}
+                      className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded"
+                    />
+                  </td>
+                  <td className="px-4 py-2 border-b text-center">
+                    <input
+                      type="checkbox"
+                      checked={executive.isDisabled || false}
+                      onChange={(e) => updateExecutive(index, "isDisabled", e.target.checked)}
+                      className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded"
+                    />
+                  </td>
+                  <td className="px-4 py-2 border-b">
+                    <button
+                      type="button"
+                      onClick={() => removeExecutive(index)}
+                      className="text-red-500 hover:text-red-700"
+                      title="Remove executive"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>

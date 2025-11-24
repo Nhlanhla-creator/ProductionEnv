@@ -194,7 +194,7 @@ export default function CatalystUniversalProfile() {
   const handleSaveSection = async () => {
     localStorage.setItem("catalystProfileData", JSON.stringify(formData))
     if (!user) {
-      alert("You must be logged in to save to Firebase.")
+      alert("You must be logged in to save.")
       return
     }
     try {
@@ -212,10 +212,10 @@ export default function CatalystUniversalProfile() {
         },
         { merge: true },
       )
-      alert("Section saved to Firebase successfully!")
+      
     } catch (error) {
-      console.error("Error saving section to Firebase:", error)
-      alert("Failed to save to Firebase.")
+      console.error("Error saving section:", error)
+      alert("Failed to save.")
     }
   }
 

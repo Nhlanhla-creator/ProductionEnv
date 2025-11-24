@@ -583,7 +583,7 @@ export default function UniversalProfile() {
 
       return true
     } catch (err) {
-      console.error("Error saving to Firebase:", err)
+      console.error("Error saving:", err)
       throw err
     }
   }
@@ -592,9 +592,9 @@ export default function UniversalProfile() {
     try {
       setSectionLoading(true)
       await saveDataToFirebase(activeSection)
-      alert("Section saved to Firebase!")
+     
     } catch (err) {
-      alert("Failed to save to Firebase.")
+      alert("Failed to save.")
     } finally {
       setSectionLoading(false)
     }
