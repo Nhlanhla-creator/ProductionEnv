@@ -76,6 +76,56 @@ export default function LoginRegister() {
   const [showAdvisorCriteria, setShowAdvisorCriteria] = useState(false)
   const [resumingRegistration, setResumingRegistration] = useState(false)
   
+const getCustomErrorMessage = (error) => {
+  if (!error || !error.code) {
+    return "🔧 An unexpected error occurred. Please try again.";
+  }
+
+  switch (error.code) {
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+      return "❌ Invalid email or password. Please try again.";
+    
+    case 'auth/email-already-in-use':
+      return "📧 This email is already registered. Try logging in or resetting your password.";
+    
+    case 'auth/weak-password':
+      return "🔒 Password should be at least 6 characters.";
+    
+    case 'auth/invalid-email':
+      return "📧 Please enter a valid email address.";
+    
+    case 'auth/user-disabled':
+      return "🚫 This account has been disabled. Please contact support.";
+    
+    case 'auth/too-many-requests':
+      return "⏳ Too many attempts. Please try again later.";
+    
+    case 'auth/network-request-failed':
+      return "📡 Network error. Please check your connection.";
+    
+    case 'auth/operation-not-allowed':
+      return "⚙️ This operation is not allowed. Please contact support.";
+    
+    case 'auth/requires-recent-login':
+      return "🔐 Please log in again to complete this action.";
+    
+    case 'permission-denied':
+      return "🚫 You don't have permission to perform this action.";
+    
+    case 'not-found':
+      return "🔍 Requested data not found.";
+    
+    case 'unavailable':
+      return "🔄 Service temporarily unavailable. Please try again.";
+    
+    default:
+      console.error('Unhandled error:', error);
+      return "❌ Something went wrong. Please try again.";
+  }
+};
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -183,9 +233,9 @@ export default function LoginRegister() {
       setResetMessage("✅ Reset link sent! Check your inbox.")
       setResetEmail("")
     } catch (error) {
-      console.error("Reset error:", error)
-      setResetError("❌ Failed to send reset email. Please try again.")
-    }
+  console.error("Reset error:", error)
+  setResetError(getCustomErrorMessage(error))
+}
   }
 
   const validateEmail = (email) => /\S+@\S+\.\S+/.test(email)
@@ -253,47 +303,56 @@ export default function LoginRegister() {
   const handleAdvisorCriteriaCancel = () => {
     setShowAdvisorCriteria(false)
   }
-const handleRegister = async () => {
-  setIsLoading(true)
-  const newErrors = {}
-  if (!validateEmail(email)) newErrors.email = "Enter your email"
-  if (username.trim() === "") newErrors.username = "Enter your username"
-  if (password.length < 6) newErrors.password = "Password should be (at least 6 characters)"
-  if (password !== confirmPassword) newErrors.confirmPassword = "Passwords do not match!"
-  if (roles.length === 0) newErrors.role = "Please select at least one role."
-  if (!agreeToTerms) newErrors.terms = "Please agree to the Terms & Conditions"
 
-  if (Object.keys(newErrors).length > 0) {
-    setErrors(newErrors)
-    setIsLoading(false)
-    return
-  }
+  const handleRegister = async () => {
+    setIsLoading(true)
+    const newErrors = {}
+    if (!validateEmail(email)) newErrors.email = "Enter your email"
+    if (username.trim() === "") newErrors.username = "Enter your username"
+    if (password.length < 6) newErrors.password = "Password should be (at least 6 characters)"
+    if (password !== confirmPassword) newErrors.confirmPassword = "Passwords do not match!"
+    if (roles.length === 0) newErrors.role = "Please select at least one role."
+    if (!agreeToTerms) newErrors.terms = "Please agree to the Terms & Conditions"
 
-  setErrors({})
-  setAuthError("")
-
-  try {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password)
-    const user = userCredential.user
-
-    await sendEmailVerification(user)
-    setEmailVerificationSent(true)
-    setCodeSent(true)
-
-    // DON'T set registrationData or show NDA here
-    // Wait for email verification first
-    
-  } catch (error) {
-    console.error("Registration error:", error)
-    if (error.code === 'auth/email-already-in-use') {
-      setAuthError("This email is already registered. Try logging in or resetting your password.")
-    } else {
-      setAuthError(error.message)
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      setIsLoading(false)
+      return
     }
-  } finally {
-    setIsLoading(false)
+
+    setErrors({})
+    setAuthError("")
+
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password)
+      const user = userCredential.user
+
+      await sendEmailVerification(user)
+      setEmailVerificationSent(true)
+      setCodeSent(true)
+
+      const ndaData = {
+        email: email,
+        username: username,
+        role: roles.join(","),
+        roleArray: roles,
+        password: password,
+        uid: user.uid,
+        termsAccepted: true,
+        termsAcceptedDate: new Date().toISOString(),
+      }
+      setRegistrationData(ndaData)
+    } catch (error) {
+      console.error("Registration error:", error)
+      if (error.code === 'auth/email-already-in-use') {
+        setAuthError("This email is already registered. Try logging in or resetting your password.")
+      } else {
+        setAuthError(getCustomErrorMessage(error))
+      }
+    } finally {
+      setIsLoading(false)
+    }
   }
-}
 
  const handleRegistrationComplete = async (ndaData) => {
   if (ndaData.cancelled) {
@@ -375,9 +434,9 @@ const handleRegister = async () => {
       navigateToRoleDashboard(finalRoles[0]);
     }
   } catch (error) {
-    console.error("Error saving user data:", error);
-    setAuthError("Failed to complete registration. Please try again.");
-  }
+  console.error("Error saving user data:", error);
+  setAuthError(getCustomErrorMessage(error));
+}
 };
 
 const validateRegistrationData = (registrationData) => {
@@ -399,41 +458,27 @@ const handleReturnToForm = () => {
 };
 
 
-const handleVerify = async () => {
-  setCheckingVerification(true)
-  setErrors({})
-  try {
-    await auth.currentUser.reload()
-    const user = auth.currentUser
-    if (user.emailVerified) {
-      setIsEmailVerified(true)
-      
-      // Only now set the registration data and show NDA
-      const ndaData = {
-        email: email,
-        username: username,
-        role: roles.join(","),
-        roleArray: roles,
-        password: password,
-        uid: user.uid,
-        termsAccepted: true,
-        termsAcceptedDate: new Date().toISOString(),
+  const handleVerify = async () => {
+    setCheckingVerification(true)
+    setErrors({})
+    try {
+      await auth.currentUser.reload()
+      const user = auth.currentUser
+      if (user.emailVerified) {
+        setIsEmailVerified(true)
+        setShowNDA(true)
+      } else {
+        setErrors({
+          verificationCode: "Please verify your email first. Check your inbox and click the verification link.",
+        })
       }
-      setRegistrationData(ndaData)
-      setShowNDA(true)
-      
-    } else {
-      setErrors({
-        verificationCode: "Please verify your email first. Check your inbox and click the verification link.",
-      })
+    } catch (error) {
+      console.error("Verification check error:", error)
+      setErrors({ verificationCode: "Error checking verification status. Please try again." })
+    } finally {
+      setCheckingVerification(false)
     }
-  } catch (error) {
-    console.error("Verification check error:", error)
-    setErrors({ verificationCode: "Error checking verification status. Please try again." })
-  } finally {
-    setCheckingVerification(false)
   }
-}
 
   const resendVerificationEmail = async () => {
     try {
@@ -442,9 +487,9 @@ const handleVerify = async () => {
         setAuthError("Verification email sent! Please check your inbox.")
       }
     } catch (error) {
-      console.error("Error resending verification:", error)
-      setAuthError("Failed to resend verification email.")
-    }
+  console.error("Error resending verification:", error)
+  setAuthError(getCustomErrorMessage(error))
+}
   }
 
 const handleLogin = async () => {
@@ -543,7 +588,7 @@ const handleLogin = async () => {
     if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
       setAuthError("Invalid email or password. Please try again.");
     } else {
-      setAuthError(error.message);
+       setAuthError(getCustomErrorMessage(error))
     }
   } finally {
     setIsLoading(false);
@@ -640,13 +685,14 @@ const handleRoleClick = (roleObj) => {
           <div className="form-header">
 
 
-            {authError && <div className="auth-error">{authError}</div>}
+          
             <h2>{isRegistering ? "Create Your Account!" : "Welcome Back!"}</h2>
             <div className={`icon-container ${isRegistering ? "register" : "login"}`}>
               {isRegistering ? <Rocket size={24} /> : <Smile size={24} />}
             </div>
+            
           </div>
-
+  {authError && <div className="auth-error">{authError}</div>}
           <div className="form-box">
             {isRegistering ? (
               codeSent ? (
@@ -1194,54 +1240,49 @@ const handleRoleClick = (roleObj) => {
                 )}
 
                 {isVerifying && (
-                <div className="form-step">
-  <div className="verification-message">
-    <p>✨ Email Verification Required! ✨</p>
-    <p style={{ fontSize: "14px", color: "var(--text-secondary)", marginBottom: "16px" }}>
-      We've sent a verification link to <strong>{email}</strong>. 
-      Please check your inbox and click the verification link to continue.
-    </p>
-    <p style={{ fontSize: "12px", color: "var(--text-secondary)", fontStyle: "italic" }}>
-      You must verify your email before you can complete registration and access your dashboard.
-    </p>
-  </div>
-  
-  {errors.verificationCode && <p className="error-text">{errors.verificationCode}</p>}
-  
-  <button
-    className="primary-btn verify-btn"
-    onClick={handleVerify}
-    disabled={checkingVerification}
-    style={{ marginBottom: "10px" }}
-  >
-    {checkingVerification ? (
-      <>
-        <Loader2 className="animate-spin" size={16} />
-        Checking Verification...
-      </>
-    ) : (
-      <>
-        <CheckCircle size={16} />
-        I've verified my email - Continue
-      </>
-    )}
-  </button>
-  
-  <button
-    onClick={resendVerificationEmail}
-    style={{
-      background: "transparent",
-      border: "1px solid var(--primary)",
-      color: "var(--primary)",
-      padding: "8px 16px",
-      borderRadius: "8px",
-      cursor: "pointer",
-      fontSize: "14px",
-    }}
-  >
-    Resend verification email
-  </button>
-</div>
+                  <div
+                    style={{
+                      padding: "12px",
+                      backgroundColor: "#FFF3CD",
+                      border: "1px solid #FFEAA7",
+                      borderRadius: "8px",
+                      marginBottom: "16px",
+                    }}
+                  >
+                    <p
+                      style={{
+                        margin: "0 0 8px 0",
+                        fontSize: "14px",
+                        color: "#856404",
+                        fontWeight: "600",
+                      }}
+                    >
+                      Email verification required
+                    </p>
+                    <p
+                      style={{
+                        margin: "0 0 8px 0",
+                        fontSize: "13px",
+                        color: "#856404",
+                      }}
+                    >
+                      Please check your email and click the verification link before logging in.
+                    </p>
+                    <button
+                      onClick={resendVerificationEmail}
+                      style={{
+                        background: "transparent",
+                        border: "1px solid #856404",
+                        color: "#856404",
+                        padding: "4px 8px",
+                        borderRadius: "4px",
+                        cursor: "pointer",
+                        fontSize: "12px",
+                      }}
+                    >
+                      Resend verification email
+                    </button>
+                  </div>
                 )}
 
                 <button className="primary-btn" onClick={handleLogin} disabled={isLoading}>
@@ -1857,10 +1898,10 @@ const handleRoleClick = (roleObj) => {
         </div>
       </div>
 
-    {/* NDA Popup Component - Only show after email verification */}
-{showNDA && registrationData && isEmailVerified && (
-  <NDASignupPopup registrationData={registrationData} onRegistrationComplete={handleRegistrationComplete} />
-)}
+      {/* NDA Popup Component */}
+      {showNDA && registrationData && (
+        <NDASignupPopup registrationData={registrationData} onRegistrationComplete={handleRegistrationComplete} />
+      )}
 
       {/* Custom CSS for animations and hover effects */}
       <style jsx>{`

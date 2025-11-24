@@ -506,9 +506,9 @@ export default function AdvisorProfile() {
     try {
       setSectionLoading(true)
       await saveDataToFirebase(activeSection)
-      alert("Section saved to Firebase!")
+      
     } catch (err) {
-      alert("Failed to save to Firebase.")
+      alert("Failed to save.")
     } finally {
       setSectionLoading(false)
     }

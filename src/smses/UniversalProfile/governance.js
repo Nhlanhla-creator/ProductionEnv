@@ -1,6 +1,6 @@
 "use client"
 import { useEffect, useState } from "react"
-import { HelpCircle } from "lucide-react"
+import { HelpCircle, ChevronDown, ChevronUp } from "lucide-react"
 import FormField from "./form-field"
 import FileUpload from "./file-upload"
 import './UniversalProfile.css';
@@ -8,7 +8,7 @@ import { db, auth, storage } from "../../firebaseConfig"
 import { doc, getDoc, updateDoc } from "firebase/firestore"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
 
-// Governance Checklist Items (moved from Legal Compliance)
+// Governance Checklist Items (Ethics Policy and Whistleblowing moved here)
 const governanceChecklistItems = [
   {
     category: "Agreements",
@@ -23,6 +23,8 @@ const governanceChecklistItems = [
     category: "Policy Essentials",
     items: [
       { name: "Employee Code of Conduct", id: "codeOfConduct" },
+      { name: "Ethics Policy", id: "ethicsPolicy" },
+      { name: "Whistleblowing Policy", id: "whistleblowingPolicy" },
       { name: "Leave Policy", id: "leavePolicy" },
       { name: "Disciplinary & Grievance Policy", id: "disciplinaryPolicy" },
       { name: "Health & Safety Policy", id: "healthSafetyPolicy" },
@@ -76,28 +78,135 @@ const Tooltip = ({ children, content, position = "top" }) => {
   )
 }
 
+// MultiSelect component - matching EntityOverview exactly
+function MultiSelect({ options, selected, onChange, label }) {
+  const [isOpen, setIsOpen] = useState(false)
+
+  const toggleDropdown = () => setIsOpen(!isOpen)
+  const closeDropdown = () => setIsOpen(false)
+
+  const handleSelect = (value) => {
+    const newSelected = selected.includes(value) 
+      ? selected.filter((item) => item !== value) 
+      : [...selected, value]
+    onChange(newSelected)
+  }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <div 
+        onClick={toggleDropdown}
+        style={{
+          border: '1px solid #ccc',
+          borderRadius: '4px',
+          padding: '8px 12px',
+          cursor: 'pointer',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          minHeight: '40px',
+          backgroundColor: 'white'
+        }}
+      >
+        {selected.length > 0 ? (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+            {selected.map((freq) => (
+              <span 
+                key={freq}
+                style={{
+                  backgroundColor: '#e0e0e0',
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  fontSize: '14px'
+                }}
+              >
+                {options.find((opt) => opt.value === freq)?.label || freq}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <span style={{ color: '#999' }}>Select {label}</span>
+        )}
+        {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+      </div>
+
+      {isOpen && (
+        <div style={{
+          position: 'absolute',
+          top: '100%',
+          left: 0,
+          right: 0,
+          backgroundColor: 'white',
+          border: '1px solid #ccc',
+          borderRadius: '4px',
+          marginTop: '4px',
+          zIndex: 1000,
+          maxHeight: '300px',
+          overflow: 'auto'
+        }}>
+          <div style={{ padding: '8px' }}>
+            {options.map((option) => (
+              <div
+                key={option.value}
+                onClick={() => handleSelect(option.value)}
+                style={{
+                  padding: '8px',
+                  cursor: 'pointer',
+                  backgroundColor: selected.includes(option.value) ? '#f0f0f0' : 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(option.value)}
+                  onChange={() => {}}
+                  style={{ cursor: 'pointer' }}
+                />
+                <span>{option.label}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ padding: '8px', borderTop: '1px solid #ccc' }}>
+            <button 
+              type="button"
+              onClick={closeDropdown}
+              style={{
+                width: '100%',
+                padding: '8px',
+                backgroundColor: '#8B4513',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const Governance = ({ data, updateData }) => {
   const [formData, setFormData] = useState({
     governanceChecklist: {},
-    // Conflict Resolution / Ethics
-    hasEthicsPolicy: "",
-    ethicsPolicyDocs: [],
+    // Conflict Resolution
     hasConflictResolution: "",
-    conflictResolutionDocs: [],
-    hasWhistleblowingPolicy: "",
-    whistleblowingPolicyDocs: [],
     ethicsTrainingFrequency: "",
     lastEthicsTrainingDate: "",
-    // Transparency & Reporting (moved from OwnershipManagement)
-    stakeholderReportingFrequency: "",
-    performanceReviewCycle: "",
+    // Transparency & Reporting
+    stakeholderReportingFrequency: [],
+    performanceReviewCycle: [],
     stakeholderCommunicationMethods: "",
     performanceReviewProcess: "",
     complianceProcedures: "",
     dataManagementPolicies: "",
   })
   const [isLoading, setIsLoading] = useState(true)
-  const [uploadingDocs, setUploadingDocs] = useState({})
 
   useEffect(() => {
     const fetchGovernanceData = async () => {
@@ -116,16 +225,11 @@ const Governance = ({ data, updateData }) => {
               // Initialize with default structure
               const initialData = {
                 governanceChecklist: {},
-                hasEthicsPolicy: "",
-                ethicsPolicyDocs: [],
                 hasConflictResolution: "",
-                conflictResolutionDocs: [],
-                hasWhistleblowingPolicy: "",
-                whistleblowingPolicyDocs: [],
                 ethicsTrainingFrequency: "",
                 lastEthicsTrainingDate: "",
-                stakeholderReportingFrequency: "",
-                performanceReviewCycle: "",
+                stakeholderReportingFrequency: [],
+                performanceReviewCycle: [],
                 stakeholderCommunicationMethods: "",
                 performanceReviewProcess: "",
                 complianceProcedures: "",
@@ -138,16 +242,11 @@ const Governance = ({ data, updateData }) => {
             // No profile exists yet, initialize with defaults
             const initialData = {
               governanceChecklist: {},
-              hasEthicsPolicy: "",
-              ethicsPolicyDocs: [],
               hasConflictResolution: "",
-              conflictResolutionDocs: [],
-              hasWhistleblowingPolicy: "",
-              whistleblowingPolicyDocs: [],
               ethicsTrainingFrequency: "",
               lastEthicsTrainingDate: "",
-              stakeholderReportingFrequency: "",
-              performanceReviewCycle: "",
+              stakeholderReportingFrequency: [],
+              performanceReviewCycle: [],
               stakeholderCommunicationMethods: "",
               performanceReviewProcess: "",
               complianceProcedures: "",
@@ -185,52 +284,6 @@ const Governance = ({ data, updateData }) => {
     }
     setFormData(updatedFormData)
     updateData("governance", updatedFormData)
-  }
-
-  const handleFileChange = async (name, files) => {
-    if (!files || files.length === 0) {
-      const updatedFormData = {
-        ...formData,
-        [name]: [],
-      }
-      setFormData(updatedFormData)
-      updateData("governance", updatedFormData)
-      return
-    }
-
-    setUploadingDocs((prev) => ({ ...prev, [name]: true }))
-
-    try {
-      const uploadedFiles = await Promise.all(
-        files.map(async (file) => {
-          if (file.url) {
-            return file
-          }
-
-          const user = auth.currentUser
-          if (!user) throw new Error("User not authenticated")
-
-          const fileName = `${Date.now()}_${file.name}`
-          const storageRef = ref(storage, `governance/${user.uid}/${fileName}`)
-          await uploadBytes(storageRef, file)
-          const url = await getDownloadURL(storageRef)
-
-          return { name: file.name, url, uploadedAt: new Date().toISOString() }
-        })
-      )
-
-      const updatedFormData = {
-        ...formData,
-        [name]: uploadedFiles,
-      }
-      setFormData(updatedFormData)
-      updateData("governance", updatedFormData)
-    } catch (error) {
-      console.error("Error uploading files:", error)
-      alert("Failed to upload files. Please try again.")
-    } finally {
-      setUploadingDocs((prev) => ({ ...prev, [name]: false }))
-    }
   }
 
   const handleChecklistChange = async (itemId, isChecked) => {
@@ -282,6 +335,16 @@ const Governance = ({ data, updateData }) => {
       </div>
     )
   }
+
+  // Frequency options for multi-select
+  const frequencyOptions = [
+    { value: "weekly", label: "Weekly" },
+    { value: "monthly", label: "Monthly" },
+    { value: "quarterly", label: "Quarterly" },
+    { value: "biannually", label: "Bi-annually" },
+    { value: "annually", label: "Annually" },
+    { value: "as_needed", label: "As needed" },
+  ]
 
   return (
     <div>
@@ -352,43 +415,14 @@ const Governance = ({ data, updateData }) => {
         </div>
       </div>
 
-      {/* Conflict Resolution / Ethics Section */}
+      {/* Conflict Resolution Section */}
       <div className="mb-8">
         <h3 className="text-xl font-semibold text-brown-700 mt-6 mb-6 border-b border-brown-200 pb-2">
-          Conflict Resolution / Ethics
+          Conflict Resolution
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-6">
-            <div>
-              <FormField label="Do you have an ethics policy?" required>
-                <select
-                  name="hasEthicsPolicy"
-                  value={formData.hasEthicsPolicy || ""}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-                  required
-                >
-                  <option value="">Select</option>
-                  <option value="Yes">Yes</option>
-                  <option value="No">No</option>
-                </select>
-              </FormField>
-
-              {formData.hasEthicsPolicy === "Yes" && (
-                <div className="mt-4">
-                  <FileUpload
-                    label="Upload Ethics Policy Documents"
-                    value={formData.ethicsPolicyDocs || []}
-                    onChange={(files) => handleFileChange("ethicsPolicyDocs", files)}
-                    accept=".pdf,.doc,.docx"
-                    multiple={true}
-                    isUploading={uploadingDocs["ethicsPolicyDocs"]}
-                  />
-                </div>
-              )}
-            </div>
-
             <div>
               <FormField label="Do you have conflict resolution procedures?" required>
                 <select
@@ -403,48 +437,6 @@ const Governance = ({ data, updateData }) => {
                   <option value="No">No</option>
                 </select>
               </FormField>
-
-              {formData.hasConflictResolution === "Yes" && (
-                <div className="mt-4">
-                  <FileUpload
-                    label="Upload Conflict Resolution Documents"
-                    value={formData.conflictResolutionDocs || []}
-                    onChange={(files) => handleFileChange("conflictResolutionDocs", files)}
-                    accept=".pdf,.doc,.docx"
-                    multiple={true}
-                    isUploading={uploadingDocs["conflictResolutionDocs"]}
-                  />
-                </div>
-              )}
-            </div>
-
-            <div>
-              <FormField label="Do you have a whistleblowing policy?" required>
-                <select
-                  name="hasWhistleblowingPolicy"
-                  value={formData.hasWhistleblowingPolicy || ""}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-                  required
-                >
-                  <option value="">Select</option>
-                  <option value="Yes">Yes</option>
-                  <option value="No">No</option>
-                </select>
-              </FormField>
-
-              {formData.hasWhistleblowingPolicy === "Yes" && (
-                <div className="mt-4">
-                  <FileUpload
-                    label="Upload Whistleblowing Policy Documents"
-                    value={formData.whistleblowingPolicyDocs || []}
-                    onChange={(files) => handleFileChange("whistleblowingPolicyDocs", files)}
-                    accept=".pdf,.doc,.docx"
-                    multiple={true}
-                    isUploading={uploadingDocs["whistleblowingPolicyDocs"]}
-                  />
-                </div>
-              )}
             </div>
           </div>
 
@@ -457,6 +449,7 @@ const Governance = ({ data, updateData }) => {
                 className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
               >
                 <option value="">Select frequency</option>
+                <option value="Weekly">Weekly</option>
                 <option value="Monthly">Monthly</option>
                 <option value="Quarterly">Quarterly</option>
                 <option value="Bi-annually">Bi-annually</option>
@@ -475,16 +468,16 @@ const Governance = ({ data, updateData }) => {
                 className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
               />
             </FormField>
-
-            <div className="bg-brown-50 p-4 rounded-md border border-brown-200">
-              <h4 className="text-sm font-medium text-brown-700 mb-2">Ethics & Compliance Notes</h4>
-              <p className="text-xs text-brown-600 leading-relaxed">
-                Having proper ethics policies and conflict resolution procedures demonstrates good corporate governance
-                and helps protect your organization from potential disputes and reputational risks. These documents
-                are often required by investors and partners.
-              </p>
-            </div>
           </div>
+        </div>
+
+        <div className="bg-brown-50 p-4 rounded-md border border-brown-200 mt-6">
+          <h4 className="text-sm font-medium text-brown-700 mb-2">Ethics & Compliance Notes</h4>
+          <p className="text-xs text-brown-600 leading-relaxed">
+            Having proper ethics policies and conflict resolution procedures demonstrates good corporate governance
+            and helps protect your organization from potential disputes and reputational risks. These documents
+            are often required by investors and partners.
+          </p>
         </div>
       </div>
 
@@ -494,41 +487,41 @@ const Governance = ({ data, updateData }) => {
           Transparency & Reporting
         </h3>
 
-        {/* Stakeholder Reporting */}
+        {/* Stakeholder Reporting - Multi-select */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <div>
-            <FormField label="Stakeholder Reporting Frequency">
-              <select
-                name="stakeholderReportingFrequency"
-                value={formData.stakeholderReportingFrequency || ""}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-              >
-                <option value="">Select frequency</option>
-                <option value="monthly">Monthly</option>
-                <option value="quarterly">Quarterly</option>
-                <option value="biannually">Bi-annually</option>
-                <option value="annually">Annually</option>
-                <option value="as_needed">As needed</option>
-              </select>
+            <FormField label="Stakeholder Reporting Frequency (Select all that apply)">
+              <MultiSelect
+                options={frequencyOptions}
+                selected={formData.stakeholderReportingFrequency || []}
+                onChange={(value) => {
+                  const updatedFormData = {
+                    ...formData,
+                    stakeholderReportingFrequency: value,
+                  }
+                  setFormData(updatedFormData)
+                  updateData("governance", updatedFormData)
+                }}
+                label="Frequency"
+              />
             </FormField>
           </div>
 
           <div>
-            <FormField label="Performance Review Cycle">
-              <select
-                name="performanceReviewCycle"
-                value={formData.performanceReviewCycle || ""}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-              >
-                <option value="">Select cycle</option>
-                <option value="monthly">Monthly</option>
-                <option value="quarterly">Quarterly</option>
-                <option value="biannually">Bi-annually</option>
-                <option value="annually">Annually</option>
-                <option value="as_needed">As needed</option>
-              </select>
+            <FormField label="Performance Review Cycle (Select all that apply)">
+              <MultiSelect
+                options={frequencyOptions}
+                selected={formData.performanceReviewCycle || []}
+                onChange={(value) => {
+                  const updatedFormData = {
+                    ...formData,
+                    performanceReviewCycle: value,
+                  }
+                  setFormData(updatedFormData)
+                  updateData("governance", updatedFormData)
+                }}
+                label="Cycle"
+              />
             </FormField>
           </div>
         </div>

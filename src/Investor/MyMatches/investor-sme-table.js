@@ -198,7 +198,23 @@ const normalizeStage = (raw) => {
   
   return stageMap[clean] || clean
 }
+const isStageAvailable = (targetStage) => {
+  const currentStage = selectedSMEForStage?.pipelineStage || "Application Received"
+  
+  const validProgressions = {
+    "Application Sent": ["Under Review", "Funding Approved","Deal Declined"],
+    "Application Received": ["Under Review", "Deal Declined"],
+    "Under Review": ["Due Diligence", "Deal Declined"],
+    "Due Diligence": ["Funding Approved", "Deal Declined"],
+    "Funding Approved": ["Termsheet", "Deal Declined"],
+    "Termsheet": ["Deal Complete", "Deal Declined"],
+    "Deal Complete": ["Closed"],
+    "Deal Declined": ["Closed"]
+  }
 
+  const allowedStages = validProgressions[currentStage] || []
+  return allowedStages.includes(targetStage)
+}
 // Add the sector synonyms map (same as in SME table)
 const SECTOR_SYNONYMS = {
   general: "generalist",
@@ -1381,268 +1397,313 @@ const deriveNextStage = (stage) => {
   }
 }
 
-  const handleUpdateNextStage = async () => {
-    const errors = {}
+const handleUpdateNextStage = async () => {
+  const errors = {}
 
-    if (!nextStage) {
-      errors.nextStage = "Please select a next stage"
-    }
+  // Validate required fields based on current stage
+  if (!nextStage) {
+    errors.nextStage = "Please select a next stage"
+  }
 
-    if (!message.trim()) {
-      errors.message = "Please provide a message to the SME"
-    }
+  if (!message.trim()) {
+    errors.message = "Please provide a message to the SME"
+  }
 
-    if (nextStage === "Under Review") {
-      if (!availabilities.length) {
-        errors.availabilities = "Please select at least one available date"
-      }
-      if (!meetingLocation.trim()) {
-        errors.meetingLocation = "Please provide a meeting location"
-      }
-      if (!meetingPurpose.trim()) {
-        errors.meetingPurpose = "Please provide a purpose for the meeting"
-      }
-    }
+  // Get current stage to validate progression
+  const currentStage = selectedSMEForStage.pipelineStage || "Application Received"
+  
+  // Define valid stage progression
+  const validProgressions = {
+     "Application Sent": ["Under Review", "Funding Approved","Deal Declined"],
+    "Application Received": ["Under Review", "Deal Declined"],
+    "Under Review": ["Due Diligence", "Funding Approved","Deal Declined"],
+    "Due Diligence": ["Funding Approved","Under Review" ,"Deal Declined"],
+    "Funding Approved": ["Termsheet", "Deal Declined"],
+    "Termsheet": ["Deal Complete", "Deal Declined"],
+    "Deal Complete": ["Closed"],
+    "Deal Declined": ["Closed"]
+  }
 
-    if (nextStage === "Funding Approved") {
-      if (!amountAsked.trim()) {
-        errors.amountAsked = "Please enter the amount asked"
-      }
-      if (!amountApproved.trim()) {
-        errors.amountApproved = "Please enter the amount approved"
-      }
-      if (!paymentDeployment.trim()) {
-        errors.paymentDeployment = "Please specify how the payment will be deployed"
-      }
-      if (!investmentType) {
-        errors.investmentType = "Please select an investment type"
-      }
-    }
-
-    if (nextStage === "Termsheet" && !documentFile) {
-      errors.documentFile = "Please attach a termsheet document"
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors)
-      return
-    }
-
-    setIsSubmitting(true)
-
-    try {
-      setUpdatedStages((prev) => ({ ...prev, [selectedSMEForStage.id]: nextStage }))
-      const appRef = doc(db, "investorApplications", selectedSMEForStage.id)
-      const nextStageValue = deriveNextStage(nextStage)
-
-      const updateData = {
-        stage: nextStage,
-        nextStage: nextStageValue,
-        pipelineStage: nextStage,
-        updatedAt: new Date().toISOString(),
-      }
-      addInvestorNotification(
-        `Application moved to ${nextStage} for ${selectedSMEForStage.smeName}`,
-        "status_change",
-        selectedSMEForStage.id,
-      )
-
-      // Funding Approved specific data
-      if (nextStage === "Funding Approved") {
-        updateData.fundingDetails = {
-          amountAsked,
-          amountApproved,
-          paymentDeployment,
-          investmentType,
-          approvedAt: new Date().toISOString(),
-        }
-      }
-
-      await updateDoc(appRef, updateData)
-
-      const auth = getAuth()
-      const user = auth.currentUser
-      const { smeId, funderId } = (await getDoc(appRef)).data()
-
-      const smeQuery = query(
-        collection(db, "smeApplications"),
-        where("smeId", "==", smeId),
-        where("funderId", "==", funderId),
-      )
-      const smeSnapshot = await getDocs(smeQuery)
-      if (!smeSnapshot.empty) {
-        const smeDocRef = smeSnapshot.docs[0].ref
-        await updateDoc(smeDocRef, updateData)
-
-        if (nextStage === "Under Review") {
-          const availabilityData = availabilities.map((avail) => ({
-            date: avail.date.toISOString(),
-            timeSlots: avail.timeSlots,
-            timeZone: avail.timeZone,
-            status: avail.status,
-          }))
-
-          await updateDoc(appRef, {
-            availableDates: availabilityData,
-            meetingLocation,
-            meetingPurpose,
-          })
-
-          await updateDoc(smeDocRef, {
-            availableDates: availabilityData,
-            meetingLocation,
-            meetingPurpose,
-          })
-
-          await addDoc(collection(db, "smeCalendarEvents"), {
-            smeId,
-            funderId: user.uid,
-            title: meetingPurpose,
-            date: availabilityData[0].date,
-            location: meetingLocation,
-            type: "meeting",
-            createdAt: new Date().toISOString(),
-            availableDates: availabilityData,
-          })
-        }
-      }
-
-      // Upload termsheet if applicable
-      let attachmentUrl = null
-      if (nextStage === "Termsheet" && documentFile) {
-        const fileRef = ref(storage, `termsheets/${selectedSMEForStage.id}/${documentFile.name}`)
-        const snapshot = await uploadBytes(fileRef, documentFile)
-        attachmentUrl = await getDownloadURL(snapshot.ref)
-      }
-
-      if (nextStage === "Deal Complete" && onDealComplete) {
-        onDealComplete()
-      }
-
-      // Compose professional message
-      let subject = ""
-      let content = ""
-
-      switch (nextStage) {
-        case "Under Review":
-          subject = meetingPurpose
-          content =
-            `Dear ${selectedSMEForStage.smeName},\n\n` +
-            `We are pleased to inform you that your application has moved to the "Under Review" stage of our evaluation process.\n\n` +
-            `${message}\n\n` +
-            `Meeting Invitation:\n` +
-            `Location: ${meetingLocation}\n` +
-            `Available Time Slots:\n` +
-            availabilities
-              .map((avail, idx) => {
-                const dateStr = avail.date.toLocaleDateString("en-US", {
-                  weekday: "short",
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })
-                return `${idx + 1}. ${dateStr} at ${avail.timeSlots?.[0]?.start || "TBD"} - ${avail.timeSlots?.[0]?.end || "TBD"} (${avail.timeZone})`
-              })
-              .join("\n") +
-            `\n\nPlease RSVP on your calendar with your preferred meeting time from the options above.\n\n` +
-            `Best regards,\nInvestment Team`
-          break
-
-        case "Funding Approved":
-          subject = `Funding Approved: ${selectedSMEForStage.smeName}`
-          content =
-            `Dear ${selectedSMEForStage.smeName},\n\n` +
-            `Congratulations! Your funding application has been approved.\n\n` +
-            `${message}\n\n` +
-            `Funding Details:\n` +
-            `Amount Requested: ${amountAsked}\n` +
-            `Amount Approved: ${amountApproved}\n` +
-            `Investment Type: ${investmentType}\n` +
-            `Payment Deployment: ${paymentDeployment}\n\n` +
-            `We will be in touch shortly with the next steps.\n\n` +
-            `Best regards,\nFunding Team`
-          break
-
-        case "Termsheet":
-          subject = `Termsheet Shared: ${selectedSMEForStage.smeName}`
-          content =
-            `Dear ${selectedSMEForStage.smeName},\n\n` +
-            `We are pleased to share the termsheet for your consideration.\n\n` +
-            `${message}\n\n` +
-            `The attached document outlines the proposed terms of our investment. ` +
-            `Please review it carefully and let us know if you have any questions.\n\n` +
-            `Best regards,\nInvestment Team`
-          break
-
-        case "Deal Complete":
-          subject = `Congratulations: Deal Approved for ${selectedSMEForStage.smeName}`
-          content =
-            `Dear ${selectedSMEForStage.smeName},\n\n` +
-            `We are delighted to inform you that your funding application has been approved!\n\n` +
-            `${message}\n\n` +
-            `Our team will be in touch shortly to finalize the next steps. ` +
-            `Congratulations on this exciting milestone for your business.\n\n` +
-            `Best regards,\nInvestment Team`
-          break
-
-          case "Due Diligence":
-          subject = `Stage Update: Due Diligence for ${selectedSMEForStage.smeName}`
-          content =
-            `Dear ${selectedSMEForStage.smeName},\n\n` +
-            `Your funding application has been move to Due Diligence !\n\n` +
-            `${message}\n\n` +
-            `The Investor should be in touch shortly to finalize the next steps. ` +
-       
-            `Best regards,\nInvestment Team`
-          break
-
-        default:
-          subject = `Application Status Update: ${selectedSMEForStage.smeName}`
-          content =
-            `Dear ${selectedSMEForStage.smeName},\n\n` +
-            `This is to inform you that your application status has been updated to "${nextStage}".\n\n` +
-            `${message}\n\n` +
-            `Best regards,\nInvestment Team`
-      }
-
-      const messagePayload = {
-        to: smeId,
-        from: user.uid,
-        subject,
-        content,
-        date: new Date().toISOString(),
-        read: false,
-        type: "inbox",
-        applicationId: selectedSMEForStage.id,
-        attachments: attachmentUrl ? [attachmentUrl] : [],
-      }
-
-      await Promise.all([
-        addDoc(collection(db, "messages"), messagePayload),
-        addDoc(collection(db, "messages"), { ...messagePayload, read: true, type: "sent" }),
-      ])
-
-      setNotification({
-        type: "success",
-        message: `Application moved to ${nextStage} successfully`,
-      })
-      setTimeout(() => setNotification(null), 3000)
-      setShowNextStageModal(false)
-    } catch (error) {
-      console.error("Error updating next stage:", error)
-      setNotification({
-        type: "error",
-        message: "Failed to update next stage",
-      })
-      setUpdatedStages((prev) => {
-        const newState = { ...prev }
-        delete newState[selectedSMEForStage.id]
-        return newState
-      })
-    } finally {
-      setIsSubmitting(false)
+  // Validate stage progression
+  const allowedNextStages = validProgressions[currentStage] || []
+  if (nextStage && !allowedNextStages.includes(nextStage)) {
+    errors.nextStage = `Invalid stage progression. From "${currentStage}", you can only move to: ${allowedNextStages.join(", ")}`
+    if(allowedNextStages.includes("Funding Approved"))
+    {
+       errors.nextStage = `Invalid stage progression. From "${currentStage}", you can only move to: ${allowedNextStages.join(", ")} (Funding Approved/Decision)`
     }
   }
+
+  // Stage-specific validation
+  if (nextStage === "Under Review") {
+    if (!availabilities.length) {
+      errors.availabilities = "Please select at least one available date"
+    }
+    if (!meetingLocation.trim()) {
+      errors.meetingLocation = "Please provide a meeting location"
+    }
+    if (!meetingPurpose.trim()) {
+      errors.meetingPurpose = "Please provide a purpose for the meeting"
+    }
+  }
+
+  if (nextStage === "Funding Approved") {
+    if (!amountAsked.trim()) {
+      errors.amountAsked = "Please enter the amount asked"
+    }
+    if (!amountApproved.trim()) {
+      errors.amountApproved = "Please enter the amount approved"
+    }
+    if (!paymentDeployment.trim()) {
+      errors.paymentDeployment = "Please specify how the payment will be deployed"
+    }
+    if (!investmentType) {
+      errors.investmentType = "Please select an investment type"
+    }
+  }
+
+  if (nextStage === "Termsheet" && !documentFile) {
+    errors.documentFile = "Please attach a termsheet document"
+  }
+
+  // Prevent skipping to Deal Complete without required stages
+  if (nextStage === "Deal Complete") {
+    const requiredStages = ["Funding Approved", "Termsheet"]
+    const missingStages = requiredStages.filter(stage => 
+      !selectedSMEForStage.pipelineHistory?.includes(stage) && 
+      stage !== currentStage
+    )
+    
+    if (missingStages.length > 0) {
+      errors.nextStage = `Cannot complete deal without completing: ${missingStages.join(" and ")} stages first`
+    }
+  }
+
+  if (Object.keys(errors).length > 0) {
+    setFormErrors(errors)
+    return
+  }
+
+  setIsSubmitting(true)
+
+  try {
+    // Update pipeline history
+    const currentHistory = selectedSMEForStage.pipelineHistory || []
+    const updatedHistory = [...currentHistory, currentStage]
+
+    setUpdatedStages((prev) => ({ ...prev, [selectedSMEForStage.id]: nextStage }))
+    const appRef = doc(db, "investorApplications", selectedSMEForStage.id)
+
+    const updateData = {
+      stage: nextStage,
+      pipelineStage: nextStage,
+      pipelineHistory: updatedHistory,
+      updatedAt: new Date().toISOString(),
+    }
+
+    // Add notification
+    addInvestorNotification(
+      `Application moved to ${nextStage} for ${selectedSMEForStage.smeName}`,
+      "status_change",
+      selectedSMEForStage.id,
+    )
+
+    // Funding Approved specific data
+    if (nextStage === "Funding Approved") {
+      updateData.fundingDetails = {
+        amountAsked,
+        amountApproved,
+        paymentDeployment,
+        investmentType,
+        approvedAt: new Date().toISOString(),
+      }
+    }
+
+    await updateDoc(appRef, updateData)
+
+    const auth = getAuth()
+    const user = auth.currentUser
+    const { smeId, funderId } = (await getDoc(appRef)).data()
+
+    const smeQuery = query(
+      collection(db, "smeApplications"),
+      where("smeId", "==", smeId),
+      where("funderId", "==", funderId),
+    )
+    
+    const smeSnapshot = await getDocs(smeQuery)
+    if (!smeSnapshot.empty) {
+      const smeDocRef = smeSnapshot.docs[0].ref
+      await updateDoc(smeDocRef, updateData)
+
+      if (nextStage === "Under Review") {
+        const availabilityData = availabilities.map((avail) => ({
+          date: avail.date.toISOString(),
+          timeSlots: avail.timeSlots,
+          timeZone: avail.timeZone,
+          status: avail.status,
+        }))
+
+        await updateDoc(appRef, {
+          availableDates: availabilityData,
+          meetingLocation,
+          meetingPurpose,
+        })
+
+        await updateDoc(smeDocRef, {
+          availableDates: availabilityData,
+          meetingLocation,
+          meetingPurpose,
+        })
+
+        await addDoc(collection(db, "smeCalendarEvents"), {
+          smeId,
+          funderId: user.uid,
+          title: meetingPurpose,
+          date: availabilityData[0].date,
+          location: meetingLocation,
+          type: "meeting",
+          createdAt: new Date().toISOString(),
+          availableDates: availabilityData,
+        })
+      }
+    }
+
+    // Upload termsheet if applicable
+    let attachmentUrl = null
+    if (nextStage === "Termsheet" && documentFile) {
+      const fileRef = ref(storage, `termsheets/${selectedSMEForStage.id}/${documentFile.name}`)
+      const snapshot = await uploadBytes(fileRef, documentFile)
+      attachmentUrl = await getDownloadURL(snapshot.ref)
+    }
+
+    if (nextStage === "Deal Complete" && onDealComplete) {
+      onDealComplete()
+    }
+
+    // Compose professional message (your existing message composition code here)
+    let subject = ""
+    let content = ""
+
+    switch (nextStage) {
+      case "Under Review":
+        subject = meetingPurpose
+        content =
+          `Dear ${selectedSMEForStage.smeName},\n\n` +
+          `We are pleased to inform you that your application has moved to the "Under Review" stage of our evaluation process.\n\n` +
+          `${message}\n\n` +
+          `Meeting Invitation:\n` +
+          `Location: ${meetingLocation}\n` +
+          `Available Time Slots:\n` +
+          availabilities
+            .map((avail, idx) => {
+              const dateStr = avail.date.toLocaleDateString("en-US", {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })
+              return `${idx + 1}. ${dateStr} at ${avail.timeSlots?.[0]?.start || "TBD"} - ${avail.timeSlots?.[0]?.end || "TBD"} (${avail.timeZone})`
+            })
+            .join("\n") +
+          `\n\nPlease RSVP on your calendar with your preferred meeting time from the options above.\n\n` +
+          `Best regards,\nInvestment Team`
+        break
+
+      case "Funding Approved":
+        subject = `Funding Approved: ${selectedSMEForStage.smeName}`
+        content =
+          `Dear ${selectedSMEForStage.smeName},\n\n` +
+          `Congratulations! Your funding application has been approved.\n\n` +
+          `${message}\n\n` +
+          `Funding Details:\n` +
+          `Amount Requested: ${amountAsked}\n` +
+          `Amount Approved: ${amountApproved}\n` +
+          `Investment Type: ${investmentType}\n` +
+          `Payment Deployment: ${paymentDeployment}\n\n` +
+          `We will be in touch shortly with the next steps.\n\n` +
+          `Best regards,\nFunding Team`
+        break
+
+      case "Termsheet":
+        subject = `Termsheet Shared: ${selectedSMEForStage.smeName}`
+        content =
+          `Dear ${selectedSMEForStage.smeName},\n\n` +
+          `We are pleased to share the termsheet for your consideration.\n\n` +
+          `${message}\n\n` +
+          `The attached document outlines the proposed terms of our investment. ` +
+          `Please review it carefully and let us know if you have any questions.\n\n` +
+          `Best regards,\nInvestment Team`
+        break
+
+      case "Deal Complete":
+        subject = `Congratulations: Deal Approved for ${selectedSMEForStage.smeName}`
+        content =
+          `Dear ${selectedSMEForStage.smeName},\n\n` +
+          `We are delighted to inform you that your funding application has been approved!\n\n` +
+          `${message}\n\n` +
+          `Our team will be in touch shortly to finalize the next steps. ` +
+          `Congratulations on this exciting milestone for your business.\n\n` +
+          `Best regards,\nInvestment Team`
+        break
+
+      case "Due Diligence":
+        subject = `Stage Update: Due Diligence for ${selectedSMEForStage.smeName}`
+        content =
+          `Dear ${selectedSMEForStage.smeName},\n\n` +
+          `Your funding application has been moved to Due Diligence!\n\n` +
+          `${message}\n\n` +
+          `The Investor should be in touch shortly to finalize the next steps.\n\n` +
+          `Best regards,\nInvestment Team`
+        break
+
+      default:
+        subject = `Application Status Update: ${selectedSMEForStage.smeName}`
+        content =
+          `Dear ${selectedSMEForStage.smeName},\n\n` +
+          `This is to inform you that your application status has been updated to "${nextStage}".\n\n` +
+          `${message}\n\n` +
+          `Best regards,\nInvestment Team`
+    }
+
+    const messagePayload = {
+      to: smeId,
+      from: user.uid,
+      subject,
+      content,
+      date: new Date().toISOString(),
+      read: false,
+      type: "inbox",
+      applicationId: selectedSMEForStage.id,
+      attachments: attachmentUrl ? [attachmentUrl] : [],
+    }
+
+    await Promise.all([
+      addDoc(collection(db, "messages"), messagePayload),
+      addDoc(collection(db, "messages"), { ...messagePayload, read: true, type: "sent" }),
+    ])
+
+    setNotification({
+      type: "success",
+      message: `Application moved to ${nextStage} successfully`,
+    })
+    setTimeout(() => setNotification(null), 3000)
+    setShowNextStageModal(false)
+  } catch (error) {
+    console.error("Error updating next stage:", error)
+    setNotification({
+      type: "error",
+      message: "Failed to update next stage",
+    })
+    setUpdatedStages((prev) => {
+      const newState = { ...prev }
+      delete newState[selectedSMEForStage.id]
+      return newState
+    })
+  } finally {
+    setIsSubmitting(false)
+  }
+}
 
   useEffect(() => {
     if (nextStage && defaultMessages[nextStage]) {
@@ -1874,7 +1935,7 @@ const modalOverlayStyle = {
               <th>Sector</th>
               <th>Stage</th>
               <th>Funding Required</th>
-              <th>Funding Instrument</th>
+              <th>Equity Offered</th>
               <th>Gurantees</th>
               <th>Support Required</th>
               <th>Application Date</th>
@@ -4249,28 +4310,41 @@ const modalOverlayStyle = {
 >
   Due Diligence
 </button>
-                <button
-                  onClick={() => setNextStage("Deal Complete")}
-                  style={{
-                    padding: "20px 24px",
-                    borderRadius: "16px",
-                    border: nextStage === "Deal Complete" ? "3px solid #2e7d32" : "2px solid #e0e0e0",
-                    backgroundColor: nextStage === "Deal Complete" ? "#2e7d32" : "#ffffff",
-                    color: nextStage === "Deal Complete" ? "#ffffff" : "#3e2723",
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    cursor: "pointer",
-                    transition: "all 0.3s ease",
-                    boxShadow:
-                      nextStage === "Deal Complete"
-                        ? "0 8px 24px rgba(46, 125, 50, 0.4)"
-                        : "0 2px 8px rgba(0, 0, 0, 0.1)",
-                    width: "100%",
-                    textAlign: "center",
-                  }}
-                >
-                  Deal Closed
-                </button>
+               <button
+  onClick={() => setNextStage("Deal Complete")}
+  disabled={!isStageAvailable("Deal Complete")}
+  style={{
+    padding: "20px 24px",
+    borderRadius: "16px",
+    border: nextStage === "Deal Complete" ? "3px solid #2e7d32" : "2px solid #e0e0e0",
+    backgroundColor: nextStage === "Deal Complete" ? "#2e7d32" : 
+                   !isStageAvailable("Deal Complete") ? "#f5f5f5" : "#ffffff",
+    color: nextStage === "Deal Complete" ? "#ffffff" : 
+           !isStageAvailable("Deal Complete") ? "#9e9e9e" : "#3e2723",
+    fontSize: "16px",
+    fontWeight: "600",
+    cursor: !isStageAvailable("Deal Complete") ? "not-allowed" : "pointer",
+    transition: "all 0.3s ease",
+    boxShadow: nextStage === "Deal Complete" ? "0 8px 24px rgba(46, 125, 50, 0.4)" : "0 2px 8px rgba(0, 0, 0, 0.1)",
+    width: "100%",
+    textAlign: "center",
+    position: "relative",
+  }}
+  title={!isStageAvailable("Deal Complete") ? "Complete Funding Approved(Decision) and Termsheet stages first" : "Move to Deal Complete"}
+>
+  Deal Closed
+  {!isStageAvailable("Deal Complete") && (
+    <Info 
+      size={14} 
+      style={{
+        position: "absolute",
+        top: "8px",
+        right: "8px",
+        color: "#9e9e9e"
+      }}
+    />
+  )}
+</button>
                 <button
                   onClick={() => setNextStage("Deal Declined")}
                   style={{

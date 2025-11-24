@@ -278,12 +278,7 @@ const Sidebar = ({ companyName = "Company Name" }) => {
           icon: <PieChart size={16} />,
           route: "/FinancialPerformance",
         },
-        {
-          id: "capital-structure",
-          label: "Capital Structure & Investment Performance",
-          icon: <Layers size={16} />,
-          route: "/CapitalStructure",
-        },
+      
         {
           id: "operational-strength",
           label: "Operational Performance",

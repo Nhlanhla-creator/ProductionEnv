@@ -1,3 +1,4 @@
+"use client"
 import { useEffect, useState } from "react"
 import { Info, ChevronDown, ChevronUp } from "lucide-react"
 import { db, auth } from '../../firebaseConfig';
@@ -499,7 +500,7 @@ function MultiSelect({ options, selected, onChange, label }) {
               style={{
                 width: '100%',
                 padding: '8px',
-                backgroundColor: '#007bff',
+                backgroundColor: '#8B4513',
                 color: 'white',
                 border: 'none',
                 borderRadius: '4px',
@@ -515,21 +516,17 @@ function MultiSelect({ options, selected, onChange, label }) {
   )
 }
 
-// Searchable Town Select Component
-function TownSelect({ value, onChange, locations }) {
+// Searchable Select Component for Country, Region, City
+function SearchableSelect({ value, onChange, options, placeholder, searchable = true }) {
   const [isOpen, setIsOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
 
-  const filteredLocations = locations.filter(loc => 
-    loc.town.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    loc.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    loc.country.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const filteredOptions = searchable 
+    ? options.filter(opt => opt.toLowerCase().includes(searchTerm.toLowerCase()))
+    : options
 
-  const selectedLocation = locations.find(loc => loc.town === value)
-
-  const handleSelect = (town) => {
-    onChange(town)
+  const handleSelect = (option) => {
+    onChange(option)
     setIsOpen(false)
     setSearchTerm("")
   }
@@ -550,7 +547,7 @@ function TownSelect({ value, onChange, locations }) {
         }}
       >
         <span style={{ color: value ? '#000' : '#999' }}>
-          {value ? `${value}${selectedLocation ? `, ${selectedLocation.country}` : ''}` : 'Select Town/City'}
+          {value || placeholder}
         </span>
         {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
       </div>
@@ -571,46 +568,45 @@ function TownSelect({ value, onChange, locations }) {
           display: 'flex',
           flexDirection: 'column'
         }}>
-          <div style={{ padding: '8px', borderBottom: '1px solid #ccc' }}>
-            <input
-              type="text"
-              placeholder="Search town, city or country..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px',
-                border: '1px solid #ccc',
-                borderRadius: '4px',
-                fontSize: '14px'
-              }}
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
+          {searchable && (
+            <div style={{ padding: '8px', borderBottom: '1px solid #ccc' }}>
+              <input
+                type="text"
+                placeholder={`Search ${placeholder.toLowerCase()}...`}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  fontSize: '14px'
+                }}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+          )}
           <div style={{ overflow: 'auto', maxHeight: '340px' }}>
-            {filteredLocations.length > 0 ? (
-              filteredLocations.map((location) => (
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((option) => (
                 <div
-                  key={`${location.town}-${location.country}`}
-                  onClick={() => handleSelect(location.town)}
+                  key={option}
+                  onClick={() => handleSelect(option)}
                   style={{
                     padding: '10px 12px',
                     cursor: 'pointer',
-                    backgroundColor: value === location.town ? '#f0f0f0' : 'white',
+                    backgroundColor: value === option ? '#f0f0f0' : 'white',
                     borderBottom: '1px solid #f0f0f0'
                   }}
                   onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f8f8'}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = value === location.town ? '#f0f0f0' : 'white'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = value === option ? '#f0f0f0' : 'white'}
                 >
-                  <div style={{ fontWeight: '500' }}>{location.town}</div>
-                  <div style={{ fontSize: '12px', color: '#666' }}>
-                    {location.city}, {location.region}, {location.country}
-                  </div>
+                  {option}
                 </div>
               ))
             ) : (
               <div style={{ padding: '12px', textAlign: 'center', color: '#999' }}>
-                No locations found
+                No options found
               </div>
             )}
           </div>
@@ -676,15 +672,66 @@ export default function EntityOverview({ data = {}, updateData }) {
     updateFormData(newData)
   }
 
-  const handleTownChange = (town) => {
-    const location = africanLocations.find(loc => loc.town === town)
+  // Get unique countries
+  const getCountries = () => {
+    const countries = [...new Set(africanLocations.map(loc => loc.country))]
+    return countries.sort()
+  }
+
+  // Get regions for selected country
+  const getRegions = (country) => {
+    if (!country) return []
+    const regions = [...new Set(
+      africanLocations
+        .filter(loc => loc.country === country)
+        .map(loc => loc.region)
+    )]
+    return regions.sort()
+  }
+
+  // Get cities for selected country and region
+  const getCities = (country, region) => {
+    if (!country || !region) return []
+    const cities = [...new Set(
+      africanLocations
+        .filter(loc => loc.country === country && loc.region === region)
+        .map(loc => loc.city)
+    )]
+    return cities.sort()
+  }
+
+  const handleCountryChange = (country) => {
+    const newData = {
+      ...formData,
+      country: country,
+      region: "",
+      city: "",
+      town: ""
+    }
+    updateFormData(newData)
+  }
+
+  const handleRegionChange = (region) => {
+    const newData = {
+      ...formData,
+      region: region,
+      city: "",
+      town: ""
+    }
+    updateFormData(newData)
+  }
+
+  const handleCityChange = (city) => {
+    const location = africanLocations.find(loc => 
+      loc.city === city && 
+      loc.region === formData.region && 
+      loc.country === formData.country
+    )
     if (location) {
       const newData = {
         ...formData,
-        town: town,
-        city: location.city,
-        region: location.region,
-        country: location.country
+        city: city,
+        town: location.town
       }
       updateFormData(newData)
     }
@@ -784,23 +831,6 @@ export default function EntityOverview({ data = {}, updateData }) {
             </select>
           </FormField>
 
-          <FormField label="Entity Size (by employees)" required>
-            <select
-              name="entitySize"
-              value={formData.entitySize || ""}
-              onChange={handleChange}
-              style={inputStyle}
-              required
-            >
-              <option value="">Select Entity Size</option>
-              {entitySizes.map((size) => (
-                <option key={size.value} value={size.value}>
-                  {size.label}
-                </option>
-              ))}
-            </select>
-          </FormField>
-
           <FormField label="Financial Year End" required>
             <input
               type="month"
@@ -865,44 +895,44 @@ export default function EntityOverview({ data = {}, updateData }) {
             />
           </FormField>
 
-          <FormField label="Town/City" required>
-            <TownSelect
-              value={formData.town || ""}
-              onChange={handleTownChange}
-              locations={africanLocations}
+          {/* Country -> Region -> City order */}
+          <FormField label="Country" required>
+            <SearchableSelect
+              value={formData.country || ""}
+              onChange={handleCountryChange}
+              options={getCountries()}
+              placeholder="Select Country"
             />
           </FormField>
 
-          {/* Auto-populated Country field */}
           {formData.country && (
-            <FormField label="Country">
-              <input
-                type="text"
-                value={formData.country}
-                style={{...inputStyle, backgroundColor: '#f5f5f5'}}
-                disabled
+            <FormField label="Province/Region/State" required>
+              <SearchableSelect
+                value={formData.region || ""}
+                onChange={handleRegionChange}
+                options={getRegions(formData.country)}
+                placeholder="Select Province/Region"
               />
             </FormField>
           )}
 
-          {/* Auto-populated City field (if different from town) */}
-          {formData.city && formData.city !== formData.town && (
-            <FormField label="City">
-              <input
-                type="text"
-                value={formData.city}
-                style={{...inputStyle, backgroundColor: '#f5f5f5'}}
-                disabled
-              />
-            </FormField>
-          )}
-
-          {/* Auto-populated Region field */}
           {formData.region && (
-            <FormField label="Region/Province/State">
+            <FormField label="City" required>
+              <SearchableSelect
+                value={formData.city || ""}
+                onChange={handleCityChange}
+                options={getCities(formData.country, formData.region)}
+                placeholder="Select City"
+              />
+            </FormField>
+          )}
+
+          {/* Auto-populated Town field (hidden but stored) */}
+          {formData.town && formData.town !== formData.city && (
+            <FormField label="Town/Suburb">
               <input
                 type="text"
-                value={formData.region}
+                value={formData.town}
                 style={{...inputStyle, backgroundColor: '#f5f5f5'}}
                 disabled
               />
@@ -916,8 +946,17 @@ export default function EntityOverview({ data = {}, updateData }) {
               onChange={handleChange}
               rows={6}
               style={{...inputStyle, resize: 'vertical'}}
+              maxLength={1500}
               required
             />
+            <div style={{ 
+              fontSize: '12px', 
+              color: '#666', 
+              marginTop: '4px',
+              textAlign: 'right' 
+            }}>
+              {(formData.businessDescription || "").length}/1500 characters
+            </div>
           </FormField>
         </div>
       </div>
