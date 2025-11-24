@@ -188,7 +188,7 @@ const saveToFirebase = async (data, completed, section = null) => {
 
   const handleSaveSection = async () => {
     await saveToFirebase(formData, completedSections)
-    alert("Section saved successfully!")
+    
   }
 
   const handleSaveAndContinue = async () => {
