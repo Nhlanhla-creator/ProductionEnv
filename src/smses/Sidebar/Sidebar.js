@@ -293,7 +293,7 @@ const Sidebar = ({ companyName = "Company Name" }) => {
         },
         {
           id: "social-environmental",
-          label: "Social & Environmental Impact",
+          label: "ESG Impact",
           icon: <Globe size={16} />,
           route: "/SocialImpact",
         },
