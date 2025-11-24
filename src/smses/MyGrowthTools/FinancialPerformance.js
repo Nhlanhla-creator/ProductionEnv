@@ -18,6 +18,7 @@ import {
   Tooltip,
   Legend,
 } from "chart.js"
+import CapitalStructure from './CapitalStructure'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
@@ -3285,6 +3286,7 @@ const FinancialPerformance = () => {
     { id: "pnl-snapshot", label: "P&L Snapshot" },
     { id: "cashflow-trends", label: "Cashflow Trends" },
     { id: "balance-sheet", label: "Balance Sheet" },
+    { id: "capital-structure", label: "Capital Structure" },
   ]
 
   const handleUpdateChartData = (chartName, data) => {
@@ -3497,6 +3499,13 @@ const FinancialPerformance = () => {
             user={user}
             onUpdateChartData={handleUpdateChartData}
             chartData={chartData}
+            isInvestorView={isInvestorView}
+          />
+
+          <CapitalStructure
+            activeSection={activeSection}
+            viewMode={viewMode}
+            user={user}
             isInvestorView={isInvestorView}
           />
         </div>
