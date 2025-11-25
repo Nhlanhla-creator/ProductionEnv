@@ -3,7 +3,7 @@ import { getAuth } from "firebase/auth";
 import { getDoc, doc, updateDoc, serverTimestamp, collection, getDocs, where } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, auth } from "../../firebaseConfig";
-import { FileText, ExternalLink, Upload } from "lucide-react";
+import { FileText, ExternalLink, Upload, Filter } from "lucide-react";
 import get from "lodash.get";
 import { onAuthStateChanged } from "firebase/auth";
 import { GoogleGenAI } from "@google/genai";
@@ -22,7 +22,31 @@ const ai = new GoogleGenAI({
   apiKey: "AIzaSyCNgMy76oz4N-mNXEmoc5e3XPO-Sem4ca8"
 });
 
-const DOCUMENTS = getAllDocumentLabels().sort((a, b) => a.localeCompare(b));
+
+const DOCUMENTS = [
+  "5 Year Budget",
+  "Audited Financials", 
+  "Bank Details Confirmation Letter",
+  "B-BBEE Certificate",
+  "Business Plan",
+  "Certified IDs of Directors & Shareholders",
+  "Client References",
+  "Company Profile / Brochure",
+  "Company Registration Certificate",
+  "COIDA Letter of Good Standing",
+  "CV", // ✅ ADDED CV DOCUMENT
+  "Financial Statements", 
+  "Guarantee/Contract",
+  "Impact Statements", 
+  "Industry Accreditations",
+  "Loan Agreements",
+  "Pitch Deck",
+  "Previous Program Reports",
+  "Proof of Address",
+  "Share Register",
+  "Support Letters / Endorsements",
+  "Tax Clearance Certificate"
+].sort((a, b) => a.localeCompare(b));
 
 const getDocumentURL = (docLabel, profileData) => {
   const documentId = getDocumentId(docLabel);
@@ -42,13 +66,13 @@ const documentValidationRules = {
   },
   "Audited Financials": {
     requiredElements: [
-      "Auditor's report/signed opinion",
-      "Complete financial statements",
+      "Financial statements (Balance Sheet, Income Statement, Cash Flow)",
+      "Auditor's report/signed opinion (if audited)",
       "Notes to financial statements", 
       "Comparative figures",
-      "Auditor signature and date"
+      "Company name and period covered"
     ],
-    strictChecks: ["has_auditor_report", "is_signed", "has_comparatives"]
+    strictChecks: ["has_financial_statements", "has_company_name", "covers_complete_period"]
   },
   "Bank Details Confirmation Letter": {
     requiredElements: [
@@ -61,20 +85,20 @@ const documentValidationRules = {
     ],
     strictChecks:["has_account_number", "shows_valid_south_african_bank", "has_account_holder's_name"]
   },
-"B-BBEE Certificate": {
-  requiredElements: [
-    "Expiry date - MUST NOT BE EXPIRED",
-    "Issued by accredited verification agency",
-    "B-BBEE certificate number",
-    "B-BBEE level (1-8)", 
-    "Issue date",
-    "Certificate must be currently valid",
-    "Company registration details",
-    "SANAS logo or accreditation number"
-  ],
-  strictChecks: ["has_certificate_number", "not_expired", "currently_valid"]
-},
-   "Business Plan": {
+  "B-BBEE Certificate": {
+    requiredElements: [
+      "Expiry date - MUST NOT BE EXPIRED",
+      "Issued by accredited verification agency",
+      "B-BBEE certificate number",
+      "B-BBEE level (1-8)", 
+      "Issue date",
+      "Certificate must be currently valid",
+      "Company registration details",
+      "SANAS logo or accreditation number"
+    ],
+    strictChecks: ["has_certificate_number", "not_expired", "currently_valid"]
+  },
+  "Business Plan": {
     requiredElements: [
       "Executive Summary",
       "Company Description", 
@@ -88,183 +112,198 @@ const documentValidationRules = {
     strictChecks: ["has_executive_summary", "has_market_analysis", "has_financials"]
   },
   "Certified IDs of Directors & Shareholders": {
-  requiredElements: [
-    "Certification stamp/signature (Commissioner of Oaths)",
-    "Certification date within last 3 months",
-    "South African ID number (13 digits)",
-    "Photograph of ID holder",
-    "Full names matching company records",
-    "Keywords: Certified, True Copy, Commissioner of Oaths"
-  ],
-    strictChecks: ["certified_within_3_months", "has_id_numbers", "names_match_records"]
-},
-"Client References": {
-  requiredElements: [
-    "Reference letter heading/title",
-    "Client company name and contact details",
-    "Description of services provided",
-    "Performance/satisfaction statement",
-    "Dates of service/work period",
-    "Authorized signature and position"
-  ],
-  strictChecks:["has_client_details", "describes_services", "has_signature"]
-},
-"Company Profile / Brochure": {
-  requiredElements: [
-    "Company name and logo",
-    "About Us/Company Overview section",
-    "Mission, Vision, Values statements",
-    "Management/Team information",
-    "Contact details",
-    "Services/Products description"
-  ],
-  strictChecks: ["has_company_details", "has_mission_vision", "has_contact_info"]
-},
-"Company Registration Certificate": {
-  requiredElements: [
-    "Issued by CIPC/Companies Registry",
-    "Company registration number",
-    "Registered company name",
-    "Date of incorporation",
-    "Company type (Pty Ltd, CC, etc.)",
-    "Official stamp/signature"
-  ],
-  strictChecks: ["issued_by_cipc", "has_registration_number", "matches_company_name"]
-},
-"Financial Statements": {
-  requiredElements: [
-    "Balance Sheet (Statement of Financial Position)",
-    "Income Statement (Profit & Loss)",
-    "Cash Flow Statement",
-    "Notes to financial statements",
-    "Company name and period covered",
-    "Currency specified (Rands)"
-  ],
-  strictChecks: ["has_all_statements", "has_company_name", "covers_complete_period"]
-},
-"Guarantee/Contract": {
-  requiredElements: [
-    "Contract/Agreement title",
-    "Parties involved clearly defined",
-    "Terms and obligations specified",
-    "Duration/validity period",
-    "Signatures from all parties"
-  ],
-   strictChecks: ["has_parties", "has_terms", "fully_signed"]
-},
-"Impact Statements": {
-  requiredElements: [
-    "Impact Statement/Report title",
-    "Reporting period/dates",
-    "Objectives and goals stated",
-    "Measurable results/outcomes",
-    "Beneficiary numbers/statistics",
-    "Monitoring and evaluation data"
-  ],
-  strictChecks: ["has_measurable_results", "has_reporting_period", "shows_impact_evidence"]
-},
-"Industry Accreditations": {
-  requiredElements: [
-    "Accreditation/Certificate title",
-    "Issuing accreditation body",
-    "Scope/standard (e.g., ISO 9001)",
-    "Issue and expiry dates",
-    "Company name matches applicant"
-  ],
-   strictChecks: ["has_expiry_date", "issued_by_accredited_body", "matches_company_name"]
-},
-"Loan Agreements": {
-  requiredElements: [
-    "Parties involved (lender/borrower)",
-    "Loan amount and interest rate",
-    "Repayment terms and schedule",
-    "Signatures from all parties",
-    "Agreement date and duration"
-  ],
-   strictChecks: ["has_loan_amount", "has_repayment_terms", "fully_signed"]
-},
-"Pitch Deck": {
-  requiredElements: [
-    "Company name and problem statement",
-    "Solution/product offering",
-    "Business model and revenue streams",
-    "Market analysis and opportunity",
-    "Management team overview",
-    "Funding requirements and use"
-  ]
-},
-"Previous Program Reports": {
-  requiredElements: [
-    "Program/project name and description",
-    "Reporting period and dates",
-    "Activities and deliverables completed",
-    "Results and achievements measured",
-    "Challenges and lessons learned",
-    "Financial expenditure summary"
-  ]
-},
-"Proof of Address": {
-  requiredElements: [
-    "Full name and physical address",
-    "Issue date within last 3 months",
-    "Utility company/landlord details",
-    "Account number or reference",
-    "Official stamp/letterhead"
-  ],
-  strictChecks: ["recent_issue_date", "matches_applicant_name", "has_physical_address"]
-},
-"Share Register": {
-  requiredElements: [
-    "Company name and registration number",
-    "Shareholder names and details",
-    "Number and class of shares held",
-    "Issue dates of shares",
-    "Certificate numbers",
-    "Director/company secretary signature"
-  ],
-  strictChecks: ["matches_company_records", "has_share_details", "complete_shareholder_list"]
-},
-"Support Letters / Endorsements": {
-  requiredElements: [
-    "Letterhead of supporting organization",
-    "Clear endorsement statement",
-    "Relationship to applicant described",
-    "Specific support details provided",
-    "Authorized signature and position",
-    "Contact details of endorser"
-  ]
-},
+    requiredElements: [
+      "Certification stamp/signature (Commissioner of Oaths)",
+      "Certification date within last 3 months", 
+      "ID document (South African ID Card, Passport, Driver's License, etc.)",
+      "Photograph of ID holder",
+      "Full names matching company records",
+      "Keywords: Certified, True Copy, Commissioner of Oaths",
+      "✅ ACCEPT ANY OFFICIAL ID: South African ID Card, Passport, Driver's License, Refugee ID"
+    ],
+    strictChecks: ["certified_within_3_months", "has_id_details", "names_match_records"]
+  },
+  "Client References": {
+    requiredElements: [
+      "Reference letter heading/title",
+      "Client company name and contact details",
+      "Description of services provided",
+      "Performance/satisfaction statement",
+      "Dates of service/work period",
+      "Authorized signature and position"
+    ],
+    strictChecks:["has_client_details", "describes_services", "has_signature"]
+  },
+  "Company Profile / Brochure": {
+    requiredElements: [
+      "Company name and logo",
+      "About Us/Company Overview section",
+      "Mission, Vision, Values statements",
+      "Management/Team information",
+      "Contact details",
+      "Services/Products description"
+    ],
+    strictChecks: ["has_company_details", "has_mission_vision", "has_contact_info"]
+  },
+  "Company Registration Certificate": {
+    requiredElements: [
+      "Issued by CIPC/Companies Registry",
+      "Company registration number",
+      "Registered company name",
+      "Date of incorporation",
+      "Company type (Pty Ltd, CC, etc.)",
+      "Official stamp/signature"
+    ],
+    strictChecks: ["issued_by_cipc", "has_registration_number", "matches_company_name"]
+  },
+  "COIDA Letter of Good Standing": {
+    requiredElements: [
+      "Issued by Compensation Fund",
+      "Letter of Good Standing title",
+      "Employer reference number",
+      "Company name and address",
+      "Issue date",
+      "Status confirmation (Good Standing)",
+      "Official stamp/signature"
+    ],
+    strictChecks: ["issued_by_compensation_fund", "has_employer_reference", "shows_good_standing"]
+  },
+  "CV": { // ✅ ADDED CV VALIDATION RULES
+    requiredElements: [
+      "Personal details and contact information",
+      "Professional summary/objective",
+      "Work experience with dates and descriptions",
+      "Educational background and qualifications",
+      "Skills and competencies",
+      "Professional certifications (if any)",
+      "References or availability upon request"
+    ],
+    strictChecks: ["has_work_experience", "has_education", "has_contact_info"]
+  },
+  "Financial Statements": {
+    requiredElements: [
+      "Balance Sheet (Statement of Financial Position)",
+      "Income Statement (Profit & Loss)",
+      "Cash Flow Statement",
+      "Notes to financial statements",
+      "Company name and period covered",
+      "Currency specified (Rands)"
+    ],
+    strictChecks: ["has_all_statements", "has_company_name", "covers_complete_period"]
+  },
+  "Guarantee/Contract": {
+    requiredElements: [
+      "Contract/Agreement title",
+      "Parties involved clearly defined",
+      "Terms and obligations specified",
+      "Duration/validity period",
+      "Signatures from all parties"
+    ],
+    strictChecks: ["has_parties", "has_terms", "fully_signed"]
+  },
+  "Impact Statements": {
+    requiredElements: [
+      "Impact Statement/Report title",
+      "Reporting period/dates",
+      "Objectives and goals stated",
+      "Measurable results/outcomes",
+      "Beneficiary numbers/statistics",
+      "Monitoring and evaluation data"
+    ],
+    strictChecks: ["has_measurable_results", "has_reporting_period", "shows_impact_evidence"]
+  },
+  "Industry Accreditations": {
+    requiredElements: [
+      "Accreditation/Certificate title",
+      "Issuing accreditation body",
+      "Scope/standard (e.g., ISO 9001)",
+      "Issue and expiry dates",
+      "Company name matches applicant"
+    ],
+    strictChecks: ["has_expiry_date", "issued_by_accredited_body", "matches_company_name"]
+  },
+  "Loan Agreements": {
+    requiredElements: [
+      "Parties involved (lender/borrower)",
+      "Loan amount and interest rate",
+      "Repayment terms and schedule",
+      "Signatures from all parties",
+      "Agreement date and duration"
+    ],
+    strictChecks: ["has_loan_amount", "has_repayment_terms", "fully_signed"]
+  },
+  "Pitch Deck": {
+    requiredElements: [
+      "Company name and problem statement",
+      "Solution/product offering",
+      "Business model and revenue streams",
+      "Market analysis and opportunity",
+      "Management team overview",
+      "Funding requirements and use"
+    ]
+  },
+  "Previous Program Reports": {
+    requiredElements: [
+      "Program/project name and description",
+      "Reporting period and dates",
+      "Activities and deliverables completed",
+      "Results and achievements measured",
+      "Challenges and lessons learned",
+      "Financial expenditure summary"
+    ]
+  },
+  "Proof of Address": {
+    requiredElements: [
+      "Full name and physical address",
+      "Issue date within last 3 months",
+      "Utility company/landlord details",
+      "Account number or reference",
+      "Official stamp/letterhead"
+    ],
+    strictChecks: ["recent_issue_date", "matches_applicant_name", "has_physical_address"]
+  },
+  "Share Register": {
+    requiredElements: [
+      "Company name and registration number",
+      "Shareholder names and details",
+      "Number and class of shares held",
+      "Issue dates of shares",
+      "Certificate numbers",
+      "Director/company secretary signature"
+    ],
+    strictChecks: ["matches_company_records", "has_share_details", "complete_shareholder_list"]
+  },
+  "Support Letters / Endorsements": {
+    requiredElements: [
+      "Letterhead of supporting organization",
+      "Clear endorsement statement",
+      "Relationship to applicant described",
+      "Specific support details provided",
+      "Authorized signature and position",
+      "Contact details of endorser"
+    ]
+  },
   "Tax Clearance Certificate": {
-  requiredElements: [
-    "Issued by South African Revenue Service (SARS)",
-    "Tax Reference Number",
-    "Issue Date", 
-    "Expiry Date (usually 1 year from issue)",
-    "Certificate Number",
-    "Taxpayer Name and Address",
-    "SARS official stamp/signature",
-    "Clearance Status (Good Standing)"
-  ],
-  criticalChecks: ["has_tax_reference_number", "has_expiry_date", "issued_by_sars", "valid_clearance_status"]
-},
-"VAT Certificate": {
-  requiredElements: [
-    "VAT Registration Number",
-    "Business Name and Trading Name", 
-    "Business Address",
-    "Date of Registration",
-    "VAT Registration Status",
-    "Issued by SARS",
-    "VAT number format (starts with 4)"
-  ],
-  criticalChecks: ["has_vat_number", "valid_vat_format", "issued_by_sars", "has_registration_date"]
-}
+    requiredElements: [
+      "Issued by South African Revenue Service (SARS)",
+      "Tax Reference Number",
+      "Issue Date", 
+      "Expiry Date (usually 1 year from issue)",
+      "Certificate Number",
+      "Taxpayer Name and Address",
+      "SARS official stamp/signature",
+      "Clearance Status (Good Standing)",
+      "✅ ACCEPT: Tax Clearance Certificate OR Tax Compliance Status document - THEY ARE THE SAME"
+    ],
+    criticalChecks: ["has_tax_reference_number", "has_expiry_date", "issued_by_sars", "valid_clearance_status"]
+  },
 };
 
 
 const MyDocuments = () => {
   const [profileData, setProfileData] = useState({});
   const [filter, setFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all"); // ✅ ADDED STATUS FILTER
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -274,6 +313,7 @@ const MyDocuments = () => {
   const [validationResults, setValidationResults] = useState({});
   const [rejectionReasons, setRejectionReasons] = useState({});
   const [submittedDocuments, setSubmittedDocuments] = useState([]);
+  const [showStatusFilter, setShowStatusFilter] = useState(false); // ✅ ADDED STATUS FILTER DROPDOWN STATE
 
   // Use the synchronization hook
   useDocumentSync(setSubmittedDocuments, setProfileData, null);
@@ -297,7 +337,7 @@ const MyDocuments = () => {
 
           const data = profileSnap.data();
           setProfileData(data);
-          const submitted = checkSubmittedDocs(DOCUMENTS, data); // ✅ Now this works
+          const submitted = checkSubmittedDocs(DOCUMENTS, data);
           setSubmittedDocuments(submitted);
         } catch (err) {
           console.error("Failed to load user documents:", err);
@@ -339,7 +379,7 @@ const MyDocuments = () => {
       console.log("User Name:", user?.email)
     });
 
-    return () => unsubscribe(); // Cleanup
+    return () => unsubscribe();
   }, []);
 
 
@@ -379,7 +419,48 @@ const MyDocuments = () => {
 
 
   const createStrictPrompt = (docLabel, rules, registeredName) => { 
-    return `
+    let customInstructions = "";
+    
+    // ✅ SPECIAL INSTRUCTIONS FOR DIFFERENT DOCUMENT TYPES
+    if (docLabel === "B-BBEE Certificate") {
+      customInstructions = `SPECIAL INSTRUCTIONS FOR B-BBEE DOCUMENTS:
+- ACCEPT BOTH: Traditional B-BBEE Certificates AND Exemption Affidavits for micro-enterprises
+- EXEMPTION AFFIDAVITS MUST CONTAIN: Clear 'Exemption Affidavit' or 'Micro Enterprise' title, Commissioner of Oaths stamp, turnover declaration below R10 million
+- CERTIFICATES MUST CONTAIN: B-BBEE level (1-8), certificate number, expiry date, issued by accredited agency
+- REJECT: Generic letters, self-declarations without commissioner stamp, expired certificates, non-accredited certificates
+- BOTH DOCUMENT TYPES ARE VALID for different business sizes
+`;
+    }
+
+     if (docLabel === "Certified IDs of Directors & Shareholders") {
+      customInstructions = `SPECIAL INSTRUCTIONS FOR ID DOCUMENTS:
+- ACCEPT ANY OFFICIAL ID DOCUMENT: South African ID Card, Passport, Driver's License, Refugee ID, Asylum Seeker Certificate
+- MUST BE CERTIFIED: Commissioner of Oaths stamp/signature within last 3 months
+- FOCUS ON: Certification validity, document clarity, ID details
+- IGNORE COMPANY NAME CHECK: ID DOCUMENTS DON'T CONTAIN COMPANY NAMES
+- DO NOT REJECT based on specific ID type - all official IDs are acceptable
+`;
+    }
+
+    if (docLabel === "Tax Clearance Certificate") {
+      customInstructions = `SPECIAL INSTRUCTIONS FOR TAX DOCUMENTS:
+- ACCEPT BOTH: Tax Clearance Certificate AND Tax Compliance Status documents - THEY ARE THE SAME
+- BOTH DOCUMENTS serve the same purpose and are issued by SARS
+- FOCUS ON: SARS issuance, tax reference number, expiry date, company name matching
+- DO NOT REJECT based on document title variation
+`;
+    }
+
+    if (docLabel === "Financial Statements") {
+      customInstructions = `SPECIAL INSTRUCTIONS FOR FINANCIAL STATEMENTS:
+- CHECK IF AUDITED: Look for auditor's report, audit opinion, auditor signature
+- COMMENT ON AUDIT STATUS but DO NOT reject based on audit status
+- ACCEPT BOTH audited and unaudited financial statements
+- FOCUS ON: Completeness of statements (Balance Sheet, Income Statement, Cash Flow), company name, period covered
+`;
+    }
+
+    return `${customInstructions}
 ANALYZE THE UPLOADED DOCUMENT FILE (not these instructions):
 
 DOCUMENT VALIDATION FOR: ${docLabel}
@@ -435,7 +516,7 @@ ANALYZE THE UPLOADED FILE AND RESPOND WITH:
     const manualExpiryCheck = (file, docLabel) => {
     const expiryDocuments = [
       'B-BBEE Certificate', 'Tax Clearance Certificate', 
-      'Industry Accreditations', 'VAT Certificate', 'Tax Clearance Cert'
+      'Industry Accreditations', 'COIDA Letter of Good Standing'
     ];
     
     if (!expiryDocuments.includes(docLabel)) {
@@ -470,8 +551,7 @@ ANALYZE THE UPLOADED FILE AND RESPOND WITH:
         "tax clearance": "Tax Clearance Certificate",
         "tax certificate": "Tax Clearance Certificate", 
         "sars certificate": "Tax Clearance Certificate",
-        "vat": "VAT Certificate",
-        "vat registration": "VAT Certificate",
+        "tax compliance": "Tax Clearance Certificate", // ✅ ADDED Tax Compliance Status
         "financial statement": "Financial Statements",
         "audited financial": "Audited Financials",
         "5 year budget": "5 Year Budget",
@@ -484,6 +564,8 @@ ANALYZE THE UPLOADED FILE AND RESPOND WITH:
         "share register": "Share Register",
         "certified id": "Certified IDs",
         "id document": "Certified IDs",
+        "passport": "Certified IDs", // ✅ ADDED Passport
+        "driver license": "Certified IDs", // ✅ ADDED Driver's License
         "proof of address": "Proof of Address",
         "utility bill": "Proof of Address",
         "client reference": "Client References",
@@ -497,10 +579,11 @@ ANALYZE THE UPLOADED FILE AND RESPOND WITH:
         "impact statement": "Impact Statements",
         "loan agreement": "Loan Agreements",
         "contract": "Guarantee Contracts",
-        "uif": "UIF/PAYE/COIDA Certificates",
-        "paye": "UIF/PAYE/COIDA Certificates",
-        "coida": "UIF/PAYE/COIDA Certificates",
-        "program report": "Previous Program Reports"
+        "coida": "COIDA Letter of Good Standing", // ✅ UPDATED to COIDA
+        "program report": "Previous Program Reports",
+        "cv": "CV", // ✅ ADDED CV
+        "resume": "CV", // ✅ ADDED Resume as synonym for CV
+        "curriculum vitae": "CV" // ✅ ADDED Curriculum Vitae
       };
 
       const extractDocumentType = (text) => {
@@ -512,11 +595,12 @@ ANALYZE THE UPLOADED FILE AND RESPOND WITH:
           }
         }
         
-        if (lowerText.includes('tax') && lowerText.includes('clearance')) return "Tax Clearance Certificate";
+        if (lowerText.includes('tax') && (lowerText.includes('clearance') || lowerText.includes('compliance'))) return "Tax Clearance Certificate";
         if (lowerText.includes('bbbee') || lowerText.includes('b-bbee')) return "B-BBEE Certificate";
-        if (lowerText.includes('vat')) return "VAT Certificate";
         if (lowerText.includes('company') && lowerText.includes('registration')) return "Company Registration Certificate";
         if (lowerText.includes('business') && lowerText.includes('plan')) return "Business Plan";
+        if (lowerText.includes('coida') || lowerText.includes('letter of good standing')) return "COIDA Letter of Good Standing";
+        if (lowerText.includes('cv') || lowerText.includes('resume') || lowerText.includes('curriculum vitae')) return "CV"; // ✅ ADDED CV DETECTION
         
         return "this document type";
       };
@@ -537,16 +621,39 @@ ANALYZE THE UPLOADED FILE AND RESPOND WITH:
           identifiedType = extractDocumentType(parsed.message || responseText);
         }
 
-        // ✅ CLEANER WRONG TYPE MESSAGES
+        // ✅ FIXED: Don't override "incomplete" status - preserve all statuses from AI
         if (parsed.status === "wrong_type" || (!parsed.isValid && identifiedType !== docLabel)) {
-          userMessage = `Please upload a ${docLabel} doc, not ${identifiedType}`;
-          status = "wrong_type";
+          // SPECIAL CASE: Certified IDs should accept any ID type
+          if (docLabel === "Certified IDs of Directors & Shareholders" && 
+              (identifiedType.includes("ID") || identifiedType.includes("Passport") || identifiedType.includes("Driver"))) {
+            userMessage = "ID document verified";
+            status = "verified";
+          } 
+          // SPECIAL CASE: Tax Clearance should accept both names
+          else if (docLabel === "Tax Clearance Certificate" && 
+                   (identifiedType.includes("Tax Compliance") || identifiedType.includes("Tax Clearance"))) {
+            userMessage = "Tax compliance document verified";
+            status = "verified";
+          }
+          // SPECIAL CASE: CV should accept both CV and Resume
+          else if (docLabel === "CV" && 
+                   (identifiedType.includes("CV") || identifiedType.includes("Resume") || identifiedType.includes("Curriculum Vitae"))) {
+            userMessage = "CV/Resume verified";
+            status = "verified";
+          }
+          else {
+            userMessage = `Please upload a ${docLabel} doc, not ${identifiedType}`;
+            status = "wrong_type";
+          }
         } else if (parsed.status === "name_mismatch") {
           userMessage = "Company name does not match your registered name";
           status = "name_mismatch";
         } else if (parsed.status === "expired") {
           userMessage = "Document expired";
           status = "expired";
+        } else if (parsed.status === "incomplete") {
+          userMessage = "Document is incomplete - missing required elements"; // ✅ PRESERVE INCOMPLETE STATUS
+          status = "incomplete";
         } else {
           userMessage = "Document verified";
           status = "verified";
@@ -554,7 +661,7 @@ ANALYZE THE UPLOADED FILE AND RESPOND WITH:
         
         return {
           isValid: true,
-          status: status,
+          status: status, // ✅ This now correctly shows "incomplete" when AI says incomplete
           message: userMessage,
           warnings: parsed.warnings || []
         };
@@ -766,7 +873,6 @@ ANALYZE THE UPLOADED FILE AND RESPOND WITH:
           updateData[`contactDetails.${documentId}`] = downloadURL;
           break;
         case 'taxClearanceCert':
-        case 'vatCertificate':
         case 'bbbeeCert':
         case 'otherCerts':
         case 'industryAccreditationDocs':
@@ -774,6 +880,9 @@ ANALYZE THE UPLOADED FILE AND RESPOND WITH:
           break;
         case 'companyProfile':
         case 'clientReferences':
+          updateData[`productsServices.${documentId}`] = downloadURL;
+          break;
+        case 'cv': // ✅ ADDED CV PATH MAPPING
           updateData[`productsServices.${documentId}`] = downloadURL;
           break;
       }
@@ -803,15 +912,133 @@ ANALYZE THE UPLOADED FILE AND RESPOND WITH:
   }
 };
 
-  const filteredDocuments = DOCUMENTS.filter((doc) => {
-    const isSubmitted = submittedDocuments.includes(doc);
-    const matchFilter =
-      filter === "all" ||
-      (filter === "submitted" && isSubmitted) ||
-      (filter === "pending" && !isSubmitted);
-    const matchSearch = doc.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchFilter && matchSearch;
-  });
+// ✅ ADDED: Function to get document status for filtering
+const getDocumentStatus = (docLabel) => {
+  const documentId = getDocumentId(docLabel);
+  const url = getDocumentURL(docLabel, profileData);
+  const verification = profileData.verification?.[documentId];
+  
+  if (!url) {
+    return "pending";
+  }
+  
+  if (!verification) {
+    return "uploaded";
+  }
+  
+  return verification.status || "uploaded";
+};
+
+const filteredDocuments = DOCUMENTS.filter((doc) => {
+  const isSubmitted = submittedDocuments.includes(doc);
+  const documentStatus = getDocumentStatus(doc); // ✅ ADDED STATUS CHECK
+  
+  // Big Score documents
+  const bigScoreDocuments = [
+    "Company Registration Certificate",
+    "Tax Clearance Certificate",  
+    "Certified IDs of Directors & Shareholders",
+    "Share Register",
+    "B-BBEE Certificate",
+    "COIDA Letter of Good Standing",
+    "Proof of Address",
+    "Company Profile / Brochure"
+  ];
+
+  // Funding documents
+  const fundingDocuments = [
+    "5 Year Budget",
+    "Bank Details Confirmation Letter", 
+    "Financial Statements",
+    "Previous Program Reports",
+    "Loan Agreements",
+    "Support Letters / Endorsements",
+    "Impact Statements" 
+  ];
+
+  // ✅ NEW: Compliance Score documents
+  const complianceDocuments = [
+    "Company Registration Certificate",        // CIPC business registration
+    "Tax Clearance Certificate",               // SARS tax compliance status
+    "B-BBEE Certificate",                      // B-BBEE certification
+    "COIDA Letter of Good Standing",           // UIF & COIDA registration
+    "Certified IDs of Directors & Shareholders", // Verified Director IDs
+    "Proof of Address",                        // Verified business address
+    "Share Register",                          // Ownership and shareholding structure
+    "Company Profile / Brochure"               // Complete business profile
+    // Note: VAT registration is included in Tax Clearance Certificate
+    // Note: POPIA compliance documentation is not in current document list
+  ];
+
+  // ✅ NEW: Legitimacy documents
+  const legitimacyDocuments = [
+    "Company Registration Certificate",
+    "Tax Clearance Certificate",
+    "B-BBEE Certificate",
+    "COIDA Letter of Good Standing",
+    "Industry Accreditations"
+  ];
+
+  // ✅ NEW: Leadership documents  
+  const leadershipDocuments = [
+    "Certified IDs of Directors & Shareholders",
+    "Share Register",
+    "Company Profile / Brochure",
+    "Client References",
+    "Support Letters / Endorsements",
+    "CV" // ✅ ADDED CV TO LEADERSHIP DOCUMENTS
+  ];
+
+  // ✅ NEW: Governance documents
+  const governanceDocuments = [
+    "Share Register",
+    "Audited Financials",
+    "Financial Statements", 
+    "Loan Agreements",
+    "Guarantee/Contract"
+  ];
+
+  const capitalAppealDocuments = [
+    "Financial Statements",           // Financial readiness & strength
+    "Audited Financials",             // Financial strength & credibility  
+    "5 Year Budget",                  // Financial projections
+    "Business Plan",                  // Business strategy
+    "Pitch Deck",                     // Investor presentation
+    "Bank Details Confirmation Letter", // Financial reliability
+    "Tax Clearance Certificate",      // Compliance
+    "B-BBEE Certificate",             // Impact proof
+    "Impact Statements",              // Social impact
+    "Company Profile / Brochure",     // Operational strength
+    "Industry Accreditations",        // Operational standards
+    "Loan Agreements",                // Credit history
+    "CV" // ✅ ADDED CV TO CAPITAL APPEAL DOCUMENTS
+  ];
+
+  // ✅ UPDATED FILTER LOGIC: Remove "submitted" and "pending", add status filter
+  const matchFilter =
+    filter === "all" ||
+    (filter === "Big Score" && bigScoreDocuments.includes(doc)) ||
+    (filter === "Funding" && fundingDocuments.includes(doc)) ||
+    (filter === "Compliance" && complianceDocuments.includes(doc)) || 
+    (filter === "Legitimacy" && legitimacyDocuments.includes(doc)) || 
+    (filter === "Leadership" && leadershipDocuments.includes(doc)) || 
+    (filter === "Governance" && governanceDocuments.includes(doc)) ||
+    (filter === "Capital Appeal" && capitalAppealDocuments.includes(doc)); 
+
+  // ✅ ADDED STATUS FILTER LOGIC
+  const matchStatusFilter = 
+    statusFilter === "all" ||
+    (statusFilter === "pending" && !getDocumentURL(doc, profileData)) ||
+    (statusFilter === "verified" && documentStatus === "verified") ||
+    (statusFilter === "rejected" && 
+      (documentStatus === "wrong_type" || documentStatus === "expired" || 
+       documentStatus === "name_mismatch" || documentStatus === "incomplete")) ||
+    (statusFilter === "uploaded" && getDocumentURL(doc, profileData) && documentStatus !== "verified");
+
+  const matchSearch = doc.toLowerCase().includes(searchTerm.toLowerCase());
+  
+  return matchFilter && matchStatusFilter && matchSearch;
+});
 
 
 const handleDeleteDocument = async (docLabel) => {
@@ -839,47 +1066,47 @@ const handleDeleteDocument = async (docLabel) => {
       switch(documentId) {
         case 'registrationCertificate':
           updateData[`entityOverview.registrationCertificate`] = null;
-          updateData[`entityOverview.registrationCertificateUpdatedAt`] = null; // ✅ Clear timestamp
+          updateData[`entityOverview.registrationCertificateUpdatedAt`] = null; 
           break;
         case 'certifiedIds':
           updateData[`ownershipManagement.certifiedIds`] = null;
-          updateData[`ownershipManagement.certifiedIdsUpdatedAt`] = null; // ✅ Clear timestamp
+          updateData[`ownershipManagement.certifiedIdsUpdatedAt`] = null;
           break;
         case 'shareRegister':
           updateData[`ownershipManagement.shareRegister`] = null;
-          updateData[`ownershipManagement.shareRegisterUpdatedAt`] = null; // ✅ Clear timestamp
+          updateData[`ownershipManagement.shareRegisterUpdatedAt`] = null;
           break;
         case 'proofOfAddress':
           updateData[`contactDetails.proofOfAddress`] = null;
-          updateData[`contactDetails.proofOfAddressUpdatedAt`] = null; // ✅ Clear timestamp
+          updateData[`contactDetails.proofOfAddressUpdatedAt`] = null;
           break;
         case 'taxClearanceCert':
           updateData[`legalCompliance.taxClearanceCert`] = null;
-          updateData[`legalCompliance.taxClearanceCertUpdatedAt`] = null; // ✅ Clear timestamp
-          break;
-        case 'vatCertificate':
-          updateData[`legalCompliance.vatCertificate`] = null;
-          updateData[`legalCompliance.vatCertificateUpdatedAt`] = null; // ✅ Clear timestamp
+          updateData[`legalCompliance.taxClearanceCertUpdatedAt`] = null;
           break;
         case 'bbbeeCert':
           updateData[`legalCompliance.bbbeeCert`] = null;
-          updateData[`legalCompliance.bbbeeCertUpdatedAt`] = null; // ✅ Clear timestamp
+          updateData[`legalCompliance.bbbeeCertUpdatedAt`] = null;
           break;
         case 'otherCerts':
           updateData[`legalCompliance.otherCerts`] = null;
-          updateData[`legalCompliance.otherCertsUpdatedAt`] = null; // ✅ Clear timestamp
+          updateData[`legalCompliance.otherCertsUpdatedAt`] = null;
           break;
         case 'industryAccreditationDocs':
           updateData[`legalCompliance.industryAccreditationDocs`] = null;
-          updateData[`legalCompliance.industryAccreditationDocsUpdatedAt`] = null; // ✅ Clear timestamp
+          updateData[`legalCompliance.industryAccreditationDocsUpdatedAt`] = null;
           break;
         case 'companyProfile':
           updateData[`productsServices.companyProfile`] = null;
-          updateData[`productsServices.companyProfileUpdatedAt`] = null; // ✅ Clear timestamp
+          updateData[`productsServices.companyProfileUpdatedAt`] = null;
           break;
         case 'clientReferences':
           updateData[`productsServices.clientReferences`] = null;
-          updateData[`productsServices.clientReferencesUpdatedAt`] = null; // ✅ Clear timestamp
+          updateData[`productsServices.clientReferencesUpdatedAt`] = null;
+          break;
+        case 'cv': // ✅ ADDED CV DELETE HANDLING
+          updateData[`productsServices.cv`] = null;
+          updateData[`productsServices.cvUpdatedAt`] = null;
           break;
       }
     }
@@ -901,8 +1128,8 @@ const handleDeleteDocument = async (docLabel) => {
     alert('Failed to delete document. Please try again.');
   }
 };
-  // In MyDocuments component, update the renderDocumentLink function:
 
+// ✅ ADDED BACK: renderDocumentLink function
 const renderDocumentLink = (label) => {
   const documentId = getDocumentId(label);
   const url = profileData.documents?.[documentId] || getDocumentURL(label, profileData);
@@ -955,7 +1182,7 @@ const renderDocumentLink = (label) => {
 
  const getStatusBadge = (docLabel) => {
   const documentId = getDocumentId(docLabel);
-  const url = profileData.documents?.[documentId] || getDocumentURL(docLabel, profileData);
+  const url = getDocumentURL(docLabel, profileData);
   const verification = profileData.verification?.[documentId];
   
   if (!url) {
@@ -975,7 +1202,7 @@ const renderDocumentLink = (label) => {
     );
   }
 
-  // ✅ SHOW VERIFICATION STATUS INSTEAD OF JUST "UPLOADED"
+  // ✅ UPDATED: Show "incomplete" status when AI returns incomplete
   let backgroundColor = "#e8f5e8";
   let color = "#2e7d32";
   let statusText = "Uploaded";
@@ -997,6 +1224,10 @@ const renderDocumentLink = (label) => {
       backgroundColor = "#fff3e0";
       color = "#ef6c00";
       statusText = "Name Mismatch";
+    } else if (verification.status === "incomplete") { // ✅ ADDED INCOMPLETE STATUS
+      backgroundColor = "#fff3e0";
+      color = "#ef6c00";
+      statusText = "Incomplete";
     }
   }
 
@@ -1148,7 +1379,8 @@ const renderDocumentLink = (label) => {
             boxSizing: "border-box"
           }}>
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-              {["all", "submitted", "pending"].map((type) => (
+              {/* ✅ UPDATED: Removed "submitted" and "pending", kept category filters */}
+              {["all", "Big Score", "Compliance", "Legitimacy", "Leadership", "Governance", "Capital Appeal"].map((type) => (
                 <button
                   key={type}
                   onClick={() => setFilter(type)}
@@ -1183,33 +1415,117 @@ const renderDocumentLink = (label) => {
                 </button>
               ))}
             </div>
-            <input
-              className="search-box"
-              type="text"
-              placeholder="Search documents..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{
-                padding: "12px 16px",
-                border: "2px solid #d7ccc8",
-                borderRadius: "8px",
-                fontSize: "0.875rem",
-                backgroundColor: "#faf8f6",
-                color: "#5d4037",
-                minWidth: "200px",
-                width: "280px",
-                outline: "none",
-                boxSizing: "border-box"
-              }}
-              onFocus={(e) => {
-                e.target.style.borderColor = "#8d6e63";
-                e.target.style.boxShadow = "0 0 0 3px rgba(141, 110, 99, 0.1)";
-              }}
-              onBlur={(e) => {
-                e.target.style.borderColor = "#d7ccc8";
-                e.target.style.boxShadow = "none";
-              }}
-            />
+            <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
+              {/* ✅ ADDED STATUS FILTER DROPDOWN */}
+              <div style={{ position: "relative" }}>
+                <button
+                  onClick={() => setShowStatusFilter(!showStatusFilter)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "12px 16px",
+                    border: "2px solid #d7ccc8",
+                    backgroundColor: "#faf8f6",
+                    color: "#6d4c41",
+                    borderRadius: "8px",
+                    fontWeight: "500",
+                    fontSize: "0.875rem",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                    minWidth: "140px"
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.backgroundColor = "#efebe9";
+                    e.target.style.borderColor = "#a67c52";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.backgroundColor = "#faf8f6";
+                    e.target.style.borderColor = "#d7ccc8";
+                  }}
+                >
+                  <Filter size={16} />
+                  <span>Status: {statusFilter === "all" ? "All" : 
+                                statusFilter === "pending" ? "Pending" :
+                                statusFilter === "verified" ? "Verified" :
+                                statusFilter === "rejected" ? "Rejected" : "Uploaded"}</span>
+                </button>
+                
+                {showStatusFilter && (
+                  <div style={{
+                    position: "absolute",
+                    top: "100%",
+                    right: 0,
+                    marginTop: "8px",
+                    backgroundColor: "white",
+                    border: "2px solid #d7ccc8",
+                    borderRadius: "8px",
+                    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+                    zIndex: 1000,
+                    minWidth: "160px"
+                  }}>
+                    {["all", "pending", "verified", "rejected", "uploaded"].map((status) => (
+                      <div
+                        key={status}
+                        onClick={() => {
+                          setStatusFilter(status);
+                          setShowStatusFilter(false);
+                        }}
+                        style={{
+                          padding: "12px 16px",
+                          cursor: "pointer",
+                          backgroundColor: statusFilter === status ? "#efebe9" : "white",
+                          color: "#6d4c41",
+                          fontSize: "0.875rem",
+                          fontWeight: "500",
+                          borderBottom: "1px solid #f5f2f0",
+                          transition: "background-color 0.2s ease"
+                        }}
+                        onMouseEnter={(e) => {
+                          e.target.style.backgroundColor = "#f5f2f0";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.target.style.backgroundColor = statusFilter === status ? "#efebe9" : "white";
+                        }}
+                      >
+                        {status === "all" ? "All Statuses" :
+                         status === "pending" ? "Pending" :
+                         status === "verified" ? "Verified" :
+                         status === "rejected" ? "Rejected" : "Uploaded"}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              
+              <input
+                className="search-box"
+                type="text"
+                placeholder="Search documents..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{
+                  padding: "12px 16px",
+                  border: "2px solid #d7ccc8",
+                  borderRadius: "8px",
+                  fontSize: "0.875rem",
+                  backgroundColor: "#faf8f6",
+                  color: "#5d4037",
+                  minWidth: "200px",
+                  width: "280px",
+                  outline: "none",
+                  boxSizing: "border-box"
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = "#8d6e63";
+                  e.target.style.boxShadow = "0 0 0 3px rgba(141, 110, 99, 0.1)";
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = "#d7ccc8";
+                  e.target.style.boxShadow = "none";
+                }}
+              />
+            </div>
           </div>
 
           {/* Documents Table */}
@@ -1297,7 +1613,21 @@ const renderDocumentLink = (label) => {
                       letterSpacing: "0.5px",
                       borderBottom: "2px solid #6d4c41",
                       width: "15%"
-                    }}>Status</th>
+                    }}>
+                      {/* ✅ ADDED FILTER ICON TO STATUS HEADING */}
+                      <div style={{ 
+                        display: "flex", 
+                        alignItems: "center", 
+                        justifyContent: "center",
+                        gap: "8px",
+                        cursor: "pointer"
+                      }}
+                      onClick={() => setShowStatusFilter(!showStatusFilter)}
+                      >
+                        Status
+                        <Filter size={14} />
+                      </div>
+                    </th>
                     <th style={{
                       padding: "16px 20px",
                       textAlign: "center",
@@ -1316,7 +1646,7 @@ const renderDocumentLink = (label) => {
                 const unifiedPath = UNIFIED_DOCUMENT_PATHS[documentId];
                 let updatedAt;
                 
-                // ✅ FIXED: Get timestamp from unified path or legacy path
+                // Get timestamp from unified path or legacy path
                 updatedAt = profileData[`documents.${documentId}UpdatedAt`] || 
                           get(profileData, `${unifiedPath}UpdatedAt`) ||
                           get(profileData, `${DOCUMENT_PATHS[doc]}UpdatedAt`);
