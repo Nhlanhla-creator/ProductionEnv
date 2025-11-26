@@ -564,9 +564,8 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
   const executiveColumns = [
     { label: "Name", style: { width: "20%", minWidth: "160px" } },
     { label: "Position", style: { width: "15%", minWidth: "120px" } },
-    { label: "Department", style: { width: "12%" } },
-    { label: "Nationality", style: { width: "10%" } },
-    { label: "LinkedIn & CV", style: { width: "23%", minWidth: "180px" } },
+    { label: "Nationality", style: { width: "12%" } },
+    { label: "LinkedIn & CV", style: { width: "25%", minWidth: "180px" } },
     { label: "Race", style: { width: "8%" } },
     { label: "Gender", style: { width: "8%" } },
     { label: "Youth?", style: { width: "6%" } },
@@ -1032,15 +1031,6 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
                         />
                       )}
                     </div>
-                  </td>
-                  <td className="px-4 py-2 border-b">
-                    <input
-                      type="text"
-                      value={executive.department || ""}
-                      onChange={(e) => updateExecutive(index, "department", e.target.value)}
-                      className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500"
-                      placeholder="e.g., Finance"
-                    />
                   </td>
                   <td className="px-4 py-2 border-b">
                     <select

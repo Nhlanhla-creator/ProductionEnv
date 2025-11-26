@@ -339,690 +339,689 @@ const ProfileSummary = ({ data, onEdit }) => {
             }}
           >
             {/* Entity Overview */}
-            <div
+           {/* Entity Overview */}
+<div
+  style={{
+    background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
+    backdropFilter: "blur(20px)",
+    borderRadius: "16px",
+    overflow: "hidden",
+    border: "1px solid rgba(200, 182, 166, 0.3)",
+    boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
+    transition: "all 0.3s ease",
+  }}
+>
+  <div
+    onClick={() => toggleSection("entityOverview")}
+    style={{
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: "16px 20px",
+      background: expandedSections.entityOverview
+        ? "linear-gradient(135deg, #a67c52, #7d5a50)"
+        : "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
+      cursor: "pointer",
+      transition: "all 0.3s ease",
+    }}
+  >
+    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+      <Building size={20} color={expandedSections.entityOverview ? "#faf7f2" : "#4a352f"} />
+      <h2
+        style={{
+          margin: 0,
+          fontSize: "clamp(16px, 2.5vw, 20px)",
+          fontWeight: "700",
+          color: expandedSections.entityOverview ? "#faf7f2" : "#4a352f",
+        }}
+      >
+        Entity Overview
+      </h2>
+    </div>
+    {expandedSections.entityOverview ? (
+      <ChevronUp size={20} color="#faf7f2" />
+    ) : (
+      <ChevronDown size={20} color="#4a352f" />
+    )}
+  </div>
+
+  {expandedSections.entityOverview && (
+    <div
+      style={{
+        padding: "20px",
+        background: "linear-gradient(135deg, rgba(250, 247, 242, 0.8), rgba(240, 230, 217, 0.6))",
+        animation: "slideDown 0.3s ease-out",
+      }}
+    >
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gap: "16px",
+        }}
+      >
+        {[
+          { label: "Registered Name", value: data?.entityOverview?.registeredName },
+          { label: "Trading Name", value: data?.entityOverview?.tradingName || "Same as registered name" },
+          { label: "Registration Number", value: data?.entityOverview?.registrationNumber },
+          { label: "Entity Type", value: data?.entityOverview?.entityType },
+          { label: "Legal Structure", value: data?.entityOverview?.legalStructure },
+          { 
+            label: "Entity Size", 
+            value: data?.entityOverview?.employeeCount 
+              ? `${data.entityOverview.employeeCount} employees` 
+              : "Not provided"
+          },
+          { label: "Financial Year End", value: data?.entityOverview?.financialYearEnd },
+          { label: "Years in Operation", value: data?.entityOverview?.yearsInOperation },
+          { label: "Operation Stage", value: data?.entityOverview?.operationStage },
+          { label: "Town", value: data?.entityOverview?.town || "Not provided" },
+          { label: "City", value: data?.entityOverview?.city || "Not provided" },
+          { label: "Region/Province", value: data?.entityOverview?.region || "Not provided" },
+          { label: "Country", value: data?.entityOverview?.country || "Not provided" },
+        ].map((item, i) => (
+          <div
+            key={i}
+            style={{
+              background: "rgba(250, 247, 242, 0.8)",
+              borderRadius: "12px",
+              padding: "16px",
+              border: "1px solid rgba(200, 182, 166, 0.2)",
+              transition: "all 0.3s ease",
+            }}
+          >
+            <span
               style={{
-                background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
-                backdropFilter: "blur(20px)",
-                borderRadius: "16px",
-                overflow: "hidden",
-                border: "1px solid rgba(200, 182, 166, 0.3)",
-                boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
-                transition: "all 0.3s ease",
+                display: "block",
+                fontSize: "12px",
+                color: "#7d5a50",
+                marginBottom: "6px",
+                fontWeight: "600",
+                textTransform: "uppercase",
+                letterSpacing: "0.5px",
               }}
             >
-              <div
-                onClick={() => toggleSection("entityOverview")}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "16px 20px",
-                  background: expandedSections.entityOverview
-                    ? "linear-gradient(135deg, #a67c52, #7d5a50)"
-                    : "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
-                  cursor: "pointer",
-                  transition: "all 0.3s ease",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <Building size={20} color={expandedSections.entityOverview ? "#faf7f2" : "#4a352f"} />
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: "clamp(16px, 2.5vw, 20px)",
-                      fontWeight: "700",
-                      color: expandedSections.entityOverview ? "#faf7f2" : "#4a352f",
-                    }}
-                  >
-                    Entity Overview
-                  </h2>
-                </div>
-                {expandedSections.entityOverview ? (
-                  <ChevronUp size={20} color="#faf7f2" />
-                ) : (
-                  <ChevronDown size={20} color="#4a352f" />
-                )}
-              </div>
+              {item.label}
+            </span>
+            <span
+              style={{
+                fontSize: "14px",
+                color: "#4a352f",
+                fontWeight: "500",
+                lineHeight: "1.4",
+              }}
+            >
+              {item.value || "Not provided"}
+            </span>
+          </div>
+        ))}
+      </div>
 
-              {expandedSections.entityOverview && (
-                <div
-                  style={{
-                    padding: "20px",
-                    background: "linear-gradient(135deg, rgba(250, 247, 242, 0.8), rgba(240, 230, 217, 0.6))",
-                    animation: "slideDown 0.3s ease-out",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                      gap: "16px",
-                    }}
-                  >
-                    {[
-                      { label: "Registered Name", value: formatLabel(data?.entityOverview?.registeredName) },
-                      { label: "Trading Name", value: data?.entityOverview?.tradingName || "Same as registered name" },
-                      { label: "Registration Number", value: data?.entityOverview?.registrationNumber },
-                      { label: "Entity Type", value: data?.entityOverview?.entityType },
-                      { label: "Legal Structure", value: data?.entityOverview?.legalStructure },
-                      { label: "Entity Size", value: data?.entityOverview?.entitySize },
-                      { label: "Financial Year End", value: data?.entityOverview?.financialYearEnd },
-                      { label: "Number of Employees", value: data?.entityOverview?.employeeCount },
-                      { label: "Years in Operation", value: data?.entityOverview?.yearsInOperation },
-                      { label: "Operation Stage", value: formatLabel(data?.entityOverview?.operationStage) },
-                      { label: "Town/City", value: data?.entityOverview?.town || data?.entityOverview?.city || "Not provided" },
-                      { label: "Region/Province", value: data?.entityOverview?.region || "Not provided" },
-                      { label: "Country", value: data?.entityOverview?.country || "Not provided" },
-                    ].map((item, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          background: "rgba(250, 247, 242, 0.8)",
-                          borderRadius: "12px",
-                          padding: "16px",
-                          border: "1px solid rgba(200, 182, 166, 0.2)",
-                          transition: "all 0.3s ease",
-                        }}
-                      >
-                        <span
-                          style={{
-                            display: "block",
-                            fontSize: "12px",
-                            color: "#7d5a50",
-                            marginBottom: "6px",
-                            fontWeight: "600",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.5px",
-                          }}
-                        >
-                          {item.label}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: "14px",
-                            color: "#4a352f",
-                            fontWeight: "500",
-                            lineHeight: "1.4",
-                          }}
-                        >
-                          {item.value || "Not provided"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+      <div
+        style={{
+          background: "rgba(166, 124, 82, 0.1)",
+          borderRadius: "12px",
+          padding: "16px",
+          border: "1px solid rgba(166, 124, 82, 0.2)",
+          marginTop: "16px",
+        }}
+      >
+        <span
+          style={{
+            display: "block",
+            fontSize: "12px",
+            color: "#7d5a50",
+            marginBottom: "8px",
+            fontWeight: "700",
+            textTransform: "uppercase",
+            letterSpacing: "0.5px",
+          }}
+        >
+          Business Description
+        </span>
+        <p
+          style={{
+            fontSize: "14px",
+            color: "#4a352f",
+            lineHeight: "1.6",
+            margin: 0,
+            fontWeight: "400",
+          }}
+        >
+          {data?.entityOverview?.businessDescription || "Not provided"}
+        </p>
+      </div>
 
-                  <div
-                    style={{
-                      background: "rgba(166, 124, 82, 0.1)",
-                      borderRadius: "12px",
-                      padding: "16px",
-                      border: "1px solid rgba(166, 124, 82, 0.2)",
-                      marginTop: "16px",
-                    }}
-                  >
-                    <span
-                      style={{
-                        display: "block",
-                        fontSize: "12px",
-                        color: "#7d5a50",
-                        marginBottom: "8px",
-                        fontWeight: "700",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.5px",
-                      }}
-                    >
-                      Business Description
-                    </span>
-                    <p
-                      style={{
-                        fontSize: "14px",
-                        color: "#4a352f",
-                        lineHeight: "1.6",
-                        margin: 0,
-                        fontWeight: "400",
-                      }}
-                    >
-                      {data?.entityOverview?.businessDescription || "Not provided"}
-                    </p>
-                  </div>
-
-                  <div
-                    style={{
-                      background: "rgba(166, 124, 82, 0.1)",
-                      borderRadius: "12px",
-                      padding: "16px",
-                      border: "1px solid rgba(166, 124, 82, 0.2)",
-                      marginTop: "12px",
-                    }}
-                  >
-                    <span
-                      style={{
-                        display: "block",
-                        fontSize: "12px",
-                        color: "#7d5a50",
-                        marginBottom: "8px",
-                        fontWeight: "700",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.5px",
-                      }}
-                    >
-                      Economic Sectors
-                    </span>
-                    <p
-                      style={{
-                        fontSize: "14px",
-                        color: "#4a352f",
-                        lineHeight: "1.6",
-                        margin: 0,
-                        fontWeight: "400",
-                      }}
-                    >
-                      {formatArray(data?.entityOverview?.economicSectors) || "Not provided"}
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
+      <div
+        style={{
+          background: "rgba(166, 124, 82, 0.1)",
+          borderRadius: "12px",
+          padding: "16px",
+          border: "1px solid rgba(166, 124, 82, 0.2)",
+          marginTop: "12px",
+        }}
+      >
+        <span
+          style={{
+            display: "block",
+            fontSize: "12px",
+            color: "#7d5a50",
+            marginBottom: "8px",
+            fontWeight: "700",
+            textTransform: "uppercase",
+            letterSpacing: "0.5px",
+          }}
+        >
+          Economic Sectors
+        </span>
+        <p
+          style={{
+            fontSize: "14px",
+            color: "#4a352f",
+            lineHeight: "1.6",
+            margin: 0,
+            fontWeight: "400",
+          }}
+        >
+          {data?.entityOverview?.economicSectors && data.entityOverview.economicSectors.length > 0
+            ? data.entityOverview.economicSectors.join(" • ")
+            : "Not provided"}
+        </p>
+      </div>
+    </div>
+  )}
+</div>
 
             {/* Products & Services */}
+           {/* Products & Services */}
+<div
+  style={{
+    background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
+    backdropFilter: "blur(20px)",
+    borderRadius: "16px",
+    overflow: "hidden",
+    border: "1px solid rgba(200, 182, 166, 0.3)",
+    boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
+    transition: "all 0.3s ease",
+  }}
+>
+  <div
+    onClick={() => toggleSection("productsServices")}
+    style={{
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: "16px 20px",
+      background: expandedSections.productsServices
+        ? "linear-gradient(135deg, #7d5a50, #4a352f)"
+        : "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
+      cursor: "pointer",
+      transition: "all 0.3s ease",
+    }}
+  >
+    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+      <Package size={20} color={expandedSections.productsServices ? "#faf7f2" : "#4a352f"} />
+      <h2
+        style={{
+          margin: 0,
+          fontSize: "clamp(16px, 2.5vw, 20px)",
+          fontWeight: "700",
+          color: expandedSections.productsServices ? "#faf7f2" : "#4a352f",
+        }}
+      >
+        Products & Services
+      </h2>
+    </div>
+    {expandedSections.productsServices ? (
+      <ChevronUp size={20} color="#faf7f2" />
+    ) : (
+      <ChevronDown size={20} color="#4a352f" />
+    )}
+  </div>
+
+  {expandedSections.productsServices && (
+    <div
+      style={{
+        padding: "20px",
+        background: "linear-gradient(135deg, rgba(250, 247, 242, 0.8), rgba(240, 230, 217, 0.6))",
+        animation: "slideDown 0.3s ease-out",
+      }}
+    >
+      {/* Offering Type */}
+      <div style={{ marginBottom: "20px" }}>
+        <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
+          Business Offering
+        </h3>
+        <div
+          style={{
+            background: "rgba(250, 247, 242, 0.8)",
+            borderRadius: "12px",
+            padding: "16px",
+            border: "1px solid rgba(200, 182, 166, 0.2)",
+          }}
+        >
+          <span
+            style={{
+              display: "block",
+              fontSize: "12px",
+              color: "#7d5a50",
+              marginBottom: "6px",
+              fontWeight: "600",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
+            Offering Type
+          </span>
+          <span
+            style={{
+              fontSize: "14px",
+              color: "#4a352f",
+              fontWeight: "500",
+            }}
+          >
+            {data?.productsServices?.offeringType ? 
+              data.productsServices.offeringType.charAt(0).toUpperCase() + data.productsServices.offeringType.slice(1) 
+              : "Not provided"}
+          </span>
+        </div>
+      </div>
+
+      {/* Product Categories */}
+      <div style={{ marginBottom: "16px" }}>
+        <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
+          Product Categories
+        </h3>
+        {data?.productsServices?.productCategories && data.productsServices.productCategories.length > 0 ? (
+          data.productsServices.productCategories.map((category, index) => (
             <div
+              key={index}
               style={{
-                background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
-                backdropFilter: "blur(20px)",
-                borderRadius: "16px",
-                overflow: "hidden",
-                border: "1px solid rgba(200, 182, 166, 0.3)",
-                boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
-                transition: "all 0.3s ease",
+                background: "rgba(250, 247, 242, 0.8)",
+                borderRadius: "12px",
+                padding: "16px",
+                border: "1px solid rgba(200, 182, 166, 0.2)",
+                marginBottom: "12px",
               }}
             >
-              <div
-                onClick={() => toggleSection("productsServices")}
+              <h4
                 style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "16px 20px",
-                  background: expandedSections.productsServices
-                    ? "linear-gradient(135deg, #7d5a50, #4a352f)"
-                    : "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
-                  cursor: "pointer",
-                  transition: "all 0.3s ease",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  color: "#4a352f",
+                  marginBottom: "10px",
+                  background: "linear-gradient(135deg, #a67c52, #7d5a50)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <Package size={20} color={expandedSections.productsServices ? "#faf7f2" : "#4a352f"} />
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: "clamp(16px, 2.5vw, 20px)",
-                      fontWeight: "700",
-                      color: expandedSections.productsServices ? "#faf7f2" : "#4a352f",
-                    }}
-                  >
-                    Products & Services
-                  </h2>
-                </div>
-                {expandedSections.productsServices ? (
-                  <ChevronUp size={20} color="#faf7f2" />
-                ) : (
-                  <ChevronDown size={20} color="#4a352f" />
-                )}
-              </div>
-
-              {expandedSections.productsServices && (
+                {Array.isArray(category.categories) && category.categories.length > 0
+                  ? category.categories.join(", ")
+                  : "Unnamed Category"}
+              </h4>
+              {category.products && category.products.length > 0 ? (
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "2px solid #c8b6a6" }}>
+                      <th
+                        style={{
+                          padding: "8px 6px",
+                          textAlign: "left",
+                          fontSize: "11px",
+                          fontWeight: "700",
+                          color: "#7d5a50",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                        }}
+                      >
+                        Product Name
+                      </th>
+                      <th
+                        style={{
+                          padding: "8px 6px",
+                          textAlign: "left",
+                          fontSize: "11px",
+                          fontWeight: "700",
+                          color: "#7d5a50",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                        }}
+                      >
+                        Description
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {category.products.map((product, idx) => (
+                      <tr key={idx} style={{ borderBottom: "1px solid #e6d7c3" }}>
+                        <td
+                          style={{
+                            padding: "8px 6px",
+                            color: "#4a352f",
+                            fontWeight: "500",
+                            fontSize: "12px",
+                          }}
+                        >
+                          {product.name || "Not provided"}
+                        </td>
+                        <td style={{ padding: "8px 6px", color: "#4a352f", fontSize: "12px" }}>
+                          {product.description || "Not provided"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
                 <div
                   style={{
-                    padding: "20px",
-                    background: "linear-gradient(135deg, rgba(250, 247, 242, 0.8), rgba(240, 230, 217, 0.6))",
-                    animation: "slideDown 0.3s ease-out",
+                    padding: "16px",
+                    textAlign: "center",
+                    color: "#7d5a50",
+                    fontStyle: "italic",
+                    fontSize: "13px",
                   }}
                 >
-                  {/* Offering Type */}
-                  <div style={{ marginBottom: "20px" }}>
-                    <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
-                      Business Offering
-                    </h3>
-                    <div
-                      style={{
-                        background: "rgba(250, 247, 242, 0.8)",
-                        borderRadius: "12px",
-                        padding: "16px",
-                        border: "1px solid rgba(200, 182, 166, 0.2)",
-                      }}
-                    >
-                      <span
-                        style={{
-                          display: "block",
-                          fontSize: "12px",
-                          color: "#7d5a50",
-                          marginBottom: "6px",
-                          fontWeight: "600",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.5px",
-                        }}
-                      >
-                        Offering Type
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "14px",
-                          color: "#4a352f",
-                          fontWeight: "500",
-                        }}
-                      >
-                        {data?.productsServices?.offeringType ? 
-                          data.productsServices.offeringType.charAt(0).toUpperCase() + data.productsServices.offeringType.slice(1) 
-                          : "Not provided"}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Product Categories */}
-                  <div style={{ marginBottom: "16px" }}>
-                    <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
-                      Product Categories
-                    </h3>
-                    {data?.productsServices?.productCategories && data.productsServices.productCategories.length > 0 ? (
-                      data.productsServices.productCategories.map((category, index) => (
-                        <div
-                          key={index}
-                          style={{
-                            background: "rgba(250, 247, 242, 0.8)",
-                            borderRadius: "12px",
-                            padding: "16px",
-                            border: "1px solid rgba(200, 182, 166, 0.2)",
-                            marginBottom: "12px",
-                          }}
-                        >
-                          <h4
-                            style={{
-                              fontSize: "14px",
-                              fontWeight: "600",
-                              color: "#4a352f",
-                              marginBottom: "10px",
-                              background: "linear-gradient(135deg, #a67c52, #7d5a50)",
-                              WebkitBackgroundClip: "text",
-                              WebkitTextFillColor: "transparent",
-                            }}
-                          >
-                            {category.name || "Unnamed Category"}
-                          </h4>
-                          {category.products && category.products.length > 0 ? (
-                            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                              <thead>
-                                <tr style={{ borderBottom: "2px solid #c8b6a6" }}>
-                                  <th
-                                    style={{
-                                      padding: "8px 6px",
-                                      textAlign: "left",
-                                      fontSize: "11px",
-                                      fontWeight: "700",
-                                      color: "#7d5a50",
-                                      textTransform: "uppercase",
-                                      letterSpacing: "0.5px",
-                                    }}
-                                  >
-                                    Product Name
-                                  </th>
-                                  <th
-                                    style={{
-                                      padding: "8px 6px",
-                                      textAlign: "left",
-                                      fontSize: "11px",
-                                      fontWeight: "700",
-                                      color: "#7d5a50",
-                                      textTransform: "uppercase",
-                                      letterSpacing: "0.5px",
-                                    }}
-                                  >
-                                    Description
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {category.products.map((product, idx) => (
-                                  <tr key={idx} style={{ borderBottom: "1px solid #e6d7c3" }}>
-                                    <td
-                                      style={{
-                                        padding: "8px 6px",
-                                        color: "#4a352f",
-                                        fontWeight: "500",
-                                        fontSize: "12px",
-                                      }}
-                                    >
-                                      {product.name || "Not provided"}
-                                    </td>
-                                    <td style={{ padding: "8px 6px", color: "#4a352f", fontSize: "12px" }}>
-                                      {product.description || "Not provided"}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          ) : (
-                            <div
-                              style={{
-                                padding: "16px",
-                                textAlign: "center",
-                                color: "#7d5a50",
-                                fontStyle: "italic",
-                                fontSize: "13px",
-                              }}
-                            >
-                              No products in this category
-                            </div>
-                          )}
-                        </div>
-                      ))
-                    ) : (
-                      <div style={{ fontSize: "14px", color: "#7d5a50", fontStyle: "italic" }}>
-                        No product categories provided
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Service Categories */}
-                  <div style={{ marginBottom: "16px" }}>
-                    <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
-                      Service Categories
-                    </h3>
-                    {data?.productsServices?.serviceCategories && data.productsServices.serviceCategories.length > 0 ? (
-                      data.productsServices.serviceCategories.map((category, index) => (
-                        <div
-                          key={index}
-                          style={{
-                            background: "rgba(250, 247, 242, 0.8)",
-                            borderRadius: "12px",
-                            padding: "16px",
-                            border: "1px solid rgba(200, 182, 166, 0.2)",
-                            marginBottom: "12px",
-                          }}
-                        >
-                          <h4
-                            style={{
-                              fontSize: "14px",
-                              fontWeight: "600",
-                              color: "#4a352f",
-                              marginBottom: "10px",
-                              background: "linear-gradient(135deg, #a67c52, #7d5a50)",
-                              WebkitBackgroundClip: "text",
-                              WebkitTextFillColor: "transparent",
-                            }}
-                          >
-                            {category.name || "Unnamed Category"}
-                          </h4>
-                          {category.services && category.services.length > 0 ? (
-                            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                              <thead>
-                                <tr style={{ borderBottom: "2px solid #c8b6a6" }}>
-                                  <th
-                                    style={{
-                                      padding: "8px 6px",
-                                      textAlign: "left",
-                                      fontSize: "11px",
-                                      fontWeight: "700",
-                                      color: "#7d5a50",
-                                      textTransform: "uppercase",
-                                      letterSpacing: "0.5px",
-                                    }}
-                                  >
-                                    Service Name
-                                  </th>
-                                  <th
-                                    style={{
-                                      padding: "8px 6px",
-                                      textAlign: "left",
-                                      fontSize: "11px",
-                                      fontWeight: "700",
-                                      color: "#7d5a50",
-                                      textTransform: "uppercase",
-                                      letterSpacing: "0.5px",
-                                    }}
-                                  >
-                                    Description
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {category.services.map((service, idx) => (
-                                  <tr key={idx} style={{ borderBottom: "1px solid #e6d7c3" }}>
-                                    <td
-                                      style={{
-                                        padding: "8px 6px",
-                                        color: "#4a352f",
-                                        fontWeight: "500",
-                                        fontSize: "12px",
-                                      }}
-                                    >
-                                      {service.name || "Not provided"}
-                                    </td>
-                                    <td style={{ padding: "8px 6px", color: "#4a352f", fontSize: "12px" }}>
-                                      {service.description || "Not provided"}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          ) : (
-                            <div
-                              style={{
-                                padding: "16px",
-                                textAlign: "center",
-                                color: "#7d5a50",
-                                fontStyle: "italic",
-                                fontSize: "13px",
-                              }}
-                            >
-                              No services in this category
-                            </div>
-                          )}
-                        </div>
-                      ))
-                    ) : (
-                      <div style={{ fontSize: "14px", color: "#7d5a50", fontStyle: "italic" }}>
-                        No service categories provided
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Delivery Standards */}
-                  <div style={{ marginBottom: "16px" }}>
-                    <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
-                      Delivery Standards
-                    </h3>
-                    <div
-                      style={{
-                        background: "rgba(250, 247, 242, 0.8)",
-                        borderRadius: "12px",
-                        padding: "16px",
-                        border: "1px solid rgba(200, 182, 166, 0.2)",
-                      }}
-                    >
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px" }}>
-                        <div>
-                          <span
-                            style={{
-                              display: "block",
-                              fontSize: "12px",
-                              color: "#7d5a50",
-                              marginBottom: "6px",
-                              fontWeight: "600",
-                              textTransform: "uppercase",
-                              letterSpacing: "0.5px",
-                            }}
-                          >
-                            Delivery Modes
-                          </span>
-                          <span
-                            style={{
-                              fontSize: "14px",
-                              color: "#4a352f",
-                              fontWeight: "500",
-                            }}
-                          >
-                            {formatArray(data?.productsServices?.deliveryModes) || "Not provided"}
-                          </span>
-                        </div>
-                        <div>
-                          <span
-                            style={{
-                              display: "block",
-                              fontSize: "12px",
-                              color: "#7d5a50",
-                              marginBottom: "6px",
-                              fontWeight: "600",
-                              textTransform: "uppercase",
-                              letterSpacing: "0.5px",
-                            }}
-                          >
-                            Lead Time
-                          </span>
-                          <span
-                            style={{
-                              fontSize: "14px",
-                              color: "#4a352f",
-                              fontWeight: "500",
-                            }}
-                          >
-                            {data?.productsServices?.minLeadTime && data?.productsServices?.maxLeadTime 
-                              ? `${data.productsServices.minLeadTime} ${data.productsServices.minLeadTimeUnit} - ${data.productsServices.maxLeadTime} ${data.productsServices.maxLeadTimeUnit}`
-                              : "Not provided"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Target Market */}
-                  <div style={{ marginBottom: "16px" }}>
-                    <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
-                      Target Market
-                    </h3>
-                    <div
-                      style={{
-                        background: "rgba(250, 247, 242, 0.8)",
-                        borderRadius: "12px",
-                        padding: "16px",
-                        border: "1px solid rgba(200, 182, 166, 0.2)",
-                      }}
-                    >
-                      <span
-                        style={{
-                          display: "block",
-                          fontSize: "12px",
-                          color: "#7d5a50",
-                          marginBottom: "6px",
-                          fontWeight: "600",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.5px",
-                        }}
-                      >
-                        Target Market Description
-                      </span>
-                      <p
-                        style={{
-                          fontSize: "14px",
-                          color: "#4a352f",
-                          lineHeight: "1.6",
-                          margin: 0,
-                          fontWeight: "400",
-                        }}
-                      >
-                        {data?.productsServices?.targetMarket || "Not provided"}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Key Clients */}
-                  <div>
-                    <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
-                      Key Clients
-                    </h3>
-                    {data?.productsServices?.keyClients && data.productsServices.keyClients.length > 0 ? (
-                      <div
-                        style={{
-                          background: "rgba(250, 247, 242, 0.8)",
-                          borderRadius: "12px",
-                          padding: "16px",
-                          border: "1px solid rgba(200, 182, 166, 0.2)",
-                          overflowX: "auto",
-                        }}
-                      >
-                        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                          <thead>
-                            <tr style={{ borderBottom: "2px solid #c8b6a6" }}>
-                              <th
-                                style={{
-                                  padding: "10px 6px",
-                                  textAlign: "left",
-                                  fontSize: "11px",
-                                  fontWeight: "700",
-                                  color: "#7d5a50",
-                                  textTransform: "uppercase",
-                                  letterSpacing: "0.5px",
-                                }}
-                              >
-                                Client Name
-                              </th>
-                              <th
-                                style={{
-                                  padding: "10px 6px",
-                                  textAlign: "left",
-                                  fontSize: "11px",
-                                  fontWeight: "700",
-                                  color: "#7d5a50",
-                                  textTransform: "uppercase",
-                                  letterSpacing: "0.5px",
-                                }}
-                              >
-                                Industry
-                              </th>
-                              <th
-                                style={{
-                                  padding: "10px 6px",
-                                  textAlign: "left",
-                                  fontSize: "11px",
-                                  fontWeight: "700",
-                                  color: "#7d5a50",
-                                  textTransform: "uppercase",
-                                  letterSpacing: "0.5px",
-                                }}
-                              >
-                                Documents
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {data.productsServices.keyClients.map((client, index) => (
-                              <tr key={index} style={{ borderBottom: "1px solid #e6d7c3" }}>
-                                <td
-                                  style={{ padding: "10px 6px", color: "#4a352f", fontWeight: "500", fontSize: "13px" }}
-                                >
-                                  {client.name || "Not provided"}
-                                </td>
-                                <td style={{ padding: "10px 6px", color: "#4a352f", fontSize: "13px" }}>
-                                  {client.industry || "Not provided"}
-                                </td>
-                                <td style={{ padding: "10px 6px", color: "#4a352f", fontSize: "13px" }}>
-                                  {client.documents && client.documents.length > 0 
-                                    ? `${client.documents.length} document(s) uploaded`
-                                    : "No documents"}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <div style={{ fontSize: "14px", color: "#7d5a50", fontStyle: "italic" }}>
-                        No key clients provided
-                      </div>
-                    )}
-                  </div>
+                  No products in this category
                 </div>
               )}
             </div>
+          ))
+        ) : (
+          <div style={{ fontSize: "14px", color: "#7d5a50", fontStyle: "italic" }}>
+            No product categories provided
+          </div>
+        )}
+      </div>
+
+      {/* Service Categories */}
+      <div style={{ marginBottom: "16px" }}>
+        <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
+          Service Categories
+        </h3>
+        {data?.productsServices?.serviceCategories && data.productsServices.serviceCategories.length > 0 ? (
+          data.productsServices.serviceCategories.map((category, index) => (
+            <div
+              key={index}
+              style={{
+                background: "rgba(250, 247, 242, 0.8)",
+                borderRadius: "12px",
+                padding: "16px",
+                border: "1px solid rgba(200, 182, 166, 0.2)",
+                marginBottom: "12px",
+              }}
+            >
+              <h4
+                style={{
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  color: "#4a352f",
+                  marginBottom: "10px",
+                  background: "linear-gradient(135deg, #a67c52, #7d5a50)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                }}
+              >
+                {Array.isArray(category.categories) && category.categories.length > 0
+                  ? category.categories.join(", ")
+                  : "Unnamed Category"}
+              </h4>
+              {category.services && category.services.length > 0 ? (
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "2px solid #c8b6a6" }}>
+                      <th
+                        style={{
+                          padding: "8px 6px",
+                          textAlign: "left",
+                          fontSize: "11px",
+                          fontWeight: "700",
+                          color: "#7d5a50",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                        }}
+                      >
+                        Service Name
+                      </th>
+                      <th
+                        style={{
+                          padding: "8px 6px",
+                          textAlign: "left",
+                          fontSize: "11px",
+                          fontWeight: "700",
+                          color: "#7d5a50",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                        }}
+                      >
+                        Description
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {category.services.map((service, idx) => (
+                      <tr key={idx} style={{ borderBottom: "1px solid #e6d7c3" }}>
+                        <td
+                          style={{
+                            padding: "8px 6px",
+                            color: "#4a352f",
+                            fontWeight: "500",
+                            fontSize: "12px",
+                          }}
+                        >
+                          {service.name || "Not provided"}
+                        </td>
+                        <td style={{ padding: "8px 6px", color: "#4a352f", fontSize: "12px" }}>
+                          {service.description || "Not provided"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div
+                  style={{
+                    padding: "16px",
+                    textAlign: "center",
+                    color: "#7d5a50",
+                    fontStyle: "italic",
+                    fontSize: "13px",
+                  }}
+                >
+                  No services in this category
+                </div>
+              )}
+            </div>
+          ))
+        ) : (
+          <div style={{ fontSize: "14px", color: "#7d5a50", fontStyle: "italic" }}>
+            No service categories provided
+          </div>
+        )}
+      </div>
+
+      {/* Delivery Standards */}
+      <div style={{ marginBottom: "16px" }}>
+        <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
+          Delivery Standards
+        </h3>
+        <div
+          style={{
+            background: "rgba(250, 247, 242, 0.8)",
+            borderRadius: "12px",
+            padding: "16px",
+            border: "1px solid rgba(200, 182, 166, 0.2)",
+          }}
+        >
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px" }}>
+            <div>
+              <span
+                style={{
+                  display: "block",
+                  fontSize: "12px",
+                  color: "#7d5a50",
+                  marginBottom: "6px",
+                  fontWeight: "600",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.5px",
+                }}
+              >
+                Delivery Modes
+              </span>
+              <span
+                style={{
+                  fontSize: "14px",
+                  color: "#4a352f",
+                  fontWeight: "500",
+                }}
+              >
+                {data?.productsServices?.deliveryModes && data.productsServices.deliveryModes.length > 0
+                  ? data.productsServices.deliveryModes.join(" • ")
+                  : "Not provided"}
+              </span>
+            </div>
+            <div>
+              <span
+                style={{
+                  display: "block",
+                  fontSize: "12px",
+                  color: "#7d5a50",
+                  marginBottom: "6px",
+                  fontWeight: "600",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.5px",
+                }}
+              >
+                Lead Time
+              </span>
+              <span
+                style={{
+                  fontSize: "14px",
+                  color: "#4a352f",
+                  fontWeight: "500",
+                }}
+              >
+                {data?.productsServices?.minLeadTime && data?.productsServices?.maxLeadTime 
+                  ? `${data.productsServices.minLeadTime} ${data.productsServices.minLeadTimeUnit} - ${data.productsServices.maxLeadTime} ${data.productsServices.maxLeadTimeUnit}`
+                  : "Not provided"}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Target Market */}
+      <div style={{ marginBottom: "16px" }}>
+        <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
+          Target Market
+        </h3>
+        <div
+          style={{
+            background: "rgba(250, 247, 242, 0.8)",
+            borderRadius: "12px",
+            padding: "16px",
+            border: "1px solid rgba(200, 182, 166, 0.2)",
+          }}
+        >
+          <span
+            style={{
+              display: "block",
+              fontSize: "12px",
+              color: "#7d5a50",
+              marginBottom: "6px",
+              fontWeight: "600",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
+            Target Market Description
+          </span>
+          <p
+            style={{
+              fontSize: "14px",
+              color: "#4a352f",
+              lineHeight: "1.6",
+              margin: 0,
+              fontWeight: "400",
+            }}
+          >
+            {data?.productsServices?.targetMarket || "Not provided"}
+          </p>
+        </div>
+      </div>
+
+      {/* Key Clients */}
+      <div>
+        <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
+          Key Clients
+        </h3>
+        {data?.productsServices?.keyClients && data.productsServices.keyClients.length > 0 ? (
+          <div
+            style={{
+              background: "rgba(250, 247, 242, 0.8)",
+              borderRadius: "12px",
+              padding: "16px",
+              border: "1px solid rgba(200, 182, 166, 0.2)",
+              overflowX: "auto",
+            }}
+          >
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: "2px solid #c8b6a6" }}>
+                  <th
+                    style={{
+                      padding: "10px 6px",
+                      textAlign: "left",
+                      fontSize: "11px",
+                      fontWeight: "700",
+                      color: "#7d5a50",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                    }}
+                  >
+                    Client Name
+                  </th>
+                  <th
+                    style={{
+                      padding: "10px 6px",
+                      textAlign: "left",
+                      fontSize: "11px",
+                      fontWeight: "700",
+                      color: "#7d5a50",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                    }}
+                  >
+                    Industries
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.productsServices.keyClients.map((client, index) => (
+                  <tr key={index} style={{ borderBottom: "1px solid #e6d7c3" }}>
+                    <td
+                      style={{ padding: "10px 6px", color: "#4a352f", fontWeight: "500", fontSize: "13px" }}
+                    >
+                      {client.name || "Not provided"}
+                    </td>
+                    <td style={{ padding: "10px 6px", color: "#4a352f", fontSize: "13px" }}>
+                      {Array.isArray(client.industries) && client.industries.length > 0
+                        ? client.industries.join(", ")
+                        : "Not provided"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div style={{ fontSize: "14px", color: "#7d5a50", fontStyle: "italic" }}>
+            No key clients provided
+          </div>
+        )}
+      </div>
+    </div>
+  )}
+</div>
 
             {/* Ownership & Management */}
             <div
@@ -1345,6 +1344,86 @@ const ProfileSummary = ({ data, onEdit }) => {
                       </div>
                     )}
                   </div>
+                  {/* Ownership & Management - EXECUTIVES SECTION */}
+{data?.ownershipManagement?.executives && data.ownershipManagement.executives.length > 0 && (
+  <div style={{ marginBottom: "20px" }}>
+    <h3
+      style={{
+        fontSize: "16px",
+        fontWeight: "700",
+        color: "#4a352f",
+        marginBottom: "12px",
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+      }}
+    >
+      <Users size={18} color="#a67c52" />
+      Executive Management 
+    </h3>
+    <div
+      style={{
+        background: "rgba(250, 247, 242, 0.8)",
+        borderRadius: "12px",
+        padding: "16px",
+        border: "1px solid rgba(200, 182, 166, 0.2)",
+        overflowX: "auto",
+      }}
+    >
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <thead>
+          <tr style={{ borderBottom: "2px solid #c8b6a6" }}>
+            {[
+              "Name",
+              "Position",
+              "Department",
+              "Nationality",
+              "LinkedIn",
+              "Race",
+              "Gender",
+              "Youth",
+              "Disabled",
+            ].map((header, i) => (
+              <th
+                key={i}
+                style={{
+                  textAlign: "left",
+                  padding: "12px 8px",
+                  fontSize: "13px",
+                  fontWeight: "700",
+                  color: "#7d5a50",
+                  textTransform: "uppercase",
+                  borderBottom: "1px solid #e6d7c3",
+                }}
+              >
+                {header}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {data.ownershipManagement.executives.map((executive, i) => (
+            <tr key={i} style={{ borderBottom: "1px solid #f0e6d9" }}>
+              <td style={{ padding: "12px 8px", fontSize: "13px", color: "#4a352f" }}>{executive.name || "N/A"}</td>
+              <td style={{ padding: "12px 8px", fontSize: "13px", color: "#4a352f" }}>
+                {executive.position === "Other" ? executive.customPosition : executive.position || "N/A"}
+              </td>
+              <td style={{ padding: "12px 8px", fontSize: "13px", color: "#4a352f" }}>{executive.department || "N/A"}</td>
+              <td style={{ padding: "12px 8px", fontSize: "13px", color: "#4a352f" }}>{executive.nationality || "N/A"}</td>
+              <td style={{ padding: "12px 8px", fontSize: "13px" }}>
+                {executive.linkedin ? renderLinkedInLink(executive.linkedin) : "N/A"}
+              </td>
+              <td style={{ padding: "12px 8px", fontSize: "13px", color: "#4a352f" }}>{executive.race || "N/A"}</td>
+              <td style={{ padding: "12px 8px", fontSize: "13px", color: "#4a352f" }}>{executive.gender || "N/A"}</td>
+              <td style={{ padding: "12px 8px", fontSize: "13px", color: "#4a352f" }}>{formatBoolean(executive.isYouth)}</td>
+              <td style={{ padding: "12px 8px", fontSize: "13px", color: "#4a352f" }}>{formatBoolean(executive.isDisabled)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
                 </div>
               )}
             </div>
@@ -1746,902 +1825,835 @@ const ProfileSummary = ({ data, onEdit }) => {
             </div>
 
             {/* Financial Overview */}
-            <div
+           {/* Financial Overview */}
+<div
+  style={{
+    background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
+    backdropFilter: "blur(20px)",
+    borderRadius: "16px",
+    overflow: "hidden",
+    border: "1px solid rgba(200, 182, 166, 0.3)",
+    boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
+    transition: "all 0.3s ease",
+  }}
+>
+  <div
+    onClick={() => toggleSection("financialOverview")}
+    style={{
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: "16px 20px",
+      background: expandedSections.financialOverview
+        ? "linear-gradient(135deg, #7d5a50, #4a352f)"
+        : "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
+      cursor: "pointer",
+      transition: "all 0.3s ease",
+    }}
+  >
+    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+      <DollarSign size={20} color={expandedSections.financialOverview ? "#faf7f2" : "#4a352f"} />
+      <h2
+        style={{
+          margin: 0,
+          fontSize: "clamp(16px, 2.5vw, 20px)",
+          fontWeight: "700",
+          color: expandedSections.financialOverview ? "#faf7f2" : "#4a352f",
+        }}
+      >
+        Financial Overview
+      </h2>
+    </div>
+    {expandedSections.financialOverview ? (
+      <ChevronUp size={20} color="#faf7f2" />
+    ) : (
+      <ChevronDown size={20} color="#4a352f" />
+    )}
+  </div>
+
+  {expandedSections.financialOverview && (
+    <div
+      style={{
+        padding: "20px",
+        background: "linear-gradient(135deg, rgba(250, 247, 242, 0.8), rgba(240, 230, 217, 0.6))",
+        animation: "slideDown 0.3s ease-out",
+      }}
+    >
+      {/* Revenue & Valuation */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gap: "16px",
+          marginBottom: "20px",
+        }}
+      >
+        {[
+          { label: "Generates Revenue", value: data?.financialOverview?.generatesRevenue === "yes" ? "Yes" : "No" },
+          { label: "Annual Revenue", value: data?.financialOverview?.annualRevenue || "Not provided" },
+          { label: "Current Valuation", value: data?.financialOverview?.currentValuation || "Not provided" },
+          { label: "Profitability Status", value: data?.financialOverview?.profitabilityStatus || "Not provided" },
+          { label: "Existing Debt", value: data?.financialOverview?.existingDebt || "None" },
+        ].map((item, i) => (
+          <div
+            key={i}
+            style={{
+              background: "rgba(250, 247, 242, 0.8)",
+              borderRadius: "12px",
+              padding: "16px",
+              border: "1px solid rgba(200, 182, 166, 0.2)",
+            }}
+          >
+            <span
               style={{
-                background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
-                backdropFilter: "blur(20px)",
-                borderRadius: "16px",
-                overflow: "hidden",
-                border: "1px solid rgba(200, 182, 166, 0.3)",
-                boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
-                transition: "all 0.3s ease",
+                display: "block",
+                fontSize: "12px",
+                color: "#7d5a50",
+                marginBottom: "6px",
+                fontWeight: "600",
+                textTransform: "uppercase",
+                letterSpacing: "0.5px",
               }}
             >
+              {item.label}
+            </span>
+            <span
+              style={{
+                fontSize: "14px",
+                color: "#4a352f",
+                fontWeight: "500",
+              }}
+            >
+              {item.value}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Accounting Software & Documentation */}
+      <h3
+        style={{
+          fontSize: "16px",
+          fontWeight: "700",
+          color: "#4a352f",
+          marginBottom: "16px",
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+        }}
+      >
+        <FileText size={18} color="#a67c52" />
+        Accounting & Documentation
+      </h3>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gap: "16px",
+          marginBottom: "20px",
+        }}
+      >
+        <div
+          style={{
+            background: "rgba(250, 247, 242, 0.8)",
+            borderRadius: "12px",
+            padding: "16px",
+            border: "1px solid rgba(200, 182, 166, 0.2)",
+          }}
+        >
+          <span
+            style={{
+              display: "block",
+              fontSize: "12px",
+              color: "#7d5a50",
+              marginBottom: "6px",
+              fontWeight: "600",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
+            Has Accounting Software
+          </span>
+          <span
+            style={{
+              fontSize: "14px",
+              color: "#4a352f",
+              fontWeight: "500",
+            }}
+          >
+            {data?.financialOverview?.hasAccountingSoftware === "yes" ? "Yes" : "No"}
+          </span>
+          {data?.financialOverview?.hasAccountingSoftware === "yes" && data?.financialOverview?.accountingSoftwareName && (
+            <div style={{ marginTop: "8px", fontSize: "13px", color: "#7d5a50" }}>
+              Software: {data.financialOverview.accountingSoftwareName}
+            </div>
+          )}
+        </div>
+
+        <div
+          style={{
+            background: "rgba(250, 247, 242, 0.8)",
+            borderRadius: "12px",
+            padding: "16px",
+            border: "1px solid rgba(200, 182, 166, 0.2)",
+          }}
+        >
+          <span
+            style={{
+              display: "block",
+              fontSize: "12px",
+              color: "#7d5a50",
+              marginBottom: "6px",
+              fontWeight: "600",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
+            Books Up to Date
+          </span>
+          <span
+            style={{
+              fontSize: "14px",
+              color: "#4a352f",
+              fontWeight: "500",
+            }}
+          >
+            {data?.financialOverview?.booksUpToDate === "yes" ? "Yes" : "No"}
+          </span>
+          {data?.financialOverview?.booksUpToDate === "no" && data?.financialOverview?.booksUpToDateDetails && (
+            <div style={{ marginTop: "8px", fontSize: "13px", color: "#7d5a50" }}>
+              {data.financialOverview.booksUpToDateDetails}
+            </div>
+          )}
+        </div>
+
+        <div
+          style={{
+            background: "rgba(250, 247, 242, 0.8)",
+            borderRadius: "12px",
+            padding: "16px",
+            border: "1px solid rgba(200, 182, 166, 0.2)",
+          }}
+        >
+          <span
+            style={{
+              display: "block",
+              fontSize: "12px",
+              color: "#7d5a50",
+              marginBottom: "6px",
+              fontWeight: "600",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
+            Financials Audited
+          </span>
+          <span
+            style={{
+              fontSize: "14px",
+              color: "#4a352f",
+              fontWeight: "500",
+            }}
+          >
+            {data?.financialOverview?.financialsAudited === "yes" ? "Yes" : "No"}
+          </span>
+          {data?.financialOverview?.financialsAudited === "yes" && data?.financialOverview?.auditedFinancialsDocs && data?.financialOverview?.auditedFinancialsDocs.length > 0 && (
+            <div style={{ marginTop: "8px" }}>
+              {renderDocumentsList(data.financialOverview.auditedFinancialsDocs, "Audited Financial")}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Additional Information */}
+      {(data?.financialOverview?.fundraisingHistory || data?.financialOverview?.additionalFinancialNotes) && (
+        <>
+          <h3
+            style={{
+              fontSize: "16px",
+              fontWeight: "700",
+              color: "#4a352f",
+              marginBottom: "16px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <FileText size={18} color="#a67c52" />
+            Additional Information
+          </h3>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+              gap: "16px",
+            }}
+          >
+            {data?.financialOverview?.fundraisingHistory && (
               <div
-                onClick={() => toggleSection("financialOverview")}
                 style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "16px 20px",
-                  background: expandedSections.financialOverview
-                    ? "linear-gradient(135deg, #7d5a50, #4a352f)"
-                    : "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
-                  cursor: "pointer",
-                  transition: "all 0.3s ease",
+                  background: "rgba(250, 247, 242, 0.8)",
+                  borderRadius: "12px",
+                  padding: "16px",
+                  border: "1px solid rgba(200, 182, 166, 0.2)",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <DollarSign size={20} color={expandedSections.financialOverview ? "#faf7f2" : "#4a352f"} />
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: "clamp(16px, 2.5vw, 20px)",
-                      fontWeight: "700",
-                      color: expandedSections.financialOverview ? "#faf7f2" : "#4a352f",
-                    }}
-                  >
-                    Financial Overview
-                  </h2>
-                </div>
-                {expandedSections.financialOverview ? (
-                  <ChevronUp size={20} color="#faf7f2" />
-                ) : (
-                  <ChevronDown size={20} color="#4a352f" />
-                )}
-              </div>
-
-              {expandedSections.financialOverview && (
-                <div
+                <span
                   style={{
-                    padding: "20px",
-                    background: "linear-gradient(135deg, rgba(250, 247, 242, 0.8), rgba(240, 230, 217, 0.6))",
-                    animation: "slideDown 0.3s ease-out",
+                    display: "block",
+                    fontSize: "12px",
+                    color: "#7d5a50",
+                    marginBottom: "6px",
+                    fontWeight: "600",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
                   }}
                 >
-                  {/* Revenue & Valuation */}
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                      gap: "16px",
-                      marginBottom: "20px",
-                    }}
-                  >
-                    {[
-                      { label: "Generates Revenue", value: data?.financialOverview?.generatesRevenue === "yes" ? "Yes" : "No" },
-                      { label: "Annual Revenue", value: data?.financialOverview?.annualRevenue || "Not provided" },
-                      { label: "Current Valuation", value: data?.financialOverview?.currentValuation || "Not provided" },
-                      { label: "Profitability Status", value: data?.financialOverview?.profitabilityStatus || "Not provided" },
-                      { label: "Existing Debt", value: data?.financialOverview?.existingDebt || "None" },
-                    ].map((item, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          background: "rgba(250, 247, 242, 0.8)",
-                          borderRadius: "12px",
-                          padding: "16px",
-                          border: "1px solid rgba(200, 182, 166, 0.2)",
-                        }}
-                      >
-                        <span
-                          style={{
-                            display: "block",
-                            fontSize: "12px",
-                            color: "#7d5a50",
-                            marginBottom: "6px",
-                            fontWeight: "600",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.5px",
-                          }}
-                        >
-                          {item.label}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: "14px",
-                            color: "#4a352f",
-                            fontWeight: "500",
-                          }}
-                        >
-                          {item.value}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                  Fundraising History
+                </span>
+                <span
+                  style={{
+                    fontSize: "14px",
+                    color: "#4a352f",
+                    fontWeight: "500",
+                  }}
+                >
+                  {data.financialOverview.fundraisingHistory}
+                </span>
+              </div>
+            )}
 
-                  {/* Accounting Software */}
-                  <h3
-                    style={{
-                      fontSize: "16px",
-                      fontWeight: "700",
-                      color: "#4a352f",
-                      marginBottom: "16px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    <FileText size={18} color="#a67c52" />
-                    Accounting & Documentation
-                  </h3>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                      gap: "16px",
-                      marginBottom: "20px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        background: "rgba(250, 247, 242, 0.8)",
-                        borderRadius: "12px",
-                        padding: "16px",
-                        border: "1px solid rgba(200, 182, 166, 0.2)",
-                      }}
-                    >
-                      <span
-                        style={{
-                          display: "block",
-                          fontSize: "12px",
-                          color: "#7d5a50",
-                          marginBottom: "6px",
-                          fontWeight: "600",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.5px",
-                        }}
-                      >
-                        Accounting Software
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "14px",
-                          color: "#4a352f",
-                          fontWeight: "500",
-                        }}
-                      >
-                        {data?.financialOverview?.hasAccountingSoftware === "yes" ? "Yes" : "No"}
-                      </span>
-                      {data?.financialOverview?.hasAccountingSoftware === "yes" && data?.financialOverview?.accountingSoftwareDocs && data?.financialOverview?.accountingSoftwareDocs.length > 0 && (
-                        <div style={{ marginTop: "8px" }}>
-                          {renderDocumentsList(data.financialOverview.accountingSoftwareDocs, "Accounting Software Report")}
-                        </div>
-                      )}
-                    </div>
-
-                    <div
-                      style={{
-                        background: "rgba(250, 247, 242, 0.8)",
-                        borderRadius: "12px",
-                        padding: "16px",
-                        border: "1px solid rgba(200, 182, 166, 0.2)",
-                      }}
-                    >
-                      <span
-                        style={{
-                          display: "block",
-                          fontSize: "12px",
-                          color: "#7d5a50",
-                          marginBottom: "6px",
-                          fontWeight: "600",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.5px",
-                        }}
-                      >
-                        Books Up to Date
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "14px",
-                          color: "#4a352f",
-                          fontWeight: "500",
-                        }}
-                      >
-                        {data?.financialOverview?.booksUpToDate === "yes" ? "Yes" : "No"}
-                      </span>
-                      {data?.financialOverview?.booksUpToDate === "no" && data?.financialOverview?.booksUpToDateDetails && (
-                        <div style={{ marginTop: "8px", fontSize: "13px", color: "#7d5a50" }}>
-                          {data.financialOverview.booksUpToDateDetails}
-                        </div>
-                      )}
-                    </div>
-
-                    <div
-                      style={{
-                        background: "rgba(250, 247, 242, 0.8)",
-                        borderRadius: "12px",
-                        padding: "16px",
-                        border: "1px solid rgba(200, 182, 166, 0.2)",
-                      }}
-                    >
-                      <span
-                        style={{
-                          display: "block",
-                          fontSize: "12px",
-                          color: "#7d5a50",
-                          marginBottom: "6px",
-                          fontWeight: "600",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.5px",
-                        }}
-                      >
-                        Financials Audited
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "14px",
-                          color: "#4a352f",
-                          fontWeight: "500",
-                        }}
-                      >
-                        {data?.financialOverview?.financialsAudited === "yes" ? "Yes" : "No"}
-                      </span>
-                      {data?.financialOverview?.financialsAudited === "yes" && data?.financialOverview?.auditedFinancialsDocs && data?.financialOverview?.auditedFinancialsDocs.length > 0 && (
-                        <div style={{ marginTop: "8px" }}>
-                          {renderDocumentsList(data.financialOverview.auditedFinancialsDocs, "Audited Financial")}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Additional Information */}
-                  {(data?.financialOverview?.fundraisingHistory || data?.financialOverview?.additionalFinancialNotes) && (
-                    <>
-                      <h3
-                        style={{
-                          fontSize: "16px",
-                          fontWeight: "700",
-                          color: "#4a352f",
-                          marginBottom: "16px",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                        }}
-                      >
-                        <FileText size={18} color="#a67c52" />
-                        Additional Information
-                      </h3>
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                          gap: "16px",
-                        }}
-                      >
-                        {data?.financialOverview?.fundraisingHistory && (
-                          <div
-                            style={{
-                              background: "rgba(250, 247, 242, 0.8)",
-                              borderRadius: "12px",
-                              padding: "16px",
-                              border: "1px solid rgba(200, 182, 166, 0.2)",
-                            }}
-                          >
-                            <span
-                              style={{
-                                display: "block",
-                                fontSize: "12px",
-                                color: "#7d5a50",
-                                marginBottom: "6px",
-                                fontWeight: "600",
-                                textTransform: "uppercase",
-                                letterSpacing: "0.5px",
-                              }}
-                            >
-                              Fundraising History
-                            </span>
-                            <span
-                              style={{
-                                fontSize: "14px",
-                                color: "#4a352f",
-                                fontWeight: "500",
-                              }}
-                            >
-                              {data.financialOverview.fundraisingHistory}
-                            </span>
-                          </div>
-                        )}
-
-                        {data?.financialOverview?.additionalFinancialNotes && (
-                          <div
-                            style={{
-                              background: "rgba(250, 247, 242, 0.8)",
-                              borderRadius: "12px",
-                              padding: "16px",
-                              border: "1px solid rgba(200, 182, 166, 0.2)",
-                            }}
-                          >
-                            <span
-                              style={{
-                                display: "block",
-                                fontSize: "12px",
-                                color: "#7d5a50",
-                                marginBottom: "6px",
-                                fontWeight: "600",
-                                textTransform: "uppercase",
-                                letterSpacing: "0.5px",
-                              }}
-                            >
-                              Additional Notes
-                            </span>
-                            <span
-                              style={{
-                                fontSize: "14px",
-                                color: "#4a352f",
-                                fontWeight: "500",
-                              }}
-                            >
-                              {data.financialOverview.additionalFinancialNotes}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
+            {data?.financialOverview?.additionalFinancialNotes && (
+              <div
+                style={{
+                  background: "rgba(250, 247, 242, 0.8)",
+                  borderRadius: "12px",
+                  padding: "16px",
+                  border: "1px solid rgba(200, 182, 166, 0.2)",
+                }}
+              >
+                <span
+                  style={{
+                    display: "block",
+                    fontSize: "12px",
+                    color: "#7d5a50",
+                    marginBottom: "6px",
+                    fontWeight: "600",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  Additional Notes
+                </span>
+                <span
+                  style={{
+                    fontSize: "14px",
+                    color: "#4a352f",
+                    fontWeight: "500",
+                  }}
+                >
+                  {data.financialOverview.additionalFinancialNotes}
+                </span>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )}
+</div>
 
             {/* Governance */}
+            {/* Governance */}
+<div
+  style={{
+    background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
+    backdropFilter: "blur(20px)",
+    borderRadius: "16px",
+    overflow: "hidden",
+    border: "1px solid rgba(200, 182, 166, 0.3)",
+    boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
+    transition: "all 0.3s ease",
+  }}
+>
+  <div
+    onClick={() => toggleSection("governance")}
+    style={{
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: "16px 20px",
+      background: expandedSections.governance
+        ? "linear-gradient(135deg, #7d5a50, #4a352f)"
+        : "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
+      cursor: "pointer",
+      transition: "all 0.3s ease",
+    }}
+  >
+    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+      <FileCheck size={20} color={expandedSections.governance ? "#faf7f2" : "#4a352f"} />
+      <h2
+        style={{
+          margin: 0,
+          fontSize: "clamp(16px, 2.5vw, 20px)",
+          fontWeight: "700",
+          color: expandedSections.governance ? "#faf7f2" : "#4a352f",
+        }}
+      >
+        Governance
+      </h2>
+    </div>
+    {expandedSections.governance ? (
+      <ChevronUp size={20} color="#faf7f2" />
+    ) : (
+      <ChevronDown size={20} color="#4a352f" />
+    )}
+  </div>
+
+  {expandedSections.governance && (
+    <div
+      style={{
+        padding: "20px",
+        background: "linear-gradient(135deg, rgba(250, 247, 242, 0.8), rgba(240, 230, 217, 0.6))",
+        animation: "slideDown 0.3s ease-out",
+      }}
+    >
+      {/* Policies & Controls Checklist */}
+      <h3
+        style={{
+          fontSize: "16px",
+          fontWeight: "700",
+          color: "#4a352f",
+          marginBottom: "16px",
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+        }}
+      >
+        <CheckSquare size={18} color="#a67c52" />
+        Policies & Controls Progress
+      </h3>
+
+      {data?.governance?.governanceChecklist && Object.keys(data.governance.governanceChecklist).length > 0 ? (
+        <>
+          {/* Progress Summary */}
+          <div
+            style={{
+              background: "rgba(166, 124, 82, 0.1)",
+              borderRadius: "12px",
+              padding: "20px",
+              border: "1px solid rgba(166, 124, 82, 0.2)",
+              marginBottom: "20px",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <span style={{ fontSize: "16px", fontWeight: "600", color: "#4a352f" }}>Completion Progress</span>
+              <span style={{ fontSize: "16px", fontWeight: "600", color: "#7d5a50" }}>
+                {Object.values(data.governance.governanceChecklist).filter(Boolean).length} completed
+              </span>
+            </div>
             <div
               style={{
-                background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
-                backdropFilter: "blur(20px)",
-                borderRadius: "16px",
+                width: "100%",
+                background: "rgba(200, 182, 166, 0.3)",
+                borderRadius: "8px",
+                height: "12px",
                 overflow: "hidden",
-                border: "1px solid rgba(200, 182, 166, 0.3)",
-                boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
-                transition: "all 0.3s ease",
               }}
             >
               <div
-                onClick={() => toggleSection("governance")}
                 style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "16px 20px",
-                  background: expandedSections.governance
-                    ? "linear-gradient(135deg, #7d5a50, #4a352f)"
-                    : "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
-                  cursor: "pointer",
-                  transition: "all 0.3s ease",
+                  height: "100%",
+                  background: "linear-gradient(135deg, #a67c52, #7d5a50)",
+                  width: `${(Object.values(data.governance.governanceChecklist).filter(Boolean).length / Object.keys(data.governance.governanceChecklist).length) * 100}%`,
+                  transition: "width 0.3s ease",
+                  borderRadius: "8px",
                 }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <FileCheck size={20} color={expandedSections.governance ? "#faf7f2" : "#4a352f"} />
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: "clamp(16px, 2.5vw, 20px)",
-                      fontWeight: "700",
-                      color: expandedSections.governance ? "#faf7f2" : "#4a352f",
-                    }}
-                  >
-                    Governance
-                  </h2>
-                </div>
-                {expandedSections.governance ? (
-                  <ChevronUp size={20} color="#faf7f2" />
-                ) : (
-                  <ChevronDown size={20} color="#4a352f" />
-                )}
-              </div>
+              />
+            </div>
+          </div>
 
-              {expandedSections.governance && (
+          {/* Completed Items List */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+              gap: "12px",
+              marginBottom: "24px",
+            }}
+          >
+            {Object.entries(data.governance.governanceChecklist)
+              .filter(([key, value]) => value === true)
+              .map(([key, value], index) => (
                 <div
+                  key={index}
                   style={{
-                    padding: "20px",
-                    background: "linear-gradient(135deg, rgba(250, 247, 242, 0.8), rgba(240, 230, 217, 0.6))",
-                    animation: "slideDown 0.3s ease-out",
+                    background: "rgba(166, 124, 82, 0.1)",
+                    borderRadius: "8px",
+                    padding: "12px",
+                    border: "1px solid rgba(166, 124, 82, 0.2)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
                   }}
                 >
-                  {/* Policies & Controls Checklist */}
-                  <h3
-                    style={{
-                      fontSize: "16px",
-                      fontWeight: "700",
-                      color: "#4a352f",
-                      marginBottom: "16px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    <CheckSquare size={18} color="#a67c52" />
-                    Policies & Controls Progress
-                  </h3>
-
-                  {data?.governance?.governanceChecklist && Object.keys(data.governance.governanceChecklist).length > 0 ? (
-                    <>
-                      {/* Progress Summary */}
-                      <div
-                        style={{
-                          background: "rgba(166, 124, 82, 0.1)",
-                          borderRadius: "12px",
-                          padding: "20px",
-                          border: "1px solid rgba(166, 124, 82, 0.2)",
-                          marginBottom: "20px",
-                        }}
-                      >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                          <span style={{ fontSize: "16px", fontWeight: "600", color: "#4a352f" }}>Completion Progress</span>
-                          <span style={{ fontSize: "16px", fontWeight: "600", color: "#7d5a50" }}>
-                            {Object.values(data.governance.governanceChecklist).filter(Boolean).length} completed
-                          </span>
-                        </div>
-                        <div
-                          style={{
-                            width: "100%",
-                            background: "rgba(200, 182, 166, 0.3)",
-                            borderRadius: "8px",
-                            height: "12px",
-                            overflow: "hidden",
-                          }}
-                        >
-                          <div
-                            style={{
-                              height: "100%",
-                              background: "linear-gradient(135deg, #a67c52, #7d5a50)",
-                              width: `${(Object.values(data.governance.governanceChecklist).filter(Boolean).length / Object.keys(data.governance.governanceChecklist).length) * 100}%`,
-                              transition: "width 0.3s ease",
-                              borderRadius: "8px",
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Completed Items List */}
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                          gap: "12px",
-                          marginBottom: "24px",
-                        }}
-                      >
-                        {Object.entries(data.governance.governanceChecklist)
-                          .filter(([key, value]) => value === true)
-                          .map(([key, value], index) => (
-                            <div
-                              key={index}
-                              style={{
-                                background: "rgba(166, 124, 82, 0.1)",
-                                borderRadius: "8px",
-                                padding: "12px",
-                                border: "1px solid rgba(166, 124, 82, 0.2)",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "8px",
-                              }}
-                            >
-                              <CheckSquare size={16} color="#a67c52" />
-                              <span style={{ fontSize: "13px", color: "#4a352f", fontWeight: "500" }}>
-                                {key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase())}
-                              </span>
-                            </div>
-                          ))}
-                      </div>
-                    </>
-                  ) : (
-                    <div
-                      style={{
-                        background: "rgba(200, 182, 166, 0.1)",
-                        borderRadius: "12px",
-                        padding: "24px",
-                        border: "1px solid rgba(200, 182, 166, 0.2)",
-                        textAlign: "center",
-                        color: "#7d5a50",
-                        marginBottom: "24px",
-                      }}
-                    >
-                      <p style={{ margin: 0, fontSize: "14px" }}>No policies & controls checklist completed yet.</p>
-                    </div>
-                  )}
-
-                  {/* Ethics & Conflict Resolution Section */}
-                  <h3
-                    style={{
-                      fontSize: "16px",
-                      fontWeight: "700",
-                      color: "#4a352f",
-                      marginBottom: "16px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    <Shield size={18} color="#a67c52" />
-                    Ethics & Conflict Resolution
-                  </h3>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                      gap: "16px",
-                      marginBottom: "24px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        background: "rgba(250, 247, 242, 0.8)",
-                        borderRadius: "12px",
-                        padding: "16px",
-                        border: "1px solid rgba(200, 182, 166, 0.2)",
-                      }}
-                    >
-                      <span
-                        style={{
-                          display: "block",
-                          fontSize: "12px",
-                          color: "#7d5a50",
-                          marginBottom: "6px",
-                          fontWeight: "600",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.5px",
-                        }}
-                      >
-                        Ethics Policy
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "14px",
-                          color: "#4a352f",
-                          fontWeight: "500",
-                        }}
-                      >
-                        {data?.governance?.hasEthicsPolicy || "Not specified"}
-                      </span>
-                      {data?.governance?.hasEthicsPolicy === "Yes" && data?.governance?.ethicsPolicyDocs && data.governance.ethicsPolicyDocs.length > 0 && (
-                        <div style={{ marginTop: "8px" }}>
-                          {renderDocumentsList(data.governance.ethicsPolicyDocs, "Ethics Policy")}
-                        </div>
-                      )}
-                    </div>
-
-                    <div
-                      style={{
-                        background: "rgba(250, 247, 242, 0.8)",
-                        borderRadius: "12px",
-                        padding: "16px",
-                        border: "1px solid rgba(200, 182, 166, 0.2)",
-                      }}
-                    >
-                      <span
-                        style={{
-                          display: "block",
-                          fontSize: "12px",
-                          color: "#7d5a50",
-                          marginBottom: "6px",
-                          fontWeight: "600",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.5px",
-                        }}
-                      >
-                        Conflict Resolution
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "14px",
-                          color: "#4a352f",
-                          fontWeight: "500",
-                        }}
-                      >
-                        {data?.governance?.hasConflictResolution || "Not specified"}
-                      </span>
-                      {data?.governance?.hasConflictResolution === "Yes" && data?.governance?.conflictResolutionDocs && data.governance.conflictResolutionDocs.length > 0 && (
-                        <div style={{ marginTop: "8px" }}>
-                          {renderDocumentsList(data.governance.conflictResolutionDocs, "Conflict Resolution")}
-                        </div>
-                      )}
-                    </div>
-
-                    <div
-                      style={{
-                        background: "rgba(250, 247, 242, 0.8)",
-                        borderRadius: "12px",
-                        padding: "16px",
-                        border: "1px solid rgba(200, 182, 166, 0.2)",
-                      }}
-                    >
-                      <span
-                        style={{
-                          display: "block",
-                          fontSize: "12px",
-                          color: "#7d5a50",
-                          marginBottom: "6px",
-                          fontWeight: "600",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.5px",
-                        }}
-                      >
-                        Whistleblowing Policy
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "14px",
-                          color: "#4a352f",
-                          fontWeight: "500",
-                        }}
-                      >
-                        {data?.governance?.hasWhistleblowingPolicy || "Not specified"}
-                      </span>
-                      {data?.governance?.hasWhistleblowingPolicy === "Yes" && data?.governance?.whistleblowingPolicyDocs && data.governance.whistleblowingPolicyDocs.length > 0 && (
-                        <div style={{ marginTop: "8px" }}>
-                          {renderDocumentsList(data.governance.whistleblowingPolicyDocs, "Whistleblowing Policy")}
-                        </div>
-                      )}
-                    </div>
-
-                    <div
-                      style={{
-                        background: "rgba(250, 247, 242, 0.8)",
-                        borderRadius: "12px",
-                        padding: "16px",
-                        border: "1px solid rgba(200, 182, 166, 0.2)",
-                      }}
-                    >
-                      <span
-                        style={{
-                          display: "block",
-                          fontSize: "12px",
-                          color: "#7d5a50",
-                          marginBottom: "6px",
-                          fontWeight: "600",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.5px",
-                        }}
-                      >
-                        Ethics Training Frequency
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "14px",
-                          color: "#4a352f",
-                          fontWeight: "500",
-                        }}
-                      >
-                        {data?.governance?.ethicsTrainingFrequency || "Not specified"}
-                      </span>
-                    </div>
-
-                    <div
-                      style={{
-                        background: "rgba(250, 247, 242, 0.8)",
-                        borderRadius: "12px",
-                        padding: "16px",
-                        border: "1px solid rgba(200, 182, 166, 0.2)",
-                      }}
-                    >
-                      <span
-                        style={{
-                          display: "block",
-                          fontSize: "12px",
-                          color: "#7d5a50",
-                          marginBottom: "6px",
-                          fontWeight: "600",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.5px",
-                        }}
-                      >
-                        Last Ethics Training
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "14px",
-                          color: "#4a352f",
-                          fontWeight: "500",
-                        }}
-                      >
-                        {data?.governance?.lastEthicsTrainingDate || "Not specified"}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Transparency & Reporting Section */}
-                  <h3
-                    style={{
-                      fontSize: "16px",
-                      fontWeight: "700",
-                      color: "#4a352f",
-                      marginBottom: "16px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    <FileCheck size={18} color="#a67c52" />
-                    Transparency & Reporting
-                  </h3>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                      gap: "16px",
-                    }}
-                  >
-                    {[
-                      { label: "Stakeholder Reporting Frequency", value: data?.governance?.stakeholderReportingFrequency },
-                      { label: "Performance Review Cycle", value: data?.governance?.performanceReviewCycle },
-                    ].map((item, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          background: "rgba(250, 247, 242, 0.8)",
-                          borderRadius: "12px",
-                          padding: "16px",
-                          border: "1px solid rgba(200, 182, 166, 0.2)",
-                        }}
-                      >
-                        <span
-                          style={{
-                            display: "block",
-                            fontSize: "12px",
-                            color: "#7d5a50",
-                            marginBottom: "6px",
-                            fontWeight: "600",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.5px",
-                          }}
-                        >
-                          {item.label}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: "14px",
-                            color: "#4a352f",
-                            fontWeight: "500",
-                          }}
-                        >
-                          {item.value || "Not provided"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div
-                    style={{
-                      background: "rgba(166, 124, 82, 0.1)",
-                      borderRadius: "12px",
-                      padding: "16px",
-                      border: "1px solid rgba(166, 124, 82, 0.2)",
-                      marginTop: "16px",
-                    }}
-                  >
-                    <span
-                      style={{
-                        display: "block",
-                        fontSize: "12px",
-                        color: "#7d5a50",
-                        marginBottom: "8px",
-                        fontWeight: "700",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.5px",
-                      }}
-                    >
-                      Stakeholder Communication Methods
-                    </span>
-                    <p
-                      style={{
-                        fontSize: "14px",
-                        color: "#4a352f",
-                        lineHeight: "1.6",
-                        margin: 0,
-                        fontWeight: "400",
-                      }}
-                    >
-                      {data?.governance?.stakeholderCommunicationMethods || "Not provided"}
-                    </p>
-                  </div>
-
-                  <div
-                    style={{
-                      background: "rgba(166, 124, 82, 0.1)",
-                      borderRadius: "12px",
-                      padding: "16px",
-                      border: "1px solid rgba(166, 124, 82, 0.2)",
-                      marginTop: "12px",
-                    }}
-                  >
-                    <span
-                      style={{
-                        display: "block",
-                        fontSize: "12px",
-                        color: "#7d5a50",
-                        marginBottom: "8px",
-                        fontWeight: "700",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.5px",
-                      }}
-                    >
-                      Performance Review & KPI Monitoring Process
-                    </span>
-                    <p
-                      style={{
-                        fontSize: "14px",
-                        color: "#4a352f",
-                        lineHeight: "1.6",
-                        margin: 0,
-                        fontWeight: "400",
-                      }}
-                    >
-                      {data?.governance?.performanceReviewProcess || "Not provided"}
-                    </p>
-                  </div>
-
-                  <div
-                    style={{
-                      background: "rgba(166, 124, 82, 0.1)",
-                      borderRadius: "12px",
-                      padding: "16px",
-                      border: "1px solid rgba(166, 124, 82, 0.2)",
-                      marginTop: "12px",
-                    }}
-                  >
-                    <span
-                      style={{
-                        display: "block",
-                        fontSize: "12px",
-                        color: "#7d5a50",
-                        marginBottom: "8px",
-                        fontWeight: "700",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.5px",
-                      }}
-                    >
-                      Compliance Monitoring & Risk Management
-                    </span>
-                    <p
-                      style={{
-                        fontSize: "14px",
-                        color: "#4a352f",
-                        lineHeight: "1.6",
-                        margin: 0,
-                        fontWeight: "400",
-                      }}
-                    >
-                      {data?.governance?.complianceProcedures || "Not provided"}
-                    </p>
-                  </div>
-
-                  <div
-                    style={{
-                      background: "rgba(166, 124, 82, 0.1)",
-                      borderRadius: "12px",
-                      padding: "16px",
-                      border: "1px solid rgba(166, 124, 82, 0.2)",
-                      marginTop: "12px",
-                    }}
-                  >
-                    <span
-                      style={{
-                        display: "block",
-                        fontSize: "12px",
-                        color: "#7d5a50",
-                        marginBottom: "8px",
-                        fontWeight: "700",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.5px",
-                      }}
-                    >
-                      Data Management & Privacy Policies
-                    </span>
-                    <p
-                      style={{
-                        fontSize: "14px",
-                        color: "#4a352f",
-                        lineHeight: "1.6",
-                        margin: 0,
-                        fontWeight: "400",
-                      }}
-                    >
-                      {data?.governance?.dataManagementPolicies || "Not provided"}
-                    </p>
-                  </div>
+                  <CheckSquare size={16} color="#a67c52" />
+                  <span style={{ fontSize: "13px", color: "#4a352f", fontWeight: "500" }}>
+                    {key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase())}
+                  </span>
                 </div>
-              )}
-            </div>
+              ))}
+          </div>
+        </>
+      ) : (
+        <div
+          style={{
+            background: "rgba(200, 182, 166, 0.1)",
+            borderRadius: "12px",
+            padding: "24px",
+            border: "1px solid rgba(200, 182, 166, 0.2)",
+            textAlign: "center",
+            color: "#7d5a50",
+            marginBottom: "24px",
+          }}
+        >
+          <p style={{ margin: 0, fontSize: "14px" }}>No policies & controls checklist completed yet.</p>
+        </div>
+      )}
+
+      {/* Conflict Resolution Section */}
+      <h3
+        style={{
+          fontSize: "16px",
+          fontWeight: "700",
+          color: "#4a352f",
+          marginBottom: "16px",
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+        }}
+      >
+        <Shield size={18} color="#a67c52" />
+        Conflict Resolution
+      </h3>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gap: "16px",
+          marginBottom: "24px",
+        }}
+      >
+        <div
+          style={{
+            background: "rgba(250, 247, 242, 0.8)",
+            borderRadius: "12px",
+            padding: "16px",
+            border: "1px solid rgba(200, 182, 166, 0.2)",
+          }}
+        >
+          <span
+            style={{
+              display: "block",
+              fontSize: "12px",
+              color: "#7d5a50",
+              marginBottom: "6px",
+              fontWeight: "600",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
+            Conflict Resolution Procedures
+          </span>
+          <span
+            style={{
+              fontSize: "14px",
+              color: "#4a352f",
+              fontWeight: "500",
+            }}
+          >
+            {data?.governance?.hasConflictResolution || "Not specified"}
+          </span>
+        </div>
+
+        <div
+          style={{
+            background: "rgba(250, 247, 242, 0.8)",
+            borderRadius: "12px",
+            padding: "16px",
+            border: "1px solid rgba(200, 182, 166, 0.2)",
+          }}
+        >
+          <span
+            style={{
+              display: "block",
+              fontSize: "12px",
+              color: "#7d5a50",
+              marginBottom: "6px",
+              fontWeight: "600",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
+            Ethics Training Frequency
+          </span>
+          <span
+            style={{
+              fontSize: "14px",
+              color: "#4a352f",
+              fontWeight: "500",
+            }}
+          >
+            {data?.governance?.ethicsTrainingFrequency || "Not specified"}
+          </span>
+        </div>
+
+        <div
+          style={{
+            background: "rgba(250, 247, 242, 0.8)",
+            borderRadius: "12px",
+            padding: "16px",
+            border: "1px solid rgba(200, 182, 166, 0.2)",
+          }}
+        >
+          <span
+            style={{
+              display: "block",
+              fontSize: "12px",
+              color: "#7d5a50",
+              marginBottom: "6px",
+              fontWeight: "600",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
+            Last Ethics Training
+          </span>
+          <span
+            style={{
+              fontSize: "14px",
+              color: "#4a352f",
+              fontWeight: "500",
+            }}
+          >
+            {data?.governance?.lastEthicsTrainingDate || "Not specified"}
+          </span>
+        </div>
+      </div>
+
+      {/* Transparency & Reporting Section */}
+      <h3
+        style={{
+          fontSize: "16px",
+          fontWeight: "700",
+          color: "#4a352f",
+          marginBottom: "16px",
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+        }}
+      >
+        <FileCheck size={18} color="#a67c52" />
+        Transparency & Reporting
+      </h3>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gap: "16px",
+        }}
+      >
+        {[
+          { 
+            label: "Stakeholder Reporting Frequency", 
+            value: data?.governance?.stakeholderReportingFrequency && data.governance.stakeholderReportingFrequency.length > 0
+              ? data.governance.stakeholderReportingFrequency.join(", ")
+              : "Not provided"
+          },
+          { 
+            label: "Performance Review Cycle", 
+            value: data?.governance?.performanceReviewCycle && data.governance.performanceReviewCycle.length > 0
+              ? data.governance.performanceReviewCycle.join(", ")
+              : "Not provided"
+          },
+        ].map((item, i) => (
+          <div
+            key={i}
+            style={{
+              background: "rgba(250, 247, 242, 0.8)",
+              borderRadius: "12px",
+              padding: "16px",
+              border: "1px solid rgba(200, 182, 166, 0.2)",
+            }}
+          >
+            <span
+              style={{
+                display: "block",
+                fontSize: "12px",
+                color: "#7d5a50",
+                marginBottom: "6px",
+                fontWeight: "600",
+                textTransform: "uppercase",
+                letterSpacing: "0.5px",
+              }}
+            >
+              {item.label}
+            </span>
+            <span
+              style={{
+                fontSize: "14px",
+                color: "#4a352f",
+                fontWeight: "500",
+              }}
+            >
+              {item.value}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <div
+        style={{
+          background: "rgba(166, 124, 82, 0.1)",
+          borderRadius: "12px",
+          padding: "16px",
+          border: "1px solid rgba(166, 124, 82, 0.2)",
+          marginTop: "16px",
+        }}
+      >
+        <span
+          style={{
+            display: "block",
+            fontSize: "12px",
+            color: "#7d5a50",
+            marginBottom: "8px",
+            fontWeight: "700",
+            textTransform: "uppercase",
+            letterSpacing: "0.5px",
+          }}
+        >
+          Stakeholder Communication Methods
+        </span>
+        <p
+          style={{
+            fontSize: "14px",
+            color: "#4a352f",
+            lineHeight: "1.6",
+            margin: 0,
+            fontWeight: "400",
+          }}
+        >
+          {data?.governance?.stakeholderCommunicationMethods || "Not provided"}
+        </p>
+      </div>
+
+      <div
+        style={{
+          background: "rgba(166, 124, 82, 0.1)",
+          borderRadius: "12px",
+          padding: "16px",
+          border: "1px solid rgba(166, 124, 82, 0.2)",
+          marginTop: "12px",
+        }}
+      >
+        <span
+          style={{
+            display: "block",
+            fontSize: "12px",
+            color: "#7d5a50",
+            marginBottom: "8px",
+            fontWeight: "700",
+            textTransform: "uppercase",
+            letterSpacing: "0.5px",
+          }}
+        >
+          Performance Review & KPI Monitoring Process
+        </span>
+        <p
+          style={{
+            fontSize: "14px",
+            color: "#4a352f",
+            lineHeight: "1.6",
+            margin: 0,
+            fontWeight: "400",
+          }}
+        >
+          {data?.governance?.performanceReviewProcess || "Not provided"}
+        </p>
+      </div>
+
+      <div
+        style={{
+          background: "rgba(166, 124, 82, 0.1)",
+          borderRadius: "12px",
+          padding: "16px",
+          border: "1px solid rgba(166, 124, 82, 0.2)",
+          marginTop: "12px",
+        }}
+      >
+        <span
+          style={{
+            display: "block",
+            fontSize: "12px",
+            color: "#7d5a50",
+            marginBottom: "8px",
+            fontWeight: "700",
+            textTransform: "uppercase",
+            letterSpacing: "0.5px",
+          }}
+        >
+          Compliance Monitoring & Risk Management
+        </span>
+        <p
+          style={{
+            fontSize: "14px",
+            color: "#4a352f",
+            lineHeight: "1.6",
+            margin: 0,
+            fontWeight: "400",
+          }}
+        >
+          {data?.governance?.complianceProcedures || "Not provided"}
+        </p>
+      </div>
+
+      <div
+        style={{
+          background: "rgba(166, 124, 82, 0.1)",
+          borderRadius: "12px",
+          padding: "16px",
+          border: "1px solid rgba(166, 124, 82, 0.2)",
+          marginTop: "12px",
+        }}
+      >
+        <span
+          style={{
+            display: "block",
+            fontSize: "12px",
+            color: "#7d5a50",
+            marginBottom: "8px",
+            fontWeight: "700",
+            textTransform: "uppercase",
+            letterSpacing: "0.5px",
+          }}
+        >
+          Data Management & Privacy Policies
+        </span>
+        <p
+          style={{
+            fontSize: "14px",
+            color: "#4a352f",
+            lineHeight: "1.6",
+            margin: 0,
+            fontWeight: "400",
+          }}
+        >
+          {data?.governance?.dataManagementPolicies || "Not provided"}
+        </p>
+      </div>
+    </div>
+  )}
+</div>
 
             {/* Documents Section */}
             <div

@@ -77,14 +77,14 @@ const LoanRepayments = ({ activeSection, currentUser, isInvestorView }) => {
 
   const saveLoanData = async () => {
     if (!currentUser) return
-    
+
     try {
       await setDoc(doc(db, "loan-repayments", currentUser.uid), {
         monthlyData,
         quarterlyData,
         comments,
         flags,
-        lastUpdated: new Date().toISOString()
+        lastUpdated: new Date().toISOString(),
       })
       setShowEditForm(false)
       setShowFlagsEditForm(false)
@@ -97,7 +97,7 @@ const LoanRepayments = ({ activeSection, currentUser, isInvestorView }) => {
 
   const loadLoanData = async () => {
     if (!currentUser) return
-    
+
     try {
       setIsLoading(true)
       const docRef = doc(db, "loan-repayments", currentUser.uid)
@@ -127,7 +127,7 @@ const LoanRepayments = ({ activeSection, currentUser, isInvestorView }) => {
           quarterlyData,
           comments: [],
           flags: [],
-          lastUpdated: new Date().toISOString()
+          lastUpdated: new Date().toISOString(),
         })
       }
     } catch (error) {
@@ -217,16 +217,20 @@ const LoanRepayments = ({ activeSection, currentUser, isInvestorView }) => {
       const updatedComments = [...comments, newComment]
       setComments(updatedComments)
       setComment("")
-      
+
       // Auto-save comments
       if (currentUser) {
-        setDoc(doc(db, "loan-repayments", currentUser.uid), {
-          monthlyData,
-          quarterlyData,
-          comments: updatedComments,
-          flags,
-          lastUpdated: new Date().toISOString()
-        }, { merge: true })
+        setDoc(
+          doc(db, "loan-repayments", currentUser.uid),
+          {
+            monthlyData,
+            quarterlyData,
+            comments: updatedComments,
+            flags,
+            lastUpdated: new Date().toISOString(),
+          },
+          { merge: true },
+        )
       }
     }
   }
@@ -286,14 +290,16 @@ const LoanRepayments = ({ activeSection, currentUser, isInvestorView }) => {
 
   if (isLoading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '200px',
-        backgroundColor: '#fdfcfb',
-        borderRadius: '8px'
-      }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "200px",
+          backgroundColor: "#fdfcfb",
+          borderRadius: "8px",
+        }}
+      >
         <div>Loading loan repayment data...</div>
       </div>
     )
@@ -888,9 +894,7 @@ const LoanRepayments = ({ activeSection, currentUser, isInvestorView }) => {
                   <th style={{ padding: "12px", textAlign: "left" }}>Status</th>
                   <th style={{ padding: "12px", textAlign: "left" }}>Count</th>
                   <th style={{ padding: "12px", textAlign: "left" }}>Action</th>
-                  {!isInvestorView && (
-                    <th style={{ padding: "12px", textAlign: "left" }}>Actions</th>
-                  )}
+                  {!isInvestorView && <th style={{ padding: "12px", textAlign: "left" }}>Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -955,11 +959,11 @@ const IRRInvestments = ({ activeSection, currentUser, isInvestorView }) => {
 
   const saveIRRData = async () => {
     if (!currentUser) return
-    
+
     try {
-      await setDoc(doc(db, "irr-investments", currentUser.uid), { 
+      await setDoc(doc(db, "irr-investments", currentUser.uid), {
         investments,
-        lastUpdated: new Date().toISOString()
+        lastUpdated: new Date().toISOString(),
       })
       setShowEditForm(false)
       alert("IRR investment data saved successfully!")
@@ -971,7 +975,7 @@ const IRRInvestments = ({ activeSection, currentUser, isInvestorView }) => {
 
   const loadIRRData = async () => {
     if (!currentUser) return
-    
+
     try {
       setIsLoading(true)
       const docRef = doc(db, "irr-investments", currentUser.uid)
@@ -982,7 +986,7 @@ const IRRInvestments = ({ activeSection, currentUser, isInvestorView }) => {
         // Initialize with empty data if no document exists
         await setDoc(docRef, {
           investments: [],
-          lastUpdated: new Date().toISOString()
+          lastUpdated: new Date().toISOString(),
         })
       }
     } catch (error) {
@@ -1047,11 +1051,11 @@ const IRRInvestments = ({ activeSection, currentUser, isInvestorView }) => {
       const csvContent = [
         ["Investment Name", "IRR %", "Initial Investment", "Duration", "Risk Rating"],
         ...investments.map((inv) => [
-          inv.name, 
-          inv.irr, 
-          inv.details.initialInvestment, 
-          inv.details.duration, 
-          inv.details.riskRating
+          inv.name,
+          inv.irr,
+          inv.details.initialInvestment,
+          inv.details.duration,
+          inv.details.riskRating,
         ]),
       ]
         .map((row) => row.join(","))
@@ -1081,14 +1085,16 @@ const IRRInvestments = ({ activeSection, currentUser, isInvestorView }) => {
 
   if (isLoading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '200px',
-        backgroundColor: '#fdfcfb',
-        borderRadius: '8px'
-      }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "200px",
+          backgroundColor: "#fdfcfb",
+          borderRadius: "8px",
+        }}
+      >
         <div>Loading IRR investments data...</div>
       </div>
     )
@@ -1448,11 +1454,11 @@ const InvestmentRatios = ({ activeSection, currentUser, isInvestorView }) => {
 
   const saveRatiosData = async () => {
     if (!currentUser) return
-    
+
     try {
-      await setDoc(doc(db, "investment-ratios", currentUser.uid), { 
+      await setDoc(doc(db, "investment-ratios", currentUser.uid), {
         ratios,
-        lastUpdated: new Date().toISOString()
+        lastUpdated: new Date().toISOString(),
       })
       setShowEditForm(false)
       alert("Investment ratios data saved successfully!")
@@ -1464,7 +1470,7 @@ const InvestmentRatios = ({ activeSection, currentUser, isInvestorView }) => {
 
   const loadRatiosData = async () => {
     if (!currentUser) return
-    
+
     try {
       setIsLoading(true)
       const docRef = doc(db, "investment-ratios", currentUser.uid)
@@ -1475,7 +1481,7 @@ const InvestmentRatios = ({ activeSection, currentUser, isInvestorView }) => {
         // Initialize with empty data if no document exists
         await setDoc(docRef, {
           ratios: [],
-          lastUpdated: new Date().toISOString()
+          lastUpdated: new Date().toISOString(),
         })
       }
     } catch (error) {
@@ -1573,14 +1579,16 @@ const InvestmentRatios = ({ activeSection, currentUser, isInvestorView }) => {
 
   if (isLoading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '200px',
-        backgroundColor: '#fdfcfb',
-        borderRadius: '8px'
-      }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "200px",
+          backgroundColor: "#fdfcfb",
+          borderRadius: "8px",
+        }}
+      >
         <div>Loading investment ratios data...</div>
       </div>
     )
@@ -1941,11 +1949,11 @@ const CapTable = ({ activeSection, currentUser, isInvestorView }) => {
 
   const saveCapTableData = async () => {
     if (!currentUser) return
-    
+
     try {
-      await setDoc(doc(db, "cap-table", currentUser.uid), { 
+      await setDoc(doc(db, "cap-table", currentUser.uid), {
         investors,
-        lastUpdated: new Date().toISOString()
+        lastUpdated: new Date().toISOString(),
       })
       setShowEditForm(false)
       alert("Cap table data saved successfully!")
@@ -1957,7 +1965,7 @@ const CapTable = ({ activeSection, currentUser, isInvestorView }) => {
 
   const loadCapTableData = async () => {
     if (!currentUser) return
-    
+
     try {
       setIsLoading(true)
       const docRef = doc(db, "cap-table", currentUser.uid)
@@ -1968,7 +1976,7 @@ const CapTable = ({ activeSection, currentUser, isInvestorView }) => {
         // Initialize with empty data if no document exists
         await setDoc(docRef, {
           investors: [],
-          lastUpdated: new Date().toISOString()
+          lastUpdated: new Date().toISOString(),
         })
       }
     } catch (error) {
@@ -2041,14 +2049,16 @@ const CapTable = ({ activeSection, currentUser, isInvestorView }) => {
 
   if (isLoading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '200px',
-        backgroundColor: '#fdfcfb',
-        borderRadius: '8px'
-      }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "200px",
+          backgroundColor: "#fdfcfb",
+          borderRadius: "8px",
+        }}
+      >
         <div>Loading cap table data...</div>
       </div>
     )
@@ -2216,7 +2226,7 @@ const CapTable = ({ activeSection, currentUser, isInvestorView }) => {
                   borderRadius: "4px",
                   cursor: "pointer",
                 }}
-                >
+              >
                 Remove
               </button>
             </div>
@@ -2381,11 +2391,11 @@ const DividendHistory = ({ activeSection, currentUser, isInvestorView }) => {
 
   const saveDividendData = async () => {
     if (!currentUser) return
-    
+
     try {
-      await setDoc(doc(db, "dividend-history", currentUser.uid), { 
+      await setDoc(doc(db, "dividend-history", currentUser.uid), {
         dividends,
-        lastUpdated: new Date().toISOString()
+        lastUpdated: new Date().toISOString(),
       })
       setShowEditForm(false)
       alert("Dividend history data saved successfully!")
@@ -2397,7 +2407,7 @@ const DividendHistory = ({ activeSection, currentUser, isInvestorView }) => {
 
   const loadDividendData = async () => {
     if (!currentUser) return
-    
+
     try {
       setIsLoading(true)
       const docRef = doc(db, "dividend-history", currentUser.uid)
@@ -2408,7 +2418,7 @@ const DividendHistory = ({ activeSection, currentUser, isInvestorView }) => {
         // Initialize with empty data if no document exists
         await setDoc(docRef, {
           dividends: [],
-          lastUpdated: new Date().toISOString()
+          lastUpdated: new Date().toISOString(),
         })
       }
     } catch (error) {
@@ -2478,14 +2488,16 @@ const DividendHistory = ({ activeSection, currentUser, isInvestorView }) => {
 
   if (isLoading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '200px',
-        backgroundColor: '#fdfcfb',
-        borderRadius: '8px'
-      }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "200px",
+          backgroundColor: "#fdfcfb",
+          borderRadius: "8px",
+        }}
+      >
         <div>Loading dividend history data...</div>
       </div>
     )
@@ -2746,29 +2758,44 @@ const DividendHistory = ({ activeSection, currentUser, isInvestorView }) => {
 }
 
 // Main Capital Structure Component
-const CapitalStructure = () => {
+const CapitalStructure = ({
+  activeSection: parentActiveSection,
+  viewMode: parentViewMode,
+  user: parentUser,
+  isInvestorView: parentIsInvestorView,
+  isEmbedded = false,
+}) => {
   const [activeSection, setActiveSection] = useState("cap-table")
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
-  const [isInvestorView, setIsInvestorView] = useState(false)
+  const [isInvestorView, setIsInvestorView] = useState(parentIsInvestorView || false)
   const [viewingSMEId, setViewingSMEId] = useState(null)
   const [viewingSMEName, setViewingSMEName] = useState("")
-  const [currentUser, setCurrentUser] = useState(null)
+  const [currentUser, setCurrentUser] = useState(parentUser || null)
 
   useEffect(() => {
-    const investorViewMode = sessionStorage.getItem("investorViewMode")
-    const smeId = sessionStorage.getItem("viewingSMEId")
-    const smeName = sessionStorage.getItem("viewingSMEName")
+    // Only check sessionStorage if not in embedded mode
+    if (!isEmbedded) {
+      const investorViewMode = sessionStorage.getItem("investorViewMode")
+      const smeId = sessionStorage.getItem("viewingSMEId")
+      const smeName = sessionStorage.getItem("viewingSMEName")
 
-    if (investorViewMode === "true" && smeId) {
-      setIsInvestorView(true)
-      setViewingSMEId(smeId)
-      setViewingSMEName(smeName || "SME")
-      console.log("Investor view mode activated for SME:", smeId)
+      if (investorViewMode === "true" && smeId) {
+        setIsInvestorView(true)
+        setViewingSMEId(smeId)
+        setViewingSMEName(smeName || "SME")
+        console.log("Investor view mode activated for SME:", smeId)
+      }
     }
-  }, [])
+  }, [isEmbedded])
 
   useEffect(() => {
+    // If embedded, use the parent user
+    if (isEmbedded && parentUser) {
+      setCurrentUser(parentUser)
+      return
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (isInvestorView && viewingSMEId) {
         // In investor view, use the SME ID as the 'user' ID for data fetching
@@ -2780,7 +2807,14 @@ const CapitalStructure = () => {
     })
 
     return () => unsubscribe()
-  }, [isInvestorView, viewingSMEId])
+  }, [isInvestorView, viewingSMEId, isEmbedded, parentUser])
+
+  // Update investor view state from parent
+  useEffect(() => {
+    if (isEmbedded && parentIsInvestorView !== undefined) {
+      setIsInvestorView(parentIsInvestorView)
+    }
+  }, [isEmbedded, parentIsInvestorView])
 
   const handleExitInvestorView = () => {
     sessionStorage.removeItem("viewingSMEId")
@@ -2791,6 +2825,9 @@ const CapitalStructure = () => {
   }
 
   useEffect(() => {
+    // Only track sidebar state if not embedded
+    if (isEmbedded) return
+
     const checkSidebarState = () => {
       setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
     }
@@ -2804,7 +2841,7 @@ const CapitalStructure = () => {
     })
 
     return () => observer.disconnect()
-  }, [])
+  }, [isEmbedded])
 
   const getContentStyles = () => ({
     width: "100%",
@@ -2816,6 +2853,13 @@ const CapitalStructure = () => {
     boxSizing: "border-box",
   })
 
+  const getEmbeddedContentStyles = () => ({
+    width: "100%",
+    backgroundColor: "transparent",
+    padding: "0",
+    boxSizing: "border-box",
+  })
+
   const sectionButtons = [
     { id: "cap-table", label: "Cap Table" },
     { id: "irr-investments", label: "IRR on Investments" },
@@ -2824,6 +2868,92 @@ const CapitalStructure = () => {
     { id: "loan-repayments", label: "Loan Repayments" },
   ]
 
+  if (isEmbedded) {
+    return (
+      <div style={getEmbeddedContentStyles()}>
+        {isInvestorView && (
+          <div
+            style={{
+              backgroundColor: "#e8f5e9",
+              padding: "16px 20px",
+              marginBottom: "20px",
+              borderRadius: "8px",
+              border: "2px solid #4caf50",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <span style={{ fontSize: "20px" }}>👁️</span>
+              <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
+                Investor View: Viewing {viewingSMEName}'s Capital Structure
+              </span>
+            </div>
+            <button
+              onClick={handleExitInvestorView}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#4caf50",
+                color: "white",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "14px",
+                transition: "background-color 0.3s ease",
+              }}
+            >
+              Back to My Cohorts
+            </button>
+          </div>
+        )}
+
+        <div
+          style={{
+            display: "flex",
+            gap: "10px",
+            marginBottom: "20px",
+            padding: "15px",
+            backgroundColor: "#fdfcfb",
+            borderRadius: "8px",
+            boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+            flexWrap: "wrap",
+            overflowX: "auto",
+          }}
+        >
+          {sectionButtons.map((button) => (
+            <button
+              key={button.id}
+              onClick={() => setActiveSection(button.id)}
+              style={{
+                padding: "10px 20px",
+                backgroundColor: activeSection === button.id ? "#4a352f" : "#e6d7c3",
+                color: activeSection === button.id ? "#faf7f2" : "#4a352f",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "14px",
+                transition: "all 0.3s ease",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {button.label}
+            </button>
+          ))}
+        </div>
+
+        <CapTable activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
+        <IRRInvestments activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
+        <InvestmentRatios activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
+        <DividendHistory activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
+        <LoanRepayments activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
+      </div>
+    )
+  }
+
+  // Original standalone render with Sidebar and Header
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
       <Sidebar />
@@ -2911,31 +3041,11 @@ const CapitalStructure = () => {
             ))}
           </div>
 
-          <CapTable 
-            activeSection={activeSection} 
-            currentUser={currentUser} 
-            isInvestorView={isInvestorView} 
-          />
-          <IRRInvestments 
-            activeSection={activeSection} 
-            currentUser={currentUser} 
-            isInvestorView={isInvestorView} 
-          />
-          <InvestmentRatios 
-            activeSection={activeSection} 
-            currentUser={currentUser} 
-            isInvestorView={isInvestorView} 
-          />
-          <DividendHistory 
-            activeSection={activeSection} 
-            currentUser={currentUser} 
-            isInvestorView={isInvestorView} 
-          />
-          <LoanRepayments 
-            activeSection={activeSection} 
-            currentUser={currentUser} 
-            isInvestorView={isInvestorView} 
-          />
+          <CapTable activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
+          <IRRInvestments activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
+          <InvestmentRatios activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
+          <DividendHistory activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
+          <LoanRepayments activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
         </div>
       </div>
     </div>
