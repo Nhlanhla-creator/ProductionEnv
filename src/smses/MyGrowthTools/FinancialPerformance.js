@@ -18,7 +18,7 @@ import {
   Tooltip,
   Legend,
 } from "chart.js"
-import CapitalStructure from './CapitalStructure'
+import CapitalStructure from "./CapitalStructure"
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
@@ -149,21 +149,21 @@ const PnLSnapshot = ({
       const kpiQuery = query(
         collection(db, "financialData"),
         where("userId", "==", user.uid),
-        where("isCustomKPI", "==", true)
+        where("isCustomKPI", "==", true),
       )
       const querySnapshot = await getDocs(kpiQuery)
-      
+
       const kpis = {}
       querySnapshot.forEach((doc) => {
         const data = doc.data()
         kpis[data.chartName] = data
         // Add to visible charts
-        setVisibleCharts(prev => ({
+        setVisibleCharts((prev) => ({
           ...prev,
-          [data.chartName]: true
+          [data.chartName]: true,
         }))
       })
-      
+
       setCustomKPIs(kpis)
     } catch (error) {
       console.error("Error loading custom KPIs:", error)
@@ -205,12 +205,15 @@ const PnLSnapshot = ({
     const npMarginBudget = salesBudget.map((s, i) => (s !== 0 ? (netProfitBudget[i] / s) * 100 : 0))
 
     const chartData = {
-      sales: { actual: sales.map(val => val / 1000000), budget: salesBudget.map(val => val / 1000000) },
-      cogs: { actual: cogs.map(val => val / 1000000), budget: cogsBudget.map(val => val / 1000000) },
-      opex: { actual: opex.map(val => val / 1000000), budget: opexBudget.map(val => val / 1000000) },
-      grossProfit: { actual: grossProfit.map(val => val / 1000000), budget: grossProfitBudget.map(val => val / 1000000) },
-      ebitda: { actual: ebitda.map(val => val / 1000000), budget: ebitdaBudget.map(val => val / 1000000) },
-      netProfit: { actual: netProfit.map(val => val / 1000000), budget: netProfitBudget.map(val => val / 1000000) },
+      sales: { actual: sales.map((val) => val / 1000000), budget: salesBudget.map((val) => val / 1000000) },
+      cogs: { actual: cogs.map((val) => val / 1000000), budget: cogsBudget.map((val) => val / 1000000) },
+      opex: { actual: opex.map((val) => val / 1000000), budget: opexBudget.map((val) => val / 1000000) },
+      grossProfit: {
+        actual: grossProfit.map((val) => val / 1000000),
+        budget: grossProfitBudget.map((val) => val / 1000000),
+      },
+      ebitda: { actual: ebitda.map((val) => val / 1000000), budget: ebitdaBudget.map((val) => val / 1000000) },
+      netProfit: { actual: netProfit.map((val) => val / 1000000), budget: netProfitBudget.map((val) => val / 1000000) },
       gpMargin: { actual: gpMargin, budget: gpMarginBudget },
       npMargin: { actual: npMargin, budget: npMarginBudget },
     }
@@ -521,34 +524,38 @@ const PnLSnapshot = ({
   }
 
   const updatePnlDetailValue = (category, monthIndex, value) => {
-    setPnlDetails(prev => ({
+    setPnlDetails((prev) => ({
       ...prev,
-      [category]: prev[category].map((val, idx) => idx === monthIndex ? value : val)
+      [category]: prev[category].map((val, idx) => (idx === monthIndex ? value : val)),
     }))
   }
 
   const renderMonthlyInputs = (category, label) => {
     const startMonthIndex = months.indexOf(selectedFinancialYearStart)
     const orderedMonths = [...months.slice(startMonthIndex), ...months.slice(0, startMonthIndex)]
-    
+
     return (
       <div style={{ marginBottom: "20px" }}>
         <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>{label}</h5>
-        <div style={{ 
-          display: "grid", 
-          gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", 
-          gap: "10px" 
-        }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+            gap: "10px",
+          }}
+        >
           {orderedMonths.map((month, displayIndex) => {
             const actualIndex = months.indexOf(month)
             return (
               <div key={month} style={{ display: "flex", flexDirection: "column" }}>
-                <label style={{ 
-                  fontSize: "12px", 
-                  color: "#72542b", 
-                  marginBottom: "5px", 
-                  fontWeight: "500" 
-                }}>
+                <label
+                  style={{
+                    fontSize: "12px",
+                    color: "#72542b",
+                    marginBottom: "5px",
+                    fontWeight: "500",
+                  }}
+                >
                   {month}
                 </label>
                 <input
@@ -582,7 +589,7 @@ const PnLSnapshot = ({
     }
 
     try {
-      const chartName = newKPI.name.toLowerCase().replace(/\s+/g, '_')
+      const chartName = newKPI.name.toLowerCase().replace(/\s+/g, "_")
       const kpiData = {
         userId: user.uid,
         chartName: chartName,
@@ -599,14 +606,14 @@ const PnLSnapshot = ({
       console.log("New KPI saved to Firebase")
 
       // Add the new KPI to visible charts and custom KPIs
-      setCustomKPIs(prev => ({
+      setCustomKPIs((prev) => ({
         ...prev,
-        [chartName]: kpiData
+        [chartName]: kpiData,
       }))
 
-      setVisibleCharts(prev => ({
+      setVisibleCharts((prev) => ({
         ...prev,
-        [chartName]: true
+        [chartName]: true,
       }))
 
       setShowAddKPIModal(false)
@@ -716,14 +723,12 @@ const PnLSnapshot = ({
               Add P&L Details
             </button>
           )}
-          
+
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            <label style={{ color: "#5d4037", fontWeight: "600", fontSize: "14px" }}>
-              Data Year:
-            </label>
+            <label style={{ color: "#5d4037", fontWeight: "600", fontSize: "14px" }}>Data Year:</label>
             <select
               value={selectedYear}
-              onChange={(e) => handleYearChange(parseInt(e.target.value))}
+              onChange={(e) => handleYearChange(Number.parseInt(e.target.value))}
               style={{
                 padding: "8px 12px",
                 borderRadius: "4px",
@@ -759,7 +764,7 @@ const PnLSnapshot = ({
           >
             {showVariance ? "Show Actual vs Budget" : "Show Variance"}
           </button>
-          
+
           {!isInvestorView && (
             <button
               onClick={handleAddKPI}
@@ -818,10 +823,7 @@ const PnLSnapshot = ({
         {visibleCharts.sales && (
           <div>
             <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
-              <Bar
-                data={createChartData("sales")}
-                options={chartOptions("Sales Revenue (R m)")}
-              />
+              <Bar data={createChartData("sales")} options={chartOptions("Sales Revenue (R m)")} />
             </div>
             <button
               onClick={() => toggleNotes("sales")}
@@ -859,10 +861,7 @@ const PnLSnapshot = ({
         {visibleCharts.cogs && (
           <div>
             <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
-              <Bar
-                data={createChartData("cogs")}
-                options={chartOptions("Cost of Goods Sold (R m)")}
-              />
+              <Bar data={createChartData("cogs")} options={chartOptions("Cost of Goods Sold (R m)")} />
             </div>
             <button
               onClick={() => toggleNotes("cogs")}
@@ -900,10 +899,7 @@ const PnLSnapshot = ({
         {visibleCharts.opex && (
           <div>
             <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
-              <Bar
-                data={createChartData("opex")}
-                options={chartOptions("Operating Expenses (R m)")}
-              />
+              <Bar data={createChartData("opex")} options={chartOptions("Operating Expenses (R m)")} />
             </div>
             <button
               onClick={() => toggleNotes("opex")}
@@ -941,10 +937,7 @@ const PnLSnapshot = ({
         {visibleCharts.grossProfit && (
           <div>
             <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
-              <Bar
-                data={createChartData("grossProfit")}
-                options={chartOptions("Gross Profit (R m)")}
-              />
+              <Bar data={createChartData("grossProfit")} options={chartOptions("Gross Profit (R m)")} />
             </div>
             <button
               onClick={() => toggleNotes("grossProfit")}
@@ -982,10 +975,7 @@ const PnLSnapshot = ({
         {visibleCharts.ebitda && (
           <div>
             <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
-              <Bar
-                data={createChartData("ebitda")}
-                options={chartOptions("EBITDA (R m)")}
-              />
+              <Bar data={createChartData("ebitda")} options={chartOptions("EBITDA (R m)")} />
             </div>
             <button
               onClick={() => toggleNotes("ebitda")}
@@ -1023,10 +1013,7 @@ const PnLSnapshot = ({
         {visibleCharts.netProfit && (
           <div>
             <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
-              <Bar
-                data={createChartData("netProfit")}
-                options={chartOptions("Net Profit (R m)")}
-              />
+              <Bar data={createChartData("netProfit")} options={chartOptions("Net Profit (R m)")} />
             </div>
             <button
               onClick={() => toggleNotes("netProfit")}
@@ -1064,10 +1051,7 @@ const PnLSnapshot = ({
         {visibleCharts.gpMargin && (
           <div>
             <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
-              <Bar
-                data={createChartData("gpMargin", true)}
-                options={chartOptions("GP Margin (%)", true)}
-              />
+              <Bar data={createChartData("gpMargin", true)} options={chartOptions("GP Margin (%)", true)} />
             </div>
             <button
               onClick={() => toggleNotes("gpMargin")}
@@ -1105,10 +1089,7 @@ const PnLSnapshot = ({
         {visibleCharts.npMargin && (
           <div>
             <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
-              <Bar
-                data={createChartData("npMargin", true)}
-                options={chartOptions("NP Margin (%)", true)}
-              />
+              <Bar data={createChartData("npMargin", true)} options={chartOptions("NP Margin (%)", true)} />
             </div>
             <button
               onClick={() => toggleNotes("npMargin")}
@@ -1146,7 +1127,7 @@ const PnLSnapshot = ({
         {/* Custom KPI Charts */}
         {Object.keys(customKPIs).map((kpiName) => {
           if (!visibleCharts[kpiName]) return null
-          
+
           const kpiData = customKPIs[kpiName]
           return (
             <div key={kpiName}>
@@ -1154,12 +1135,18 @@ const PnLSnapshot = ({
                 {kpiData.type === "line" ? (
                   <Line
                     data={createCustomKPIChartData(kpiData)}
-                    options={customKPIOptions(`${kpiData.name} (${kpiData.dataType === "currency" ? "R m" : kpiData.dataType === "percentage" ? "%" : ""})`, kpiData.dataType)}
+                    options={customKPIOptions(
+                      `${kpiData.name} (${kpiData.dataType === "currency" ? "R m" : kpiData.dataType === "percentage" ? "%" : ""})`,
+                      kpiData.dataType,
+                    )}
                   />
                 ) : (
                   <Bar
                     data={createCustomKPIChartData(kpiData)}
-                    options={customKPIOptions(`${kpiData.name} (${kpiData.dataType === "currency" ? "R m" : kpiData.dataType === "percentage" ? "%" : ""})`, kpiData.dataType)}
+                    options={customKPIOptions(
+                      `${kpiData.name} (${kpiData.dataType === "currency" ? "R m" : kpiData.dataType === "percentage" ? "%" : ""})`,
+                      kpiData.dataType,
+                    )}
                   />
                 )}
               </div>
@@ -1242,13 +1229,15 @@ const PnLSnapshot = ({
             }}
           >
             <h3 style={{ color: "#5d4037", marginBottom: "20px" }}>Add P&L Details</h3>
-            
-            <div style={{ 
-              display: "grid", 
-              gridTemplateColumns: "1fr 1fr", 
-              gap: "20px", 
-              marginBottom: "25px" 
-            }}>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "20px",
+                marginBottom: "25px",
+              }}
+            >
               <div>
                 <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                   Financial Year Start:
@@ -1281,7 +1270,7 @@ const PnLSnapshot = ({
                 </label>
                 <select
                   value={selectedYear}
-                  onChange={(e) => handleYearChange(parseInt(e.target.value))}
+                  onChange={(e) => handleYearChange(Number.parseInt(e.target.value))}
                   style={{
                     width: "100%",
                     padding: "10px",
@@ -1304,7 +1293,7 @@ const PnLSnapshot = ({
 
             <div style={{ marginBottom: "30px" }}>
               <h4 style={{ color: "#5d4037", marginBottom: "20px", fontSize: "18px" }}>Actual Data</h4>
-              
+
               {renderMonthlyInputs("sales", "Sales Revenue")}
               {renderMonthlyInputs("cogs", "Cost of Goods Sold")}
               {renderMonthlyInputs("opex", "Operating Expenses")}
@@ -1315,7 +1304,7 @@ const PnLSnapshot = ({
 
             <div style={{ marginBottom: "30px" }}>
               <h4 style={{ color: "#5d4037", marginBottom: "20px", fontSize: "18px" }}>Budget Data</h4>
-              
+
               {renderMonthlyInputs("salesBudget", "Sales Revenue Budget")}
               {renderMonthlyInputs("cogsBudget", "COGS Budget")}
               {renderMonthlyInputs("opexBudget", "OPEX Budget")}
@@ -1402,7 +1391,7 @@ const PnLSnapshot = ({
             }}
           >
             <h3 style={{ color: "#5d4037", marginBottom: "20px" }}>Add New KPI</h3>
-            
+
             <div style={{ marginBottom: "20px" }}>
               <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 KPI Name:
@@ -2170,9 +2159,9 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
   }
 
   const updateHealthDetailValue = (category, monthIndex, value) => {
-    setHealthDetails(prev => ({
+    setHealthDetails((prev) => ({
       ...prev,
-      [category]: prev[category].map((val, idx) => idx === monthIndex ? value : val)
+      [category]: prev[category].map((val, idx) => (idx === monthIndex ? value : val)),
     }))
   }
 
@@ -2180,19 +2169,23 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
     return (
       <div style={{ marginBottom: "20px" }}>
         <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>{label}</h5>
-        <div style={{ 
-          display: "grid", 
-          gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", 
-          gap: "10px" 
-        }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+            gap: "10px",
+          }}
+        >
           {months.map((month, index) => (
             <div key={month} style={{ display: "flex", flexDirection: "column" }}>
-              <label style={{ 
-                fontSize: "12px", 
-                color: "#72542b", 
-                marginBottom: "5px", 
-                fontWeight: "500" 
-              }}>
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#72542b",
+                  marginBottom: "5px",
+                  fontWeight: "500",
+                }}
+              >
                 {month}
               </label>
               <input
@@ -3502,12 +3495,15 @@ const FinancialPerformance = () => {
             isInvestorView={isInvestorView}
           />
 
-          <CapitalStructure
-            activeSection={activeSection}
-            viewMode={viewMode}
-            user={user}
-            isInvestorView={isInvestorView}
-          />
+          {activeSection === "capital-structure" && (
+            <CapitalStructure
+              activeSection={activeSection}
+              viewMode={viewMode}
+              user={user}
+              isInvestorView={isInvestorView}
+              isEmbedded={true}
+            />
+          )}
         </div>
       </div>
     </div>
