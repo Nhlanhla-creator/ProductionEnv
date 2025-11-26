@@ -1,8 +1,9 @@
-"use client"
 import { useEffect, useState } from "react"
-import { Info, ChevronDown, ChevronUp } from "lucide-react"
-import { db, auth } from '../../firebaseConfig';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { Info, ChevronDown, ChevronUp, Upload, X } from "lucide-react"
+import { db, auth, storage } from '../../firebaseConfig';
+import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+
 
 // Entity types remain the same
 const entityTypes = [
@@ -27,12 +28,11 @@ const legalStructures = [
   { value: "State Owned", label: "State-Owned Enterprise" },
 ]
 
-// Updated employee-based entity sizes
 const entitySizes = [
-  { value: "Micro", label: "Micro (0-5 employees)" },
-  { value: "Small", label: "Small (6-50 employees)" },
-  { value: "Medium", label: "Medium (51-250 employees)" },
-  { value: "Large", label: "Large (251+ employees)" },
+  { value: "Micro", label: "Micro (< R1M annual turnover)" },
+  { value: "Small", label: "Small (R1M - R10M annual turnover)" },
+  { value: "Medium", label: "Medium (R10M - R50M annual turnover)" },
+  { value: "Large", label: "Large (> R50M annual turnover)" },
 ]
 
 const operationStages = [
@@ -83,313 +83,283 @@ const economicSectors = [
   { value: "Utilities (Water, Electricity, Waste)", label: "Utilities (Water, Electricity, Waste)" },
 ]
 
-// Comprehensive African locations database
-const africanLocations = [
-  // Algeria
-  { town: "Algiers", city: "Algiers", region: "Algiers Province", country: "Algeria" },
-  { town: "Oran", city: "Oran", region: "Oran Province", country: "Algeria" },
-  { town: "Constantine", city: "Constantine", region: "Constantine Province", country: "Algeria" },
-  { town: "Annaba", city: "Annaba", region: "Annaba Province", country: "Algeria" },
-  { town: "Batna", city: "Batna", region: "Batna Province", country: "Algeria" },
-  { town: "Sétif", city: "Sétif", region: "Sétif Province", country: "Algeria" },
-  { town: "Sidi Bel Abbès", city: "Sidi Bel Abbès", region: "Sidi Bel Abbès Province", country: "Algeria" },
-  { town: "Biskra", city: "Biskra", region: "Biskra Province", country: "Algeria" },
-
-  // Angola
-  { town: "Luanda", city: "Luanda", region: "Luanda Province", country: "Angola" },
-  { town: "Huambo", city: "Huambo", region: "Huambo Province", country: "Angola" },
-  { town: "Lobito", city: "Lobito", region: "Benguela Province", country: "Angola" },
-  { town: "Benguela", city: "Benguela", region: "Benguela Province", country: "Angola" },
-  { town: "Lubango", city: "Lubango", region: "Huíla Province", country: "Angola" },
-  { town: "Kuito", city: "Kuito", region: "Bié Province", country: "Angola" },
-  { town: "Malanje", city: "Malanje", region: "Malanje Province", country: "Angola" },
-
-  // Benin
-  { town: "Porto-Novo", city: "Porto-Novo", region: "Ouémé Department", country: "Benin" },
-  { town: "Cotonou", city: "Cotonou", region: "Littoral Department", country: "Benin" },
-  { town: "Parakou", city: "Parakou", region: "Borgou Department", country: "Benin" },
-  { town: "Djougou", city: "Djougou", region: "Donga Department", country: "Benin" },
-  { town: "Bohicon", city: "Bohicon", region: "Zou Department", country: "Benin" },
-
-  // Botswana
-  { town: "Gaborone", city: "Gaborone", region: "South-East District", country: "Botswana" },
-  { town: "Francistown", city: "Francistown", region: "North-East District", country: "Botswana" },
-  { town: "Maun", city: "Maun", region: "North-West District", country: "Botswana" },
-  { town: "Serowe", city: "Serowe", region: "Central District", country: "Botswana" },
-  { town: "Selibe Phikwe", city: "Selibe Phikwe", region: "Central District", country: "Botswana" },
-
-  // Burkina Faso
-  { town: "Ouagadougou", city: "Ouagadougou", region: "Centre Region", country: "Burkina Faso" },
-  { town: "Bobo-Dioulasso", city: "Bobo-Dioulasso", region: "Hauts-Bassins Region", country: "Burkina Faso" },
-  { town: "Koudougou", city: "Koudougou", region: "Centre-Ouest Region", country: "Burkina Faso" },
-  { town: "Banfora", city: "Banfora", region: "Cascades Region", country: "Burkina Faso" },
-
-  // Burundi
-  { town: "Gitega", city: "Gitega", region: "Gitega Province", country: "Burundi" },
-  { town: "Bujumbura", city: "Bujumbura", region: "Bujumbura Mairie Province", country: "Burundi" },
-  { town: "Ngozi", city: "Ngozi", region: "Ngozi Province", country: "Burundi" },
-  { town: "Muyinga", city: "Muyinga", region: "Muyinga Province", country: "Burundi" },
-
-  // Cameroon
-  { town: "Yaoundé", city: "Yaoundé", region: "Centre Region", country: "Cameroon" },
-  { town: "Douala", city: "Douala", region: "Littoral Region", country: "Cameroon" },
-  { town: "Garoua", city: "Garoua", region: "North Region", country: "Cameroon" },
-  { town: "Bamenda", city: "Bamenda", region: "North-West Region", country: "Cameroon" },
-  { town: "Bafoussam", city: "Bafoussam", region: "West Region", country: "Cameroon" },
-
-  // Chad
-  { town: "N'Djamena", city: "N'Djamena", region: "N'Djamena Region", country: "Chad" },
-  { town: "Moundou", city: "Moundou", region: "Logone Occidental Region", country: "Chad" },
-  { town: "Sarh", city: "Sarh", region: "Moyen-Chari Region", country: "Chad" },
-  { town: "Abéché", city: "Abéché", region: "Ouaddaï Region", country: "Chad" },
-
-  // Congo
-  { town: "Brazzaville", city: "Brazzaville", region: "Brazzaville Department", country: "Congo" },
-  { town: "Pointe-Noire", city: "Pointe-Noire", region: "Pointe-Noire Department", country: "Congo" },
-  { town: "Dolisie", city: "Dolisie", region: "Niari Department", country: "Congo" },
-
-  // Côte d'Ivoire
-  { town: "Abidjan", city: "Abidjan", region: "Abidjan Autonomous District", country: "Côte d'Ivoire" },
-  { town: "Yamoussoukro", city: "Yamoussoukro", region: "Yamoussoukro Autonomous District", country: "Côte d'Ivoire" },
-  { town: "Bouaké", city: "Bouaké", region: "Vallée du Bandama District", country: "Côte d'Ivoire" },
-  { town: "Daloa", city: "Daloa", region: "Sassandra-Marahoué District", country: "Côte d'Ivoire" },
-  { town: "San-Pédro", city: "San-Pédro", region: "Bas-Sassandra District", country: "Côte d'Ivoire" },
-
-  // DR Congo
-  { town: "Kinshasa", city: "Kinshasa", region: "Kinshasa Province", country: "DR Congo" },
-  { town: "Lubumbashi", city: "Lubumbashi", region: "Haut-Katanga Province", country: "DR Congo" },
-  { town: "Mbuji-Mayi", city: "Mbuji-Mayi", region: "Kasaï-Oriental Province", country: "DR Congo" },
-  { town: "Kananga", city: "Kananga", region: "Kasaï-Central Province", country: "DR Congo" },
-  { town: "Kisangani", city: "Kisangani", region: "Tshopo Province", country: "DR Congo" },
-  { town: "Goma", city: "Goma", region: "North Kivu Province", country: "DR Congo" },
-  { town: "Bukavu", city: "Bukavu", region: "South Kivu Province", country: "DR Congo" },
-
-  // Egypt
-  { town: "Cairo", city: "Cairo", region: "Cairo Governorate", country: "Egypt" },
-  { town: "Alexandria", city: "Alexandria", region: "Alexandria Governorate", country: "Egypt" },
-  { town: "Giza", city: "Giza", region: "Giza Governorate", country: "Egypt" },
-  { town: "Port Said", city: "Port Said", region: "Port Said Governorate", country: "Egypt" },
-  { town: "Suez", city: "Suez", region: "Suez Governorate", country: "Egypt" },
-  { town: "Luxor", city: "Luxor", region: "Luxor Governorate", country: "Egypt" },
-  { town: "Aswan", city: "Aswan", region: "Aswan Governorate", country: "Egypt" },
-
-  // Ethiopia
-  { town: "Addis Ababa", city: "Addis Ababa", region: "Addis Ababa", country: "Ethiopia" },
-  { town: "Dire Dawa", city: "Dire Dawa", region: "Dire Dawa", country: "Ethiopia" },
-  { town: "Mekelle", city: "Mekelle", region: "Tigray Region", country: "Ethiopia" },
-  { town: "Gondar", city: "Gondar", region: "Amhara Region", country: "Ethiopia" },
-  { town: "Bahir Dar", city: "Bahir Dar", region: "Amhara Region", country: "Ethiopia" },
-  { town: "Hawassa", city: "Hawassa", region: "Sidama Region", country: "Ethiopia" },
-  { town: "Jimma", city: "Jimma", region: "Oromia Region", country: "Ethiopia" },
-
-  // Ghana
-  { town: "Accra", city: "Accra", region: "Greater Accra Region", country: "Ghana" },
-  { town: "Kumasi", city: "Kumasi", region: "Ashanti Region", country: "Ghana" },
-  { town: "Tamale", city: "Tamale", region: "Northern Region", country: "Ghana" },
-  { town: "Takoradi", city: "Sekondi-Takoradi", region: "Western Region", country: "Ghana" },
-  { town: "Cape Coast", city: "Cape Coast", region: "Central Region", country: "Ghana" },
-  { town: "Tema", city: "Tema", region: "Greater Accra Region", country: "Ghana" },
-
-  // Kenya
-  { town: "Nairobi", city: "Nairobi", region: "Nairobi County", country: "Kenya" },
-  { town: "Mombasa", city: "Mombasa", region: "Mombasa County", country: "Kenya" },
-  { town: "Kisumu", city: "Kisumu", region: "Kisumu County", country: "Kenya" },
-  { town: "Nakuru", city: "Nakuru", region: "Nakuru County", country: "Kenya" },
-  { town: "Eldoret", city: "Eldoret", region: "Uasin Gishu County", country: "Kenya" },
-  { town: "Thika", city: "Thika", region: "Kiambu County", country: "Kenya" },
-  { town: "Malindi", city: "Malindi", region: "Kilifi County", country: "Kenya" },
-
-  // Lesotho
-  { town: "Maseru", city: "Maseru", region: "Maseru District", country: "Lesotho" },
-  { town: "Mafeteng", city: "Mafeteng", region: "Mafeteng District", country: "Lesotho" },
-  { town: "Leribe", city: "Leribe", region: "Leribe District", country: "Lesotho" },
-  { town: "Maputsoe", city: "Maputsoe", region: "Leribe District", country: "Lesotho" },
-
-  // Libya
-  { town: "Tripoli", city: "Tripoli", region: "Tripoli District", country: "Libya" },
-  { town: "Benghazi", city: "Benghazi", region: "Benghazi District", country: "Libya" },
-  { town: "Misrata", city: "Misrata", region: "Misrata District", country: "Libya" },
-  { town: "Bayda", city: "Bayda", region: "Jabal al Akhdar District", country: "Libya" },
-
-  // Madagascar
-  { town: "Antananarivo", city: "Antananarivo", region: "Analamanga Region", country: "Madagascar" },
-  { town: "Toamasina", city: "Toamasina", region: "Atsinanana Region", country: "Madagascar" },
-  { town: "Antsirabe", city: "Antsirabe", region: "Vakinankaratra Region", country: "Madagascar" },
-  { town: "Fianarantsoa", city: "Fianarantsoa", region: "Haute Matsiatra Region", country: "Madagascar" },
-
-  // Malawi
-  { town: "Lilongwe", city: "Lilongwe", region: "Central Region", country: "Malawi" },
-  { town: "Blantyre", city: "Blantyre", region: "Southern Region", country: "Malawi" },
-  { town: "Mzuzu", city: "Mzuzu", region: "Northern Region", country: "Malawi" },
-  { town: "Zomba", city: "Zomba", region: "Southern Region", country: "Malawi" },
-
-  // Mali
-  { town: "Bamako", city: "Bamako", region: "Bamako Capital District", country: "Mali" },
-  { town: "Sikasso", city: "Sikasso", region: "Sikasso Region", country: "Mali" },
-  { town: "Mopti", city: "Mopti", region: "Mopti Region", country: "Mali" },
-  { town: "Ségou", city: "Ségou", region: "Ségou Region", country: "Mali" },
-
-  // Mauritius
-  { town: "Port Louis", city: "Port Louis", region: "Port Louis District", country: "Mauritius" },
-  { town: "Vacoas-Phoenix", city: "Vacoas-Phoenix", region: "Plaines Wilhems District", country: "Mauritius" },
-  { town: "Curepipe", city: "Curepipe", region: "Plaines Wilhems District", country: "Mauritius" },
-  { town: "Quatre Bornes", city: "Quatre Bornes", region: "Plaines Wilhems District", country: "Mauritius" },
-
-  // Morocco
-  { town: "Casablanca", city: "Casablanca", region: "Casablanca-Settat", country: "Morocco" },
-  { town: "Rabat", city: "Rabat", region: "Rabat-Salé-Kénitra", country: "Morocco" },
-  { town: "Fes", city: "Fes", region: "Fès-Meknès", country: "Morocco" },
-  { town: "Marrakech", city: "Marrakech", region: "Marrakech-Safi", country: "Morocco" },
-  { town: "Agadir", city: "Agadir", region: "Souss-Massa", country: "Morocco" },
-  { town: "Tangier", city: "Tangier", region: "Tanger-Tétouan-Al Hoceïma", country: "Morocco" },
-
-  // Mozambique
-  { town: "Maputo", city: "Maputo", region: "Maputo City Province", country: "Mozambique" },
-  { town: "Matola", city: "Matola", region: "Maputo Province", country: "Mozambique" },
-  { town: "Nampula", city: "Nampula", region: "Nampula Province", country: "Mozambique" },
-  { town: "Beira", city: "Beira", region: "Sofala Province", country: "Mozambique" },
-  { town: "Chimoio", city: "Chimoio", region: "Manica Province", country: "Mozambique" },
-
-  // Namibia
-  { town: "Windhoek", city: "Windhoek", region: "Khomas Region", country: "Namibia" },
-  { town: "Walvis Bay", city: "Walvis Bay", region: "Erongo Region", country: "Namibia" },
-  { town: "Swakopmund", city: "Swakopmund", region: "Erongo Region", country: "Namibia" },
-  { town: "Rundu", city: "Rundu", region: "Kavango East Region", country: "Namibia" },
-
-  // Nigeria
-  { town: "Lagos", city: "Lagos", region: "Lagos State", country: "Nigeria" },
-  { town: "Kano", city: "Kano", region: "Kano State", country: "Nigeria" },
-  { town: "Ibadan", city: "Ibadan", region: "Oyo State", country: "Nigeria" },
-  { town: "Abuja", city: "Abuja", region: "Federal Capital Territory", country: "Nigeria" },
-  { town: "Port Harcourt", city: "Port Harcourt", region: "Rivers State", country: "Nigeria" },
-  { town: "Benin City", city: "Benin City", region: "Edo State", country: "Nigeria" },
-  { town: "Kaduna", city: "Kaduna", region: "Kaduna State", country: "Nigeria" },
-  { town: "Enugu", city: "Enugu", region: "Enugu State", country: "Nigeria" },
-
-  // Rwanda
-  { town: "Kigali", city: "Kigali", region: "Kigali Province", country: "Rwanda" },
-  { town: "Butare", city: "Butare", region: "Southern Province", country: "Rwanda" },
-  { town: "Gitarama", city: "Gitarama", region: "Southern Province", country: "Rwanda" },
-  { town: "Ruhengeri", city: "Ruhengeri", region: "Northern Province", country: "Rwanda" },
-
-  // Senegal
-  { town: "Dakar", city: "Dakar", region: "Dakar Region", country: "Senegal" },
-  { town: "Thiès", city: "Thiès", region: "Thiès Region", country: "Senegal" },
-  { town: "Saint-Louis", city: "Saint-Louis", region: "Saint-Louis Region", country: "Senegal" },
-  { town: "Kaolack", city: "Kaolack", region: "Kaolack Region", country: "Senegal" },
-
-  // Somalia
-  { town: "Mogadishu", city: "Mogadishu", region: "Banaadir Region", country: "Somalia" },
-  { town: "Hargeisa", city: "Hargeisa", region: "Woqooyi Galbeed Region", country: "Somalia" },
-  { town: "Bosaso", city: "Bosaso", region: "Bari Region", country: "Somalia" },
-  { town: "Kismayo", city: "Kismayo", region: "Lower Juba Region", country: "Somalia" },
-
-  // South Africa - Gauteng
-  { town: "Johannesburg", city: "Johannesburg", region: "Gauteng", country: "South Africa" },
-  { town: "Pretoria", city: "Pretoria", region: "Gauteng", country: "South Africa" },
-  { town: "Soweto", city: "Johannesburg", region: "Gauteng", country: "South Africa" },
-  { town: "Sandton", city: "Johannesburg", region: "Gauteng", country: "South Africa" },
-  { town: "Roodepoort", city: "Johannesburg", region: "Gauteng", country: "South Africa" },
-  { town: "Randburg", city: "Johannesburg", region: "Gauteng", country: "South Africa" },
-  { town: "Benoni", city: "Ekurhuleni", region: "Gauteng", country: "South Africa" },
-  { town: "Boksburg", city: "Ekurhuleni", region: "Gauteng", country: "South Africa" },
-  { town: "Centurion", city: "Tshwane", region: "Gauteng", country: "South Africa" },
-  { town: "Midrand", city: "Johannesburg", region: "Gauteng", country: "South Africa" },
-  
-  // South Africa - Western Cape
-  { town: "Cape Town", city: "Cape Town", region: "Western Cape", country: "South Africa" },
-  { town: "George", city: "George", region: "Western Cape", country: "South Africa" },
-  { town: "Stellenbosch", city: "Stellenbosch", region: "Western Cape", country: "South Africa" },
-  { town: "Paarl", city: "Paarl", region: "Western Cape", country: "South Africa" },
-  { town: "Knysna", city: "Knysna", region: "Western Cape", country: "South Africa" },
-  
-  // South Africa - KwaZulu-Natal
-  { town: "Durban", city: "Durban", region: "KwaZulu-Natal", country: "South Africa" },
-  { town: "Pietermaritzburg", city: "Pietermaritzburg", region: "KwaZulu-Natal", country: "South Africa" },
-  { town: "Newcastle", city: "Newcastle", region: "KwaZulu-Natal", country: "South Africa" },
-  { town: "Richards Bay", city: "Richards Bay", region: "KwaZulu-Natal", country: "South Africa" },
-  
-  // South Africa - Eastern Cape
-  { town: "Port Elizabeth", city: "Gqeberha", region: "Eastern Cape", country: "South Africa" },
-  { town: "Gqeberha", city: "Gqeberha", region: "Eastern Cape", country: "South Africa" },
-  { town: "East London", city: "East London", region: "Eastern Cape", country: "South Africa" },
-  { town: "Mthatha", city: "Mthatha", region: "Eastern Cape", country: "South Africa" },
-  
-  // South Africa - Free State
-  { town: "Bloemfontein", city: "Bloemfontein", region: "Free State", country: "South Africa" },
-  { town: "Welkom", city: "Welkom", region: "Free State", country: "South Africa" },
-  { town: "Bethlehem", city: "Bethlehem", region: "Free State", country: "South Africa" },
-  
-  // South Africa - Limpopo
-  { town: "Polokwane", city: "Polokwane", region: "Limpopo", country: "South Africa" },
-  { town: "Tzaneen", city: "Tzaneen", region: "Limpopo", country: "South Africa" },
-  { town: "Mokopane", city: "Mokopane", region: "Limpopo", country: "South Africa" },
-  
-  // South Africa - Mpumalanga
-  { town: "Nelspruit", city: "Mbombela", region: "Mpumalanga", country: "South Africa" },
-  { town: "Mbombela", city: "Mbombela", region: "Mpumalanga", country: "South Africa" },
-  { town: "Witbank", city: "eMalahleni", region: "Mpumalanga", country: "South Africa" },
-  { town: "Middelburg", city: "Middelburg", region: "Mpumalanga", country: "South Africa" },
-  
-  // South Africa - North West
-  { town: "Rustenburg", city: "Rustenburg", region: "North West", country: "South Africa" },
-  { town: "Mahikeng", city: "Mahikeng", region: "North West", country: "South Africa" },
-  { town: "Klerksdorp", city: "Klerksdorp", region: "North West", country: "South Africa" },
-  { town: "Potchefstroom", city: "Potchefstroom", region: "North West", country: "South Africa" },
-  
-  // South Africa - Northern Cape
-  { town: "Kimberley", city: "Kimberley", region: "Northern Cape", country: "South Africa" },
-  { town: "Upington", city: "Upington", region: "Northern Cape", country: "South Africa" },
-  { town: "Kathu", city: "Kathu", region: "Northern Cape", country: "South Africa" },
-  { town: "Kuruman", city: "Kuruman", region: "Northern Cape", country: "South Africa" },
-
-  // Sudan
-  { town: "Khartoum", city: "Khartoum", region: "Khartoum State", country: "Sudan" },
-  { town: "Omdurman", city: "Omdurman", region: "Khartoum State", country: "Sudan" },
-  { town: "Port Sudan", city: "Port Sudan", region: "Red Sea State", country: "Sudan" },
-  { town: "Kassala", city: "Kassala", region: "Kassala State", country: "Sudan" },
-
-  // Tanzania
-  { town: "Dar es Salaam", city: "Dar es Salaam", region: "Dar es Salaam Region", country: "Tanzania" },
-  { town: "Dodoma", city: "Dodoma", region: "Dodoma Region", country: "Tanzania" },
-  { town: "Mwanza", city: "Mwanza", region: "Mwanza Region", country: "Tanzania" },
-  { town: "Arusha", city: "Arusha", region: "Arusha Region", country: "Tanzania" },
-  { town: "Mbeya", city: "Mbeya", region: "Mbeya Region", country: "Tanzania" },
-  { town: "Zanzibar City", city: "Zanzibar City", region: "Mjini Magharibi Region", country: "Tanzania" },
-
-  // Togo
-  { town: "Lomé", city: "Lomé", region: "Maritime Region", country: "Togo" },
-  { town: "Sokodé", city: "Sokodé", region: "Centrale Region", country: "Togo" },
-  { town: "Kara", city: "Kara", region: "Kara Region", country: "Togo" },
-
-  // Tunisia
-  { town: "Tunis", city: "Tunis", region: "Tunis Governorate", country: "Tunisia" },
-  { town: "Sfax", city: "Sfax", region: "Sfax Governorate", country: "Tunisia" },
-  { town: "Sousse", city: "Sousse", region: "Sousse Governorate", country: "Tunisia" },
-  { town: "Kairouan", city: "Kairouan", region: "Kairouan Governorate", country: "Tunisia" },
-
-  // Uganda
-  { town: "Kampala", city: "Kampala", region: "Central Region", country: "Uganda" },
-  { town: "Gulu", city: "Gulu", region: "Northern Region", country: "Uganda" },
-  { town: "Lira", city: "Lira", region: "Northern Region", country: "Uganda" },
-  { town: "Mbarara", city: "Mbarara", region: "Western Region", country: "Uganda" },
-  { town: "Jinja", city: "Jinja", region: "Eastern Region", country: "Uganda" },
-  { town: "Entebbe", city: "Entebbe", region: "Central Region", country: "Uganda" },
-
-  // Zambia
-  { town: "Lusaka", city: "Lusaka", region: "Lusaka Province", country: "Zambia" },
-  { town: "Kitwe", city: "Kitwe", region: "Copperbelt Province", country: "Zambia" },
-  { town: "Ndola", city: "Ndola", region: "Copperbelt Province", country: "Zambia" },
-  { town: "Kabwe", city: "Kabwe", region: "Central Province", country: "Zambia" },
-  { town: "Livingstone", city: "Livingstone", region: "Southern Province", country: "Zambia" },
-
-  // Zimbabwe
-  { town: "Harare", city: "Harare", region: "Harare Province", country: "Zimbabwe" },
-  { town: "Bulawayo", city: "Bulawayo", region: "Bulawayo Province", country: "Zimbabwe" },
-  { town: "Mutare", city: "Mutare", region: "Manicaland Province", country: "Zimbabwe" },
-  { town: "Gweru", city: "Gweru", region: "Midlands Province", country: "Zimbabwe" },
-  { town: "Kwekwe", city: "Kwekwe", region: "Midlands Province", country: "Zimbabwe" },
+const africanCountries = [
+  { value: "Algeria", label: "Algeria" },
+  { value: "Angola", label: "Angola" },
+  { value: "Benin", label: "Benin" },
+  { value: "Botswana", label: "Botswana" },
+  { value: "Burkina Faso", label: "Burkina Faso" },
+  { value: "Burundi", label: "Burundi" },
+  { value: "Cabo Verde", label: "Cabo Verde" },
+  { value: "Cameroon", label: "Cameroon" },
+  { value: "Central African Republic", label: "Central African Republic" },
+  { value: "Chad", label: "Chad" },
+  { value: "Comoros", label: "Comoros" },
+  { value: "Congo", label: "Congo" },
+  { value: "Côte d'Ivoire", label: "Côte d'Ivoire" },
+  { value: "Djibouti", label: "Djibouti" },
+  { value: "DR Congo", label: "DR Congo" },
+  { value: "Egypt", label: "Egypt" },
+  { value: "Equatorial Guinea", label: "Equatorial Guinea" },
+  { value: "Eritrea", label: "Eritrea" },
+  { value: "Eswatini", label: "Eswatini" },
+  { value: "Ethiopia", label: "Ethiopia" },
+  { value: "Gabon", label: "Gabon" },
+  { value: "Gambia", label: "Gambia" },
+  { value: "Ghana", label: "Ghana" },
+  { value: "Guinea", label: "Guinea" },
+  { value: "Guinea-Bissau", label: "Guinea-Bissau" },
+  { value: "Kenya", label: "Kenya" },
+  { value: "Lesotho", label: "Lesotho" },
+  { value: "Liberia", label: "Liberia" },
+  { value: "Libya", label: "Libya" },
+  { value: "Madagascar", label: "Madagascar" },
+  { value: "Malawi", label: "Malawi" },
+  { value: "Mali", label: "Mali" },
+  { value: "Mauritania", label: "Mauritania" },
+  { value: "Mauritius", label: "Mauritius" },
+  { value: "Morocco", label: "Morocco" },
+  { value: "Mozambique", label: "Mozambique" },
+  { value: "Namibia", label: "Namibia" },
+  { value: "Niger", label: "Niger" },
+  { value: "Nigeria", label: "Nigeria" },
+  { value: "Rwanda", label: "Rwanda" },
+  { value: "São Tomé and Príncipe", label: "São Tomé and Príncipe" },
+  { value: "Senegal", label: "Senegal" },
+  { value: "Seychelles", label: "Seychelles" },
+  { value: "Sierra Leone", label: "Sierra Leone" },
+  { value: "Somalia", label: "Somalia" },
+  { value: "South Africa", label: "South Africa" },
+  { value: "South Sudan", label: "South Sudan" },
+  { value: "Sudan", label: "Sudan" },
+  { value: "Tanzania", label: "Tanzania" },
+  { value: "Togo", label: "Togo" },
+  { value: "Tunisia", label: "Tunisia" },
+  { value: "Uganda", label: "Uganda" },
+  { value: "Zambia", label: "Zambia" },
+  { value: "Zimbabwe", label: "Zimbabwe" },
 ]
+
+// City mapping for each country
+const citiesByCountry = {
+  "Algeria": [
+    "Algiers", "Oran", "Constantine", "Annaba", "Batna",
+    "Sétif", "Sidi Bel Abbès", "Biskra", "Tébessa", "El Oued"
+  ],
+  "Angola": [
+    "Luanda", "Huambo", "Lobito", "Benguela", "Lubango",
+    "Kuito", "Malanje", "Namibe", "Soyo", "Cabinda"
+  ],
+  "Benin": [
+    "Porto-Novo", "Cotonou", "Parakou", "Djougou", "Bohicon",
+    "Kandi", "Lokossa", "Ouidah", "Abomey", "Natitingou"
+  ],
+  "Botswana": [
+    "Gaborone", "Francistown", "Molepolole", "Maun", "Serowe",
+    "Selibe Phikwe", "Kanye", "Mochudi", "Mahalapye", "Palapye"
+  ],
+  "Burkina Faso": [
+    "Ouagadougou", "Bobo-Dioulasso", "Koudougou", "Banfora", "Ouahigouya",
+    "Dedougou", "Fada N'gourma", "Kaya", "Tenkodogo", "Houndé"
+  ],
+  "Burundi": [
+    "Gitega", "Bujumbura", "Muyinga", "Ngozi", "Ruyigi",
+    "Kayanza", "Makamba", "Bururi", "Cibitoke", "Rutana"
+  ],
+  "Cabo Verde": [
+    "Praia", "Mindelo", "Santa Maria", "Assomada", "Pedra Badejo",
+    "São Filipe", "Tarrafal", "Vila do Maio", "Porto Novo", "Ponta do Sol"
+  ],
+  "Cameroon": [
+    "Yaoundé", "Douala", "Garoua", "Bamenda", "Bafoussam",
+    "Maroua", "Ngaoundéré", "Bertoua", "Kumba", "Nkongsamba"
+  ],
+  "Central African Republic": [
+    "Bangui", "Bimbo", "Mbaïki", "Berbérati", "Carnot",
+    "Bambari", "Bouar", "Bossangoa", "Bria", "Bangassou"
+  ],
+  "Chad": [
+    "N'Djamena", "Moundou", "Sarh", "Abéché", "Kélo",
+    "Koumra", "Pala", "Am Timan", "Bongor", "Mongo"
+  ],
+  "Comoros": [
+    "Moroni", "Mutsamudu", "Fomboni", "Domoni", "Ouani",
+    "Sima", "Mitsamiouli", "Adda-Douéni", "Koni-Djodjo", "Tsimbeo"
+  ],
+  "Congo": [
+    "Brazzaville", "Pointe-Noire", "Dolisie", "Nkayi", "Owando",
+    "Ouesso", "Impfondo", "Sibiti", "Loandjili", "Madingou"
+  ],
+  "Côte d'Ivoire": [
+    "Abidjan", "Yamoussoukro", "Bouaké", "Daloa", "San-Pédro",
+    "Korhogo", "Man", "Divo", "Gagnoa", "Anyama"
+  ],
+  "Djibouti": [
+    "Djibouti", "Ali Sabieh", "Tadjourah", "Obock", "Dikhil",
+    "Arta", "Holhol", "Loyada", "Randa", "Balho"
+  ],
+  "DR Congo": [
+    "Kinshasa", "Lubumbashi", "Mbuji-Mayi", "Kananga", "Kisangani",
+    "Goma", "Bukavu", "Kolwezi", "Likasi", "Tshikapa"
+  ],
+  "Egypt": [
+    "Cairo", "Alexandria", "Giza", "Shubra El-Kheima", "Port Said",
+    "Suez", "Luxor", "Mansoura", "Tanta", "Asyut"
+  ],
+  "Equatorial Guinea": [
+    "Malabo", "Bata", "Ebebiyin", "Aconibe", "Añisoc",
+    "Luba", "Evinayong", "Mongomo", "Mengomeyén", "Rebola"
+  ],
+  "Eritrea": [
+    "Asmara", "Keren", "Massawa", "Assab", "Mendefera",
+    "Barentu", "Adi Keyh", "Adi Quala", "Dekemhare", "Ak'ordat"
+  ],
+  "Eswatini": [
+    "Mbabane", "Manzini", "Lobamba", "Siteki", "Malkerns",
+    "Nhlangano", "Piggs Peak", "Big Bend", "Hluti", "Simunye"
+  ],
+  "Ethiopia": [
+    "Addis Ababa", "Dire Dawa", "Mekelle", "Gondar", "Bahir Dar",
+    "Hawassa", "Dessie", "Jimma", "Jijiga", "Shashamane"
+  ],
+  "Gabon": [
+    "Libreville", "Port-Gentil", "Franceville", "Oyem", "Moanda",
+    "Mouila", "Lambaréné", "Tchibanga", "Koulamoutou", "Makokou"
+  ],
+  "Gambia": [
+    "Banjul", "Serekunda", "Brikama", "Bakau", "Farafenni",
+    "Lamin", "Sukuta", "Basse Santa Su", "Gunjur", "Soma"
+  ],
+  "Ghana": [
+    "Accra", "Kumasi", "Tamale", "Takoradi", "Ashaiman",
+    "Tema", "Teshie", "Cape Coast", "Obuasi", "Koforidua"
+  ],
+  "Guinea": [
+    "Conakry", "Nzérékoré", "Kankan", "Kindia", "Labé",
+    "Siguiri", "Kamsar", "Kissidougou", "Guéckédou", "Boké"
+  ],
+  "Guinea-Bissau": [
+    "Bissau", "Gabú", "Bafatá", "Canchungo", "Bissorã",
+    "Bolama", "Cacheu", "Catió", "Bubaque", "Farim"
+  ],
+  "Kenya": [
+    "Nairobi", "Mombasa", "Kisumu", "Nakuru", "Eldoret",
+    "Thika", "Malindi", "Kitale", "Garissa", "Kakamega"
+  ],
+  "Lesotho": [
+    "Maseru", "Mafeteng", "Leribe", "Maputsoe", "Mohale's Hoek",
+    "Qacha's Nek", "Quthing", "Butha-Buthe", "Mokhotlong", "Thaba-Tseka"
+  ],
+  "Liberia": [
+    "Monrovia", "Gbarnga", "Kakata", "Bensonville", "Harper",
+    "Voinjama", "Buchanan", "Zwedru", "New Yekepa", "Ganta"
+  ],
+  "Libya": [
+    "Tripoli", "Benghazi", "Misrata", "Bayda", "Zawiya",
+    "Ajdabiya", "Tobruk", "Sabha", "Sirte", "Derna"
+  ],
+  "Madagascar": [
+    "Antananarivo", "Toamasina", "Antsirabe", "Fianarantsoa", "Mahajanga",
+    "Toliara", "Antsiranana", "Ambovombe", "Antanifotsy", "Ambanja"
+  ],
+  "Malawi": [
+    "Lilongwe", "Blantyre", "Mzuzu", "Zomba", "Kasungu",
+    "Mangochi", "Karonga", "Salima", "Liwonde", "Dedza"
+  ],
+  "Mali": [
+    "Bamako", "Sikasso", "Mopti", "Koutiala", "Kayes",
+    "Ségou", "Gao", "Kati", "San", "Tombouctou"
+  ],
+  "Mauritania": [
+    "Nouakchott", "Nouadhibou", "Néma", "Kaédi", "Rosso",
+    "Zouérat", "Kiffa", "Atar", "Sélibaby", "Aleg"
+  ],
+  "Mauritius": [
+    "Port Louis", "Beau Bassin-Rose Hill", "Vacoas-Phoenix", "Curepipe", "Quatre Bornes",
+    "Triolet", "Goodlands", "Centre de Flacq", "Mahebourg", "Saint Pierre"
+  ],
+  "Morocco": [
+    "Casablanca", "Rabat", "Fes", "Marrakech", "Agadir",
+    "Tangier", "Meknes", "Oujda", "Kenitra", "Tetouan"
+  ],
+  "Mozambique": [
+    "Maputo", "Matola", "Nampula", "Beira", "Chimoio",
+    "Nacala", "Quelimane", "Tete", "Lichinga", "Pemba"
+  ],
+  "Namibia": [
+    "Windhoek", "Rundu", "Walvis Bay", "Oshakati", "Swakopmund",
+    "Katima Mulilo", "Grootfontein", "Rehoboth", "Otjiwarongo", "Ondangwa"
+  ],
+  "Niger": [
+    "Niamey", "Zinder", "Maradi", "Agadez", "Tahoua",
+    "Dosso", "Diffa", "Arlit", "Tillabéri", "Ayorou"
+  ],
+  "Nigeria": [
+    "Lagos", "Kano", "Ibadan", "Abuja", "Port Harcourt",
+    "Benin City", "Kaduna", "Maiduguri", "Zaria", "Aba"
+  ],
+  "Rwanda": [
+    "Kigali", "Butare", "Gitarama", "Ruhengeri", "Gisenyi",
+    "Byumba", "Cyangugu", "Kibungo", "Kibuye", "Rwamagana"
+  ],
+  "São Tomé and Príncipe": [
+    "São Tomé", "Santo António", "Trindade", "Neves", "Santana",
+    "Guadalupe", "Santo Amaro", "São João dos Angolares", "Porto Alegre", "Ribeira Afonso"
+  ],
+  "Senegal": [
+    "Dakar", "Touba", "Thiès", "Kaolack", "Saint-Louis",
+    "Ziguinchor", "Mbour", "Diourbel", "Tambacounda", "Rufisque"
+  ],
+  "Seychelles": [
+    "Victoria", "Anse Boileau", "Beau Vallon", "Cascade", "Takamaka",
+    "Anse Royale", "Bel Ombre", "Grand Anse", "La Digue", "Baie Lazare"
+  ],
+  "Sierra Leone": [
+    "Freetown", "Bo", "Kenema", "Makeni", "Koidu",
+    "Lunsar", "Port Loko", "Waterloo", "Kabala", "Magburaka"
+  ],
+  "Somalia": [
+    "Mogadishu", "Hargeisa", "Bosaso", "Kismayo", "Merca",
+    "Jamame", "Beledweyne", "Baidoa", "Burao", "Galkayo"
+  ],
+  "South Africa": [
+    "Johannesburg", "Cape Town", "Durban", "Pretoria", "Port Elizabeth",
+    "Bloemfontein", "East London", "Nelspruit", "Polokwane", "Kimberley",
+    "Pietermaritzburg", "Rustenburg", "George", "Middelburg", "Witbank"
+  ],
+  "South Sudan": [
+    "Juba", "Malakal", "Wau", "Yei", "Bor",
+    "Yambio", "Aweil", "Rumbek", "Torit", "Bentiu"
+  ],
+  "Sudan": [
+    "Khartoum", "Omdurman", "Port Sudan", "Kassala", "El-Obeid",
+    "Nyala", "Wad Madani", "El Fasher", "Kosti", "El Gadarif"
+  ],
+  "Tanzania": [
+    "Dar es Salaam", "Dodoma", "Mwanza", "Arusha", "Mbeya",
+    "Morogoro", "Tanga", "Zanzibar City", "Kigoma", "Tabora"
+  ],
+  "Togo": [
+    "Lomé", "Sokodé", "Kara", "Atakpamé", "Kpalimé",
+    "Bassar", "Tsévié", "Aného", "Sansanné-Mango", "Dapaong"
+  ],
+  "Tunisia": [
+    "Tunis", "Sfax", "Sousse", "Kairouan", "Bizerte",
+    "Gabès", "Ariana", "Gafsa", "Monastir", "Ben Arous"
+  ],
+  "Uganda": [
+    "Kampala", "Gulu", "Lira", "Mbarara", "Jinja",
+    "Mbale", "Mukono", "Kasese", "Masaka", "Entebbe"
+  ],
+  "Zambia": [
+    "Lusaka", "Kitwe", "Ndola", "Kabwe", "Chingola",
+    "Mufulira", "Livingstone", "Luanshya", "Kasama", "Chipata"
+  ],
+  "Zimbabwe": [
+    "Harare", "Bulawayo", "Chitungwiza", "Mutare", "Gweru",
+    "Kwekwe", "Kadoma", "Masvingo", "Chinhoyi", "Marondera"
+  ]
+}
 
 // Simple FormField component
 function FormField({ label, required, tooltip, children }) {
@@ -500,7 +470,7 @@ function MultiSelect({ options, selected, onChange, label }) {
               style={{
                 width: '100%',
                 padding: '8px',
-                backgroundColor: '#8B4513',
+                backgroundColor: '#007bff',
                 color: 'white',
                 border: 'none',
                 borderRadius: '4px',
@@ -516,111 +486,144 @@ function MultiSelect({ options, selected, onChange, label }) {
   )
 }
 
-// Searchable Select Component for Country, Region, City
-function SearchableSelect({ value, onChange, options, placeholder, searchable = true }) {
-  const [isOpen, setIsOpen] = useState(false)
-  const [searchTerm, setSearchTerm] = useState("")
-
-  const filteredOptions = searchable 
-    ? options.filter(opt => opt.toLowerCase().includes(searchTerm.toLowerCase()))
-    : options
-
-  const handleSelect = (option) => {
-    onChange(option)
-    setIsOpen(false)
-    setSearchTerm("")
-  }
-
-  return (
-    <div style={{ position: 'relative' }}>
-      <div 
-        onClick={() => setIsOpen(!isOpen)}
-        style={{
-          border: '1px solid #ccc',
-          borderRadius: '4px',
-          padding: '8px 12px',
-          cursor: 'pointer',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          backgroundColor: 'white'
-        }}
-      >
-        <span style={{ color: value ? '#000' : '#999' }}>
-          {value || placeholder}
-        </span>
-        {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-      </div>
-
-      {isOpen && (
-        <div style={{
-          position: 'absolute',
-          top: '100%',
-          left: 0,
-          right: 0,
-          backgroundColor: 'white',
-          border: '1px solid #ccc',
-          borderRadius: '4px',
-          marginTop: '4px',
-          zIndex: 1000,
-          maxHeight: '400px',
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column'
-        }}>
-          {searchable && (
-            <div style={{ padding: '8px', borderBottom: '1px solid #ccc' }}>
-              <input
-                type="text"
-                placeholder={`Search ${placeholder.toLowerCase()}...`}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  border: '1px solid #ccc',
-                  borderRadius: '4px',
-                  fontSize: '14px'
-                }}
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>
-          )}
-          <div style={{ overflow: 'auto', maxHeight: '340px' }}>
-            {filteredOptions.length > 0 ? (
-              filteredOptions.map((option) => (
-                <div
-                  key={option}
-                  onClick={() => handleSelect(option)}
-                  style={{
-                    padding: '10px 12px',
-                    cursor: 'pointer',
-                    backgroundColor: value === option ? '#f0f0f0' : 'white',
-                    borderBottom: '1px solid #f0f0f0'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f8f8'}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = value === option ? '#f0f0f0' : 'white'}
-                >
-                  {option}
-                </div>
-              ))
-            ) : (
-              <div style={{ padding: '12px', textAlign: 'center', color: '#999' }}>
-                No options found
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
 // Main component
 export default function EntityOverview({ data = {}, updateData }) {
   const [formData, setFormData] = useState({})
   const [isLoading, setIsLoading] = useState(true)
+const [logoUploading, setLogoUploading] = useState(false);
+const [showLogoUpload, setShowLogoUpload] = useState(false);
+const [logoPreview, setLogoPreview] = useState("");
 
+const handleLogoUpload = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+  if (!allowedTypes.includes(file.type)) {
+    alert('Please select a valid image file (JPEG, PNG, GIF, or WebP)');
+    return;
+  }
+
+  const maxSize = 5 * 1024 * 1024;
+  if (file.size > maxSize) {
+    alert('Image size must be less than 5MB');
+    return;
+  }
+
+  try {
+    setLogoUploading(true);
+    const currentUser = auth.currentUser;
+
+    if (!currentUser) {
+      throw new Error('User not authenticated');
+    }
+
+    // Create preview
+    const previewURL = URL.createObjectURL(file);
+    setLogoPreview(previewURL);
+
+    const timestamp = Date.now();
+    const fileName = `company_logos/${currentUser.uid}/${timestamp}_${file.name}`;
+    const storageRef = ref(storage, fileName);
+
+    const uploadResult = await uploadBytes(storageRef, file);
+    const downloadURL = await getDownloadURL(uploadResult.ref);
+
+    const userDocRef = doc(db, "universalProfiles", currentUser.uid);
+    const currentProfileDoc = await getDoc(userDocRef);
+    const currentData = currentProfileDoc.exists() ? currentProfileDoc.data() : {};
+
+    const updatedData = {
+      ...currentData,
+      entityOverview: {
+        ...currentData.entityOverview,
+        companyLogo: downloadURL
+      },
+      updatedAt: new Date().toISOString()
+    };
+
+    await updateDoc(userDocRef, updatedData);
+    
+    // Update local form data
+    const newFormData = { ...formData, companyLogo: downloadURL };
+    updateFormData(newFormData);
+
+    // Clean up old logo if it exists and is different
+    if (currentData.entityOverview?.companyLogo &&
+        currentData.entityOverview.companyLogo !== downloadURL &&
+        currentData.entityOverview.companyLogo.includes('firebase')) {
+      try {
+        const oldImageRef = ref(storage, currentData.entityOverview.companyLogo);
+        await deleteObject(oldImageRef);
+      } catch (deleteError) {
+        console.warn('Could not delete old logo:', deleteError);
+      }
+    }
+
+    setShowLogoUpload(false);
+    
+  } catch (error) {
+    console.error('Error uploading logo:', error);
+    let errorMessage = 'Failed to upload logo. Please try again.';
+
+    if (error.code === 'storage/unauthorized') {
+      errorMessage = 'You do not have permission to upload images.';
+    } else if (error.code === 'storage/canceled') {
+      errorMessage = 'Upload was canceled.';
+    } else if (error.code === 'storage/unknown') {
+      errorMessage = 'An unknown error occurred. Please check your internet connection.';
+    }
+
+    alert(errorMessage);
+    setLogoPreview("");
+  } finally {
+    setLogoUploading(false);
+  }
+};
+
+const handleRemoveLogo = async () => {
+  try {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+
+    const userDocRef = doc(db, "universalProfiles", currentUser.uid);
+    const currentProfileDoc = await getDoc(userDocRef);
+    const currentData = currentProfileDoc.exists() ? currentProfileDoc.data() : {};
+
+    // Delete from storage if it exists
+    if (currentData.entityOverview?.companyLogo && 
+        currentData.entityOverview.companyLogo.includes('firebase')) {
+      try {
+        const oldImageRef = ref(storage, currentData.entityOverview.companyLogo);
+        await deleteObject(oldImageRef);
+      } catch (deleteError) {
+        console.warn('Could not delete old logo:', deleteError);
+      }
+    }
+
+    // Update Firestore
+    const updatedData = {
+      ...currentData,
+      entityOverview: {
+        ...currentData.entityOverview,
+        companyLogo: ""
+      },
+      updatedAt: new Date().toISOString()
+    };
+
+    await updateDoc(userDocRef, updatedData);
+    
+    // Update local state
+    const newFormData = { ...formData };
+    delete newFormData.companyLogo;
+    updateFormData(newFormData);
+    setLogoPreview("");
+
+  } catch (error) {
+    console.error('Error removing logo:', error);
+    alert('Failed to remove logo. Please try again.');
+  }
+};
   // Update form data and notify parent
   const updateFormData = (newData) => {
     setFormData(newData)
@@ -669,72 +672,13 @@ export default function EntityOverview({ data = {}, updateData }) {
   const handleChange = (e) => {
     const { name, value } = e.target
     const newData = { ...formData, [name]: value }
-    updateFormData(newData)
-  }
-
-  // Get unique countries
-  const getCountries = () => {
-    const countries = [...new Set(africanLocations.map(loc => loc.country))]
-    return countries.sort()
-  }
-
-  // Get regions for selected country
-  const getRegions = (country) => {
-    if (!country) return []
-    const regions = [...new Set(
-      africanLocations
-        .filter(loc => loc.country === country)
-        .map(loc => loc.region)
-    )]
-    return regions.sort()
-  }
-
-  // Get cities for selected country and region
-  const getCities = (country, region) => {
-    if (!country || !region) return []
-    const cities = [...new Set(
-      africanLocations
-        .filter(loc => loc.country === country && loc.region === region)
-        .map(loc => loc.city)
-    )]
-    return cities.sort()
-  }
-
-  const handleCountryChange = (country) => {
-    const newData = {
-      ...formData,
-      country: country,
-      region: "",
-      city: "",
-      town: ""
+    
+    // If country changes, clear city selection
+    if (name === "location") {
+      newData.city = ""
     }
+    
     updateFormData(newData)
-  }
-
-  const handleRegionChange = (region) => {
-    const newData = {
-      ...formData,
-      region: region,
-      city: "",
-      town: ""
-    }
-    updateFormData(newData)
-  }
-
-  const handleCityChange = (city) => {
-    const location = africanLocations.find(loc => 
-      loc.city === city && 
-      loc.region === formData.region && 
-      loc.country === formData.country
-    )
-    if (location) {
-      const newData = {
-        ...formData,
-        city: city,
-        town: location.town
-      }
-      updateFormData(newData)
-    }
   }
 
   const handleMultiSelectChange = (field, value) => {
@@ -831,6 +775,23 @@ export default function EntityOverview({ data = {}, updateData }) {
             </select>
           </FormField>
 
+          <FormField label="Entity Size" required>
+            <select
+              name="entitySize"
+              value={formData.entitySize || ""}
+              onChange={handleChange}
+              style={inputStyle}
+              required
+            >
+              <option value="">Select Entity Size</option>
+              {entitySizes.map((size) => (
+                <option key={size.value} value={size.value}>
+                  {size.label}
+                </option>
+              ))}
+            </select>
+          </FormField>
+
           <FormField label="Financial Year End" required>
             <input
               type="month"
@@ -895,47 +856,63 @@ export default function EntityOverview({ data = {}, updateData }) {
             />
           </FormField>
 
-          {/* Country -> Region -> City order */}
           <FormField label="Country" required>
-            <SearchableSelect
-              value={formData.country || ""}
-              onChange={handleCountryChange}
-              options={getCountries()}
-              placeholder="Select Country"
-            />
+            <select
+              name="location"
+              value={formData.location || ""}
+              onChange={handleChange}
+              style={inputStyle}
+              required
+            >
+              <option value="">Select Country</option>
+              {africanCountries.map((country) => (
+                <option key={country.value} value={country.value}>
+                  {country.label}
+                </option>
+              ))}
+            </select>
           </FormField>
 
-          {formData.country && (
-            <FormField label="Province/Region/State" required>
-              <SearchableSelect
-                value={formData.region || ""}
-                onChange={handleRegionChange}
-                options={getRegions(formData.country)}
-                placeholder="Select Province/Region"
-              />
-            </FormField>
-          )}
-
-          {formData.region && (
+          {/* City dropdown - shows when country is selected */}
+          {formData.location && citiesByCountry[formData.location] && (
             <FormField label="City" required>
-              <SearchableSelect
+              <select
+                name="city"
                 value={formData.city || ""}
-                onChange={handleCityChange}
-                options={getCities(formData.country, formData.region)}
-                placeholder="Select City"
-              />
+                onChange={handleChange}
+                style={inputStyle}
+                required
+              >
+                <option value="">Select City</option>
+                {citiesByCountry[formData.location].map((city) => (
+                  <option key={city} value={city}>
+                    {city}
+                  </option>
+                ))}
+              </select>
             </FormField>
           )}
 
-          {/* Auto-populated Town field (hidden but stored) */}
-          {formData.town && formData.town !== formData.city && (
-            <FormField label="Town/Suburb">
-              <input
-                type="text"
-                value={formData.town}
-                style={{...inputStyle, backgroundColor: '#f5f5f5'}}
-                disabled
-              />
+          {formData.location === "South Africa" && (
+            <FormField label="Province" required>
+              <select
+                name="province"
+                value={formData.province || ""}
+                onChange={handleChange}
+                style={inputStyle}
+                required
+              >
+                <option value="">Select Province</option>
+                <option value="eastern_cape">Eastern Cape</option>
+                <option value="free_state">Free State</option>
+                <option value="gauteng">Gauteng</option>
+                <option value="kwazulu_natal">KwaZulu-Natal</option>
+                <option value="limpopo">Limpopo</option>
+                <option value="mpumalanga">Mpumalanga</option>
+                <option value="northern_cape">Northern Cape</option>
+                <option value="north_west">North West</option>
+                <option value="western_cape">Western Cape</option>
+              </select>
             </FormField>
           )}
 
@@ -944,20 +921,173 @@ export default function EntityOverview({ data = {}, updateData }) {
               name="businessDescription"
               value={formData.businessDescription || ""}
               onChange={handleChange}
-              rows={6}
+              rows={4}
               style={{...inputStyle, resize: 'vertical'}}
-              maxLength={1500}
               required
             />
-            <div style={{ 
-              fontSize: '12px', 
-              color: '#666', 
-              marginTop: '4px',
-              textAlign: 'right' 
-            }}>
-              {(formData.businessDescription || "").length}/1500 characters
-            </div>
           </FormField>
+ <FormField label="Company Logo">
+  <div style={{ 
+    border: '2px dashed #d1d5db', 
+    borderRadius: '8px', 
+    padding: '20px',
+    backgroundColor: '#fafafa',
+    transition: 'all 0.3s ease'
+  }}>
+    <div style={{ 
+      display: 'flex', 
+      alignItems: 'center', 
+      gap: '20px',
+      justifyContent: 'center',
+      flexDirection: 'column',
+      textAlign: 'center'
+    }}>
+      {/* Logo Preview */}
+      <div style={{ 
+        width: '100px', 
+        height: '100px', 
+        borderRadius: '8px', 
+        overflow: 'hidden', 
+        border: '2px solid #e5e7eb',
+        backgroundColor: 'white',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+      }}>
+        {formData.companyLogo || logoPreview ? (
+          <img 
+            src={logoPreview || formData.companyLogo} 
+            alt="Company Logo" 
+            style={{ 
+              width: '100%', 
+              height: '100%', 
+              objectFit: 'cover' 
+            }}
+          />
+        ) : (
+          <div style={{ 
+            color: '#9ca3af', 
+            fontSize: '12px', 
+            textAlign: 'center',
+            padding: '8px'
+          }}>
+            <div style={{ fontSize: '24px', marginBottom: '4px' }}>🏢</div>
+            No Logo
+          </div>
+        )}
+      </div>
+      
+      {/* Upload Controls */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+          <label 
+            htmlFor="logo-upload"
+            style={{
+              padding: '10px 20px',
+              backgroundColor: logoUploading ? '#9ca3af' : '#8B4513',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: logoUploading ? 'not-allowed' : 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              transition: 'all 0.2s ease',
+              boxShadow: '0 2px 4px rgba(139, 69, 19, 0.2)'
+            }}
+            onMouseOver={(e) => {
+              if (!logoUploading) {
+                e.target.style.backgroundColor = '#5D2F06';
+                e.target.style.transform = 'translateY(-1px)';
+                e.target.style.boxShadow = '0 4px 8px rgba(139, 69, 19, 0.3)';
+              }
+            }}
+            onMouseOut={(e) => {
+              if (!logoUploading) {
+                e.target.style.backgroundColor = '#8B4513';
+                e.target.style.transform = 'translateY(0)';
+                e.target.style.boxShadow = '0 2px 4px rgba(139, 69, 19, 0.2)';
+              }
+            }}
+          >
+            {logoUploading ? (
+              <>
+                <div style={{
+                  width: '16px',
+                  height: '16px',
+                  border: '2px solid transparent',
+                  borderTop: '2px solid white',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }}></div>
+                Uploading...
+              </>
+            ) : (
+              <>
+                <Upload size={16} />
+                Choose File
+              </>
+            )}
+            <input
+              id="logo-upload"
+              type="file"
+              accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+              onChange={handleLogoUpload}
+              disabled={logoUploading}
+              style={{ display: 'none' }}
+            />
+          </label>
+          
+          {(formData.companyLogo || logoPreview) && (
+            <button
+              type="button"
+              onClick={handleRemoveLogo}
+              style={{
+                padding: '10px 16px',
+                backgroundColor: '#ef4444',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 2px 4px rgba(239, 68, 68, 0.2)'
+              }}
+              onMouseOver={(e) => {
+                e.target.style.backgroundColor = '#dc2626';
+                e.target.style.transform = 'translateY(-1px)';
+                e.target.style.boxShadow = '0 4px 8px rgba(239, 68, 68, 0.3)';
+              }}
+              onMouseOut={(e) => {
+                e.target.style.backgroundColor = '#ef4444';
+                e.target.style.transform = 'translateY(0)';
+                e.target.style.boxShadow = '0 2px 4px rgba(239, 68, 68, 0.2)';
+              }}
+            >
+              Remove Logo
+            </button>
+          )}
+        </div>
+        
+        {/* File Info */}
+        <div style={{ 
+          fontSize: '12px', 
+          color: '#6b7280',
+          textAlign: 'center',
+          lineHeight: '1.4'
+        }}>
+          <div>Supported formats: JPG, PNG, GIF, WebP</div>
+          <div>Maximum file size: 5MB</div>
+          <div>Recommended: Square image, 200×200px or larger</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</FormField>
         </div>
       </div>
     </div>
