@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { BarChart3, Calendar, Filter, X, Info, ExternalLink, Eye, ChevronRight } from "lucide-react"
+import { Filter, X, ExternalLink, Eye, ChevronRight } from "lucide-react"
 import {
   doc,
   getDoc,
@@ -17,73 +17,183 @@ import {
 import { auth, db } from "../../firebaseConfig"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
 import { storage } from "../../firebaseConfig"
-import { DayPicker } from "react-day-picker"
 import "react-day-picker/dist/style.css"
 import { createPortal } from "react-dom"
 import "react-circular-progressbar/dist/styles.css"
-import emailjs from '@emailjs/browser';
+import emailjs from "@emailjs/browser"
 import { API_KEYS } from "../../API"
 
-// Inside your component render return
-const southAfricanCities = [
-  "Johannesburg",
-  "Cape Town",
-  "Pretoria",
-  "Durban",
-  "Stellenbosch",
-  "Grahamstown",
-  "Potchefstroom",
-  "Bloemfontein",
-  "Port Elizabeth",
-  "East London",
-  "Pietermaritzburg",
-  "Kimberley",
-  "Mafikeng",
-  "Polokwane",
-  "Nelspruit",
-  "Rustenburg",
-  "Welkom",
-  "Vanderbijlpark",
-  "George",
-  "Other",
+// Replaced cities with South African provinces for location filter
+const southAfricanProvinces = [
+  "Eastern Cape",
+  "Free State",
+  "Gauteng",
+  "KwaZulu-Natal",
+  "Limpopo",
+  "Mpumalanga",
+  "North West",
+  "Northern Cape",
+  "Western Cape",
 ].sort((a, b) => a.localeCompare(b))
 
-// South African universities and institutions
+// Comprehensive list of South African universities and colleges
 const southAfricanInstitutions = [
   // Traditional Universities
-  "University of Cape Town",
-  "University of the Witwatersrand",
+  "University of Cape Town (UCT)",
+  "University of the Witwatersrand (Wits)",
   "Stellenbosch University",
-  "University of Pretoria",
-  "University of KwaZulu-Natal",
+  "University of Pretoria (UP)",
+  "University of KwaZulu-Natal (UKZN)",
   "Rhodes University",
-  "University of the Free State",
-  "University of Johannesburg",
-  "University of the Western Cape",
+  "University of the Free State (UFS)",
+  "University of Johannesburg (UJ)",
+  "University of the Western Cape (UWC)",
   "University of Limpopo",
-  "North-West University",
+  "North-West University (NWU)",
   "University of Venda",
   "University of Fort Hare",
   "University of Zululand",
   "University of South Africa (UNISA)",
+  "Nelson Mandela University",
+  "University of Mpumalanga",
+  "Sefako Makgatho Health Sciences University",
+  "Sol Plaatje University",
 
   // Universities of Technology
-  "Cape Peninsula University of Technology",
-  "Central University of Technology",
-  "Durban University of Technology",
-  "Mangosuthu University of Technology",
-  "Tshwane University of Technology",
-  "Vaal University of Technology",
+  "Cape Peninsula University of Technology (CPUT)",
+  "Central University of Technology (CUT)",
+  "Durban University of Technology (DUT)",
+  "Mangosuthu University of Technology (MUT)",
+  "Tshwane University of Technology (TUT)",
+  "Vaal University of Technology (VUT)",
+  "Walter Sisulu University",
 
-  // TVET Colleges (grouped)
-  "TVET College",
+  // TVET Colleges - Eastern Cape
+  "Buffalo City TVET College",
+  "Eastcape Midlands TVET College",
+  "Ikhala TVET College",
+  "Ingwe TVET College",
+  "King Hintsa TVET College",
+  "King Sabata Dalindyebo TVET College",
+  "Lovedale TVET College",
+  "Port Elizabeth TVET College",
 
-  // Private Colleges (grouped)
-  "Private College",
+  // TVET Colleges - Free State
+  "Flavius Mareka TVET College",
+  "Goldfields TVET College",
+  "Maluti TVET College",
+  "Motheo TVET College",
+
+  // TVET Colleges - Gauteng
+  "Central Johannesburg TVET College",
+  "Ekurhuleni East TVET College",
+  "Ekurhuleni West TVET College",
+  "Sedibeng TVET College",
+  "South West Gauteng TVET College",
+  "Tshwane North TVET College",
+  "Tshwane South TVET College",
+  "Western TVET College",
+
+  // TVET Colleges - KwaZulu-Natal
+  "Coastal KZN TVET College",
+  "Elangeni TVET College",
+  "Esayidi TVET College",
+  "Majuba TVET College",
+  "Mnambithi TVET College",
+  "Mthashana TVET College",
+  "Thekwini TVET College",
+  "Umfolozi TVET College",
+  "Umgungundlovu TVET College",
+
+  // TVET Colleges - Limpopo
+  "Capricorn TVET College",
+  "Lephalale TVET College",
+  "Letaba TVET College",
+  "Mopani South East TVET College",
+  "Sekhukhune TVET College",
+  "Vhembe TVET College",
+  "Waterberg TVET College",
+
+  // TVET Colleges - Mpumalanga
+  "Ehlanzeni TVET College",
+  "Gert Sibande TVET College",
+  "Nkangala TVET College",
+
+  // TVET Colleges - North West
+  "ORBIT TVET College",
+  "Taletso TVET College",
+  "Vuselela TVET College",
+
+  // TVET Colleges - Northern Cape
+  "Northern Cape Rural TVET College",
+  "Northern Cape Urban TVET College",
+
+  // TVET Colleges - Western Cape
+  "Boland TVET College",
+  "College of Cape Town",
+  "False Bay TVET College",
+  "Northlink TVET College",
+  "South Cape TVET College",
+  "West Coast TVET College",
+
+  // Private Colleges and Institutions
+  "Damelin",
+  "Boston City Campus",
+  "Varsity College",
+  "Rosebank College",
+  "CTI Education Group",
+  "Pearson Institute of Higher Education (formerly Midrand Graduate Institute)",
+  "Monash South Africa",
+  "AFDA (The South African School of Motion Picture Medium and Live Performance)",
+  "IMM Graduate School",
+  "Milpark Education",
+  "Regent Business School",
+  "MANCOSA",
+  "Richfield Graduate Institute of Technology",
+  "IIE (The Independent Institute of Education)",
+  "CTU Training Solutions",
+  "Oxbridge Academy",
+  "Boston Media House",
 
   // Other
   "Other",
 ].sort((a, b) => a.localeCompare(b))
+
+// Degree options as specified by user
+const degreeOptions = [
+  // Undergraduate Degrees
+  {
+    group: "Undergraduate Degrees",
+    options: [
+      "Bachelor of Commerce (BCom)",
+      "Bachelor of Business Administration (BBA)",
+      "Bachelor of Arts (BA)",
+      "Bachelor of Science (BSc)",
+      "Bachelor of Engineering (BEng)",
+      "Bachelor of Technology (BTech)",
+      "Bachelor of Education (BEd)",
+      "Bachelor of Law (LLB)",
+      "Bachelor of Medicine (MBChB)",
+      "Bachelor of Accounting Science (BAcc)",
+      "Bachelor of Social Work (BSW)",
+      "Bachelor of Fine Arts (BFA)",
+    ],
+  },
+  // Diplomas
+  {
+    group: "Diplomas",
+    options: ["National Diploma", "Higher Certificate", "Advanced Diploma", "Postgraduate Diploma"],
+  },
+  // TVET Qualifications
+  {
+    group: "TVET Qualifications",
+    options: ["N6 Certificate", "N5 Certificate", "N4 Certificate", "NCV Level 4", "NCV Level 3", "NCV Level 2"],
+  },
+  // Postgraduate
+  { group: "Postgraduate", options: ["Honours Degree", "Master's Degree", "Doctoral Degree (PhD)"] },
+  // Other
+  { group: "Other", options: ["Other"] },
+]
 
 const formatLabel = (value) => {
   if (!value) return ""
@@ -558,78 +668,7 @@ const NextStageIndicator = ({ currentStage, onStageUpdate, isLoading }) => {
 }
 
 // Sample Intern Data (for initial load or when no data is found)
-const sampleInterns = [
-  // {
-  //   id: "sample1",
-  //   internId: "sample_intern_1",
-  //   applicationId: "sample_app_1",
-  //   internName: "Alice Wonderland",
-  //   location: "Cape Town",
-  //   institution: "University of Cape Town",
-  //   degree: "BSc Computer Science",
-  //   field: "Information Technology",
-  //   internType: "Full-time",
-  //   role: "Software Developer Intern",
-  //   sponsorName: "Tech Innovators Inc.",
-  //   fundingProgramType: "General",
-  //   startDate: "2024-09-01",
-  //   bigScore: 85,
-  //   matchPercentage: 92,
-  //   status: "Confirmed",
-  //   pipelineStage: "confirmed",
-  //   action: "Application Received",
-  //   availableDates: [],
-  //   locationFlexibility: "Hybrid",
-  //   matchAnalysis: {
-  //     breakdown: {
-  //       skillsMatch: { score: 28, maxScore: 30, matched: true, description: "Strong match in Python and Java." },
-  //       workModeMatch: { score: 22, maxScore: 25, matched: true, description: "Compatible with Hybrid work mode." },
-  //       locationMatch: { score: 18, maxScore: 20, matched: true, description: "Lives in same province." },
-  //       availabilityMatch: {
-  //         score: 13,
-  //         maxScore: 15,
-  //         matched: true,
-  //         description: "Available one week after required start.",
-  //       },
-  //       additionalFactors: {
-  //         score: 8,
-  //         maxScore: 10,
-  //         matched: true,
-  //         description: "Has graduation year and internship type.",
-  //       },
-  //     },
-  //     matchSummary: {
-  //       overallScore: 89,
-  //       matchPercentage: 89,
-  //       overallAssessment: "Excellent Match",
-  //       strongPoints: ["Skills", "Location"],
-  //       weakPoints: [],
-  //     },
-  //   },
-  //   profileEmail: "alice@example.com",
-  //   phone: "071 234 5678",
-  //   nationalId: "9001015000000",
-  //   availabilityStart: "2024-09-08",
-  //   availableHours: "9am - 5pm",
-  //   internTypePreference: "Full-time",
-  //   languagesSpoken: ["English"],
-  //   technicalSkills: ["Python", "Java", "SQL"],
-  //   industryInterests: ["Technology", "Software Development"],
-  //   careerGoals: "Become a full-stack developer",
-  //   cvUrl: "/docs/alice_cv.pdf",
-  //   idDocumentUrl: "/docs/alice_id.pdf",
-  //   transcriptUrl: "/docs/alice_transcript.pdf",
-  //   motivationLetterUrl: "/docs/alice_motivation.pdf",
-  //   portfolioFileUrl: "/docs/alice_portfolio.pdf",
-  //   proofOfStudyUrl: "/docs/alice_proof.pdf",
-  //   referencesUrl: "/docs/alice_references.pdf",
-  //   completedSections: { profile: true, education: true, skills: true },
-  //   profileCreatedAt: new Date("2023-01-15"),
-  //   profileLastUpdated: new Date("2024-05-20"),
-  //   applicationCreatedAt: new Date("2024-07-01"),
-  //   applicationUpdatedAt: new Date("2024-07-10"),
-  // },
-]
+const sampleInterns = []
 
 // Helper to extract the first URL from an array of document objects
 const firstUrl = (arr) => (Array.isArray(arr) && arr.length > 0 && arr[0] && arr[0].url ? arr[0].url : null)
@@ -1171,29 +1210,21 @@ const MatchBreakdownModal = ({ intern, onClose }) => {
           </div>
 
           {/* Close Button */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              paddingTop: "1.5rem",
-              borderTop: "1px solid #E8D5C4",
-            }}
-          >
+          <div style={{ textAlign: "center" }}>
             <button
+              onClick={onClose}
               style={{
-                padding: "0.75rem 2rem",
-                background: "#5D2A0A",
+                padding: "12px 32px",
+                backgroundColor: "#5D2A0A",
                 color: "white",
                 border: "none",
-                borderRadius: "6px",
-                fontSize: "0.875rem",
-                fontWeight: "500",
+                borderRadius: "8px",
                 cursor: "pointer",
-                transition: "all 0.2s",
+                fontWeight: "600",
+                fontSize: "1rem",
               }}
-              onClick={onClose}
             >
-              Close Breakdown
+              Close
             </button>
           </div>
         </div>
@@ -1223,9 +1254,8 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
   const [meetingTime, setMeetingTime] = useState("")
   const [meetingLocation, setMeetingLocation] = useState("")
   const [meetingPurpose, setMeetingPurpose] = useState("")
-  const [termSheetFile, setTermSheetFile] = useState(null) // State for term sheet file
+  const [termSheetFile, setTermSheetFile] = useState(null)
   const [statuses, setStatuses] = useState({})
-  // Availability management state
   const [availabilities, setAvailabilities] = useState([])
   const [showCalendarModal, setShowCalendarModal] = useState(false)
   const [tempDates, setTempDates] = useState([])
@@ -1244,19 +1274,20 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
     sortBy: "matchPercentage",
   })
   const [updatingStageForIntern, setUpdatingStageForIntern] = useState(null)
-  const [showFilters, setShowFilters] = useState(false) // State to control filter modal visibility
+  const [showFilters, setShowFilters] = useState(false)
   const [bigScoreData, setBigScoreData] = useState({
-    // State for BIG score breakdown
     PresentationScore: { score: 0, color: "#000" },
     ProfessionalSkillsScore: { score: 0, color: "#000" },
     WorkExperienceScore: { score: 0, color: "#000" },
     AcademicScore: { score: 0, color: "#000" },
   })
+  // State for the stage update modal
+  const [selectedStage, setSelectedStage] = useState("")
+  const [stageNotes, setStageNotes] = useState("")
 
-  // Dynamically determine which fields to show based on the selected stage
   const getStageFields = (stage) => {
     const fields = {
-      showMessage: true, // Message is generally always shown
+      showMessage: true,
       showAvailability: false,
       showInterview: false,
       showMeeting: false,
@@ -1272,10 +1303,10 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
         break
       case "Confirmed/Term Sheet Sign":
         fields.showTermSheet = true
-        fields.showMeeting = true // Meeting might still be relevant
+        fields.showMeeting = true
         break
       case "Applied":
-        fields.showMessage = true // Explicitly set for clarity
+        fields.showMessage = true
         fields.showNextStageButton = true
         break
       case "Requested":
@@ -1298,7 +1329,6 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
         break
     }
 
-    // Availability is typically used when scheduling interviews or follow-ups
     if (stage === "Contacted/Interview" || stage === "Interviewed" || stage === "Confirmed") {
       fields.showAvailability = true
     }
@@ -1306,7 +1336,6 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
     return fields
   }
 
-  // Define available stages for the dropdown
   const applicationStages = [
     { id: "applied", name: "Applied" },
     { id: "requested", name: "Requested" },
@@ -1322,43 +1351,38 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
     { id: "declined", name: "Declined" },
   ]
 
-  // Handle time slot changes
   const handleTimeChange = (type, value) => {
     setTimeSlot((prev) => ({ ...prev, [type]: value }))
   }
 
-  // Handle date selection for availability
   const handleDateSelect = (selected) => {
     setTempDates(selected || [])
   }
 
-  // Add selected dates and time slot to availabilities state
   const saveSelectedDates = () => {
     const newAvailabilities = tempDates.map((date) => ({
       date,
       timeSlots: [{ start: timeSlot.start, end: timeSlot.end }],
       timeZone: timeZone,
-      status: "available", // Default status
+      status: "available",
     }))
     setAvailabilities((prev) => [...prev, ...newAvailabilities])
     setShowCalendarModal(false)
-    setTempDates([]) // Reset temp dates
+    setTempDates([])
   }
 
-  // Remove an availability slot
   const removeAvailability = (dateToRemove) => {
     setAvailabilities((prev) => prev.filter((avail) => avail.date.getTime() !== dateToRemove.getTime()))
   }
 
-  // Load availability data for a specific intern
   const loadApplicationAvailability = (intern) => {
     if (intern?.availableDates && Array.isArray(intern.availableDates)) {
       setAvailabilities(
         intern.availableDates.map((avail) => ({
           ...avail,
-          date: new Date(avail.date), // Ensure dates are Date objects
-          timeSlots: Array.isArray(avail.timeSlots) ? avail.timeSlots : [{ start: "09:00", end: "17:00" }], // Ensure timeSlots is an array
-          timeZone: avail.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone, // Default timezone
+          date: new Date(avail.date),
+          timeSlots: Array.isArray(avail.timeSlots) ? avail.timeSlots : [{ start: "09:00", end: "17:00" }],
+          timeZone: avail.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone,
         })),
       )
     } else {
@@ -1366,7 +1390,6 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
     }
   }
 
-  // Render document links safely
   const renderDocumentLink = (url, text) => {
     if (!url) return null
     return (
@@ -1376,13 +1399,11 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
     )
   }
 
-  // Function to handle clicking the Match Score breakdown
   const handleMatchScoreBreakdown = (intern) => {
     setSelectedIntern(intern)
     setModalType("matchBreakdown")
   }
 
-  // Function to reset modal states
   const resetModal = () => {
     setSelectedIntern(null)
     setModalType(null)
@@ -1403,14 +1424,11 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
         const smeUserDoc = await getDoc(doc(db, "universalProfiles", smeUserId))
         const smeUserData = smeUserDoc.exists() ? smeUserDoc.data() : {}
 
-        // Step 1: Fetch applications to this SME first
         const applicationsQuery = query(collection(db, "internshipApplications"), where("sponsorId", "==", smeUserId))
         const applicationsSnapshot = await getDocs(applicationsQuery)
 
-        // Track which intern IDs have already applied
         const appliedInternIds = new Set()
 
-        // Process applications first
         const applicationInterns = await Promise.all(
           applicationsSnapshot.docs.map(async (applicationDoc) => {
             try {
@@ -1422,10 +1440,8 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
                 return null
               }
 
-              // Add to applied set
               appliedInternIds.add(internId)
 
-              // Get the intern profile data
               let profileData = {
                 formData: {
                   personalOverview: {},
@@ -1458,7 +1474,6 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
               const programAffiliation = formData.programAffiliation || {}
               const requiredDocuments = formData.requiredDocuments || profileData.requiredDocuments || {}
 
-              // Calculate match score and BIG score
               const bigScore = applicationData.bigScore || applicationData.bigInternScore || 0
               const matchPercentage =
                 applicationData.matchPercentage || applicationData.matchAnalysis?.overallScore || 0
@@ -1482,7 +1497,6 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
                 },
               })
 
-              // Handle availability data
               const availabilityData = applicationData.availableDates
                 ? applicationData.availableDates.map((avail) => ({
                     ...avail,
@@ -1490,7 +1504,6 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
                   }))
                 : []
 
-              // Extract document URLs
               const extractDocUrl = (docArray) => {
                 if (Array.isArray(docArray) && docArray.length > 0) {
                   return docArray[0].url || null
@@ -1536,16 +1549,14 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
                 action: "Application Received",
                 availableDates: availabilityData,
                 locationFlexibility:
-  (applicationData.locationFlexibility && 
-   applicationData.locationFlexibility[0] && 
-   applicationData.locationFlexibility[0] !== "N") 
-    ? applicationData.locationFlexibility[0] 
-    : (skillsInterests.locationPreference && skillsInterests.locationPreference !== "N")
-      ? skillsInterests.locationPreference
-      : "Not specified",
+                  applicationData.locationFlexibility &&
+                  applicationData.locationFlexibility[0] &&
+                  applicationData.locationFlexibility[0] !== "N"
+                    ? applicationData.locationFlexibility[0]
+                    : skillsInterests.locationPreference && skillsInterests.locationPreference !== "N"
+                      ? skillsInterests.locationPreference
+                      : "Not specified",
                 matchAnalysis: applicationData.matchAnalysis || null,
-
-                // Profile information
                 profileEmail: profileData.userEmail || personalOverview.email,
                 phone: personalOverview.phoneNumber,
                 nationalId: personalOverview.nationalIdOrStudentNo,
@@ -1556,8 +1567,6 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
                 technicalSkills: skillsInterests.technicalSkills || [],
                 industryInterests: skillsInterests.industryInterests || [],
                 careerGoals: skillsInterests.careerGoals,
-
-                // Document URLs
                 cvUrl: extractDocUrl(requiredDocuments.cvFile),
                 idDocumentUrl: extractDocUrl(requiredDocuments.idDocument),
                 transcriptUrl: extractDocUrl(requiredDocuments.transcriptFile),
@@ -1565,13 +1574,9 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
                 portfolioFileUrl: extractDocUrl(requiredDocuments.portfolioFile),
                 proofOfStudyUrl: extractDocUrl(requiredDocuments.proofOfStudy),
                 referencesUrl: extractDocUrl(requiredDocuments.references),
-
-                // Additional profile data
                 completedSections: profileData.completedSections || {},
                 profileCreatedAt: profileData.createdAt?.toDate() || null,
                 profileLastUpdated: profileData.lastUpdated?.toDate() || null,
-
-                // Application specific data
                 applicationCreatedAt: applicationData.createdAt || null,
                 applicationUpdatedAt: applicationData.updatedAt || null,
               }
@@ -1582,7 +1587,6 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
           }),
         )
 
-        // Step 2: Fetch intern profiles that haven't applied yet
         const profilesSnapshot = await getDocs(collection(db, "internProfiles"))
 
         const profileInterns = await Promise.all(
@@ -1590,16 +1594,14 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
             try {
               const internId = docSnap.id
 
-              // skip if already applied or is the SME themselves
               if (appliedInternIds.has(internId) || internId === smeUserId) return null
 
               const data = docSnap.data()
               if (!data) return null
               if (appliedInternIds.has(internId) || internId === smeUserId) return null
 
-              // Calculate match score for profiles that haven't applied
               const matchResult = calculateMatchScoreForSponsor(smeUserData, data)
-              const matchPercentage = matchResult.score || (data.matchPercentage ?? 0) // Use calculation if available, else fallback
+              const matchPercentage = matchResult.score || (data.matchPercentage ?? 0)
 
               const fd = data.formData || {}
               const personalOverview = fd.personalOverview || {}
@@ -1608,7 +1610,7 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
               const programAffiliation = fd.programAffiliation || {}
               const requiredDocs = fd.requiredDocuments || data.requiredDocuments || {}
               const experienceTrackRecord = fd.experienceTrackRecord || {}
-              // must have some signal
+
               const hasRelevantData =
                 personalOverview.fullName ||
                 personalOverview.firstName ||
@@ -1621,26 +1623,22 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
                 id: `profile_${internId}`,
                 internId,
                 applicationId: null,
-
                 internName:
                   personalOverview.fullName ||
                   `${personalOverview.firstName || ""} ${personalOverview.lastName || ""}`.trim() ||
                   "Unnamed Intern",
-
                 location:
                   Array.isArray(personalOverview.provinces) && personalOverview.provinces.length
                     ? personalOverview.provinces.join(", ")
                     : Array.isArray(personalOverview.cities) && personalOverview.cities.length
                       ? personalOverview.cities.join(", ")
                       : "Not specified",
-
                 institution: academicOverview.institution || "Not specified",
                 degree: academicOverview.degree || academicOverview.qualificationLevel || "Not specified",
                 field:
                   academicOverview.fieldOfStudy ||
                   (Array.isArray(skillsInterests.industryInterests) && skillsInterests.industryInterests[0]) ||
                   "Not specified",
-
                 internType: academicOverview.yearOfStudy || "Not specified",
                 role:
                   Array.isArray(skillsInterests.technicalSkills) && skillsInterests.technicalSkills.length
@@ -1648,41 +1646,32 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
                     : Array.isArray(experienceTrackRecord.type) && experienceTrackRecord.type.length
                       ? experienceTrackRecord.type.join(", ")
                       : "Not specified",
-
                 sponsorName: programAffiliation.sponsorName || "Not specified",
                 fundingProgramType: programAffiliation.fundingStatus || "Not specified",
                 startDate: skillsInterests.availabilityStart || "Not specified",
-
                 bigScore: data.bigInternScore || 0,
-                matchPercentage: matchPercentage || 0, // no app yet
-
+                matchPercentage: matchPercentage || 0,
                 status: "Matched",
                 pipelineStage: "Matched",
                 action: "No Application",
-
                 availableDates: [],
-                locationFlexibility: 
-  (Array.isArray(academicOverview.locationFlexibility) && 
-   academicOverview.locationFlexibility.length > 0 && 
-   academicOverview.locationFlexibility[0] !== "N")
-    ? academicOverview.locationFlexibility.join(", ")
-    : "Not specified",
-
+                locationFlexibility:
+                  Array.isArray(academicOverview.locationFlexibility) &&
+                  academicOverview.locationFlexibility.length > 0 &&
+                  academicOverview.locationFlexibility[0] !== "N"
+                    ? academicOverview.locationFlexibility.join(", ")
+                    : "Not specified",
                 matchAnalysis: matchResult,
-
-                // profile info
-                profileEmail: data.userEmail || personalOverview.email || null,
-                phone: personalOverview.phone || personalOverview.phoneNumber || null,
-                nationalId: personalOverview.nationalIdOrStudentNo || null,
-                availabilityStart: skillsInterests.availabilityStart || null,
-                availableHours: skillsInterests.availableHours || null,
-                internTypePreference: skillsInterests.internTypePreference || null,
+                profileEmail: data.userEmail || personalOverview.email,
+                phone: personalOverview.phoneNumber,
+                nationalId: personalOverview.nationalIdOrStudentNo,
+                availabilityStart: skillsInterests.availabilityStart,
+                availableHours: skillsInterests.availableHours,
+                internTypePreference: skillsInterests.internTypePreference,
                 languagesSpoken: skillsInterests.languagesSpoken || [],
                 technicalSkills: skillsInterests.technicalSkills || [],
                 industryInterests: skillsInterests.industryInterests || [],
-                careerGoals: skillsInterests.careerGoals || null,
-
-                // doc URLs
+                careerGoals: skillsInterests.careerGoals,
                 cvUrl: firstUrl(requiredDocs.cvFile),
                 idDocumentUrl: firstUrl(requiredDocs.idDocument),
                 transcriptUrl: firstUrl(requiredDocs.transcriptFile),
@@ -1690,63 +1679,27 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
                 portfolioFileUrl: firstUrl(requiredDocs.portfolioFile),
                 proofOfStudyUrl: firstUrl(requiredDocs.proofOfStudy),
                 referencesUrl: firstUrl(requiredDocs.references),
-
-                // timestamps
                 completedSections: data.completedSections || {},
                 profileCreatedAt: toDateSafe(data.createdAt),
                 profileLastUpdated: toDateSafe(data.lastUpdated),
-
                 applicationCreatedAt: null,
                 applicationUpdatedAt: null,
               }
-            } catch (docError) {
-              console.log(`Error processing profile document ${docSnap.id}:`, docError)
+            } catch (err) {
+              console.error("Error processing intern profile:", err)
               return null
             }
           }),
         )
 
-        // Combine and filter out null values
-        const allInterns = [...applicationInterns, ...profileInterns].filter((intern) => intern !== null)
+        const allInterns = [...applicationInterns, ...profileInterns].filter(Boolean)
 
-        console.log(
-          `Found ${applicationInterns.filter((i) => i !== null).length} applications and ${profileInterns.filter((i) => i !== null).length} additional profiles`,
-        )
-        setInterns(allInterns.length > 0 ? allInterns : sampleInterns)
+        allInterns.sort((a, b) => (b.matchPercentage || 0) - (a.matchPercentage || 0))
 
-        if (allInterns.length === 0) {
-          setNotification({ type: "info", message: "No intern data found." })
-          setTimeout(() => setNotification(null), 3000)
-        } else {
-          const applicationCount = applicationInterns.filter((i) => i !== null).length
-          const profileCount = profileInterns.filter((i) => i !== null).length
-          matchesCount(applicationCount + profileCount)
-          profileMatchesCount(profileCount)
-          setNotification({
-            type: "success",
-            message: `Found ${applicationCount} application(s) and ${profileCount} additional profile(s)`,
-          })
-          setTimeout(() => setNotification(null), 3000)
-        }
+        setInterns(allInterns)
+        setFilteredInterns(allInterns)
       } catch (error) {
-        console.error("Error loading intern data:", error)
-        console.error("Error details:", error.message, error.code)
-
-        // Set sample data to prevent crashes
-        setInterns(sampleInterns)
-
-        // More specific error message
-        let errorMessage = "Failed to load intern data."
-        if (error.code === "permission-denied") {
-          errorMessage = "Permission denied. Please check your authentication."
-        } else if (error.code === "unavailable") {
-          errorMessage = "Service temporarily unavailable. Please try again later."
-        } else if (error.message.includes("network")) {
-          errorMessage = "Network error. Please check your connection."
-        }
-
-        setNotification({ type: "error", message: errorMessage })
-        setTimeout(() => setNotification(null), 5000)
+        console.error("Error fetching intern applications:", error)
       } finally {
         setLoading(false)
       }
@@ -1755,33 +1708,11 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
     fetchInternApplications()
   }, [])
 
-  const handleFilterChange = (key, value) => {
-    setLocalFilters((prev) => ({ ...prev, [key]: value }))
-  }
-
-  const formatLabel = (value) => {
-    if (!value) return "Not specified"
-
-    try {
-      return value
-        .toString()
-        .split(",")
-        .map((item) => item.trim())
-        .map((word) => {
-          if (!word) return ""
-
-          // Convert snake_case or kebab-case to Title Case
-          return word
-            .replace(/[_-]+/g, " ") // Replace underscores/dashes with space
-            .split(" ") // Split into words
-            .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()) // Capitalize each word
-            .join(" ")
-        })
-        .join(", ")
-    } catch (error) {
-      console.error("Error formatting label:", error)
-      return value || ""
-    }
+  const handleFilterChange = (filterName, value) => {
+    setLocalFilters((prev) => ({
+      ...prev,
+      [filterName]: value,
+    }))
   }
 
   const clearFilters = () => {
@@ -1806,16 +1737,18 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
   const handleStageAction = (intern) => {
     setSelectedInternForStage(intern)
     setShowStageModal(true)
-    setNextStage("")
+    setNextStage("") // Clear previous selection
     setMessage("")
     setInterviewDate("")
     setInterviewTime("")
     setInterviewLocation("")
     setTermSheetFile(null)
     setFormErrors({})
-
-    // Load availability data when opening stage modal
     loadApplicationAvailability(intern)
+    setSelectedStage("") // Reset stage selection in modal
+    setStageNotes("") // Reset notes
+    setMeetingLocation("") // Reset meeting location
+    setMeetingPurpose("") // Reset meeting purpose
   }
 
   const resetStageModal = () => {
@@ -1829,33 +1762,39 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
     setTermSheetFile(null)
     setFormErrors({})
     setAvailabilities([])
+    setSelectedStage("") // Reset stage selection
+    setStageNotes("") // Reset notes
+    setMeetingLocation("") // Reset meeting location
+    setMeetingPurpose("") // Reset meeting purpose
   }
 
   const handleStageUpdate = async () => {
-    const stageFields = getStageFields(nextStage)
+    // Determine the fields relevant to the selected stage
+    const stageFields = getStageFields(selectedStage)
     const errors = {}
 
-    if (!nextStage) {
-      errors.nextStage = "Please select a stage"
+    if (!selectedStage) {
+      errors.selectedStage = "Please select a new stage"
     }
 
     if (stageFields.showMessage) {
-      if (!message.trim()) {
-        errors.message = "A message to the applicant is required"
-      } else if (message.length < 10) {
-        errors.message = "Message is too short (min 10 characters)"
+      if (!stageNotes.trim()) {
+        errors.stageNotes = "A message/note to the applicant is required"
+      } else if (stageNotes.length < 10) {
+        errors.stageNotes = "Message is too short (min 10 characters)"
       }
     }
 
-    if (stageFields.showAvailability) {
-      if (!availabilities.length) {
-        errors.availabilities = "Please select at least one availability slot"
-      }
+    if (stageFields.showAvailability && availabilities.length === 0) {
+      errors.availabilities = "Please select at least one availability slot"
     }
 
     if (stageFields.showMeeting) {
       if (!meetingLocation || typeof meetingLocation !== "string" || (meetingLocation && !meetingLocation.trim())) {
         errors.meetingLocation = "Meeting location is required"
+      }
+      if (!meetingPurpose || typeof meetingPurpose !== "string" || (meetingPurpose && !meetingPurpose.trim())) {
+        errors.meetingPurpose = "Meeting purpose is required"
       }
     }
 
@@ -1874,7 +1813,7 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
       if (!user) throw new Error("User not authenticated")
 
       const sponsorId = user.uid
-      const internId = selectedInternForStage.id // this is the doc ID in internshipApplications
+      const internId = selectedInternForStage.id // This is the application ID
 
       let attachmentUrl = null
       if (termSheetFile) {
@@ -1884,10 +1823,10 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
       }
 
       const updateData = {
-        status: nextStage,
-        pipelineStage: nextStage,
+        status: selectedStage,
+        pipelineStage: selectedStage,
         updatedAt: serverTimestamp(),
-        ...(message && { lastMessage: message }),
+        ...(stageNotes && { lastMessage: stageNotes }), // Use stageNotes as lastMessage
         ...(stageFields.showInterview && {
           interviewDetails: {
             date: interviewDate,
@@ -1912,19 +1851,20 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
       if (!docSnapshot.exists()) throw new Error(`Application with ID ${internId} not found`)
 
       const applicationData = docSnapshot.data()
-      const internUid = applicationData.applicantId
+      const internUid = applicationData.applicantId // This is the intern's profile ID
 
       await updateDoc(docRef, updateData)
       console.log("Document updated in internshipApplications")
 
+      // Add to internCalendarEvents if applicable (e.g., for interviews)
       if (stageFields.showInterview && interviewDate && interviewTime && interviewLocation) {
         await addDoc(collection(db, "internCalendarEvents"), {
           sponsorId,
-          internId: internUid,
+          internId: internUid, // Link to the intern's profile
           title: "Internship Interview",
           date: interviewDate,
           time: interviewTime,
-          status: "available",
+          status: "available", // Default status
           location: interviewLocation,
           type: "internship_meeting",
           createdAt: new Date().toISOString(),
@@ -1932,14 +1872,15 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
         })
       }
 
+      // Update local state
       setInterns((prevInterns) =>
         prevInterns.map((intern) =>
           intern.id === internId
             ? {
                 ...intern,
-                status: nextStage,
-                pipelineStage: nextStage,
-                ...(message && { lastMessage: message }),
+                status: selectedStage,
+                pipelineStage: selectedStage,
+                ...(stageNotes && { lastMessage: stageNotes }),
                 ...(stageFields.showInterview && {
                   interviewDetails: {
                     date: interviewDate,
@@ -1953,27 +1894,28 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
         ),
       )
 
-      setUpdatedStages((prev) => ({ ...prev, [internId]: nextStage }))
+      setUpdatedStages((prev) => ({ ...prev, [internId]: selectedStage }))
       setNotification({
         type: "success",
-        message: `Application status updated to ${nextStage} successfully`,
+        message: `Application status updated to ${selectedStage} successfully`,
       })
       setShowStageModal(false)
       resetStageModal()
 
-      // Get intern email from internProfiles collection
+      // Sending email notification to intern
       let internEmail = null
       try {
         const internProfileRef = doc(db, "internProfiles", internUid)
         const internProfileSnap = await getDoc(internProfileRef)
-        
+
         if (internProfileSnap.exists()) {
           const internProfileData = internProfileSnap.data()
-          internEmail = internProfileData.formData?.personalOverview?.email || 
-                       internProfileData.userEmail ||
-                       internProfileData.contactDetails?.email ||
-                       internProfileData.email
-          
+          internEmail =
+            internProfileData.formData?.personalOverview?.email ||
+            internProfileData.userEmail ||
+            internProfileData.contactDetails?.email ||
+            internProfileData.email
+
           console.log("Found intern email:", internEmail)
         } else {
           console.log("No intern profile found for:", internUid)
@@ -1982,20 +1924,34 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
         console.error("Error fetching intern email:", emailError)
       }
 
-      // If no email found in internProfiles, use the profileEmail from the intern object
+      // Fallback to email from selectedInternForStage if profile email not found
       if (!internEmail) {
         internEmail = selectedInternForStage.profileEmail
         console.log("Using profile email as fallback:", internEmail)
       }
 
-      const subject = `Update: ${nextStage} Stage for Your Application`
-      let content = `Dear ${selectedInternForStage.internName},\n\nYour application has progressed to the "${nextStage}" stage.\n\n${message}`
+      const subject = `Update: ${selectedStage} Stage for Your Application`
+      let content = `Dear ${selectedInternForStage.internName},\n\nYour application has progressed to the "${selectedStage}" stage.\n\n`
 
-      if (stageFields.showInterview) {
-        content += `\n\nInterview Details:\n-Location: ${meetingLocation}`
+      if (stageNotes) {
+        content += `Message from ${user?.displayName || "Internship Program Team"}:\n${stageNotes}\n\n`
       }
+
+      if (stageFields.showMeeting) {
+        content += `Meeting Details:\n`
+        if (meetingTime) {
+          content += `- Time: ${new Date(meetingTime).toLocaleString()}\n`
+        }
+        if (meetingLocation) {
+          content += `- Location: ${meetingLocation}\n`
+        }
+        if (meetingPurpose) {
+          content += `- Purpose: ${meetingPurpose}\n\n`
+        }
+      }
+
       if (stageFields.showAvailability && availabilities.length > 0) {
-        content += `\n\nAvailable Interview Times:\n`
+        content += `Available Meeting Times:\n`
         content += availabilities
           .map((avail, idx) => {
             const dateStr = avail.date.toLocaleDateString("en-US", {
@@ -2011,28 +1967,31 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
           })
           .join("\n")
 
-        content += `\n\nPlease reply with your preferred time.`
+        content += `\nPlease reply with your preferred time.`
       }
 
-      content += `\n\nBest regards,\nInternship Program Team`
+      content += `\n\nBest regards,\nInternship Program Team\nBIG Marketplace Africa`
 
+      // Store message in 'messages' collection
       const messagePayload = {
-        to: internUid,
-        from: sponsorId,
+        to: internUid, // Intern's profile ID
+        from: sponsorId, // Sponsor's profile ID
         subject,
         content,
         date: new Date().toISOString(),
         read: false,
         type: "inbox",
-        applicationId: internId,
-        attachments: attachmentUrl ? [attachmentUrl] : [],
-        ...(updateData.availableDates && { availableDates: updateData.availableDates }),
+        applicationId: internId, // Link to the application
+        ...(attachmentUrl && { attachments: [attachmentUrl] }),
+        ...(stageFields.showAvailability && availabilities.length > 0 && { availableDates: updateData.availableDates }),
       }
 
       const sentMessagePayload = {
         ...messagePayload,
         read: true,
         type: "sent",
+        to: sponsorId, // Sent message from sponsor's perspective
+        from: internUid, // Sent message to intern's perspective
       }
 
       await Promise.all([
@@ -2040,115 +1999,113 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
         addDoc(collection(db, "messages"), sentMessagePayload),
       ])
 
-      // Send email to intern's personal email
+      // Send email using EmailJS
       if (internEmail) {
         try {
-          console.log("🔄 Using EmailJS service to send email to intern...")
+          console.log("Using EmailJS service to send email to intern...")
 
           const emailjsConfig = {
             serviceId: API_KEYS.SERVICE_ID_MESSAGES,
             templateId: API_KEYS.TEMPLATE_ID_MESSAGES,
-            publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES
-          };
+            publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES,
+          }
 
-          console.log("📧 Using EmailJS config:", emailjsConfig);
+          console.log("Using EmailJS config:", emailjsConfig)
 
           if (!window.emailjs) {
-            emailjs.init(emailjsConfig.publicKey);
-            window.emailjs = emailjs;
+            emailjs.init(emailjsConfig.publicKey)
+            window.emailjs = emailjs
           }
 
-          const sponsorName = user?.displayName || "Internship Program Team";
-          const internName = selectedInternForStage.internName;
+          const sponsorName = user?.displayName || "Internship Program Team"
+          const internName = selectedInternForStage.internName
 
-          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
           if (!emailRegex.test(internEmail)) {
-            throw new Error(`Invalid email format: "${internEmail}"`);
+            throw new Error(`Invalid email format: "${internEmail}"`)
           }
 
-          let emailMessage = `Dear ${internName},\n\n`;
-          
-          if (nextStage === "Declined") {
-            emailMessage += `We regret to inform you that your application has been moved to the "${nextStage}" stage.\n\n`;
+          let emailMessage = `Dear ${internName},\n\n`
+
+          if (selectedStage === "Declined") {
+            emailMessage += `We regret to inform you that your application has been moved to the "${selectedStage}" stage.\n\n`
           } else {
-            emailMessage += `We are pleased to inform you that your application has progressed to the "${nextStage}" stage.\n\n`;
+            emailMessage += `We are pleased to inform you that your application has progressed to the "${selectedStage}" stage.\n\n`
           }
-          
-          if (message) {
-            emailMessage += `Message from ${sponsorName}:\n${message}\n\n`;
+
+          if (stageNotes) {
+            emailMessage += `Message from ${sponsorName}:\n${stageNotes}\n\n`
           }
 
           if (stageFields.showMeeting && meetingLocation && meetingPurpose) {
-            emailMessage += `Meeting Details:\n`;
+            emailMessage += `Meeting Details:\n`
             if (meetingTime) {
-              emailMessage += `- Date: ${new Date(meetingTime).toLocaleString()}\n`;
+              emailMessage += `- Date: ${new Date(meetingTime).toLocaleString()}\n`
             }
-            emailMessage += `- Location: ${meetingLocation}\n`;
-            emailMessage += `- Purpose: ${meetingPurpose}\n\n`;
+            emailMessage += `- Location: ${meetingLocation}\n`
+            emailMessage += `- Purpose: ${meetingPurpose}\n\n`
           }
 
           if (stageFields.showAvailability && availabilities.length > 0) {
-            emailMessage += `Available Meeting Times:\n`;
+            emailMessage += `Available Meeting Times:\n`
             availabilities.forEach((avail, idx) => {
               const dateStr = avail.date.toLocaleDateString("en-US", {
                 weekday: "long",
                 year: "numeric",
                 month: "long",
                 day: "numeric",
-              });
+              })
               const timeStr = avail.timeSlots?.[0]
                 ? `${avail.timeSlots[0].start} - ${avail.timeSlots[0].end} ${avail.timeZone}`
-                : "Time not specified";
-              emailMessage += `${idx + 1}. ${dateStr} (${timeStr})\n`;
-            });
-            emailMessage += `\nPlease reply with your preferred meeting time from the above options.\n\n`;
+                : "Time not specified"
+              emailMessage += `${idx + 1}. ${dateStr} (${timeStr})\n`
+            })
+            emailMessage += `\nPlease reply with your preferred meeting time from the above options.\n\n`
           }
 
-          emailMessage += `Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`;
+          emailMessage += `Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
 
           const templateParams = {
             to_email: internEmail,
-            subject: `Internship Application Stage Update: ${nextStage}`,
+            subject: `Internship Application Stage Update: ${selectedStage}`,
             from_name: sponsorName,
             date: new Date().toLocaleDateString(),
             message: emailMessage,
             portal_url: `https://www.bigmarketplace.africa/applications/${sponsorId}_${internId}`,
             has_attachments: termSheetFile ? "true" : "false",
-            attachments_count: termSheetFile ? "1" : "0"
-          };
+            attachments_count: termSheetFile ? "1" : "0",
+          }
 
-          console.log("📨 Sending email to intern with EmailJS...", templateParams);
+          console.log("Sending email to intern with EmailJS...", templateParams)
 
           const response = await window.emailjs.send(
             emailjsConfig.serviceId,
             emailjsConfig.templateId,
             templateParams,
-            emailjsConfig.publicKey
-          );
-          
-          console.log("✅ Email sent successfully to intern!", response);
-          
+            emailjsConfig.publicKey,
+          )
+
+          console.log("Email sent successfully to intern!", response)
+
           setNotification({
             type: "success",
-            message: `Stage updated to ${nextStage} and email notification sent successfully`
-          });
-
+            message: `Stage updated to ${selectedStage} and email notification sent successfully`,
+          })
         } catch (emailError) {
-          console.error("❌ Email to intern failed:", emailError);
-          
+          console.error("Email to intern failed:", emailError)
+
           setNotification({
-            type: "success", 
-            message: `Stage updated to ${nextStage} successfully (email notification failed)`
-          });
+            type: "success",
+            message: `Stage updated to ${selectedStage} successfully (email notification failed)`,
+          })
         }
       } else {
-        console.warn("⚠️ No intern email found, skipping email notification");
+        console.warn("No intern email found, skipping email notification")
         setNotification({
           type: "success",
-          message: `Stage updated to ${nextStage} successfully (no email available)`
-        });
+          message: `Stage updated to ${selectedStage} successfully (no email available)`,
+        })
       }
-
     } catch (error) {
       console.error("Detailed error:", {
         message: error.message,
@@ -2177,7 +2134,6 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
       console.log("SME User ID:", user.uid)
       console.log("Intern object:", intern)
 
-      // Get SME profile data
       let smeData = {}
       try {
         const smeDoc = await getDoc(doc(db, "universalProfiles", user.uid))
@@ -2195,7 +2151,6 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
         console.warn("Could not retrieve SME profile:", smeError)
       }
 
-      // Get intern data (already available in the intern object, but we might need more details)
       let internData = {}
       try {
         const internDoc = await getDoc(doc(db, "internProfiles", intern.internId))
@@ -2205,7 +2160,6 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
         console.warn("Could not retrieve intern profile:", internError)
       }
 
-      // Fetch evaluation scores from internEvaluations collection
       let evaluationScores = {
         academic: 0,
         bigInternScore: 0,
@@ -2238,7 +2192,6 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
         console.warn("Could not retrieve evaluation scores:", evaluationError)
       }
 
-      // Build the composite ID for the request document
       const internId = intern.internId
       const sponsorId = user.uid
       const requestDocId = `${sponsorId}_${internId}`
@@ -2247,23 +2200,17 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
       console.log("Sponsor ID:", sponsorId)
       console.log("Intern ID:", internId)
 
-      // Get more detailed intern information if available
       const internFormData = internData.formData || {}
       const internProfile = internData.entityOverview || {}
 
-      // Calculate fresh match breakdown for the request
       const matchResult = calculateMatchScore(internData, smeData)
       console.log("Match result with breakdown:", matchResult)
 
-      // Request data structure with match breakdown and evaluation scores included
       const requestData = {
-        // Intern Information
         applicantId: internId,
         internId: internId,
         internName: intern.internName || internFormData.personalOverview?.fullName || "Anonymous Intern",
         internEmail: intern.profileEmail || internFormData.personalOverview?.email || "Not provided",
-
-        // Educational Information
         institution:
           intern.institution ||
           internFormData.academicOverview?.institution ||
@@ -2276,15 +2223,11 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
           internFormData.academicOverview?.locationFlexibility ||
           internFormData.locationFlexibility ||
           "Not Provided",
-
-        // Intern Skills and Preferences
         technicalSkills: intern.technicalSkills || internFormData.skillsInterests?.technicalSkills || [],
         availabilityStart:
           intern.availabilityStart || internFormData.skillsInterests?.availabilityStart || "Not specified",
         provinces: internFormData.personalOverview?.provinces || [],
         cities: internFormData.personalOverview?.cities || [],
-
-        // SME/Sponsor Details
         sponsorId: sponsorId,
         sponsorName:
           smeData.entityOverview?.tradingName || smeData.entityOverview?.registeredName || "Our Organization",
@@ -2293,16 +2236,10 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
         type: "Internship Request",
         role: internshipInformation.internshipRequest?.internRolesText || smeData.jobOverview?.roleTitle || "N/A",
         sector: smeData.sector || smeData.entityOverview?.sector || "N/A",
-
-        // Funding Information (if applicable)
         funding: smeData.fundingAvailable || "No",
         fundType: smeData.fundingType || "not specified",
-
-        // Timeline
         startDate: smeData.internshipRequest?.startDate || "TBD",
         requestedDate: new Date().toISOString(),
-
-        // AI EVALUATION SCORES
         aiAcademicScore: evaluationScores.academic,
         aiProfessionalSkillsScore: evaluationScores.professionalSkills,
         aiWorkExperienceScore: evaluationScores.workExperience,
@@ -2310,8 +2247,6 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
         bigInternScore: evaluationScores.bigInternScore,
         evaluationLastUpdated: evaluationScores.lastUpdated,
         evaluationUpdatedAt: evaluationScores.updatedAt,
-
-        // MATCH BREAKDOWN INFORMATION
         matchAnalysis: {
           overallScore: matchResult.score,
           calculatedAt: new Date().toISOString(),
@@ -2336,12 +2271,12 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
             locationCompatibility: {
               score: matchResult.breakdown.locationMatch.score,
               maxScore: matchResult.breakdown.locationMatch.maxScore,
+              matched: matchResult.breakdown.locationMatch.score > 0,
               description: matchResult.breakdown.locationMatch.description,
               applicantProvinces: matchResult.breakdown.locationMatch.details.internProvinces,
               applicantCities: matchResult.breakdown.locationMatch.details.internCities,
-              requiredProvince: matchResult.breakdown.locationMatch.details.sponsorProvince,
-              requiredCities: matchResult.breakdown.locationMatch.details.sponsorCities,
-              isLocationRelevant: matchResult.breakdown.locationMatch.details.isLocationRelevant,
+              sponsorProvince: matchResult.breakdown.locationMatch.details.sponsorProvince,
+              sponsorCities: matchResult.breakdown.locationMatch.details.sponsorCities,
             },
             availabilityAlignment: {
               score: matchResult.breakdown.availabilityMatch.score,
@@ -2349,54 +2284,40 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
               matched: matchResult.breakdown.availabilityMatch.matched,
               description: matchResult.breakdown.availabilityMatch.description,
               applicantStartDate: matchResult.breakdown.availabilityMatch.details.internStartDate,
-              requiredStartDate: matchResult.breakdown.availabilityMatch.details.sponsorStartDate,
+              sponsorStartDate: matchResult.breakdown.availabilityMatch.details.sponsorStartDate,
             },
             profileCompleteness: {
               score: matchResult.breakdown.additionalFactors.score,
               maxScore: matchResult.breakdown.additionalFactors.maxScore,
               matched: matchResult.breakdown.additionalFactors.matched,
               description: matchResult.breakdown.additionalFactors.description,
-              hasGraduationYear: matchResult.breakdown.additionalFactors.details.hasGradYear,
-              hasInternshipType: matchResult.breakdown.additionalFactors.details.hasInternType,
             },
           },
-          // Summary for quick review
-          matchSummary: {
-            strongPoints: [],
-            weakPoints: [],
-            recommendations: [],
-          },
         },
-
-        // Status Tracking - Different from the application version
-        status: "Requested", // This is the key difference - status is "Requested" not "Applied"
-        action: "Request Intern",
-        rating: intern.ratingRecommendation || "Pending",
-
-        // Metadata
-        submittedAt: new Date().toISOString(),
-        lastUpdated: new Date().toISOString(),
-        requestVersion: "1.0", // Different version to indicate this is a request
+        matchPercentage: matchResult.score,
+        status: "Requested",
+        pipelineStage: "Requested",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       }
 
-      // Generate match summary
-      const breakdown = matchResult.breakdown
       const strongPoints = []
       const weakPoints = []
       const recommendations = []
 
-      // Analyze each component
+      const { breakdown } = matchResult
+
       if (breakdown.skillsMatch.matched) {
-        strongPoints.push("Skills align well with role requirements")
+        strongPoints.push("Skills align with role requirements")
       } else {
-        weakPoints.push("Skills don't match role requirements")
-        recommendations.push("Consider highlighting transferable skills or willingness to learn")
+        weakPoints.push("Skills may not fully match role requirements")
+        recommendations.push("Consider highlighting transferable skills")
       }
 
       if (breakdown.workModeMatch.matched) {
         strongPoints.push("Work mode preferences are compatible")
       } else {
-        weakPoints.push("Work mode preferences don't align")
+        weakPoints.push("Work mode preferences don't match")
         recommendations.push("Consider discussing flexibility in work arrangements")
       }
 
@@ -2416,7 +2337,6 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
         recommendations.push("Discuss flexible start dates")
       }
 
-      // Add evaluation-based insights to summary
       if (evaluationScores.bigInternScore >= 70) {
         strongPoints.push("High overall evaluation score")
       } else if (evaluationScores.bigInternScore >= 50) {
@@ -2426,7 +2346,6 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
         recommendations.push("Consider highlighting achievements and growth potential")
       }
 
-      // Add summary to request data
       requestData.matchAnalysis.matchSummary = {
         strongPoints,
         weakPoints,
@@ -2441,28 +2360,26 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
                 : "Poor Match",
       }
 
-      // Save to Firestore with error handling
       await setDoc(doc(db, "internshipApplications", requestDocId), requestData, { merge: true })
 
       console.log("Intern request successfully saved to Firestore")
 
-      // Update UI state
       setStatuses((prev) => ({ ...prev, [intern.id]: "Requested" }))
 
-      // Send email notification to intern
       try {
         let internEmail = null
         try {
           const internProfileRef = doc(db, "internProfiles", intern.internId)
           const internProfileSnap = await getDoc(internProfileRef)
-          
+
           if (internProfileSnap.exists()) {
             const internProfileData = internProfileSnap.data()
-            internEmail = internProfileData.formData?.personalOverview?.email || 
-                         internProfileData.userEmail ||
-                         internProfileData.contactDetails?.email ||
-                         internProfileData.email
-            
+            internEmail =
+              internProfileData.formData?.personalOverview?.email ||
+              internProfileData.userEmail ||
+              internProfileData.contactDetails?.email ||
+              internProfileData.email
+
             console.log("Found intern email for request:", internEmail)
           }
         } catch (emailError) {
@@ -2474,21 +2391,21 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
         }
 
         if (internEmail) {
-          console.log("🔄 Sending internship request email to intern...")
+          console.log("Sending internship request email to intern...")
 
           const emailjsConfig = {
             serviceId: API_KEYS.SERVICE_ID_MESSAGES,
             templateId: API_KEYS.TEMPLATE_ID_MESSAGES,
-            publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES
-          };
-
-          if (!window.emailjs) {
-            emailjs.init(emailjsConfig.publicKey);
-            window.emailjs = emailjs;
+            publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES,
           }
 
-          const sponsorName = user?.displayName || "Our Organization";
-          const internName = intern.internName;
+          if (!window.emailjs) {
+            emailjs.init(emailjsConfig.publicKey)
+            window.emailjs = emailjs
+          }
+
+          const sponsorName = user?.displayName || "Our Organization"
+          const internName = intern.internName
 
           const emailMessage = `Dear ${internName},\n\n
 We are excited to inform you that ${sponsorName} has requested you for an internship opportunity!\n\n
@@ -2497,7 +2414,7 @@ Location: ${requestData.location}\n
 Start Date: ${requestData.startDate}\n\n
 Your profile stood out to us because of your strong match with our requirements. We would like to discuss this opportunity further with you.\n\n
 Please log into your BIG Marketplace Africa account to view the full details and respond to this request.\n\n
-Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`;
+Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
 
           const templateParams = {
             to_email: internEmail,
@@ -2507,25 +2424,24 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`;
             message: emailMessage,
             portal_url: `https://www.bigmarketplace.africa/applications/${sponsorId}_${internId}`,
             has_attachments: "false",
-            attachments_count: "0"
-          };
+            attachments_count: "0",
+          }
 
-          console.log("📨 Sending internship request email to intern...");
+          console.log("Sending internship request email to intern...")
 
           const response = await window.emailjs.send(
             emailjsConfig.serviceId,
             emailjsConfig.templateId,
             templateParams,
-            emailjsConfig.publicKey
-          );
-          
-          console.log("✅ Internship request email sent successfully!", response);
+            emailjsConfig.publicKey,
+          )
+
+          console.log("Internship request email sent successfully!", response)
         }
       } catch (emailError) {
-        console.error("❌ Internship request email failed:", emailError);
+        console.error("Internship request email failed:", emailError)
       }
 
-      // Dispatch notification event to the intern
       const dispatchNotification = () => {
         const notificationMessage = `New internship request from ${requestData.sponsorName} for ${requestData.role}!`
         console.log("Dispatching intern notification:", notificationMessage)
@@ -2535,7 +2451,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`;
             message: notificationMessage,
             type: "info",
             timestamp: new Date().toISOString(),
-            recipientId: internId, // Send to the intern
+            recipientId: internId,
           },
           bubbles: true,
           cancelable: true,
@@ -2550,7 +2466,6 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`;
 
       dispatchNotification()
 
-      // Show success notification to SME
       setNotification({
         type: "success",
         message: `Intern request successfully sent to ${intern.internName}!`,
@@ -2561,7 +2476,6 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`;
       console.error("Error code:", error.code)
       console.error("Error message:", error.message)
 
-      // More specific error messages
       let errorMessage = "Failed to send intern request."
 
       if (error.code === "permission-denied") {
@@ -2574,7 +2488,6 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`;
         errorMessage = "Authentication error. Please log in again."
       }
 
-      // Dispatch error notification
       const errorEvent = new CustomEvent("newNotification", {
         detail: {
           message: errorMessage,
@@ -2604,7 +2517,6 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`;
     setModalType("scoreBreakdown")
   }
 
-  // Enhanced Modal Overlay Style with animation
   const modalOverlayStyle = {
     position: "fixed",
     top: 0,
@@ -2620,7 +2532,6 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`;
     backdropFilter: "blur(4px)",
   }
 
-  // Enhanced Modern Modal Content Style
   const modalContentStyle = {
     backgroundColor: "#ffffff",
     borderRadius: "20px",
@@ -2635,33 +2546,32 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`;
     position: "relative",
   }
 
-  // Style constants
   const tableHeaderStyle = {
     background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
     color: "#FEFCFA",
-    padding: "0.5rem 0.25rem", // Reduced padding from 0.75rem 0.5rem
+    padding: "0.5rem 0.25rem",
     textAlign: "left",
     fontWeight: "600",
-    fontSize: "0.75rem", // Reduced from 0.75rem
-    letterSpacing: "0.3px", // Reduced from 0.5px
+    fontSize: "0.75rem",
+    letterSpacing: "0.3px",
     textTransform: "uppercase",
     position: "sticky",
     top: "0",
     zIndex: "10",
     borderBottom: "2px solid #1a0c02",
     borderRight: "1px solid #1a0c02",
-    lineHeight: "1.2", // Reduced from 1.2
+    lineHeight: "1.2",
   }
 
   const tableCellStyle = {
-    padding: "0.5rem 0.25rem", // Reduced padding from 0.75rem 0.5rem
+    padding: "0.5rem 0.25rem",
     borderBottom: "1px solid #E8D5C4",
     borderRight: "1px solid #E8D5C4",
-    fontSize: "0.8rem", // Reduced from 0.8rem
+    fontSize: "0.8rem",
     verticalAlign: "top",
     color: "#5d4037",
-    lineHeight: "1.3", // Reduced from 1.3
-    maxWidth: "0", // This forces text wrapping
+    lineHeight: "1.3",
+    maxWidth: "0",
     overflow: "hidden",
   }
 
@@ -2673,10 +2583,10 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`;
   }
 
   const progressBarStyle = {
-    width: "60%", // Updated from 35px to 60% to match supplier
-    height: "6px", // Updated from 4px to 6px to match supplier
-    background: "#E2E8F0", // Updated to match supplier color
-    borderRadius: "3px", // Updated from 2px to 3px
+    width: "60%",
+    height: "6px",
+    background: "#E2E8F0",
+    borderRadius: "3px",
     overflow: "hidden",
   }
 
@@ -2687,12 +2597,11 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`;
   }
 
   const matchScoreStyle = {
-    fontWeight: "600", // Updated from 600 to match supplier
+    fontWeight: "600",
     color: "#5D2A0A",
-    fontSize: "0.75rem", // Updated from 0.7rem to 0.75rem to match supplier
+    fontSize: "0.75rem",
   }
 
-  // Added statusBadgeStyle definition
   const statusBadgeStyle = {
     padding: "4px 8px",
     borderRadius: "4px",
@@ -2701,122 +2610,112 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`;
     display: "inline-block",
     textTransform: "capitalize",
   }
-// Add this filter function near your other filter functions
-const hasTooManyMissingFields = (intern) => {
-  const fieldsToCheck = [
-    intern.internName,
-    intern.location,
-    intern.institution,
-    intern.degree,
-    intern.field,
-    intern.locationFlexibility,
-    intern.role,
-    intern.sponsorName,
-    intern.fundingProgramType,
-    intern.startDate,
-    intern.matchPercentage?.toString(),
-    intern.bigScore?.toString()
-  ];
 
-  const missingCount = fieldsToCheck.filter(field => {
-    if (field === null || field === undefined) return true;
-    
-    const stringField = field.toString().trim();
-    return (
-      stringField === '' ||
-      stringField === '-' ||
-      stringField === 'Not specified' ||
-      stringField === 'Various' ||
-      stringField === 'unspecified' ||
-      stringField === 'Unknown' ||
-      stringField === 'N/A' ||
-stringField === 'Not Provided' ||
-      stringField === '0' || // If scores are 0, consider them missing
-      stringField.toLowerCase() === 'null' ||
-      stringField.toLowerCase().includes('not specified') ||
-      stringField.toLowerCase().includes('unspecified') ||
-      stringField.toLowerCase().includes('tbd') ||
-      stringField.toLowerCase().includes('anonymous')
-    );
-  }).length;
+  const hasTooManyMissingFields = (intern) => {
+    const fieldsToCheck = [
+      intern.internName,
+      intern.location,
+      intern.institution,
+      intern.degree,
+      intern.field,
+      intern.locationFlexibility,
+      intern.role,
+      intern.sponsorName,
+      intern.fundingProgramType,
+      intern.startDate,
+      intern.matchPercentage?.toString(),
+      intern.bigScore?.toString(),
+    ]
 
-  return missingCount > 4;
-};
-  // The useEffect hook must be called at the top level of the component, not conditionally.
-  // The original code had it inside the component body but not as a direct child.
-  // This has been moved to the top level of the component's scope.
-  // However, the logic within the useEffect is fine for fetching data on component mount.
+    const missingCount = fieldsToCheck.filter((field) => {
+      if (field === null || field === undefined) return true
 
-  // Moved the filtering logic directly into the component body, outside of the useEffect.
-  // This ensures it runs on every render after `interns` is updated.
- const applyLocalFilters = () => {
-  let updatedInterns = [...interns];
+      const stringField = field.toString().trim()
+      return (
+        stringField === "" ||
+        stringField === "-" ||
+        stringField === "Not specified" ||
+        stringField === "Various" ||
+        stringField === "unspecified" ||
+        stringField === "Unknown" ||
+        stringField === "N/A" ||
+        stringField === "Not Provided" ||
+        stringField === "0" ||
+        stringField.toLowerCase() === "null" ||
+        stringField.toLowerCase().includes("not specified") ||
+        stringField.toLowerCase().includes("unspecified") ||
+        stringField.toLowerCase().includes("tbd") ||
+        stringField.toLowerCase().includes("anonymous")
+      )
+    }).length
 
-  // Apply the main filters (user exclusion and missing fields)
-  updatedInterns = updatedInterns.filter((intern) => {
-    // First check if intern UID matches current user - if so, exclude
-    const user = auth.currentUser;
-    if (user && intern.internId === user.uid) {
-      return false;
-    }
+    return missingCount > 4
+  }
 
-    // Then check if too many fields are missing - if so, exclude completely
-    if (hasTooManyMissingFields(intern)) {
-      return false;
-    }
+  const applyLocalFilters = () => {
+    let updatedInterns = [...interns]
 
-    // Then apply your existing local filters...
-    if (localFilters.location) {
-      if (!intern.location || !intern.location.toLowerCase().includes(localFilters.location.toLowerCase())) {
-        return false;
+    updatedInterns = updatedInterns.filter((intern) => {
+      const user = auth.currentUser
+      if (user && intern.internId === user.uid) {
+        return false
       }
-    }
 
-    if (localFilters.institution) {
-      if (!intern.institution || !intern.institution.toLowerCase().includes(localFilters.institution.toLowerCase())) {
-        return false;
+      if (hasTooManyMissingFields(intern)) {
+        return false
       }
-    }
 
-    if (localFilters.degree) {
-      if (!intern.degree || !intern.degree.toLowerCase().includes(localFilters.degree.toLowerCase())) {
-        return false;
+      if (localFilters.location) {
+        if (!intern.location || !intern.location.toLowerCase().includes(localFilters.location.toLowerCase())) {
+          return false
+        }
       }
-    }
 
-    if (localFilters.matchScore > 0) {
-      if (!intern.matchPercentage || intern.matchPercentage < localFilters.matchScore) {
-        return false;
+      if (localFilters.institution) {
+        if (!intern.institution || !intern.institution.toLowerCase().includes(localFilters.institution.toLowerCase())) {
+          return false
+        }
       }
-    }
 
-    return true;
-  });
+      if (localFilters.degree) {
+        if (!intern.degree || !intern.degree.toLowerCase().includes(localFilters.degree.toLowerCase())) {
+          return false
+        }
+      }
 
-  // Sorting
-  updatedInterns.sort((a, b) => {
-    if (localFilters.sortBy === "matchPercentage") {
-      return b.matchPercentage - a.matchPercentage;
-    } else if (localFilters.sortBy === "bigScore") {
-      return b.bigScore - a.bigScore;
-    } else if (localFilters.sortBy === "internName") {
-      return a.internName.localeCompare(b.internName);
-    }
-    return 0;
-  });
+      if (localFilters.matchScore > 0) {
+        if (!intern.matchPercentage || intern.matchPercentage < localFilters.matchScore) {
+          return false
+        }
+      }
 
-  setFilteredInterns(updatedInterns);
-};
+      return true
+    })
+
+    updatedInterns.sort((a, b) => {
+      if (localFilters.sortBy === "matchPercentage") {
+        return b.matchPercentage - a.matchPercentage
+      } else if (localFilters.sortBy === "bigScore") {
+        return b.bigScore - a.bigScore
+      } else if (localFilters.sortBy === "internName") {
+        return a.internName.localeCompare(b.internName)
+      }
+      return 0
+    })
+
+    setFilteredInterns(updatedInterns)
+  }
 
   useEffect(() => {
     applyLocalFilters()
-  }, [localFilters, interns]) // Re-run filter when filters or intern list changes
+  }, [localFilters, interns])
 
   if (loading) {
     return <div style={{ padding: "40px", textAlign: "center" }}>Loading applications...</div>
   }
 
-  const currentStageFields = getStageFields(nextStage)
+  // Determine current stage fields based on the selected stage in the modal
+  const currentStageFields = getStageFields(selectedStage)
 
   return (
     <div style={{ padding: "20px", width: "100%", maxWidth: "100vw", overflowX: "hidden" }}>
@@ -2879,19 +2778,19 @@ stringField === 'Not Provided' ||
           }}
         >
           <colgroup>
-            <col style={{ width: "8%" }} /> {/* Intern Name */}
-            <col style={{ width: "7%" }} /> {/* Location */}
-            <col style={{ width: "9%" }} /> {/* Institution */}
-            <col style={{ width: "8%" }} /> {/* Degree */}
-            <col style={{ width: "10%" }} /> {/* Field */}
-            <col style={{ width: "8%" }} /> {/* Intern Type */}
-            <col style={{ width: "9%" }} /> {/* Role */}
-            <col style={{ width: "8%" }} /> {/* Funding Program */}
-            <col style={{ width: "6%" }} /> {/* Match % */}
-            <col style={{ width: "7%" }} /> {/* BIG Score */}
-            <col style={{ width: "7%" }} /> {/* Status */}
-            <col style={{ width: "7%" }} /> {/* Next Stage */}
-            <col style={{ width: "13%" }} /> {/* Action */}
+            <col style={{ width: "8%" }} />
+            <col style={{ width: "7%" }} />
+            <col style={{ width: "9%" }} />
+            <col style={{ width: "8%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "8%" }} />
+            <col style={{ width: "9%" }} />
+            <col style={{ width: "8%" }} />
+            <col style={{ width: "6%" }} />
+            <col style={{ width: "7%" }} />
+            <col style={{ width: "7%" }} />
+            <col style={{ width: "7%" }} />
+            <col style={{ width: "13%" }} />
           </colgroup>
           <thead>
             <tr>
@@ -2925,7 +2824,7 @@ stringField === 'Not Provided' ||
           <tbody>
             {filteredInterns.length === 0 ? (
               <tr>
-                <td colSpan="12" style={{ ...tableCellStyle, textAlign: "center", color: "#666" }}>
+                <td colSpan="13" style={{ ...tableCellStyle, textAlign: "center", color: "#666" }}>
                   No applications found matching your criteria.
                 </td>
               </tr>
@@ -2962,23 +2861,22 @@ stringField === 'Not Provided' ||
                       </div>
                     </td>
                     <td style={tableCellStyle}>
-                      {/* CHANGE: Updated TruncatedText maxLength for better visibility */}
                       <TruncatedText text={intern.institution} maxLength={25} />
                     </td>
                     <td style={tableCellStyle}>
                       <TruncatedText text={intern.degree} maxLength={20} />
                     </td>
                     <td style={tableCellStyle}>
-                      <TruncatedText text={intern.field} maxLength={25} />
+                      <TruncatedText text={formatLabel(intern.field)} maxLength={25} />
                     </td>
                     <td style={tableCellStyle}>
-                      <TruncatedText text={intern.locationFlexibility} maxLength={12} />
+                      <TruncatedText text={intern.locationFlexibility} maxLength={15} />
                     </td>
                     <td style={tableCellStyle}>
-                      <TruncatedText text={intern.role} maxLength={15} />
+                      <TruncatedText text={formatLabel(intern.role)} maxLength={25} />
                     </td>
                     <td style={tableCellStyle}>
-                      <TruncatedText text={intern.sponsorName} maxLength={15} />
+                      <TruncatedText text={intern.fundingProgramType} maxLength={18} />
                     </td>
                     <td style={tableCellStyle}>
                       <div style={matchContainerStyle}>
@@ -2987,16 +2885,11 @@ stringField === 'Not Provided' ||
                             style={{
                               ...progressFillStyle,
                               width: `${intern.matchPercentage}%`,
-                              background:
-                                intern.matchPercentage > 75
-                                  ? "#48BB78"
-                                  : intern.matchPercentage > 50
-                                    ? "#F6AD55"
-                                    : "#F56565",
+                              background: `linear-gradient(90deg, ${intern.matchPercentage > 75 ? "#48BB78" : intern.matchPercentage > 50 ? "#D69E2E" : "#E53E3E"}, ${intern.matchPercentage > 75 ? "#48BB78" : intern.matchPercentage > 50 ? "#D69E2E" : "#E53E3E"}aa)`,
                             }}
                           />
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "4px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                           <span
                             style={{
                               ...matchScoreStyle,
@@ -3043,7 +2936,6 @@ stringField === 'Not Provided' ||
                           >
                             {intern.bigScore}%
                           </span>
-                          {/* CHANGE: Fixed eye icon to call handleBigScoreClick instead of handleScoreBreakdown */}
                           <Eye
                             size={14}
                             style={{ cursor: "pointer", color: "#a67c52" }}
@@ -3068,11 +2960,7 @@ stringField === 'Not Provided' ||
                       </span>
                     </td>
                     <td style={tableCellStyle}>
-                      <NextStageIndicator
-                        currentStage={currentStatus}
-                        // onStageUpdate={(newStage) => handleQuickStageUpdate(intern, newStage)}
-                        // isLoading={updatingStageForIntern === intern.id}
-                      />
+                      <NextStageIndicator currentStage={currentStatus} />
                     </td>
                     <td style={{ ...tableCellStyle, borderRight: "none" }}>
                       {intern.status === "Matched" ? (
@@ -3138,7 +3026,7 @@ stringField === 'Not Provided' ||
         </table>
       </div>
 
-      {/* Filter Modal */}
+      {/* Updated Filter Modal with Province, Institution (comprehensive list), and Degree (grouped) filters */}
       {showFilters &&
         createPortal(
           <div style={modalOverlayStyle} onClick={() => setShowFilters(false)}>
@@ -3163,6 +3051,7 @@ stringField === 'Not Provided' ||
                 </button>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginBottom: "32px" }}>
+                {/* Province Filter */}
                 <div>
                   <label
                     style={{
@@ -3173,7 +3062,7 @@ stringField === 'Not Provided' ||
                       marginBottom: "12px",
                     }}
                   >
-                    Location
+                    Province
                   </label>
                   <select
                     value={localFilters.location}
@@ -3187,14 +3076,16 @@ stringField === 'Not Provided' ||
                       backgroundColor: "#f5f0e1",
                     }}
                   >
-                    <option value="">All Locations</option>
-                    {southAfricanCities.map((city) => (
-                      <option key={city} value={city}>
-                        {city}
+                    <option value="">All Provinces</option>
+                    {southAfricanProvinces.map((province) => (
+                      <option key={province} value={province}>
+                        {province}
                       </option>
                     ))}
                   </select>
                 </div>
+
+                {/* Institution Filter */}
                 <div>
                   <label
                     style={{
@@ -3227,6 +3118,8 @@ stringField === 'Not Provided' ||
                     ))}
                   </select>
                 </div>
+
+                {/* Degree Filter - with grouped options */}
                 <div>
                   <label
                     style={{
@@ -3239,8 +3132,7 @@ stringField === 'Not Provided' ||
                   >
                     Degree
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={localFilters.degree}
                     onChange={(e) => handleFilterChange("degree", e.target.value)}
                     style={{
@@ -3251,9 +3143,21 @@ stringField === 'Not Provided' ||
                       fontSize: "16px",
                       backgroundColor: "#f5f0e1",
                     }}
-                    placeholder="Filter by degree"
-                  />
+                  >
+                    <option value="">All Degrees</option>
+                    {degreeOptions.map((group) => (
+                      <optgroup key={group.group} label={group.group}>
+                        {group.options.map((degree) => (
+                          <option key={degree} value={degree}>
+                            {degree}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
                 </div>
+
+                {/* Match Score Filter */}
                 <div>
                   <label
                     style={{
@@ -3293,6 +3197,8 @@ stringField === 'Not Provided' ||
                     <span>100%</span>
                   </div>
                 </div>
+
+                {/* Sort By Filter */}
                 <div>
                   <label
                     style={{
@@ -3459,60 +3365,42 @@ stringField === 'Not Provided' ||
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                       <h4>Documents</h4>
-
                       <div>{renderDocumentLink(selectedIntern.cvUrl, "CV Document")}</div>
                       <div>{renderDocumentLink(selectedIntern.transcriptUrl, "Transcript Document")}</div>
-                      <div>{renderDocumentLink(selectedIntern.idDocumentUrl, "ID Document Document")}</div>
-                      <div>{renderDocumentLink(selectedIntern.portfolioFileUrl, "Portfolio Document")}</div>
-                      <div>{renderDocumentLink(selectedIntern.proofOfStudyUrl, "Proof of Study Document")}</div>
-                      <div>{renderDocumentLink(selectedIntern.referencesUrl, "References Document")}</div>
-
-                      <div>{renderDocumentLink(selectedIntern.motivationLetterUrl, "Motivation Letter Document")}</div>
+                      <div>{renderDocumentLink(selectedIntern.idDocumentUrl, "ID Document")}</div>
+                      <div>{renderDocumentLink(selectedIntern.motivationLetterUrl, "Motivation Letter")}</div>
+                      <div>{renderDocumentLink(selectedIntern.portfolioFileUrl, "Portfolio")}</div>
+                      <div>{renderDocumentLink(selectedIntern.proofOfStudyUrl, "Proof of Study")}</div>
+                      <div>{renderDocumentLink(selectedIntern.referencesUrl, "References")}</div>
                     </div>
                   </div>
                 </div>
                 <div>
                   <h4 style={{ fontSize: "18px", fontWeight: "600", color: "#4a352f", marginBottom: "16px" }}>
-                    Evaluation Scores
+                    Match Information
                   </h4>
                   <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                     <div>
-                      <strong>Match Score:</strong>{" "}
-                      <span style={{ color: getScoreColor(selectedIntern.matchPercentage) }}>
-                        {selectedIntern.matchPercentage}%
-                      </span>
+                      <strong>Match Score:</strong> {selectedIntern.matchPercentage}%
                     </div>
                     <div>
-                      <strong>BIG Score:</strong>{" "}
-                      <span style={{ color: getScoreColor(selectedIntern.bigScore) }}>{selectedIntern.bigScore}%</span>
+                      <strong>BIG Score:</strong> {selectedIntern.bigScore}%
+                    </div>
+                    <div>
+                      <strong>Location Flexibility:</strong> {selectedIntern.locationFlexibility}
+                    </div>
+                    <div>
+                      <strong>Availability Start:</strong> {selectedIntern.availabilityStart || "N/A"}
                     </div>
                   </div>
                 </div>
               </div>
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "16px" }}>
-                <button
-                  onClick={() => handleBigScoreClick(selectedIntern)}
-                  style={{
-                    padding: "12px 24px",
-                    backgroundColor: "#a67c52",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    fontWeight: "600",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
-                  <BarChart3 size={16} />
-                  View BIG Score Breakdown
-                </button>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
                 <button
                   onClick={resetModal}
                   style={{
                     padding: "12px 24px",
-                    backgroundColor: "#e6d7c3",
+                    backgroundColor: "#c8b6a6",
                     color: "#4a352f",
                     border: "none",
                     borderRadius: "8px",
@@ -3527,314 +3415,21 @@ stringField === 'Not Provided' ||
           </div>,
           document.body,
         )}
+
+      {/* Match Score Breakdown Modal */}
       {selectedIntern &&
         modalType === "matchBreakdown" &&
-        createPortal(<MatchBreakdownModal intern={selectedIntern} onClose={resetModal} />, document.body)}
-      {/* Enhanced BIG Score Modal */}
-      {selectedIntern &&
-        modalType === "bigScore" &&
         createPortal(
           <div style={modalOverlayStyle} onClick={resetModal}>
-            <div style={{ ...modalContentStyle, maxWidth: "1000px" }} onClick={(e) => e.stopPropagation()}>
-              <div
-                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "40px" }}
-              >
-                <h3 style={{ fontSize: "32px", fontWeight: "800", color: "#3e2723", margin: 0 }}>
-                  BIG Score Breakdown
-                </h3>
-                <div
-                  style={{
-                    backgroundColor: getScoreColor(selectedIntern.bigScore),
-                    color: "white",
-                    borderRadius: "50%",
-                    width: "100px",
-                    height: "100px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "32px",
-                    fontWeight: "800",
-                    boxShadow: "0 12px 32px rgba(93, 64, 55, 0.4)",
-                  }}
-                >
-                  {selectedIntern.bigScore}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  backgroundColor: "#f8f5f3",
-                  padding: "24px",
-                  borderRadius: "16px",
-                  marginBottom: "32px",
-                  border: "2px solid #8d6e63",
-                }}
-              >
-                <p
-                  style={{
-                    fontSize: "20px",
-                    color: "#5d4037",
-                    marginBottom: "16px",
-                    lineHeight: "1.6",
-                    fontWeight: "500",
-                  }}
-                >
-                  The BIG Score is a comprehensive evaluation of {selectedIntern.internName}'s internship readiness
-                  across key dimensions:
-                </p>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                    gap: "16px",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                      gap: "16px",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <div
-                        style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: "#4E342E" }}
-                      ></div>
-                      <span style={{ fontWeight: "600", color: "#3e2723" }}>Presentation Score (25%)</span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <div
-                        style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: "#8D6E63" }}
-                      ></div>
-                      <span style={{ fontWeight: "600", color: "#3e2723" }}>Professional Skills (25%)</span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <div
-                        style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: "#5D4037" }}
-                      ></div>
-                      <span style={{ fontWeight: "600", color: "#3e2723" }}>Work Experience (25%)</span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <div
-                        style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: "#3E2723" }}
-                      ></div>
-                      <span style={{ fontWeight: "600", color: "#3e2723" }}>Academic Score (25%)</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Score breakdown sections - PIS first */}
-              {Object.entries(bigScoreData).map(([key, data]) => (
-                <div
-                  key={key}
-                  style={{
-                    backgroundColor: "#ffffff",
-                    borderRadius: "20px",
-                    padding: "32px",
-                    marginBottom: "24px",
-                    boxShadow: "0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08)",
-                    border: `2px solid ${data.color}20`,
-                    transition: "transform 0.2s ease, box-shadow 0.2s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = "translateY(-4px)"
-                    e.currentTarget.style.boxShadow = "0 12px 40px rgba(0, 0, 0, 0.15), 0 4px 12px rgba(0, 0, 0, 0.1)"
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "translateY(0)"
-                    e.currentTarget.style.boxShadow = "0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08)"
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      marginBottom: "20px",
-                    }}
-                  >
-                    <div>
-                      <h4
-                        style={{
-                          margin: 0,
-                          fontSize: "24px",
-                          fontWeight: "700",
-                          textTransform: "capitalize",
-                          color: "#3e2723",
-                        }}
-                      >
-                        {/* Updated key formatting */}
-                        {key === "PresentationScore"
-                          ? "Presentation Score"
-                          : key === "ProfessionalSkillsScore"
-                            ? "Professional Skills Score"
-                            : key === "WorkExperienceScore"
-                              ? "Work Experience Score"
-                              : key === "AcademicScore"
-                                ? "Academic Score"
-                                : key}
-                      </h4>
-                      <p style={{ margin: "8px 0 0 0", fontSize: "16px", color: "#666", fontWeight: "400" }}>
-                        {/* Updated descriptions */}
-                        {key === "PresentationScore" && "Communication and presentation capabilities assessment"}
-                        {key === "ProfessionalSkillsScore" && "Technical and professional competencies evaluation"}
-                        {key === "WorkExperienceScore" && "Relevant work experience and practical skills"}
-                        {key === "AcademicScore" && "Educational background and academic achievements"}
-                      </p>
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "16px",
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: "36px",
-                          fontWeight: "800",
-                          color: data.color,
-                          textShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
-                        }}
-                      >
-                        {data.score}%
-                      </div>
-                      <div
-                        style={{
-                          width: "60px",
-                          height: "60px",
-                          borderRadius: "50%",
-                          backgroundColor: `${data.color}20`,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          border: `3px solid ${data.color}`,
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: "24px",
-                            height: "24px",
-                            borderRadius: "50%",
-                            backgroundColor: data.color,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div
-                    style={{
-                      width: "100%",
-                      height: "20px",
-                      backgroundColor: "#f5f5f5",
-                      borderRadius: "10px",
-                      overflow: "hidden",
-                      boxShadow: "inset 0 2px 4px rgba(0, 0, 0, 0.1)",
-                      position: "relative",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: `${data.score}%`,
-                        height: "100%",
-                        background: `linear-gradient(90deg, ${data.color}, ${data.color}dd)`,
-                        borderRadius: "10px",
-                        transition: "width 2s cubic-bezier(0.4, 0, 0.2, 1)",
-                        position: "relative",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <div
-                        style={{
-                          position: "absolute",
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)",
-                          animation: "shimmer 2s infinite",
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              <div
-                style={{
-                  backgroundColor: "#f3e5f5",
-                  padding: "24px",
-                  borderRadius: "16px",
-                  marginTop: "32px",
-                  marginBottom: "32px",
-                  border: "2px solid #ce93d8",
-                }}
-              >
-                <div
-                  style={{
-                    backgroundColor: "#f3e5f5",
-                    padding: "24px",
-                    borderRadius: "16px",
-                    marginTop: "32px",
-                    marginBottom: "32px",
-                    border: "2px solid #ce93d8",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-                    <Info size={24} style={{ color: "#5d4037" }} />
-                    <p style={{ margin: 0, color: "#5d4037", fontSize: "16px", lineHeight: "1.5", fontWeight: "500" }}>
-                      The BIG Score is calculated using equal weights: Presentation Score (25%) + Professional Skills
-                      Score (25%) + Work Experience Score (25%) + Academic Score (25%)
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <button
-                  onClick={resetModal}
-                  style={{
-                    background: "linear-gradient(135deg, #5d4037 0%, #4e342e 100%)",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "12px",
-                    padding: "16px 32px",
-                    fontSize: "18px",
-                    fontWeight: "600",
-                    cursor: "pointer",
-                    boxShadow: "0 4px 16px rgba(93, 64, 55, 0.3)",
-                    transition: "all 0.3s ease",
-                  }}
-                  onMouseOver={(e) => {
-                    e.target.style.transform = "translateY(-2px)"
-                    e.target.style.boxShadow = "0 8px 24px rgba(93, 64, 55, 0.4)"
-                  }}
-                  onMouseOut={(e) => {
-                    e.target.style.transform = "translateY(0)"
-                    e.target.style.boxShadow = "0 4px 16px rgba(93, 64, 55, 0.3)"
-                  }}
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
-
-      {showCalendarModal &&
-        createPortal(
-          <div style={{ ...modalOverlayStyle, zIndex: 1100 }} onClick={() => setShowCalendarModal(false)}>
-            <div style={{ ...modalContentStyle, maxWidth: "800px" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ ...modalContentStyle, maxWidth: "600px" }} onClick={(e) => e.stopPropagation()}>
               <div
                 style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}
               >
-                <h3 style={{ fontSize: "24px", fontWeight: "700", color: "#3e2723", margin: 0 }}>
-                  Select Available Dates
+                <h3 style={{ fontSize: "24px", fontWeight: "800", color: "#3e2723", margin: 0 }}>
+                  Match Score Breakdown
                 </h3>
                 <button
-                  onClick={() => setShowCalendarModal(false)}
+                  onClick={resetModal}
                   style={{
                     background: "none",
                     border: "none",
@@ -3846,161 +3441,74 @@ stringField === 'Not Provided' ||
                   <X size={24} />
                 </button>
               </div>
-
               <div style={{ marginBottom: "24px" }}>
-                <label style={{ display: "block", fontSize: "16px", fontWeight: "600", marginBottom: "8px" }}>
-                  Time Zone
-                </label>
-                <select
-                  value={timeZone}
-                  onChange={(e) => setTimeZone(e.target.value)}
+                <div
                   style={{
-                    width: "100%",
-                    padding: "10px",
-                    border: "1px solid #ddd",
-                    borderRadius: "4px",
+                    fontSize: "48px",
+                    fontWeight: "800",
+                    color: getScoreColor(selectedIntern.matchPercentage),
+                    textAlign: "center",
+                    marginBottom: "16px",
                   }}
                 >
-                  <option value="Africa/Johannesburg">South Africa Time (SAST)</option>
-                  <option value="UTC">UTC</option>
-                </select>
-              </div>
-
-              <div style={{ marginBottom: "24px" }}>
-                <label style={{ display: "block", fontSize: "16px", fontWeight: "600", marginBottom: "8px" }}>
-                  Time Slot
-                </label>
-                <div style={{ display: "flex", gap: "16px" }}>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ display: "block", marginBottom: "4px" }}>Start Time</label>
-                    <input
-                      type="time"
-                      value={timeSlot.start}
-                      onChange={(e) => handleTimeChange("start", e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        border: "1px solid #ddd",
-                        borderRadius: "4px",
-                      }}
-                    />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ display: "block", marginBottom: "4px" }}>End Time</label>
-                    <input
-                      type="time"
-                      value={timeSlot.end}
-                      onChange={(e) => handleTimeChange("end", e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        border: "1px solid #ddd",
-                        borderRadius: "4px",
-                      }}
-                    />
-                  </div>
+                  {selectedIntern.matchPercentage}%
                 </div>
+                <p style={{ textAlign: "center", color: "#666", fontSize: "14px" }}>Overall Match Score</p>
               </div>
-
-              <div style={{ marginBottom: "24px" }}>
-                <label style={{ display: "block", fontSize: "16px", fontWeight: "600", marginBottom: "8px" }}>
-                  Select Dates
-                </label>
-                <DayPicker
-                  mode="multiple"
-                  selected={tempDates}
-                  onSelect={handleDateSelect}
-                  fromDate={new Date()}
-                  styles={{
-                    caption: { color: "#4a352f", fontWeight: "bold" },
-                    day_selected: { backgroundColor: "#5d4037", color: "white" },
-                  }}
-                />
-              </div>
-
-              <div style={{ marginBottom: "24px" }}>
-                <h4 style={{ fontSize: "16px", fontWeight: "600", marginBottom: "12px" }}>Selected Availability</h4>
-                {tempDates.length > 0 ? (
-                  <div
-                    style={{
-                      border: "1px solid #eee",
-                      borderRadius: "8px",
-                      padding: "12px",
-                      maxHeight: "200px",
-                      overflowY: "auto",
-                    }}
-                  >
-                    {tempDates.map((date, index) => (
-                      <div
-                        key={index}
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          padding: "8px 0",
-                          borderBottom: "1px solid #f0f0f0",
-                        }}
-                      >
-                        <span>
-                          {date.toLocaleDateString("en-US", {
-                            weekday: "long",
-                            year: "numeric",
-                            month: "long",
-                            day: "numeric",
-                          })}
-                          {timeSlot.start && timeSlot.end && (
-                            <span style={{ color: "#666", marginLeft: "8px" }}>
-                              {timeSlot.start} - {timeSlot.end}
-                            </span>
-                          )}
-                        </span>
-                        <button
-                          onClick={() => setTempDates(tempDates.filter((d, i) => i !== index))}
+              {selectedIntern.matchAnalysis && selectedIntern.matchAnalysis.breakdown && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  {Object.entries(selectedIntern.matchAnalysis.breakdown).map(([key, data]) => (
+                    <div
+                      key={key}
+                      style={{
+                        padding: "16px",
+                        backgroundColor:
+                          data.score >= data.maxScore * 0.7
+                            ? "#e8f5e9"
+                            : data.score >= data.maxScore * 0.4
+                              ? "#fff3e0"
+                              : "#ffebee",
+                        borderRadius: "8px",
+                        border: `1px solid ${data.score >= data.maxScore * 0.7 ? "#c8e6c9" : data.score >= data.maxScore * 0.4 ? "#ffe0b2" : "#ffcdd2"}`,
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+                        <strong style={{ color: "#4a352f" }}>
+                          {key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase())}
+                        </strong>
+                        <span
                           style={{
-                            background: "none",
-                            border: "none",
-                            color: "#ff4444",
-                            cursor: "pointer",
-                            padding: "4px",
+                            color:
+                              data.score >= data.maxScore * 0.7
+                                ? "#388e3c"
+                                : data.score >= data.maxScore * 0.4
+                                  ? "#f57c00"
+                                  : "#d32f2f",
+                            fontWeight: "600",
                           }}
                         >
-                          <X size={16} />
-                        </button>
+                          {data.score}/{data.maxScore}
+                        </span>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p style={{ color: "#666", fontStyle: "italic" }}>No dates selected yet</p>
-                )}
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
+                      <p style={{ fontSize: "13px", color: "#666", margin: 0 }}>{data.description}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "24px" }}>
                 <button
-                  onClick={() => setShowCalendarModal(false)}
+                  onClick={resetModal}
                   style={{
-                    padding: "10px 20px",
-                    backgroundColor: "transparent",
-                    color: "#666",
-                    border: "1px solid #ddd",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={saveSelectedDates}
-                  style={{
-                    padding: "10px 20px",
-                    backgroundColor: "#5d4037",
+                    padding: "12px 24px",
+                    backgroundColor: "#a67c52",
                     color: "white",
                     border: "none",
-                    borderRadius: "6px",
+                    borderRadius: "8px",
                     cursor: "pointer",
+                    fontWeight: "600",
                   }}
-                  disabled={tempDates.length === 0}
                 >
-                  Save Availability
+                  Close
                 </button>
               </div>
             </div>
@@ -4008,98 +3516,93 @@ stringField === 'Not Provided' ||
           document.body,
         )}
 
-      {currentStageFields.showMeeting && (
-        <div style={{ backgroundColor: "#f8f5f3", padding: "20px", borderRadius: "12px", marginBottom: "24px" }}>
-          <h4 style={{ fontSize: "16px", fontWeight: "600", color: "#4a352f", marginBottom: "16px" }}>
-            Schedule Meeting
-          </h4>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
-            <div>
-              <label
-                style={{
-                  display: "block",
-                  fontSize: "14px",
-                  fontWeight: "600",
-                  color: "#4a352f",
-                  marginBottom: "8px",
-                }}
+      {/* BIG Score Modal */}
+      {selectedIntern &&
+        modalType === "bigScore" &&
+        createPortal(
+          <div style={modalOverlayStyle} onClick={resetModal}>
+            <div style={{ ...modalContentStyle, maxWidth: "600px" }} onClick={(e) => e.stopPropagation()}>
+              <div
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}
               >
-                Location:
-              </label>
-              <input
-                type="text"
-                value={meetingLocation}
-                onChange={(e) => {
-                  setMeetingLocation(e.target.value)
-                  if (e.target.value.trim()) {
-                    setFormErrors({ ...formErrors, meetingLocation: "" })
-                  }
-                }}
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  border: formErrors.meetingLocation ? "2px solid #dc2626" : "2px solid #c8b6a6",
-                  borderRadius: "6px",
-                  fontSize: "14px",
-                  backgroundColor: "white",
-                }}
-                placeholder="Office, Virtual, etc."
-              />
-              {formErrors.meetingLocation && (
-                <p style={{ color: "#dc2626", fontSize: "12px", marginTop: "4px" }}>{formErrors.meetingLocation}</p>
-              )}
+                <h3 style={{ fontSize: "24px", fontWeight: "800", color: "#3e2723", margin: 0 }}>
+                  BIG Score Breakdown
+                </h3>
+                <button
+                  onClick={resetModal}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    fontSize: "24px",
+                    cursor: "pointer",
+                    color: "#666",
+                  }}
+                >
+                  <X size={24} />
+                </button>
+              </div>
+              <div style={{ marginBottom: "24px" }}>
+                <div
+                  style={{
+                    fontSize: "48px",
+                    fontWeight: "800",
+                    color: getScoreColor(selectedIntern.bigScore),
+                    textAlign: "center",
+                    marginBottom: "16px",
+                  }}
+                >
+                  {selectedIntern.bigScore}%
+                </div>
+                <p style={{ textAlign: "center", color: "#666", fontSize: "14px" }}>BIG Assessment Score</p>
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "24px" }}>
+                <button
+                  onClick={resetModal}
+                  style={{
+                    padding: "12px 24px",
+                    backgroundColor: "#a67c52",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    fontWeight: "600",
+                  }}
+                >
+                  Close
+                </button>
+              </div>
             </div>
-          </div>
+          </div>,
+          document.body,
+        )}
 
-          <div>
-            <label
-              style={{
-                display: "block",
-                fontSize: "14px",
-                fontWeight: "600",
-                color: "#4a352f",
-                marginBottom: "8px",
-              }}
-            >
-              Meeting Purpose:
-            </label>
-            <input
-              type="text"
-              value={meetingPurpose}
-              onChange={(e) => {
-                setMeetingPurpose(e.target.value)
-                if (e.target.value.trim()) {
-                  setFormErrors({ ...formErrors, meetingPurpose: "" })
-                }
-              }}
-              style={{
-                width: "100%",
-                padding: "10px 12px",
-                border: formErrors.meetingPurpose ? "2px solid #dc2626" : "2px solid #c8b6a6",
-                borderRadius: "6px",
-                fontSize: "14px",
-                backgroundColor: "white",
-              }}
-              placeholder="Initial discussion, strategy review, etc."
-            />
-            {formErrors.meetingPurpose && (
-              <p style={{ color: "#dc2626", fontSize: "12px", marginTop: "4px" }}>{formErrors.meetingPurpose}</p>
-            )}
-          </div>
-        </div>
-      )}
-      {/* Stage Action Modal - Conditional Fields Based on Selected Stage */}
+      {/* Stage Update Modal */}
       {showStageModal &&
-        selectedInternForStage &&
+        selectedIntern &&
         createPortal(
           <div style={modalOverlayStyle} onClick={() => setShowStageModal(false)}>
-            <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
-              <div style={{ textAlign: "center", marginBottom: "32px" }}>
-                <h3 style={{ fontSize: "24px", fontWeight: "700", color: "#3e2723", margin: "0 0 8px 0" }}>
-                  Update Application Stage
+            <div style={{ ...modalContentStyle, maxWidth: "600px" }} onClick={(e) => e.stopPropagation()}>
+              <div
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}
+              >
+                <h3 style={{ fontSize: "24px", fontWeight: "800", color: "#3e2723", margin: 0 }}>
+                  Update Stage - {selectedIntern.internName}
                 </h3>
-                <p style={{ fontSize: "16px", color: "#666", margin: 0 }}>{selectedInternForStage.internName}</p>
+                <button
+                  onClick={() => {
+                    setShowStageModal(false)
+                    resetStageModal()
+                  }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    fontSize: "24px",
+                    cursor: "pointer",
+                    color: "#666",
+                  }}
+                >
+                  <X size={24} />
+                </button>
               </div>
 
               {/* Stage Selection */}
@@ -4113,190 +3616,90 @@ stringField === 'Not Provided' ||
                     marginBottom: "12px",
                   }}
                 >
-                  Select Next Stage:
+                  Select New Stage:
                 </label>
                 <select
-                  value={nextStage}
+                  value={selectedStage}
                   onChange={(e) => {
-                    setNextStage(e.target.value)
-                    if (e.target.value) {
-                      setFormErrors({ ...formErrors, nextStage: "" })
-                    }
+                    setSelectedStage(e.target.value)
+                    // Clear previous errors related to stage selection
+                    setFormErrors({ ...formErrors, selectedStage: "" })
                   }}
                   style={{
                     width: "100%",
                     padding: "12px 16px",
-                    border: formErrors.nextStage ? "2px solid #dc2626" : "2px solid #c8b6a6",
+                    border: formErrors.selectedStage ? "2px solid #dc2626" : "2px solid #c8b6a6",
                     borderRadius: "8px",
                     fontSize: "16px",
                     backgroundColor: "#f5f0e1",
                   }}
                 >
-                  <option value="">Choose a stage...</option>
+                  <option value="">Select a stage...</option>
                   {applicationStages.map((stage) => (
                     <option key={stage.id} value={stage.name}>
                       {stage.name}
                     </option>
                   ))}
                 </select>
-                {formErrors.nextStage && (
-                  <p style={{ color: "#dc2626", fontSize: "14px", marginTop: "8px" }}>{formErrors.nextStage}</p>
+                {formErrors.selectedStage && (
+                  <p style={{ color: "#dc2626", fontSize: "12px", marginTop: "4px" }}>{formErrors.selectedStage}</p>
                 )}
               </div>
 
-              {/* Conditional Fields Based on Selected Stage */}
-              {nextStage && (
+              {/* Conditional Fields based on stage */}
+              {selectedStage && (
                 <>
-                  {/* Message - Always show */}
-                  {currentStageFields.showMessage && (
-                    <div style={{ marginBottom: "24px" }}>
-                      <label
+                  {/* Notes Field */}
+                  <div style={{ marginBottom: "24px" }}>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        color: "#4a352f",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      Notes:
+                    </label>
+                    <textarea
+                      value={stageNotes}
+                      onChange={(e) => {
+                        setStageNotes(e.target.value)
+                        if (e.target.value.trim() && !formErrors.stageNotes) {
+                          setFormErrors({ ...formErrors, stageNotes: "" })
+                        }
+                      }}
+                      rows={4}
+                      style={{
+                        width: "100%",
+                        padding: "12px 16px",
+                        border: formErrors.stageNotes ? "2px solid #dc2626" : "2px solid #c8b6a6",
+                        borderRadius: "8px",
+                        fontSize: "14px",
+                        backgroundColor: "#f5f0e1",
+                        resize: "vertical",
+                      }}
+                      placeholder="Add notes about this stage update..."
+                    />
+                    {formErrors.stageNotes && (
+                      <p style={{ color: "#dc2626", fontSize: "12px", marginTop: "4px" }}>{formErrors.stageNotes}</p>
+                    )}
+                  </div>
+
+                  {/* Meeting Schedule - Only for interview stages */}
+                  {currentStageFields.showMeeting && (
+                    <div
+                      style={{ marginBottom: "24px", padding: "16px", backgroundColor: "#f9f5f0", borderRadius: "8px" }}
+                    >
+                      <h4
                         style={{
-                          display: "block",
                           fontSize: "16px",
                           fontWeight: "600",
                           color: "#4a352f",
-                          marginBottom: "12px",
-                        }}
-                      >
-                        Message to SMSE:
-                      </label>
-                      <textarea
-                        value={message}
-                        onChange={(e) => {
-                          setMessage(e.target.value)
-                          if (e.target.value.trim()) {
-                            setFormErrors({ ...formErrors, message: "" })
-                          }
-                        }}
-                        style={{
-                          width: "100%",
-                          padding: "12px 16px",
-                          border: formErrors.message ? "2px solid #dc2626" : "2px solid #c8b6a6",
-                          borderRadius: "8px",
-                          minHeight: "100px",
-                          resize: "vertical",
-                          fontSize: "16px",
-                          fontFamily: "inherit",
-                          backgroundColor: "#f5f0e1",
-                        }}
-                        placeholder="Enter your message..."
-                      />
-                      {formErrors.message && (
-                        <p style={{ color: "#dc2626", fontSize: "14px", marginTop: "8px" }}>{formErrors.message}</p>
-                      )}
-                    </div>
-                  )}
-                  {currentStageFields.showAvailability && (
-                    <div
-                      style={{
-                        backgroundColor: "#f8f5f3",
-                        padding: "20px",
-                        borderRadius: "12px",
-                        marginBottom: "24px",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
                           marginBottom: "16px",
                         }}
                       >
-                        <h4 style={{ fontSize: "16px", fontWeight: "600", color: "#4a352f" }}>Your Availability</h4>
-                        <button
-                          onClick={() => setShowCalendarModal(true)}
-                          style={{
-                            padding: "6px 12px",
-                            backgroundColor: "#5d4037",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "4px",
-                            cursor: "pointer",
-                            fontSize: "14px",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "4px",
-                          }}
-                        >
-                          <Calendar size={14} />
-                          Add Dates
-                        </button>
-                      </div>
-
-                      {availabilities.length > 0 ? (
-                        <div
-                          style={{
-                            border: "1px solid #eee",
-                            borderRadius: "8px",
-                            maxHeight: "200px",
-                            overflowY: "auto",
-                          }}
-                        >
-                          {availabilities.map((availability, index) => (
-                            <div
-                              key={index}
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                padding: "8px 12px",
-                                borderBottom: "1px solid #f0f0f0",
-                              }}
-                            >
-                              <div>
-                                <div style={{ fontWeight: "500" }}>
-                                  {availability.date.toLocaleDateString("en-US", {
-                                    weekday: "short",
-                                    month: "short",
-                                    day: "numeric",
-                                  })}
-                                </div>
-                                {availability.timeSlots?.[0] && (
-                                  <div style={{ fontSize: "12px", color: "#666" }}>
-                                    {availability.timeSlots[0].start} - {availability.timeSlots[0].end} (
-                                    {availability.timeZone})
-                                  </div>
-                                )}
-                              </div>
-                              <button
-                                onClick={() => removeAvailability(availability.date)}
-                                style={{
-                                  background: "none",
-                                  border: "none",
-                                  color: "#ff4444",
-                                  cursor: "pointer",
-                                  padding: "4px",
-                                }}
-                              >
-                                <X size={16} />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p style={{ color: "#666", fontStyle: "italic" }}>No availability slots added yet</p>
-                      )}
-                      {formErrors.availabilities && (
-                        <p style={{ color: "#dc2626", fontSize: "14px", marginTop: "8px" }}>
-                          {formErrors.availabilities}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Meeting Details - Show for most stages */}
-                  {currentStageFields.showMeeting && (
-                    <div
-                      style={{
-                        backgroundColor: "#f8f5f3",
-                        padding: "20px",
-                        borderRadius: "12px",
-                        marginBottom: "24px",
-                      }}
-                    >
-                      <h4 style={{ fontSize: "16px", fontWeight: "600", color: "#4a352f", marginBottom: "16px" }}>
                         Schedule Meeting
                       </h4>
 
@@ -4340,45 +3743,184 @@ stringField === 'Not Provided' ||
                             </p>
                           )}
                         </div>
+                        <div>
+                          <label
+                            style={{
+                              display: "block",
+                              fontSize: "14px",
+                              fontWeight: "600",
+                              color: "#4a352f",
+                              marginBottom: "8px",
+                            }}
+                          >
+                            Purpose:
+                          </label>
+                          <input
+                            type="text"
+                            value={meetingPurpose}
+                            onChange={(e) => {
+                              setMeetingPurpose(e.target.value)
+                              if (e.target.value.trim()) {
+                                setFormErrors({ ...formErrors, meetingPurpose: "" })
+                              }
+                            }}
+                            style={{
+                              width: "100%",
+                              padding: "10px 12px",
+                              border: formErrors.meetingPurpose ? "2px solid #dc2626" : "2px solid #c8b6a6",
+                              borderRadius: "6px",
+                              fontSize: "14px",
+                              backgroundColor: "white",
+                            }}
+                            placeholder="Initial discussion, strategy review, etc."
+                          />
+                          {formErrors.meetingPurpose && (
+                            <p style={{ color: "#dc2626", fontSize: "12px", marginTop: "4px" }}>
+                              {formErrors.meetingPurpose}
+                            </p>
+                          )}
+                        </div>
                       </div>
 
-                      <div>
-                        <label
+                      {/* Date and Time Selection for Interview */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                        <div>
+                          <label
+                            style={{
+                              display: "block",
+                              fontSize: "14px",
+                              fontWeight: "600",
+                              color: "#4a352f",
+                              marginBottom: "8px",
+                            }}
+                          >
+                            Date:
+                          </label>
+                          <input
+                            type="date"
+                            value={interviewDate}
+                            onChange={(e) => setInterviewDate(e.target.value)}
+                            style={{
+                              width: "100%",
+                              padding: "10px 12px",
+                              border: "2px solid #c8b6a6",
+                              borderRadius: "6px",
+                              fontSize: "14px",
+                              backgroundColor: "white",
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label
+                            style={{
+                              display: "block",
+                              fontSize: "14px",
+                              fontWeight: "600",
+                              color: "#4a352f",
+                              marginBottom: "8px",
+                            }}
+                          >
+                            Time:
+                          </label>
+                          <input
+                            type="time"
+                            value={interviewTime}
+                            onChange={(e) => setInterviewTime(e.target.value)}
+                            style={{
+                              width: "100%",
+                              padding: "10px 12px",
+                              border: "2px solid #c8b6a6",
+                              borderRadius: "6px",
+                              fontSize: "14px",
+                              backgroundColor: "white",
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Availability Selection - Only for stages requiring availability */}
+                  {currentStageFields.showAvailability && (
+                    <div
+                      style={{ marginBottom: "24px", padding: "16px", backgroundColor: "#f9f5f0", borderRadius: "8px" }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          marginBottom: "16px",
+                        }}
+                      >
+                        <h4 style={{ fontSize: "16px", fontWeight: "600", color: "#4a352f", margin: 0 }}>
+                          Set Availability
+                        </h4>
+                        <button
+                          onClick={() => setShowCalendarModal(true)}
                           style={{
-                            display: "block",
+                            padding: "8px 16px",
+                            backgroundColor: "#a67c52",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "6px",
+                            cursor: "pointer",
                             fontSize: "14px",
-                            fontWeight: "600",
-                            color: "#4a352f",
-                            marginBottom: "8px",
+                            fontWeight: "500",
                           }}
                         >
-                          Meeting Purpose:
-                        </label>
-                        <input
-                          type="text"
-                          value={meetingPurpose}
-                          onChange={(e) => {
-                            setMeetingPurpose(e.target.value)
-                            if (e.target.value.trim()) {
-                              setFormErrors({ ...formErrors, meetingPurpose: "" })
-                            }
-                          }}
-                          style={{
-                            width: "100%",
-                            padding: "10px 12px",
-                            border: formErrors.meetingPurpose ? "2px solid #dc2626" : "2px solid #c8b6a6",
-                            borderRadius: "6px",
-                            fontSize: "14px",
-                            backgroundColor: "white",
-                          }}
-                          placeholder="Initial discussion, strategy review, etc."
-                        />
-                        {formErrors.meetingPurpose && (
-                          <p style={{ color: "#dc2626", fontSize: "12px", marginTop: "4px" }}>
-                            {formErrors.meetingPurpose}
-                          </p>
-                        )}
+                          Add Availability
+                        </button>
                       </div>
+                      {availabilities.length > 0 ? (
+                        <div style={{ maxHeight: "200px", overflowY: "auto", paddingRight: "8px" }}>
+                          {availabilities.map((avail, index) => (
+                            <div
+                              key={index}
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                padding: "8px",
+                                borderBottom: "1px solid #e8d5c4",
+                                fontSize: "13px",
+                                color: "#5d4037",
+                              }}
+                            >
+                              <span>
+                                {avail.date.toLocaleDateString("en-US", {
+                                  weekday: "short",
+                                  year: "numeric",
+                                  month: "short",
+                                  day: "numeric",
+                                })}{" "}
+                                {avail.timeSlots?.[0]?.start} - {avail.timeSlots?.[0]?.end} ({avail.timeZone})
+                              </span>
+                              <button
+                                onClick={() => removeAvailability(avail.date)}
+                                style={{
+                                  background: "none",
+                                  border: "none",
+                                  color: "#d32f2f",
+                                  cursor: "pointer",
+                                  fontSize: "16px",
+                                }}
+                              >
+                                ✖
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p style={{ fontSize: "14px", color: "#888", textAlign: "center" }}>
+                          No availability slots added yet.
+                        </p>
+                      )}
+                      {formErrors.availabilities && (
+                        <p style={{ color: "#dc2626", fontSize: "12px", marginTop: "8px", textAlign: "center" }}>
+                          {formErrors.availabilities}
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -4399,11 +3941,16 @@ stringField === 'Not Provided' ||
                       <input
                         type="file"
                         accept=".pdf,.doc,.docx"
-                        onChange={(e) => setTermSheetFile(e.target.files[0])}
+                        onChange={(e) => {
+                          setTermSheetFile(e.target.files[0])
+                          if (e.target.files[0]) {
+                            setFormErrors({ ...formErrors, termSheetFile: "" })
+                          }
+                        }}
                         style={{
                           width: "100%",
                           padding: "12px 16px",
-                          border: "2px solid #c8b6a6",
+                          border: formErrors.termSheetFile ? "2px solid #dc2626" : "2px solid #c8b6a6",
                           borderRadius: "8px",
                           fontSize: "14px",
                           backgroundColor: "#f5f0e1",
@@ -4412,6 +3959,11 @@ stringField === 'Not Provided' ||
                       {termSheetFile && (
                         <p style={{ fontSize: "14px", color: "#666", marginTop: "8px" }}>
                           Selected: {termSheetFile.name}
+                        </p>
+                      )}
+                      {formErrors.termSheetFile && (
+                        <p style={{ color: "#dc2626", fontSize: "12px", marginTop: "4px" }}>
+                          {formErrors.termSheetFile}
                         </p>
                       )}
                     </div>
@@ -4455,7 +4007,7 @@ stringField === 'Not Provided' ||
                     alignItems: "center",
                     gap: "8px",
                   }}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !selectedStage}
                 >
                   {isSubmitting ? "Updating..." : "Update Stage"}
                 </button>
@@ -4465,6 +4017,166 @@ stringField === 'Not Provided' ||
           document.body,
         )}
 
+      {/* Calendar Modal for Availability Selection */}
+      {showCalendarModal &&
+        createPortal(
+          <div style={modalOverlayStyle} onClick={() => setShowCalendarModal(false)}>
+            <div style={{ ...modalContentStyle, maxWidth: "700px" }} onClick={(e) => e.stopPropagation()}>
+              <div
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}
+              >
+                <h3 style={{ fontSize: "24px", fontWeight: "800", color: "#3e2723", margin: 0 }}>
+                  Select Availability Dates
+                </h3>
+                <button
+                  onClick={() => setShowCalendarModal(false)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    fontSize: "24px",
+                    cursor: "pointer",
+                    color: "#666",
+                  }}
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginBottom: "24px" }}>
+                {/* Date Picker */}
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#4a352f",
+                      marginBottom: "12px",
+                    }}
+                  >
+                    Select Dates:
+                  </label>
+                  {/* Placeholder for actual date picker component */}
+                  <div
+                    style={{
+                      border: "2px solid #c8b6a6",
+                      borderRadius: "8px",
+                      padding: "12px",
+                      backgroundColor: "#f5f0e1",
+                      minHeight: "150px", // To ensure it has some height even if empty
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      color: "#888",
+                      fontSize: "14px",
+                    }}
+                  >
+                    Coming Soon: Interactive Date Picker
+                  </div>
+                </div>
+
+                {/* Time Slot Selection */}
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#4a352f",
+                      marginBottom: "12px",
+                    }}
+                  >
+                    Time Slot:
+                  </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
+                    <input
+                      type="time"
+                      value={timeSlot.start}
+                      onChange={(e) => handleTimeChange("start", e.target.value)}
+                      style={{
+                        padding: "10px",
+                        border: "2px solid #c8b6a6",
+                        borderRadius: "6px",
+                        fontSize: "14px",
+                        backgroundColor: "#f5f0e1",
+                      }}
+                    />
+                    <span>-</span>
+                    <input
+                      type="time"
+                      value={timeSlot.end}
+                      onChange={(e) => handleTimeChange("end", e.target.value)}
+                      style={{
+                        padding: "10px",
+                        border: "2px solid #c8b6a6",
+                        borderRadius: "6px",
+                        fontSize: "14px",
+                        backgroundColor: "#f5f0e1",
+                      }}
+                    />
+                  </div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "16px",
+                      fontWeight: "600",
+                      color: "#4a352f",
+                      marginBottom: "12px",
+                    }}
+                  >
+                    Timezone:
+                  </label>
+                  <input
+                    type="text"
+                    value={timeZone}
+                    onChange={(e) => setTimeZone(e.target.value)}
+                    style={{
+                      width: "calc(100% - 24px)",
+                      padding: "10px",
+                      border: "2px solid #c8b6a6",
+                      borderRadius: "6px",
+                      fontSize: "14px",
+                      backgroundColor: "#f5f0e1",
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
+                <button
+                  onClick={() => setShowCalendarModal(false)}
+                  style={{
+                    padding: "12px 24px",
+                    backgroundColor: "#c8b6a6",
+                    color: "#4a352f",
+                    border: "none",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    fontWeight: "600",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveSelectedDates}
+                  style={{
+                    padding: "12px 24px",
+                    backgroundColor: "#a67c52",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    fontWeight: "600",
+                  }}
+                >
+                  Save Availability
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
       <style jsx>{`
         @keyframes fadeIn {
           from { opacity: 0; }
