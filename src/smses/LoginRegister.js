@@ -44,7 +44,7 @@ export default function LoginRegister() {
   const navigate = useNavigate()
   const location = useLocation()
   const initialMode = new URLSearchParams(location.search).get("mode")
-  const [isRegistering, setIsRegistering] = useState(initialMode !== "login")
+  const [isRegistering, setIsRegistering] = useState(initialMode == "login")
   const [showForgotPassword, setShowForgotPassword] = useState(false)
   const [resetEmail, setResetEmail] = useState("")
   const [resetMessage, setResetMessage] = useState("")
