@@ -48,60 +48,86 @@ const PIPELINE_STAGES = {
   },
 }
 
-// Geographic focus options
+// Geographic focus options - UPDATED
 const geographicFocusOptions = [
-  { value: "Global", label: "Global" },
-  { value: "Africa", label: "Africa" },
-  { value: "SADC", label: "SADC" },
-  { value: "East Africa", label: "East Africa" },
-  { value: "West Africa", label: "West Africa" },
-  { value: "North Africa", label: "North Africa" },
-  { value: "Southern Africa", label: "Southern Africa" },
-  { value: "South Africa", label: "South Africa" },
-  { value: "Nigeria", label: "Nigeria" },
-  { value: "Kenya", label: "Kenya" },
-  { value: "Ghana", label: "Ghana" },
-  { value: "Egypt", label: "Egypt" },
+  { value: "global", label: "Global" },
+  { value: "regional_na", label: "Regional (NA)" },
+  { value: "regional_emea", label: "Regional (EMEA)" },
+  { value: "regional_apac", label: "Regional (APAC)" },
+  { value: "country_specific", label: "Country-specific" },
+  { value: "province_specific", label: "Province Specific" },
 ]
 
-// Sector focus options
+// Sector focus options - UPDATED
 const sectorFocusOptions = [
   { value: "Generalist", label: "Generalist" },
-  { value: "Technology", label: "Technology" },
   { value: "Agriculture", label: "Agriculture" },
-  { value: "Healthcare", label: "Healthcare" },
-  { value: "Finance", label: "Finance" },
-  { value: "Education", label: "Education" },
-  { value: "Energy", label: "Energy" },
-  { value: "Manufacturing", label: "Manufacturing" },
-  { value: "Retail", label: "Retail" },
-  { value: "Transportation", label: "Transportation" },
+  { value: "Automotive", label: "Automotive" },
+  { value: "Banking, Finance & Insurance", label: "Banking, Finance & Insurance" },
+  { value: "Beauty / Cosmetics / Personal Care", label: "Beauty / Cosmetics / Personal Care" },
   { value: "Construction", label: "Construction" },
+  { value: "Consulting", label: "Consulting" },
+  { value: "Creative Arts / Design", label: "Creative Arts / Design" },
+  { value: "Customer Service", label: "Customer Service" },
+  { value: "Education & Training", label: "Education & Training" },
+  { value: "Engineering", label: "Engineering" },
+  { value: "Environmental / Natural Sciences", label: "Environmental / Natural Sciences" },
+  { value: "Government / Public Sector", label: "Government / Public Sector" },
+  { value: "Healthcare / Medical", label: "Healthcare / Medical" },
+  { value: "Hospitality / Tourism", label: "Hospitality / Tourism" },
+  { value: "Human Resources", label: "Human Resources" },
+  { value: "Information Technology (IT)", label: "Information Technology (IT)" },
+  { value: "Infrastructure", label: "Infrastructure" },
+  { value: "Legal / Law", label: "Legal / Law" },
+  { value: "Logistics / Supply Chain", label: "Logistics / Supply Chain" },
+  { value: "Manufacturing", label: "Manufacturing" },
+  { value: "Marketing / Advertising / PR", label: "Marketing / Advertising / PR" },
+  { value: "Media / Journalism / Broadcasting", label: "Media / Journalism / Broadcasting" },
   { value: "Mining", label: "Mining" },
+  { value: "Energy", label: "Energy" },
+  { value: "Oil & Gas", label: "Oil & Gas" },
+  { value: "Non-Profit / NGO", label: "Non-Profit / NGO" },
+  { value: "Property / Real Estate", label: "Property / Real Estate" },
+  { value: "Retail / Wholesale", label: "Retail / Wholesale" },
+  { value: "Safety & Security / Police / Defence", label: "Safety & Security / Police / Defence" },
+  { value: "Sales", label: "Sales" },
+  { value: "Science & Research", label: "Science & Research" },
+  { value: "Social Services / Social Work", label: "Social Services / Social Work" },
+  { value: "Sports / Recreation / Fitness", label: "Sports / Recreation / Fitness" },
+  { value: "Telecommunications", label: "Telecommunications" },
+  { value: "Transport", label: "Transport" },
+  { value: "Utilities (Water, Electricity, Waste)", label: "Utilities (Water, Electricity, Waste)" },
 ]
 
-// Funding stage options
+// Funding stage options - UPDATED
 const fundingStageOptions = [
-  { value: "Pre-seed", label: "Pre-seed" },
-  { value: "Seed", label: "Seed" },
-  { value: "Series A", label: "Series A" },
-  { value: "Series B", label: "Series B" },
-  { value: "Series C", label: "Series C" },
+  { value: "Startup", label: "Startup" },
   { value: "Growth", label: "Growth" },
-  { value: "Bridge", label: "Bridge" },
-  { value: "Mezzanine", label: "Mezzanine" },
+  { value: "Scaling", label: "Scaling" },
+  { value: "Turnaround", label: "Turnaround" },
+  { value: "Mature", label: "Mature" },
+  { value: "any_stage", label: "Any Stage" },
 ]
 
-// Support offered options
+// Support offered options - UPDATED
 const supportOfferedOptions = [
-  { value: "Funding", label: "Funding" },
-  { value: "Mentorship", label: "Mentorship" },
-  { value: "Networking", label: "Networking" },
-  { value: "Training", label: "Training" },
-  { value: "Incubation", label: "Incubation" },
-  { value: "Acceleration", label: "Acceleration" },
-  { value: "Market Access", label: "Market Access" },
-  { value: "Technical Support", label: "Technical Support" },
+  { value: "funding", label: "Funding Support" },
+  { value: "capacity_building", label: "Capacity Building" },
+  { value: "market_access", label: "Market Access" },
+  { value: "technology", label: "Technology & Innovation" },
+  { value: "social_impact", label: "Social Impact" },
+]
+
+// Status options
+const statusOptions = [
+  { value: "Match", label: "Match" },
+  { value: "Application Sent", label: "Application Sent" },
+  { value: "Evaluation", label: "Evaluation" },
+  { value: "Due Diligence", label: "Due Diligence" },
+  { value: "Decision", label: "Decision" },
+  { value: "Support Approved", label: "Support Approved" },
+  { value: "Active Support", label: "Active Support" },
+  { value: "Support Declined", label: "Support Declined" },
 ]
 
 // Helper function to get the next stage
@@ -338,16 +364,17 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
   const [mounted, setMounted] = useState(false)
   const [showMatchBreakdown, setShowMatchBreakdown] = useState(false)
   const [selectedAccelerator, setSelectedAccelerator] = useState(null)
-  // Filter states
+  
+  // Filter states - UPDATED
   const [selectedGeographic, setSelectedGeographic] = useState([])
   const [selectedSectors, setSelectedSectors] = useState([])
   const [selectedStages, setSelectedStages] = useState([])
   const [selectedSupport, setSelectedSupport] = useState([])
+  const [selectedStatus, setSelectedStatus] = useState([])
   const [nextStageFilter, setNextStageFilter] = useState("")
   const [minMatchFilter, setMinMatchFilter] = useState(0)
 
   const hasApplication = (acceleratorId) => {
-    // Check both statuses and pipelineStages with proper ID matching
     return statuses[acceleratorId] || (pipelineStages[acceleratorId] && pipelineStages[acceleratorId] !== "Match")
   }
 
@@ -359,31 +386,30 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
   }, [])
 
   const hasTooManyMissingFields = (accelerator) => {
-  const fieldsToCheck = [
-    accelerator.geographicFocus,
-    accelerator.sectorFocus,
-    accelerator.fundingStage,
-    accelerator.fundingType,
-    accelerator.ticketSize,
-    accelerator.supportOffered,
-    accelerator.servicesOffered,
-    accelerator.deadline,
-    accelerator.speed
-  ];
+    const fieldsToCheck = [
+      accelerator.geographicFocus,
+      accelerator.sectorFocus,
+      accelerator.fundingStage,
+      accelerator.fundingType,
+      accelerator.ticketSize,
+      accelerator.supportOffered,
+      accelerator.servicesOffered,
+      accelerator.deadline,
+      accelerator.speed
+    ];
 
-  const missingCount = fieldsToCheck.filter(field => 
-    !field || 
-    field === '-' || 
-    field === 'Not specified' || 
-    field === 'Various' || 
-    field === 'unspecified' || 
-    field === 'Unknown' ||
-    field === 'N/A'
-  ).length;
+    const missingCount = fieldsToCheck.filter(field => 
+      !field || 
+      field === '-' || 
+      field === 'Not specified' || 
+      field === 'Various' || 
+      field === 'unspecified' || 
+      field === 'Unknown' ||
+      field === 'N/A'
+    ).length;
 
-  return missingCount > 4; // Hide if more than 4 fields are missing
-};
-
+    return missingCount > 4;
+  };
 
   // Function to send email notification to catalyst
   const sendCatalystEmailNotification = async (catalystId, smeData, accelerator) => {
@@ -415,14 +441,12 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
           const profileData = catalystProfileSnap.data();
           console.log("📄 catalystProfiles data:", profileData);
           
-          // Get email from formData > contactDetails > businessEmail
           catalystEmail = profileData.formData?.contactDetails?.businessEmail;
           
           if (catalystEmail) {
             console.log("✅ Found catalyst email:", catalystEmail);
           } else {
             console.log("❌ No business email found in catalyst profile");
-            // Try alternative email fields as fallback
             catalystEmail = profileData.formData?.contactDetails?.email ||
                            profileData.email ||
                            profileData.contactEmail;
@@ -514,9 +538,10 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
         snapshot.docs.flatMap(async (docSnap) => {
           const catalystId = docSnap.id
           
-if (catalystId === currentUserId) {
-  return []
-}
+          if (catalystId === currentUserId) {
+            return []
+          }
+          
           const data = docSnap.data()
           const formData = data.formData || {}
           const overview = formData.entityOverview || {}
@@ -562,8 +587,8 @@ if (catalystId === currentUserId) {
               const matchResult = calculateMatchScore(smeData, formData, program)
 
               return {
-                id: `${catalystId}_${index}`, // Unique ID for each program
-                originalCatalystId: catalystId, // Keep reference to original catalyst
+                id: `${catalystId}_${index}`,
+                originalCatalystId: catalystId,
                 programIndex: index,
                 name: `${overview.registeredName || "Unnamed"}${programs.length > 1 ? ` (Program ${program.name})` : ""}`,
                 location: overview.province || "N/A",
@@ -579,7 +604,6 @@ if (catalystId === currentUserId) {
                 speed: formData.applicationBrief?.estimatedReviewTime || "Unknown",
                 matchPercentage: matchResult.score,
                 matchBreakdown: matchResult.breakdown,
-
                 pipelineStage: appData?.pipelineStage || "Match",
                 nextStage: appData?.nextStage || "Application Review",
               }
@@ -588,12 +612,8 @@ if (catalystId === currentUserId) {
         }),
       )
 
-      // Flatten the array since flatMap with async doesn't work as expected
       const flattenedProfiles = profiles.flat()
-
-      // Sort by match percentage (highest to lowest)
       flattenedProfiles.sort((a, b) => b.matchPercentage - a.matchPercentage)
-
       setAccelerators(flattenedProfiles)
     } catch (err) {
       console.error("Error loading accelerator profiles:", err)
@@ -603,7 +623,6 @@ if (catalystId === currentUserId) {
     }
   }
 
-  // Fetch accelerators on mount and when filters change
   useEffect(() => {
     isMountedRef.current = true
     fetchAccelerators()
@@ -611,9 +630,8 @@ if (catalystId === currentUserId) {
     return () => {
       isMountedRef.current = false
     }
-  }, [filters]) // Add any dependencies that should trigger a refresh
+  }, [filters])
 
-  // Fetch application statuses separately
   useEffect(() => {
     const user = auth.currentUser
     if (!user) return
@@ -626,7 +644,6 @@ if (catalystId === currentUserId) {
       snapshot.docs.forEach((docSnap) => {
         const data = docSnap.data()
         if (data.smeId === user.uid) {
-          // Create the same composite ID used in the accelerators list
           const acceleratorId = `${data.catalystId}_${data.programIndex || 0}`
           statusMap[acceleratorId] = "Sent"
           stageMap[acceleratorId] = data.pipelineStage || "Application Sent"
@@ -664,115 +681,102 @@ if (catalystId === currentUserId) {
     loadStatusFromFirestore()
   }, [])
 
-
-
   const calculateMatchScore = (smeData, acceleratorData, program = null) => {
     const totalFields = 8
     let matched = 0
 
-    // Initialize breakdown object
-   const breakdown = {
-    fundingStage: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-    ticketSize: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-    geographicFit: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-    sectorMatch: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-    instrumentFit: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-    supportMatch: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} }, // Replaced firmTypeMatch
-    legalEntityFit: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-    revenueThreshold: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-  }
-
-  // ---------- Sector helpers (drop-in) ----------
-  const toArray = (v) => {
-    if (v == null) return [];
-    if (Array.isArray(v)) return v;
-    return v.toString().split(/[,\|/]+/g).map(s => s.trim()).filter(Boolean);
-  };
-
-  // Split items, then split composites by underscores, hyphens, slashes, and also by single spaces
-  const splitSectorTokens = (v) =>
-    toArray(v)
-      .flatMap(item => item.split(/[,\|/]+/g))
-      .flatMap(item => item.split(/[_/\-\s]+/g))   // <— includes spaces too
-      .map(s => s.replace(/\(.*?\)/g, ""))         // remove parentheticals
-      .map(s => s.trim())
-      .filter(Boolean);
-
-  // Canonicalize: letters only, lowercase
-  const canon = (s) => s.toLowerCase().replace(/[^a-z]/g, "");
-
-  // Aliases
-  const SECTOR_ALIASES = {
-    it: "informationtechnology",
-    ict: "informationtechnology",
-    informationtechnology: "informationtechnology",
-    technology: "informationtechnology",
-    software: "informationtechnology",
-
-    agri: "agriculture",
-    agriculture: "agriculture",
-    forestry: "forestry",
-    fishing: "fishing",
-  };
-
-  // Known composites → expand to atomic sectors
-  const COMPOSITE_EXPANSIONS = {
-    agricultureforestryfishing: ["agriculture", "forestry", "fishing"],
-    // add more if you encounter them
-  };
-
-  const mapAlias = (t) => SECTOR_ALIASES[t] || t;
-
-  const normalizeSectors = (v) =>
-    splitSectorTokens(v)
-      .map(canon)
-      .map(mapAlias)
-      .flatMap(t => COMPOSITE_EXPANSIONS[t] ? COMPOSITE_EXPANSIONS[t] : [t])
-      .filter(Boolean);
-
-  // any overlap?
-  const hasOverlap = (a, b) => {
-    const A = new Set(normalizeSectors(a));
-    for (const t of normalizeSectors(b)) if (A.has(t)) return true;
-    return false;
-  };
-
-  // normalize each token: lower-case, trim, remove underscores/hyphens/spaces
-  const normalizeToken = (s) =>
-    s.toString().toLowerCase().trim().replace(/[_\-\s]+/g, "");
-
-  const normalizeList = (v) =>
-    toArray(v)
-      .flatMap(item => item.split(/\s*,\s*/)) // catch comma-separated inside array items
-      .map(normalizeToken)
-      .filter(Boolean);
-
-  const normalize = (val) => (Array.isArray(val) ? val.map((v) => v.toLowerCase().trim()) : val?.toLowerCase().trim())
-
-  const includesMatch = (smeVal, accelVal) => {
-    if (!smeVal || !accelVal) return false
-    const smeSet = new Set(Array.isArray(smeVal) ? smeVal : [smeVal])
-    const accelSet = new Set(Array.isArray(accelVal) ? accelVal : [accelVal])
-    return [...smeSet].some((v) => accelSet.has(v))
-  }
-
-  const cleanCurrency = (value) => {
-    if (!value) return 0
-    const cleaned = value.toString().replace(/[^0-9.]/g, "")
-    return Number.parseFloat(cleaned) || 0
-  }
-
-  // Utility to clean strings or arrays of strings
-  const cleanString = (input) => {
-    if (Array.isArray(input)) {
-      return input.map((str) => (typeof str === "string" ? str.replace(/[_-]/g, " ").toLowerCase() : str))
+    const breakdown = {
+      fundingStage: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+      ticketSize: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+      geographicFit: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+      sectorMatch: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+      instrumentFit: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+      supportMatch: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+      legalEntityFit: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+      revenueThreshold: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
     }
-    if (typeof input === "string") {
-      return input.replace(/[_-]/g, " ").toLowerCase()
-    }
-    return input
-  }
 
+    // Helper functions
+    const toArray = (v) => {
+      if (v == null) return [];
+      if (Array.isArray(v)) return v;
+      return v.toString().split(/[,\|/]+/g).map(s => s.trim()).filter(Boolean);
+    };
+
+    const splitSectorTokens = (v) =>
+      toArray(v)
+        .flatMap(item => item.split(/[,\|/]+/g))
+        .flatMap(item => item.split(/[_/\-\s]+/g))
+        .map(s => s.replace(/\(.*?\)/g, ""))
+        .map(s => s.trim())
+        .filter(Boolean);
+
+    const canon = (s) => s.toLowerCase().replace(/[^a-z]/g, "");
+
+    const SECTOR_ALIASES = {
+      it: "informationtechnology",
+      ict: "informationtechnology",
+      informationtechnology: "informationtechnology",
+      technology: "informationtechnology",
+      software: "informationtechnology",
+      agri: "agriculture",
+      agriculture: "agriculture",
+      forestry: "forestry",
+      fishing: "fishing",
+    };
+
+    const COMPOSITE_EXPANSIONS = {
+      agricultureforestryfishing: ["agriculture", "forestry", "fishing"],
+    };
+
+    const mapAlias = (t) => SECTOR_ALIASES[t] || t;
+
+    const normalizeSectors = (v) =>
+      splitSectorTokens(v)
+        .map(canon)
+        .map(mapAlias)
+        .flatMap(t => COMPOSITE_EXPANSIONS[t] ? COMPOSITE_EXPANSIONS[t] : [t])
+        .filter(Boolean);
+
+    const hasOverlap = (a, b) => {
+      const A = new Set(normalizeSectors(a));
+      for (const t of normalizeSectors(b)) if (A.has(t)) return true;
+      return false;
+    };
+
+    const normalizeToken = (s) =>
+      s.toString().toLowerCase().trim().replace(/[_\-\s]+/g, "");
+
+    const normalizeList = (v) =>
+      toArray(v)
+        .flatMap(item => item.split(/\s*,\s*/))
+        .map(normalizeToken)
+        .filter(Boolean);
+
+    const normalize = (val) => (Array.isArray(val) ? val.map((v) => v.toLowerCase().trim()) : val?.toLowerCase().trim())
+
+    const includesMatch = (smeVal, accelVal) => {
+      if (!smeVal || !accelVal) return false
+      const smeSet = new Set(Array.isArray(smeVal) ? smeVal : [smeVal])
+      const accelSet = new Set(Array.isArray(accelVal) ? accelVal : [accelVal])
+      return [...smeSet].some((v) => accelSet.has(v))
+    }
+
+    const cleanCurrency = (value) => {
+      if (!value) return 0
+      const cleaned = value.toString().replace(/[^0-9.]/g, "")
+      return Number.parseFloat(cleaned) || 0
+    }
+
+    const cleanString = (input) => {
+      if (Array.isArray(input)) {
+        return input.map((str) => (typeof str === "string" ? str.replace(/[_-]/g, " ").toLowerCase() : str))
+      }
+      if (typeof input === "string") {
+        return input.replace(/[_-]/g, " ").toLowerCase()
+      }
+      return input
+    }
 
     const checkGeographicMatch = (smeLocation, acceleratorGeoData) => {
       const smeProvince = normalize(smeData.entityOverview?.province)
@@ -801,7 +805,6 @@ if (catalystId === currentUserId) {
       return false
     }
 
-    // Get the specific program data or fallback to first program or empty object
     const programData = program || acceleratorData?.programmeDetails?.programs?.[0] || {}
     const allPrograms = acceleratorData?.programmeDetails?.programs || []
 
@@ -821,7 +824,7 @@ if (catalystId === currentUserId) {
       breakdown.fundingStage.description = `Stage mismatch: You're in ${smeStage || "unspecified"} stage, they focus on ${accelStage || "unspecified"}`
     }
 
-    // 2. Ticket Size Compatibility - FIXED: Use specific program data
+    // 2. Ticket Size Compatibility
     const smeAmountRequested = cleanCurrency(smeData.useOfFunds?.amountRequested)
     const accelMinTicket = cleanCurrency(programData.minimumSupport || 0)
     const accelMaxTicket = cleanCurrency(programData.maximumSupport || 0)
@@ -865,104 +868,95 @@ if (catalystId === currentUserId) {
       breakdown.geographicFit.description = `Geographic mismatch: Your location (${smeLocation}) doesn't align with their focus areas`
     }
 
-// 4. Sector Match (alias + composite aware)
-const smeSectors = smeData.entityOverview?.economicSectors;
-const accelSectors = acceleratorData?.generalMatchingPreference?.sectorFocus;
+    // 4. Sector Match
+    const smeSectors = smeData.entityOverview?.economicSectors;
+    const accelSectors = acceleratorData?.generalMatchingPreference?.sectorFocus;
 
-const sectorMatch = hasOverlap(smeSectors, accelSectors);
+    const sectorMatch = hasOverlap(smeSectors, accelSectors);
 
-breakdown.sectorMatch.details = {
-  smeSectors: Array.isArray(smeSectors) ? smeSectors : toArray(smeSectors),
-  accelSectors: Array.isArray(accelSectors) ? accelSectors : toArray(accelSectors),
-  smeValue: normalizeSectors(smeSectors).join(", "),
-  accelValue: normalizeSectors(accelSectors).join(", "),
-};
-breakdown.sectorMatch.matched = sectorMatch;
+    breakdown.sectorMatch.details = {
+      smeSectors: Array.isArray(smeSectors) ? smeSectors : toArray(smeSectors),
+      accelSectors: Array.isArray(accelSectors) ? accelSectors : toArray(accelSectors),
+      smeValue: normalizeSectors(smeSectors).join(", "),
+      accelValue: normalizeSectors(accelSectors).join(", "),
+    };
+    breakdown.sectorMatch.matched = sectorMatch;
 
-if (sectorMatch) {
-  breakdown.sectorMatch.score = 12.5;
-  breakdown.sectorMatch.description =
-    `Sector alignment: overlap found (${breakdown.sectorMatch.details.smeValue} ↔ ${breakdown.sectorMatch.details.accelValue})`;
-  matched++;
-} else {
-  breakdown.sectorMatch.description =
-    `Sector mismatch: you have [${breakdown.sectorMatch.details.smeValue || "unspecified"}], they focus on [${breakdown.sectorMatch.details.accelValue || "unspecified"}]`;
-}
+    if (sectorMatch) {
+      breakdown.sectorMatch.score = 12.5;
+      breakdown.sectorMatch.description =
+        `Sector alignment: overlap found (${breakdown.sectorMatch.details.smeValue} ↔ ${breakdown.sectorMatch.details.accelValue})`;
+      matched++;
+    } else {
+      breakdown.sectorMatch.description =
+        `Sector mismatch: you have [${breakdown.sectorMatch.details.smeValue || "unspecified"}], they focus on [${breakdown.sectorMatch.details.accelValue || "unspecified"}]`;
+    }
 
+    // 5. Instrument Fit
+    const smeInstrumentRaw = smeData.useOfFunds?.fundingInstruments;
+    const accelInstrumentRaw =
+      programData.supportType ||
+      acceleratorData?.generalMatchingPreference?.supportFocusSubtype ||
+      acceleratorData?.generalMatchingPreference?.supportFocusType;
 
+    const instrumentMatch = hasOverlap(smeInstrumentRaw, accelInstrumentRaw);
 
- // 5. Instrument Fit - program-specific first, fallback to general
-const smeInstrumentRaw = smeData.useOfFunds?.fundingInstruments; // array or string(s)
-const accelInstrumentRaw =
-  programData.supportType ||
-  acceleratorData?.generalMatchingPreference?.supportFocusSubtype ||
-  acceleratorData?.generalMatchingPreference?.supportFocusType; // extra fallback, if you have it
+    breakdown.instrumentFit.details = {
+      smeInstrument: toArray(smeInstrumentRaw),
+      accelInstrument: toArray(accelInstrumentRaw),
+      smeValue: normalizeList(smeInstrumentRaw).join(", "),
+      accelValue: normalizeList(accelInstrumentRaw).join(", "),
+    };
+    breakdown.instrumentFit.matched = instrumentMatch;
 
-const instrumentMatch = hasOverlap(smeInstrumentRaw, accelInstrumentRaw);
+    if (instrumentMatch) {
+      breakdown.instrumentFit.score = 12.5;
+      breakdown.instrumentFit.description = `Instrument match: overlap found between your instruments and theirs (${breakdown.instrumentFit.details.smeValue} ↔ ${breakdown.instrumentFit.details.accelValue})`;
+      matched++;
+    } else {
+      breakdown.instrumentFit.description = `Instrument mismatch: you have [${breakdown.instrumentFit.details.smeValue || "unspecified"}], they offer [${breakdown.instrumentFit.details.accelValue || "unspecified"}]`;
+    }
 
-breakdown.instrumentFit.details = {
-  smeInstrument: toArray(smeInstrumentRaw),
-  accelInstrument: toArray(accelInstrumentRaw),
-  smeValue: normalizeList(smeInstrumentRaw).join(", "),
-  accelValue: normalizeList(accelInstrumentRaw).join(", "),
-};
-breakdown.instrumentFit.matched = instrumentMatch;
+    // 6. Support Match
+    const smeSupportCategory = smeData.useOfFunds?.additionalSupportFocus;
+    const smeSupportSubtype = smeData.useOfFunds?.additionalSupportFocusSubtype;
+    
+    const accelSupportCategory = 
+      programData.supportFocusType || 
+      acceleratorData?.generalMatchingPreference?.supportFocus;
+    const accelSupportSubtype = 
+      programData.supportFocusSubtype || 
+      acceleratorData?.generalMatchingPreference?.supportFocusSubtype;
 
-if (instrumentMatch) {
-  breakdown.instrumentFit.score = 12.5;
-  breakdown.instrumentFit.description = `Instrument match: overlap found between your instruments and theirs (${breakdown.instrumentFit.details.smeValue} ↔ ${breakdown.instrumentFit.details.accelValue})`;
-  matched++;
-} else {
-  breakdown.instrumentFit.description = `Instrument mismatch: you have [${breakdown.instrumentFit.details.smeValue || "unspecified"}], they offer [${breakdown.instrumentFit.details.accelValue || "unspecified"}]`;
-}
+    let supportMatchScore = 0;
+    let supportMatched = false;
+    let supportDescription = "";
 
-  // 6. Support Match - NEW: Replaces firmTypeMatch with support focus matching
-  const smeSupportCategory = smeData.useOfFunds?.additionalSupportFocus;
-  const smeSupportSubtype = smeData.useOfFunds?.additionalSupportFocusSubtype;
-  
-  // Get accelerator support preferences - program specific first, then general
-  const accelSupportCategory = 
-    programData.supportFocusType || 
-    acceleratorData?.generalMatchingPreference?.supportFocus;
-  const accelSupportSubtype = 
-    programData.supportFocusSubtype || 
-    acceleratorData?.generalMatchingPreference?.supportFocusSubtype;
+    if (smeSupportSubtype && accelSupportSubtype && smeSupportSubtype === accelSupportSubtype) {
+      supportMatchScore = 12.5;
+      supportMatched = true;
+      supportDescription = `Perfect support match: Your ${smeSupportSubtype} need aligns with their ${accelSupportSubtype} offering`;
+      matched++;
+    } else if (smeSupportCategory && accelSupportCategory && smeSupportCategory === accelSupportCategory) {
+      supportMatchScore = 6.25;
+      supportMatched = true;
+      supportDescription = `Partial support match: Your ${smeSupportCategory} category aligns, but subtypes may differ`;
+    } else {
+      supportDescription = `Support mismatch: You need ${smeSupportCategory || "unspecified"}${smeSupportSubtype ? ` - ${smeSupportSubtype}` : ""}, they offer ${accelSupportCategory || "unspecified"}${accelSupportSubtype ? ` - ${accelSupportSubtype}` : ""}`;
+    }
 
-  // Calculate support match score (50% for category match, 100% for subtype match)
-  let supportMatchScore = 0;
-  let supportMatched = false;
-  let supportDescription = "";
-
-  if (smeSupportSubtype && accelSupportSubtype && smeSupportSubtype === accelSupportSubtype) {
-    // Full match - subtype level
-    supportMatchScore = 12.5;
-    supportMatched = true;
-    supportDescription = `Perfect support match: Your ${smeSupportSubtype} need aligns with their ${accelSupportSubtype} offering`;
-    matched++;
-  } else if (smeSupportCategory && accelSupportCategory && smeSupportCategory === accelSupportCategory) {
-    // Partial match - category level only
-    supportMatchScore = 6.25; // 50% of 12.5
-    supportMatched = true;
-    supportDescription = `Partial support match: Your ${smeSupportCategory} category aligns, but subtypes may differ`;
-    // Don't increment matched counter for partial matches to maintain scoring consistency
-  } else {
-    // No match
-    supportDescription = `Support mismatch: You need ${smeSupportCategory || "unspecified"}${smeSupportSubtype ? ` - ${smeSupportSubtype}` : ""}, they offer ${accelSupportCategory || "unspecified"}${accelSupportSubtype ? ` - ${accelSupportSubtype}` : ""}`;
-  }
-
-  breakdown.supportMatch.details = {
-    smeSupportCategory,
-    smeSupportSubtype,
-    accelSupportCategory,
-    accelSupportSubtype,
-    smeValue: smeSupportSubtype ? `${smeSupportCategory} - ${smeSupportSubtype}` : smeSupportCategory,
-    accelValue: accelSupportSubtype ? `${accelSupportCategory} - ${accelSupportSubtype}` : accelSupportCategory,
-    matchLevel: supportMatchScore === 12.5 ? "subtype" : supportMatchScore === 6.25 ? "category" : "none"
-  };
-  breakdown.supportMatch.score = supportMatchScore;
-  breakdown.supportMatch.matched = supportMatched;
-  breakdown.supportMatch.description = supportDescription;
-
+    breakdown.supportMatch.details = {
+      smeSupportCategory,
+      smeSupportSubtype,
+      accelSupportCategory,
+      accelSupportSubtype,
+      smeValue: smeSupportSubtype ? `${smeSupportCategory} - ${smeSupportSubtype}` : smeSupportCategory,
+      accelValue: accelSupportSubtype ? `${accelSupportCategory} - ${accelSupportSubtype}` : accelSupportCategory,
+      matchLevel: supportMatchScore === 12.5 ? "subtype" : supportMatchScore === 6.25 ? "category" : "none"
+    };
+    breakdown.supportMatch.score = supportMatchScore;
+    breakdown.supportMatch.matched = supportMatched;
+    breakdown.supportMatch.description = supportDescription;
 
     // 7. Legal Entity Fit
     const smeLegal = smeData.entityOverview?.legalStructure
@@ -980,7 +974,7 @@ if (instrumentMatch) {
       breakdown.legalEntityFit.description = `Legal structure mismatch: You are ${smeLegal || "unspecified"}, they work with ${accelLegal || "unspecified"}`
     }
 
-    // 8. Revenue Threshold - FIXED: Use program-specific minimum support
+    // 8. Revenue Threshold
     const smeRevenue = cleanCurrency(smeData.financialOverview?.annualRevenue)
     const accelThreshold = cleanCurrency(programData.minimumSupport || "0")
     const revenueMatch = smeRevenue >= accelThreshold
@@ -1012,12 +1006,10 @@ if (instrumentMatch) {
     if (!user) return
 
     const smeUserId = user.uid
-    // Use originalCatalystId if available, otherwise use id for backwards compatibility
     const catalystId = accelerator.originalCatalystId || accelerator.id
     const programIndex = accelerator.programIndex || 0
 
     try {
-      // Create unique application ID that includes program index
       const appId = `${smeUserId}_${catalystId}_${programIndex}`
       const appRef = doc(db, "catalystApplications", appId)
       const appSnap = await getDoc(appRef)
@@ -1031,7 +1023,6 @@ if (instrumentMatch) {
         return
       }
 
-      // 🔽 Fetch SME data and guarantees
       const smeDoc = await getDoc(doc(db, "universalProfiles", smeUserId))
       const smeData = smeDoc.exists() ? smeDoc.data() : {}
 
@@ -1041,7 +1032,6 @@ if (instrumentMatch) {
       const entity = smeData.entityOverview || {}
       const funding = smeData.useOfFunds || {}
 
-      // 🧠 Guarantee categories (same as before)
       const guaranteeGroups = {
         "Forward Contracts (Revenue Guarantees)": [
           ["signedCustomerContracts", "Signed customer contracts"],
@@ -1074,20 +1064,18 @@ if (instrumentMatch) {
         ],
       }
 
-      // 🔍 Build summary of selected guarantees
       const guaranteeTitles = Object.entries(guaranteeGroups)
         .filter(([_, items]) => items.some(([key]) => guarantees[key] === "yes"))
         .map(([category]) => category)
 
       const guaranteeSummary = guaranteeTitles.join(", ")
 
-      // 🌱 Create application data
       const pipelineStage = "Application Sent"
       const nextStage = getNextStage(pipelineStage)
 
       const applicationData = {
         catalystId: catalystId,
-        programIndex: programIndex, // Include program index
+        programIndex: programIndex,
         smeId: smeUserId,
         acceleratorName: accelerator.name,
         location: entity.location || "-",
@@ -1115,13 +1103,11 @@ if (instrumentMatch) {
       const catalystApp = { ...applicationData, viewType: "accelerator" }
       const smeApp = { ...applicationData, viewType: "sme" }
 
-      // Use the unique application ID for both collections
       await Promise.all([
         setDoc(doc(db, "catalystApplications", `${catalystId}_${smeUserId}_${programIndex}`), catalystApp),
         setDoc(doc(db, "smeCatalystApplications", appId), smeApp),
       ])
 
-      // Send email notification to catalyst
       await sendCatalystEmailNotification(catalystId, smeData, accelerator);
 
       setStatuses((prev) => ({ ...prev, [accelerator.id]: "Sent" }))
@@ -1149,13 +1135,13 @@ if (instrumentMatch) {
     setShowMatchBreakdown(true)
   }
 
-  // 5. FIFTH - Update your closeAllModals function (or add if it doesn't exist)
   const closeAllModals = () => {
     setModalAccelerator(null)
     setShowFilterModal(false)
     setShowMatchBreakdown(false)
     setSelectedAccelerator(null)
   }
+
   const handleCompareClick = (accelerator) => {
     setNotification({ type: "info", message: `Added ${accelerator.name} to comparison` })
     setTimeout(() => setNotification(null), 3000)
@@ -1170,6 +1156,7 @@ if (instrumentMatch) {
     setSelectedSectors([])
     setSelectedStages([])
     setSelectedSupport([])
+    setSelectedStatus([])
     setNextStageFilter("")
     setMinMatchFilter(0)
     setShowFilterModal(false)
@@ -1180,14 +1167,14 @@ if (instrumentMatch) {
   const uniqueSectors = [...new Set(accelerators.map((acc) => acc.sectorFocus).filter(Boolean))]
   const uniqueStages = [...new Set(accelerators.map((acc) => acc.fundingStage).filter(Boolean))]
   const uniqueSupport = [...new Set(accelerators.map((acc) => acc.supportOffered).filter(Boolean))]
+  const uniqueStatuses = [...new Set(accelerators.map((acc) => pipelineStages[acc.id] || "Match").filter(Boolean))]
   const uniqueNextStages = [...new Set(accelerators.map((acc) => acc.nextStage).filter(Boolean))]
 
   const filteredAccelerators = accelerators.filter((accelerator) => {
-      if (hasTooManyMissingFields(accelerator)) {
-    return false;
-  }
+    if (hasTooManyMissingFields(accelerator)) {
+      return false;
+    }
 
- 
     // Filter by geographic focus
     if (
       selectedGeographic.length > 0 &&
@@ -1215,6 +1202,14 @@ if (instrumentMatch) {
     if (
       selectedSupport.length > 0 &&
       !selectedSupport.some((sup) => formatLabel(accelerator.supportOffered).toLowerCase().includes(sup.toLowerCase()))
+    ) {
+      return false
+    }
+    // Filter by status
+    if (
+      selectedStatus.length > 0 &&
+      !selectedStatus.some((status) => 
+        (pipelineStages[accelerator.id] || "Match").toLowerCase().includes(status.toLowerCase()))
     ) {
       return false
     }
@@ -1302,6 +1297,7 @@ if (instrumentMatch) {
                 selectedSectors.length > 0 ||
                 selectedStages.length > 0 ||
                 selectedSupport.length > 0 ||
+                selectedStatus.length > 0 ||
                 nextStageFilter ||
                 minMatchFilter > 0) && (
                 <span
@@ -1323,6 +1319,7 @@ if (instrumentMatch) {
                       selectedSectors.length,
                       selectedStages.length,
                       selectedSupport.length,
+                      selectedStatus.length,
                       nextStageFilter,
                       minMatchFilter > 0,
                     ].filter(Boolean).length
@@ -1381,7 +1378,7 @@ if (instrumentMatch) {
                 <th style={tableHeaderStyle}>Deadline</th>
                 <th style={tableHeaderStyle}>Speed (Days)</th>
                 <th style={tableHeaderStyle}>Match %</th>
-                <th style={tableHeaderStyle}>Action</th>
+                <th style={tableHeaderStyle}>Status</th>
                 <th style={{ ...tableHeaderStyle, borderRight: "none" }}>Next Stage</th>
               </tr>
             </thead>
@@ -1484,22 +1481,20 @@ if (instrumentMatch) {
                             ...statusBadgeStyle,
                             backgroundColor: "#F5EBE0",
                             color: "#5D2A0A",
-                            fontSize: "0.55rem", // Reduced from 0.65rem to prevent overflow
+                            fontSize: "0.55rem",
                             padding: "0.15rem 0.3rem",
                             textAlign: "center",
-                            lineHeight: "1.1", // Reduced line height for tighter spacing
-                            minHeight: "2.2rem", // Reduced from 2.5rem
+                            lineHeight: "1.1",
+                            minHeight: "2.2rem",
                             display: "flex",
                             flexDirection: "column",
                             justifyContent: "center",
-                            maxWidth: "100px", // Added max width to prevent overflow
-                            overflow: "hidden", // Added overflow hidden
+                            maxWidth: "100px",
+                            overflow: "hidden",
                           }}
                         >
                           {accelerator.nextStage.split(" ").map((word, index) => (
                             <div key={index} style={{ fontSize: "0.55rem" }}>
-                              {" "}
-                              {/* Reduced from 0.6rem */}
                               {word}
                             </div>
                           ))}
@@ -1554,9 +1549,9 @@ if (instrumentMatch) {
               style={{
                 background: "white",
                 borderRadius: "12px",
-                maxWidth: "800px", // Updated maxWidth to match advisor table
-                width: "95%", // Updated width to match advisor table
-                maxHeight: "90vh", // Updated maxHeight to match advisor table
+                maxWidth: "800px",
+                width: "95%",
+                maxHeight: "90vh",
                 overflowY: "auto",
                 boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
               }}
@@ -1578,7 +1573,7 @@ if (instrumentMatch) {
                 >
                   <div
                     style={{
-                      fontSize: "3rem", // Updated font size to match advisor table
+                      fontSize: "3rem",
                       fontWeight: "bold",
                       color:
                         selectedAccelerator?.matchPercentage >= 80
@@ -1593,7 +1588,7 @@ if (instrumentMatch) {
                   </div>
                   <p
                     style={{
-                      fontSize: "1rem", // Updated font size to match advisor table
+                      fontSize: "1rem",
                       color: "#8D6E63",
                       margin: "0",
                     }}
@@ -1605,7 +1600,7 @@ if (instrumentMatch) {
                 <div
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", // Updated grid to match advisor table
+                    gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))",
                     gap: "1rem",
                     marginBottom: "2rem",
                   }}
@@ -1633,11 +1628,11 @@ if (instrumentMatch) {
                         <div
                           key={key}
                           style={{
-                            background: "#FEFCFA", // Updated background to match advisor table
+                            background: "#FEFCFA",
                             border: "1px solid #E8D5C4",
                             borderRadius: "8px",
-                            padding: "1.25rem", // Updated padding to match advisor table
-                            borderLeft: `4px solid ${scoreColor}`, // Updated border to match advisor table
+                            padding: "1.25rem",
+                            borderLeft: `4px solid ${scoreColor}`,
                           }}
                         >
                           <div
@@ -1645,12 +1640,12 @@ if (instrumentMatch) {
                               display: "flex",
                               justifyContent: "space-between",
                               alignItems: "flex-start",
-                              marginBottom: "0.75rem", // Updated margin to match advisor table
+                              marginBottom: "0.75rem",
                             }}
                           >
                             <h4
                               style={{
-                                fontSize: "0.875rem", // Updated font size to match advisor table
+                                fontSize: "0.875rem",
                                 fontWeight: "600",
                                 color: "#5D2A0A",
                                 margin: "0",
@@ -1662,7 +1657,7 @@ if (instrumentMatch) {
                             </h4>
                             <span
                               style={{
-                                fontSize: "0.75rem", // Updated font size to match advisor table
+                                fontSize: "0.75rem",
                                 fontWeight: "600",
                                 color: scoreColor,
                                 marginLeft: "0.5rem",
@@ -1922,6 +1917,27 @@ if (instrumentMatch) {
                         fontSize: "0.8rem",
                       }}
                     >
+                      Status
+                    </label>
+                    <MultiSelectDropdown
+                      options={statusOptions}
+                      selectedValues={selectedStatus}
+                      onSelect={(value) => setSelectedStatus((prev) => [...prev, value])}
+                      onRemove={(value) => setSelectedStatus((prev) => prev.filter((v) => v !== value))}
+                      placeholder="Select status..."
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      style={{
+                        display: "block",
+                        marginBottom: "0.5rem",
+                        fontWeight: "500",
+                        color: "#5D2A0A",
+                        fontSize: "0.8rem",
+                      }}
+                    >
                       Next Stage
                     </label>
                     <select
@@ -2093,12 +2109,12 @@ const actionButtonsStyle = {
 }
 
 const applyButtonStyle = {
-  padding: "0.3rem 0.5rem", // Reduced padding
+  padding: "0.3rem 0.5rem",
   background: "#5D2A0A",
   color: "white",
   border: "none",
   borderRadius: "4px",
-  fontSize: "0.7rem", // Reduced from 0.8rem
+  fontSize: "0.7rem",
   cursor: "pointer",
   transition: "background 0.2s",
   whiteSpace: "nowrap",
@@ -2108,9 +2124,9 @@ const applyButtonStyle = {
 const sentBadgeStyle = {
   background: "#48BB78",
   color: "white",
-  padding: "0.3rem 0.5rem", // Reduced padding
+  padding: "0.3rem 0.5rem",
   borderRadius: "4px",
-  fontSize: "0.7rem", // Reduced from 0.8rem
+  fontSize: "0.7rem",
   fontWeight: "500",
   display: "flex",
   alignItems: "center",

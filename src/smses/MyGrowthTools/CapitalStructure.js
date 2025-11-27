@@ -1,5 +1,3 @@
-"use client"
-
 import { useState, useEffect } from "react"
 import { Bar, Pie } from "react-chartjs-2"
 import { doc, getDoc, setDoc } from "firebase/firestore"
@@ -949,501 +947,6 @@ const LoanRepayments = ({ activeSection, currentUser, isInvestorView }) => {
   )
 }
 
-// IRR Component
-const IRRInvestments = ({ activeSection, currentUser, isInvestorView }) => {
-  const [investments, setInvestments] = useState([])
-  const [expandedInvestment, setExpandedInvestment] = useState(null)
-  const [showEditForm, setShowEditForm] = useState(false)
-  const [showDownloadOptions, setShowDownloadOptions] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-
-  const saveIRRData = async () => {
-    if (!currentUser) return
-
-    try {
-      await setDoc(doc(db, "irr-investments", currentUser.uid), {
-        investments,
-        lastUpdated: new Date().toISOString(),
-      })
-      setShowEditForm(false)
-      alert("IRR investment data saved successfully!")
-    } catch (error) {
-      console.error("Error saving IRR data:", error)
-      alert("Error saving data")
-    }
-  }
-
-  const loadIRRData = async () => {
-    if (!currentUser) return
-
-    try {
-      setIsLoading(true)
-      const docRef = doc(db, "irr-investments", currentUser.uid)
-      const docSnap = await getDoc(docRef)
-      if (docSnap.exists()) {
-        setInvestments(docSnap.data().investments || [])
-      } else {
-        // Initialize with empty data if no document exists
-        await setDoc(docRef, {
-          investments: [],
-          lastUpdated: new Date().toISOString(),
-        })
-      }
-    } catch (error) {
-      console.error("Error loading IRR data:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (currentUser) {
-      loadIRRData()
-    }
-  }, [currentUser])
-
-  const updateInvestment = (index, field, value) => {
-    const newInvestments = [...investments]
-    if (field === "name" || field === "riskRating") {
-      newInvestments[index][field] = value
-    } else if (field === "irr") {
-      newInvestments[index][field] = Number.parseFloat(value) || 0
-    } else if (field.startsWith("details.")) {
-      const detailField = field.split(".")[1]
-      if (detailField === "cashFlows") {
-        newInvestments[index].details[detailField] = value.split(",").map((flow) => flow.trim())
-      } else {
-        newInvestments[index].details[detailField] = value
-      }
-    }
-    setInvestments(newInvestments)
-  }
-
-  const addInvestment = () => {
-    const newInvestment = {
-      name: "New Project",
-      irr: 0,
-      details: {
-        initialInvestment: "R0M",
-        duration: "0 years",
-        cashFlows: ["Year 1: R0M"],
-        riskRating: "Medium",
-      },
-    }
-    setInvestments([...investments, newInvestment])
-  }
-
-  const removeInvestment = (index) => {
-    const newInvestments = investments.filter((_, i) => i !== index)
-    setInvestments(newInvestments)
-  }
-
-  const toggleInvestment = (index) => {
-    if (expandedInvestment === index) {
-      setExpandedInvestment(null)
-    } else {
-      setExpandedInvestment(index)
-    }
-  }
-
-  const handleDownload = (type) => {
-    if (type === "csv") {
-      const csvContent = [
-        ["Investment Name", "IRR %", "Initial Investment", "Duration", "Risk Rating"],
-        ...investments.map((inv) => [
-          inv.name,
-          inv.irr,
-          inv.details.initialInvestment,
-          inv.details.duration,
-          inv.details.riskRating,
-        ]),
-      ]
-        .map((row) => row.join(","))
-        .join("\n")
-
-      const blob = new Blob([csvContent], { type: "text/csv" })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = "irr-investments.csv"
-      a.click()
-      URL.revokeObjectURL(url)
-    } else if (type === "json") {
-      const jsonContent = JSON.stringify(investments, null, 2)
-      const blob = new Blob([jsonContent], { type: "application/json" })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = "irr-investments.json"
-      a.click()
-      URL.revokeObjectURL(url)
-    }
-    setShowDownloadOptions(false)
-  }
-
-  if (activeSection !== "irr-investments") return null
-
-  if (isLoading) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "200px",
-          backgroundColor: "#fdfcfb",
-          borderRadius: "8px",
-        }}
-      >
-        <div>Loading IRR investments data...</div>
-      </div>
-    )
-  }
-
-  return (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "20px",
-        margin: "20px 0",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ color: "#5d4037", marginTop: 0 }}>IRR on Equity Investments</h2>
-        <div style={{ display: "flex", gap: "10px" }}>
-          {!isInvestorView && (
-            <button
-              onClick={() => setShowEditForm(!showEditForm)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              {showEditForm ? "Cancel" : "Edit Data"}
-            </button>
-          )}
-          <div style={{ position: "relative" }}>
-            <button
-              onClick={() => setShowDownloadOptions(!showDownloadOptions)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#72542b",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Download
-            </button>
-            {showDownloadOptions && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "100%",
-                  right: 0,
-                  backgroundColor: "#fdfcfb",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                  zIndex: 1000,
-                }}
-              >
-                <button
-                  onClick={() => handleDownload("json")}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    padding: "8px 15px",
-                    backgroundColor: "transparent",
-                    border: "none",
-                    textAlign: "left",
-                    cursor: "pointer",
-                    color: "#5d4037",
-                  }}
-                >
-                  Download JSON
-                </button>
-                <button
-                  onClick={() => handleDownload("csv")}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    padding: "8px 15px",
-                    backgroundColor: "transparent",
-                    border: "none",
-                    textAlign: "left",
-                    cursor: "pointer",
-                    color: "#5d4037",
-                  }}
-                >
-                  Download CSV
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {!isInvestorView && showEditForm && (
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#72542b", marginTop: 0 }}>Edit IRR Investment Data</h3>
-          {investments.map((investment, index) => (
-            <div
-              key={index}
-              style={{
-                marginBottom: "20px",
-                padding: "15px",
-                backgroundColor: "#fdfcfb",
-                borderRadius: "4px",
-              }}
-            >
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "2fr 1fr 1fr auto",
-                  gap: "10px",
-                  alignItems: "center",
-                  marginBottom: "10px",
-                }}
-              >
-                <input
-                  type="text"
-                  value={investment.name}
-                  onChange={(e) => updateInvestment(index, "name", e.target.value)}
-                  style={{
-                    padding: "8px",
-                    border: "1px solid #d4c4b0",
-                    borderRadius: "4px",
-                  }}
-                  placeholder="Project Name"
-                />
-                <input
-                  type="number"
-                  value={investment.irr}
-                  onChange={(e) => updateInvestment(index, "irr", e.target.value)}
-                  style={{
-                    padding: "8px",
-                    border: "1px solid #d4c4b0",
-                    borderRadius: "4px",
-                  }}
-                  placeholder="IRR %"
-                />
-                <select
-                  value={investment.details.riskRating}
-                  onChange={(e) => updateInvestment(index, "details.riskRating", e.target.value)}
-                  style={{
-                    padding: "8px",
-                    border: "1px solid #d4c4b0",
-                    borderRadius: "4px",
-                  }}
-                >
-                  <option value="Low">Low</option>
-                  <option value="Medium">Medium</option>
-                  <option value="High">High</option>
-                </select>
-                <button
-                  onClick={() => removeInvestment(index)}
-                  style={{
-                    padding: "8px",
-                    backgroundColor: "#dc2626",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                  }}
-                >
-                  Remove
-                </button>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
-                <input
-                  type="text"
-                  value={investment.details.initialInvestment}
-                  onChange={(e) => updateInvestment(index, "details.initialInvestment", e.target.value)}
-                  style={{
-                    padding: "8px",
-                    border: "1px solid #d4c4b0",
-                    borderRadius: "4px",
-                  }}
-                  placeholder="Initial Investment"
-                />
-                <input
-                  type="text"
-                  value={investment.details.duration}
-                  onChange={(e) => updateInvestment(index, "details.duration", e.target.value)}
-                  style={{
-                    padding: "8px",
-                    border: "1px solid #d4c4b0",
-                    borderRadius: "4px",
-                  }}
-                  placeholder="Duration"
-                />
-                <input
-                  type="text"
-                  value={investment.details.cashFlows.join(", ")}
-                  onChange={(e) => updateInvestment(index, "details.cashFlows", e.target.value)}
-                  style={{
-                    padding: "8px",
-                    border: "1px solid #d4c4b0",
-                    borderRadius: "4px",
-                  }}
-                  placeholder="Cash Flows (comma separated)"
-                />
-              </div>
-            </div>
-          ))}
-          <div style={{ marginTop: "15px" }}>
-            <button
-              onClick={addInvestment}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#72542b",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                marginRight: "10px",
-              }}
-            >
-              Add Investment
-            </button>
-            <button
-              onClick={saveIRRData}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#16a34a",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Save Data
-            </button>
-          </div>
-        </div>
-      )}
-
-      {investments.length === 0 ? (
-        <div
-          style={{
-            textAlign: "center",
-            padding: "40px",
-            color: "#72542b",
-          }}
-        >
-          <p>No investment data available. {!isInvestorView && 'Click "Edit Data" to add your first investment.'}</p>
-        </div>
-      ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: window.innerWidth < 768 ? "1fr" : "repeat(auto-fit, minmax(250px, 1fr))",
-            gap: "20px",
-          }}
-        >
-          {investments.map((investment, index) => (
-            <div
-              key={index}
-              style={{
-                padding: "15px",
-                backgroundColor: "#f7f3f0",
-                borderRadius: "6px",
-                textAlign: "center",
-              }}
-            >
-              <h3 style={{ color: "#72542b" }}>{investment.name}</h3>
-              <div
-                style={{
-                  width: "120px",
-                  height: "120px",
-                  borderRadius: "50%",
-                  backgroundColor: "#e8ddd4",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  margin: "0 auto",
-                  border: "8px solid #9c7c5f",
-                  marginBottom: "15px",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: "24px",
-                    fontWeight: "bold",
-                    color: "#5d4037",
-                  }}
-                >
-                  {investment.irr}%
-                </span>
-              </div>
-
-              <button
-                onClick={() => toggleInvestment(index)}
-                style={{
-                  padding: "8px 15px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  marginBottom: "10px",
-                }}
-              >
-                {expandedInvestment === index ? "Hide Details" : "Breakdown"}
-              </button>
-
-              {expandedInvestment === index && (
-                <div
-                  style={{
-                    textAlign: "left",
-                    backgroundColor: "#e8ddd4",
-                    padding: "10px",
-                    borderRadius: "4px",
-                    marginTop: "10px",
-                  }}
-                >
-                  <p>
-                    <strong>Initial Investment:</strong> {investment.details.initialInvestment}
-                  </p>
-                  <p>
-                    <strong>Duration:</strong> {investment.details.duration}
-                  </p>
-                  <p>
-                    <strong>Risk Rating:</strong> {investment.details.riskRating}
-                  </p>
-                  <div>
-                    <strong>Cash Flows:</strong>
-                    <ul style={{ margin: "5px 0 0 20px", padding: 0 }}>
-                      {investment.details.cashFlows.map((flow, i) => (
-                        <li key={i}>{flow}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 // Investment Ratios Component (updated - removed mock data)
 const InvestmentRatios = ({ activeSection, currentUser, isInvestorView }) => {
   const [expandedRatio, setExpandedRatio] = useState(null)
@@ -1940,12 +1443,18 @@ const InvestmentRatios = ({ activeSection, currentUser, isInvestorView }) => {
   )
 }
 
-// Cap Table Component
+// Cap Table Component (Now includes IRR on Investments)
 const CapTable = ({ activeSection, currentUser, isInvestorView }) => {
   const [investors, setInvestors] = useState([])
   const [showEditForm, setShowEditForm] = useState(false)
   const [showDownloadOptions, setShowDownloadOptions] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+
+  // IRR Investments state (now part of Cap Table)
+  const [irrInvestments, setIrrInvestments] = useState([])
+  const [expandedInvestment, setExpandedInvestment] = useState(null)
+  const [showIrrEditForm, setShowIrrEditForm] = useState(false)
+  const [showIrrDownloadOptions, setShowIrrDownloadOptions] = useState(false)
 
   const saveCapTableData = async () => {
     if (!currentUser) return
@@ -1953,9 +1462,11 @@ const CapTable = ({ activeSection, currentUser, isInvestorView }) => {
     try {
       await setDoc(doc(db, "cap-table", currentUser.uid), {
         investors,
+        irrInvestments,
         lastUpdated: new Date().toISOString(),
       })
       setShowEditForm(false)
+      setShowIrrEditForm(false)
       alert("Cap table data saved successfully!")
     } catch (error) {
       console.error("Error saving cap table data:", error)
@@ -1971,11 +1482,20 @@ const CapTable = ({ activeSection, currentUser, isInvestorView }) => {
       const docRef = doc(db, "cap-table", currentUser.uid)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
-        setInvestors(docSnap.data().investors || [])
+        const data = docSnap.data()
+        // Handle legacy data - convert valuation to investment if needed
+        const investorsData = data.investors || []
+        const updatedInvestors = investorsData.map(investor => ({
+          ...investor,
+          investment: investor.investment !== undefined ? investor.investment : (investor.valuation || 0)
+        }))
+        setInvestors(updatedInvestors)
+        setIrrInvestments(data.irrInvestments || [])
       } else {
         // Initialize with empty data if no document exists
         await setDoc(docRef, {
           investors: [],
+          irrInvestments: [],
           lastUpdated: new Date().toISOString(),
         })
       }
@@ -1999,7 +1519,7 @@ const CapTable = ({ activeSection, currentUser, isInvestorView }) => {
   }
 
   const addInvestor = () => {
-    setInvestors([...investors, { name: "New Investor", shares: 0, valuation: 0 }])
+    setInvestors([...investors, { name: "New Investor", shares: 0, investment: 0 }])
   }
 
   const removeInvestor = (index) => {
@@ -2007,20 +1527,65 @@ const CapTable = ({ activeSection, currentUser, isInvestorView }) => {
     setInvestors(newInvestors)
   }
 
+  // IRR Investments functions
+  const updateIrrInvestment = (index, field, value) => {
+    const newInvestments = [...irrInvestments]
+    if (field === "name" || field === "riskRating") {
+      newInvestments[index][field] = value
+    } else if (field === "irr") {
+      newInvestments[index][field] = Number.parseFloat(value) || 0
+    } else if (field.startsWith("details.")) {
+      const detailField = field.split(".")[1]
+      if (detailField === "cashFlows") {
+        newInvestments[index].details[detailField] = value.split(",").map((flow) => flow.trim())
+      } else {
+        newInvestments[index].details[detailField] = value
+      }
+    }
+    setIrrInvestments(newInvestments)
+  }
+
+  const addIrrInvestment = () => {
+    const newInvestment = {
+      name: "New Project",
+      irr: 0,
+      details: {
+        initialInvestment: "R0M",
+        duration: "0 years",
+        cashFlows: ["Year 1: R0M"],
+        riskRating: "Medium",
+      },
+    }
+    setIrrInvestments([...irrInvestments, newInvestment])
+  }
+
+  const removeIrrInvestment = (index) => {
+    const newInvestments = irrInvestments.filter((_, i) => i !== index)
+    setIrrInvestments(newInvestments)
+  }
+
+  const toggleIrrInvestment = (index) => {
+    if (expandedInvestment === index) {
+      setExpandedInvestment(null)
+    } else {
+      setExpandedInvestment(index)
+    }
+  }
+
   const handleDownload = (type) => {
     const totalShares = investors.reduce((sum, inv) => sum + inv.shares, 0)
-    const totalValuation = investors.reduce((sum, inv) => sum + inv.valuation, 0)
+    const totalInvestment = investors.reduce((sum, inv) => sum + (inv.investment || 0), 0)
 
     if (type === "csv") {
       const csvContent = [
-        ["Investor Name", "Shares", "Percentage", "Valuation (RM)"],
+        ["Investor Name", "Shares", "Percentage", "Investment (RM)"],
         ...investors.map((inv) => [
           inv.name,
           inv.shares,
           totalShares > 0 ? ((inv.shares / totalShares) * 100).toFixed(1) : 0,
-          inv.valuation.toFixed(1),
+          (inv.investment || 0).toFixed(1),
         ]),
-        ["Total", totalShares, "100", totalValuation.toFixed(1)],
+        ["Total", totalShares, "100", totalInvestment.toFixed(1)],
       ]
         .map((row) => row.join(","))
         .join("\n")
@@ -2033,7 +1598,7 @@ const CapTable = ({ activeSection, currentUser, isInvestorView }) => {
       a.click()
       URL.revokeObjectURL(url)
     } else if (type === "json") {
-      const jsonContent = JSON.stringify(investors, null, 2)
+      const jsonContent = JSON.stringify({ investors, irrInvestments }, null, 2)
       const blob = new Blob([jsonContent], { type: "application/json" })
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
@@ -2043,6 +1608,41 @@ const CapTable = ({ activeSection, currentUser, isInvestorView }) => {
       URL.revokeObjectURL(url)
     }
     setShowDownloadOptions(false)
+  }
+
+  const handleIrrDownload = (type) => {
+    if (type === "csv") {
+      const csvContent = [
+        ["Investment Name", "IRR %", "Initial Investment", "Duration", "Risk Rating"],
+        ...irrInvestments.map((inv) => [
+          inv.name,
+          inv.irr,
+          inv.details.initialInvestment,
+          inv.details.duration,
+          inv.details.riskRating,
+        ]),
+      ]
+        .map((row) => row.join(","))
+        .join("\n")
+
+      const blob = new Blob([csvContent], { type: "text/csv" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "irr-investments.csv"
+      a.click()
+      URL.revokeObjectURL(url)
+    } else if (type === "json") {
+      const jsonContent = JSON.stringify(irrInvestments, null, 2)
+      const blob = new Blob([jsonContent], { type: "application/json" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "irr-investments.json"
+      a.click()
+      URL.revokeObjectURL(url)
+    }
+    setShowIrrDownloadOptions(false)
   }
 
   if (activeSection !== "cap-table") return null
@@ -2065,324 +1665,667 @@ const CapTable = ({ activeSection, currentUser, isInvestorView }) => {
   }
 
   const totalShares = investors.reduce((sum, inv) => sum + inv.shares, 0)
-  const totalValuation = investors.reduce((sum, inv) => sum + inv.valuation, 0)
+  const totalInvestment = investors.reduce((sum, inv) => sum + (inv.investment || 0), 0)
 
   return (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "20px",
-        margin: "20px 0",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Cap Table Overview</h2>
-        <div style={{ display: "flex", gap: "10px" }}>
-          {!isInvestorView && (
-            <button
-              onClick={() => setShowEditForm(!showEditForm)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              {showEditForm ? "Cancel" : "Edit Data"}
-            </button>
-          )}
-          <div style={{ position: "relative" }}>
-            <button
-              onClick={() => setShowDownloadOptions(!showDownloadOptions)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#72542b",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Download
-            </button>
-            {showDownloadOptions && (
-              <div
+    <div style={{ display: "flex", flexDirection: "column", gap: "30px" }}>
+      {/* Main Cap Table Section */}
+      <div
+        style={{
+          backgroundColor: "#fdfcfb",
+          padding: "20px",
+          borderRadius: "8px",
+          boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+          <h2 style={{ color: "#5d4037", marginTop: 0 }}>Cap Table Overview</h2>
+          <div style={{ display: "flex", gap: "10px" }}>
+            {!isInvestorView && (
+              <button
+                onClick={() => setShowEditForm(!showEditForm)}
                 style={{
-                  position: "absolute",
-                  top: "100%",
-                  right: 0,
-                  backgroundColor: "#fdfcfb",
-                  border: "1px solid #d4c4b0",
+                  padding: "8px 16px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
                   borderRadius: "4px",
-                  boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                  zIndex: 1000,
+                  cursor: "pointer",
                 }}
               >
-                <button
-                  onClick={() => handleDownload("json")}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    padding: "8px 15px",
-                    backgroundColor: "transparent",
-                    border: "none",
-                    textAlign: "left",
-                    cursor: "pointer",
-                    color: "#5d4037",
-                  }}
-                >
-                  Download JSON
-                </button>
-                <button
-                  onClick={() => handleDownload("csv")}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    padding: "8px 15px",
-                    backgroundColor: "transparent",
-                    border: "none",
-                    textAlign: "left",
-                    cursor: "pointer",
-                    color: "#5d4037",
-                  }}
-                >
-                  Download CSV
-                </button>
-              </div>
+                {showEditForm ? "Cancel" : "Edit Data"}
+              </button>
             )}
+            <div style={{ position: "relative" }}>
+              <button
+                onClick={() => setShowDownloadOptions(!showDownloadOptions)}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#72542b",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                }}
+              >
+                Download
+              </button>
+              {showDownloadOptions && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "100%",
+                    right: 0,
+                    backgroundColor: "#fdfcfb",
+                    border: "1px solid #d4c4b0",
+                    borderRadius: "4px",
+                    boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                    zIndex: 1000,
+                  }}
+                >
+                  <button
+                    onClick={() => handleDownload("json")}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      padding: "8px 15px",
+                      backgroundColor: "transparent",
+                      border: "none",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      color: "#5d4037",
+                    }}
+                  >
+                    Download JSON
+                  </button>
+                  <button
+                    onClick={() => handleDownload("csv")}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      padding: "8px 15px",
+                      backgroundColor: "transparent",
+                      border: "none",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      color: "#5d4037",
+                    }}
+                  >
+                    Download CSV
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      {!isInvestorView && showEditForm && (
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#72542b", marginTop: 0 }}>Edit Cap Table Data</h3>
-          {investors.map((investor, index) => (
-            <div
-              key={index}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "2fr 1fr 1fr auto",
-                gap: "10px",
-                alignItems: "center",
-                marginBottom: "10px",
-                padding: "10px",
-                backgroundColor: "#fdfcfb",
-                borderRadius: "4px",
-              }}
-            >
-              <input
-                type="text"
-                value={investor.name}
-                onChange={(e) => updateInvestor(index, "name", e.target.value)}
+        {!isInvestorView && showEditForm && (
+          <div
+            style={{
+              backgroundColor: "#f7f3f0",
+              padding: "20px",
+              borderRadius: "6px",
+              marginBottom: "20px",
+            }}
+          >
+            <h3 style={{ color: "#72542b", marginTop: 0 }}>Edit Cap Table Data</h3>
+            {investors.map((investor, index) => (
+              <div
+                key={index}
                 style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
+                  display: "grid",
+                  gridTemplateColumns: "2fr 1fr 1fr auto",
+                  gap: "10px",
+                  alignItems: "center",
+                  marginBottom: "10px",
+                  padding: "10px",
+                  backgroundColor: "#fdfcfb",
                   borderRadius: "4px",
                 }}
-                placeholder="Investor Name"
-              />
-              <input
-                type="number"
-                value={investor.shares}
-                onChange={(e) => updateInvestor(index, "shares", e.target.value)}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-                placeholder="Shares %"
-              />
-              <input
-                type="number"
-                step="0.1"
-                value={investor.valuation}
-                onChange={(e) => updateInvestor(index, "valuation", e.target.value)}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-                placeholder="Valuation (RM)"
-              />
+              >
+                <input
+                  type="text"
+                  value={investor.name}
+                  onChange={(e) => updateInvestor(index, "name", e.target.value)}
+                  style={{
+                    padding: "8px",
+                    border: "1px solid #d4c4b0",
+                    borderRadius: "4px",
+                  }}
+                  placeholder="Investor Name"
+                />
+                <input
+                  type="number"
+                  value={investor.shares}
+                  onChange={(e) => updateInvestor(index, "shares", e.target.value)}
+                  style={{
+                    padding: "8px",
+                    border: "1px solid #d4c4b0",
+                    borderRadius: "4px",
+                  }}
+                  placeholder="Shares %"
+                />
+                <input
+                  type="number"
+                  step="0.1"
+                  value={investor.investment || 0}
+                  onChange={(e) => updateInvestor(index, "investment", e.target.value)}
+                  style={{
+                    padding: "8px",
+                    border: "1px solid #d4c4b0",
+                    borderRadius: "4px",
+                  }}
+                  placeholder="Investment (RM)"
+                />
+                <button
+                  onClick={() => removeInvestor(index)}
+                  style={{
+                    padding: "8px",
+                    backgroundColor: "#dc2626",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+            <div style={{ marginTop: "15px" }}>
               <button
-                onClick={() => removeInvestor(index)}
+                onClick={addInvestor}
                 style={{
-                  padding: "8px",
-                  backgroundColor: "#dc2626",
+                  padding: "8px 16px",
+                  backgroundColor: "#72542b",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  marginRight: "10px",
+                }}
+              >
+                Add Investor
+              </button>
+              <button
+                onClick={saveCapTableData}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#16a34a",
                   color: "white",
                   border: "none",
                   borderRadius: "4px",
                   cursor: "pointer",
                 }}
               >
-                Remove
+                Save Data
               </button>
             </div>
-          ))}
-          <div style={{ marginTop: "15px" }}>
-            <button
-              onClick={addInvestor}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#72542b",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                marginRight: "10px",
-              }}
-            >
-              Add Investor
-            </button>
-            <button
-              onClick={saveCapTableData}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#16a34a",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Save Data
-            </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {investors.length === 0 ? (
-        <div
-          style={{
-            textAlign: "center",
-            padding: "40px",
-            color: "#72542b",
-          }}
-        >
-          <p>No investor data available. {!isInvestorView && 'Click "Edit Data" to add your first investor.'}</p>
-        </div>
-      ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: window.innerWidth < 768 ? "1fr" : "1fr 1fr",
-            gap: "30px",
-          }}
-        >
-          <div>
-            <h3 style={{ color: "#7d5a50" }}>Ownership Structure</h3>
-            <div style={{ height: "400px" }}>
-              <Pie
-                data={{
-                  labels: investors.map((inv) => inv.name),
-                  datasets: [
-                    {
-                      data: investors.map((inv) => inv.shares),
-                      backgroundColor: ["#a67c52", "#8b7355", "#b89f8d", "#e6d7c3", "#f5f0e1"],
-                      borderColor: "#4a352f",
-                      borderWidth: 1,
-                    },
-                  ],
-                }}
-                options={{
-                  responsive: true,
-                  plugins: {
-                    legend: {
-                      position: window.innerWidth < 768 ? "bottom" : "right",
-                    },
-                    datalabels: {
-                      color: "#fff",
-                      font: {
-                        weight: "bold",
-                        size: 14,
-                      },
-                      formatter: (value, context) => {
-                        const total = context.dataset.data.reduce((sum, val) => sum + val, 0)
-                        const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0
-                        return percentage + "%"
-                      },
-                    },
-                  },
-                }}
-                plugins={[ChartDataLabels]}
-              />
-            </div>
+        {investors.length === 0 ? (
+          <div
+            style={{
+              textAlign: "center",
+              padding: "40px",
+              color: "#72542b",
+            }}
+          >
+            <p>No investor data available. {!isInvestorView && 'Click "Edit Data" to add your first investor.'}</p>
           </div>
-          <div>
-            <h3 style={{ color: "#7d5a50" }}>Investor Details</h3>
-            <div
-              style={{
-                backgroundColor: "#f5f0e1",
-                padding: "15px",
-                borderRadius: "6px",
-              }}
-            >
-              <table
+        ) : (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: window.innerWidth < 768 ? "1fr" : "1fr 1fr",
+              gap: "30px",
+            }}
+          >
+            <div>
+              <h3 style={{ color: "#7d5a50" }}>Ownership Structure</h3>
+              <div style={{ height: "400px" }}>
+                <Pie
+                  data={{
+                    labels: investors.map((inv) => inv.name),
+                    datasets: [
+                      {
+                        data: investors.map((inv) => inv.shares),
+                        backgroundColor: ["#a67c52", "#8b7355", "#b89f8d", "#e6d7c3", "#f5f0e1"],
+                        borderColor: "#4a352f",
+                        borderWidth: 1,
+                      },
+                    ],
+                  }}
+                  options={{
+                    responsive: true,
+                    plugins: {
+                      legend: {
+                        position: window.innerWidth < 768 ? "bottom" : "right",
+                      },
+                      datalabels: {
+                        color: "#fff",
+                        font: {
+                          weight: "bold",
+                          size: 14,
+                        },
+                        formatter: (value, context) => {
+                          const total = context.dataset.data.reduce((sum, val) => sum + val, 0)
+                          const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0
+                          return percentage + "%"
+                        },
+                      },
+                    },
+                  }}
+                  plugins={[ChartDataLabels]}
+                />
+              </div>
+            </div>
+            <div>
+              <h3 style={{ color: "#7d5a50" }}>Investor Details</h3>
+              <div
                 style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                  color: "#5d4037",
+                  backgroundColor: "#f5f0e1",
+                  padding: "15px",
+                  borderRadius: "6px",
                 }}
               >
-                <thead>
-                  <tr
-                    style={{
-                      borderBottom: "2px solid #e6d7c3",
-                    }}
-                  >
-                    <th style={{ padding: "12px", textAlign: "left" }}>Investor</th>
-                    <th style={{ padding: "12px", textAlign: "right" }}>Shares (%)</th>
-                    <th style={{ padding: "12px", textAlign: "right" }}>Valuation (RM)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {investors.map((investor, index) => (
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    color: "#5d4037",
+                  }}
+                >
+                  <thead>
                     <tr
-                      key={index}
                       style={{
-                        borderBottom: "1px solid #e6d7c3",
+                        borderBottom: "2px solid #e6d7c3",
                       }}
                     >
-                      <td style={{ padding: "12px" }}>{investor.name}</td>
-                      <td style={{ padding: "12px", textAlign: "right" }}>
-                        {totalShares > 0 ? ((investor.shares / totalShares) * 100).toFixed(1) : 0}%
-                      </td>
-                      <td style={{ padding: "12px", textAlign: "right" }}>R{investor.valuation.toFixed(1)}</td>
+                      <th style={{ padding: "12px", textAlign: "left" }}>Investor</th>
+                      <th style={{ padding: "12px", textAlign: "right" }}>Shares (%)</th>
+                      <th style={{ padding: "12px", textAlign: "right" }}>Investment (RM)</th>
                     </tr>
-                  ))}
-                  <tr
+                  </thead>
+                  <tbody>
+                    {investors.map((investor, index) => (
+                      <tr
+                        key={index}
+                        style={{
+                          borderBottom: "1px solid #e6d7c3",
+                        }}
+                      >
+                        <td style={{ padding: "12px" }}>{investor.name}</td>
+                        <td style={{ padding: "12px", textAlign: "right" }}>
+                          {totalShares > 0 ? ((investor.shares / totalShares) * 100).toFixed(1) : 0}%
+                        </td>
+                        <td style={{ padding: "12px", textAlign: "right" }}>R{(investor.investment || 0).toFixed(1)}</td>
+                      </tr>
+                    ))}
+                    <tr
+                      style={{
+                        borderTop: "2px solid #e6d7c3",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      <td style={{ padding: "12px" }}>Total</td>
+                      <td style={{ padding: "12px", textAlign: "right" }}>100%</td>
+                      <td style={{ padding: "12px", textAlign: "right" }}>R{totalInvestment.toFixed(1)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* IRR on Investments Section (Now under Cap Table) */}
+      <div
+        style={{
+          backgroundColor: "#fdfcfb",
+          padding: "20px",
+          borderRadius: "8px",
+          boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+          <h2 style={{ color: "#5d4037", marginTop: 0 }}>IRR on Equity Investments</h2>
+          <div style={{ display: "flex", gap: "10px" }}>
+            {!isInvestorView && (
+              <button
+                onClick={() => setShowIrrEditForm(!showIrrEditForm)}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                }}
+              >
+                {showIrrEditForm ? "Cancel" : "Edit Data"}
+              </button>
+            )}
+            <div style={{ position: "relative" }}>
+              <button
+                onClick={() => setShowIrrDownloadOptions(!showIrrDownloadOptions)}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#72542b",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                }}
+              >
+                Download
+              </button>
+              {showIrrDownloadOptions && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "100%",
+                    right: 0,
+                    backgroundColor: "#fdfcfb",
+                    border: "1px solid #d4c4b0",
+                    borderRadius: "4px",
+                    boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                    zIndex: 1000,
+                  }}
+                >
+                  <button
+                    onClick={() => handleIrrDownload("json")}
                     style={{
-                      borderTop: "2px solid #e6d7c3",
-                      fontWeight: "bold",
+                      display: "block",
+                      width: "100%",
+                      padding: "8px 15px",
+                      backgroundColor: "transparent",
+                      border: "none",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      color: "#5d4037",
                     }}
                   >
-                    <td style={{ padding: "12px" }}>Total</td>
-                    <td style={{ padding: "12px", textAlign: "right" }}>100%</td>
-                    <td style={{ padding: "12px", textAlign: "right" }}>R{totalValuation.toFixed(1)}</td>
-                  </tr>
-                </tbody>
-              </table>
+                    Download JSON
+                  </button>
+                  <button
+                    onClick={() => handleIrrDownload("csv")}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      padding: "8px 15px",
+                      backgroundColor: "transparent",
+                      border: "none",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      color: "#5d4037",
+                    }}
+                  >
+                    Download CSV
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
-      )}
+
+        {!isInvestorView && showIrrEditForm && (
+          <div
+            style={{
+              backgroundColor: "#f7f3f0",
+              padding: "20px",
+              borderRadius: "6px",
+              marginBottom: "20px",
+            }}
+          >
+            <h3 style={{ color: "#72542b", marginTop: 0 }}>Edit IRR Investment Data</h3>
+            {irrInvestments.map((investment, index) => (
+              <div
+                key={index}
+                style={{
+                  marginBottom: "20px",
+                  padding: "15px",
+                  backgroundColor: "#fdfcfb",
+                  borderRadius: "4px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "2fr 1fr 1fr auto",
+                    gap: "10px",
+                    alignItems: "center",
+                    marginBottom: "10px",
+                  }}
+                >
+                  <input
+                    type="text"
+                    value={investment.name}
+                    onChange={(e) => updateIrrInvestment(index, "name", e.target.value)}
+                    style={{
+                      padding: "8px",
+                      border: "1px solid #d4c4b0",
+                      borderRadius: "4px",
+                    }}
+                    placeholder="Project Name"
+                  />
+                  <input
+                    type="number"
+                    value={investment.irr}
+                    onChange={(e) => updateIrrInvestment(index, "irr", e.target.value)}
+                    style={{
+                      padding: "8px",
+                      border: "1px solid #d4c4b0",
+                      borderRadius: "4px",
+                    }}
+                    placeholder="IRR %"
+                  />
+                  <select
+                    value={investment.details.riskRating}
+                    onChange={(e) => updateIrrInvestment(index, "details.riskRating", e.target.value)}
+                    style={{
+                      padding: "8px",
+                      border: "1px solid #d4c4b0",
+                      borderRadius: "4px",
+                    }}
+                  >
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                  </select>
+                  <button
+                    onClick={() => removeIrrInvestment(index)}
+                    style={{
+                      padding: "8px",
+                      backgroundColor: "#dc2626",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
+                  <input
+                    type="text"
+                    value={investment.details.initialInvestment}
+                    onChange={(e) => updateIrrInvestment(index, "details.initialInvestment", e.target.value)}
+                    style={{
+                      padding: "8px",
+                      border: "1px solid #d4c4b0",
+                      borderRadius: "4px",
+                    }}
+                    placeholder="Initial Investment"
+                  />
+                  <input
+                    type="text"
+                    value={investment.details.duration}
+                    onChange={(e) => updateIrrInvestment(index, "details.duration", e.target.value)}
+                    style={{
+                      padding: "8px",
+                      border: "1px solid #d4c4b0",
+                      borderRadius: "4px",
+                    }}
+                    placeholder="Duration"
+                  />
+                  <input
+                    type="text"
+                    value={investment.details.cashFlows.join(", ")}
+                    onChange={(e) => updateIrrInvestment(index, "details.cashFlows", e.target.value)}
+                    style={{
+                      padding: "8px",
+                      border: "1px solid #d4c4b0",
+                      borderRadius: "4px",
+                    }}
+                    placeholder="Cash Flows (comma separated)"
+                  />
+                </div>
+              </div>
+            ))}
+            <div style={{ marginTop: "15px" }}>
+              <button
+                onClick={addIrrInvestment}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#72542b",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  marginRight: "10px",
+                }}
+              >
+                Add Investment
+              </button>
+              <button
+                onClick={saveCapTableData}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#16a34a",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                }}
+              >
+                Save Data
+              </button>
+            </div>
+          </div>
+        )}
+
+        {irrInvestments.length === 0 ? (
+          <div
+            style={{
+              textAlign: "center",
+              padding: "40px",
+              color: "#72542b",
+            }}
+          >
+            <p>No investment data available. {!isInvestorView && 'Click "Edit Data" to add your first investment.'}</p>
+          </div>
+        ) : (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: window.innerWidth < 768 ? "1fr" : "repeat(auto-fit, minmax(250px, 1fr))",
+              gap: "20px",
+            }}
+          >
+            {irrInvestments.map((investment, index) => (
+              <div
+                key={index}
+                style={{
+                  padding: "15px",
+                  backgroundColor: "#f7f3f0",
+                  borderRadius: "6px",
+                  textAlign: "center",
+                }}
+              >
+                <h3 style={{ color: "#72542b" }}>{investment.name}</h3>
+                <div
+                  style={{
+                    width: "120px",
+                    height: "120px",
+                    borderRadius: "50%",
+                    backgroundColor: "#e8ddd4",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    margin: "0 auto",
+                    border: "8px solid #9c7c5f",
+                    marginBottom: "15px",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "24px",
+                      fontWeight: "bold",
+                      color: "#5d4037",
+                    }}
+                  >
+                    {investment.irr}%
+                  </span>
+                </div>
+
+                <button
+                  onClick={() => toggleIrrInvestment(index)}
+                  style={{
+                    padding: "8px 15px",
+                    backgroundColor: "#5d4037",
+                    color: "#fdfcfb",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    marginBottom: "10px",
+                  }}
+                >
+                  {expandedInvestment === index ? "Hide Details" : "Breakdown"}
+                </button>
+
+                {expandedInvestment === index && (
+                  <div
+                    style={{
+                      textAlign: "left",
+                      backgroundColor: "#e8ddd4",
+                      padding: "10px",
+                      borderRadius: "4px",
+                      marginTop: "10px",
+                    }}
+                  >
+                    <p>
+                      <strong>Initial Investment:</strong> {investment.details.initialInvestment}
+                    </p>
+                    <p>
+                      <strong>Duration:</strong> {investment.details.duration}
+                    </p>
+                    <p>
+                      <strong>Risk Rating:</strong> {investment.details.riskRating}
+                    </p>
+                    <div>
+                      <strong>Cash Flows:</strong>
+                      <ul style={{ margin: "5px 0 0 20px", padding: 0 }}>
+                        {investment.details.cashFlows.map((flow, i) => (
+                          <li key={i}>{flow}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
 
-// Dividend History Component
+// Dividend History Component (Updated with new columns)
 const DividendHistory = ({ activeSection, currentUser, isInvestorView }) => {
   const [dividends, setDividends] = useState([])
   const [showEditForm, setShowEditForm] = useState(false)
@@ -2413,7 +2356,15 @@ const DividendHistory = ({ activeSection, currentUser, isInvestorView }) => {
       const docRef = doc(db, "dividend-history", currentUser.uid)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
-        setDividends(docSnap.data().dividends || [])
+        const data = docSnap.data()
+        // Handle legacy data - convert amount to amountPerShare if needed
+        const dividendsData = data.dividends || []
+        const updatedDividends = dividendsData.map(dividend => ({
+          ...dividend,
+          amountPerShare: dividend.amountPerShare !== undefined ? dividend.amountPerShare : (dividend.amount || 0),
+          totalIssued: dividend.totalIssued !== undefined ? dividend.totalIssued : 0
+        }))
+        setDividends(updatedDividends)
       } else {
         // Initialize with empty data if no document exists
         await setDoc(docRef, {
@@ -2438,7 +2389,9 @@ const DividendHistory = ({ activeSection, currentUser, isInvestorView }) => {
     const newDividends = [...dividends]
     if (field === "year") {
       newDividends[index][field] = Number.parseInt(value) || 0
-    } else if (field === "amount") {
+    } else if (field === "amountPerShare") {
+      newDividends[index][field] = Number.parseFloat(value) || 0
+    } else if (field === "totalIssued") {
       newDividends[index][field] = Number.parseFloat(value) || 0
     } else {
       newDividends[index][field] = value
@@ -2447,7 +2400,12 @@ const DividendHistory = ({ activeSection, currentUser, isInvestorView }) => {
   }
 
   const addDividend = () => {
-    setDividends([...dividends, { year: new Date().getFullYear(), amount: 0, paymentDate: "" }])
+    setDividends([...dividends, { 
+      year: new Date().getFullYear(), 
+      amountPerShare: 0, 
+      totalIssued: 0,
+      paymentDate: "" 
+    }])
   }
 
   const removeDividend = (index) => {
@@ -2458,8 +2416,13 @@ const DividendHistory = ({ activeSection, currentUser, isInvestorView }) => {
   const handleDownload = (type) => {
     if (type === "csv") {
       const csvContent = [
-        ["Year", "Amount per Share", "Payment Date"],
-        ...dividends.map((div) => [div.year, div.amount.toFixed(2), div.paymentDate]),
+        ["Year", "Amount per Share", "Total Issued", "Payment Date"],
+        ...dividends.map((div) => [
+          div.year, 
+          (div.amountPerShare || 0).toFixed(2), 
+          (div.totalIssued || 0).toFixed(2), 
+          div.paymentDate
+        ]),
       ]
         .map((row) => row.join(","))
         .join("\n")
@@ -2609,7 +2572,7 @@ const DividendHistory = ({ activeSection, currentUser, isInvestorView }) => {
               key={index}
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 1fr 2fr auto",
+                gridTemplateColumns: "1fr 1fr 1fr 2fr auto",
                 gap: "10px",
                 alignItems: "center",
                 marginBottom: "10px",
@@ -2632,14 +2595,26 @@ const DividendHistory = ({ activeSection, currentUser, isInvestorView }) => {
               <input
                 type="number"
                 step="0.01"
-                value={dividend.amount}
-                onChange={(e) => updateDividend(index, "amount", e.target.value)}
+                value={dividend.amountPerShare || 0}
+                onChange={(e) => updateDividend(index, "amountPerShare", e.target.value)}
                 style={{
                   padding: "8px",
                   border: "1px solid #d4c4b0",
                   borderRadius: "4px",
                 }}
                 placeholder="Amount per Share"
+              />
+              <input
+                type="number"
+                step="0.01"
+                value={dividend.totalIssued || 0}
+                onChange={(e) => updateDividend(index, "totalIssued", e.target.value)}
+                style={{
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+                placeholder="Total Issued"
               />
               <input
                 type="date"
@@ -2731,6 +2706,7 @@ const DividendHistory = ({ activeSection, currentUser, isInvestorView }) => {
               >
                 <th style={{ padding: "12px", textAlign: "left" }}>Year</th>
                 <th style={{ padding: "12px", textAlign: "right" }}>Amount per Share</th>
+                <th style={{ padding: "12px", textAlign: "right" }}>Total Issued</th>
                 <th style={{ padding: "12px", textAlign: "left" }}>Payment Date</th>
               </tr>
             </thead>
@@ -2745,7 +2721,8 @@ const DividendHistory = ({ activeSection, currentUser, isInvestorView }) => {
                     }}
                   >
                     <td style={{ padding: "12px" }}>{div.year}</td>
-                    <td style={{ padding: "12px", textAlign: "right" }}>R{div.amount.toFixed(2)}</td>
+                    <td style={{ padding: "12px", textAlign: "right" }}>R{(div.amountPerShare || 0).toFixed(2)}</td>
+                    <td style={{ padding: "12px", textAlign: "right" }}>R{(div.totalIssued || 0).toFixed(2)}</td>
                     <td style={{ padding: "12px" }}>{div.paymentDate}</td>
                   </tr>
                 ))}
@@ -2862,7 +2839,6 @@ const CapitalStructure = ({
 
   const sectionButtons = [
     { id: "cap-table", label: "Cap Table" },
-    { id: "irr-investments", label: "IRR on Investments" },
     { id: "investment-ratios", label: "Investment Ratios" },
     { id: "dividend-history", label: "Dividend History" },
     { id: "loan-repayments", label: "Loan Repayments" },
@@ -2945,7 +2921,6 @@ const CapitalStructure = ({
         </div>
 
         <CapTable activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
-        <IRRInvestments activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
         <InvestmentRatios activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
         <DividendHistory activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
         <LoanRepayments activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
@@ -3042,7 +3017,6 @@ const CapitalStructure = ({
           </div>
 
           <CapTable activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
-          <IRRInvestments activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
           <InvestmentRatios activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
           <DividendHistory activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
           <LoanRepayments activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />

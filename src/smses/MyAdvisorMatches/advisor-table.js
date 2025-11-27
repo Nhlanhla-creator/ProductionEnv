@@ -40,13 +40,6 @@ const STATUS_TYPES = {
     textColor: "#5D2A0A",
   },
 }
-const operationStages = [
-  { value: "Startup", label: "Startup" },
-  { value: "Growth", label: "Growth" },
-  { value: "Scaling", label: "Scaling" },
-  { value: "Turnaround", label: "Turnaround" },
-  { value: "Mature", label: "Mature" },
-]
 
 // Economic sectors data
 const economicSectors = [
@@ -87,6 +80,24 @@ const economicSectors = [
   { value: "Telecommunications", label: "Telecommunications" },
   { value: "Transport", label: "Transport" },
   { value: "Utilities (Water, Electricity, Waste)", label: "Utilities (Water, Electricity, Waste)" },
+]
+
+// Funding Stage options
+const fundingStages = [
+  { value: "startup", label: "Startup" },
+  { value: "growth", label: "Growth" },
+  { value: "scaling", label: "Scaling" },
+  { value: "turnaround", label: "Turnaround" },
+  { value: "mature", label: "Mature" },
+]
+
+// Compensation Model options
+const compensationModels = [
+  { value: "pro-bono", label: "Pro-Bono" },
+  { value: "equity", label: "Equity" },
+  { value: "fee-based", label: "Fee-Based" },
+  { value: "hourly-rate", label: "Hourly Rate" },
+  { value: "retainer", label: "Retainer" },
 ]
 
 // African countries data
@@ -417,18 +428,15 @@ export function AdvisorTable({ filters, onConnectionRequested, onCountChange }) 
   const [mounted, setMounted] = useState(false)
 
   // Filter states
-  const [sectorFilter, setSectorFilter] = useState("")
-  const [stageFilter, setStageFilter] = useState("")
-  const [locationFilter, setLocationFilter] = useState("")
-  const [availabilityFilter, setAvailabilityFilter] = useState("")
   const [selectedLocations, setSelectedLocations] = useState([])
   const [selectedSectors, setSelectedSectors] = useState([])
-  const [selectedStages, setSelectedStages] = useState([])
+  const [selectedFundingStages, setSelectedFundingStages] = useState([])
+  const [selectedCompensationModels, setSelectedCompensationModels] = useState([])
   const [statusFilter, setStatusFilter] = useState("")
-  const [compensationFilter, setCompensationFilter] = useState("")
   const [minMatchFilter, setMinMatchFilter] = useState(0)
 
   const [matchBreakdownModal, setMatchBreakdownModal] = useState(null)
+
   // Add this useEffect to listen for status updates
   useEffect(() => {
     const user = auth.currentUser
@@ -922,9 +930,9 @@ Best regards,\nBIG Marketplace Africa Team`;
   const resetFilters = () => {
     setSelectedLocations([])
     setSelectedSectors([])
-    setSelectedStages([])
+    setSelectedFundingStages([])
+    setSelectedCompensationModels([])
     setStatusFilter("")
-    setCompensationFilter("")
     setMinMatchFilter(0)
     setShowFilterModal(false)
   }
@@ -968,11 +976,7 @@ const hasTooManyMissingFields = (advisor) => {
 };
 
   // Get unique values for filter dropdowns
-  const uniqueLocations = [...new Set(advisors.map((adv) => adv.location).filter(Boolean))]
-  const uniqueSectors = [...new Set(advisors.map((adv) => adv.sectorFocus).filter(Boolean))]
-  const uniqueStages = [...new Set(advisors.map((adv) => adv.fundingStage).filter(Boolean))]
   const uniqueStatuses = [...new Set(advisors.map((adv) => statuses[adv.id] || adv.status).filter(Boolean))]
-  const uniqueCompensation = [...new Set(advisors.map((adv) => adv.compensationModel).filter(Boolean))]
 
   const filteredAdvisors = advisors.filter((advisor) => {
       const user = auth.currentUser;
@@ -999,22 +1003,22 @@ const hasTooManyMissingFields = (advisor) => {
     ) {
       return false
     }
-    // Filter by stage
+    // Filter by funding stage
     if (
-      selectedStages.length > 0 &&
-      !selectedStages.some((stage) => formatLabel(advisor.fundingStage).toLowerCase().includes(stage.toLowerCase()))
+      selectedFundingStages.length > 0 &&
+      !selectedFundingStages.some((stage) => formatLabel(advisor.fundingStage).toLowerCase().includes(stage.toLowerCase()))
+    ) {
+      return false
+    }
+    // Filter by compensation model
+    if (
+      selectedCompensationModels.length > 0 &&
+      !selectedCompensationModels.some((model) => formatLabel(advisor.compensationModel).toLowerCase().includes(model.toLowerCase()))
     ) {
       return false
     }
     // Filter by status
     if (statusFilter && currentStatus.toLowerCase() !== statusFilter.toLowerCase()) {
-      return false
-    }
-    // Filter by compensation model
-    if (
-      compensationFilter &&
-      !formatLabel(advisor.compensationModel).toLowerCase().includes(compensationFilter.toLowerCase())
-    ) {
       return false
     }
     // Filter by minimum match percentage
@@ -1095,9 +1099,9 @@ const hasTooManyMissingFields = (advisor) => {
               Filters
               {(selectedLocations.length > 0 ||
                 selectedSectors.length > 0 ||
-                selectedStages.length > 0 ||
+                selectedFundingStages.length > 0 ||
+                selectedCompensationModels.length > 0 ||
                 statusFilter ||
-                compensationFilter ||
                 minMatchFilter > 0) && (
                 <span
                   style={{
@@ -1116,9 +1120,9 @@ const hasTooManyMissingFields = (advisor) => {
                     [
                       selectedLocations.length,
                       selectedSectors.length,
-                      selectedStages.length,
+                      selectedFundingStages.length,
+                      selectedCompensationModels.length,
                       statusFilter,
-                      compensationFilter,
                       minMatchFilter > 0,
                     ].filter(Boolean).length
                   }
@@ -1644,7 +1648,7 @@ const hasTooManyMissingFields = (advisor) => {
                 <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", padding: "1.5rem" }}>
                   <div>
                     <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500", color: "#5D2A0A" }}>
-                      Location
+                      Location (African Countries)
                     </label>
                     <MultiSelectDropdown
                       options={africanCountries}
@@ -1673,11 +1677,24 @@ const hasTooManyMissingFields = (advisor) => {
                       Funding Stage
                     </label>
                     <MultiSelectDropdown
-                      options={operationStages}
-                      selectedValues={selectedStages}
-                      onSelect={(value) => setSelectedStages((prev) => [...prev, value])}
-                      onRemove={(value) => setSelectedStages((prev) => prev.filter((v) => v !== value))}
-                      placeholder="Select stages..."
+                      options={fundingStages}
+                      selectedValues={selectedFundingStages}
+                      onSelect={(value) => setSelectedFundingStages((prev) => [...prev, value])}
+                      onRemove={(value) => setSelectedFundingStages((prev) => prev.filter((v) => v !== value))}
+                      placeholder="Select funding stages..."
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500", color: "#5D2A0A" }}>
+                      Compensation Model
+                    </label>
+                    <MultiSelectDropdown
+                      options={compensationModels}
+                      selectedValues={selectedCompensationModels}
+                      onSelect={(value) => setSelectedCompensationModels((prev) => [...prev, value])}
+                      onRemove={(value) => setSelectedCompensationModels((prev) => prev.filter((v) => v !== value))}
+                      placeholder="Select compensation models..."
                     />
                   </div>
 
@@ -1700,30 +1717,6 @@ const hasTooManyMissingFields = (advisor) => {
                       {uniqueStatuses.map((status) => (
                         <option key={status} value={status}>
                           {status}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500", color: "#5D2A0A" }}>
-                      Compensation Model
-                    </label>
-                    <select
-                      value={compensationFilter}
-                      onChange={(e) => setCompensationFilter(e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "0.5rem",
-                        border: "1px solid #E8D5C4",
-                        borderRadius: "4px",
-                        fontSize: "0.75rem",
-                      }}
-                    >
-                      <option value="">All Models</option>
-                      {uniqueCompensation.map((model) => (
-                        <option key={model} value={model}>
-                          {model}
                         </option>
                       ))}
                     </select>

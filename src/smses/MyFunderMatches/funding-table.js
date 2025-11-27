@@ -577,7 +577,7 @@ const [bigScore, setBigScore] = useState(null);
     minMatch: 0,
     maxMatch: 100,
     currentStage: "",
-    supportOffered: "",
+
   })
 
   // Get unique values for filter dropdowns
@@ -601,7 +601,7 @@ const [bigScore, setBigScore] = useState(null);
   const uniqueStages = getUniqueValues("targetStage")
   const uniqueTypes = getUniqueValues("investmentType")
   const uniquePipelineStages = getUniqueValues("pipelineStage")
-  const uniqueSupport = getUniqueValues("supportOffered")
+ 
 
   useEffect(() => {
   const fetchBigScore = async () => {
@@ -4146,29 +4146,7 @@ const [bigScore, setBigScore] = useState(null);
                   </div>
 
                   {/* Support Offered Filter */}
-                  <div>
-                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#5D2A0A" }}>
-                      Support Offered
-                    </label>
-                    <select
-                      value={tableFilters.supportOffered}
-                      onChange={(e) => handleFilterChange("supportOffered", e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "0.75rem",
-                        border: "1px solid #E8D5C4",
-                        borderRadius: "6px",
-                        fontSize: "0.875rem",
-                      }}
-                    >
-                      <option value="">All Support Types</option>
-                      {uniqueSupport.map((support) => (
-                        <option key={support} value={support}>
-                          {formatSupport(support)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                 
                 </div>
 
                 <div

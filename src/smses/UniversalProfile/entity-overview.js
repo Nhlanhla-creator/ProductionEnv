@@ -44,7 +44,7 @@ const operationStages = [
 ]
 
 const economicSectors = [
-  { value: "Generalist", label: "Generalist" },
+ { value: "Generalist", label: "Generalist" },
   { value: "Agriculture", label: "Agriculture" },
   { value: "Automotive", label: "Automotive" },
   { value: "Banking, Finance & Insurance", label: "Banking, Finance & Insurance" },
@@ -926,168 +926,194 @@ const handleRemoveLogo = async () => {
               required
             />
           </FormField>
- <FormField label="Company Logo">
-  <div style={{ 
-    border: '2px dashed #d1d5db', 
-    borderRadius: '8px', 
-    padding: '20px',
-    backgroundColor: '#fafafa',
-    transition: 'all 0.3s ease'
-  }}>
-    <div style={{ 
-      display: 'flex', 
-      alignItems: 'center', 
-      gap: '20px',
-      justifyContent: 'center',
-      flexDirection: 'column',
-      textAlign: 'center'
-    }}>
-      {/* Logo Preview */}
-      <div style={{ 
-        width: '100px', 
-        height: '100px', 
-        borderRadius: '8px', 
-        overflow: 'hidden', 
-        border: '2px solid #e5e7eb',
-        backgroundColor: 'white',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-      }}>
-        {formData.companyLogo || logoPreview ? (
-          <img 
-            src={logoPreview || formData.companyLogo} 
-            alt="Company Logo" 
-            style={{ 
-              width: '100%', 
-              height: '100%', 
-              objectFit: 'cover' 
-            }}
-          />
-        ) : (
-          <div style={{ 
-            color: '#9ca3af', 
-            fontSize: '12px', 
-            textAlign: 'center',
-            padding: '8px'
-          }}>
-            <div style={{ fontSize: '24px', marginBottom: '4px' }}>🏢</div>
-            No Logo
-          </div>
-        )}
-      </div>
-      
-      {/* Upload Controls */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
-          <label 
-            htmlFor="logo-upload"
-            style={{
-              padding: '10px 20px',
-              backgroundColor: logoUploading ? '#9ca3af' : '#8B4513',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              fontSize: '14px',
-              fontWeight: '600',
-              cursor: logoUploading ? 'not-allowed' : 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              transition: 'all 0.2s ease',
-              boxShadow: '0 2px 4px rgba(139, 69, 19, 0.2)'
-            }}
-            onMouseOver={(e) => {
-              if (!logoUploading) {
-                e.target.style.backgroundColor = '#5D2F06';
-                e.target.style.transform = 'translateY(-1px)';
-                e.target.style.boxShadow = '0 4px 8px rgba(139, 69, 19, 0.3)';
-              }
-            }}
-            onMouseOut={(e) => {
-              if (!logoUploading) {
-                e.target.style.backgroundColor = '#8B4513';
-                e.target.style.transform = 'translateY(0)';
-                e.target.style.boxShadow = '0 2px 4px rgba(139, 69, 19, 0.2)';
-              }
-            }}
-          >
-            {logoUploading ? (
-              <>
-                <div style={{
-                  width: '16px',
-                  height: '16px',
-                  border: '2px solid transparent',
-                  borderTop: '2px solid white',
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite'
-                }}></div>
-                Uploading...
-              </>
-            ) : (
-              <>
-                <Upload size={16} />
-                Choose File
-              </>
-            )}
-            <input
-              id="logo-upload"
-              type="file"
-              accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-              onChange={handleLogoUpload}
-              disabled={logoUploading}
-              style={{ display: 'none' }}
-            />
-          </label>
-          
-          {(formData.companyLogo || logoPreview) && (
-            <button
-              type="button"
-              onClick={handleRemoveLogo}
-              style={{
-                padding: '10px 16px',
-                backgroundColor: '#ef4444',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                boxShadow: '0 2px 4px rgba(239, 68, 68, 0.2)'
-              }}
-              onMouseOver={(e) => {
-                e.target.style.backgroundColor = '#dc2626';
-                e.target.style.transform = 'translateY(-1px)';
-                e.target.style.boxShadow = '0 4px 8px rgba(239, 68, 68, 0.3)';
-              }}
-              onMouseOut={(e) => {
-                e.target.style.backgroundColor = '#ef4444';
-                e.target.style.transform = 'translateY(0)';
-                e.target.style.boxShadow = '0 2px 4px rgba(239, 68, 68, 0.2)';
-              }}
-            >
-              Remove Logo
-            </button>
-          )}
-        </div>
-        
-        {/* File Info */}
-        <div style={{ 
-          fontSize: '12px', 
-          color: '#6b7280',
-          textAlign: 'center',
-          lineHeight: '1.4'
-        }}>
-          <div>Supported formats: JPG, PNG, GIF, WebP</div>
-          <div>Maximum file size: 5MB</div>
-          <div>Recommended: Square image, 200×200px or larger</div>
-        </div>
-      </div>
-    </div>
-  </div>
-</FormField>
+
+          <FormField label="Company Logo">
+            <div style={{ 
+              border: '2px dashed #C19A6B', 
+              borderRadius: '8px', 
+              padding: '16px',
+              backgroundColor: '#FAF8F5',
+              transition: 'all 0.3s ease',
+              maxWidth: '400px'
+            }}>
+              <style>
+                {`
+                  @keyframes spin {
+                    to { transform: rotate(360deg); }
+                  }
+                `}
+              </style>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '16px',
+                justifyContent: 'flex-start'
+              }}>
+                {/* Circular Logo Preview */}
+                <div style={{ 
+                  width: '80px', 
+                  height: '80px', 
+                  borderRadius: '50%', 
+                  overflow: 'hidden', 
+                  border: '3px solid #8B6F47',
+                  backgroundColor: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 4px 12px rgba(139, 111, 71, 0.2)',
+                  flexShrink: 0,
+                  background: 'linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%)'
+                }}>
+                  {formData.companyLogo || logoPreview ? (
+                    <img 
+                      src={logoPreview || formData.companyLogo} 
+                      alt="Company Logo" 
+                      style={{ 
+                        width: '100%', 
+                        height: '100%', 
+                        objectFit: 'cover' 
+                      }}
+                    />
+                  ) : (
+                    <div style={{ 
+                      color: '#A0826D', 
+                      fontSize: '10px', 
+                      textAlign: 'center',
+                      padding: '6px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '2px'
+                    }}>
+                      <div style={{ 
+                        fontSize: '28px', 
+                        lineHeight: '1',
+                        filter: 'grayscale(0.3)'
+                      }}>🏢</div>
+                      <div style={{ 
+                        fontWeight: '600',
+                        letterSpacing: '0.2px',
+                        color: '#8B6F47',
+                        fontSize: '9px'
+                      }}>No Logo</div>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Upload Controls */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <label 
+                      htmlFor="logo-upload"
+                      title="Upload Logo"
+                      style={{
+                        padding: '10px',
+                        background: logoUploading 
+                          ? 'linear-gradient(135deg, #A0826D 0%, #8B6F47 100%)' 
+                          : 'linear-gradient(135deg, #8B4513 0%, #6B3410 100%)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '5px',
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        cursor: logoUploading ? 'not-allowed' : 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.3s ease',
+                        boxShadow: '0 2px 8px rgba(139, 69, 19, 0.25)',
+                        opacity: logoUploading ? 0.7 : 1,
+                        width: '40px',
+                        height: '40px'
+                      }}
+                      onMouseOver={(e) => {
+                        if (!logoUploading) {
+                          e.target.style.transform = 'translateY(-1px)';
+                          e.target.style.boxShadow = '0 4px 12px rgba(139, 69, 19, 0.35)';
+                        }
+                      }}
+                      onMouseOut={(e) => {
+                        if (!logoUploading) {
+                          e.target.style.transform = 'translateY(0)';
+                          e.target.style.boxShadow = '0 2px 8px rgba(139, 69, 19, 0.25)';
+                        }
+                      }}
+                    >
+                      {logoUploading ? (
+                        <div style={{
+                          width: '16px',
+                          height: '16px',
+                          border: '2px solid transparent',
+                          borderTop: '2px solid white',
+                          borderRadius: '50%',
+                          animation: 'spin 1s linear infinite'
+                        }}></div>
+                      ) : (
+                        <Upload size={18} />
+                      )}
+                      <input
+                        id="logo-upload"
+                        type="file"
+                        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                        onChange={handleLogoUpload}
+                        disabled={logoUploading}
+                        style={{ display: 'none' }}
+                      />
+                    </label>
+                    
+                    {(formData.companyLogo || logoPreview) && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveLogo}
+                        title="Remove Logo"
+                        style={{
+                          padding: '10px',
+                          background: 'linear-gradient(135deg, #B8860B 0%, #996515 100%)',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '5px',
+                          fontSize: '13px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          transition: 'all 0.3s ease',
+                          boxShadow: '0 2px 8px rgba(184, 134, 11, 0.25)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: '40px',
+                          height: '40px'
+                        }}
+                        onMouseOver={(e) => {
+                          e.target.style.transform = 'translateY(-1px)';
+                          e.target.style.boxShadow = '0 4px 12px rgba(184, 134, 11, 0.35)';
+                        }}
+                        onMouseOut={(e) => {
+                          e.target.style.transform = 'translateY(0)';
+                          e.target.style.boxShadow = '0 2px 8px rgba(184, 134, 11, 0.25)';
+                        }}
+                      >
+                        <X size={18} />
+                      </button>
+                    )}
+                  </div>
+                  
+                  {/* File Info */}
+                  <div style={{ 
+                    fontSize: '11px', 
+                    color: '#8B6F47',
+                    lineHeight: '1.4',
+                    backgroundColor: 'rgba(139, 111, 71, 0.08)',
+                    padding: '8px 10px',
+                    borderRadius: '5px',
+                    border: '1px solid rgba(139, 111, 71, 0.15)'
+                  }}>
+                    <div style={{ fontWeight: '600', marginBottom: '2px' }}>📋 Requirements</div>
+                    <div>JPG, PNG, GIF, WebP • Max 5MB</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </FormField>
         </div>
       </div>
     </div>

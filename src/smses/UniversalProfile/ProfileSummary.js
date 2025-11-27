@@ -338,8 +338,10 @@ const ProfileSummary = ({ data, onEdit }) => {
               gap: "16px",
             }}
           >
-            {/* Entity Overview */}
-           {/* Entity Overview */}
+         
+
+
+{/* Entity Overview */}
 <div
   style={{
     background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
@@ -406,19 +408,13 @@ const ProfileSummary = ({ data, onEdit }) => {
           { label: "Registration Number", value: data?.entityOverview?.registrationNumber },
           { label: "Entity Type", value: data?.entityOverview?.entityType },
           { label: "Legal Structure", value: data?.entityOverview?.legalStructure },
-          { 
-            label: "Entity Size", 
-            value: data?.entityOverview?.employeeCount 
-              ? `${data.entityOverview.employeeCount} employees` 
-              : "Not provided"
-          },
+          { label: "Entity Size", value: data?.entityOverview?.entitySize },
           { label: "Financial Year End", value: data?.entityOverview?.financialYearEnd },
+          { label: "No. of Employees", value: data?.entityOverview?.employeeCount },
           { label: "Years in Operation", value: data?.entityOverview?.yearsInOperation },
           { label: "Operation Stage", value: data?.entityOverview?.operationStage },
-          { label: "Town", value: data?.entityOverview?.town || "Not provided" },
+          { label: "Country", value: data?.entityOverview?.location || "Not provided" },
           { label: "City", value: data?.entityOverview?.city || "Not provided" },
-          { label: "Region/Province", value: data?.entityOverview?.region || "Not provided" },
-          { label: "Country", value: data?.entityOverview?.country || "Not provided" },
         ].map((item, i) => (
           <div
             key={i}
@@ -455,6 +451,43 @@ const ProfileSummary = ({ data, onEdit }) => {
             </span>
           </div>
         ))}
+
+        {/* Province field - only shows for South Africa */}
+        {data?.entityOverview?.location === "South Africa" && data?.entityOverview?.province && (
+          <div
+            style={{
+              background: "rgba(250, 247, 242, 0.8)",
+              borderRadius: "12px",
+              padding: "16px",
+              border: "1px solid rgba(200, 182, 166, 0.2)",
+              transition: "all 0.3s ease",
+            }}
+          >
+            <span
+              style={{
+                display: "block",
+                fontSize: "12px",
+                color: "#7d5a50",
+                marginBottom: "6px",
+                fontWeight: "600",
+                textTransform: "uppercase",
+                letterSpacing: "0.5px",
+              }}
+            >
+              Province
+            </span>
+            <span
+              style={{
+                fontSize: "14px",
+                color: "#4a352f",
+                fontWeight: "500",
+                lineHeight: "1.4",
+              }}
+            >
+              {data.entityOverview.province.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+            </span>
+          </div>
+        )}
       </div>
 
       <div
@@ -2441,76 +2474,80 @@ const ProfileSummary = ({ data, onEdit }) => {
         </div>
       </div>
 
-      {/* Transparency & Reporting Section */}
-      <h3
+   {/* Transparency & Reporting Section */}
+<h3
+  style={{
+    fontSize: "16px",
+    fontWeight: "700",
+    color: "#4a352f",
+    marginBottom: "16px",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+  }}
+>
+  <FileCheck size={18} color="#a67c52" />
+  Transparency & Reporting
+</h3>
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    gap: "16px",
+  }}
+>
+  {[
+    { 
+      label: "Stakeholder Reporting Frequency", 
+      value: Array.isArray(data?.governance?.stakeholderReportingFrequency) 
+        ? (data.governance.stakeholderReportingFrequency.length > 0 
+            ? data.governance.stakeholderReportingFrequency.join(", ") 
+            : "Not provided")
+        : (data?.governance?.stakeholderReportingFrequency || "Not provided")
+    },
+    { 
+      label: "Performance Review Cycle", 
+      value: Array.isArray(data?.governance?.performanceReviewCycle)
+        ? (data.governance.performanceReviewCycle.length > 0
+            ? data.governance.performanceReviewCycle.join(", ")
+            : "Not provided")
+        : (data?.governance?.performanceReviewCycle || "Not provided")
+    },
+  ].map((item, i) => (
+    <div
+      key={i}
+      style={{
+        background: "rgba(250, 247, 242, 0.8)",
+        borderRadius: "12px",
+        padding: "16px",
+        border: "1px solid rgba(200, 182, 166, 0.2)",
+      }}
+    >
+      <span
         style={{
-          fontSize: "16px",
-          fontWeight: "700",
+          display: "block",
+          fontSize: "12px",
+          color: "#7d5a50",
+          marginBottom: "6px",
+          fontWeight: "600",
+          textTransform: "uppercase",
+          letterSpacing: "0.5px",
+        }}
+      >
+        {item.label}
+      </span>
+      <span
+        style={{
+          fontSize: "14px",
           color: "#4a352f",
-          marginBottom: "16px",
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
+          fontWeight: "500",
         }}
       >
-        <FileCheck size={18} color="#a67c52" />
-        Transparency & Reporting
-      </h3>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-          gap: "16px",
-        }}
-      >
-        {[
-          { 
-            label: "Stakeholder Reporting Frequency", 
-            value: data?.governance?.stakeholderReportingFrequency && data.governance.stakeholderReportingFrequency.length > 0
-              ? data.governance.stakeholderReportingFrequency.join(", ")
-              : "Not provided"
-          },
-          { 
-            label: "Performance Review Cycle", 
-            value: data?.governance?.performanceReviewCycle && data.governance.performanceReviewCycle.length > 0
-              ? data.governance.performanceReviewCycle.join(", ")
-              : "Not provided"
-          },
-        ].map((item, i) => (
-          <div
-            key={i}
-            style={{
-              background: "rgba(250, 247, 242, 0.8)",
-              borderRadius: "12px",
-              padding: "16px",
-              border: "1px solid rgba(200, 182, 166, 0.2)",
-            }}
-          >
-            <span
-              style={{
-                display: "block",
-                fontSize: "12px",
-                color: "#7d5a50",
-                marginBottom: "6px",
-                fontWeight: "600",
-                textTransform: "uppercase",
-                letterSpacing: "0.5px",
-              }}
-            >
-              {item.label}
-            </span>
-            <span
-              style={{
-                fontSize: "14px",
-                color: "#4a352f",
-                fontWeight: "500",
-              }}
-            >
-              {item.value}
-            </span>
-          </div>
-        ))}
-      </div>
+        {item.value}
+      </span>
+    </div>
+  ))}
+</div>
 
       <div
         style={{
