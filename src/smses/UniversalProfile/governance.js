@@ -78,17 +78,20 @@ const Tooltip = ({ children, content, position = "top" }) => {
   )
 }
 
-// MultiSelect component - matching EntityOverview exactly
-function MultiSelect({ options, selected, onChange, label }) {
+// MultiSelect component - matching EntityOverview exactly with fix
+function MultiSelect({ options, selected = [], onChange, label }) {
   const [isOpen, setIsOpen] = useState(false)
+
+  // Ensure selected is always an array
+  const safeSelected = Array.isArray(selected) ? selected : []
 
   const toggleDropdown = () => setIsOpen(!isOpen)
   const closeDropdown = () => setIsOpen(false)
 
   const handleSelect = (value) => {
-    const newSelected = selected.includes(value) 
-      ? selected.filter((item) => item !== value) 
-      : [...selected, value]
+    const newSelected = safeSelected.includes(value) 
+      ? safeSelected.filter((item) => item !== value) 
+      : [...safeSelected, value]
     onChange(newSelected)
   }
 
@@ -108,9 +111,9 @@ function MultiSelect({ options, selected, onChange, label }) {
           backgroundColor: 'white'
         }}
       >
-        {selected.length > 0 ? (
+        {safeSelected.length > 0 ? (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-            {selected.map((freq) => (
+            {safeSelected.map((freq) => (
               <span 
                 key={freq}
                 style={{
@@ -152,7 +155,7 @@ function MultiSelect({ options, selected, onChange, label }) {
                 style={{
                   padding: '8px',
                   cursor: 'pointer',
-                  backgroundColor: selected.includes(option.value) ? '#f0f0f0' : 'white',
+                  backgroundColor: safeSelected.includes(option.value) ? '#f0f0f0' : 'white',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px'
@@ -160,7 +163,7 @@ function MultiSelect({ options, selected, onChange, label }) {
               >
                 <input
                   type="checkbox"
-                  checked={selected.includes(option.value)}
+                  checked={safeSelected.includes(option.value)}
                   onChange={() => {}}
                   style={{ cursor: 'pointer' }}
                 />
@@ -219,8 +222,18 @@ const Governance = ({ data, updateData }) => {
           if (docSnap.exists()) {
             const userData = docSnap.data()
             if (userData.governance) {
-              setFormData(userData.governance)
-              updateData("governance", userData.governance)
+              // Ensure arrays are properly initialized
+              const governanceData = {
+                ...userData.governance,
+                stakeholderReportingFrequency: Array.isArray(userData.governance.stakeholderReportingFrequency) 
+                  ? userData.governance.stakeholderReportingFrequency 
+                  : [],
+                performanceReviewCycle: Array.isArray(userData.governance.performanceReviewCycle)
+                  ? userData.governance.performanceReviewCycle
+                  : []
+              }
+              setFormData(governanceData)
+              updateData("governance", governanceData)
             } else {
               // Initialize with default structure
               const initialData = {

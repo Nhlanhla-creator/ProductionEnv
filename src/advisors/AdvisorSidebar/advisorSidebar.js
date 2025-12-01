@@ -92,17 +92,18 @@ function AdvisorSidebar({ companyName }) {
       icon: <User size={18} />,
       route: "/advisor-profile",
     },
-    {
-      id: "insights",
-      label: "BIG Insights",
-      icon: <Lightbulb size={18} />,
-      route: "/advisor-insights",
-    },
+   
     {
       id: "matches",
       label: "My Matches",
       icon: <HeartHandshake size={18} />,
       route: "/advisor-dashboard",
+    },
+     {
+      id: "insights",
+      label: "BIG Insights",
+      icon: <Lightbulb size={18} />,
+      route: "/advisor-insights",
     },
     {
       id: "documents",
