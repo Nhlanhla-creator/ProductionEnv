@@ -1246,38 +1246,26 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
                             }}
                           />
                         </div>
-                        <button
-                          onClick={() => handleBigScoreClick(advisor)}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            color: getScoreColor(advisor.bigScore),
-                            textDecoration: "underline",
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "1px",
-                            fontWeight: "600",
-                            fontSize: "0.8rem",
-                          }}
-                        >
-                          {advisor.bigScore}%
-                          <BarChart3 size={8} />
-                        </button>
-                        <button
-                          onClick={() => handleScoreBreakdown(advisor)}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            color: "#666",
-                            textDecoration: "underline",
-                            cursor: "pointer",
-                            fontSize: "0.59rem",
-                            marginTop: "1px",
-                          }}
-                        >
-                          View breakdown
-                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span style={{ 
+                            ...matchScoreStyle, 
+                            color: getScoreColor(advisor.bigScore) 
+                          }}>
+                            {advisor.bigScore}%
+                          </span>
+                          <Eye 
+                            size={14} 
+                            style={{ 
+                              cursor: 'pointer', 
+                              color: getScoreColor(advisor.bigScore) 
+                            }} 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedAdvisor(advisor);
+                              setModalType("bigScoreBreakdown");
+                            }}
+                          />
+                        </div>
                       </div>
                     </td>
                     <td style={tableCellStyle}>
@@ -1379,6 +1367,94 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
               }}>
                 <p style={{ fontSize: '0.875rem', color: '#5D2A0A' }}>
                   This score represents how well this advisor matches your specific needs and criteria.
+                </p>
+              </div>
+            </div>
+            
+            <div style={modalActionsStyle}>
+              <button 
+                onClick={resetModal}
+                style={cancelButtonStyle}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedAdvisor && modalType === "bigScoreBreakdown" && (
+        <div style={modalOverlayStyle} onClick={resetModal}>
+          <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
+            <div style={modalHeaderStyle}>
+              <h3 style={modalTitleStyle}>
+                BIG Score Breakdown - {selectedAdvisor.name}
+              </h3>
+              <button onClick={resetModal} style={modalCloseButtonStyle}>
+                ✖
+              </button>
+            </div>
+            
+            <div style={modalBodyStyle}>
+              <div style={{ marginBottom: '1rem' }}>
+                <p style={{ color: '#5D2A0A', marginBottom: '0.5rem' }}>
+                  BIG Score: {selectedAdvisor.bigScore}%
+                </p>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {Object.entries(bigScoreData).map(([key, data]) => (
+                    <div key={key} style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '0.75rem',
+                      background: '#F5F5F5',
+                      borderRadius: '6px',
+                      color: '#333',
+                      fontSize: '0.875rem',
+                      marginBottom: '0.5rem',
+                      borderLeft: `4px solid ${data.color}`
+                    }}>
+                      <span style={{ fontWeight: '500', textTransform: 'capitalize' }}>
+                        {key === 'pis' ? 'PIS Score' : key}
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{
+                          width: '60px',
+                          height: '6px',
+                          background: '#E0E0E0',
+                          borderRadius: '3px',
+                          overflow: 'hidden'
+                        }}>
+                          <div style={{
+                            width: `${data.score}%`,
+                            height: '100%',
+                            background: data.color,
+                            borderRadius: '3px'
+                          }} />
+                        </div>
+                        <span style={{ 
+                          fontWeight: '600', 
+                          color: data.color,
+                          minWidth: '35px',
+                          textAlign: 'right'
+                        }}>
+                          {data.score}%
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              <div style={{ 
+                background: '#F5EBE0', 
+                padding: '1rem', 
+                borderRadius: '8px',
+                marginTop: '1rem'
+              }}>
+                <p style={{ fontSize: '0.875rem', color: '#5D2A0A' }}>
+                  The BIG Score evaluates advisory readiness across key dimensions: PIS (Performance Indicators), Compliance, Legitimacy, and Fundability.
                 </p>
               </div>
             </div>

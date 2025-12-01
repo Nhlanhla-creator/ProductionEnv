@@ -669,8 +669,13 @@ export default function AdvisorProfile() {
     <div
       className="universal-profile-container"
       style={{
-        padding: `70px 20px 20px ${isSidebarCollapsed ? "100px" : "270px"}`,
-        transition: "padding 0.3s ease",
+        padding: "70px 20px 20px",
+        marginLeft: isSidebarCollapsed ? "100px" : "270px",
+        transition: "margin-left 0.3s ease",
+        width: `calc(100vw - ${isSidebarCollapsed ? "100px" : "270px"})`,
+        boxSizing: "border-box",
+        minHeight: "100vh",
+        backgroundColor: "#f5f7fa",
       }}
     >
       {validationModal.open && (

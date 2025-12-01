@@ -25,32 +25,26 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointEleme
 
 // Status indicator component
 const StatusIndicator = ({ variance, target }) => {
-  // Determine status based on variance
-  // Variance = Actual - Target (so positive means we exceeded target)
-  
   let emoji = "😐"
-  let color = "#FFC107" // yellow
+  let color = "#FFC107"
   
-  // Calculate threshold as 10% of target (or absolute value for small numbers)
   const threshold = Math.max(Math.abs(target) * 0.1, 0.5)
   
   if (variance >= 0) {
-    // Met or exceeded target
     if (Math.abs(variance) <= threshold) {
       emoji = "😐"
-      color = "#FFC107" // yellow - close to target
+      color = "#FFC107"
     } else {
       emoji = "😊"
-      color = "#4CAF50" // green - exceeded target
+      color = "#4CAF50"
     }
   } else {
-    // Below target
     if (Math.abs(variance) <= threshold) {
       emoji = "😐"
-      color = "#FFC107" // yellow - close to target
+      color = "#FFC107"
     } else {
       emoji = "☹️"
-      color = "#F44336" // red - significantly below target
+      color = "#F44336"
     }
   }
 
@@ -70,23 +64,13 @@ const StatusIndicator = ({ variance, target }) => {
 }
 
 // KPI Dashboard Component - Summary of all tabs
-const KPIDashboard = ({ activeSection, isInvestorView, allData }) => {
-  const [selectedMonth, setSelectedMonth] = useState("")
-
-  useEffect(() => {
-    // Set current month as default
-    const now = new Date()
-    const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-    setSelectedMonth(monthStr)
-  }, [])
-
+const KPIDashboard = ({ activeSection, isInvestorView, allData, onCategoryClick }) => {
   const formatValue = (value, decimals = 0) => {
     if (value === null || value === undefined) return "0"
     return Number(value).toFixed(decimals)
   }
 
   const calculateVariance = (target, actual) => {
-    // Variance = Actual - Target
     return actual - target
   }
 
@@ -96,13 +80,12 @@ const KPIDashboard = ({ activeSection, isInvestorView, allData }) => {
 
     // Productivity Category
     if (allData.productivity) {
-      const monthIndex = new Date(selectedMonth + "-01").getMonth()
-      const productivityValue = allData.productivity.productivityData?.[monthIndex] || 0
-      const efficiencyValue = allData.productivity.efficiencyData?.[monthIndex] || 0
+      const productivityValue = allData.productivity.productivityData?.[5] || 0
+      const efficiencyValue = allData.productivity.efficiencyData?.[5] || 0
       
-      // Calculate YTD (average of all months up to selected month)
-      const ytdProdAvg = allData.productivity.productivityData?.slice(0, monthIndex + 1).reduce((a, b) => a + b, 0) / (monthIndex + 1) || 0
-      const ytdEffAvg = allData.productivity.efficiencyData?.slice(0, monthIndex + 1).reduce((a, b) => a + b, 0) / (monthIndex + 1) || 0
+      // Calculate YTD (average of all months)
+      const ytdProdAvg = allData.productivity.productivityData?.reduce((a, b) => a + b, 0) / 6 || 0
+      const ytdEffAvg = allData.productivity.efficiencyData?.reduce((a, b) => a + b, 0) / 6 || 0
 
       rows.push({
         category: "Productivity",
@@ -132,7 +115,7 @@ const KPIDashboard = ({ activeSection, isInvestorView, allData }) => {
           category: "Unit Cost",
           kpi: `${product.name} - Cost`,
           units: "R",
-          thisMonthTarget: product.cost * 0.95, // Assuming 5% cost reduction target
+          thisMonthTarget: product.cost * 0.95,
           thisMonthActual: product.cost,
           ytdTarget: product.cost * 0.95,
           ytdActual: product.cost,
@@ -141,7 +124,7 @@ const KPIDashboard = ({ activeSection, isInvestorView, allData }) => {
           category: "Unit Cost",
           kpi: `${product.name} - Margin`,
           units: "%",
-          thisMonthTarget: 30, // 30% margin target
+          thisMonthTarget: 30,
           thisMonthActual: margin,
           ytdTarget: 30,
           ytdActual: margin,
@@ -171,7 +154,7 @@ const KPIDashboard = ({ activeSection, isInvestorView, allData }) => {
           category: "Tech Stack",
           kpi: `${system.name} - Adoption`,
           units: "%",
-          thisMonthTarget: 90, // 90% adoption target
+          thisMonthTarget: 90,
           thisMonthActual: system.adoption,
           ytdTarget: 90,
           ytdActual: system.adoption,
@@ -180,7 +163,7 @@ const KPIDashboard = ({ activeSection, isInvestorView, allData }) => {
           category: "Tech Stack",
           kpi: `${system.name} - Users`,
           units: "#",
-          thisMonthTarget: 100, // 100 users target
+          thisMonthTarget: 100,
           thisMonthActual: system.users,
           ytdTarget: 100,
           ytdActual: system.users,
@@ -195,7 +178,7 @@ const KPIDashboard = ({ activeSection, isInvestorView, allData }) => {
           category: "Process Automation",
           kpi: process.name,
           units: "%",
-          thisMonthTarget: 80, // 80% automation target
+          thisMonthTarget: 80,
           thisMonthActual: process.automation,
           ytdTarget: 80,
           ytdActual: process.automation,
@@ -205,12 +188,11 @@ const KPIDashboard = ({ activeSection, isInvestorView, allData }) => {
 
     // Customer Retention Category
     if (allData.customerRetention) {
-      const monthIndex = new Date(selectedMonth + "-01").getMonth()
-      const retentionValue = allData.customerRetention.retentionData?.[monthIndex] || 0
-      const churnValue = allData.customerRetention.churnData?.[monthIndex] || 0
+      const retentionValue = allData.customerRetention.retentionData?.[5] || 0
+      const churnValue = allData.customerRetention.churnData?.[5] || 0
       
-      const ytdRetAvg = allData.customerRetention.retentionData?.slice(0, monthIndex + 1).reduce((a, b) => a + b, 0) / (monthIndex + 1) || 0
-      const ytdChurnAvg = allData.customerRetention.churnData?.slice(0, monthIndex + 1).reduce((a, b) => a + b, 0) / (monthIndex + 1) || 0
+      const ytdRetAvg = allData.customerRetention.retentionData?.reduce((a, b) => a + b, 0) / 6 || 0
+      const ytdChurnAvg = allData.customerRetention.churnData?.reduce((a, b) => a + b, 0) / 6 || 0
 
       rows.push({
         category: "Customer Retention",
@@ -229,6 +211,21 @@ const KPIDashboard = ({ activeSection, isInvestorView, allData }) => {
         thisMonthActual: churnValue,
         ytdTarget: 15,
         ytdActual: ytdChurnAvg,
+      })
+    }
+
+    // Custom KPIs
+    if (allData.customKPIs) {
+      allData.customKPIs.forEach(kpi => {
+        rows.push({
+          category: "Custom KPIs",
+          kpi: kpi.name,
+          units: kpi.units || "",
+          thisMonthTarget: kpi.target || 0,
+          thisMonthActual: kpi.actual || 0,
+          ytdTarget: kpi.target || 0,
+          ytdActual: kpi.actual || 0,
+        })
       })
     }
 
@@ -272,9 +269,24 @@ const KPIDashboard = ({ activeSection, isInvestorView, allData }) => {
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = `kpi-dashboard-${selectedMonth}.csv`
+    a.download = `kpi-dashboard.csv`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  const handleCategoryClick = (category) => {
+    if (onCategoryClick) {
+      const sectionMap = {
+        "Productivity": "productivity",
+        "Unit Cost": "unit-cost",
+        "Order Fulfillment": "order-fulfillment",
+        "Tech Stack": "tech-stack",
+        "Process Automation": "process-automation",
+        "Customer Retention": "customer-retention",
+        "Custom KPIs": "custom-kpis"
+      }
+      onCategoryClick(sectionMap[category] || category.toLowerCase())
+    }
   }
 
   if (activeSection !== "kpi-dashboard") return null
@@ -292,20 +304,7 @@ const KPIDashboard = ({ activeSection, isInvestorView, allData }) => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <div>
           <h2 style={{ color: "#4a352f", marginTop: 0, marginBottom: "10px" }}>KPI Dashboard Summary</h2>
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            <label style={{ color: "#7d5a50", fontWeight: "600" }}>Selected Month:</label>
-            <input
-              type="month"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              style={{
-                padding: "6px 10px",
-                border: "1px solid #d4c4b0",
-                borderRadius: "4px",
-                fontSize: "14px",
-              }}
-            />
-          </div>
+          <p style={{ color: "#7d5a50", margin: 0 }}>Current Month: June 2024</p>
         </div>
         <button
           onClick={handleDownloadCSV}
@@ -414,7 +413,11 @@ const KPIDashboard = ({ activeSection, isInvestorView, allData }) => {
                               borderRight: "2px solid #999",
                               backgroundColor: categoryIndex % 2 === 0 ? "#e6d7c3" : "#d4c4b0",
                               verticalAlign: "top",
+                              cursor: "pointer",
+                              textDecoration: "underline",
                             }}
+                            onClick={() => handleCategoryClick(category)}
+                            title={`Click to navigate to ${category} tab`}
                           >
                             {category}
                           </td>
@@ -462,7 +465,588 @@ const KPIDashboard = ({ activeSection, isInvestorView, allData }) => {
   )
 }
 
-// Productivity Measures Component
+// Custom KPIs Component
+const CustomKPIs = ({ activeSection, isInvestorView, onDataChange }) => {
+  const [customKPIs, setCustomKPIs] = useState([])
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [showEditForm, setShowEditForm] = useState(false)
+  const [currentUser, setCurrentUser] = useState(null)
+  const [newKPI, setNewKPI] = useState({
+    name: "",
+    units: "",
+    target: 0,
+    actual: 0,
+    displayType: "chart",
+    data: [],
+    description: ""
+  })
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setCurrentUser(user)
+        loadCustomKPIs(user.uid)
+      } else {
+        setCurrentUser(null)
+      }
+    })
+
+    return () => unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    if (onDataChange) {
+      onDataChange('customKPIs', customKPIs)
+    }
+  }, [customKPIs])
+
+  const loadCustomKPIs = async (userId) => {
+    try {
+      const docRef = doc(db, "custom-kpis", userId)
+      const docSnap = await getDoc(docRef)
+      if (docSnap.exists()) {
+        setCustomKPIs(docSnap.data().kpis || [])
+      }
+    } catch (error) {
+      console.error("Error loading custom KPIs:", error)
+    }
+  }
+
+  const saveCustomKPIs = async () => {
+    if (isInvestorView) {
+      alert("You are in investor view mode. You cannot edit SME data.")
+      return
+    }
+
+    if (!currentUser) {
+      alert("User not authenticated")
+      return
+    }
+
+    try {
+      await setDoc(doc(db, "custom-kpis", currentUser.uid), {
+        kpis: customKPIs,
+        userId: currentUser.uid,
+      })
+      alert("Custom KPIs saved successfully!")
+    } catch (error) {
+      console.error("Error saving custom KPIs:", error)
+      alert("Error saving data")
+    }
+  }
+
+  const addNewKPI = () => {
+    if (!newKPI.name.trim()) {
+      alert("Please enter a KPI name")
+      return
+    }
+
+    const newKpiData = {
+      ...newKPI,
+      id: Date.now().toString(),
+      data: newKPI.displayType === "chart" ? Array(6).fill(0) : []
+    }
+
+    setCustomKPIs([...customKPIs, newKpiData])
+    setNewKPI({
+      name: "",
+      units: "",
+      target: 0,
+      actual: 0,
+      displayType: "chart",
+      data: [],
+      description: ""
+    })
+    setShowAddForm(false)
+  }
+
+  const updateKPI = (index, field, value) => {
+    const newKPIs = [...customKPIs]
+    if (field === "data") {
+      const dataIndex = value.index
+      const dataValue = value.value
+      newKPIs[index].data[dataIndex] = Number.parseFloat(dataValue) || 0
+    } else {
+      newKPIs[index][field] = field === "name" || field === "units" || field === "description" 
+        ? value 
+        : Number.parseFloat(value) || 0
+    }
+    setCustomKPIs(newKPIs)
+  }
+
+  const removeKPI = (index) => {
+    const newKPIs = customKPIs.filter((_, i) => i !== index)
+    setCustomKPIs(newKPIs)
+  }
+
+  const handleDownload = () => {
+    const csvContent = [
+      ["KPI Name", "Units", "Target", "Actual", "Display Type", "Description"],
+      ...customKPIs.map(kpi => [
+        kpi.name,
+        kpi.units,
+        kpi.target,
+        kpi.actual,
+        kpi.displayType,
+        kpi.description
+      ]),
+    ]
+      .map((row) => row.join(","))
+      .join("\n")
+
+    const blob = new Blob([csvContent], { type: "text/csv" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "custom-kpis.csv"
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  if (activeSection !== "custom-kpis") return null
+
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
+
+  return (
+    <div
+      style={{
+        backgroundColor: "#fdfcfb",
+        padding: "20px",
+        margin: "20px 0",
+        borderRadius: "8px",
+        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Custom KPIs</h2>
+        {!isInvestorView && (
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button
+              onClick={handleDownload}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#a67c52",
+                color: "#faf7f2",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
+            >
+              Download CSV
+            </button>
+            <button
+              onClick={() => setShowAddForm(!showAddForm)}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#4a352f",
+                color: "#faf7f2",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
+            >
+              {showAddForm ? "Cancel" : "Add New KPI"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {showAddForm && (
+        <div
+          style={{
+            backgroundColor: "#f5f0e1",
+            padding: "20px",
+            borderRadius: "6px",
+            marginBottom: "20px",
+          }}
+        >
+          <h3 style={{ color: "#7d5a50", marginTop: 0 }}>Add New KPI</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+            <div>
+              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>KPI Name</label>
+              <input
+                type="text"
+                value={newKPI.name}
+                onChange={(e) => setNewKPI({...newKPI, name: e.target.value})}
+                style={{
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                  width: "100%",
+                }}
+                placeholder="Enter KPI name"
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Units of Measure</label>
+              <input
+                type="text"
+                value={newKPI.units}
+                onChange={(e) => setNewKPI({...newKPI, units: e.target.value})}
+                style={{
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                  width: "100%",
+                }}
+                placeholder="e.g., %, R, index"
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Target Value</label>
+              <input
+                type="number"
+                value={newKPI.target}
+                onChange={(e) => setNewKPI({...newKPI, target: Number.parseFloat(e.target.value) || 0})}
+                style={{
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                  width: "100%",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Actual Value</label>
+              <input
+                type="number"
+                value={newKPI.actual}
+                onChange={(e) => setNewKPI({...newKPI, actual: Number.parseFloat(e.target.value) || 0})}
+                style={{
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                  width: "100%",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Display Type</label>
+              <select
+                value={newKPI.displayType}
+                onChange={(e) => setNewKPI({...newKPI, displayType: e.target.value})}
+                style={{
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                  width: "100%",
+                }}
+              >
+                <option value="chart">Chart</option>
+                <option value="metric">Metric Card</option>
+                <option value="progress">Progress Bar</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Description</label>
+              <input
+                type="text"
+                value={newKPI.description}
+                onChange={(e) => setNewKPI({...newKPI, description: e.target.value})}
+                style={{
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                  width: "100%",
+                }}
+                placeholder="Optional description"
+              />
+            </div>
+          </div>
+          <button
+            onClick={addNewKPI}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#16a34a",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              marginTop: "15px",
+            }}
+          >
+            Add KPI
+          </button>
+        </div>
+      )}
+
+      {customKPIs.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "40px", color: "#72542b" }}>
+          <p>No custom KPIs added yet. Click "Add New KPI" to create your first custom KPI.</p>
+        </div>
+      ) : (
+        <>
+          {!isInvestorView && (
+            <div style={{ marginBottom: "20px", textAlign: "right" }}>
+              <button
+                onClick={() => setShowEditForm(!showEditForm)}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#72542b",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                }}
+              >
+                {showEditForm ? "Hide Edit Mode" : "Edit KPIs"}
+              </button>
+            </div>
+          )}
+
+          {showEditForm && (
+            <div
+              style={{
+                backgroundColor: "#f5f0e1",
+                padding: "20px",
+                borderRadius: "6px",
+                marginBottom: "20px",
+              }}
+            >
+              <h3 style={{ color: "#7d5a50", marginTop: 0 }}>Edit KPIs</h3>
+              {customKPIs.map((kpi, index) => (
+                <div
+                  key={kpi.id}
+                  style={{
+                    backgroundColor: "#fdfcfb",
+                    padding: "15px",
+                    borderRadius: "6px",
+                    marginBottom: "15px",
+                  }}
+                >
+                  <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr auto", gap: "10px", alignItems: "center" }}>
+                    <input
+                      type="text"
+                      value={kpi.name}
+                      onChange={(e) => updateKPI(index, "name", e.target.value)}
+                      style={{
+                        padding: "8px",
+                        border: "1px solid #d4c4b0",
+                        borderRadius: "4px",
+                      }}
+                    />
+                    <input
+                      type="text"
+                      value={kpi.units}
+                      onChange={(e) => updateKPI(index, "units", e.target.value)}
+                      style={{
+                        padding: "8px",
+                        border: "1px solid #d4c4b0",
+                        borderRadius: "4px",
+                      }}
+                    />
+                    <input
+                      type="number"
+                      value={kpi.target}
+                      onChange={(e) => updateKPI(index, "target", e.target.value)}
+                      style={{
+                        padding: "8px",
+                        border: "1px solid #d4c4b0",
+                        borderRadius: "4px",
+                      }}
+                    />
+                    <input
+                      type="number"
+                      value={kpi.actual}
+                      onChange={(e) => updateKPI(index, "actual", e.target.value)}
+                      style={{
+                        padding: "8px",
+                        border: "1px solid #d4c4b0",
+                        borderRadius: "4px",
+                      }}
+                    />
+                    <select
+                      value={kpi.displayType}
+                      onChange={(e) => updateKPI(index, "displayType", e.target.value)}
+                      style={{
+                        padding: "8px",
+                        border: "1px solid #d4c4b0",
+                        borderRadius: "4px",
+                      }}
+                    >
+                      <option value="chart">Chart</option>
+                      <option value="metric">Metric Card</option>
+                      <option value="progress">Progress Bar</option>
+                    </select>
+                    <button
+                      onClick={() => removeKPI(index)}
+                      style={{
+                        padding: "8px",
+                        backgroundColor: "#dc2626",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "4px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  {kpi.displayType === "chart" && (
+                    <div style={{ marginTop: "10px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                        {months.map((month, monthIndex) => (
+                          <div key={monthIndex} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                            <span style={{ color: "#7d5a50", fontSize: "12px" }}>{month}:</span>
+                            <input
+                              type="number"
+                              value={kpi.data[monthIndex] || 0}
+                              onChange={(e) => updateKPI(index, "data", {index: monthIndex, value: e.target.value})}
+                              style={{
+                                padding: "4px",
+                                border: "1px solid #d4c4b0",
+                                borderRadius: "4px",
+                                width: "60px",
+                              }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ marginTop: "10px" }}>
+                    <input
+                      type="text"
+                      value={kpi.description || ""}
+                      onChange={(e) => updateKPI(index, "description", e.target.value)}
+                      placeholder="Description"
+                      style={{
+                        padding: "8px",
+                        border: "1px solid #d4c4b0",
+                        borderRadius: "4px",
+                        width: "100%",
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+              <button
+                onClick={saveCustomKPIs}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#16a34a",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  marginTop: "10px",
+                }}
+              >
+                Save Changes
+              </button>
+            </div>
+          )}
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
+            {customKPIs.map((kpi, index) => (
+              <div
+                key={kpi.id}
+                style={{
+                  backgroundColor: "#f5f0e1",
+                  padding: "15px",
+                  borderRadius: "6px",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: "10px" }}>
+                  <div>
+                    <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "5px" }}>{kpi.name}</h3>
+                    {kpi.description && (
+                      <p style={{ color: "#72542b", fontSize: "12px", margin: 0 }}>{kpi.description}</p>
+                    )}
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ color: "#4a352f", fontWeight: "bold", fontSize: "18px" }}>
+                      {kpi.actual} {kpi.units}
+                    </div>
+                    <div style={{ color: "#7d5a50", fontSize: "12px" }}>
+                      Target: {kpi.target} {kpi.units}
+                    </div>
+                  </div>
+                </div>
+
+                {kpi.displayType === "chart" && (
+                  <div style={{ height: "150px", marginTop: "15px" }}>
+                    <Line
+                      data={{
+                        labels: months,
+                        datasets: [
+                          {
+                            label: kpi.name,
+                            data: kpi.data || Array(6).fill(0),
+                            borderColor: "#a67c52",
+                            backgroundColor: "rgba(166, 124, 82, 0.1)",
+                            borderWidth: 2,
+                            tension: 0.1,
+                            fill: true,
+                          },
+                        ],
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: {
+                            display: false,
+                          },
+                        },
+                        scales: {
+                          y: {
+                            beginAtZero: true,
+                          },
+                        },
+                      }}
+                    />
+                  </div>
+                )}
+
+                {kpi.displayType === "metric" && (
+                  <div style={{ textAlign: "center", padding: "20px 0" }}>
+                    <div style={{ fontSize: "36px", fontWeight: "bold", color: "#4a352f" }}>
+                      {kpi.actual} {kpi.units}
+                    </div>
+                    <div style={{ color: "#7d5a50", fontSize: "14px", marginTop: "5px" }}>
+                      vs Target: {kpi.target} {kpi.units}
+                    </div>
+                  </div>
+                )}
+
+                {kpi.displayType === "progress" && (
+                  <div style={{ marginTop: "15px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                      <span style={{ color: "#7d5a50" }}>Progress</span>
+                      <span style={{ color: "#4a352f", fontWeight: "bold" }}>
+                        {kpi.target > 0 ? Math.min(100, (kpi.actual / kpi.target) * 100).toFixed(1) : 0}%
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        height: "10px",
+                        backgroundColor: "#e6d7c3",
+                        borderRadius: "5px",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${kpi.target > 0 ? Math.min(100, (kpi.actual / kpi.target) * 100) : 0}%`,
+                          height: "100%",
+                          backgroundColor: kpi.actual >= kpi.target ? "#4CAF50" : "#FF9800",
+                          borderRadius: "5px",
+                        }}
+                      ></div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// Productivity Measures Component (unchanged but included for completeness)
 const ProductivityMeasures = ({ activeSection, isInvestorView, onDataChange }) => {
   const [productivityData, setProductivityData] = useState([0, 0, 0, 0, 0, 0])
   const [efficiencyData, setEfficiencyData] = useState([0, 0, 0, 0, 0, 0])
@@ -484,7 +1068,6 @@ const ProductivityMeasures = ({ activeSection, isInvestorView, onDataChange }) =
   }, [])
 
   useEffect(() => {
-    // Notify parent of data changes
     if (onDataChange) {
       onDataChange('productivity', { productivityData, efficiencyData })
     }
@@ -714,7 +1297,7 @@ const ProductivityMeasures = ({ activeSection, isInvestorView, onDataChange }) =
   )
 }
 
-// Unit Cost Component
+// Unit Cost Component (unchanged but included for completeness)
 const UnitCost = ({ activeSection, isInvestorView, onDataChange }) => {
   const [products, setProducts] = useState([])
   const [showEditForm, setShowEditForm] = useState(false)
@@ -734,7 +1317,6 @@ const UnitCost = ({ activeSection, isInvestorView, onDataChange }) => {
   }, [])
 
   useEffect(() => {
-    // Notify parent of data changes
     if (onDataChange) {
       onDataChange('unitCost', { products })
     }
@@ -1018,7 +1600,7 @@ const UnitCost = ({ activeSection, isInvestorView, onDataChange }) => {
   )
 }
 
-// Order Fulfillment Component
+// Order Fulfillment Component (unchanged but included for completeness)
 const OrderFulfillment = ({ activeSection, isInvestorView, onDataChange }) => {
   const [metrics, setMetrics] = useState([])
   const [showEditForm, setShowEditForm] = useState(false)
@@ -1038,7 +1620,6 @@ const OrderFulfillment = ({ activeSection, isInvestorView, onDataChange }) => {
   }, [])
 
   useEffect(() => {
-    // Notify parent of data changes
     if (onDataChange) {
       onDataChange('orderFulfillment', { metrics })
     }
@@ -1305,7 +1886,6 @@ const OrderFulfillment = ({ activeSection, isInvestorView, onDataChange }) => {
                 }}
               >
                 <svg width="120" height="120" style={{ transform: "rotate(-90deg)" }}>
-                  {/* Background circle */}
                   <circle
                     cx="60"
                     cy="60"
@@ -1314,7 +1894,6 @@ const OrderFulfillment = ({ activeSection, isInvestorView, onDataChange }) => {
                     stroke="#e8ddd4"
                     strokeWidth="12"
                   />
-                  {/* Progress circle */}
                   <circle
                     cx="60"
                     cy="60"
@@ -1366,7 +1945,7 @@ const OrderFulfillment = ({ activeSection, isInvestorView, onDataChange }) => {
   )
 }
 
-// Tech Stack Component
+// Tech Stack Component (unchanged but included for completeness)
 const TechStackUsage = ({ activeSection, isInvestorView, onDataChange }) => {
   const [systems, setSystems] = useState([])
   const [showEditForm, setShowEditForm] = useState(false)
@@ -1386,7 +1965,6 @@ const TechStackUsage = ({ activeSection, isInvestorView, onDataChange }) => {
   }, [])
 
   useEffect(() => {
-    // Notify parent of data changes
     if (onDataChange) {
       onDataChange('techStack', { systems })
     }
@@ -1705,7 +2283,7 @@ const TechStackUsage = ({ activeSection, isInvestorView, onDataChange }) => {
   )
 }
 
-// Process Automation Component
+// Process Automation Component (unchanged but included for completeness)
 const ProcessAutomation = ({ activeSection, isInvestorView, onDataChange }) => {
   const [processes, setProcesses] = useState([])
   const [showEditForm, setShowEditForm] = useState(false)
@@ -1725,7 +2303,6 @@ const ProcessAutomation = ({ activeSection, isInvestorView, onDataChange }) => {
   }, [])
 
   useEffect(() => {
-    // Notify parent of data changes
     if (onDataChange) {
       onDataChange('processAutomation', { processes })
     }
@@ -2040,7 +2617,7 @@ const ProcessAutomation = ({ activeSection, isInvestorView, onDataChange }) => {
   )
 }
 
-// Customer Retention Component
+// Customer Retention Component (unchanged but included for completeness)
 const CustomerRetention = ({ activeSection, isInvestorView, onDataChange }) => {
   const [retentionData, setRetentionData] = useState([0, 0, 0, 0, 0, 0])
   const [churnData, setChurnData] = useState([0, 0, 0, 0, 0, 0])
@@ -2062,7 +2639,6 @@ const CustomerRetention = ({ activeSection, isInvestorView, onDataChange }) => {
   }, [])
 
   useEffect(() => {
-    // Notify parent of data changes
     if (onDataChange) {
       onDataChange('customerRetention', { retentionData, churnData })
     }
@@ -2321,6 +2897,7 @@ const OperationalStrength = () => {
     techStack: null,
     processAutomation: null,
     customerRetention: null,
+    customKPIs: null,
   })
 
   const [isInvestorView, setIsInvestorView] = useState(false)
@@ -2336,7 +2913,6 @@ const OperationalStrength = () => {
       setIsInvestorView(true)
       setViewingSMEId(smeId)
       setViewingSMEName(smeName || "SME")
-      console.log("Investor view mode activated for SME:", smeId)
     }
   }, [])
 
@@ -2370,6 +2946,14 @@ const OperationalStrength = () => {
     }))
   }
 
+  const handleCategoryClick = (section) => {
+    setActiveSection(section)
+    // Scroll to the section
+    setTimeout(() => {
+      document.querySelector(`[data-section="${section}"]`)?.scrollIntoView({ behavior: 'smooth' })
+    }, 100)
+  }
+
   const getContentStyles = () => ({
     width: "100%",
     marginLeft: "0",
@@ -2388,6 +2972,7 @@ const OperationalStrength = () => {
     { id: "tech-stack", label: "Tech Stack" },
     { id: "process-automation", label: "Process Automation" },
     { id: "customer-retention", label: "Customer Retention" },
+    { id: "custom-kpis", label: "Add KPI" },
   ]
 
   return (
@@ -2478,42 +3063,71 @@ const OperationalStrength = () => {
             ))}
           </div>
 
-          <KPIDashboard 
-            activeSection={activeSection} 
-            isInvestorView={isInvestorView} 
-            viewingSMEId={viewingSMEId}
-            allData={allData}
-          />
-          <ProductivityMeasures 
-            activeSection={activeSection} 
-            isInvestorView={isInvestorView}
-            onDataChange={handleDataChange}
-          />
-          <UnitCost 
-            activeSection={activeSection} 
-            isInvestorView={isInvestorView}
-            onDataChange={handleDataChange}
-          />
-          <OrderFulfillment 
-            activeSection={activeSection} 
-            isInvestorView={isInvestorView}
-            onDataChange={handleDataChange}
-          />
-          <TechStackUsage 
-            activeSection={activeSection} 
-            isInvestorView={isInvestorView}
-            onDataChange={handleDataChange}
-          />
-          <ProcessAutomation 
-            activeSection={activeSection} 
-            isInvestorView={isInvestorView}
-            onDataChange={handleDataChange}
-          />
-          <CustomerRetention 
-            activeSection={activeSection} 
-            isInvestorView={isInvestorView}
-            onDataChange={handleDataChange}
-          />
+          <div data-section="kpi-dashboard">
+            <KPIDashboard 
+              activeSection={activeSection} 
+              isInvestorView={isInvestorView} 
+              viewingSMEId={viewingSMEId}
+              allData={allData}
+              onCategoryClick={handleCategoryClick}
+            />
+          </div>
+          
+          <div data-section="productivity">
+            <ProductivityMeasures 
+              activeSection={activeSection} 
+              isInvestorView={isInvestorView}
+              onDataChange={handleDataChange}
+            />
+          </div>
+          
+          <div data-section="unit-cost">
+            <UnitCost 
+              activeSection={activeSection} 
+              isInvestorView={isInvestorView}
+              onDataChange={handleDataChange}
+            />
+          </div>
+          
+          <div data-section="order-fulfillment">
+            <OrderFulfillment 
+              activeSection={activeSection} 
+              isInvestorView={isInvestorView}
+              onDataChange={handleDataChange}
+            />
+          </div>
+          
+          <div data-section="tech-stack">
+            <TechStackUsage 
+              activeSection={activeSection} 
+              isInvestorView={isInvestorView}
+              onDataChange={handleDataChange}
+            />
+          </div>
+          
+          <div data-section="process-automation">
+            <ProcessAutomation 
+              activeSection={activeSection} 
+              isInvestorView={isInvestorView}
+              onDataChange={handleDataChange}
+            />
+          </div>
+          
+          <div data-section="customer-retention">
+            <CustomerRetention 
+              activeSection={activeSection} 
+              isInvestorView={isInvestorView}
+              onDataChange={handleDataChange}
+            />
+          </div>
+          
+          <div data-section="custom-kpis">
+            <CustomKPIs 
+              activeSection={activeSection} 
+              isInvestorView={isInvestorView}
+              onDataChange={handleDataChange}
+            />
+          </div>
         </div>
       </div>
     </div>

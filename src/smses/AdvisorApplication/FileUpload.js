@@ -100,29 +100,29 @@ export default function FileUpload({
 
   const styles = {
     container: {
-      marginBottom: '1rem',
-      maxWidth: '500px',
+      marginBottom: '0.5rem',
+      maxWidth: '240px',
       width: '100%'
     },
     label: {
       display: 'block',
-      fontSize: '0.875rem',
+      fontSize: '0.6875rem',
       fontWeight: '500',
       color: '#8B4513',
-      marginBottom: '0.5rem'
+      marginBottom: '0.25rem'
     },
     required: {
       color: '#EF4444'
     },
     dropZone: {
-      border: `2px dashed ${isDragging ? '#8B4513' : '#D2B48C'}`,
-      borderRadius: '8px',
-      padding: '0.75rem',
+      border: `1.5px dashed ${isDragging ? '#8B4513' : '#D2B48C'}`,
+      borderRadius: '6px',
+      padding: '0.375rem',
       textAlign: 'center',
       cursor: isUploading ? 'not-allowed' : 'pointer',
       transition: 'all 0.3s ease',
       backgroundColor: isDragging ? '#F5F5DC' : isUploading ? '#F8F8F8' : 'transparent',
-      minHeight: '70px',
+      minHeight: '38px',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
@@ -137,51 +137,51 @@ export default function FileUpload({
       display: 'none'
     },
     uploadIcon: {
-      width: '1.5rem',
-      height: '1.5rem',
+      width: '0.875rem',
+      height: '0.875rem',
       color: '#A0522D',
-      marginBottom: '0.25rem'
+      marginBottom: '0.125rem'
     },
     loadingIcon: {
-      width: '1.5rem',
-      height: '1.5rem',
+      width: '0.875rem',
+      height: '0.875rem',
       color: '#8B4513',
-      marginBottom: '0.25rem',
+      marginBottom: '0.125rem',
       animation: 'spin 1s linear infinite'
     },
     dragText: {
-      marginTop: '0.25rem',
-      fontSize: '0.75rem',
+      marginTop: '0',
+      fontSize: '0.625rem',
       color: '#8B4513',
-      lineHeight: '1.2'
+      lineHeight: '1.1'
     },
     formatText: {
-      fontSize: '0.625rem',
+      fontSize: '0.5rem',
       color: '#A0522D',
-      marginTop: '0.25rem'
+      marginTop: '0.125rem'
     },
     filesContainer: {
-      marginTop: '0.75rem'
+      marginTop: '0.375rem'
     },
     filesLabel: {
-      fontSize: '0.75rem',
+      fontSize: '0.625rem',
       fontWeight: '500',
       color: '#8B4513',
-      marginBottom: '0.5rem'
+      marginBottom: '0.25rem'
     },
     filesList: {
       display: 'flex',
       flexDirection: 'column',
-      gap: '0.25rem'
+      gap: '0.1875rem'
     },
     fileItem: {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
       backgroundColor: '#F5F5DC',
-      padding: '0.5rem',
+      padding: '0.25rem 0.375rem',
       borderRadius: '4px',
-      fontSize: '0.75rem',
+      fontSize: '0.625rem',
       opacity: isUploading ? 0.6 : 1
     },
     fileInfo: {
@@ -190,10 +190,10 @@ export default function FileUpload({
       minWidth: 0
     },
     fileIcon: {
-      width: '1rem',
-      height: '1rem',
+      width: '0.75rem',
+      height: '0.75rem',
       color: '#A0522D',
-      marginRight: '0.5rem',
+      marginRight: '0.25rem',
       flexShrink: 0
     },
     fileName: {
@@ -206,15 +206,17 @@ export default function FileUpload({
     removeButton: {
       color: '#A0522D',
       cursor: isUploading ? 'not-allowed' : 'pointer',
-      padding: '0.125rem',
+      padding: '0.0625rem',
       borderRadius: '2px',
       transition: 'color 0.2s ease',
       flexShrink: 0,
-      opacity: isUploading ? 0.5 : 1
+      opacity: isUploading ? 0.5 : 1,
+      background: 'none',
+      border: 'none'
     },
     removeIcon: {
-      width: '1rem',
-      height: '1rem'
+      width: '0.75rem',
+      height: '0.75rem'
     }
   }
 
@@ -269,12 +271,12 @@ export default function FileUpload({
         {isUploading ? (
           <>
             <Loader2 style={styles.loadingIcon} className="animate-spin" />
-            <p style={styles.dragText}>Uploading files...</p>
+            <p style={styles.dragText}>Uploading...</p>
           </>
         ) : (
           <>
             <Upload style={styles.uploadIcon} />
-            <p style={styles.dragText}>Drag files or click to select</p>
+            <p style={styles.dragText}>Drop or click</p>
             <p style={styles.formatText}>{accept.replace(/\./g, "").replace(/,/g, ", ")}</p>
           </>
         )}
