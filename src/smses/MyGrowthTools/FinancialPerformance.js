@@ -2538,16 +2538,44 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
           <div
             style={{
               display: "flex",
-              justifyContent: "center",
+              justifyContent: "space-between",
+              alignItems: "center",
               marginBottom: "20px",
+              flexWrap: "wrap",
+              gap: "15px",
             }}
           >
+            <div
+              style={{
+                display: "flex",
+                gap: "15px",
+                alignItems: "center",
+              }}
+            >
+              <button
+                onClick={() => onMonthChange(viewMode === "month" ? "quarter" : viewMode === "quarter" ? "year" : "month")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                  fontSize: "14px",
+                  transition: "all 0.3s ease",
+                }}
+              >
+                {viewMode === "month" ? "Monthly View" : viewMode === "quarter" ? "Quarterly View" : "Yearly View"}
+              </button>
+            </div>
+
             {!isInvestorView && (
               <button
                 onClick={handleAddHealthDetails}
                 style={{
                   padding: "10px 20px",
-                  backgroundColor: "#5d4037",
+                  backgroundColor: "#8b6914",
                   color: "#fdfcfb",
                   border: "none",
                   borderRadius: "6px",
@@ -2556,7 +2584,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
                   fontSize: "14px",
                 }}
               >
-                Add Balance Sheet Health Details
+                Add KPI
               </button>
             )}
           </div>
@@ -3308,6 +3336,10 @@ const FinancialPerformance = () => {
     window.location.href = "/my-cohorts"
   }
 
+  const handleViewModeToggle = (newViewMode) => {
+    setViewMode(newViewMode)
+  }
+
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
       <Sidebar />
@@ -3396,73 +3428,76 @@ const FinancialPerformance = () => {
             ))}
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "20px",
-              flexWrap: "wrap",
-              gap: "15px",
-            }}
-          >
+          {/* View mode buttons - show for P&L Snapshot, Cashflow Trends, and Balance Sheet */}
+          {(activeSection === "pnl-snapshot" || activeSection === "cashflow-trends" || activeSection === "balance-sheet") && (
             <div
               style={{
                 display: "flex",
-                gap: "15px",
+                justifyContent: "space-between",
                 alignItems: "center",
+                marginBottom: "20px",
+                flexWrap: "wrap",
+                gap: "15px",
               }}
             >
-              <button
-                onClick={() => setViewMode("month")}
+              <div
                 style={{
-                  padding: "8px 16px",
-                  backgroundColor: viewMode === "month" ? "#5d4037" : "#e8ddd4",
-                  color: viewMode === "month" ? "#fdfcfb" : "#5d4037",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                  fontSize: "14px",
-                  transition: "all 0.3s ease",
+                  display: "flex",
+                  gap: "15px",
+                  alignItems: "center",
                 }}
               >
-                Monthly View
-              </button>
-              <button
-                onClick={() => setViewMode("quarter")}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: viewMode === "quarter" ? "#5d4037" : "#e8ddd4",
-                  color: viewMode === "quarter" ? "#fdfcfb" : "#5d4037",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                  fontSize: "14px",
-                  transition: "all 0.3s ease",
-                }}
-              >
-                Quarterly View
-              </button>
-              <button
-                onClick={() => setViewMode("year")}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: viewMode === "year" ? "#5d4037" : "#e8ddd4",
-                  color: viewMode === "year" ? "#fdfcfb" : "#5d4037",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                  fontSize: "14px",
-                  transition: "all 0.3s ease",
-                }}
-              >
-                Yearly View
-              </button>
+                <button
+                  onClick={() => handleViewModeToggle("month")}
+                  style={{
+                    padding: "8px 16px",
+                    backgroundColor: viewMode === "month" ? "#5d4037" : "#e8ddd4",
+                    color: viewMode === "month" ? "#fdfcfb" : "#5d4037",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontWeight: "500",
+                    fontSize: "14px",
+                    transition: "all 0.3s ease",
+                  }}
+                >
+                  Monthly View
+                </button>
+                <button
+                  onClick={() => handleViewModeToggle("quarter")}
+                  style={{
+                    padding: "8px 16px",
+                    backgroundColor: viewMode === "quarter" ? "#5d4037" : "#e8ddd4",
+                    color: viewMode === "quarter" ? "#fdfcfb" : "#5d4037",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontWeight: "500",
+                    fontSize: "14px",
+                    transition: "all 0.3s ease",
+                  }}
+                >
+                  Quarterly View
+                </button>
+                <button
+                  onClick={() => handleViewModeToggle("year")}
+                  style={{
+                    padding: "8px 16px",
+                    backgroundColor: viewMode === "year" ? "#5d4037" : "#e8ddd4",
+                    color: viewMode === "year" ? "#fdfcfb" : "#5d4037",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontWeight: "500",
+                    fontSize: "14px",
+                    transition: "all 0.3s ease",
+                  }}
+                >
+                  Yearly View
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
           <PnLSnapshot
             activeSection={activeSection}
