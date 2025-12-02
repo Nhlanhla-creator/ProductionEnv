@@ -488,7 +488,7 @@ if (section) {
 
   const handleSaveSection = async () => {
     await saveDataToFirebase(activeSection)
-
+    alert("Section saved to Firebase!")
   }
 const handleSaveAndContinue = async () => {
   const sectionData = formData[activeSection] || {};
@@ -558,9 +558,9 @@ const handleSaveAndContinue = async () => {
 
       setIsEditing(false) // Reset editing state
       window.scrollTo(0, 0)
-    
+      console.log("Submitted:", formData)
     } catch (err) {
-     
+      console.error("Failed to submit profile:", err);
       alert("Failed to submit profile. Please try again.");
       setProfileSubmitted(false);
     }
@@ -572,6 +572,7 @@ const handleSaveAndContinue = async () => {
     // Any final submission logic here
 
     // Show a success message
+    alert("Your profile has been successfully submitted!")
 
     // Redirect to dashboard
     navigate("/dashboard")
@@ -705,7 +706,7 @@ const handleSaveAndContinue = async () => {
       setError("No profile found. Please complete your Universal Profile first.")
     }
   } catch (err) {
-    
+    console.error("Error fetching profile data:", err)
     setError("Failed to load profile data. Please try again later.")
   } finally {
     setLoading(false)
@@ -837,11 +838,19 @@ const handleSaveAndContinue = async () => {
       <div className="profile-tracker">
         <div className="profile-tracker-inner">
           {sections.map((section) => (
-            <button
+           <button
               key={section.id}
-              onClick={() => setActiveSection(section.id)}
-              className={`profile-tracker-button ${activeSection === section.id ? "active" : completedSections[section.id] ? "completed" : "pending"
-                }`}
+              onClick={() => {
+                if (section.id === "documents") {
+                  // Navigate to MyDocuments page
+                  window.location.href = "/my-documents"; // or your actual route
+                } else {
+                  setActiveSection(section.id);
+                }
+              }}
+              className={`profile-tracker-button ${
+                activeSection === section.id ? "active" : completedSections[section.id] ? "completed" : "pending"
+              }`}
             >
               {section.label.split("\n").map((line, i) => (
                 <span key={i} className="tracker-label-line">

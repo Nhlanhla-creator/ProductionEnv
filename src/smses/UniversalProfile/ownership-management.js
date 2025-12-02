@@ -5,10 +5,11 @@ import FileUpload from "./file-upload"
 import './UniversalProfile.css';
 import { useEffect, useState } from 'react';
 import { db, auth, storage } from '../../firebaseConfig';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { validateDocument } from '../../services/documentValidationService';
 
-// Constants
+// Constants (all your existing constants remain the same)
 const raceOptions = [
   { value: "black", label: "Black African" },
   { value: "coloured", label: "Coloured" },
@@ -175,7 +176,6 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
     syncToGrowthSuite(newData.directors || []);
   };
 
-  // Sync directors to Growth Suite
   const syncToGrowthSuite = async (directors) => {
     try {
       const userId = auth.currentUser?.uid;
@@ -206,81 +206,262 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
     }
   };
 
-  // File upload handler for director CVs
-  const handleDirectorCVUpload = async (index, file) => {
-    if (!file) return;
+// Fix the handleDeleteCV function
+const handleDeleteCV = async (type, index) => {
+  try {
+    const userId = auth.currentUser?.uid;
+    if (!userId) return;
 
-    try {
-      const userId = auth.currentUser?.uid;
-      if (!userId) {
-        console.error("No user authenticated");
-        return;
+    const profileRef = doc(db, "universalProfiles", userId);
+    
+    // Get existing CVs from documents system
+    const profileSnap = await getDoc(profileRef);
+    const existingData = profileSnap.exists() ? profileSnap.data() : {};
+    const existingCVs = existingData.documents?.cv_multiple || [];
+    
+    // Remove the CV from MyDocuments system
+    const updatedCVs = existingCVs.filter(cv => {
+      if (type === 'director') {
+        return !(cv.directorIndex === index && cv.source === "ownership_management");
+      } else if (type === 'executive') {
+        return !(cv.executiveIndex === index && cv.source === "ownership_management");
       }
+      return true;
+    });
 
-      // Create a unique filename
-      const timestamp = Date.now();
-      const fileName = `directors/cv/${userId}/${index}_${timestamp}_${file.name}`;
-      
-      // Create storage reference
-      const storageRef = ref(storage, fileName);
-      
-      // Upload file
-      const uploadResult = await uploadBytes(storageRef, file);
-      
-      // Get download URL
-      const downloadURL = await getDownloadURL(uploadResult.ref);
-      
-      // Update director with CV URL
-      updateDirector(index, "cv", {
-        name: file.name,
-        url: downloadURL,
-        uploadedAt: new Date().toISOString()
-      });
+    // Update the documents system
+    await updateDoc(profileRef, {
+      [`documents.cv_multiple`]: updatedCVs,
+      [`documents.cv_multiple_updated`]: serverTimestamp(),
+      [`documents.cv_count`]: updatedCVs.length
+    });
 
-      console.log("CV uploaded successfully:", downloadURL);
-    } catch (error) {
-      console.error("Error uploading CV:", error);
-      alert("Failed to upload CV. Please try again.");
+    console.log(`CV deleted and synced from MyDocuments for ${type} ${index}`);
+  } catch (error) {
+    console.error("Error deleting CV from MyDocuments:", error);
+  }
+};
+
+
+
+ const handleDirectorCVUpload = async (index, file) => {
+  if (!file) return;
+
+  try {
+    const userId = auth.currentUser?.uid;
+    if (!userId) {
+      console.error("No user authenticated");
+      return;
     }
-  };
 
-  // File upload handler for executive CVs
-  const handleExecutiveCVUpload = async (index, file) => {
-    if (!file) return;
+    // Get registered name for validation
+    const registeredName = await getRegisteredName();
 
-    try {
-      const userId = auth.currentUser?.uid;
-      if (!userId) {
-        console.error("No user authenticated");
-        return;
-      }
-
-      // Create a unique filename
-      const timestamp = Date.now();
-      const fileName = `executives/cv/${userId}/${index}_${timestamp}_${file.name}`;
-      
-      // Create storage reference
-      const storageRef = ref(storage, fileName);
-      
-      // Upload file
-      const uploadResult = await uploadBytes(storageRef, file);
-      
-      // Get download URL
-      const downloadURL = await getDownloadURL(uploadResult.ref);
-      
-      // Update executive with CV URL
-      updateExecutive(index, "cv", {
-        name: file.name,
-        url: downloadURL,
-        uploadedAt: new Date().toISOString()
-      });
-
-      console.log("Executive CV uploaded successfully:", downloadURL);
-    } catch (error) {
-      console.error("Error uploading executive CV:", error);
-      alert("Failed to upload CV. Please try again.");
+    // ✅ RUN AI VALIDATION
+    const validationResult = await validateDocument('CV', file, registeredName);
+    
+    if (!validationResult.isValid) {
+      alert(`Validation failed: ${validationResult.message}`);
+      return;
     }
-  };
+
+    // Create a unique filename
+    const timestamp = Date.now();
+    const fileName = `directors/cv/${userId}/${index}_${timestamp}_${file.name}`;
+    
+    // Create storage reference
+    const storageRef = ref(storage, fileName);
+    
+    // Upload file
+    const uploadResult = await uploadBytes(storageRef, file);
+    
+    // Get download URL
+    const downloadURL = await getDownloadURL(uploadResult.ref);
+    
+    // Update director with CV URL and validation status
+    updateDirector(index, "cv", {
+      name: file.name,
+      url: downloadURL,
+      uploadedAt: new Date().toISOString(),
+      status: validationResult.status,
+      message: validationResult.message
+    });
+
+    // ✅ SYNC WITH MYDOCUMENTS SYSTEM
+    const profileRef = doc(db, "universalProfiles", userId);
+    
+    // Get existing CVs from documents system
+    const profileSnap = await getDoc(profileRef);
+    const existingData = profileSnap.exists() ? profileSnap.data() : {};
+    const existingCVs = existingData.documents?.cv_multiple || [];
+    
+    // Create CV data for MyDocuments system
+   const cvData = {
+  url: downloadURL,
+  status: validationResult.status,
+  message: validationResult.message,
+  uploadedAt: new Date().toISOString(),
+  directorIndex: index,
+  directorName: formData.directors[index]?.name || `Director ${index + 1}`,
+  source: "ownership_management",
+  documentType: "CV",
+  role: "Director", // ADD THIS
+  roleLabel: `Director ${index + 1}`, // ADD THIS - you can customize
+  personName: formData.directors[index]?.name || `Director ${index + 1}` // ADD THIS
+};
+
+    // Find if this director already has a CV in the system
+    const existingIndex = existingCVs.findIndex(cv => 
+      cv.directorIndex === index && cv.source === "ownership_management"
+    );
+
+    let updatedCVs;
+    if (existingIndex >= 0) {
+      // Update existing CV
+      updatedCVs = existingCVs.map((cv, i) => 
+        i === existingIndex ? cvData : cv
+      );
+    } else {
+      // Add new CV
+      updatedCVs = [...existingCVs, cvData];
+    }
+
+    // Update the documents system
+    await updateDoc(profileRef, {
+      [`documents.cv_multiple`]: updatedCVs,
+      [`documents.cv_multiple_updated`]: serverTimestamp(),
+      [`documents.cv_count`]: updatedCVs.length
+    });
+
+    console.log("Director CV uploaded and synced to MyDocuments with AI validation");
+  } catch (error) {
+    console.error("Error uploading director CV:", error);
+    alert("Failed to upload CV. Please try again.");
+  }
+};
+
+// Enhanced executive CV upload handler with AI validation
+const handleExecutiveCVUpload = async (index, file) => {
+  if (!file) return;
+
+  try {
+    const userId = auth.currentUser?.uid;
+    if (!userId) {
+      console.error("No user authenticated");
+      return;
+    }
+
+    // Get registered name for validation
+    const registeredName = await getRegisteredName();
+
+    // ✅ RUN AI VALIDATION
+    const validationResult = await validateDocument('CV', file, registeredName);
+    
+    if (!validationResult.isValid) {
+      alert(`Validation failed: ${validationResult.message}`);
+      return;
+    }
+
+    // Create a unique filename
+    const timestamp = Date.now();
+    const fileName = `executives/cv/${userId}/${index}_${timestamp}_${file.name}`;
+    
+    // Create storage reference
+    const storageRef = ref(storage, fileName);
+    
+    // Upload file
+    const uploadResult = await uploadBytes(storageRef, file);
+    
+    // Get download URL
+    const downloadURL = await getDownloadURL(uploadResult.ref);
+    
+    // Update executive with CV URL and validation status
+    updateExecutive(index, "cv", {
+      name: file.name,
+      url: downloadURL,
+      uploadedAt: new Date().toISOString(),
+      status: validationResult.status,
+      message: validationResult.message
+    });
+
+    // ✅ SYNC WITH MYDOCUMENTS SYSTEM
+    const profileRef = doc(db, "universalProfiles", userId);
+    
+    // Get existing CVs from documents system
+    const profileSnap = await getDoc(profileRef);
+    const existingData = profileSnap.exists() ? profileSnap.data() : {};
+    const existingCVs = existingData.documents?.cv_multiple || [];
+    
+    // Create CV data for MyDocuments system
+    const cvData = {
+      url: downloadURL,
+      status: validationResult.status,
+      message: validationResult.message,
+      uploadedAt: new Date().toISOString(),
+      executiveIndex: index,
+      executiveName: formData.executives[index]?.name || `Executive ${index + 1}`,
+      source: "ownership_management",
+      documentType: "CV",
+      role: "Executive", // ADD THIS
+      roleLabel: `Executive ${index + 1}`, // ADD THIS
+      personName: formData.executives[index]?.name || `Executive ${index + 1}` // ADD THIS
+    };
+
+    // Find if this executive already has a CV in the system
+    const existingIndex = existingCVs.findIndex(cv => 
+      cv.executiveIndex === index && cv.source === "ownership_management"
+    );
+
+    let updatedCVs;
+    if (existingIndex >= 0) {
+      // Update existing CV
+      updatedCVs = existingCVs.map((cv, i) => 
+        i === existingIndex ? cvData : cv
+      );
+    } else {
+      // Add new CV
+      updatedCVs = [...existingCVs, cvData];
+    }
+
+    // Update the documents system
+    await updateDoc(profileRef, {
+      [`documents.cv_multiple`]: updatedCVs,
+      [`documents.cv_multiple_updated`]: serverTimestamp(),
+      [`documents.cv_count`]: updatedCVs.length
+    });
+
+    console.log("Executive CV uploaded and synced to MyDocuments with AI validation");
+  } catch (error) {
+    console.error("Error uploading executive CV:", error);
+    alert("Failed to upload CV. Please try again.");
+  }
+};
+
+
+const getRegisteredName = async () => {
+  const user = auth.currentUser;
+  
+  if (!user) {
+    console.log("❌ No user found");
+    return "";
+  }
+
+  try {
+    const profileRef = doc(db, "universalProfiles", user.uid);
+    const profileSnap = await getDoc(profileRef);
+    
+    if (profileSnap.exists()) {
+      const data = profileSnap.data();
+      const registeredName = data.entityOverview?.registeredName;
+      return registeredName || "";
+    } else {
+      return "";
+    }
+  } catch (error) {
+    console.error("❌ Error fetching registeredName:", error);
+    return "";
+  }
+};
 
   // Data loading
   useEffect(() => {
@@ -480,26 +661,34 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
     updateFormData({ ...formData, directors: newDirectors });
   };
 
-  const removeDirector = (index) => {
-    const director = formData.directors[index];
-    const newDirectors = formData.directors.filter((_, i) => i !== index);
-    
-    // If this director is linked to a shareholder, unlink
-    if (director.linkedShareholderId !== null) {
-      const newShareholders = [...formData.shareholders];
-      if (director.linkedShareholderId < newShareholders.length) {
-        newShareholders[director.linkedShareholderId] = {
-          ...newShareholders[director.linkedShareholderId],
-          isAlsoDirector: false,
-          directorId: null
-        };
-        updateFormData({ ...formData, directors: newDirectors, shareholders: newShareholders });
-        return;
-      }
+  // Fix the removeDirector function
+const removeDirector = (index) => {
+  const director = formData.directors[index];
+  
+  // Remove CV from MyDocuments if exists
+  if (director.cv) {
+    handleDeleteCV('director', index);
+  }
+  
+  const newDirectors = formData.directors.filter((_, i) => i !== index);
+  
+  // If this director is linked to a shareholder, unlink
+  if (director.linkedShareholderId !== null) {
+    const newShareholders = [...formData.shareholders];
+    if (director.linkedShareholderId < newShareholders.length) {
+      newShareholders[director.linkedShareholderId] = {
+        ...newShareholders[director.linkedShareholderId],
+        isAlsoDirector: false,
+        directorId: null
+      };
+      updateFormData({ ...formData, directors: newDirectors, shareholders: newShareholders });
+      return;
     }
-    
-    updateFormData({ ...formData, directors: newDirectors });
-  };
+  }
+  
+  updateFormData({ ...formData, directors: newDirectors });
+};
+
 
   // Executive functions
   const addExecutive = () => {
@@ -519,11 +708,18 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
     updateFormData({ ...formData, executives: newExecutives });
   };
 
-  const removeExecutive = (index) => {
-    const newExecutives = (formData.executives || []).filter((_, i) => i !== index);
-    updateFormData({ ...formData, executives: newExecutives });
-  };
-
+ // Fix the removeExecutive function
+const removeExecutive = (index) => {
+  const executive = formData.executives[index];
+  
+  // Remove CV from MyDocuments if exists
+  if (executive.cv) {
+    handleDeleteCV('executive', index);
+  }
+  
+  const newExecutives = (formData.executives || []).filter((_, i) => i !== index);
+  updateFormData({ ...formData, executives: newExecutives });
+};
   // Handlers
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -582,6 +778,7 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
     );
   }
 
+  // ... (your existing JSX/UI code remains exactly the same)
   return (
     <div>
       <h2 className="text-2xl font-bold text-brown-800 mb-6">Ownership & Management</h2>

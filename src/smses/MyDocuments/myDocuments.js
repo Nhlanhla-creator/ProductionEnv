@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getAuth } from "firebase/auth";
-import { getDoc, doc, updateDoc, serverTimestamp, collection, getDocs, where } from "firebase/firestore";
+import { getDoc, doc, updateDoc, serverTimestamp, collection, getDocs, where, onSnapshot } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, auth } from "../../firebaseConfig";
 import { FileText, ExternalLink, Upload, Filter, ChevronDown, ChevronUp, Trash2, Plus, Minus } from "lucide-react";
@@ -24,25 +24,22 @@ const ai = new GoogleGenAI({
 
 const DOCUMENTS = [
   "5 Year Budget",
-  "Audited Financials", 
   "Bank Details Confirmation Letter",
   "B-BBEE Certificate",
   "Business Plan",
   "IDs of Directors & Shareholders",
-  "Client References",
+  "Client References / Support Letters",
   "Company Profile / Brochure",
   "Company Registration Certificate",
   "COIDA Letter of Good Standing",
   "CV",
+  "Financial Statements",
   "Guarantee/Contract",
-  "Impact Statements", 
   "Industry Accreditations",
   "Loan Agreements",
   "Pitch Deck",
-  "Previous Program Reports",
   "Proof of Address",
   "Share Register",
-  "Support Letters / Endorsements",
   "Tax Clearance Certificate"
 ].sort((a, b) => a.localeCompare(b));
 
@@ -58,21 +55,12 @@ const documentValidationRules = {
       "Cash Flow Statement with 5-year projections", 
       "Balance Sheet with 5-year projections",
       "Revenue and expense projections",
-      "Financial assumptions"
+      "Financial assumptions",
+      "✅ ACCEPT MULTI-PAGE DOCUMENTS: Even if other financial documents are included"
     ],
     strictChecks: ["covers_5_years", "has_all_three_statements", "shows_projection_basis"]
   },
-  "Audited Financials": {
-    requiredElements: [
-      "Financial statements (Balance Sheet, Income Statement, Cash Flow)",
-      "Auditor's report/signed opinion (if audited)",
-      "Notes to financial statements", 
-      "Comparative figures",
-      "Company name and period covered"
-    ],
-    strictChecks: ["has_financial_statements", "has_company_name", "covers_complete_period"]
-  },
-  "Bank Details Confirmation Letter": {
+  "Bank Confirmation Letter": {
     requiredElements: [
       "Bank name clearly stated",
       "Account holder name",
@@ -92,7 +80,8 @@ const documentValidationRules = {
       "Issue date",
       "Certificate must be currently valid",
       "Company registration details",
-      "SANAS logo or accreditation number"
+      "SANAS logo or accreditation number",
+      "ACCEPT MULTI-PAGE DOCUMENTS: Even if other certificates are included"
     ],
     strictChecks: ["has_certificate_number", "not_expired", "currently_valid"]
   },
@@ -105,7 +94,8 @@ const documentValidationRules = {
       "Marketing Strategy",
       "Management Team",
       "Financial Projections",
-      "Information Filled In"
+      "Information Filled In",
+      "ACCEPT MULTI-PAGE DOCUMENTS: Even if appendices or additional documents are included"
     ],
     strictChecks: ["has_executive_summary", "has_market_analysis", "has_financials"]
   },
@@ -120,14 +110,15 @@ const documentValidationRules = {
     ],
     strictChecks: ["has_id_details", "names_match_records"]
   },
-  "Client References": {
+  "Client references / Support Letters": { 
     requiredElements: [
       "Reference letter heading/title",
       "Client company name and contact details",
       "Description of services provided",
       "Performance/satisfaction statement",
       "Dates of service/work period",
-      "Authorized signature and position"
+      "Authorized signature and position",
+      "ACCEPT MULTI-PAGE DOCUMENTS: Even if multiple reference letters are included"
     ],
     strictChecks:["has_client_details", "describes_services", "has_signature"]
   },
@@ -138,7 +129,8 @@ const documentValidationRules = {
       "Mission, Vision, Values statements",
       "Management/Team information",
       "Contact details",
-      "Services/Products description"
+      "Services/Products description",
+      "ACCEPT MULTI-PAGE DOCUMENTS: Even if additional marketing materials are included"
     ],
     strictChecks: ["has_company_details", "has_mission_vision", "has_contact_info"]
   },
@@ -149,7 +141,8 @@ const documentValidationRules = {
       "Registered company name",
       "Date of incorporation",
       "Company type (Pty Ltd, CC, etc.)",
-      "Official stamp/signature"
+      "Official stamp/signature",
+      "ACCEPT MULTI-PAGE DOCUMENTS: Even if other CIPC documents are included"
     ],
     strictChecks: ["issued_by_cipc", "has_registration_number", "matches_company_name"]
   },
@@ -161,7 +154,8 @@ const documentValidationRules = {
       "Company name and address",
       "Issue date",
       "Status confirmation (Good Standing)",
-      "Official stamp/signature"
+      "Official stamp/signature",
+      "ACCEPT MULTI-PAGE DOCUMENTS: Even if other COIDA documents are included"
     ],
     strictChecks: ["issued_by_compensation_fund", "has_employer_reference", "shows_good_standing"]
   },
@@ -177,6 +171,19 @@ const documentValidationRules = {
     ],
     strictChecks: ["has_work_experience", "has_education", "has_contact_info"]
   },
+  "Financial Statements": {
+    requiredElements: [
+      "Financial statements (Balance Sheet, Income Statement, Cash Flow)",
+      "Company name and period covered",
+      "Revenue and expense details",
+      "Assets and liabilities information",
+      "ACCEPT BOTH: Audited AND Unaudited financial statements",
+      "ACCEPT MULTI-PAGE DOCUMENTS: Even if other documents are included in the same PDF",
+      "FOCUS ON: Presence of financial statements, not audit status",
+      "ACCEPT MULTI-PAGE DOCUMENTS: Even if other documents are included in the same PDF"
+    ],
+    strictChecks: ["has_financial_statements", "has_company_name", "covers_complete_period"]
+  },
   "Guarantee/Contract": {
     requiredElements: [
       "Contract/Agreement title",
@@ -187,24 +194,14 @@ const documentValidationRules = {
     ],
     strictChecks: ["has_parties", "has_terms", "fully_signed"]
   },
-  "Impact Statements": {
-    requiredElements: [
-      "Impact Statement/Report title",
-      "Reporting period/dates",
-      "Objectives and goals stated",
-      "Measurable results/outcomes",
-      "Beneficiary numbers/statistics",
-      "Monitoring and evaluation data"
-    ],
-    strictChecks: ["has_measurable_results", "has_reporting_period", "shows_impact_evidence"]
-  },
   "Industry Accreditations": {
     requiredElements: [
       "Accreditation/Certificate title",
       "Issuing accreditation body",
       "Scope/standard (e.g., ISO 9001)",
       "Issue and expiry dates",
-      "Company name matches applicant"
+      "Company name matches applicant",
+      "ACCEPT MULTI-PAGE DOCUMENTS: Even if multiple certificates are included"
     ],
     strictChecks: ["has_expiry_date", "issued_by_accredited_body", "matches_company_name"]
   },
@@ -214,7 +211,8 @@ const documentValidationRules = {
       "Loan amount and interest rate",
       "Repayment terms and schedule",
       "Signatures from all parties",
-      "Agreement date and duration"
+      "Agreement date and duration",
+      "ACCEPT MULTI-PAGE DOCUMENTS: Even if terms and conditions or other related documents are included"
     ],
     strictChecks: ["has_loan_amount", "has_repayment_terms", "fully_signed"]
   },
@@ -225,17 +223,8 @@ const documentValidationRules = {
       "Business model and revenue streams",
       "Market analysis and opportunity",
       "Management team overview",
-      "Funding requirements and use"
-    ]
-  },
-  "Previous Program Reports": {
-    requiredElements: [
-      "Program/project name and description",
-      "Reporting period and dates",
-      "Activities and deliverables completed",
-      "Results and achievements measured",
-      "Challenges and lessons learned",
-      "Financial expenditure summary"
+      "Funding requirements and use",
+      "ACCEPT MULTI-PAGE DOCUMENTS: Even if additional slides are included"
     ]
   },
   "Proof of Address": {
@@ -244,7 +233,8 @@ const documentValidationRules = {
       "Issue date within last 3 months",
       "Utility company/landlord details",
       "Account number or reference",
-      "Official stamp/letterhead"
+      "Official stamp/letterhead",
+      "ACCEPT MULTI-PAGE DOCUMENTS: Even if billing details are included"
     ],
     strictChecks: ["recent_issue_date", "matches_applicant_name", "has_physical_address"]
   },
@@ -259,16 +249,6 @@ const documentValidationRules = {
     ],
     strictChecks: ["matches_company_records", "has_share_details", "complete_shareholder_list"]
   },
-  "Support Letters / Endorsements": {
-    requiredElements: [
-      "Letterhead of supporting organization",
-      "Clear endorsement statement",
-      "Relationship to applicant described",
-      "Specific support details provided",
-      "Authorized signature and position",
-      "Contact details of endorser"
-    ]
-  },
   "Tax Clearance Certificate": {
     requiredElements: [
       "Issued by South African Revenue Service (SARS)",
@@ -279,7 +259,8 @@ const documentValidationRules = {
       "Taxpayer Name and Address",
       "SARS official stamp/signature",
       "Clearance Status (Good Standing)",
-      "✅ ACCEPT: Tax Clearance Certificate OR Tax Compliance Status document - THEY ARE THE SAME"
+      "ACCEPT: Tax Clearance Certificate OR Tax Compliance Status document - THEY ARE THE SAME",
+      "ACCEPT MULTI-PAGE DOCUMENTS: Even if other tax documents are included"
     ],
     criticalChecks: ["has_tax_reference_number", "has_expiry_date", "issued_by_sars", "valid_clearance_status"]
   },
@@ -294,49 +275,65 @@ const MyDocuments = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isOverlayVisible, setIsOverlayVisible] = useState(false);
-  const [validatingDoc, setValidatingDoc] = useState(null);
   const [validationResults, setValidationResults] = useState({});
   const [rejectionReasons, setRejectionReasons] = useState({});
   const [submittedDocuments, setSubmittedDocuments] = useState([]);
   const [showStatusFilter, setShowStatusFilter] = useState(false);
-  const [expandedRows, setExpandedRows] = useState({});
   const [expandedIDs, setExpandedIDs] = useState(false);
+  const [expandedCVs, setExpandedCVs] = useState(false);
+  const [activeSection, setActiveSection] = useState('documents');
 
   // Use the synchronization hook
   useDocumentSync(setSubmittedDocuments, setProfileData, null);
 
-  const checkSubmittedDocs = (documents, data) => {
-    return documents.filter(docLabel => {
-      const url = getDocumentURL(docLabel, data);
-      return !!(url && url !== null && url !== '');
-    });
-  };
+ // Replace your checkSubmittedDocs function with this:
+const checkSubmittedDocs = (documents, data) => {
+  return documents.filter(docLabel => {
+    if (docLabel === "CV") {
+      // Check for CVs from both sources
+      const regularCVs = data.documents?.cv_multiple || [];
+      const ownershipCVs = data.documents?.cv_multiple || []; // This gets both now
+      const singleCV = getDocumentURL(docLabel, data);
+      
+      return regularCVs.length > 0 || ownershipCVs.length > 0 || !!singleCV;
+    }
+    
+    // For other documents, use existing logic
+    const url = getDocumentURL(docLabel, data);
+    return !!(url && url !== null && url !== '');
+  });
+};
 
   useEffect(() => {
-    const auth = getAuth();
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        try {
-          const profileRef = doc(db, "universalProfiles", user.uid);
-          const profileSnap = await getDoc(profileRef);
-          if (!profileSnap.exists()) return;
-
-          const data = profileSnap.data();
-          setProfileData(data);
-          const submitted = checkSubmittedDocs(DOCUMENTS, data);
-          setSubmittedDocuments(submitted);
-        } catch (err) {
-          console.error("Failed to load user documents:", err);
-        } finally {
+  const auth = getAuth();
+  const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      try {
+        const profileRef = doc(db, "universalProfiles", user.uid);
+        
+        // ✅ REPLACE getDoc with onSnapshot for real-time updates
+        const unsubscribeSnapshot = onSnapshot(profileRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setProfileData(data);
+            const submitted = checkSubmittedDocs(DOCUMENTS, data);
+            setSubmittedDocuments(submitted);
+          }
           setLoading(false);
-        }
-      } else {
+        });
+
+        return () => unsubscribeSnapshot(); // Clean up snapshot listener
+      } catch (err) {
+        console.error("Failed to load user documents:", err);
         setLoading(false);
       }
-    });
+    } else {
+      setLoading(false);
+    }
+  });
 
-    return () => unsubscribe();
-  }, []);
+  return () => unsubscribe();
+}, []);
 
   // Add sidebar detection
   useEffect(() => {
@@ -357,17 +354,7 @@ const MyDocuments = () => {
     return () => observer.disconnect()
   }, [])
 
-  useEffect(() => {
-    const auth = getAuth();
-    
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log("Auth state user:", user);
-      console.log("User Name:", user?.email)
-    });
-
-    return () => unsubscribe();
-  }, []);
-
+  
   const getRegisteredName = async () => {
     const user = auth.currentUser;
     
@@ -377,22 +364,14 @@ const MyDocuments = () => {
     }
 
     try {
-      console.log("🔍 Fetching from universalProfiles with UID:", user.uid);
       const profileRef = doc(db, "universalProfiles", user.uid);
       const profileSnap = await getDoc(profileRef);
       
-      console.log("🔍 Profile exists:", profileSnap.exists());
-      
       if (profileSnap.exists()) {
         const data = profileSnap.data();
-        
-        // ✅ GET registeredName FROM entityOverview
         const registeredName = data.entityOverview?.registeredName;
-        
-        console.log("🏢 Found registeredName:", registeredName);
         return registeredName || null;
       } else {
-        console.log("❌ No profile found");
         return null;
       }
     } catch (error) {
@@ -414,7 +393,7 @@ const MyDocuments = () => {
 `;
     }
 
-     if (docLabel === "IDs of Directors & Shareholders") {
+    if (docLabel === "IDs of Directors & Shareholders") {
       customInstructions = `SPECIAL INSTRUCTIONS FOR ID DOCUMENTS:
 - ACCEPT ANY OFFICIAL ID DOCUMENT: South African ID Card, Passport, Driver's License, Refugee ID, Asylum Seeker Certificate
 - CERTIFICATION NOT REQUIRED: Regular ID copies are acceptable - no commissioner stamp needed
@@ -434,18 +413,31 @@ const MyDocuments = () => {
 `;
     }
 
-    if (docLabel === "Audited Financials") {
+    if (docLabel === "Financial Statements") { 
       customInstructions = `SPECIAL INSTRUCTIONS FOR FINANCIAL STATEMENTS:
-- CHECK IF AUDITED: Look for auditor's report, audit opinion, auditor signature
-- COMMENT ON AUDIT STATUS but DO NOT reject based on audit status
-- ACCEPT BOTH audited and unaudited financial statements
-- FOCUS ON: Completeness of statements (Balance Sheet, Income Statement, Cash Flow), company name, period covered
+- ACCEPT BOTH: Audited AND Unaudited financial statements
+- ACCEPT MULTI-PAGE DOCUMENTS: Even if the PDF contains other documents (like VAT certificates, tax documents, etc.)
+- FOCUS ON: Finding financial statements (Balance Sheet, Income Statement, Cash Flow) anywhere in the document
+- DO NOT REJECT if other documents are included in the same PDF
+- CHECK ALL PAGES: Scan entire document for financial statements
+- IF FINANCIAL STATEMENTS FOUND: Return status "verified" regardless of audit status
 - IF NOT AUDITED: Return status "verified:not_audited" with appropriate message
 - AUDITED DOCUMENTS MUST CONTAIN: "auditor", "audit report", or "audit opinion" keywords
+- KEY ELEMENTS TO LOOK FOR: Balance sheet, income statement, cash flow, revenue, expenses, assets, liabilities
 `;
     }
 
+    const universalInstructions = `UNIVERSAL DOCUMENT VALIDATION RULES:
+- ✅ ACCEPT MULTI-PAGE DOCUMENTS: Even if other documents are included in the same PDF
+- ✅ SCAN ALL PAGES: Check entire document for the required ${docLabel}
+- ✅ DO NOT REJECT if other documents are included in the same file
+- ✅ FOCUS ON: Finding the required ${docLabel} anywhere in the document
+- ✅ IF ${docLabel.toUpperCase()} FOUND: Return status "verified" regardless of additional content
+`;
+    
     return `${customInstructions}
+    ${universalInstructions}
+
 ANALYZE THE UPLOADED DOCUMENT FILE (not these instructions):
 
 DOCUMENT VALIDATION FOR: ${docLabel}
@@ -454,7 +446,7 @@ CRITICAL CHECKS:
 1. 🔴 DOCUMENT TYPE: Must be exactly ${docLabel}
 2. 🔴 COMPANY NAME: Must match "${registeredName}" 
 3. 🔴 EXPIRY DATE: Must not be expired (current year: 2025)
-4. 🔴 COMPLETENESS: All required elements present
+4. 🔴 COMPLETENESS: Required elements present (somewhere in the document)
 
 REQUIRED ELEMENTS IN UPLOADED DOCUMENT:
 ${rules.requiredElements.map(item => `- ${item}`).join('\n')}
@@ -499,37 +491,33 @@ ANALYZE THE UPLOADED FILE AND RESPOND WITH:
     };
 
     const manualExpiryCheck = (file, docLabel) => {
-    const expiryDocuments = [
-      'B-BBEE Certificate', 'Tax Clearance Certificate', 
-      'Industry Accreditations', 'COIDA Letter of Good Standing'
-    ];
-    
-    if (!expiryDocuments.includes(docLabel)) {
+      const expiryDocuments = [
+        'B-BBEE Certificate', 'Tax Clearance Certificate', 
+        'Industry Accreditations', 'COIDA Letter of Good Standing'
+      ];
+      
+      if (!expiryDocuments.includes(docLabel)) {
+        return false;
+      }
+      
+      const currentYear = new Date().getFullYear();
+      const fileName = file.name.toLowerCase();
+      
+      for (let year = 2010; year < 2023; year++) {
+        if (fileName.includes(year.toString())) {
+          return true;
+        }
+      }
+      
+      if (file.lastModified) {
+        const fileYear = new Date(file.lastModified).getFullYear();
+        if (fileYear < 2023) {
+          return true;
+        }
+      }
+      
       return false;
-    }
-    
-    const currentYear = new Date().getFullYear();
-    const fileName = file.name.toLowerCase();
-    
-    // Check for old dates in filename (2010-2022)
-    for (let year = 2010; year < 2023; year++) {
-      if (fileName.includes(year.toString())) {
-        console.log(`🔍 Manual expiry detected: File contains ${year}`);
-        return true;
-      }
-    }
-    
-    // Check file modification date
-    if (file.lastModified) {
-      const fileYear = new Date(file.lastModified).getFullYear();
-      if (fileYear < 2023) {
-        console.log(`🔍 Manual expiry detected: File from ${fileYear}`);
-        return true;
-      }
-    }
-    
-    return false;
-  };
+    };
 
     const parseDetailedResponse = (responseText, docLabel) => {
       const documentTypeMap = {
@@ -537,9 +525,12 @@ ANALYZE THE UPLOADED FILE AND RESPOND WITH:
         "tax certificate": "Tax Clearance Certificate", 
         "sars certificate": "Tax Clearance Certificate",
         "tax compliance": "Tax Clearance Certificate",
-        "financial statement": "Audited Financials",
-        "audited financial": "Audited Financials",
-        "unaudited financial": "Audited Financials",
+        "financial statement": "Financial Statements",
+        "audited financial": "Financial Statements", 
+        "unaudited financial": "Financial Statements", 
+        "balance sheet": "Financial Statements", 
+        "income statement": "Financial Statements", 
+        "cash flow": "Financial Statements",
         "5 year budget": "5 Year Budget",
         "bbbee": "B-BBEE Certificate",
         "b-bbee": "B-BBEE Certificate",
@@ -553,12 +544,12 @@ ANALYZE THE UPLOADED FILE AND RESPOND WITH:
         "driver license": "IDs of Directors & Shareholders",
         "proof of address": "Proof of Address",
         "utility bill": "Proof of Address",
-        "client reference": "Client References",
-        "reference letter": "Client References",
+        "client reference": "Client references / Support Letters", 
+        "reference letter": "Client references / Support Letters",
         "industry accreditation": "Industry Accreditations",
         "certificate": "Industry Accreditations",
-        "support letter": "Support Letters",
-        "endorsement": "Support Letters",
+        "support letter": "Client references / Support Letters", 
+        "endorsement": "Client references / Support Letters", 
         "business plan": "Business Plan",
         "pitch deck": "Pitch Deck",
         "impact statement": "Impact Statements",
@@ -586,94 +577,73 @@ ANALYZE THE UPLOADED FILE AND RESPOND WITH:
         if (lowerText.includes('business') && lowerText.includes('plan')) return "Business Plan";
         if (lowerText.includes('coida') || lowerText.includes('letter of good standing')) return "COIDA Letter of Good Standing";
         if (lowerText.includes('cv') || lowerText.includes('resume') || lowerText.includes('curriculum vitae')) return "CV";
-        if ((lowerText.includes('financial') || lowerText.includes('statement')) && !lowerText.includes('tax')) return "Audited Financials";
-        
+        if (lowerText.includes('financial') && (lowerText.includes('statement') || lowerText.includes('balance sheet') || lowerText.includes('income statement') || lowerText.includes('cash flow'))) return "Financial Statements";
+        if (lowerText.includes('client') && (lowerText.includes('reference') || lowerText.includes('support'))) return "Client references / Support Letters";
+
         return "this document type";
       };
 
-   try {
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        
-        let userMessage;
-        let status = parsed.status;
-        
-        // ✅ MORE RELIABLE: Use the AI's identifiedDocumentType if provided
-        let identifiedType = parsed.identifiedDocumentType;
-        
-        // If AI didn't provide identified type, use our fallback
-        if (!identifiedType || identifiedType === "EXACT_DOCUMENT_NAME_FROM_LIST") {
-          identifiedType = extractDocumentType(parsed.message || responseText);
-        }
-
-        // ✅ FIXED: Don't override "incomplete" status - preserve all statuses from AI
-        if (parsed.status === "wrong_type" || (!parsed.isValid && identifiedType !== docLabel)) {
-          // SPECIAL CASE: IDs should accept any ID type
-          if (docLabel === "IDs of Directors & Shareholders" && 
-              (identifiedType.includes("ID") || identifiedType.includes("Passport") || identifiedType.includes("Driver"))) {
-            userMessage = "ID document verified";
-            status = "verified";
-          } 
-          // SPECIAL CASE: Tax Clearance should accept both names
-          else if (docLabel === "Tax Clearance Certificate" && 
-                   (identifiedType.includes("Tax Compliance") || identifiedType.includes("Tax Clearance"))) {
-            userMessage = "Tax compliance document verified";
-            status = "verified";
+      try {
+        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          
+          let userMessage;
+          let status = parsed.status;
+          
+          let identifiedType = parsed.identifiedDocumentType;
+          
+          if (!identifiedType || identifiedType === "EXACT_DOCUMENT_NAME_FROM_LIST") {
+            identifiedType = extractDocumentType(parsed.message || responseText);
           }
-          // SPECIAL CASE: CV should accept both CV and Resume
-          else if (docLabel === "CV" && 
-                   (identifiedType.includes("CV") || identifiedType.includes("Resume") || identifiedType.includes("Curriculum Vitae"))) {
-            userMessage = "CV/Resume verified";
-            status = "verified";
-          }
-          // SPECIAL CASE: Audited Financials should accept both audited and unaudited
-          else if (docLabel === "Audited Financials" && 
-                   (identifiedType.includes("Financial") || identifiedType.includes("Statement"))) {
-            // Check if it's audited or not
-            const isAudited = responseText.toLowerCase().includes('audit') || 
-                             responseText.toLowerCase().includes('auditor') ||
-                             responseText.toLowerCase().includes('audited') ||
-                             responseText.toLowerCase().includes('audit report') ||
-                             responseText.toLowerCase().includes('audit opinion');
-            
-            if (isAudited) {
-              userMessage = "Audited financial statements verified";
-              status = "verified";
+          
+          if (parsed.status === "wrong_type" || (!parsed.isValid && identifiedType !== docLabel)) {
+            if (docLabel === "Financial Statements" && 
+                (identifiedType.includes("Financial") || identifiedType.includes("Statement") || 
+                 identifiedType.includes("Balance Sheet") || identifiedType.includes("Income Statement") || 
+                 identifiedType.includes("Cash Flow"))) {
+              const isAudited = responseText.toLowerCase().includes('audit') || 
+                               responseText.toLowerCase().includes('auditor') ||
+                               responseText.toLowerCase().includes('audited') ||
+                               responseText.toLowerCase().includes('audit report') ||
+                               responseText.toLowerCase().includes('audit opinion');
+              
+              if (isAudited) {
+                userMessage = "Audited financial statements verified";
+                status = "verified";
+              } else {
+                userMessage = "Financial statements verified (not audited)";
+                status = "verified:not_audited";
+              }
             } else {
-              userMessage = "Financial statements verified (not audited)";
-              status = "verified:not_audited";
+              userMessage = `Please upload a ${docLabel} doc, not ${identifiedType}`;
+              status = "wrong_type";
             }
+          } else if (parsed.status === "name_mismatch") {
+            userMessage = "Company name does not match your registered name";
+            status = "name_mismatch";
+          } else if (parsed.status === "expired") {
+            userMessage = "Document expired";
+            status = "expired";
+          } else if (parsed.status === "incomplete") {
+            userMessage = "Document is incomplete - missing required elements";
+            status = "incomplete";
+          } else if (parsed.status === "verified:not_audited") {
+            userMessage = "Financial statements verified (not audited)";
+            status = "verified:not_audited";
+          } else {
+            userMessage = "Document verified";
+            status = "verified";
           }
-          else {
-            userMessage = `Please upload a ${docLabel} doc, not ${identifiedType}`;
-            status = "wrong_type";
-          }
-        } else if (parsed.status === "name_mismatch") {
-          userMessage = "Company name does not match your registered name";
-          status = "name_mismatch";
-        } else if (parsed.status === "expired") {
-          userMessage = "Document expired";
-          status = "expired";
-        } else if (parsed.status === "incomplete") {
-          userMessage = "Document is incomplete - missing required elements";
-          status = "incomplete";
-        } else if (parsed.status === "verified:not_audited") {
-          userMessage = "Financial statements verified (not audited)";
-          status = "verified:not_audited";
-        } else {
-          userMessage = "Document verified";
-          status = "verified";
+          
+          return {
+            isValid: true,
+            status: status,
+            message: userMessage,
+            warnings: parsed.warnings || []
+          };
         }
         
-        return {
-          isValid: true,
-          status: status,
-          message: userMessage,
-          warnings: parsed.warnings || []
-        };
-      }
-   
         const lowerText = responseText.toLowerCase();
         if (lowerText.includes('false') || lowerText.includes('invalid') || lowerText.includes('reject')) {
           const docType = extractDocumentType(responseText);
@@ -711,316 +681,386 @@ ANALYZE THE UPLOADED FILE AND RESPOND WITH:
       }
     };
 
-     try {
-    const rules = documentValidationRules[docLabel];
-    
-    const validationPrompt = rules ? 
-      createStrictPrompt(docLabel, rules, registeredName) :
-      `Check if this document is a valid ${docLabel}. Return JSON with isValid true/false and message.`;
+    try {
+      const rules = documentValidationRules[docLabel];
+      
+      const validationPrompt = rules ? 
+        createStrictPrompt(docLabel, rules, registeredName) :
+        `Check if this document is a valid ${docLabel}. Return JSON with isValid true/false and message.`;
 
-    const base64Data = await new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result.split(',')[1]);
-    });
+      const base64Data = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+      });
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [
-        {
-          parts: [
-            {
-              inlineData: {
-                mimeType: file.type,
-                data: base64Data,
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [
+          {
+            parts: [
+              {
+                inlineData: {
+                  mimeType: file.type,
+                  data: base64Data,
+                }
+              },
+              {
+                text: validationPrompt
               }
-            },
-            {
-              text: validationPrompt
-            }
-          ]
-        }
-      ]
-    });
+            ]
+          }
+        ]
+      });
 
-    console.log("🔍 RAW AI RESPONSE:", response.text);
+      let finalResult = parseDetailedResponse(response.text, docLabel);
 
-    let finalResult = parseDetailedResponse(response.text, docLabel);
+      const isExpired = checkExpiryDate(response.text, file) || manualExpiryCheck(file, docLabel);
 
-    const isExpired = checkExpiryDate(response.text, file) || manualExpiryCheck(file, docLabel);
+      if (isExpired) {
+        finalResult = {
+          isValid: true,
+          status: "expired", 
+          message: "Document expired",
+          warnings: []
+        };
+      }
 
-    if (isExpired) {
-      finalResult = {
-        isValid: true,
-        status: "expired", 
-        message: "Document expired",
+      return finalResult;
+        
+    } catch (error) {
+      console.error("AI validation failed:", error);
+      
+      let errorMessage = "Network error - please try again";
+      
+      if (error.message?.includes('network') || error.message?.includes('fetch') || error.message?.includes('timeout')) {
+        errorMessage = "Network error - please check your connection and try again";
+      } else if (error.message?.includes('quota') || error.message?.includes('limit')) {
+        errorMessage = "Validation service temporarily unavailable - please try again later";
+      } else if (error.message?.includes('api key') || error.message?.includes('authentication')) {
+        errorMessage = "Validation service configuration error - please contact support";
+      }
+      
+      return {
+        isValid: false, 
+        status: "validation_failed",
+        message: errorMessage,
         warnings: []
       };
     }
+  };
 
-    return finalResult;
+ // Replace your getMultipleDocumentData function with this:
+const getMultipleDocumentData = (docLabel, profileData) => {
+  const documentId = getDocumentId(docLabel);
+  
+  if (docLabel === "CV") {
+    // Get CVs from both sources and merge them
+    const regularCVs = profileData.documents?.[`${documentId}_multiple`] || [];
+    const ownershipCVs = profileData.documents?.cv_multiple || [];
+    
+    // Combine and deduplicate by URL
+    const allCVs = [...regularCVs, ...ownershipCVs];
+    const uniqueCVs = allCVs.filter((cv, index, self) => 
+      index === self.findIndex(c => c.url === cv.url)
+    );
+    
+    return uniqueCVs;
+  }
+  
+  // For other documents, use existing logic
+  const multipleDocs = profileData.documents?.[`${documentId}_multiple`] || [];
+  
+  if (multipleDocs.length === 0) {
+    const singleUrl = getDocumentURL(docLabel, profileData);
+    if (singleUrl) {
+      return [{
+        url: singleUrl,
+        status: "verified",
+        message: `${docLabel} verified`,
+        uploadedAt: profileData.documents?.[`${documentId}UpdatedAt`]?.seconds ? 
+          new Date(profileData.documents[`${documentId}UpdatedAt`].seconds * 1000).toISOString() : 
+          new Date().toISOString()
+      }];
+    }
+  }
+  
+  return multipleDocs;
+};
+
+  // Unified function to handle individual document upload
+  const handleIndividualDocumentUpload = async (docLabel, file, docIndex) => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user || !file) return;
+
+    setIsUploading(true);
+    setIsOverlayVisible(true);
+
+    try {
+      const registeredName = await getRegisteredName();
+      const storage = getStorage();
+      const documentId = getDocumentId(docLabel);
+      const profileRef = doc(db, "universalProfiles", user.uid);
+
+      const validationResult = await validateDocumentWithAI(docLabel, file, registeredName);
       
-  } catch (error) {
-    console.error("AI validation failed:", error);
-    
-    // ✅ BETTER ERROR HANDLING
-    let errorMessage = "Network error - please try again";
-    
-    if (error.message?.includes('network') || error.message?.includes('fetch') || error.message?.includes('timeout')) {
-      errorMessage = "Network error - please check your connection and try again";
-    } else if (error.message?.includes('quota') || error.message?.includes('limit')) {
-      errorMessage = "Validation service temporarily unavailable - please try again later";
-    } else if (error.message?.includes('api key') || error.message?.includes('authentication')) {
-      errorMessage = "Validation service configuration error - please contact support";
+      if (!validationResult.isValid) {
+        throw new Error(`Validation failed: ${validationResult.message}`);
+      }
+
+      const fileExtension = file.name.toLowerCase().split('.').pop();
+      const fileName = `${documentId}_${Date.now()}_${docIndex}.${fileExtension}`;
+      const storageRef = ref(storage, `universalProfiles/documents/${user.uid}/${fileName}`);
+      
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
+
+      const newDocData = {
+        url: downloadURL,
+        status: validationResult.status,
+        message: validationResult.message,
+        uploadedAt: new Date().toISOString()
+      };
+
+      const existingDocs = getMultipleDocumentData(docLabel, profileData);
+      let updatedDocs;
+
+      if (docIndex < existingDocs.length) {
+        updatedDocs = existingDocs.map((doc, index) => 
+          index === docIndex ? newDocData : doc
+        );
+      } else {
+        updatedDocs = [...existingDocs, newDocData];
+      }
+
+      const updateData = {
+        [`documents.${documentId}_multiple`]: updatedDocs,
+        [`documents.${documentId}_multiple_updated`]: serverTimestamp(),
+        [`documents.${documentId}_count`]: updatedDocs.length
+      };
+
+      await updateDoc(profileRef, updateData);
+      
+      const updatedProfileSnap = await getDoc(profileRef);
+      if (updatedProfileSnap.exists()) {
+        setProfileData(updatedProfileSnap.data());
+      }
+      
+      setIsUploading(false);
+      setTimeout(() => {
+        setIsOverlayVisible(false);
+      }, 300);
+      
+    } catch (error) {
+      console.error("Individual document upload failed:", error);
+      setIsUploading(false);
+      setTimeout(() => {
+        setIsOverlayVisible(false);
+        alert(`Upload failed: ${error.message}`);
+      }, 300);
     }
-    
-    return {
-      isValid: false, 
-      status: "validation_failed",
-      message: errorMessage,
-      warnings: []
-    };
-  }
-};
+  };
 
-// ✅ ADDED: Function to get multiple ID URLs
-const getMultipleIDUrls = (profileData) => {
-  const documentId = getDocumentId("IDs of Directors & Shareholders");
-  const multipleIDs = profileData.documents?.[`${documentId}_multiple`];
-  return multipleIDs && Array.isArray(multipleIDs) ? multipleIDs : [];
-};
-
-// ✅ ADDED: Function to get all ID data with statuses
-const getAllIDData = (profileData) => {
-  const documentId = getDocumentId("IDs of Directors & Shareholders");
-  const multipleIDs = profileData.documents?.[`${documentId}_multiple`];
-  
-  if (multipleIDs && Array.isArray(multipleIDs)) {
-    return multipleIDs;
-  }
-  
-  // Fallback for single ID (backward compatibility)
-  const singleUrl = getDocumentURL("IDs of Directors & Shareholders", profileData);
-  if (singleUrl) {
-    return [{
-      url: singleUrl,
-      status: "verified",
-      message: "ID document verified",
-      uploadedAt: profileData.documents?.[`${documentId}UpdatedAt`]?.seconds ? 
-        new Date(profileData.documents[`${documentId}UpdatedAt`].seconds * 1000).toISOString() : 
-        new Date().toISOString()
-    }];
-  }
-  
-  return [];
-};
-
-// ✅ ADDED: Function to handle individual ID upload/update
-const handleIndividualIDUpload = async (docLabel, file, idIndex) => {
-  const auth = getAuth();
-  const user = auth.currentUser;
-  if (!user || !file) return;
-
-  // Start loading
-  setIsUploading(true);
-  setIsOverlayVisible(true);
-
-  try {
-    const registeredName = await getRegisteredName();
-    const storage = getStorage();
-    const documentId = getDocumentId(docLabel);
-    const profileRef = doc(db, "universalProfiles", user.uid);
-
-    // Validate the document
-    const validationResult = await validateDocumentWithAI(docLabel, file, registeredName);
-    
-    if (!validationResult.isValid) {
-      throw new Error(`Validation failed: ${validationResult.message}`);
-    }
-
-    const fileExtension = file.name.toLowerCase().split('.').pop();
-    const fileName = `${documentId}_${Date.now()}_${idIndex}.${fileExtension}`;
-    const storageRef = ref(storage, `universalProfiles/documents/${user.uid}/${fileName}`);
-    
-    await uploadBytes(storageRef, file);
-    const downloadURL = await getDownloadURL(storageRef);
-
-    const newIDData = {
-      url: downloadURL,
-      status: validationResult.status,
-      message: validationResult.message,
-      uploadedAt: new Date().toISOString()
-    };
-
-    // Get existing IDs
-    const existingIDs = getAllIDData(profileData);
-    let updatedIDs;
-
-    if (idIndex < existingIDs.length) {
-      // Update existing ID
-      updatedIDs = existingIDs.map((id, index) => 
-        index === idIndex ? newIDData : id
-      );
-    } else {
-      // Add new ID
-      updatedIDs = [...existingIDs, newIDData];
-    }
-
-    // Update profile data
-    const updateData = {
-      [`documents.${documentId}_multiple`]: updatedIDs,
-      [`documents.${documentId}_multiple_updated`]: serverTimestamp(),
-      [`documents.${documentId}_count`]: updatedIDs.length
-    };
-
-    await updateDoc(profileRef, updateData);
-    
-    // Refresh data
-    const updatedProfileSnap = await getDoc(profileRef);
-    if (updatedProfileSnap.exists()) {
-      setProfileData(updatedProfileSnap.data());
-    }
-    
-    setIsUploading(false);
-    setTimeout(() => {
-      setIsOverlayVisible(false);
-    }, 300);
-    
-  } catch (error) {
-    console.error("Individual ID upload failed:", error);
-    setIsUploading(false);
-    setTimeout(() => {
-      setIsOverlayVisible(false);
-      alert(`Upload failed: ${error.message}`);
-    }, 300);
-  }
-};
-
-// ✅ ADDED: Function to delete individual ID
-const handleDeleteIndividualID = async (docLabel, index) => {
+  const handleDeleteIndividualDocument = async (docLabel, displayIndex) => {
   const auth = getAuth();
   const user = auth.currentUser;
   if (!user) return;
 
-  const confirmDelete = window.confirm(`Are you sure you want to delete ID ${index + 1}?`);
+  const confirmDelete = window.confirm(`Are you sure you want to delete this ${docLabel}?`);
   if (!confirmDelete) return;
 
   try {
     const documentId = getDocumentId(docLabel);
     const profileRef = doc(db, "universalProfiles", user.uid);
 
-    const currentIDs = getAllIDData(profileData);
-    const updatedIDs = currentIDs.filter((_, i) => i !== index);
+    const currentDocs = getMultipleDocumentData(docLabel, profileData);
+    
+    // Get the document to be deleted
+    const docToDelete = currentDocs[displayIndex];
+    
+    if (!docToDelete) {
+      alert("Document not found!");
+      return;
+    }
 
-    const updateData = {
-      [`documents.${documentId}_multiple`]: updatedIDs,
-      [`documents.${documentId}_multiple_updated`]: serverTimestamp(),
-      [`documents.${documentId}_count`]: updatedIDs.length
-    };
+    // For ownership management CVs, find by source and index
+    if (docLabel === "CV" && docToDelete.source === "ownership_management") {
+      const updatedDocs = currentDocs.filter((doc, i) => {
+        // Match by source AND director/executive index
+        if (doc.source === "ownership_management" && doc.directorIndex !== undefined) {
+          return doc.directorIndex !== docToDelete.directorIndex;
+        }
+        if (doc.source === "ownership_management" && doc.executiveIndex !== undefined) {
+          return doc.executiveIndex !== docToDelete.executiveIndex;
+        }
+        // Keep other documents
+        return i !== displayIndex;
+      });
 
-    await updateDoc(profileRef, updateData);
+      const updateData = {
+        [`documents.cv_multiple`]: updatedDocs,
+        [`documents.cv_multiple_updated`]: serverTimestamp(),
+        [`documents.cv_count`]: updatedDocs.length
+      };
+
+      await updateDoc(profileRef, updateData);
+      
+      // Also delete from ownership management data
+      if (docToDelete.directorIndex !== undefined) {
+        // Trigger deletion from ownership management
+        console.log("Director CV should be deleted from ownership management too");
+      }
+    } else {
+      // Regular deletion for other documents
+      const updatedDocs = currentDocs.filter((_, i) => i !== displayIndex);
+      
+      const updateData = {
+        [`documents.${documentId}_multiple`]: updatedDocs,
+        [`documents.${documentId}_multiple_updated`]: serverTimestamp(),
+        [`documents.${documentId}_count`]: updatedDocs.length
+      };
+
+      await updateDoc(profileRef, updateData);
+    }
     
     // Refresh data
     const updatedProfileSnap = await getDoc(profileRef);
     if (updatedProfileSnap.exists()) {
       setProfileData(updatedProfileSnap.data());
+      const submitted = checkSubmittedDocs(DOCUMENTS, updatedProfileSnap.data());
+      setSubmittedDocuments(submitted);
     }
     
   } catch (error) {
-    console.error("Error deleting individual ID:", error);
-    alert('Failed to delete ID. Please try again.');
+    console.error("Error deleting individual document:", error);
+    alert('Failed to delete document. Please try again.');
   }
 };
 
-// ✅ ADDED: Function to add new ID slot
-const handleAddNewID = async () => {
-  const auth = getAuth();
-  const user = auth.currentUser;
-  if (!user) return;
+  // Unified function to add new document slot
+  const handleAddNewDocument = async (docLabel) => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
 
-  try {
-    const documentId = getDocumentId("IDs of Directors & Shareholders");
-    const profileRef = doc(db, "universalProfiles", user.uid);
+    try {
+      const documentId = getDocumentId(docLabel);
+      const profileRef = doc(db, "universalProfiles", user.uid);
 
-    const currentIDs = getAllIDData(profileData);
-    const newIDData = {
-      url: "",
-      status: "pending",
-      message: "No document uploaded",
-      uploadedAt: new Date().toISOString()
-    };
+      const currentDocs = getMultipleDocumentData(docLabel, profileData);
+      const newDocData = {
+        url: "",
+        status: "pending",
+        message: "No document uploaded",
+        uploadedAt: new Date().toISOString()
+      };
 
-    const updatedIDs = [...currentIDs, newIDData];
+      const updatedDocs = [...currentDocs, newDocData];
 
-    const updateData = {
-      [`documents.${documentId}_multiple`]: updatedIDs,
-      [`documents.${documentId}_multiple_updated`]: serverTimestamp(),
-      [`documents.${documentId}_count`]: updatedIDs.length
-    };
+      const updateData = {
+        [`documents.${documentId}_multiple`]: updatedDocs,
+        [`documents.${documentId}_multiple_updated`]: serverTimestamp(),
+        [`documents.${documentId}_count`]: updatedDocs.length
+      };
 
-    await updateDoc(profileRef, updateData);
-    
-    // Refresh data
-    const updatedProfileSnap = await getDoc(profileRef);
-    if (updatedProfileSnap.exists()) {
-      setProfileData(updatedProfileSnap.data());
+      await updateDoc(profileRef, updateData);
+      
+      const updatedProfileSnap = await getDoc(profileRef);
+      if (updatedProfileSnap.exists()) {
+        setProfileData(updatedProfileSnap.data());
+      }
+      
+    } catch (error) {
+      console.error("Error adding new document slot:", error);
+      alert('Failed to add new document slot. Please try again.');
     }
-    
-  } catch (error) {
-    console.error("Error adding new ID slot:", error);
-    alert('Failed to add new ID slot. Please try again.');
-  }
-};
+  };
 
-// ✅ ADDED: Helper function to render document link for individual IDs
-const renderDocumentLinkForID = (id) => {
-  if (!id.url || id.url === "") {
+  // Helper function to render document link for individual documents
+  const renderDocumentLinkForIndividual = (doc) => {
+    if (!doc.url || doc.url === "") {
+      return (
+        <span style={{
+          color: "#8d6e63",
+          fontSize: "12px",
+          fontStyle: "italic"
+        }}>
+          No document uploaded
+        </span>
+      );
+    }
+
     return (
-      <span style={{
-        color: "#8d6e63",
-        fontSize: "12px",
-        fontStyle: "italic"
-      }}>
-        No document uploaded
-      </span>
+      <a
+        href={doc.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "6px",
+          color: "#5d4037",
+          textDecoration: "none",
+          fontSize: "12px",
+          fontWeight: "500",
+          padding: "4px 0",
+          borderBottom: "1px solid #5d4037",
+          transition: "all 0.2s ease"
+        }}
+        onMouseEnter={(e) => {
+          e.target.style.color = "#8d6e63";
+          e.target.style.borderBottomColor = "#8d6e63";
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.color = "#5d4037";
+          e.target.style.borderBottomColor = "#5d4037";
+        }}
+      >
+        <FileText size={14} />
+        <span>View Document</span>
+        <ExternalLink size={12} />
+      </a>
+    );
+  };
+
+  // In renderIndividualDocumentActions function, check if it's a CV from ownership
+const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
+  // If it's a CV from ownership management, only show delete, not upload
+  if (docLabel === "CV" && doc.source === "ownership_management") {
+    return (
+      <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
+        <button
+          onClick={() => handleDeleteIndividualDocument(docLabel, docIndex)}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "4px",
+            padding: "6px 12px",
+            backgroundColor: "#d32f2f",
+            color: "white",
+            border: "none",
+            borderRadius: "6px",
+            fontSize: "11px",
+            cursor: "pointer",
+            fontWeight: "600",
+            transition: "all 0.2s ease"
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.backgroundColor = "#b71c1c";
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.backgroundColor = "#d32f2f";
+          }}
+        >
+          <Trash2 size={12} />
+          Delete
+        </button>
+      </div>
     );
   }
-
-  return (
-    <a
-      href={id.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "6px",
-        color: "#5d4037",
-        textDecoration: "none",
-        fontSize: "12px",
-        fontWeight: "500",
-        padding: "4px 0",
-        borderBottom: "1px solid #5d4037",
-        transition: "all 0.2s ease"
-      }}
-      onMouseEnter={(e) => {
-        e.target.style.color = "#8d6e63";
-        e.target.style.borderBottomColor = "#8d6e63";
-      }}
-      onMouseLeave={(e) => {
-        e.target.style.color = "#5d4037";
-        e.target.style.borderBottomColor = "#5d4037";
-      }}
-    >
-      <FileText size={14} />
-      <span>View Document</span>
-      <ExternalLink size={12} />
-    </a>
-  );
-};
-
-// ✅ ADDED: Helper function for individual ID actions
-const renderIndividualIDActions = (docLabel, idIndex, id) => {
+  
+  // Regular actions for other documents
   return (
     <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
       <label style={{
@@ -1044,22 +1084,21 @@ const renderIndividualIDActions = (docLabel, idIndex, id) => {
       }}
       >
         <Upload size={12} />
-        {id.url ? "Update" : "Upload"}
+        {doc.url ? "Update" : "Upload"}
         <input
           type="file"
           style={{ display: "none" }}
           onChange={(e) => {
-            const files = e.target.files;
-            if (files && files.length > 0) {
-              handleIndividualIDUpload(docLabel, files[0], idIndex);
+            const files = e.target.files[0];
+            if (files) {
+              handleIndividualDocumentUpload(docLabel, files[0], docIndex);
             }
           }}
           accept=".pdf,.jpg,.jpeg,.png"
         />
       </label>
-      {/* ✅ CHANGED: First ID can now also be deleted */}
       <button
-        onClick={() => handleDeleteIndividualID(docLabel, idIndex)}
+        onClick={() => handleDeleteIndividualDocument(docLabel, docIndex)}
         style={{
           display: "inline-flex",
           alignItems: "center",
@@ -1087,459 +1126,523 @@ const renderIndividualIDActions = (docLabel, idIndex, id) => {
     </div>
   );
 };
-
-// ✅ UPDATED: renderDocumentLink function for IDs to match table layout
-const renderDocumentLink = (label) => {
-  if (label === "IDs of Directors & Shareholders") {
-    const allIDs = getAllIDData(profileData);
-    const hasDocuments = allIDs.some(id => id.url && id.url !== "");
+  const renderDocumentLink = (label) => {
+    const multiUploadDocuments = ["IDs of Directors & Shareholders", "CV"];
     
-    if (!hasDocuments) {
+    if (multiUploadDocuments.includes(label)) {
+      const allDocs = getMultipleDocumentData(label, profileData);
+      const hasDocuments = allDocs.some(doc => doc.url && doc.url !== "");
+      
+      if (!hasDocuments) {
+        return (
+          <span style={{
+            color: "#8d6e63",
+            fontSize: "12px",
+            fontStyle: "italic"
+          }}>
+            No documents uploaded
+          </span>
+        );
+      }
+
+      const isExpanded = label === "IDs of Directors & Shareholders" ? expandedIDs : expandedCVs;
+      const setExpanded = label === "IDs of Directors & Shareholders" ? setExpandedIDs : setExpandedCVs;
+
+      return (
+        <div style={{ textAlign: "center" }}>
+          <span style={{
+            color: "#5d4037",
+            fontSize: "12px",
+            fontWeight: "500"
+          }}>
+            {allDocs.filter(doc => doc.url && doc.url !== "").length} {label === "IDs of Directors & Shareholders" ? "ID(s)" : "CV(s)"} uploaded
+          </span>
+          <div style={{ marginTop: "4px" }}>
+            <button
+              onClick={() => setExpanded(!isExpanded)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                padding: "2px 8px",
+                backgroundColor: "transparent",
+                color: "#8d6e63",
+                border: "1px solid #8d6e63",
+                borderRadius: "4px",
+                fontSize: "10px",
+                cursor: "pointer",
+                transition: "all 0.2s ease"
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = "#8d6e63";
+                e.target.style.color = "white";
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = "transparent";
+                e.target.style.color = "#8d6e63";
+              }}
+            >
+              {isExpanded ? <Minus size={10} /> : <Plus size={10} />}
+              {isExpanded ? "Hide" : "Show"} {label === "IDs of Directors & Shareholders" ? "IDs" : "CVs"}
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // Regular documents (unchanged)
+    const documentId = getDocumentId(label);
+    const url = profileData.documents?.[documentId] || getDocumentURL(label, profileData);
+    
+    if (!url) {
       return (
         <span style={{
           color: "#8d6e63",
           fontSize: "12px",
           fontStyle: "italic"
         }}>
-          No documents uploaded
+          No document uploaded
         </span>
       );
     }
 
     return (
-      <div style={{ textAlign: "center" }}>
-        <span style={{
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "6px",
           color: "#5d4037",
+          textDecoration: "none",
           fontSize: "12px",
-          fontWeight: "500"
-        }}>
-          {allIDs.filter(id => id.url && id.url !== "").length} ID(s) uploaded
-        </span>
-        <div style={{ marginTop: "4px" }}>
-          <button
-            onClick={() => setExpandedIDs(!expandedIDs)}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-              padding: "2px 8px",
-              backgroundColor: "transparent",
-              color: "#8d6e63",
-              border: "1px solid #8d6e63",
-              borderRadius: "4px",
-              fontSize: "10px",
-              cursor: "pointer",
-              transition: "all 0.2s ease"
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.backgroundColor = "#8d6e63";
-              e.target.style.color = "white";
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.backgroundColor = "transparent";
-              e.target.style.color = "#8d6e63";
-            }}
-          >
-            {expandedIDs ? <Minus size={10} /> : <Plus size={10} />}
-            {expandedIDs ? "Hide" : "Show"} IDs
-          </button>
-        </div>
-      </div>
+          fontWeight: "500",
+          padding: "4px 0",
+          borderBottom: "1px solid #5d4037",
+          transition: "all 0.2s ease"
+        }}
+        onMouseEnter={(e) => {
+          e.target.style.color = "#8d6e63";
+          e.target.style.borderBottomColor = "#8d6e63";
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.color = "#5d4037";
+          e.target.style.borderBottomColor = "#5d4037";
+        }}
+      >
+        <FileText size={14} />
+        <span>View Document</span>
+        <ExternalLink size={12} />
+      </a>
     );
-  }
+  };
 
-  // Regular documents (unchanged)
-  const documentId = getDocumentId(label);
-  const url = profileData.documents?.[documentId] || getDocumentURL(label, profileData);
-  
-  if (!url) {
-    return (
-      <span style={{
-        color: "#8d6e63",
-        fontSize: "12px",
-        fontStyle: "italic"
-      }}>
-        No document uploaded
-      </span>
-    );
-  }
+  const handleFileUpload = async (docLabel, file) => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user || !file) return;
 
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "6px",
-        color: "#5d4037",
-        textDecoration: "none",
-        fontSize: "12px",
-        fontWeight: "500",
-        padding: "4px 0",
-        borderBottom: "1px solid #5d4037",
-        transition: "all 0.2s ease"
-      }}
-      onMouseEnter={(e) => {
-        e.target.style.color = "#8d6e63";
-        e.target.style.borderBottomColor = "#8d6e63";
-      }}
-      onMouseLeave={(e) => {
-        e.target.style.color = "#5d4037";
-        e.target.style.borderBottomColor = "#5d4037";
-      }}
-    >
-      <FileText size={14} />
-      <span>View Document</span>
-      <ExternalLink size={12} />
-    </a>
-  );
-};
-
-const handleFileUpload = async (docLabel, file) => {
-  const auth = getAuth();
-  const user = auth.currentUser;
-  if (!user || !file) return;
-
-  const allowedTypes = ['.pdf', '.jpg', '.jpeg', '.png'];
-  const fileExtension = file.name.toLowerCase().split('.').pop();
-  
-  if (!allowedTypes.includes(`.${fileExtension}`)) {
-    alert(`Please upload only PDF or Image files. File type .${fileExtension} is not allowed.`);
-    return;
-  }
-
-  const maxSize = 10 * 1024 * 1024;
-  if (file.size > maxSize) {
-    alert('File size exceeds 10MB limit. Please upload a smaller file.');
-    return;
-  }
-
-  // Start loading for AI validation
-  setIsUploading(true);
-  setIsOverlayVisible(true);
-
-  try {
-    const registeredName = await getRegisteredName();
-    console.log("🏢 Registered Name for validation:", registeredName);
+    const allowedTypes = ['.pdf', '.jpg', '.jpeg', '.png'];
+    const fileExtension = file.name.toLowerCase().split('.').pop();
     
-    const validationResult = await validateDocumentWithAI(docLabel, file, registeredName);
-    console.log("AI validation result:", validationResult);
-
-    if (!validationResult.isValid) {
-      alert(`Validation failed: ${validationResult.message}`);
-      setIsUploading(false);
-      setIsOverlayVisible(false);
+    if (!allowedTypes.includes(`.${fileExtension}`)) {
+      alert(`Please upload only PDF or Image files. File type .${fileExtension} is not allowed.`);
       return;
     }
 
-    setRejectionReasons(prev => ({
-      ...prev,
-      [docLabel]: validationResult.rejectionReason
-    }));
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      alert('File size exceeds 10MB limit. Please upload a smaller file.');
+      return;
+    }
 
-    // Check for warnings
-    if (validationResult.warnings && validationResult.warnings.length > 0) {
-      const proceed = window.confirm(
-        `Document has warnings:\n${validationResult.warnings.join('\n')}\n\nDo you want to proceed anyway?`
-      );
-      if (!proceed) {
+    setIsUploading(true);
+    setIsOverlayVisible(true);
+
+    try {
+      const registeredName = await getRegisteredName();
+      const validationResult = await validateDocumentWithAI(docLabel, file, registeredName);
+
+      if (!validationResult.isValid) {
+        alert(`Validation failed: ${validationResult.message}`);
         setIsUploading(false);
         setIsOverlayVisible(false);
         return;
       }
-    }
 
-    // Upload to Firebase
-    const storage = getStorage();
+      setRejectionReasons(prev => ({
+        ...prev,
+        [docLabel]: validationResult.rejectionReason
+      }));
+
+      if (validationResult.warnings && validationResult.warnings.length > 0) {
+        const proceed = window.confirm(
+          `Document has warnings:\n${validationResult.warnings.join('\n')}\n\nDo you want to proceed anyway?`
+        );
+        if (!proceed) {
+          setIsUploading(false);
+          setIsOverlayVisible(false);
+          return;
+        }
+      }
+
+      const storage = getStorage();
+      const documentId = getDocumentId(docLabel);
+      const category = getDocumentCategory(docLabel);
+      
+      const fileName = `${documentId}.${fileExtension}`;
+      const storageRef = ref(storage, `universalProfiles/documents/${user.uid}/${fileName}`);
+
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
+
+      const profileRef = doc(db, "universalProfiles", user.uid);
+      const unifiedPath = UNIFIED_DOCUMENT_PATHS[documentId];
+
+      const updateData = {
+        [unifiedPath]: downloadURL,
+        [`${unifiedPath}UpdatedAt`]: serverTimestamp(),
+        [`verification.${documentId}`]: {
+          status: validationResult.status,
+          message: validationResult.message,
+          lastChecked: serverTimestamp()
+        }
+      };
+
+      if (category === DOCUMENT_CATEGORIES.PROFILE) {
+        switch(documentId) {
+          case 'registrationCertificate':
+            updateData[`entityOverview.registrationCertificate`] = downloadURL;
+            break;
+          case 'certifiedIds':
+            updateData[`ownershipManagement.certifiedIds`] = downloadURL;
+            break;
+          case 'shareRegister':
+            updateData[`ownershipManagement.shareRegister`] = downloadURL;
+            break;
+          case 'proofOfAddress':
+            updateData[`contactDetails.proofOfAddress`] = downloadURL;
+            break;
+          case 'taxClearanceCert':
+          case 'bbbeeCert':
+          case 'otherCerts':
+          case 'industryAccreditationDocs':
+            updateData[`legalCompliance.${documentId}`] = downloadURL;
+            break;
+          case 'companyProfile':
+          case 'clientReferences':
+            updateData[`productsServices.${documentId}`] = downloadURL;
+            break;
+          case 'cv':
+            updateData[`productsServices.cv`] = downloadURL;
+            break;
+        }
+      }
+
+      await updateDoc(profileRef, updateData);
+      setSubmittedDocuments((prev) => Array.from(new Set([...prev, docLabel])));
+      
+      const updatedProfileSnap = await getDoc(profileRef);
+      if (updatedProfileSnap.exists()) {
+        setProfileData(updatedProfileSnap.data());
+      }
+      
+      setIsUploading(false);
+      setTimeout(() => {
+        setIsOverlayVisible(false);
+      }, 300);
+      
+    } catch (error) {
+      console.error("Upload failed:", error);
+      setIsUploading(false);
+      setTimeout(() => {
+        setIsOverlayVisible(false);
+        alert('Upload failed - please try again');
+      }, 300);
+    }
+  };
+
+  const getDocumentStatus = (docLabel) => {
     const documentId = getDocumentId(docLabel);
-    const category = getDocumentCategory(docLabel);
+    const url = getDocumentURL(docLabel, profileData);
+    const verification = profileData.verification?.[documentId];
     
-    const fileName = `${documentId}.${fileExtension}`;
-    const storageRef = ref(storage, `universalProfiles/documents/${user.uid}/${fileName}`);
-
-    await uploadBytes(storageRef, file);
-    const downloadURL = await getDownloadURL(storageRef);
-
-    const profileRef = doc(db, "universalProfiles", user.uid);
-    const unifiedPath = UNIFIED_DOCUMENT_PATHS[documentId];
-
-    const updateData = {
-      [unifiedPath]: downloadURL,
-      [`${unifiedPath}UpdatedAt`]: serverTimestamp(),
-      [`verification.${documentId}`]: {
-        status: validationResult.status,
-        message: validationResult.message,
-        lastChecked: serverTimestamp()
-      }
-    };
-
-    // Only update profile-specific paths for profile documents
-    if (category === DOCUMENT_CATEGORIES.PROFILE) {
-      switch(documentId) {
-        case 'registrationCertificate':
-          updateData[`entityOverview.registrationCertificate`] = downloadURL;
-          break;
-        case 'certifiedIds':
-          updateData[`ownershipManagement.certifiedIds`] = downloadURL;
-          break;
-        case 'shareRegister':
-          updateData[`ownershipManagement.shareRegister`] = downloadURL;
-          break;
-        case 'proofOfAddress':
-          updateData[`contactDetails.proofOfAddress`] = downloadURL;
-          break;
-        case 'taxClearanceCert':
-        case 'bbbeeCert':
-        case 'otherCerts':
-        case 'industryAccreditationDocs':
-          updateData[`legalCompliance.${documentId}`] = downloadURL;
-          break;
-        case 'companyProfile':
-        case 'clientReferences':
-          updateData[`productsServices.${documentId}`] = downloadURL;
-          break;
-        case 'cv':
-          updateData[`productsServices.cv`] = downloadURL;
-          break;
-      }
-    }
-
-    await updateDoc(profileRef, updateData);
-    setSubmittedDocuments((prev) => Array.from(new Set([...prev, docLabel])));
-    
-    const updatedProfileSnap = await getDoc(profileRef);
-    if (updatedProfileSnap.exists()) {
-      setProfileData(updatedProfileSnap.data());
+    if (!url) {
+      return "pending";
     }
     
-    // Success
-    setIsUploading(false);
-    setTimeout(() => {
-      setIsOverlayVisible(false);
-    }, 300);
+    if (!verification) {
+      return "uploaded";
+    }
     
-  } catch (error) {
-    console.error("Upload failed:", error);
-    setIsUploading(false);
-    setTimeout(() => {
-      setIsOverlayVisible(false);
-      alert('Upload failed - please try again');
-    }, 300);
-  }
-};
+    return verification.status || "uploaded";
+  };
 
-// ✅ ADDED: Function to get document status for filtering
-const getDocumentStatus = (docLabel) => {
-  const documentId = getDocumentId(docLabel);
-  const url = getDocumentURL(docLabel, profileData);
-  const verification = profileData.verification?.[documentId];
-  
-  if (!url) {
-    return "pending";
-  }
-  
-  if (!verification) {
-    return "uploaded";
-  }
-  
-  return verification.status || "uploaded";
-};
+  const filteredDocuments = DOCUMENTS.filter((doc) => {
+    const documentStatus = getDocumentStatus(doc);
+    
+    const fundingDocuments = [
+      "5 Year Budget",
+      "Bank Details Confirmation Letter", 
+      "Financial Statements",
+      "Loan Agreements",
+    ];
 
-const filteredDocuments = DOCUMENTS.filter((doc) => {
-  const isSubmitted = submittedDocuments.includes(doc);
-  const documentStatus = getDocumentStatus(doc);
-  
-  // Big Score documents
-  const bigScoreDocuments = [
-    "Company Registration Certificate",
-    "Tax Clearance Certificate",  
-    "IDs of Directors & Shareholders",
-    "Share Register",
-    "B-BBEE Certificate",
-    "COIDA Letter of Good Standing",
-    "Proof of Address",
-    "Company Profile / Brochure"
-  ];
+    const complianceDocuments = [
+      "Company Registration Certificate",
+      "Tax Clearance Certificate", 
+      "B-BBEE Certificate",
+      "Bank Confirmation Letter",
+      "COIDA Letter of Good Standing",
+      "Proof of Address",
+      "Company Profile / Brochure"
+    ];
 
-  // Funding documents
-  const fundingDocuments = [
-    "5 Year Budget",
-    "Bank Details Confirmation Letter", 
-    "Audited Financials",
-    "Previous Program Reports",
-    "Loan Agreements",
-    "Support Letters / Endorsements",
-    "Impact Statements" 
-  ];
+    const legitimacyDocuments = [
+      "Company Registration Certificate",
+      "Tax Clearance Certificate",
+      "B-BBEE Certificate",
+      "COIDA Letter of Good Standing",
+      "Industry Accreditations",
+      "Client References / Support Letters",
+      "Company Profile / Brochure",
+    ];
 
-  // Compliance Score documents
-  const complianceDocuments = [
-    "Company Registration Certificate",
-    "Tax Clearance Certificate", 
-    "B-BBEE Certificate",
-    "COIDA Letter of Good Standing",
-    "IDs of Directors & Shareholders",
-    "Proof of Address",
-    "Share Register",
-    "Company Profile / Brochure"
-  ];
+    const leadershipDocuments = [
+      "CV"
+    ];
 
-  // Legitimacy documents
-  const legitimacyDocuments = [
-    "Company Registration Certificate",
-    "Tax Clearance Certificate",
-    "B-BBEE Certificate",
-    "COIDA Letter of Good Standing",
-    "Industry Accreditations"
-  ];
+    const governanceDocuments = [
+      "IDs of Directors & Shareholders",
+      "Share Register",
+    ];
 
-  // Leadership documents  
-  const leadershipDocuments = [
-    "IDs of Directors & Shareholders",
-    "Share Register",
-    "Company Profile / Brochure",
-    "Client References",
-    "Support Letters / Endorsements",
-    "CV"
-  ];
+    const capitalAppealDocuments = [
+      "Financial Statements", 
+      "5 Year Budget",
+      "Business Plan",
+      "Pitch Deck",
+      "B-BBEE Certificate",
+      "Company Profile / Brochure",
+      "Industry Accreditations",
+      "Loan Agreements",
+      "Guarantee/Contract"
+    ];
 
-  // Governance documents
-  const governanceDocuments = [
-    "Share Register",
-    "Audited Financials",
-    "Loan Agreements",
-    "Guarantee/Contract"
-  ];
+    const matchFilter =
+      filter === "all" ||
+      (filter === "Funding" && fundingDocuments.includes(doc)) ||
+      (filter === "Compliance" && complianceDocuments.includes(doc)) || 
+      (filter === "Legitimacy" && legitimacyDocuments.includes(doc)) || 
+      (filter === "Leadership" && leadershipDocuments.includes(doc)) || 
+      (filter === "Governance" && governanceDocuments.includes(doc)) ||
+      (filter === "Capital Appeal" && capitalAppealDocuments.includes(doc)); 
 
-  const capitalAppealDocuments = [
-    "Audited Financials",
-    "5 Year Budget",
-    "Business Plan",
-    "Pitch Deck",
-    "Bank Details Confirmation Letter",
-    "Tax Clearance Certificate",
-    "B-BBEE Certificate",
-    "Impact Statements",
-    "Company Profile / Brochure",
-    "Industry Accreditations",
-    "Loan Agreements",
-    "CV"
-  ];
+    const matchStatusFilter = 
+      statusFilter === "all" ||
+      (statusFilter === "pending" && !getDocumentURL(doc, profileData)) ||
+      (statusFilter === "verified" && (documentStatus === "verified" || documentStatus === "verified:not_audited")) ||
+      (statusFilter === "rejected" && 
+        (documentStatus === "wrong_type" || documentStatus === "expired" || 
+         documentStatus === "name_mismatch" || documentStatus === "incomplete")) ||
+      (statusFilter === "uploaded" && getDocumentURL(doc, profileData) && 
+       documentStatus !== "verified" && documentStatus !== "verified:not_audited");
 
-  // UPDATED FILTER LOGIC
-  const matchFilter =
-    filter === "all" ||
-    (filter === "Big Score" && bigScoreDocuments.includes(doc)) ||
-    (filter === "Funding" && fundingDocuments.includes(doc)) ||
-    (filter === "Compliance" && complianceDocuments.includes(doc)) || 
-    (filter === "Legitimacy" && legitimacyDocuments.includes(doc)) || 
-    (filter === "Leadership" && leadershipDocuments.includes(doc)) || 
-    (filter === "Governance" && governanceDocuments.includes(doc)) ||
-    (filter === "Capital Appeal" && capitalAppealDocuments.includes(doc)); 
+    const matchSearch = doc.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    return matchFilter && matchStatusFilter && matchSearch;
+  });
 
-  // STATUS FILTER LOGIC
-  const matchStatusFilter = 
-    statusFilter === "all" ||
-    (statusFilter === "pending" && !getDocumentURL(doc, profileData)) ||
-    (statusFilter === "verified" && (documentStatus === "verified" || documentStatus === "verified:not_audited")) ||
-    (statusFilter === "rejected" && 
-      (documentStatus === "wrong_type" || documentStatus === "expired" || 
-       documentStatus === "name_mismatch" || documentStatus === "incomplete")) ||
-    (statusFilter === "uploaded" && getDocumentURL(doc, profileData) && 
-     documentStatus !== "verified" && documentStatus !== "verified:not_audited");
+  const handleDeleteDocument = async (docLabel) => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
 
-  const matchSearch = doc.toLowerCase().includes(searchTerm.toLowerCase());
-  
-  return matchFilter && matchStatusFilter && matchSearch;
-});
+    const confirmDelete = window.confirm(`Are you sure you want to delete ${docLabel}?`);
+    if (!confirmDelete) return;
 
-const handleDeleteDocument = async (docLabel) => {
-  const auth = getAuth();
-  const user = auth.currentUser;
-  if (!user) return;
+    try {
+      const documentId = getDocumentId(docLabel);
+      const category = getDocumentCategory(docLabel);
+      const profileRef = doc(db, "universalProfiles", user.uid);
 
-  const confirmDelete = window.confirm(`Are you sure you want to delete ${docLabel}?`);
-  if (!confirmDelete) return;
+      const updateData = {
+        [`documents.${documentId}`]: null,
+        [`verification.${documentId}`]: null,
+        [`documents.${documentId}UpdatedAt`]: null,
+        [`documents.${documentId}_multiple`]: null,
+        [`documents.${documentId}_multiple_updated`]: null,
+        [`documents.${documentId}_count`]: null
+      };
 
-  try {
+      if (category === DOCUMENT_CATEGORIES.PROFILE) {
+        switch(documentId) {
+          case 'registrationCertificate':
+            updateData[`entityOverview.registrationCertificate`] = null;
+            updateData[`entityOverview.registrationCertificateUpdatedAt`] = null; 
+            break;
+          case 'certifiedIds':
+            updateData[`ownershipManagement.certifiedIds`] = null;
+            updateData[`ownershipManagement.certifiedIdsUpdatedAt`] = null;
+            break;
+          case 'shareRegister':
+            updateData[`ownershipManagement.shareRegister`] = null;
+            updateData[`ownershipManagement.shareRegisterUpdatedAt`] = null;
+            break;
+          case 'proofOfAddress':
+            updateData[`contactDetails.proofOfAddress`] = null;
+            updateData[`contactDetails.proofOfAddressUpdatedAt`] = null;
+            break;
+          case 'taxClearanceCert':
+          case 'bbbeeCert':
+          case 'otherCerts':
+          case 'industryAccreditationDocs':
+            updateData[`legalCompliance.${documentId}`] = null;
+            updateData[`legalCompliance.${documentId}UpdatedAt`] = null;
+            break;
+          case 'companyProfile':
+          case 'clientReferences':
+            updateData[`productsServices.${documentId}`] = null;
+            updateData[`productsServices.${documentId}UpdatedAt`] = null;
+            break;
+          case 'cv':
+            updateData[`productsServices.cv`] = null;
+            updateData[`productsServices.cvUpdatedAt`] = null;
+            break;
+        }
+      }
+
+      await updateDoc(profileRef, updateData);
+      
+      setSubmittedDocuments(prev => prev.filter(d => d !== docLabel));
+      
+      const updatedProfileSnap = await getDoc(profileRef);
+      if (updatedProfileSnap.exists()) {
+        setProfileData(updatedProfileSnap.data());
+      }
+      
+    } catch (error) {
+      console.error("Error deleting document:", error);
+      alert('Failed to delete document. Please try again.');
+    }
+  };
+
+  const getStatusBadge = (docLabel) => {
+    const multiUploadDocuments = ["IDs of Directors & Shareholders", "CV"];
+    
+    if (multiUploadDocuments.includes(docLabel)) {
+      const allDocs = getMultipleDocumentData(docLabel, profileData);
+      const hasUploadedDocs = allDocs.some(doc => doc.url && doc.url !== "");
+      
+      if (!hasUploadedDocs) {
+        return (
+          <span style={{
+            display: "inline-flex",
+            alignItems: "center",
+            padding: "4px 8px",
+            borderRadius: "12px",
+            fontSize: "11px",
+            fontWeight: "600",
+            backgroundColor: "#ffebee",
+            color: "#c62828"
+          }}>
+            Not Uploaded
+          </span>
+        );
+      }
+
+      const allVerified = allDocs.filter(doc => doc.url && doc.url !== "").every(doc => 
+        doc.status === "verified" || doc.status === "verified:not_audited"
+      );
+
+      if (allVerified) {
+        return (
+          <span style={{
+            display: "inline-flex",
+            alignItems: "center",
+            padding: "4px 8px",
+            borderRadius: "12px",
+            fontSize: "11px",
+            fontWeight: "600",
+            backgroundColor: "#e8f5e8",
+            color: "#2e7d32"
+          }}>
+            Verified
+          </span>
+        );
+      }
+
+      return (
+        <span style={{
+          display: "inline-flex",
+          alignItems: "center",
+          padding: "4px 8px",
+          borderRadius: "12px",
+          fontSize: "11px",
+          fontWeight: "600",
+          backgroundColor: "#fff3e0",
+          color: "#ef6c00"
+        }}>
+          Uploaded
+        </span>
+      );
+    }
+
     const documentId = getDocumentId(docLabel);
-    const category = getDocumentCategory(docLabel);
-    const profileRef = doc(db, "universalProfiles", user.uid);
+    const url = getDocumentURL(docLabel, profileData);
+    const verification = profileData.verification?.[documentId];
+    
+    if (!url) {
+      return (
+        <span style={{
+          display: "inline-flex",
+          alignItems: "center",
+          padding: "4px 8px",
+          borderRadius: "12px",
+          fontSize: "11px",
+          fontWeight: "600",
+          backgroundColor: "#ffebee",
+          color: "#c62828"
+        }}>
+          Pending
+        </span>
+      );
+    }
 
-    // Create update data that clears ALL document data including timestamps
-    const updateData = {
-      [`documents.${documentId}`]: null,
-      [`verification.${documentId}`]: null,
-      [`documents.${documentId}UpdatedAt`]: null,
-      [`documents.${documentId}_multiple`]: null,
-      [`documents.${documentId}_multiple_updated`]: null,
-      [`documents.${documentId}_count`]: null
-    };
+    let backgroundColor = "#e8f5e8";
+    let color = "#2e7d32";
+    let statusText = "Uploaded";
 
-    // Also clear from profile-specific paths for profile documents
-    if (category === DOCUMENT_CATEGORIES.PROFILE) {
-      switch(documentId) {
-        case 'registrationCertificate':
-          updateData[`entityOverview.registrationCertificate`] = null;
-          updateData[`entityOverview.registrationCertificateUpdatedAt`] = null; 
-          break;
-        case 'certifiedIds':
-          updateData[`ownershipManagement.certifiedIds`] = null;
-          updateData[`ownershipManagement.certifiedIdsUpdatedAt`] = null;
-          break;
-        case 'shareRegister':
-          updateData[`ownershipManagement.shareRegister`] = null;
-          updateData[`ownershipManagement.shareRegisterUpdatedAt`] = null;
-          break;
-        case 'proofOfAddress':
-          updateData[`contactDetails.proofOfAddress`] = null;
-          updateData[`contactDetails.proofOfAddressUpdatedAt`] = null;
-          break;
-        case 'taxClearanceCert':
-        case 'bbbeeCert':
-        case 'otherCerts':
-        case 'industryAccreditationDocs':
-          updateData[`legalCompliance.${documentId}`] = null;
-          updateData[`legalCompliance.${documentId}UpdatedAt`] = null;
-          break;
-        case 'companyProfile':
-        case 'clientReferences':
-          updateData[`productsServices.${documentId}`] = null;
-          updateData[`productsServices.${documentId}UpdatedAt`] = null;
-          break;
-        case 'cv':
-          updateData[`productsServices.cv`] = null;
-          updateData[`productsServices.cvUpdatedAt`] = null;
-          break;
+    if (verification) {
+      if (verification.status === "verified" || verification.status === "verified:not_audited") {
+        backgroundColor = verification.status === "verified:not_audited" ? "#fff3e0" : "#e8f5e8";
+        color = verification.status === "verified:not_audited" ? "#ef6c00" : "#2e7d32";
+        statusText = verification.status === "verified:not_audited" ? "Verified (Not Audited)" : "Verified";
+      } else if (verification.status === "expired") {
+        backgroundColor = "#ffebee";
+        color = "#c62828";
+        statusText = "Expired";
+      } else if (verification.status === "wrong_type") {
+        backgroundColor = "#fff3e0";
+        color = "#ef6c00";
+        statusText = "Wrong Type";
+      } else if (verification.status === "name_mismatch") {
+        backgroundColor = "#fff3e0";
+        color = "#ef6c00";
+        statusText = "Name Mismatch";
+      } else if (verification.status === "incomplete") {
+        backgroundColor = "#fff3e0";
+        color = "#ef6c00";
+        statusText = "Incomplete";
+      } else {
+        backgroundColor = "#ffebee";
+        color = "#c62828";
+        statusText = "Rejected";
       }
     }
 
-    await updateDoc(profileRef, updateData);
-    
-    setSubmittedDocuments(prev => prev.filter(doc => doc !== docLabel));
-    
-    // Refresh profile data to ensure UI updates
-    const updatedProfileSnap = await getDoc(profileRef);
-    if (updatedProfileSnap.exists()) {
-      setProfileData(updatedProfileSnap.data());
-    }
-    
-    console.log(`Document ${docLabel} deleted successfully`);
-    
-  } catch (error) {
-    console.error("Error deleting document:", error);
-    alert('Failed to delete document. Please try again.');
-  }
-};
-
- const getStatusBadge = (docLabel) => {
-  const documentId = getDocumentId(docLabel);
-  const url = getDocumentURL(docLabel, profileData);
-  const verification = profileData.verification?.[documentId];
-  
-  if (!url) {
     return (
       <span style={{
         display: "inline-flex",
@@ -1548,60 +1651,14 @@ const handleDeleteDocument = async (docLabel) => {
         borderRadius: "12px",
         fontSize: "11px",
         fontWeight: "600",
-        backgroundColor: "#ffebee",
-        color: "#c62828"
+        backgroundColor,
+        color
       }}>
-        Pending
+        {statusText}
       </span>
     );
-  }
+  };
 
-  // ✅ UPDATED: Handle "verified:not_audited" status
-  let backgroundColor = "#e8f5e8";
-  let color = "#2e7d32";
-  let statusText = "Uploaded";
-
-  if (verification) {
-    if (verification.status === "verified" || verification.status === "verified:not_audited") {
-      backgroundColor = verification.status === "verified:not_audited" ? "#fff3e0" : "#e8f5e8";
-      color = verification.status === "verified:not_audited" ? "#ef6c00" : "#2e7d32";
-      statusText = verification.status === "verified:not_audited" ? "Verified (Not Audited)" : "Verified";
-    } else if (verification.status === "expired") {
-      backgroundColor = "#ffebee";
-      color = "#c62828";
-      statusText = "Expired";
-    } else if (verification.status === "wrong_type") {
-      backgroundColor = "#fff3e0";
-      color = "#ef6c00";
-      statusText = "Wrong Type";
-    } else if (verification.status === "name_mismatch") {
-      backgroundColor = "#fff3e0";
-      color = "#ef6c00";
-      statusText = "Name Mismatch";
-    } else if (verification.status === "incomplete") {
-      backgroundColor = "#fff3e0";
-      color = "#ef6c00";
-      statusText = "Incomplete";
-    }
-  }
-
-  return (
-    <span style={{
-      display: "inline-flex",
-      alignItems: "center",
-      padding: "4px 8px",
-      borderRadius: "12px",
-      fontSize: "11px",
-      fontWeight: "600",
-      backgroundColor,
-      color
-    }}>
-      {statusText}
-    </span>
-  );
-};
-
-  // Responsive container styles
   const getContainerStyles = () => ({
     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     width: "100%",
@@ -1635,8 +1692,136 @@ const handleDeleteDocument = async (docLabel) => {
     );
   }
 
+ // In the expanded rows render function
+const renderExpandedRows = (docLabel, docs, isExpanded, docType) => {
+  if (!isExpanded) return null;
+
+  return docs.map((doc, docIndex) => {
+    // Determine display name based on role
+    let displayName = `${docType} ${docIndex + 1}`;
+    
+    if (doc.role && doc.personName) {
+      if (doc.role === "Director") {
+        displayName = `${doc.personName} (Director ${doc.directorIndex + 1})`;
+      } else if (doc.role === "Executive") {
+        displayName = `${doc.personName} (Executive ${doc.executiveIndex + 1})`;
+      }
+    }
+    
+    return (
+      <tr 
+        key={`${docType}-${docIndex}`}
+        style={{
+          backgroundColor: docIndex % 2 === 0 ? "#f9f5f3" : "#f5f2f0",
+          borderBottom: "1px solid #e8d8cf",
+          transition: "background-color 0.2s ease"
+        }}
+      >
+        <td style={{
+          padding: "12px 20px 12px 40px",
+          fontSize: "13px",
+          color: "#6d4c41",
+          fontWeight: "500",
+          verticalAlign: "middle",
+          borderLeft: "3px solid #8d6e63"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ 
+              display: "inline-flex", 
+              alignItems: "center", 
+              justifyContent: "center",
+              width: "20px",
+              height: "20px",
+              backgroundColor: "#8d6e63",
+              color: "white",
+              borderRadius: "50%",
+              fontSize: "10px",
+              fontWeight: "600"
+            }}>
+              {docIndex + 1}
+            </span>
+            {displayName} {/* Use displayName instead of static text */}
+            {docLabel === "IDs of Directors & Shareholders" ? "of Directors & Shareholders" : ""}
+          </div>
+        </td>
+        
+        <td style={{
+          padding: "12px 20px",
+          textAlign: "center",
+          verticalAlign: "middle"
+        }}>
+          {renderDocumentLinkForIndividual(doc)}
+        </td>
+        <td style={{
+          padding: "12px 20px",
+          fontSize: "12px",
+          color: "#6d4c41",
+          textAlign: "center",
+          verticalAlign: "middle"
+        }}>
+          {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString() : "-"}
+        </td>
+        <td style={{
+          padding: "12px 20px",
+          fontSize: "12px",
+          color: "#6d4c41",
+          textAlign: "center",
+          verticalAlign: "middle"
+        }}>
+          {doc.message || "No document uploaded"}
+        </td>
+        <td style={{
+          padding: "12px 20px",
+          textAlign: "center",
+          verticalAlign: "middle"
+        }}>
+          {!doc.url || doc.url === "" ? (
+            <span style={{
+              display: "inline-flex",
+              alignItems: "center",
+              padding: "4px 8px",
+              borderRadius: "12px",
+              fontSize: "10px",
+              fontWeight: "600",
+              backgroundColor: "#ffebee",
+              color: "#c62828"
+            }}>
+              Not Uploaded
+            </span>
+          ) : (
+            <span style={{
+              display: "inline-flex",
+              alignItems: "center",
+              padding: "4px 8px",
+              borderRadius: "12px",
+              fontSize: "10px",
+              fontWeight: "600",
+              backgroundColor: doc.status === "verified" || doc.status === "verified:not_audited" ? "#e8f5e8" : 
+                              doc.status === "pending" ? "#fff3e0" : "#ffebee",
+              color: doc.status === "verified" || doc.status === "verified:not_audited" ? "#2e7d32" : 
+                    doc.status === "pending" ? "#ef6c00" : "#c62828"
+            }}>
+              {doc.status === "verified" || doc.status === "verified:not_audited" ? "Verified" : 
+              doc.status === "pending" ? "Pending" : 
+              doc.status || "Uploaded"}
+            </span>
+          )}
+        </td>
+        <td style={{
+          padding: "12px 20px",
+          textAlign: "center",
+          verticalAlign: "middle"
+        }}>
+          {renderIndividualDocumentActions(docLabel, docIndex, doc)}
+        </td>
+      </tr>
+    );
+  });
+}; 
+
   return (
     <>
+
       <style jsx global>{`
         html {
           -webkit-text-size-adjust: 100%;
@@ -1716,6 +1901,112 @@ const handleDeleteDocument = async (docLabel) => {
               margin: "0",
               fontWeight: "400"
             }}>Track all your submitted documents in one place</p>
+
+            {/* Guidelines Section */}
+            <div style={{
+              backgroundColor: "#f5f2f0",
+              border: "2px solid #d7ccc8",
+              borderRadius: "12px",
+              padding: "24px",
+              marginBottom: "30px"
+            }}>
+              <h3 style={{
+                fontSize: "18px",
+                fontWeight: "600",
+                color: "#5d4037",
+                marginBottom: "16px",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px"
+              }}>
+                📋 Document Submission Guidelines
+              </h3>
+              <p style={{
+                color: "#6d4c41",
+                lineHeight: "1.6",
+                marginBottom: "20px"
+              }}>
+                To ensure smooth processing and consistent formatting across our systems, we only accept the following file types and sizes:
+              </p>
+              
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+                gap: "20px"
+              }}>
+                <div style={{
+                  backgroundColor: "#efebe9",
+                  padding: "16px",
+                  borderRadius: "8px",
+                  borderLeft: "4px solid #4caf50"
+                }}>
+                  <h4 style={{
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    color: "#2e7d32",
+                    marginBottom: "12px"
+                  }}>✅ Accepted File Formats</h4>
+                  <ul style={{
+                    margin: "0",
+                    paddingLeft: "20px",
+                    color: "#5d4037",
+                    fontSize: "14px",
+                    lineHeight: "1.5"
+                  }}>
+                    <li style={{ marginBottom: "4px" }}><strong>PDF</strong> (.pdf) – Preferred format for all official documents</li>
+                    <li style={{ marginBottom: "4px" }}><strong>Excel Spreadsheets</strong> (.xls, .xlsx) – For financials or data tables</li>
+                    <li style={{ marginBottom: "4px" }}><strong>Image Files</strong> (.jpg, .jpeg, .png) – For scanned IDs or proof of address</li>
+                  </ul>
+                </div>
+                
+                <div style={{
+                  backgroundColor: "#efebe9",
+                  padding: "16px",
+                  borderRadius: "8px",
+                  borderLeft: "4px solid #ff9800"
+                }}>
+                  <h4 style={{
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    color: "#f57c00",
+                    marginBottom: "12px"
+                  }}>⚠️ File Size Limit</h4>
+                  <ul style={{
+                    margin: "0",
+                    paddingLeft: "20px",
+                    color: "#5d4037",
+                    fontSize: "14px",
+                    lineHeight: "1.5"
+                  }}>
+                    <li>Maximum upload size: <strong>10 MB per file</strong></li>
+                  </ul>
+                </div>
+                
+                <div style={{
+                  backgroundColor: "#efebe9",
+                  padding: "16px",
+                  borderRadius: "8px",
+                  borderLeft: "4px solid #f44336"
+                }}>
+                  <h4 style={{
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    color: "#c62828",
+                    marginBottom: "12px"
+                  }}>🚫 Unsupported Formats</h4>
+                  <ul style={{
+                    margin: "0",
+                    paddingLeft: "20px",
+                    color: "#5d4037",
+                    fontSize: "14px",
+                    lineHeight: "1.5"
+                  }}>
+                    <li style={{ marginBottom: "4px" }}>No ZIP/RAR folders, executable files (.exe), or Google Docs/Drive links</li>
+                    <li style={{ marginBottom: "4px" }}>Please download and upload original files directly (no screenshots or photos of screens)</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Controls Section */}
@@ -1733,7 +2024,7 @@ const handleDeleteDocument = async (docLabel) => {
             boxSizing: "border-box"
           }}>
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-              {["all", "Big Score", "Compliance", "Legitimacy", "Leadership", "Governance", "Capital Appeal"].map((type) => (
+              {["all", "Compliance", "Legitimacy", "Leadership", "Governance", "Capital Appeal"].map((type) => (
                 <button
                   key={type}
                   onClick={() => setFilter(type)}
@@ -1768,117 +2059,34 @@ const handleDeleteDocument = async (docLabel) => {
                 </button>
               ))}
             </div>
-            <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
-              {/* ✅ ADDED STATUS FILTER DROPDOWN */}
-              <div style={{ position: "relative" }}>
-                <button
-                  onClick={() => setShowStatusFilter(!showStatusFilter)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    padding: "12px 16px",
-                    border: "2px solid #d7ccc8",
-                    backgroundColor: "#faf8f6",
-                    color: "#6d4c41",
-                    borderRadius: "8px",
-                    fontWeight: "500",
-                    fontSize: "0.875rem",
-                    cursor: "pointer",
-                    transition: "all 0.2s ease",
-                    minWidth: "140px"
-                  }}
-                  onMouseEnter={(e) => {
-                    e.target.style.backgroundColor = "#efebe9";
-                    e.target.style.borderColor = "#a67c52";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.backgroundColor = "#faf8f6";
-                    e.target.style.borderColor = "#d7ccc8";
-                  }}
-                >
-                  <Filter size={16} />
-                  <span>Status: {statusFilter === "all" ? "All" : 
-                                statusFilter === "pending" ? "Pending" :
-                                statusFilter === "verified" ? "Verified" :
-                                statusFilter === "rejected" ? "Rejected" : "Uploaded"}</span>
-                </button>
-                
-                {showStatusFilter && (
-                  <div style={{
-                    position: "absolute",
-                    top: "100%",
-                    right: 0,
-                    marginTop: "8px",
-                    backgroundColor: "white",
-                    border: "2px solid #d7ccc8",
-                    borderRadius: "8px",
-                    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
-                    zIndex: 1000,
-                    minWidth: "160px"
-                  }}>
-                    {["all", "pending", "verified", "rejected", "uploaded"].map((status) => (
-                      <div
-                        key={status}
-                        onClick={() => {
-                          setStatusFilter(status);
-                          setShowStatusFilter(false);
-                        }}
-                        style={{
-                          padding: "12px 16px",
-                          cursor: "pointer",
-                          backgroundColor: statusFilter === status ? "#efebe9" : "white",
-                          color: "#6d4c41",
-                          fontSize: "0.875rem",
-                          fontWeight: "500",
-                          borderBottom: "1px solid #f5f2f0",
-                          transition: "background-color 0.2s ease"
-                        }}
-                        onMouseEnter={(e) => {
-                          e.target.style.backgroundColor = "#f5f2f0";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.target.style.backgroundColor = statusFilter === status ? "#efebe9" : "white";
-                        }}
-                      >
-                        {status === "all" ? "All Statuses" :
-                         status === "pending" ? "Pending" :
-                         status === "verified" ? "Verified" :
-                         status === "rejected" ? "Rejected" : "Uploaded"}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              
-              <input
-                className="search-box"
-                type="text"
-                placeholder="Search documents..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{
-                  padding: "12px 16px",
-                  border: "2px solid #d7ccc8",
-                  borderRadius: "8px",
-                  fontSize: "0.875rem",
-                  backgroundColor: "#faf8f6",
-                  color: "#5d4037",
-                  minWidth: "200px",
-                  width: "280px",
-                  outline: "none",
-                  boxSizing: "border-box"
-                }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = "#8d6e63";
-                  e.target.style.boxShadow = "0 0 0 3px rgba(141, 110, 99, 0.1)";
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = "#d7ccc8";
-                  e.target.style.boxShadow = "none";
-                }}
-              />
-            </div>
+            
+            <input
+              className="search-box"
+              type="text"
+              placeholder="Search documents..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                padding: "12px 16px",
+                border: "2px solid #d7ccc8",
+                borderRadius: "8px",
+                fontSize: "0.875rem",
+                backgroundColor: "#faf8f6",
+                color: "#5d4037",
+                minWidth: "200px",
+                width: "280px",
+                outline: "none",
+                boxSizing: "border-box"
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = "#8d6e63";
+                e.target.style.boxShadow = "0 0 0 3px rgba(141, 110, 99, 0.1)";
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = "#d7ccc8";
+                e.target.style.boxShadow = "none";
+              }}
+            />
           </div>
 
           {/* Documents Table */}
@@ -1967,6 +2175,18 @@ const handleDeleteDocument = async (docLabel) => {
                       borderBottom: "2px solid #6d4c41",
                       width: "15%"
                     }}>
+                      Documents Verification
+                    </th>
+                    <th style={{
+                      padding: "16px 20px",
+                      textAlign: "center",
+                      fontWeight: "600",
+                      fontSize: "12px",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                      borderBottom: "2px solid #6d4c41",
+                      width: "15%"
+                    }}>
                       <div style={{ 
                         display: "flex", 
                         alignItems: "center", 
@@ -1998,10 +2218,12 @@ const handleDeleteDocument = async (docLabel) => {
                     const unifiedPath = UNIFIED_DOCUMENT_PATHS[documentId];
                     let updatedAt;
                     
-                    // Get timestamp from unified path or legacy path
                     updatedAt = profileData[`documents.${documentId}UpdatedAt`] || 
                               get(profileData, `${unifiedPath}UpdatedAt`) ||
                               get(profileData, `${DOCUMENT_PATHS[doc]}UpdatedAt`);
+
+                    const isMultiUpload = ["IDs of Directors & Shareholders", "CV"].includes(doc);
+                    const allDocs = isMultiUpload ? getMultipleDocumentData(doc, profileData) : [];
 
                     return (
                       <>
@@ -2023,37 +2245,36 @@ const handleDeleteDocument = async (docLabel) => {
                           }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                               {doc.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
-                              {/* ✅ CHANGED: "Add ID" button moved here and replaces the expand/collapse */}
-                              {doc === "IDs of Directors & Shareholders" && (
-                                <button
-                                  onClick={handleAddNewID}
-                                  style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "4px",
-                                    padding: "4px 8px",
-                                    backgroundColor: "#5d4037",
-                                    color: "white",
-                                    border: "none",
-                                    borderRadius: "4px",
-                                    fontSize: "10px",
-                                    cursor: "pointer",
-                                    fontWeight: "600",
-                                    transition: "all 0.2s ease"
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    e.target.style.backgroundColor = "#3e2723";
-                                    e.target.style.transform = "translateY(-1px)";
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    e.target.style.backgroundColor = "#5d4037";
-                                    e.target.style.transform = "translateY(0)";
-                                  }}
-                                >
-                                  <Plus size={10} />
-                                  Add ID
-                                </button>
-                              )}
+                                {isMultiUpload && doc === "IDs of Directors & Shareholders" && (  // Only show for IDs
+                                      <button
+                                        onClick={() => handleAddNewDocument(doc)}
+                                        style={{
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          gap: "4px",
+                                          padding: "4px 8px",
+                                          backgroundColor: "#5d4037",
+                                          color: "white",
+                                          border: "none",
+                                          borderRadius: "4px",
+                                          fontSize: "10px",
+                                          cursor: "pointer",
+                                          fontWeight: "600",
+                                          transition: "all 0.2s ease"
+                                        }}
+                                        onMouseEnter={(e) => {
+                                          e.target.style.backgroundColor = "#3e2723";
+                                          e.target.style.transform = "translateY(-1px)";
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          e.target.style.backgroundColor = "#5d4037";
+                                          e.target.style.transform = "translateY(0)";
+                                        }}
+                                      >
+                                        <Plus size={10} />
+                                        Add ID
+                                      </button>
+                                    )}
                             </div>
                           </td>
                           <td style={{
@@ -2077,51 +2298,61 @@ const handleDeleteDocument = async (docLabel) => {
                               : "-"}
                           </td>
 
-                              <td style={{
-                      padding: "16px 20px",
-                      fontSize: "13px",
-                      fontWeight: "10px",
-                      color: "#6d4c41",
-                      textAlign: "center",
-                      verticalAlign: "middle",
-                      backgroundColor: "transparent"
-                    }}>
-                      {doc === "IDs of Directors & Shareholders" ? (
-                        (() => {
-                          const allIDs = getAllIDData(profileData);
-                          const uploadedCount = allIDs.filter(id => id.url && id.url !== "").length;
-                          
-                          if (uploadedCount === 0) {
-                            return "No documents uploaded";
-                          }
-                          
-                          return `${uploadedCount} document(s) uploaded`;
-                        })()
-                      ) : (
-                        (() => {
-                          const url = getDocumentURL(doc, profileData);
-                          const documentId = getDocumentId(doc);
-                          const verification = profileData.verification?.[documentId];
-                          
-                          if (!url) {
-                            return "No document uploaded";
-                          }
-                          
-                          if (!verification) {
-                            return "Uploaded - Pending Verification";
-                          }
-                          
-                          return verification.message || "Document uploaded";
-                        })()
-                      )}
-                    </td>
+                          <td style={{
+                            padding: "16px 20px",
+                            fontSize: "13px",
+                            fontWeight: "10px",
+                            color: "#6d4c41",
+                            textAlign: "center",
+                            verticalAlign: "middle",
+                            backgroundColor: "transparent"
+                          }}>
+                            {isMultiUpload ? (
+                              (() => {
+                                const uploadedCount = allDocs.filter(d => d.url && d.url !== "").length;
+                                const verifiedCount = allDocs.filter(d => 
+                                  d.url && d.url !== "" && (d.status === "verified" || d.status === "verified:not_audited")
+                                ).length;
+                                
+                                if (uploadedCount === 0) {
+                                  return "No documents uploaded";
+                                }
+                                
+                                return `${verifiedCount}/${uploadedCount} ${doc === "IDs of Directors & Shareholders" ? "ID(s)" : "CV(s)"} verified`;
+                              })()
+                            ) : (
+                              (() => {
+                                const url = getDocumentURL(doc, profileData);
+                                const documentId = getDocumentId(doc);
+                                const verification = profileData.verification?.[documentId];
+                                
+                                if (!url) {
+                                  return "No document uploaded";
+                                }
+                                
+                                if (!verification) {
+                                  return "Uploaded - Pending Verification";
+                                }
+                                
+                                return verification.message || "Document uploaded";
+                              })()
+                            )}
+                          </td>
                           <td style={{
                             padding: "16px 20px",
                             textAlign: "center",
                             verticalAlign: "middle",
                             backgroundColor: "transparent"
                           }}>
-                            {doc === "IDs of Directors & Shareholders" ? (
+                            {getStatusBadge(doc)}
+                          </td>
+                          <td style={{
+                            padding: "16px 20px",
+                            textAlign: "center",
+                            verticalAlign: "middle",
+                            backgroundColor: "transparent"
+                          }}>
+                            {isMultiUpload ? (
                               <div style={{ display: "flex", gap: "8px", justifyContent: "center", alignItems: "center" }}>
                                 <label style={{
                                   display: "inline-flex",
@@ -2155,7 +2386,7 @@ const handleDeleteDocument = async (docLabel) => {
                                     onChange={(e) => {
                                       const files = e.target.files;
                                       if (files && files.length > 0) {
-                                        handleIndividualIDUpload(doc, files[0], 0);
+                                        handleIndividualDocumentUpload(doc, files[0], 0);
                                       }
                                     }}
                                     accept=".pdf,.jpg,.jpeg,.png"
@@ -2198,79 +2429,13 @@ const handleDeleteDocument = async (docLabel) => {
                             )}
                           </td>
                         </tr>
-
-                        {/* ✅ ADDED: Expanded ID Rows for Directors & Shareholders */}
-                        {doc === "IDs of Directors & Shareholders" && expandedIDs && (
-                          getAllIDData(profileData).map((id, idIndex) => (
-                            <tr 
-                              key={`id-${idIndex}`}
-                              style={{
-                                backgroundColor: idIndex % 2 === 0 ? "#f9f5f3" : "#f5f2f0",
-                                borderBottom: "1px solid #e8d8cf",
-                                transition: "background-color 0.2s ease"
-                              }}
-                            >
-                              <td style={{
-                                padding: "12px 20px 12px 40px",
-                                fontSize: "13px",
-                                color: "#6d4c41",
-                                fontWeight: "500",
-                                verticalAlign: "middle",
-                                borderLeft: "3px solid #8d6e63"
-                              }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                  <span style={{ 
-                                    display: "inline-flex", 
-                                    alignItems: "center", 
-                                    justifyContent: "center",
-                                    width: "20px",
-                                    height: "20px",
-                                    backgroundColor: "#8d6e63",
-                                    color: "white",
-                                    borderRadius: "50%",
-                                    fontSize: "10px",
-                                    fontWeight: "600"
-                                  }}>
-                                    {idIndex + 1}
-                                  </span>
-                                  ID {idIndex + 1} of Directors & Shareholders
-                                </div>
-                              </td>
-                              <td style={{
-                                padding: "12px 20px",
-                                textAlign: "center",
-                                verticalAlign: "middle"
-                              }}>
-                                {renderDocumentLinkForID(id)}
-                              </td>
-                              <td style={{
-                                padding: "12px 20px",
-                                fontSize: "12px",
-                                color: "#6d4c41",
-                                textAlign: "center",
-                                verticalAlign: "middle"
-                              }}>
-                                {id.uploadedAt ? new Date(id.uploadedAt).toLocaleDateString() : "-"}
-                              </td>
-                              <td style={{
-                                padding: "12px 20px",
-                                fontSize: "12px",
-                                color: "#6d4c41",
-                                textAlign: "center",
-                                verticalAlign: "middle"
-                              }}>
-                                {id.message || "No document uploaded"}
-                              </td>
-                              <td style={{
-                                padding: "12px 20px",
-                                textAlign: "center",
-                                verticalAlign: "middle"
-                              }}>
-                                {renderIndividualIDActions(doc, idIndex, id)}
-                              </td>
-                            </tr>
-                          ))
-                        )}
+                        
+                        {/* Expanded rows for multi-upload documents */}
+                        {doc === "IDs of Directors & Shareholders" && 
+                          renderExpandedRows(doc, allDocs, expandedIDs, "ID")}
+                        
+                        {doc === "CV" && 
+                          renderExpandedRows(doc, allDocs, expandedCVs, "CV")}
                       </>
                     );
                   })}
