@@ -23,7 +23,7 @@ function AdvisorHeader({ companyName, profileImage, setProfileImage }) {
   const [selectedRole, setSelectedRole] = useState("")
   const [showAddRole, setShowAddRole] = useState(false)
   const [newRoleInput, setNewRoleInput] = useState("")
-  const ROLE_OPTIONS = ["Investor", "SMSEs", "Advisors", "Accelerators",]
+  const ROLE_OPTIONS = ["Investor", "SMSEs", "Advisors", "Accelerators"]
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -34,6 +34,27 @@ function AdvisorHeader({ companyName, profileImage, setProfileImage }) {
   const [imageUploading, setImageUploading] = useState(false)
   const [profileData, setProfileData] = useState({})
   const profileRef = useRef(null)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+
+  // Listen for sidebar state changes
+  useEffect(() => {
+    const handleSidebarStateChange = () => {
+      const collapsed = document.body.classList.contains("sidebar-collapsed");
+      setIsSidebarCollapsed(collapsed);
+    };
+
+    // Check initial state
+    handleSidebarStateChange();
+
+    // Watch for changes
+    const observer = new MutationObserver(handleSidebarStateChange);
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const fetchRoles = async () => {
@@ -62,21 +83,21 @@ function AdvisorHeader({ companyName, profileImage, setProfileImage }) {
       case "SMEs":
       case "Small and Medium Social Enterprises":
       case "SME/BUSINESS":
-        case"SMSES":
-        case"SMSEs":
+      case "SMSES":
+      case "SMSEs":
         navigate("/profile");
         break;
       case "Advisor":
-        case"Advisors":
+      case "Advisors":
         navigate("/advisor-profile");
         break;
       case "Catalyst":
-        case"Catalysts":
-        case"Accelerators":
+      case "Catalysts":
+      case "Accelerators":
         navigate("/support-profile");
         break;
       case "Program Sponsor":
-        case"ProgramSponsor":
+      case "ProgramSponsor":
         navigate("/sponsor-profile");
         break;
       case "Intern":
@@ -272,8 +293,11 @@ function AdvisorHeader({ companyName, profileImage, setProfileImage }) {
 
   useEffect(() => {
     function handleClickOutside(event) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setDropdownOpen(false)
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
+        setShowProfileMenu(false)
+      }
+      if (modalRef.current && !modalRef.current.contains(event.target)) {
+        setShowAddRole(false)
       }
     }
 
@@ -282,6 +306,20 @@ function AdvisorHeader({ companyName, profileImage, setProfileImage }) {
       document.removeEventListener("mousedown", handleClickOutside)
     }
   }, [])
+
+  // Close modal with ESC key
+  useEffect(() => {
+    const handleEscKey = (event) => {
+      if (event.key === 'Escape' && showAddRole) {
+        setShowAddRole(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscKey);
+    return () => document.removeEventListener('keydown', handleEscKey);
+  }, [showAddRole]);
+
+  const modalRef = useRef(null);
 
   const handleProfileClick = () => setDropdownOpen(!dropdownOpen)
   const handleFileChange = (e) => {
@@ -312,6 +350,16 @@ function AdvisorHeader({ companyName, profileImage, setProfileImage }) {
     year: "numeric",
   })
 
+  const getAvailableRoleOptions = () => {
+    return ROLE_OPTIONS.filter(role => {
+      const hasSME = availableRoles.includes("SMEs") || 
+                   availableRoles.includes("SME/BUSINESS") || 
+                   availableRoles.includes("Small and Medium Social Enterprises")
+      if (hasSME && role === "SMEs") return false
+      return !availableRoles.includes(role)
+    });
+  };
+
   if (loading) {
     return <div className={styles.loading}>Loading user data...</div>
   }
@@ -321,7 +369,14 @@ function AdvisorHeader({ companyName, profileImage, setProfileImage }) {
   }
 
   return (
-    <header className={styles.header}>
+    <header 
+      className={styles.header}
+      style={{
+        marginLeft: isSidebarCollapsed ? '80px' : '280px',
+        width: isSidebarCollapsed ? 'calc(100% - 80px)' : 'calc(100% - 280px)',
+        transition: 'all 0.3s ease'
+      }}
+    >
       <div className={styles["header-left"]}>
         <div className={styles["header-logo"]}>
           <img src="/MainLogo.png" alt="Company Logo" className={styles["logo-image"]} />
@@ -365,53 +420,53 @@ function AdvisorHeader({ companyName, profileImage, setProfileImage }) {
             <button
               className={styles["icon-button"]}
               aria-label="Messages"
-              onClick={() => navigate("/advisor-messages")}
+              onClick={() => navigate("/support-messages")}
             >
               <Mail size={20} />
             </button>
           </div>
         </div>
 
-        <div className="profile-wrapper" ref={profileRef}>
+        <div className={styles["profile-wrapper"]} ref={profileRef}>
           <button
-            className="profile-button profile-button-simple"
+            className={styles["profile-button"]}
             onClick={() => {
               setShowProfileMenu(!showProfileMenu)
             }}
           >
-            <div className="profile-image-container">
+            <div className={styles["profile-image-container"]}>
               {profileData.formData?.entityOverview?.companyLogo ? (
                 <img
                   src={profileData.formData?.entityOverview?.companyLogo || "/placeholder.svg"}
                   alt="Profile"
-                  className="profile-image"
+                  className={styles["profile-image"]}
                 />
               ) : (
-                <div className="profile-placeholder">{userName.charAt(0).toUpperCase()}</div>
+                <div className={styles["profile-placeholder"]}>{userName.charAt(0).toUpperCase()}</div>
               )}
             </div>
           </button>
 
           {showProfileMenu && (
-            <div className="dropdown-menu profile-dropdown">
-              <div className="dropdown-header">
-                <div className="profile-info-large">
-                  <div className="profile-image-large">
+            <div className={styles["dropdown-menu"]}>
+              <div className={styles["dropdown-header"]}>
+                <div className={styles["profile-info-large"]}>
+                  <div className={styles["profile-image-large"]}>
                     {profileData.formData?.entityOverview?.companyLogo ? (
                       <img
                         src={profileData.formData?.entityOverview?.companyLogo || "/placeholder.svg"}
                         alt="Profile"
                       />
                     ) : (
-                      <div className="profile-placeholder-large">{userName.charAt(0).toUpperCase()}</div>
+                      <div className={styles["profile-placeholder-large"]}>{userName.charAt(0).toUpperCase()}</div>
                     )}
                     <label
                       htmlFor="profile-upload"
-                      className={`change-avatar-button ${imageUploading ? "uploading" : ""}`}
+                      className={`${styles["change-avatar-button"]} ${imageUploading ? styles.uploading : ""}`}
                     >
                       {imageUploading ? (
                         <>
-                          <Upload size={12} className="upload-icon spinning" />
+                          <Upload size={12} className={`${styles["upload-icon"]} ${styles.spinning}`} />
                           Uploading...
                         </>
                       ) : (
@@ -428,40 +483,43 @@ function AdvisorHeader({ companyName, profileImage, setProfileImage }) {
                     </label>
                   </div>
                   <div>
-                    <h3 className="profile-name-large">{userName}</h3>
-                    <p className="profile-email-large">{userEmail}</p>
-                    <p className="profile-role">{selectedRole || "User"}</p>
+                    <h3 className={styles["profile-name-large"]}>{userName}</h3>
+                    <p className={styles["profile-email-large"]}>{userEmail}</p>
+                    <p className={styles["profile-role"]}>{selectedRole || "Catalyst"}</p>
                   </div>
                 </div>
               </div>
-              <div className="dropdown-divider"></div>
-              <div className="dropdown-menu-items">
-                <button className="dropdown-item" onClick={() => navigate("/support-profile")}>
+              <div className={styles["dropdown-divider"]}></div>
+              <div className={styles["dropdown-menu-items"]}>
+                <button className={styles["dropdown-item"]} onClick={() => navigate("/support-profile")}>
                   <User size={16} />
                   <span>My Profile</span>
                 </button>
 
                 <button
-                  className={`dropdown-item add-role-trigger`}
-                  onClick={() => setShowAddRole(true)}
+                  className={`${styles["dropdown-item"]} ${styles["add-role-trigger"]}`}
+                  onClick={() => {
+                    setShowAddRole(true);
+                    setShowProfileMenu(false);
+                  }}
                 >
                   <User size={16} />
                   <span>+ Add New Role</span>
                 </button>
 
-                <button className="dropdown-item" onClick={() => navigate("/support-settings")}>
+                <button className={styles["dropdown-item"]} onClick={() => navigate("/support-settings")}>
                   <Settings size={16} />
                   <span>Settings</span>
                 </button>
 
                 {availableRoles.length > 1 && (
                   <>
-                    <div className="dropdown-divider"></div>
-                    <div className="dropdown-subheader">Switch Roles</div>
+                    <div className={styles["dropdown-divider"]}></div>
+                    <div className={styles["dropdown-subheader"]}>Switch Roles</div>
                     {availableRoles.map((role, idx) => (
                       <button
                         key={idx}
-                        className={`dropdown-item ${selectedRole === role ? "active-role" : ""}`}
+                        className={`${styles["dropdown-item"]} ${selectedRole === role ? styles["active-role"] : ""}`}
                         onClick={() => handleSwitchRole(role)}
                       >
                         <User size={16} />
@@ -471,9 +529,9 @@ function AdvisorHeader({ companyName, profileImage, setProfileImage }) {
                   </>
                 )}
               </div>
-              <div className="dropdown-divider"></div>
-              <div className="dropdown-footer">
-                <button className="logout-button" onClick={handleLogout}>
+              <div className={styles["dropdown-divider"]}></div>
+              <div className={styles["dropdown-footer"]}>
+                <button className={styles["logout-button"]} onClick={handleLogout}>
                   <LogOut size={16} />
                   <span>Log Out</span>
                 </button>
@@ -485,7 +543,7 @@ function AdvisorHeader({ companyName, profileImage, setProfileImage }) {
 
       {showAddRole && (
         <div className={styles["modal-overlay"]}>
-          <div className={styles["add-role-modal"]}>
+          <div className={styles["add-role-modal"]} ref={modalRef}>
             <div className={styles["modal-header"]}>
               <h3>Add New Role</h3>
               <button 
@@ -508,13 +566,7 @@ function AdvisorHeader({ companyName, profileImage, setProfileImage }) {
                   className={styles["role-select"]}
                 >
                   <option value="">Select a role</option>
-                  {ROLE_OPTIONS.filter(role => {
-                    const hasSME = availableRoles.includes("SMEs") || 
-                                 availableRoles.includes("SME/BUSINESS") || 
-                                 availableRoles.includes("Small and Medium Social Enterprises")
-                    if (hasSME && role === "SMEs") return false
-                    return !availableRoles.includes(role)
-                  }).map((role, idx) => (
+                  {getAvailableRoleOptions().map((role, idx) => (
                     <option key={idx} value={role}>{role}</option>
                   ))}
                 </select>

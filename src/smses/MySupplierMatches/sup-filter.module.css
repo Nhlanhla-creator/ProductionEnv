@@ -1,0 +1,188 @@
+.filterContainer {
+  padding: 1.5rem;
+  background: white;
+}
+
+.filterHeader {
+  position: relative;
+  text-align: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #E8D5C4;
+}
+
+.filterHeaderTitle {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #5D2A0A;
+  margin: 0 0 0.5rem 0;
+}
+
+.filterHeaderSubtitle {
+  font-size: 1rem;
+  color: #8D6E63;
+  margin: 0;
+}
+
+.closeButton {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  color: #5D2A0A;
+  padding: 0.25rem;
+}
+
+.filterGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.filterCard {
+  padding: 1.5rem;
+  background: #FEFCFA;
+  border-radius: 8px;
+  border: 1px solid #E8D5C4;
+}
+
+.filterTitle {
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #5D2A0A;
+}
+
+.filterSelect {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #E8D5C4;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: white;
+  color: #5D2A0A;
+}
+
+.filterInput {
+  flex: 1;
+  padding: 0.75rem;
+  border: 1px solid #E8D5C4;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: white;
+  color: #5D2A0A;
+}
+
+.rangeInputs {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.sliderContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sliderValue {
+  text-align: center;
+  font-weight: 600;
+  color: #5D2A0A;
+  font-size: 0.875rem;
+}
+
+.dropdownContainer {
+  position: relative;
+}
+
+.multiSelectButton {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #E8D5C4;
+  border-radius: 6px;
+  background: white;
+  color: #5D2A0A;
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.dropdownMenu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #E8D5C4;
+  border-radius: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10;
+  margin-top: 0.25rem;
+}
+
+.dropdownItem {
+  padding: 0.5rem 0.75rem;
+}
+
+.checkboxGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.checkboxItem {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: #5D2A0A;
+}
+
+.checkboxLabel {
+  font-size: 0.875rem;
+  color: #5D2A0A;
+  cursor: pointer;
+}
+
+.filterActions {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #E8D5C4;
+}
+
+.filterButton {
+  flex: 1;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filterButtonPrimary {
+  background: #5D2A0A;
+  color: white;
+  border: none;
+}
+
+.filterButtonSecondary {
+  background: #F5EBE0;
+  color: #5D2A0A;
+  border: 1px solid #E8D5C4;
+}
+
+.hidden {
+  display: none;
+}

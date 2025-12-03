@@ -18,13 +18,24 @@ import {
   arrayUnion
 } from "firebase/firestore"
 import { db } from "../../firebaseConfig"
-import { Eye, Filter, History } from "lucide-react"
+import {
+  Eye,
+  Filter,
+  History,
+  Brain,
+  AlertCircle,
+  CheckCircle,
+  TrendingUp,
+  RefreshCw,
+  Users,
+  X
+} from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import emailjs from '@emailjs/browser'
 import { API_KEYS } from "../../API"
 import SupplierDetailsModal from './SupplierDetailsModal'
-
-import { findSynonyms, expandSearchTerms, containsTermOrSynonyms } from '../../utils/synonyms';
+import { findSynonyms, expandSearchTerms, containsTermOrSynonyms } from '../../utils/synonyms'
+import { getFunctions, httpsCallable } from "firebase/functions"
 
 // Status definitions with brown color scheme
 const STATUS_TYPES = {
@@ -605,12 +616,408 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
     availability: "",
     sortBy: "",
   })
+  const [tableKey, setTableKey] = useState(0);
+
 
   const [contactedApplications, setContactedApplications] = useState([])
   const [showContactedApplications, setShowContactedApplications] = useState(false)
   const [applicationsWithContacts, setApplicationsWithContacts] = useState(new Set())
 
+  // NEW STATE FOR AI SECONDARY MATCHING
+  const [isAiAnalyzing, setIsAiAnalyzing] = useState(false)
+  const [aiAnalysisProgress, setAiAnalysisProgress] = useState({ current: 0, total: 0 })
+  const [secondaryMatchData, setSecondaryMatchData] = useState({})
+  const [showSecondaryBreakdown, setShowSecondaryBreakdown] = useState(false)
+  const [secondaryBreakdownData, setSecondaryBreakdownData] = useState(null)
+  const [aiAnalysisError, setAiAnalysisError] = useState("")
+
   const navigate = useNavigate()
+
+
+  // NEW: Load cached secondary matches
+  // Replace the current useEffect for loading cached secondary matches with this:
+
+  // Load cached secondary matches
+  useEffect(() => {
+    // Replace the current loadCachedSecondaryMatches function with this:
+
+    const loadCachedSecondaryMatches = async () => {
+      if (!currentUserApplication?.id) {
+        console.log("No application ID available yet");
+        return;
+      }
+
+      try {
+        console.log("Loading cached matches for application:", currentUserApplication.id);
+
+        const matchDocRef = doc(db, "aiSecondaryMatches", currentUserApplication.id);
+        const matchDoc = await getDoc(matchDocRef);
+
+        if (matchDoc.exists()) {
+          const data = matchDoc.data();
+          const suppliersData = data.suppliers || {};
+
+          console.log("✅ Found cached AI matches:", {
+            suppliersCount: Object.keys(suppliersData).length,
+            analyzedAt: data.analyzedAt,
+            supplierIds: Object.keys(suppliersData)
+          });
+
+          // Store the raw data
+          setSecondaryMatchData(suppliersData);
+
+          // Create update function for suppliers
+          const updateSupplierWithCache = (supplier) => {
+            const cachedData = suppliersData[supplier.id];
+            if (cachedData) {
+              return {
+                ...supplier,
+                secondaryMatchScore: cachedData.score || 0,
+                secondaryMatchReasoning: cachedData.reasoning || "",
+                secondaryMatchCapabilities: cachedData.capabilities || [],
+                _hasAiAnalysis: true
+              };
+            }
+            return supplier;
+          };
+
+          // Update the base suppliers array
+          const updatedAllSuppliers = allSuppliers.map(updateSupplierWithCache);
+
+          setAllSuppliers(updatedAllSuppliers); // Update the base array
+
+          console.log("📈 Updated suppliers with AI data:", {
+            total: updatedAllSuppliers.length,
+            withAiData: updatedAllSuppliers.filter(s => s._hasAiAnalysis).length
+          });
+
+          // CRITICAL: Re-apply filters after updating with AI data
+          applyFiltersWithUpdatedSuppliers(updatedAllSuppliers);
+
+          setNotification({
+            type: "success",
+            message: `Loaded cached secondary match analysis for ${Object.keys(suppliersData).length} suppliers`
+          });
+          setTimeout(() => setNotification(null), 3000);
+        } else {
+          console.log("⚠️ No cached AI matches found for application:", currentUserApplication.id);
+          setSecondaryMatchData({});
+        }
+      } catch (error) {
+        console.error("❌ Error loading cached secondary matches:", error);
+        setNotification({
+          type: "error",
+          message: "Failed to load cached AI analysis"
+        });
+        setTimeout(() => setNotification(null), 3000);
+      }
+    };
+    // Add a small delay to ensure application is fully loaded
+    const loadData = async () => {
+      if (currentUserApplication?.id && allSuppliers.length > 0) {
+        await loadCachedSecondaryMatches();
+      }
+    };
+
+    const timer = setTimeout(loadData, 500);
+    return () => clearTimeout(timer);
+  }, [currentUserApplication?.id, allSuppliers.length]); // Only depend on the ID string, not the whole object
+
+
+  const applyFiltersWithUpdatedSuppliers = (suppliersArray) => {
+    const filtered = suppliersArray.filter((supplier) => {
+      if (filters.location && !supplier.entityOverview?.location?.includes(filters.location)) return false
+      if (supplier.matchPercentage < filters.matchScore) return false
+      if (filters.bbbeeLevel && supplier.legalCompliance?.bbbeeLevel !== filters.bbbeeLevel) return false
+      if (
+        filters.sectors.length > 0 &&
+        !filters.sectors.some((sector) => supplier.entityOverview?.economicSectors?.includes(sector))
+      )
+        return false
+      return true
+    })
+
+    // Sort by match percentage (high to low)
+    const sorted = filtered.sort((a, b) => b.matchPercentage - a.matchPercentage);
+
+    setFilteredSuppliers(sorted);
+    if (onSuppliersUpdate) {
+      onSuppliersUpdate(suppliersArray, sorted)
+    }
+  }
+
+  // // Helper function to create the analysis prompt
+  // function createSupplierAnalysisPrompt(suppliers, customerPurpose) {
+  //   // Truncate customer purpose if too long
+  //   const truncatedPurpose = customerPurpose.length > 600
+  //     ? customerPurpose.substring(0, 600) + "..."
+  //     : customerPurpose;
+
+  //   const supplierData = suppliers.map(supplier => {
+  //     const name = supplier.entityOverview?.tradingName ||
+  //       supplier.entityOverview?.registeredName ||
+  //       'Unknown Supplier';
+
+  //     // Extract product categories safely
+  //     const productCategories = supplier.productsServices?.productCategories || [];
+  //     const serviceCategories = supplier.productsServices?.serviceCategories || [];
+  //     const targetMarket = supplier.productsServices?.targetMarket || 'Not specified';
+
+  //     // Create limited description
+  //     const productsDesc = productCategories.map(cat =>
+  //       typeof cat === 'string' ? cat : cat.name || cat.category || 'Unknown'
+  //     ).join(', ').substring(0, 150);
+
+  //     const servicesDesc = serviceCategories.map(cat =>
+  //       typeof cat === 'string' ? cat : cat.name || cat.category || 'Unknown'
+  //     ).join(', ').substring(0, 150);
+
+  //     return `
+  // SUPPLIER: ${supplier.id}
+  // NAME: ${name}
+  // PRODUCTS: ${productsDesc || 'None specified'}
+  // SERVICES: ${servicesDesc || 'None specified'}
+  // TARGET: ${targetMarket.substring(0, 100)}
+  // ---`;
+  //   }).join('\n');
+
+  //   return `Analyze business matching between customer needs and supplier capabilities.
+
+  // CUSTOMER REQUEST:
+  // "${truncatedPurpose}"
+
+  // SUPPLIER DATA:
+  // ${supplierData}
+
+  // INSTRUCTIONS:
+  // - Analyze each supplier against the customer request
+  // - Score 0-5 based on semantic alignment and capability match
+  // - Consider: industry relevance, service overlap, target market fit
+  // - Return JSON with supplierId, score (0-5), reasoning, and matchedCapabilities
+
+  // SCORING:
+  // 5 = Excellent match - direct capability alignment
+  // 4 = Strong match - minor gaps but high relevance  
+  // 3 = Good match - general alignment with some gaps
+  // 2 = Partial match - limited relevance
+  // 1 = Minimal match - very weak connection
+  // 0 = No meaningful alignment
+
+  // RETURN VALID JSON:
+  // {
+  //   "matches": [
+  //     {
+  //       "supplierId": "supplier-id-1",
+  //       "score": 4.2,
+  //       "reasoning": "Brief explanation of match quality",
+  //       "matchedCapabilities": ["capability1", "capability2"]
+  //     }
+  //   ]
+  // }
+
+  // Focus on practical business alignment, not just keywords.`;
+  // }
+
+  // In your runSecondaryAiAnalysis function, add this check at the beginning:
+
+  const runSecondaryAiAnalysis = async () => {
+    if (!currentUserApplication || filteredSuppliers.length === 0) {
+      setAiAnalysisError("No suppliers or application data available");
+      return;
+    }
+
+    const applicationId = currentUserApplication.id ||
+      `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    console.log("Starting AI analysis for ALL suppliers:", {
+      totalSuppliers: filteredSuppliers.length,
+      applicationId
+    });
+
+    // Use ALL filtered suppliers, not just first 5
+    const suppliersToAnalyze = filteredSuppliers;
+
+    setIsAiAnalyzing(true);
+    setAiAnalysisProgress({ current: 0, total: suppliersToAnalyze.length });
+    setAiAnalysisError("");
+
+    try {
+      const functions = getFunctions();
+      const analyzeSupplierMatches = httpsCallable(functions, "analyzeSupplierMatches");
+
+      // Prepare ALL supplier data for AI analysis
+      const suppliersForAnalysis = suppliersToAnalyze.map(supplier => ({
+        id: supplier.id,
+        entityOverview: supplier.entityOverview || {},
+        productsServices: supplier.productsServices || {}
+      }));
+
+      const customerPurpose = currentUserApplication.requestOverview?.purpose ||
+        currentUserApplication.purpose ||
+        "General business procurement needs";
+
+      console.log("Sending", suppliersForAnalysis.length, "suppliers for AI analysis");
+
+      const result = await analyzeSupplierMatches({
+        suppliers: suppliersForAnalysis,  // Send ALL suppliers
+        customerPurpose: customerPurpose,
+        applicationId: applicationId
+      });
+
+      console.log("AI analysis completed successfully:", result.data);
+
+      const { matches } = result.data;
+
+      // Process and normalize scores for ALL suppliers
+      const processedMatches = {};
+      matches.forEach(match => {
+        const normalizedScore = Math.round((match.score / 5) * 100);
+        processedMatches[match.supplierId] = {
+          score: normalizedScore,
+          reasoning: match.reasoning || "No reasoning provided",
+          capabilities: match.matchedCapabilities || [],
+          analyzedAt: new Date().toISOString()
+        };
+      });
+
+      // Log which suppliers got analysis vs which didn't
+      const analyzedIds = Object.keys(processedMatches);
+      const allSupplierIds = suppliersToAnalyze.map(s => s.id);
+      const missingAnalyses = allSupplierIds.filter(id => !analyzedIds.includes(id));
+
+      console.log("Analysis coverage:", {
+        analyzed: analyzedIds.length,
+        total: allSupplierIds.length,
+        missing: missingAnalyses.length,
+        missingIds: missingAnalyses
+      });
+
+      // Save to Firestore only if we have a real application ID (not temp)
+      if (!applicationId.startsWith('temp-')) {
+        await saveSecondaryMatchesToFirestore(applicationId, processedMatches);
+      }
+
+      // Update local state
+      setSecondaryMatchData(processedMatches);
+
+      // Update ALL suppliers with new scores
+      const updateSupplierWithAnalysis = (supplier) => {
+        const analysis = processedMatches[supplier.id];
+        if (analysis) {
+          return {
+            ...supplier,
+            secondaryMatchScore: analysis.score,
+            secondaryMatchReasoning: analysis.reasoning,
+            secondaryMatchCapabilities: analysis.capabilities
+          };
+        }
+        // Keep existing analysis if no new analysis (shouldn't happen with all suppliers)
+        return supplier;
+      };
+
+      setSuppliers(prev => prev.map(updateSupplierWithAnalysis));
+      setFilteredSuppliers(prev => prev.map(updateSupplierWithAnalysis));
+
+      setNotification({
+        type: "success",
+        message: `AI analysis completed. Secondary match scores updated for ${analyzedIds.length} suppliers`
+      });
+
+    } catch (error) {
+      console.error("AI Analysis error details:", error);
+
+      let errorMessage = "AI analysis failed. Please try again.";
+
+      if (error.message.includes('Missing')) {
+        errorMessage = "Data validation error: " + error.message;
+      } else if (error.message.includes('INTERNAL')) {
+        errorMessage = "Server error: The AI service is temporarily unavailable";
+      } else if (error.message.includes('timeout')) {
+        errorMessage = "Analysis timed out. Try with fewer suppliers or try again later.";
+      } else if (error.message.includes('rate limit') || error.message.includes('quota')) {
+        errorMessage = "Rate limit reached. Please wait a few minutes and try again.";
+      } else if (error.message.includes('OpenAI')) {
+        errorMessage = "AI service error: " + error.message;
+      }
+
+      setAiAnalysisError(errorMessage);
+      setNotification({
+        type: "error",
+        message: errorMessage
+      });
+    } finally {
+      setIsAiAnalyzing(false);
+      setAiAnalysisProgress({ current: 0, total: 0 });
+    }
+  };
+
+  // NEW: Save matches to Firestore
+  const saveSecondaryMatchesToFirestore = async (applicationId, matches) => {
+    try {
+      const matchDocRef = doc(db, "aiSecondaryMatches", applicationId)
+      await setDoc(matchDocRef, {
+        suppliers: matches,
+        requestPurpose: currentUserApplication.requestOverview?.purpose,
+        analyzedAt: serverTimestamp(),
+        suppliersAnalyzed: Object.keys(matches).length,
+        applicationId: applicationId
+      })
+    } catch (error) {
+      console.error("Error saving secondary matches:", error)
+      throw error
+    }
+  }
+
+  // NEW: Prepare supplier data for AI (helper function)
+  const prepareSupplierDataForAi = (supplier) => {
+    return {
+      id: supplier.id,
+      name: supplier.entityOverview?.tradingName || supplier.entityOverview?.registeredName,
+      products: supplier.productsServices?.productCategories || [],
+      services: supplier.productsServices?.serviceCategories || [],
+      targetMarket: supplier.productsServices?.targetMarket || ""
+    }
+  }
+
+  // NEW: Handle secondary match breakdown
+  const handleShowSecondaryBreakdown = (supplier) => {
+    if (!supplier.secondaryMatchScore) {
+      setNotification({
+        type: "warning",
+        message: "No AI analysis available for this supplier yet"
+      });
+      setTimeout(() => setNotification(null), 3000);
+      return;
+    }
+
+    setSecondaryBreakdownData({
+      supplier,
+      primaryScore: supplier.matchPercentage,
+      secondaryScore: supplier.secondaryMatchScore,
+      reasoning: supplier.secondaryMatchReasoning,
+      capabilities: supplier.secondaryMatchCapabilities
+    });
+    setShowSecondaryBreakdown(true);
+  };
+
+
+  // NEW: Get secondary match color
+  const getSecondaryMatchColor = (score) => {
+    if (!score) return "#999"
+    if (score >= 75) return "#48BB78"
+    if (score >= 50) return "#F6AD55"
+    return "#F56565"
+  }
+
+  function calculateCombinedMatchScore(primaryScore, aiScore) {
+    if (aiScore === null || aiScore === undefined) {
+      return null; // No AI analysis yet
+    }
+
+    // Combine scores: 60% primary match, 40% AI semantic match
+    const combinedScore = (primaryScore * 0.6) + (aiScore * 0.4);
+    return Math.round(combinedScore);
+  }
 
   useEffect(() => {
     const loadContactedApplications = async () => {
@@ -834,8 +1241,16 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
         }
 
         const applicationData = applicationDoc.data()
-        setCurrentUserApplication(applicationData)
-        console.log("Current user application:", applicationData)
+        console.log("Loaded application data:", {
+          id: applicationDoc.id,
+          hasRequestOverview: !!applicationData.requestOverview,
+          hasPurpose: !!applicationData.requestOverview?.purpose
+        })
+
+        setCurrentUserApplication({
+          id: applicationDoc.id, // Make sure we have the ID
+          ...applicationData
+        })
       } catch (error) {
         console.error("Error checking application:", error)
         setError("Failed to verify product application")
@@ -944,23 +1359,9 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
 
   // Filter suppliers based on active filters
   const applyFilters = () => {
-    const filtered = allSuppliers.filter((supplier) => {
-      if (filters.location && !supplier.entityOverview?.location?.includes(filters.location)) return false
-      if (supplier.matchPercentage < filters.matchScore) return false
-      if (filters.bbbeeLevel && supplier.legalCompliance?.bbbeeLevel !== filters.bbbeeLevel) return false
-      if (
-        filters.sectors.length > 0 &&
-        !filters.sectors.some((sector) => supplier.entityOverview?.economicSectors?.includes(sector))
-      )
-        return false
-      return true
-    })
-
-    setFilteredSuppliers(filtered)
-    if (onSuppliersUpdate) {
-      onSuppliersUpdate(allSuppliers, filtered)
-    }
+    applyFiltersWithUpdatedSuppliers(allSuppliers);
   }
+
 
   useEffect(() => {
     applyFilters()
@@ -1407,7 +1808,6 @@ BIG Marketplace Africa Team`;
 
   return (
     <>
-      {/* Main content container */}
       <div
         style={{
           position: "relative",
@@ -1435,6 +1835,63 @@ BIG Marketplace Africa Team`;
           </div>
         )}
 
+        {/* AI Analysis Progress Overlay */}
+        {isAiAnalyzing && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(0, 0, 0, 0.7)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 9999,
+              color: "white",
+            }}
+          >
+            <div
+              style={{
+                background: "white",
+                padding: "2rem",
+                borderRadius: "12px",
+                textAlign: "center",
+                color: "#5D2A0A",
+                minWidth: "300px",
+              }}
+            >
+              <Brain size={48} color="#5D2A0A" style={{ marginBottom: "1rem" }} />
+              <h3 style={{ marginBottom: "1rem" }}>AI Semantic Analysis</h3>
+              <p>Analyzing supplier capabilities...</p>
+              <div
+                style={{
+                  width: "100%",
+                  height: "8px",
+                  backgroundColor: "#E8D5C4",
+                  borderRadius: "4px",
+                  margin: "1rem 0",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    width: `${(aiAnalysisProgress.current / aiAnalysisProgress.total) * 100}%`,
+                    height: "100%",
+                    backgroundColor: "#5D2A0A",
+                    transition: "width 0.3s ease",
+                  }}
+                />
+              </div>
+              <p style={{ fontSize: "0.875rem" }}>
+                {aiAnalysisProgress.current} of {aiAnalysisProgress.total} suppliers
+              </p>
+            </div>
+          </div>
+        )}
+
         <div style={{ marginBottom: "2rem" }}>
           {/* Current Request Section */}
           <div style={{
@@ -1444,10 +1901,24 @@ BIG Marketplace Africa Team`;
             border: "1px solid #E8D5C4",
             marginBottom: "1rem"
           }}>
-            {/* Table Header */}
+            {/* Table Header - UPDATED WITH AI BUTTON */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
               <h3 style={{ color: "#5D2A0A", margin: 0 }}>Current Request</h3>
               <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button
+                  onClick={runSecondaryAiAnalysis}
+                  disabled={isAiAnalyzing || filteredSuppliers.length === 0 || !currentUserApplication}
+                  style={{
+                    ...filterButtonStyle,
+                    background: isAiAnalyzing ? "#E8D5C4" : "#5D2A0A",
+                    color: isAiAnalyzing ? "#5D2A0A" : "white",
+                    opacity: (filteredSuppliers.length === 0 || !currentUserApplication) ? 0.5 : 1,
+                    cursor: (isAiAnalyzing || filteredSuppliers.length === 0 || !currentUserApplication) ? "not-allowed" : "pointer"
+                  }}
+                >
+                  <Brain size={16} />
+                  {isAiAnalyzing ? "Analyzing..." : "AI Analysis"}
+                </button>
                 <button onClick={() => setShowFilters(true)} style={filterButtonStyle}>
                   <Filter size={16} />
                   Filter
@@ -1478,7 +1949,28 @@ BIG Marketplace Africa Team`;
               </div>
             </div>
 
-            {/* Table Structure */}
+            {/* Error Display */}
+            {aiAnalysisError && (
+              <div
+                style={{
+                  background: "#FEF2F2",
+                  border: "1px solid #FECACA",
+                  color: "#DC2626",
+                  padding: "0.75rem",
+                  borderRadius: "6px",
+                  marginBottom: "1rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  fontSize: "0.875rem"
+                }}
+              >
+                <AlertCircle size={16} />
+                {aiAnalysisError}
+              </div>
+            )}
+
+            {/* Table Structure - UPDATED WITH NEW COLUMN */}
             <div style={tableContainerStyle}>
               <table style={tableStyle}>
                 <colgroup>
@@ -1487,6 +1979,7 @@ BIG Marketplace Africa Team`;
                   <col style={{ width: "8%" }} />
                   <col style={{ width: "5%" }} />
                   <col style={{ width: "5%" }} />
+                  <col style={{ width: "8%" }} />
                   <col style={{ width: "8%" }} />
                   <col style={{ width: "8%" }} />
                   <col style={{ width: "8%" }} />
@@ -1506,6 +1999,7 @@ BIG Marketplace Africa Team`;
                     <th style={tableHeaderStyle}>Service Required</th>
                     <th style={tableHeaderStyle}>Urgency</th>
                     <th style={tableHeaderStyle}>Match %</th>
+                    <th style={tableHeaderStyle}>Secondary Match %</th>
                     <th style={tableHeaderStyle}>Action</th>
                     <th style={{ ...tableHeaderStyle, borderRight: "none" }}>Stage</th>
                   </tr>
@@ -1617,6 +2111,56 @@ BIG Marketplace Africa Team`;
                           </div>
                         </td>
 
+                        {/* NEW: Secondary Match Column */}
+
+                        <td style={tableCellStyle}>
+                          {supplier.secondaryMatchScore !== null && supplier.secondaryMatchScore !== undefined ? (
+                            <div style={matchContainerStyle}>
+                              <div style={progressBarStyle}>
+                                <div
+                                  style={{
+                                    ...progressFillStyle,
+                                    width: `${calculateCombinedMatchScore(supplier.matchPercentage, supplier.secondaryMatchScore)}%`,
+                                    backgroundColor: getSecondaryMatchColor(
+                                      calculateCombinedMatchScore(supplier.matchPercentage, supplier.secondaryMatchScore)
+                                    ),
+                                  }}
+                                />
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "4px" }}>
+                                <span
+                                  style={{
+                                    ...matchScoreStyle,
+                                    color: getSecondaryMatchColor(
+                                      calculateCombinedMatchScore(supplier.matchPercentage, supplier.secondaryMatchScore)
+                                    ),
+                                    fontWeight: "bold",
+                                  }}
+                                >
+                                  {calculateCombinedMatchScore(supplier.matchPercentage, supplier.secondaryMatchScore)}%
+                                </span>
+                                <Eye
+                                  size={14}
+                                  style={{
+                                    cursor: "pointer",
+                                    color: "#a67c52",
+                                  }}
+                                  onClick={() => handleShowSecondaryBreakdown(supplier)}
+                                  title="View secondary match breakdown"
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <span style={{
+                              color: "#999",
+                              fontSize: "0.75rem",
+                              fontStyle: "italic"
+                            }}>
+                              Pending analysis
+                            </span>
+                          )}
+                        </td>
+
                         <td style={tableCellStyle}>
                           <button
                             onClick={() => handleConnectClick(supplier)}
@@ -1681,6 +2225,11 @@ BIG Marketplace Africa Team`;
             >
               <div style={{ color: "#5D2A0A", fontSize: "0.875rem" }}>
                 Showing {filteredSuppliers.length} of {suppliers.length} suppliers
+                {Object.keys(secondaryMatchData).length > 0 && (
+                  <span style={{ marginLeft: "1rem", color: "#8D6E63" }}>
+                    • AI Analysis: {Object.keys(secondaryMatchData).length} suppliers
+                  </span>
+                )}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 <button
@@ -1713,6 +2262,296 @@ BIG Marketplace Africa Team`;
               </div>
             </div>
           </div>
+
+          {/* NEW: Secondary Match Breakdown Modal */}
+          {mounted &&
+            showSecondaryBreakdown &&
+            createPortal(
+              <div
+                style={{
+                  position: "fixed",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundColor: "rgba(0,0,0,0.5)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  zIndex: 1000,
+                }}
+              >
+                <div
+                  style={{
+                    background: "white",
+                    borderRadius: "12px",
+                    maxWidth: "800px",
+                    width: "95%",
+                    maxHeight: "90vh",
+                    overflowY: "auto",
+                    boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
+                  }}
+                >
+                  <div style={modalHeaderStyle}>
+                    <h3 style={modalTitleStyle}>
+                      AI Semantic Match -{" "}
+                      {secondaryBreakdownData?.supplier?.entityOverview?.tradingName ||
+                        secondaryBreakdownData?.supplier?.entityOverview?.registeredName}
+                    </h3>
+                    <button onClick={() => setShowSecondaryBreakdown(false)} style={modalCloseButtonStyle}>
+                      ✖
+                    </button>
+                  </div>
+                  <div style={modalBodyStyle}>
+                    {/* Score Comparison */}
+                    <div style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr 1fr", // Changed to 3 columns
+                      gap: "1rem",
+                      marginBottom: "2rem",
+                      paddingBottom: "1rem",
+                      borderBottom: "2px solid #E8D5C4",
+                    }}>
+                      <div style={{ textAlign: "center" }}>
+                        <div
+                          style={{
+                            fontSize: "2rem",
+                            fontWeight: "bold",
+                            color: getMatchScoreClass(secondaryBreakdownData?.primaryScore).color,
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          {secondaryBreakdownData?.primaryScore}%
+                        </div>
+                        <p style={{ fontSize: "0.875rem", color: "#8D6E63", margin: 0 }}>
+                          Primary Match
+                        </p>
+                        <p style={{ fontSize: "0.75rem", color: "#A67C52", margin: "0.25rem 0 0 0" }}>
+                          Structured Data
+                        </p>
+                      </div>
+                      <div style={{ textAlign: "center" }}>
+                        <div
+                          style={{
+                            fontSize: "2rem",
+                            fontWeight: "bold",
+                            color: getSecondaryMatchColor(secondaryBreakdownData?.secondaryScore),
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          {secondaryBreakdownData?.secondaryScore}%
+                        </div>
+                        <p style={{ fontSize: "0.875rem", color: "#8D6E63", margin: 0 }}>
+                          AI Semantic Match
+                        </p>
+                        <p style={{ fontSize: "0.75rem", color: "#A67C52", margin: "0.25rem 0 0 0" }}>
+                          Context & Meaning
+                        </p>
+                      </div>
+                      <div style={{ textAlign: "center" }}>
+                        <div
+                          style={{
+                            fontSize: "2.5rem", // Slightly larger for emphasis
+                            fontWeight: "bold",
+                            color: getSecondaryMatchColor(calculateCombinedMatchScore(
+                              secondaryBreakdownData?.primaryScore,
+                              secondaryBreakdownData?.secondaryScore
+                            )),
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          {calculateCombinedMatchScore(
+                            secondaryBreakdownData?.primaryScore,
+                            secondaryBreakdownData?.secondaryScore
+                          )}%
+                        </div>
+                        <p style={{ fontSize: "0.875rem", color: "#8D6E63", margin: 0 }}>
+                          Combined Match
+                        </p>
+                        <p style={{ fontSize: "0.75rem", color: "#A67C52", margin: "0.25rem 0 0 0" }}>
+                          60% Primary + 40% AI
+                        </p>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        background: "#F8F5F0",
+                        border: "1px solid #E8D5C4",
+                        borderRadius: "8px",
+                        padding: "1rem",
+                        marginBottom: "1.5rem",
+                      }}
+                    >
+                      <h4
+                        style={{
+                          fontSize: "0.875rem",
+                          fontWeight: "600",
+                          color: "#5D2A0A",
+                          margin: "0 0 0.5rem 0",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                        }}
+                      >
+                        📊 Score Calculation
+                      </h4>
+                      <p style={{ fontSize: "0.75rem", color: "#5D2A0A", margin: 0, lineHeight: "1.4" }}>
+                        <strong>Secondary Match % = (Primary Match × 60%) + (AI Match × 40%)</strong><br />
+                        This combines structured data matching with AI semantic analysis for a more comprehensive assessment.
+                      </p>
+                    </div>
+
+                    {/* AI Reasoning */}
+                    <div
+                      style={{
+                        background: "#FEFCFA",
+                        border: "1px solid #E8D5C4",
+                        borderRadius: "8px",
+                        padding: "1.5rem",
+                        marginBottom: "1.5rem",
+                      }}
+                    >
+                      <h4
+                        style={{
+                          fontSize: "1rem",
+                          fontWeight: "600",
+                          color: "#5D2A0A",
+                          margin: "0 0 1rem 0",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                        }}
+                      >
+                        <Brain size={18} />
+                        AI Analysis
+                      </h4>
+                      <p
+                        style={{
+                          fontSize: "0.875rem",
+                          lineHeight: "1.6",
+                          color: "#5D2A0A",
+                          margin: 0,
+                          whiteSpace: "pre-wrap",
+                        }}
+                      >
+                        {secondaryBreakdownData?.reasoning || "No reasoning provided."}
+                      </p>
+                    </div>
+
+                    {/* Matched Capabilities */}
+                    {secondaryBreakdownData?.capabilities &&
+                      secondaryBreakdownData.capabilities.length > 0 && (
+                        <div
+                          style={{
+                            background: "#F8F5F0",
+                            border: "1px solid #E8D5C4",
+                            borderRadius: "8px",
+                            padding: "1.5rem",
+                            marginBottom: "1.5rem",
+                          }}
+                        >
+                          <h4
+                            style={{
+                              fontSize: "1rem",
+                              fontWeight: "600",
+                              color: "#5D2A0A",
+                              margin: "0 0 1rem 0",
+                            }}
+                          >
+                            Matched Capabilities
+                          </h4>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                            {secondaryBreakdownData.capabilities.map((capability, index) => (
+                              <span
+                                key={index}
+                                style={{
+                                  background: "#E8F5E8",
+                                  color: "#388E3C",
+                                  padding: "0.5rem 0.75rem",
+                                  borderRadius: "16px",
+                                  fontSize: "0.75rem",
+                                  fontWeight: "500",
+                                  border: "1px solid #C8E6C9",
+                                }}
+                              >
+                                {capability}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                    {/* Improvement Suggestions */}
+                    <div
+                      style={{
+                        background: "#FFF3E0",
+                        border: "1px solid #FFE0B2",
+                        borderRadius: "8px",
+                        padding: "1.5rem",
+                      }}
+                    >
+                      <h4
+                        style={{
+                          fontSize: "1rem",
+                          fontWeight: "600",
+                          color: "#5D2A0A",
+                          margin: "0 0 1rem 0",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                        }}
+                      >
+                        <TrendingUp size={18} />
+                        To Improve Semantic Match
+                      </h4>
+                      <ul style={{ margin: 0, paddingLeft: "1.5rem", color: "#5D2A0A" }}>
+                        <li style={{ marginBottom: "0.5rem", fontSize: "0.875rem" }}>
+                          Add more detailed descriptions of products and services
+                        </li>
+                        <li style={{ marginBottom: "0.5rem", fontSize: "0.875rem" }}>
+                          Include specific use cases and client success stories
+                        </li>
+                        <li style={{ marginBottom: "0.5rem", fontSize: "0.875rem" }}>
+                          Highlight specialized expertise and unique capabilities
+                        </li>
+                        <li style={{ fontSize: "0.875rem" }}>
+                          Update target market descriptions to be more specific
+                        </li>
+                      </ul>
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "center",
+                        paddingTop: "1.5rem",
+                        borderTop: "1px solid #E8D5C4",
+                        marginTop: "1.5rem",
+                      }}
+                    >
+                      <button
+                        style={{
+                          padding: "0.75rem 2rem",
+                          background: "#5D2A0A",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "6px",
+                          fontSize: "0.875rem",
+                          fontWeight: "500",
+                          cursor: "pointer",
+                          transition: "all 0.2s",
+                        }}
+                        onClick={() => setShowSecondaryBreakdown(false)}
+                      >
+                        Close Analysis
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>,
+              document.body,
+            )}
 
           {/* Contacted Requests Section */}
           {showContactedApplications && contactedApplications.length > 0 && (
@@ -2857,8 +3696,9 @@ const tableStyle = {
   fontSize: "0.875rem",
   backgroundColor: "#FEFCFA",
   tableLayout: "fixed",
-  minWidth: "1200px",
+  minWidth: "1300px", // Increased to accommodate new column
 }
+
 
 const tableRowStyle = {
   borderBottom: "1px solid #E8D5C4",

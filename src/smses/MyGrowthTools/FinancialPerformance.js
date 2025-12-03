@@ -1757,6 +1757,7 @@ const BalanceSheet = ({
   onUpdateChartData,
   chartData,
   isInvestorView,
+  onViewModeToggle,
 }) => {
   const [balanceSheetTab, setBalanceSheetTab] = useState("snapshot")
   const [showModal, setShowModal] = useState(false)
@@ -1897,6 +1898,11 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
     }
 
     setShowModal(false)
+  }
+  const handleViewModeToggle = (newViewMode) => {
+    if (onViewModeToggle) {
+      onViewModeToggle(newViewMode)
+    }
   }
 
   const handleUploadBalanceSheet = (e) => {
@@ -2534,147 +2540,179 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
       )}
 
       {balanceSheetTab === "health" && (
-        <>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "20px",
-              flexWrap: "wrap",
-              gap: "15px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                gap: "15px",
-                alignItems: "center",
-              }}
-            >
-              <button
-                onClick={() => onMonthChange(viewMode === "month" ? "quarter" : viewMode === "quarter" ? "year" : "month")}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                  fontSize: "14px",
-                  transition: "all 0.3s ease",
-                }}
-              >
-                {viewMode === "month" ? "Monthly View" : viewMode === "quarter" ? "Quarterly View" : "Yearly View"}
-              </button>
-            </div>
+  <>
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: "20px",
+        flexWrap: "wrap",
+        gap: "15px",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          gap: "15px",
+          alignItems: "center",
+        }}
+      >
+        <button
+          onClick={() => handleViewModeToggle("month")}
+          style={{
+            padding: "8px 16px",
+            backgroundColor: viewMode === "month" ? "#5d4037" : "#e8ddd4",
+            color: viewMode === "month" ? "#fdfcfb" : "#5d4037",
+            border: "none",
+            borderRadius: "4px",
+            cursor: "pointer",
+            fontWeight: "500",
+            fontSize: "14px",
+            transition: "all 0.3s ease",
+          }}
+        >
+          Monthly View
+        </button>
+        <button
+          onClick={() => handleViewModeToggle("quarter")}
+          style={{
+            padding: "8px 16px",
+            backgroundColor: viewMode === "quarter" ? "#5d4037" : "#e8ddd4",
+            color: viewMode === "quarter" ? "#fdfcfb" : "#5d4037",
+            border: "none",
+            borderRadius: "4px",
+            cursor: "pointer",
+            fontWeight: "500",
+            fontSize: "14px",
+            transition: "all 0.3s ease",
+          }}
+        >
+          Quarterly View
+        </button>
+        <button
+          onClick={() => handleViewModeToggle("year")}
+          style={{
+            padding: "8px 16px",
+            backgroundColor: viewMode === "year" ? "#5d4037" : "#e8ddd4",
+            color: viewMode === "year" ? "#fdfcfb" : "#5d4037",
+            border: "none",
+            borderRadius: "4px",
+            cursor: "pointer",
+            fontWeight: "500",
+            fontSize: "14px",
+            transition: "all 0.3s ease",
+          }}
+        >
+          Yearly View
+        </button>
+      </div>
 
-            {!isInvestorView && (
-              <button
-                onClick={handleAddHealthDetails}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#8b6914",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  fontSize: "14px",
-                }}
-              >
-                Add KPI
-              </button>
-            )}
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              gap: "20px",
-              justifyContent: "space-between",
-            }}
-          >
-            <div style={{ flex: 1, height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
-              <Bar
-                data={{
-                  labels: displayLabels,
-                  datasets: [
-                    {
-                      label: "Receivables",
-                      data: aggregateDataForView(receivablesData),
-                      backgroundColor: "rgba(93, 64, 55, 0.6)",
-                      borderColor: "rgb(93, 64, 55)",
-                      borderWidth: 2,
-                    },
-                    {
-                      label: "Payables",
-                      data: aggregateDataForView(payablesData),
-                      backgroundColor: "rgba(139, 105, 20, 0.6)",
-                      borderColor: "rgb(139, 105, 20)",
-                      borderWidth: 2,
-                    },
-                  ],
-                }}
-                options={receivablesPayablesOptions}
-              />
-            </div>
-
-            <div style={{ flex: 1, height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
-              <Bar
-                data={{
-                  labels: displayLabels,
-                  datasets: [
-                    {
-                      label: "Receivables Days",
-                      data: aggregateDataForView(receivablesDaysData),
-                      backgroundColor: "rgba(114, 84, 43, 0.6)",
-                      borderColor: "rgb(114, 84, 43)",
-                      borderWidth: 2,
-                    },
-                    {
-                      label: "Payables Days",
-                      data: aggregateDataForView(payablesDaysData),
-                      backgroundColor: "rgba(156, 124, 95, 0.6)",
-                      borderColor: "rgb(156, 124, 95)",
-                      borderWidth: 2,
-                    },
-                  ],
-                }}
-                options={daysOptions}
-              />
-            </div>
-
-            <div style={{ flex: 1, height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
-              <Bar
-                data={{
-                  labels: displayLabels,
-                  datasets: [
-                    {
-                      label: "Inventory",
-                      data: aggregateDataForView(inventoryData),
-                      backgroundColor: "rgba(76, 175, 80, 0.6)",
-                      borderColor: "rgb(76, 175, 80)",
-                      borderWidth: 2,
-                      yAxisID: "y",
-                    },
-                    {
-                      label: "Inventory Days",
-                      data: aggregateDataForView(inventoryDaysData),
-                      backgroundColor: "rgba(139, 105, 20, 0.6)",
-                      borderColor: "rgb(139, 105, 20)",
-                      borderWidth: 2,
-                      yAxisID: "y1",
-                    },
-                  ],
-                }}
-                options={inventoryOptions}
-              />
-            </div>
-          </div>
-        </>
+      {!isInvestorView && (
+        <button
+          onClick={handleAddHealthDetails}
+          style={{
+            padding: "10px 20px",
+            backgroundColor: "#8b6914",
+            color: "#fdfcfb",
+            border: "none",
+            borderRadius: "6px",
+            cursor: "pointer",
+            fontWeight: "600",
+            fontSize: "14px",
+          }}
+        >
+          Add KPI
+        </button>
       )}
+    </div>
+
+    <div
+      style={{
+        display: "flex",
+        gap: "20px",
+        justifyContent: "space-between",
+      }}
+    >
+      <div style={{ flex: 1, height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
+        <Bar
+          data={{
+            labels: displayLabels,
+            datasets: [
+              {
+                label: "Receivables",
+                data: aggregateDataForView(receivablesData),
+                backgroundColor: "rgba(93, 64, 55, 0.6)",
+                borderColor: "rgb(93, 64, 55)",
+                borderWidth: 2,
+              },
+              {
+                label: "Payables",
+                data: aggregateDataForView(payablesData),
+                backgroundColor: "rgba(139, 105, 20, 0.6)",
+                borderColor: "rgb(139, 105, 20)",
+                borderWidth: 2,
+              },
+            ],
+          }}
+          options={receivablesPayablesOptions}
+        />
+      </div>
+
+      <div style={{ flex: 1, height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
+        <Bar
+          data={{
+            labels: displayLabels,
+            datasets: [
+              {
+                label: "Receivables Days",
+                data: aggregateDataForView(receivablesDaysData),
+                backgroundColor: "rgba(114, 84, 43, 0.6)",
+                borderColor: "rgb(114, 84, 43)",
+                borderWidth: 2,
+              },
+              {
+                label: "Payables Days",
+                data: aggregateDataForView(payablesDaysData),
+                backgroundColor: "rgba(156, 124, 95, 0.6)",
+                borderColor: "rgb(156, 124, 95)",
+                borderWidth: 2,
+              },
+            ],
+          }}
+          options={daysOptions}
+        />
+      </div>
+
+      <div style={{ flex: 1, height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
+        <Bar
+          data={{
+            labels: displayLabels,
+            datasets: [
+              {
+                label: "Inventory",
+                data: aggregateDataForView(inventoryData),
+                backgroundColor: "rgba(76, 175, 80, 0.6)",
+                borderColor: "rgb(76, 175, 80)",
+                borderWidth: 2,
+                yAxisID: "y",
+              },
+              {
+                label: "Inventory Days",
+                data: aggregateDataForView(inventoryDaysData),
+                backgroundColor: "rgba(139, 105, 20, 0.6)",
+                borderColor: "rgb(139, 105, 20)",
+                borderWidth: 2,
+                yAxisID: "y1",
+              },
+            ],
+          }}
+          options={inventoryOptions}
+        />
+      </div>
+    </div>
+  </>
+)}
 
       {showModal && !isInvestorView && (
         <div
@@ -3428,8 +3466,8 @@ const FinancialPerformance = () => {
             ))}
           </div>
 
-          {/* View mode buttons - show for P&L Snapshot, Cashflow Trends, and Balance Sheet */}
-          {(activeSection === "pnl-snapshot" || activeSection === "cashflow-trends" || activeSection === "balance-sheet") && (
+          {/* View mode buttons - show for P&L Snapshot and Cashflow Trends only */}
+          {(activeSection === "pnl-snapshot" || activeSection === "cashflow-trends") && (
             <div
               style={{
                 display: "flex",
@@ -3528,6 +3566,7 @@ const FinancialPerformance = () => {
             onUpdateChartData={handleUpdateChartData}
             chartData={chartData}
             isInvestorView={isInvestorView}
+            onViewModeToggle={handleViewModeToggle}
           />
 
           {activeSection === "capital-structure" && (

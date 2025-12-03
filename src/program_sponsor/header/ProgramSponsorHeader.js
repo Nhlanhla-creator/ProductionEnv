@@ -29,6 +29,28 @@ function ProgramSponsorHeader({ companyName, profileImage, setProfileImage }) {
   const [imageUploading, setImageUploading] = useState(false);
   const [profileData, setProfileData] = useState({});
   const profileRef = useRef(null);
+  const modalRef = useRef(null);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  // Listen for sidebar state changes
+  useEffect(() => {
+    const handleSidebarStateChange = () => {
+      const collapsed = document.body.classList.contains("sidebar-collapsed");
+      setIsSidebarCollapsed(collapsed);
+    };
+
+    // Check initial state
+    handleSidebarStateChange();
+
+    // Watch for changes
+    const observer = new MutationObserver(handleSidebarStateChange);
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const fetchRoles = async () => {
@@ -265,12 +287,37 @@ function ProgramSponsorHeader({ companyName, profileImage, setProfileImage }) {
       if (profileRef.current && !profileRef.current.contains(event.target)) {
         setShowProfileMenu(false);
       }
+      if (modalRef.current && !modalRef.current.contains(event.target)) {
+        setShowAddRole(false);
+      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  // Close modal with ESC key
+  useEffect(() => {
+    const handleEscKey = (event) => {
+      if (event.key === 'Escape' && showAddRole) {
+        setShowAddRole(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscKey);
+    return () => document.removeEventListener('keydown', handleEscKey);
+  }, [showAddRole]);
+
+  const getAvailableRoleOptions = () => {
+    return ROLE_OPTIONS.filter(role => {
+      const hasSME = availableRoles.includes("SMEs") || 
+                   availableRoles.includes("SME/BUSINESS") || 
+                   availableRoles.includes("Small and Medium Social Enterprises")
+      if (hasSME && role === "SMEs") return false
+      return !availableRoles.includes(role)
+    });
+  };
 
   const triggerFileInput = () => fileInputRef.current.click();
 
@@ -294,31 +341,38 @@ function ProgramSponsorHeader({ companyName, profileImage, setProfileImage }) {
   });
 
   if (loading) {
-    return <div className={styles.loading}>Loading user data...</div>;
+    return <div className="loading">Loading user data...</div>;
   }
 
   if (!user) {
-    return <div className={styles.notSignedIn}>Please sign in</div>;
+    return <div className="notSignedIn">Please sign in</div>;
   }
 
   return (
-    <header className={styles.header}>
-      <div className={styles["header-left"]}>
-        <div className={styles["header-logo"]}>
-          <img src="/MainLogo.png" alt="Company Logo" className={styles["logo-image"]} />
+    <header 
+      className="header"
+      style={{
+        marginLeft: isSidebarCollapsed ? '80px' : '280px',
+        width: isSidebarCollapsed ? 'calc(100% - 80px)' : 'calc(100% - 280px)',
+        transition: 'all 0.3s ease'
+      }}
+    >
+      <div className="header-left">
+        <div className="header-logo">
+          <img src="/MainLogo.png" alt="Company Logo" className="logo-image" />
         </div>
 
-        <div className={styles["welcome-container"]}>
-          <h1 className={styles["welcome-message"]}>
-            Welcome back, <span className={styles["user-name"]}>{userName}</span>
+        <div className={`welcome-container ${isSidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+          <h1 className="welcome-message">
+            Welcome back, <span className="user-name">{userName}</span>
           </h1>
-          <div className={styles["date-display"]}>
-            <Calendar size={14} className={styles["calendar-icon"]} />
+          <div className="date-display">
+            <Calendar size={14} className="calendar-icon" />
             {formattedDate}
           </div>
         </div>
 
-        <div className={styles["header-buttons"]}>
+        <div className="header-buttons">
           <Feedback 
             buttonStyle={{
               display: 'flex',
@@ -339,11 +393,11 @@ function ProgramSponsorHeader({ companyName, profileImage, setProfileImage }) {
         </div>
       </div>
 
-      <div className={styles["header-right"]}>
-        <div className={styles["header-icons"]}>
-          <div className={styles["icon-wrapper"]}>
+      <div className="header-right">
+        <div className="header-icons">
+          <div className="icon-wrapper">
             <button
-              className={styles["icon-button"]}
+              className="icon-button"
               aria-label="Messages"
               onClick={() => navigate("/program-sponsor-messages")}
             >
@@ -483,7 +537,7 @@ function ProgramSponsorHeader({ companyName, profileImage, setProfileImage }) {
       {/* Add Role Modal */}
       {showAddRole && (
         <div className="modal-overlay">
-          <div className="add-role-modal">
+          <div className="add-role-modal" ref={modalRef}>
             <div className="modal-header">
               <h3>Add New Role</h3>
               <button 
@@ -506,13 +560,7 @@ function ProgramSponsorHeader({ companyName, profileImage, setProfileImage }) {
                   className="role-select"
                 >
                   <option value="">Select a role</option>
-                  {ROLE_OPTIONS.filter(role => {
-                    const hasSME = availableRoles.includes("SMEs") || 
-                                 availableRoles.includes("SME/BUSINESS") || 
-                                 availableRoles.includes("Small and Medium Social Enterprises")
-                    if (hasSME && role === "SMEs") return false
-                    return !availableRoles.includes(role)
-                  }).map((role, idx) => (
+                  {getAvailableRoleOptions().map((role, idx) => (
                     <option key={idx} value={role}>{role}</option>
                   ))}
                 </select>
@@ -542,8 +590,6 @@ function ProgramSponsorHeader({ companyName, profileImage, setProfileImage }) {
         .header {
           position: fixed;
           top: 0;
-          margin-left: 259px;
-          width: calc(100% - 259px);
           height: 72px;
           background-color: #fff;
           display: flex;
@@ -552,7 +598,8 @@ function ProgramSponsorHeader({ companyName, profileImage, setProfileImage }) {
           padding: 16px 24px;
           z-index: 100;
           box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-          transition: left 0.3s ease, width 0.3s ease;
+          min-width: 0;
+          box-sizing: border-box;
         }
 
         .header-left {
@@ -579,6 +626,12 @@ function ProgramSponsorHeader({ companyName, profileImage, setProfileImage }) {
           display: flex;
           flex-direction: column;
           margin-left: 250px;
+          transition: margin-left 0.3s ease;
+        }
+
+        /* Adjust welcome container margin when sidebar is collapsed */
+        .welcome-container.sidebar-collapsed {
+          margin-left: 200px;
         }
 
         .welcome-message {
@@ -1094,9 +1147,37 @@ function ProgramSponsorHeader({ companyName, profileImage, setProfileImage }) {
           color: #E74C3C;
         }
 
+        /* Spinner animation */
+        .spinning {
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
+        .uploading {
+          opacity: 0.7;
+          cursor: not-allowed;
+        }
+
+        /* Responsive Design */
         @media (max-width: 1200px) {
           .welcome-container {
             margin-left: 200px;
+          }
+          
+          .welcome-container.sidebar-collapsed {
+            margin-left: 150px;
+          }
+          
+          .header-buttons {
+            margin-left: 20px;
           }
         }
 
@@ -1113,18 +1194,27 @@ function ProgramSponsorHeader({ companyName, profileImage, setProfileImage }) {
             margin-left: 150px;
           }
           
+          .welcome-container.sidebar-collapsed {
+            margin-left: 100px;
+          }
+          
           .header-buttons {
-            margin-left: 20px;
+            margin-left: 15px;
+            gap: 8px;
           }
         }
 
         @media (max-width: 768px) {
           .header {
-            left: 0;
-            width: 100%;
+            margin-left: 0 !important;
+            width: 100% !important;
           }
           
           .welcome-container {
+            margin-left: 50px;
+          }
+          
+          .welcome-container.sidebar-collapsed {
             margin-left: 50px;
           }
           
@@ -1139,8 +1229,8 @@ function ProgramSponsorHeader({ companyName, profileImage, setProfileImage }) {
           }
           
           .header-buttons {
-            margin-left: 15px;
-            gap: 8px;
+            margin-left: 10px;
+            gap: 6px;
           }
         }
 
@@ -1148,7 +1238,15 @@ function ProgramSponsorHeader({ companyName, profileImage, setProfileImage }) {
           .header-buttons {
             flex-direction: column;
             gap: 4px;
-            margin-left: 10px;
+            margin-left: 5px;
+          }
+          
+          .welcome-container {
+            margin-left: 20px;
+          }
+          
+          .welcome-message {
+            font-size: 0.9rem;
           }
         }
       `}</style>

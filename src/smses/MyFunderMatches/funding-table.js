@@ -574,7 +574,7 @@ const [bigScore, setBigScore] = useState(null);
     fundingType: "",
     minTicket: "",
     maxTicket: "",
-    minMatch: 0,
+    minMatch: 50,
     maxMatch: 100,
     currentStage: "",
 
@@ -673,7 +673,7 @@ const [bigScore, setBigScore] = useState(null);
         {isEligible ? (
           <span> ✓ Eligible to apply</span>
         ) : (
-          <span> ✗ Minimum 75% required</span>
+          <span> ✗ Minimum 85% required</span>
         )}
       </div>
       {!isEligible && (
@@ -788,7 +788,7 @@ const [bigScore, setBigScore] = useState(null);
               lineHeight: "1.6",
               margin: "0 0 15px 0"
             }}>
-              Your current <strong>BigScore is {bigScore}%</strong>, which is below the minimum requirement of <strong>75%</strong> needed to apply for funding.
+              Your current <strong>BigScore is {bigScore}%</strong>, which is below the minimum requirement of <strong>85%</strong> needed to apply for funding.
             </p>
             
            
@@ -850,7 +850,7 @@ const [bigScore, setBigScore] = useState(null);
                 color: "#c8b6a6"
               }}>
                 <span>0%</span>
-                <span style={{ color: "#4CAF50", fontWeight: "600" }}>75% Required</span>
+                <span style={{ color: "#4CAF50", fontWeight: "600" }}>85% Required</span>
                 <span>100%</span>
               </div>
             </div>
@@ -1383,7 +1383,7 @@ const [bigScore, setBigScore] = useState(null);
       return;
     }
 
-   if (bigScore < 75) {
+   if (bigScore < 85) {
       setShowBigScoreWarning(true);
       return;
     }

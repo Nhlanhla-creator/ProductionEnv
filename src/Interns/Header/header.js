@@ -35,6 +35,28 @@ function InternHeader({ companyName, profileImage, setProfileImage }) {
   const [recentMessages, setRecentMessages] = useState([]);
   const [showMessages, setShowMessages] = useState(false);
   const messagesRef = useRef(null);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const modalRef = useRef(null);
+
+  // Listen for sidebar state changes
+  useEffect(() => {
+    const handleSidebarStateChange = () => {
+      const collapsed = document.body.classList.contains("sidebar-collapsed");
+      setIsSidebarCollapsed(collapsed);
+    };
+
+    // Check initial state
+    handleSidebarStateChange();
+
+    // Watch for changes
+    const observer = new MutationObserver(handleSidebarStateChange);
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const fetchRoles = async () => {
@@ -348,6 +370,9 @@ function InternHeader({ companyName, profileImage, setProfileImage }) {
       if (profileRef.current && !profileRef.current.contains(event.target)) {
         setShowProfileMenu(false);
       }
+      if (modalRef.current && !modalRef.current.contains(event.target)) {
+        setShowAddRole(false);
+      }
     }
 
     document.addEventListener("mousedown", handleClickOutside);
@@ -355,6 +380,28 @@ function InternHeader({ companyName, profileImage, setProfileImage }) {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  // Close modal with ESC key
+  useEffect(() => {
+    const handleEscKey = (event) => {
+      if (event.key === 'Escape' && showAddRole) {
+        setShowAddRole(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscKey);
+    return () => document.removeEventListener('keydown', handleEscKey);
+  }, [showAddRole]);
+
+  const getAvailableRoleOptions = () => {
+    return ROLE_OPTIONS.filter(role => {
+      const hasSME = availableRoles.includes("SMEs") || 
+                   availableRoles.includes("SME/BUSINESS") || 
+                   availableRoles.includes("Small and Medium Social Enterprises")
+      if (hasSME && role === "SMEs") return false
+      return !availableRoles.includes(role)
+    });
+  };
 
   const triggerFileInput = () => fileInputRef.current.click();
   const handleLogout = () => {
@@ -377,31 +424,38 @@ function InternHeader({ companyName, profileImage, setProfileImage }) {
   });
 
   if (loading) {
-    return <div className={styles.loading}>Loading user data...</div>;
+    return <div className="loading">Loading user data...</div>;
   }
 
   if (!user) {
-    return <div className={styles.notSignedIn}>Please sign in</div>;
+    return <div className="notSignedIn">Please sign in</div>;
   }
 
   return (
-    <header className={styles.header}>
-      <div className={styles["header-left"]}>
-        <div className={styles["header-logo"]}>
-          <img src="/MainLogo.png" alt="Company Logo" className={styles["logo-image"]} />
+    <header 
+      className="header"
+      style={{
+        marginLeft: isSidebarCollapsed ? '80px' : '280px',
+        width: isSidebarCollapsed ? 'calc(100% - 80px)' : 'calc(100% - 280px)',
+        transition: 'all 0.3s ease'
+      }}
+    >
+      <div className="header-left">
+        <div className="header-logo">
+          <img src="/MainLogo.png" alt="Company Logo" className="logo-image" />
         </div>
 
-        <div className={styles["welcome-container"]}>
-          <h1 className={styles["welcome-message"]}>
-            Welcome back, <span className={styles["user-name"]}>{userName}</span>
+        <div className="welcome-container">
+          <h1 className="welcome-message">
+            Welcome back, <span className="user-name">{userName}</span>
           </h1>
-          <div className={styles["date-display"]}>
-            <Calendar size={14} className={styles["calendar-icon"]} />
+          <div className="date-display">
+            <Calendar size={14} className="calendar-icon" />
             {formattedDate}
           </div>
         </div>
 
-        <div className={styles["header-buttons"]}>
+        <div className="header-buttons">
           <Feedback 
             buttonStyle={{
               display: 'flex',
@@ -422,35 +476,35 @@ function InternHeader({ companyName, profileImage, setProfileImage }) {
         </div>
       </div>
 
-      <div className={styles["header-right"]}>
-        <div className={styles["header-icons"]}>
-          <div className={styles["icon-wrapper"]}>
+      <div className="header-right">
+        <div className="header-icons">
+          <div className="icon-wrapper">
             <Notifications />
           </div>
 
-          <div className={styles["icon-wrapper"]} ref={messagesRef}>
+          <div className="icon-wrapper" ref={messagesRef}>
             <button
-              className={`${styles["icon-button"]} ${showMessages ? styles.active : ''}`}
+              className={`icon-button ${showMessages ? 'active' : ''}`}
               aria-label="Messages"
               onClick={() => {
                 setShowMessages(!showMessages);
                 setShowProfileMenu(false);
               }}
             >
-              <div className={styles["message-icon-container"]}>
+              <div className="message-icon-container">
                 <Mail size={20} />
                 {unreadMessages > 0 && (
-                  <span className={styles["message-badge"]}>{unreadMessages}</span>
+                  <span className="message-badge">{unreadMessages}</span>
                 )}
               </div>
             </button>
 
             {showMessages && (
-              <div className={`${styles["dropdown-menu"]} ${styles["messages-dropdown"]}`}>
-                <div className={styles["dropdown-header"]}>
+              <div className="dropdown-menu messages-dropdown">
+                <div className="dropdown-header">
                   <h3>Messages</h3>
                   <button 
-                    className={styles["mark-read-button"]}
+                    className="mark-read-button"
                     onClick={() => {
                       setUnreadMessages(0);
                     }}
@@ -458,12 +512,12 @@ function InternHeader({ companyName, profileImage, setProfileImage }) {
                     Mark all as read
                   </button>
                 </div>
-                <div className={styles["dropdown-divider"]}></div>
-                <div className={styles["messages-list"]}>
+                <div className="dropdown-divider"></div>
+                <div className="messages-list">
                   {recentMessages.length === 0 ? (
-                    <div className={styles["message-item"]}>
-                      <div className={styles["no-messages"]}>
-                        <Mail size={24} className={styles["no-messages-icon"]} />
+                    <div className="message-item">
+                      <div className="no-messages">
+                        <Mail size={24} className="no-messages-icon" />
                         <p>No new messages</p>
                       </div>
                     </div>
@@ -471,19 +525,19 @@ function InternHeader({ companyName, profileImage, setProfileImage }) {
                     recentMessages.map((msg, index) => (
                       <div 
                         key={index} 
-                        className={`${styles["message-item"]} ${styles.unread}`}
+                        className={`message-item unread`}
                         onClick={() => {
                           navigate('/messages');
                           setShowMessages(false);
                         }}
                       >
-                        <div className={styles["message-avatar"]}>
+                        <div className="message-avatar">
                           <img src={logo} alt="Avatar" />
                         </div>
-                        <div className={styles["message-content"]}>
-                          <p className={styles["message-sender"]}>{msg.senderName || "Unknown Funder"}</p>
-                          <p className={styles["message-text"]}>{msg.subject}</p>
-                          <p className={styles["message-time"]}>
+                        <div className="message-content">
+                          <p className="message-sender">{msg.senderName || "Unknown Funder"}</p>
+                          <p className="message-text">{msg.subject}</p>
+                          <p className="message-time">
                             {new Date(msg.date).toLocaleString("en-ZA", {
                               hour: "2-digit",
                               minute: "2-digit",
@@ -496,9 +550,9 @@ function InternHeader({ companyName, profileImage, setProfileImage }) {
                     ))
                   )}
                 </div>
-                <div className={styles["dropdown-footer"]}>
+                <div className="dropdown-footer">
                   <button 
-                    className={styles["view-all-button"]}
+                    className="view-all-button"
                     onClick={() => {
                       navigate('/messages');
                       setShowMessages(false);
@@ -644,7 +698,7 @@ function InternHeader({ companyName, profileImage, setProfileImage }) {
       {/* Add Role Modal - Matching AdvisorHeader design */}
       {showAddRole && (
         <div className="modal-overlay">
-          <div className="add-role-modal">
+          <div className="add-role-modal" ref={modalRef}>
             <div className="modal-header">
               <h3>Add New Role</h3>
               <button 
@@ -667,13 +721,7 @@ function InternHeader({ companyName, profileImage, setProfileImage }) {
                   className="role-select"
                 >
                   <option value="">Select a role</option>
-                  {ROLE_OPTIONS.filter(role => {
-                    const hasSME = availableRoles.includes("SMEs") || 
-                                 availableRoles.includes("SME/BUSINESS") || 
-                                 availableRoles.includes("Small and Medium Social Enterprises")
-                    if (hasSME && role === "SMEs") return false
-                    return !availableRoles.includes(role)
-                  }).map((role, idx) => (
+                  {getAvailableRoleOptions().map((role, idx) => (
                     <option key={idx} value={role}>{role}</option>
                   ))}
                 </select>
@@ -703,8 +751,6 @@ function InternHeader({ companyName, profileImage, setProfileImage }) {
         .header {
           position: fixed;
           top: 0;
-          margin-left: 259px;
-          width: calc(100% - 259px);
           height: 72px;
           background-color: #fff;
           display: flex;
@@ -713,7 +759,8 @@ function InternHeader({ companyName, profileImage, setProfileImage }) {
           padding: 16px 1px;
           z-index: 100;
           box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-          transition: left 0.3s ease, width 0.3s ease;
+          min-width: 0;
+          box-sizing: border-box;
         }
 
         .header-left {
@@ -740,6 +787,12 @@ function InternHeader({ companyName, profileImage, setProfileImage }) {
           display: flex;
           flex-direction: column;
           margin-left: 250px;
+        }
+
+        /* Adjust welcome container margin when sidebar is collapsed */
+        body.sidebar-collapsed .welcome-container,
+        .header.sidebar-collapsed .welcome-container {
+          margin-left: 200px;
         }
 
         .welcome-message {
@@ -1278,9 +1331,153 @@ function InternHeader({ companyName, profileImage, setProfileImage }) {
           color: #E74C3C;
         }
 
+        /* Messages dropdown specific styles */
+        .messages-dropdown {
+          width: 320px;
+        }
+
+        .mark-read-button {
+          background: none;
+          border: none;
+          color: #9E6E3C;
+          font-size: 0.75rem;
+          font-weight: 500;
+          cursor: pointer;
+          padding: 4px 8px;
+          border-radius: 4px;
+          transition: all 0.2s ease;
+        }
+
+        .mark-read-button:hover {
+          background-color: #F8F7F3;
+        }
+
+        .messages-list {
+          max-height: 300px;
+          overflow-y: auto;
+        }
+
+        .message-item {
+          display: flex;
+          align-items: center;
+          padding: 12px 16px;
+          border-bottom: 1px solid rgba(117, 74, 45, 0.05);
+          cursor: pointer;
+          transition: background-color 0.15s ease;
+        }
+
+        .message-item:hover {
+          background-color: #F8F7F3;
+        }
+
+        .message-item.unread {
+          background-color: rgba(52, 152, 219, 0.05);
+        }
+
+        .message-avatar {
+          width: 38px;
+          height: 38px;
+          border-radius: 50%;
+          margin-right: 12px;
+          flex-shrink: 0;
+          overflow: hidden;
+          border: 1px solid rgba(117, 74, 45, 0.1);
+        }
+
+        .message-avatar img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .message-content {
+          flex-grow: 1;
+          overflow: hidden;
+        }
+
+        .message-sender {
+          margin: 0 0 2px;
+          font-size: 0.85rem;
+          font-weight: 600;
+          color: #624635;
+        }
+
+        .message-text {
+          margin: 0 0 4px;
+          font-size: 0.8rem;
+          color: #666;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          line-height: 1.3;
+        }
+
+        .message-time {
+          margin: 0;
+          font-size: 0.7rem;
+          color: #AAA199;
+        }
+
+        .no-messages {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+          color: #AAA199;
+          text-align: center;
+        }
+
+        .no-messages-icon {
+          margin-bottom: 8px;
+          opacity: 0.5;
+        }
+
+        .view-all-button {
+          background: none;
+          border: none;
+          color: #9E6E3C;
+          font-size: 0.85rem;
+          font-weight: 500;
+          cursor: pointer;
+          width: 100%;
+          padding: 6px;
+          border-radius: 4px;
+          transition: all 0.2s ease;
+        }
+
+        .view-all-button:hover {
+          background-color: #F8F7F3;
+        }
+
+        /* Spinner animation */
+        .spinning {
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
+        .uploading {
+          opacity: 0.7;
+          cursor: not-allowed;
+        }
+
+        /* Responsive Design */
         @media (max-width: 1200px) {
           .welcome-container {
             margin-left: 200px;
+          }
+          
+          body.sidebar-collapsed .welcome-container,
+          .header.sidebar-collapsed .welcome-container {
+            margin-left: 150px;
           }
           
           .header-buttons {
@@ -1305,12 +1502,17 @@ function InternHeader({ companyName, profileImage, setProfileImage }) {
             margin-left: 15px;
             gap: 8px;
           }
+          
+          body.sidebar-collapsed .welcome-container,
+          .header.sidebar-collapsed .welcome-container {
+            margin-left: 100px;
+          }
         }
 
         @media (max-width: 768px) {
           .header {
-            left: 0;
-            width: 100%;
+            margin-left: 0 !important;
+            width: 100% !important;
           }
           
           .welcome-container {
@@ -1338,6 +1540,14 @@ function InternHeader({ companyName, profileImage, setProfileImage }) {
             flex-direction: column;
             gap: 4px;
             margin-left: 5px;
+          }
+          
+          .welcome-container {
+            margin-left: 20px;
+          }
+          
+          .welcome-message {
+            font-size: 0.9rem;
           }
         }
       `}</style>
