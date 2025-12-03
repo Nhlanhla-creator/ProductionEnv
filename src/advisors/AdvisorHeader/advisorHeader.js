@@ -36,6 +36,27 @@ function AdvisorHeader({ companyName, profileImage, setProfileImage }) {
   const [profileData, setProfileData] = useState({})
   const profileRef = useRef(null)
   const modalRef = useRef(null)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+
+  // Listen for sidebar state changes
+  useEffect(() => {
+    const handleSidebarStateChange = () => {
+      const collapsed = document.body.classList.contains("sidebar-collapsed");
+      setIsSidebarCollapsed(collapsed);
+    };
+
+    // Check initial state
+    handleSidebarStateChange();
+
+    // Watch for changes
+    const observer = new MutationObserver(handleSidebarStateChange);
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const fetchRoles = async () => {
@@ -64,21 +85,21 @@ function AdvisorHeader({ companyName, profileImage, setProfileImage }) {
       case "SMEs":
       case "Small and Medium Social Enterprises":
       case "SME/BUSINESS":
-        case"SMSES":
-        case"SMSEs":
+      case "SMSES":
+      case "SMSEs":
         navigate("/profile");
         break;
       case "Advisor":
-        case"Advisors":
+      case "Advisors":
         navigate("/advisor-profile");
         break;
       case "Catalyst":
-        case"Catalysts":
-        case"Accelerators":
+      case "Catalysts":
+      case "Accelerators":
         navigate("/support-profile");
         break;
       case "Program Sponsor":
-        case"ProgramSponsor":
+      case "ProgramSponsor":
         navigate("/sponsor-profile");
         break;
       case "Intern":
@@ -368,7 +389,14 @@ function AdvisorHeader({ companyName, profileImage, setProfileImage }) {
   }
 
   return (
-    <header className={styles.header}>
+    <header 
+      className={styles.header}
+      style={{
+        marginLeft: isSidebarCollapsed ? '80px' : '280px',
+        width: isSidebarCollapsed ? 'calc(100% - 80px)' : 'calc(100% - 280px)',
+        transition: 'all 0.3s ease'
+      }}
+    >
       <div className={styles["header-left"]}>
         <div className={styles["header-logo"]}>
           <img src="/MainLogo.png" alt="Company Logo" className={styles["logo-image"]} />

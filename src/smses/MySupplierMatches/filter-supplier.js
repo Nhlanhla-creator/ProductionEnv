@@ -4,24 +4,35 @@ import { useState, useEffect } from "react"
 import { Slider } from "./slider"
 import styles from "./sup-filter.module.css"
 
-export function FilterSuppliers() {
-  const [location, setLocation] = useState("")
-  const [matchScore, setMatchScore] = useState([50])
-  const [minValue, setMinValue] = useState("")
-  const [maxValue, setMaxValue] = useState("")
-  const [entityType, setEntityType] = useState("")
-  const [sectors, setSectors] = useState([])
-  const [bbbeeLevel, setBbbeeLevel] = useState("")
-  const [procurementCategories, setProcurementCategories] = useState([])
-  const [availability, setAvailability] = useState("")
-  const [sortBy, setSortBy] = useState("")
+export function FilterSuppliers({ suppliers, onFilterChange, onClose }) {
+  const [filters, setFilters] = useState({
+    location: "",
+    matchScore: [50],
+    minValue: "",
+    maxValue: "",
+    entityType: "",
+    sectors: [],
+    bbbeeLevel: "",
+    procurementCategories: [],
+    availability: "",
+    sortBy: "",
+  })
+
+  // Update individual filter
+  const updateFilter = (key, value) => {
+    const newFilters = { ...filters, [key]: value }
+    setFilters(newFilters)
+    // Apply filters immediately when they change
+    applyFilters(newFilters)
+  }
 
   const handleSectorChange = (sector) => {
-    if (sectors.includes(sector)) {
-      setSectors(sectors.filter((s) => s !== sector))
-    } else {
-      setSectors([...sectors, sector])
-    }
+    const newSectors = filters.sectors.includes(sector)
+      ? filters.sectors.filter((s) => s !== sector)
+      : [...filters.sectors, sector]
+    
+    updateFilter('sectors', newSectors)
+    
     // Auto-close dropdown after selection
     setTimeout(() => {
       const dropdown = document.getElementById("sector-dropdown")
@@ -30,11 +41,11 @@ export function FilterSuppliers() {
   }
 
   const handleProcurementChange = (category) => {
-    if (procurementCategories.includes(category)) {
-      setProcurementCategories(procurementCategories.filter((c) => c !== category))
-    } else {
-      setProcurementCategories([...procurementCategories, category])
-    }
+    const newCategories = filters.procurementCategories.includes(category)
+      ? filters.procurementCategories.filter((c) => c !== category)
+      : [...filters.procurementCategories, category]
+    
+    updateFilter('procurementCategories', newCategories)
   }
 
   // Close dropdown when clicking outside
@@ -53,32 +64,125 @@ export function FilterSuppliers() {
   }, [])
 
   const clearAllFilters = () => {
-    setLocation("")
-    setMatchScore([50])
-    setMinValue("")
-    setMaxValue("")
-    setEntityType("")
-    setSectors([])
-    setBbbeeLevel("")
-    setProcurementCategories([])
-    setAvailability("")
-    setSortBy("")
+    const clearedFilters = {
+      location: "",
+      matchScore: [50],
+      minValue: "",
+      maxValue: "",
+      entityType: "",
+      sectors: [],
+      bbbeeLevel: "",
+      procurementCategories: [],
+      availability: "",
+      sortBy: "",
+    }
+    setFilters(clearedFilters)
+    applyFilters(clearedFilters)
   }
 
-  const applyFilters = () => {
-    // Implementation for applying filters
-    console.log({
-      location,
-      matchScore,
-      minValue,
-      maxValue,
-      entityType,
-      sectors,
-      bbbeeLevel,
-      procurementCategories,
-      availability,
-      sortBy
+  const applyFilters = (filterState = filters) => {
+    if (!onFilterChange) return
+
+    const filteredSuppliers = suppliers.filter(supplier => {
+      // Location filter
+      if (filterState.location && supplier.entityOverview?.location !== filterState.location) {
+        return false
+      }
+
+      // Match Score filter
+      if (supplier.matchPercentage < filterState.matchScore[0]) {
+        return false
+      }
+
+      // BBBEE Level filter
+      if (filterState.bbbeeLevel && supplier.legalCompliance?.bbbeeLevel !== filterState.bbbeeLevel) {
+        return false
+      }
+
+      // Entity Type filter
+      if (filterState.entityType && supplier.entityOverview?.entityType !== filterState.entityType) {
+        return false
+      }
+
+      // Sectors filter
+      if (filterState.sectors.length > 0) {
+        const supplierSectors = supplier.entityOverview?.economicSectors || []
+        const hasMatchingSector = filterState.sectors.some(sector => 
+          supplierSectors.includes(sector)
+        )
+        if (!hasMatchingSector) return false
+      }
+
+      // Procurement Categories filter
+      if (filterState.procurementCategories.length > 0) {
+        const supplierCategories = [
+          ...(supplier.productsServices?.productCategories || []).map(cat => cat.name || cat),
+          ...(supplier.productsServices?.serviceCategories || []).map(cat => cat.name || cat)
+        ]
+        const hasMatchingCategory = filterState.procurementCategories.some(category =>
+          supplierCategories.some(supplierCat => 
+            supplierCat.toLowerCase().includes(category.toLowerCase())
+          )
+        )
+        if (!hasMatchingCategory) return false
+      }
+
+      // Availability filter (simplified - using urgency field)
+      if (filterState.availability) {
+        const supplierUrgency = supplier.urgency?.toLowerCase() || ""
+        const filterAvailability = filterState.availability.toLowerCase()
+        
+        if (filterAvailability === "immediate" && !supplierUrgency.includes("immediate")) {
+          return false
+        } else if (filterAvailability === "within 1 week" && !supplierUrgency.includes("week")) {
+          return false
+        } else if (filterAvailability === "within 1 month" && !supplierUrgency.includes("month")) {
+          return false
+        }
+      }
+
+      // Budget range filter (simplified - using annual revenue)
+      if (filterState.minValue || filterState.maxValue) {
+        const supplierRevenue = parseFloat(supplier.financialOverview?.annualRevenue?.replace(/[^\d.]/g, '')) || 0
+        const minBudget = parseFloat(filterState.minValue.replace(/[^\d.]/g, '')) || 0
+        const maxBudget = parseFloat(filterState.maxValue.replace(/[^\d.]/g, '')) || Infinity
+        
+        if (supplierRevenue < minBudget || supplierRevenue > maxBudget) {
+          return false
+        }
+      }
+
+      return true
     })
+
+    // Apply sorting
+    let sortedSuppliers = [...filteredSuppliers]
+    if (filterState.sortBy) {
+      switch (filterState.sortBy) {
+        case "Match Score (High to Low)":
+          sortedSuppliers.sort((a, b) => b.matchPercentage - a.matchPercentage)
+          break
+        case "Match Score (Low to High)":
+          sortedSuppliers.sort((a, b) => a.matchPercentage - b.matchPercentage)
+          break
+        case "Rating (High to Low)":
+          sortedSuppliers.sort((a, b) => (b.rating || 0) - (a.rating || 0))
+          break
+        case "Rating (Low to High)":
+          sortedSuppliers.sort((a, b) => (a.rating || 0) - (b.rating || 0))
+          break
+        case "Date Added (Newest First)":
+          sortedSuppliers.sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity))
+          break
+        case "Date Added (Oldest First)":
+          sortedSuppliers.sort((a, b) => new Date(a.lastActivity) - new Date(b.lastActivity))
+          break
+        default:
+          break
+      }
+    }
+
+    onFilterChange(sortedSuppliers, filterState)
   }
 
   const locations = [
@@ -118,6 +222,14 @@ export function FilterSuppliers() {
       <div className={styles.filterHeader}>
         <h1 className={styles.filterHeaderTitle}>Filter Suppliers</h1>
         <p className={styles.filterHeaderSubtitle}>Find the perfect suppliers for your business needs</p>
+        {onClose && (
+          <button 
+            className={styles.closeButton}
+            onClick={onClose}
+          >
+            ✖
+          </button>
+        )}
       </div>
 
       <div className={styles.filterGrid}>
@@ -126,8 +238,8 @@ export function FilterSuppliers() {
           <h3 className={styles.filterTitle}>📍 Location</h3>
           <select
             className={styles.filterSelect}
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
+            value={filters.location}
+            onChange={(e) => updateFilter('location', e.target.value)}
           >
             <option value="">Select Location</option>
             {locations.map((loc) => (
@@ -144,11 +256,11 @@ export function FilterSuppliers() {
               defaultValue={[50]}
               max={100}
               step={1}
-              value={matchScore}
-              onValueChange={setMatchScore}
+              value={filters.matchScore}
+              onValueChange={(value) => updateFilter('matchScore', value)}
               className={styles.brownSlider}
             />
-            <div className={styles.sliderValue}>{matchScore[0]}%</div>
+            <div className={styles.sliderValue}>{filters.matchScore[0]}%</div>
           </div>
         </div>
 
@@ -160,15 +272,15 @@ export function FilterSuppliers() {
               type="text"
               placeholder="Min Amount"
               className={styles.filterInput}
-              value={minValue}
-              onChange={(e) => setMinValue(e.target.value)}
+              value={filters.minValue}
+              onChange={(e) => updateFilter('minValue', e.target.value)}
             />
             <input
               type="text"
               placeholder="Max Amount"
               className={styles.filterInput}
-              value={maxValue}
-              onChange={(e) => setMaxValue(e.target.value)}
+              value={filters.maxValue}
+              onChange={(e) => updateFilter('maxValue', e.target.value)}
             />
           </div>
         </div>
@@ -178,8 +290,8 @@ export function FilterSuppliers() {
           <h3 className={styles.filterTitle}>🏢 Entity Type</h3>
           <select
             className={styles.filterSelect}
-            value={entityType}
-            onChange={(e) => setEntityType(e.target.value)}
+            value={filters.entityType}
+            onChange={(e) => updateFilter('entityType', e.target.value)}
           >
             <option value="">Select Entity Type</option>
             {entityTypes.map((type) => (
@@ -201,7 +313,7 @@ export function FilterSuppliers() {
                 e.target.classList.toggle("open")
               }}
             >
-              {sectors.length ? `${sectors.length} sector${sectors.length > 1 ? 's' : ''} selected` : "Select Sectors"}
+              {filters.sectors.length ? `${filters.sectors.length} sector${filters.sectors.length > 1 ? 's' : ''} selected` : "Select Sectors"}
             </button>
             <div id="sector-dropdown" className={`hidden ${styles.dropdownMenu}`}>
               {industryOptions.map((sector) => (
@@ -209,7 +321,7 @@ export function FilterSuppliers() {
                   <label className={styles.checkboxLabel}>
                     <input
                       type="checkbox"
-                      checked={sectors.includes(sector)}
+                      checked={filters.sectors.includes(sector)}
                       onChange={() => handleSectorChange(sector)}
                       className={styles.checkbox}
                     />
@@ -226,8 +338,8 @@ export function FilterSuppliers() {
           <h3 className={styles.filterTitle}>⭐ BBBEE Level</h3>
           <select
             className={styles.filterSelect}
-            value={bbbeeLevel}
-            onChange={(e) => setBbbeeLevel(e.target.value)}
+            value={filters.bbbeeLevel}
+            onChange={(e) => updateFilter('bbbeeLevel', e.target.value)}
           >
             <option value="">Select BBBEE Level</option>
             {bbbeeLevels.map((level) => (
@@ -245,7 +357,7 @@ export function FilterSuppliers() {
                 <input
                   type="checkbox"
                   id={`proc-${category}`}
-                  checked={procurementCategories.includes(category)}
+                  checked={filters.procurementCategories.includes(category)}
                   onChange={() => handleProcurementChange(category)}
                   className={styles.checkbox}
                 />
@@ -262,8 +374,8 @@ export function FilterSuppliers() {
           <h3 className={styles.filterTitle}>⏰ Availability</h3>
           <select
             className={styles.filterSelect}
-            value={availability}
-            onChange={(e) => setAvailability(e.target.value)}
+            value={filters.availability}
+            onChange={(e) => updateFilter('availability', e.target.value)}
           >
             <option value="">Select Availability</option>
             {availabilityOptions.map((option) => (
@@ -277,8 +389,8 @@ export function FilterSuppliers() {
           <h3 className={styles.filterTitle}>🔄 Sort By</h3>
           <select
             className={styles.filterSelect}
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
+            value={filters.sortBy}
+            onChange={(e) => updateFilter('sortBy', e.target.value)}
           >
             <option value="">Select Sort Option</option>
             {sortOptions.map((option) => (
@@ -297,7 +409,7 @@ export function FilterSuppliers() {
         </button>
         <button 
           className={`${styles.filterButton} ${styles.filterButtonPrimary}`}
-          onClick={applyFilters}
+          onClick={() => applyFilters()}
         >
           Apply Filters
         </button>

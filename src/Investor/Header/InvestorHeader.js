@@ -39,9 +39,31 @@ function InvestorHeader({ companyName, profileImage, setProfileImage }) {
   const messagesRef = useRef(null);
   const profileRef = useRef(null);
   const searchRef = useRef(null);
+  const modalRef = useRef(null);
 
   const [showNotifications, setShowNotifications] = useState(false);
   const [showMessages, setShowMessages] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  // Listen for sidebar state changes - Same as InternHeader
+  useEffect(() => {
+    const handleSidebarStateChange = () => {
+      const collapsed = document.body.classList.contains("sidebar-collapsed");
+      setIsSidebarCollapsed(collapsed);
+    };
+
+    // Check initial state
+    handleSidebarStateChange();
+
+    // Watch for changes
+    const observer = new MutationObserver(handleSidebarStateChange);
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const fetchRoles = async () => {
@@ -322,6 +344,9 @@ const GetuserName = async () => {
       if (profileRef.current && !profileRef.current.contains(event.target)) {
         setShowProfileMenu(false);
       }
+      if (modalRef.current && !modalRef.current.contains(event.target)) {
+        setShowAddRole(false);
+      }
     }
 
     document.addEventListener("mousedown", handleClickOutside);
@@ -329,6 +354,18 @@ const GetuserName = async () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  // Close modal with ESC key
+  useEffect(() => {
+    const handleEscKey = (event) => {
+      if (event.key === 'Escape' && showAddRole) {
+        setShowAddRole(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscKey);
+    return () => document.removeEventListener('keydown', handleEscKey);
+  }, [showAddRole]);
 
   const handleProfileClick = () => setDropdownOpen(!dropdownOpen);
   const handleNotificationClick = () => setNotificationsOpen(!notificationsOpen);
@@ -362,6 +399,16 @@ const GetuserName = async () => {
     year: 'numeric'
   });
 
+  const getAvailableRoleOptions = () => {
+    return ROLE_OPTIONS.filter(role => {
+      const hasSME = availableRoles.includes("SMEs") || 
+                   availableRoles.includes("SME/BUSINESS") || 
+                   availableRoles.includes("Small and Medium Social Enterprises")
+      if (hasSME && role === "SMEs") return false
+      return !availableRoles.includes(role)
+    });
+  };
+
   if (loading) {
     return <div className={styles.loading}>Loading user data...</div>;
   }
@@ -371,7 +418,14 @@ const GetuserName = async () => {
   }
 
   return (
-    <header className={styles.header}>
+    <header 
+      className={styles.header}
+      style={{
+        marginLeft: isSidebarCollapsed ? '80px' : '280px',
+        width: isSidebarCollapsed ? 'calc(100% - 80px)' : 'calc(100% - 280px)',
+        transition: 'all 0.3s ease'
+      }}
+    >
       <div className={styles["header-left"]}>
         <div className={styles["header-logo"]}>
           <img
@@ -381,7 +435,7 @@ const GetuserName = async () => {
           />
         </div>
 
-        <div className={styles["welcome-container"]}>
+        <div className={`${styles["welcome-container"]} ${isSidebarCollapsed ? styles.sidebarCollapsed : ''}`}>
           <h1 className={styles["welcome-message"]}>
             Welcome back, <span className={styles["user-name"]}>{userName}</span>
           </h1>
@@ -473,7 +527,7 @@ const GetuserName = async () => {
                     <label htmlFor="profile-upload" className={`${styles["change-avatar-button"]} ${imageUploading ? styles.uploading : ''}`}>
                       {imageUploading ? (
                         <>
-                          <Upload size={12} className={styles["upload-icon"]} />
+                          <Upload size={12} className={`${styles["upload-icon"]} ${styles.spinning}`} />
                           Uploading...
                         </>
                       ) : (
@@ -500,7 +554,10 @@ const GetuserName = async () => {
               <div className={styles["dropdown-menu-items"]}>
                 <button
                   className={`${styles["dropdown-item"]} ${styles["add-role-trigger"]}`}
-                  onClick={() => setShowAddRole(true)}
+                  onClick={() => {
+                    setShowAddRole(true);
+                    setShowProfileMenu(false);
+                  }}
                 >
                   <User size={16} />
                   <span>+ Add New Role</span>
@@ -514,7 +571,10 @@ const GetuserName = async () => {
                       <button
                         key={idx}
                         className={`${styles["dropdown-item"]} ${selectedRole === role ? styles["active-role"] : ''}`}
-                        onClick={() => handleSwitchRole(role)}
+                        onClick={() => {
+                          handleSwitchRole(role);
+                          setShowProfileMenu(false);
+                        }}
                       >
                         <User size={16} />
                         <span>{role}</span>
@@ -525,7 +585,7 @@ const GetuserName = async () => {
               </div>
               <div className={styles["dropdown-divider"]}></div>
               <div className={styles["dropdown-footer"]}>
-                <button className={styles["dropdown-item"]} onClick={handleLogout}>
+                <button className={styles["logout-button"]} onClick={handleLogout}>
                   <LogOut size={16} />
                   <span>Log Out</span>
                 </button>
@@ -538,7 +598,7 @@ const GetuserName = async () => {
       {/* Enhanced Add Role Modal */}
       {showAddRole && (
         <div className={styles["modal-overlay"]}>
-          <div className={styles["add-role-modal"]}>
+          <div className={styles["add-role-modal"]} ref={modalRef}>
             <div className={styles["modal-header"]}>
               <h3>Add New Role</h3>
               <button 
@@ -550,21 +610,18 @@ const GetuserName = async () => {
             </div>
             <div className={styles["modal-content"]}>
               <p className={styles["modal-description"]}>
-                Expand your presence by adding a new professional role to your profile.
+                Select a new role to add to your profile:
               </p>
               <div className={styles["role-selector"]}>
-                <label htmlFor="role-select">Choose your role:</label>
+                <label htmlFor="role-select">Available Roles:</label>
                 <select
                   id="role-select"
                   value={newRoleInput}
                   onChange={(e) => setNewRoleInput(e.target.value)}
+                  className={styles["role-select"]}
                 >
                   <option value="">Select a role</option>
-                  {ROLE_OPTIONS.filter(role => {
-                    const hasSME = availableRoles.includes("SMEs") || availableRoles.includes("SME/BUSINESS") || availableRoles.includes("Small and Medium Social Enterprises");
-                    if (hasSME && role === "SMEs") return false;
-                    return !availableRoles.includes(role);
-                  }).map((role, idx) => (
+                  {getAvailableRoleOptions().map((role, idx) => (
                     <option key={idx} value={role}>{role}</option>
                   ))}
                 </select>
