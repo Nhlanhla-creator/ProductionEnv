@@ -1,0 +1,240 @@
+.container {
+  padding: 88px 32px 32px;
+  min-height: 100vh;
+  margin-left: 250px;
+  background-color: #f8f7f3;
+  color: #624635;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+/* Loading State */
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  color: #624635;
+}
+
+.loadingSpinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #f2eee6;
+  border-top: 3px solid #9e6e3c;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Header */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 32px;
+}
+
+.headerContent h1.title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #372c27;
+  margin: 0 0 8px;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  font-size: 1.1rem;
+  color: #878787;
+  margin: 0;
+  font-weight: 400;
+}
+
+.headerActions {
+  display: flex;
+  gap: 12px;
+}
+
+.actionButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background-color: #f8f7f3;
+  color: #624635;
+  border: 1px solid rgba(158, 110, 60, 0.2);
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.actionButton:hover {
+  background-color: #f2eee6;
+  border-color: #9e6e3c;
+  transform: translateY(-2px);
+}
+
+.primaryButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background-color: #9e6e3c;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(158, 110, 60, 0.2);
+}
+
+.primaryButton:hover {
+  background-color: #8b5d33;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(158, 110, 60, 0.3);
+}
+
+/* Placeholder Content */
+.placeholderContainer {
+  background: white;
+  border-radius: 20px;
+  padding: 80px 40px;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(158, 110, 60, 0.1);
+  min-height: 500px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.placeholderIcon {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(158, 110, 60, 0.1) 0%, rgba(158, 110, 60, 0.05) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9e6e3c;
+  margin-bottom: 32px;
+}
+
+.placeholderTitle {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #372c27;
+  margin: 0 0 16px;
+}
+
+.placeholderText {
+  font-size: 1.1rem;
+  color: #624635;
+  margin: 0 0 8px;
+  max-width: 600px;
+}
+
+.placeholderSubtext {
+  font-size: 0.95rem;
+  color: #878787;
+  margin: 0 0 40px;
+  max-width: 500px;
+}
+
+/* Feature Items */
+.placeholderFeatures {
+  display: flex;
+  gap: 32px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.featureItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px;
+  background-color: #f8f7f3;
+  border-radius: 12px;
+  border: 1px solid rgba(158, 110, 60, 0.1);
+  min-width: 150px;
+  transition: all 0.2s ease;
+}
+
+.featureItem:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(158, 110, 60, 0.15);
+}
+
+.featureItem svg {
+  color: #9e6e3c;
+}
+
+.featureItem span {
+  color: #624635;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .container {
+    padding: 88px 20px 32px;
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 88px 16px 32px;
+  }
+
+  .header {
+    flex-direction: column;
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  .headerContent h1.title {
+    font-size: 2rem;
+  }
+
+  .headerActions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .actionButton,
+  .primaryButton {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .placeholderContainer {
+    padding: 60px 24px;
+  }
+
+  .placeholderTitle {
+    font-size: 1.5rem;
+  }
+
+  .placeholderFeatures {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .featureItem {
+    width: 100%;
+  }
+}
