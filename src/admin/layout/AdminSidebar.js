@@ -22,6 +22,9 @@ import {
   Server,
   Download,
   Shield,
+  QrCode,
+  Handshake,
+  UserPlus,
 } from "lucide-react"
 import styles from "./admin-sidebar.module.css"
 import { auth } from "../../firebaseConfig"
@@ -144,6 +147,30 @@ function AdminSidebar() {
       label: "All Advisors",
       icon: <Target size={18} />,
       route: "/admin/advisors",
+    },
+    {
+      id: "interns",
+      label: "All Interns",
+      icon: <UserPlus size={18} />,
+      route: "/admin/interns",
+    },
+    {
+      id: "sponsors",
+      label: "All Program Sponsors",
+      icon: <Handshake size={18} />,
+      route: "/admin/sponsors",
+    },
+    {
+      id: "qr-codes",
+      label: "QR Codes",
+      icon: <QrCode size={18} />,
+      route: "/admin/qr-codes",
+    },
+    {
+      id: "subscriptions",
+      label: "Subscriptions",
+      icon: <CreditCard size={18} />,
+      route: "/admin/subscriptions",
     },
     {
       id: "documents",

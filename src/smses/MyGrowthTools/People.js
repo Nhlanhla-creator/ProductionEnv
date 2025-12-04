@@ -124,63 +124,6 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData }) => {
                   fontWeight: "bold",
                 }}
               >
-                Occupational Levels:
-              </label>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                <input
-                  type="number"
-                  placeholder="Unskilled"
-                  value={formData.unskilled || ""}
-                  onChange={(e) => setFormData({ ...formData, unskilled: Number.parseInt(e.target.value) || 0 })}
-                  style={{ padding: "8px", borderRadius: "4px", border: `2px solid ${DARK_BROWN_COLORS.accent3}` }}
-                />
-                <input
-                  type="number"
-                  placeholder="Semi-skilled"
-                  value={formData.semiSkilled || ""}
-                  onChange={(e) => setFormData({ ...formData, semiSkilled: Number.parseInt(e.target.value) || 0 })}
-                  style={{ padding: "8px", borderRadius: "4px", border: `2px solid ${DARK_BROWN_COLORS.accent3}` }}
-                />
-                <input
-                  type="number"
-                  placeholder="Skilled & Jnr Mgt"
-                  value={formData.skilledJnr || ""}
-                  onChange={(e) => setFormData({ ...formData, skilledJnr: Number.parseInt(e.target.value) || 0 })}
-                  style={{ padding: "8px", borderRadius: "4px", border: `2px solid ${DARK_BROWN_COLORS.accent3}` }}
-                />
-                <input
-                  type="number"
-                  placeholder="Professionals & Mid Mgt"
-                  value={formData.profMid || ""}
-                  onChange={(e) => setFormData({ ...formData, profMid: Number.parseInt(e.target.value) || 0 })}
-                  style={{ padding: "8px", borderRadius: "4px", border: `2px solid ${DARK_BROWN_COLORS.accent3}` }}
-                />
-                <input
-                  type="number"
-                  placeholder="Snr Mgt"
-                  value={formData.snrMgt || ""}
-                  onChange={(e) => setFormData({ ...formData, snrMgt: Number.parseInt(e.target.value) || 0 })}
-                  style={{ padding: "8px", borderRadius: "4px", border: `2px solid ${DARK_BROWN_COLORS.accent3}` }}
-                />
-                <input
-                  type="number"
-                  placeholder="Top Mgt"
-                  value={formData.topMgt || ""}
-                  onChange={(e) => setFormData({ ...formData, topMgt: Number.parseInt(e.target.value) || 0 })}
-                  style={{ padding: "8px", borderRadius: "4px", border: `2px solid ${DARK_BROWN_COLORS.accent3}` }}
-                />
-              </div>
-            </div>
-
-            <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: DARK_BROWN_COLORS.secondary,
-                  fontWeight: "bold",
-                }}
-              >
                 Demographics (%):
               </label>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
@@ -224,6 +167,63 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData }) => {
                   placeholder="Indian %"
                   value={formData.indianPercent || ""}
                   onChange={(e) => setFormData({ ...formData, indianPercent: Number.parseInt(e.target.value) || 0 })}
+                  style={{ padding: "8px", borderRadius: "4px", border: `2px solid ${DARK_BROWN_COLORS.accent3}` }}
+                />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: "15px" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "10px",
+                  color: DARK_BROWN_COLORS.secondary,
+                  fontWeight: "bold",
+                }}
+              >
+                Occupational Levels:
+              </label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                <input
+                  type="number"
+                  placeholder="Unskilled"
+                  value={formData.unskilled || ""}
+                  onChange={(e) => setFormData({ ...formData, unskilled: Number.parseInt(e.target.value) || 0 })}
+                  style={{ padding: "8px", borderRadius: "4px", border: `2px solid ${DARK_BROWN_COLORS.accent3}` }}
+                />
+                <input
+                  type="number"
+                  placeholder="Semi-skilled"
+                  value={formData.semiSkilled || ""}
+                  onChange={(e) => setFormData({ ...formData, semiSkilled: Number.parseInt(e.target.value) || 0 })}
+                  style={{ padding: "8px", borderRadius: "4px", border: `2px solid ${DARK_BROWN_COLORS.accent3}` }}
+                />
+                <input
+                  type="number"
+                  placeholder="Skilled & Jnr Mgt"
+                  value={formData.skilledJnr || ""}
+                  onChange={(e) => setFormData({ ...formData, skilledJnr: Number.parseInt(e.target.value) || 0 })}
+                  style={{ padding: "8px", borderRadius: "4px", border: `2px solid ${DARK_BROWN_COLORS.accent3}` }}
+                />
+                <input
+                  type="number"
+                  placeholder="Professionals & Mid Mgt"
+                  value={formData.profMid || ""}
+                  onChange={(e) => setFormData({ ...formData, profMid: Number.parseInt(e.target.value) || 0 })}
+                  style={{ padding: "8px", borderRadius: "4px", border: `2px solid ${DARK_BROWN_COLORS.accent3}` }}
+                />
+                <input
+                  type="number"
+                  placeholder="Snr Mgt"
+                  value={formData.snrMgt || ""}
+                  onChange={(e) => setFormData({ ...formData, snrMgt: Number.parseInt(e.target.value) || 0 })}
+                  style={{ padding: "8px", borderRadius: "4px", border: `2px solid ${DARK_BROWN_COLORS.accent3}` }}
+                />
+                <input
+                  type="number"
+                  placeholder="Top Mgt"
+                  value={formData.topMgt || ""}
+                  onChange={(e) => setFormData({ ...formData, topMgt: Number.parseInt(e.target.value) || 0 })}
                   style={{ padding: "8px", borderRadius: "4px", border: `2px solid ${DARK_BROWN_COLORS.accent3}` }}
                 />
               </div>
@@ -895,7 +895,8 @@ const percentagePlugin = {
   },
 }
 
-// Enhanced Employee Composition Component
+// Enhanced Employee Composition Component - ALL IN ONE ROW
+// Enhanced Employee Composition Component - ALL IN ONE ROW
 const EmployeeComposition = ({ activeSection, userData, onOpenModal }) => {
   if (activeSection !== "employee-composition") return null
 
@@ -1000,24 +1001,6 @@ const EmployeeComposition = ({ activeSection, userData, onOpenModal }) => {
     ],
   }
 
-  const diversityMetrics = [
-    {
-      name: "Female Leadership",
-      value: data.femaleLeadershipPercent,
-      target: 40,
-    },
-    {
-      name: "Youth Leadership",
-      value: data.youthLeadershipPercent,
-      target: 30,
-    },
-    {
-      name: "HDI Ownership",
-      value: data.hdiOwnershipPercent,
-      target: 50,
-    },
-  ]
-
   return (
     <div
       style={{
@@ -1049,40 +1032,40 @@ const EmployeeComposition = ({ activeSection, userData, onOpenModal }) => {
         </button>
       </div>
 
-      {/* First Row */}
+      {/* Top Row - Head Count, Gender, Contract, Locality, EAP */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-          gap: "25px",
-          marginTop: "25px",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: "20px",
+          marginBottom: "40px",
         }}
       >
         {/* Head Count with Target and Vacancies */}
         <div
           style={{
             backgroundColor: "#f7f3f0",
-            padding: "25px",
+            padding: "20px",
             borderRadius: "12px",
             textAlign: "center",
             border: `2px solid ${DARK_BROWN_COLORS.accent4}`,
           }}
         >
-          <h3 style={{ color: DARK_BROWN_COLORS.tertiary, margin: "0 0 20px 0", fontSize: "18px" }}>Head Count</h3>
+          <h3 style={{ color: DARK_BROWN_COLORS.tertiary, margin: "0 0 15px 0", fontSize: "16px" }}>Head Count</h3>
           <div
             style={{
-              width: "120px",
-              height: "120px",
+              width: "100px",
+              height: "100px",
               borderRadius: "50%",
               background: `linear-gradient(135deg, ${DARK_BROWN_COLORS.secondary}, ${DARK_BROWN_COLORS.tertiary})`,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              margin: "0 auto 20px auto",
+              margin: "0 auto 15px auto",
               color: "#fdfcfb",
-              fontSize: "32px",
+              fontSize: "28px",
               fontWeight: "bold",
-              boxShadow: "0 6px 12px rgba(62, 39, 35, 0.3)",
+              boxShadow: "0 4px 8px rgba(62, 39, 35, 0.3)",
             }}
           >
             {data.headCount}
@@ -1092,34 +1075,34 @@ const EmployeeComposition = ({ activeSection, userData, onOpenModal }) => {
               display: "grid",
               gridTemplateColumns: "1fr 1fr",
               gap: "10px",
-              marginTop: "15px",
+              marginTop: "10px",
             }}
           >
             <div
               style={{
                 backgroundColor: "#fff",
-                padding: "10px",
-                borderRadius: "8px",
+                padding: "8px",
+                borderRadius: "6px",
                 border: `1px solid ${DARK_BROWN_COLORS.accent3}`,
               }}
             >
-              <div style={{ fontSize: "12px", color: DARK_BROWN_COLORS.tertiary, marginBottom: "5px" }}>Target</div>
-              <div style={{ fontSize: "20px", fontWeight: "bold", color: DARK_BROWN_COLORS.secondary }}>
+              <div style={{ fontSize: "11px", color: DARK_BROWN_COLORS.tertiary, marginBottom: "3px" }}>Target</div>
+              <div style={{ fontSize: "18px", fontWeight: "bold", color: DARK_BROWN_COLORS.secondary }}>
                 {data.targetHeadCount}
               </div>
             </div>
             <div
               style={{
                 backgroundColor: "#fff",
-                padding: "10px",
-                borderRadius: "8px",
+                padding: "8px",
+                borderRadius: "6px",
                 border: `1px solid ${DARK_BROWN_COLORS.accent3}`,
               }}
             >
-              <div style={{ fontSize: "12px", color: DARK_BROWN_COLORS.tertiary, marginBottom: "5px" }}>Vacancies</div>
+              <div style={{ fontSize: "11px", color: DARK_BROWN_COLORS.tertiary, marginBottom: "3px" }}>Vacancies</div>
               <div
                 style={{
-                  fontSize: "20px",
+                  fontSize: "18px",
                   fontWeight: "bold",
                   color: vacancies > 0 ? DARK_BROWN_COLORS.warning : DARK_BROWN_COLORS.success,
                 }}
@@ -1130,66 +1113,18 @@ const EmployeeComposition = ({ activeSection, userData, onOpenModal }) => {
           </div>
         </div>
 
-        {/* Occupational Levels */}
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "25px",
-            borderRadius: "12px",
-            border: `2px solid ${DARK_BROWN_COLORS.accent4}`,
-          }}
-        >
-          <h3 style={{ color: DARK_BROWN_COLORS.tertiary, margin: "0 0 20px 0", fontSize: "18px" }}>
-            Occupational Levels
-          </h3>
-          <div style={{ height: "200px" }}>
-            <Bar
-              data={occupationalData}
-              options={{
-                indexAxis: "y",
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    display: false,
-                  },
-                },
-                scales: {
-                  x: {
-                    beginAtZero: true,
-                    grid: {
-                      color: DARK_BROWN_COLORS.accent4,
-                    },
-                    ticks: {
-                      color: DARK_BROWN_COLORS.secondary,
-                    },
-                  },
-                  y: {
-                    grid: {
-                      display: false,
-                    },
-                    ticks: {
-                      color: DARK_BROWN_COLORS.secondary,
-                    },
-                  },
-                },
-              }}
-            />
-          </div>
-        </div>
-
         {/* Gender */}
         <div
           style={{
             backgroundColor: "#f7f3f0",
-            padding: "25px",
+            padding: "20px",
             borderRadius: "12px",
             textAlign: "center",
             border: `2px solid ${DARK_BROWN_COLORS.accent4}`,
           }}
         >
-          <h3 style={{ color: DARK_BROWN_COLORS.tertiary, margin: "0 0 20px 0", fontSize: "18px" }}>Gender</h3>
-          <div style={{ height: "150px" }}>
+          <h3 style={{ color: DARK_BROWN_COLORS.tertiary, margin: "0 0 15px 0", fontSize: "16px" }}>Gender</h3>
+          <div style={{ height: "130px" }}>
             <Doughnut
               data={genderData}
               plugins={[percentagePlugin]}
@@ -1202,6 +1137,7 @@ const EmployeeComposition = ({ activeSection, userData, onOpenModal }) => {
                     labels: {
                       color: DARK_BROWN_COLORS.secondary,
                       font: {
+                        size: 10,
                         weight: "bold",
                       },
                     },
@@ -1219,14 +1155,14 @@ const EmployeeComposition = ({ activeSection, userData, onOpenModal }) => {
         <div
           style={{
             backgroundColor: "#f7f3f0",
-            padding: "25px",
+            padding: "20px",
             borderRadius: "12px",
             textAlign: "center",
             border: `2px solid ${DARK_BROWN_COLORS.accent4}`,
           }}
         >
-          <h3 style={{ color: DARK_BROWN_COLORS.tertiary, margin: "0 0 20px 0", fontSize: "18px" }}>Contract Type</h3>
-          <div style={{ height: "150px" }}>
+          <h3 style={{ color: DARK_BROWN_COLORS.tertiary, margin: "0 0 15px 0", fontSize: "16px" }}>Contract Type</h3>
+          <div style={{ height: "130px" }}>
             <Doughnut
               data={contractData}
               plugins={[percentagePlugin]}
@@ -1239,6 +1175,7 @@ const EmployeeComposition = ({ activeSection, userData, onOpenModal }) => {
                     labels: {
                       color: DARK_BROWN_COLORS.secondary,
                       font: {
+                        size: 10,
                         weight: "bold",
                       },
                     },
@@ -1256,14 +1193,14 @@ const EmployeeComposition = ({ activeSection, userData, onOpenModal }) => {
         <div
           style={{
             backgroundColor: "#f7f3f0",
-            padding: "25px",
+            padding: "20px",
             borderRadius: "12px",
             textAlign: "center",
             border: `2px solid ${DARK_BROWN_COLORS.accent4}`,
           }}
         >
-          <h3 style={{ color: DARK_BROWN_COLORS.tertiary, margin: "0 0 20px 0", fontSize: "18px" }}>Locality</h3>
-          <div style={{ height: "150px" }}>
+          <h3 style={{ color: DARK_BROWN_COLORS.tertiary, margin: "0 0 15px 0", fontSize: "16px" }}>Locality</h3>
+          <div style={{ height: "130px" }}>
             <Doughnut
               data={localityData}
               plugins={[percentagePlugin]}
@@ -1276,6 +1213,7 @@ const EmployeeComposition = ({ activeSection, userData, onOpenModal }) => {
                     labels: {
                       color: DARK_BROWN_COLORS.secondary,
                       font: {
+                        size: 10,
                         weight: "bold",
                       },
                     },
@@ -1293,14 +1231,14 @@ const EmployeeComposition = ({ activeSection, userData, onOpenModal }) => {
         <div
           style={{
             backgroundColor: "#f7f3f0",
-            padding: "25px",
+            padding: "20px",
             borderRadius: "12px",
             textAlign: "center",
             border: `2px solid ${DARK_BROWN_COLORS.accent4}`,
           }}
         >
-          <h3 style={{ color: DARK_BROWN_COLORS.tertiary, margin: "0 0 20px 0", fontSize: "18px" }}>EAP %</h3>
-          <div style={{ height: "150px" }}>
+          <h3 style={{ color: DARK_BROWN_COLORS.tertiary, margin: "0 0 15px 0", fontSize: "16px" }}>EAP %</h3>
+          <div style={{ height: "130px" }}>
             <Doughnut
               data={eapData}
               plugins={[percentagePlugin]}
@@ -1313,7 +1251,7 @@ const EmployeeComposition = ({ activeSection, userData, onOpenModal }) => {
                     labels: {
                       color: DARK_BROWN_COLORS.secondary,
                       font: {
-                        size: 11,
+                        size: 9,
                         weight: "bold",
                       },
                     },
@@ -1328,34 +1266,111 @@ const EmployeeComposition = ({ activeSection, userData, onOpenModal }) => {
         </div>
       </div>
 
-      {/* Third Row - Diversity Metrics */}
-      <div style={{ marginTop: "40px" }}>
-        <h3 style={{ color: DARK_BROWN_COLORS.tertiary, fontSize: "20px", marginBottom: "20px" }}>
-          Diversity Metrics in Leadership
+      {/* Second Row - ALL METRICS IN ONE ROW: Occupational Levels + Diversity Metrics */}
+      <div>
+        <h3 style={{ color: DARK_BROWN_COLORS.tertiary, fontSize: "18px", marginBottom: "20px" }}>
+          Diversity & Leadership Metrics
         </h3>
+        
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
             gap: "20px",
           }}
         >
-          {diversityMetrics.map((metric, index) => (
+          {/* Occupational Levels - REDUCED SIZE */}
+          <div
+            style={{
+              backgroundColor: "#f7f3f0",
+              padding: "15px",
+              borderRadius: "12px",
+              border: `2px solid ${DARK_BROWN_COLORS.accent4}`,
+            }}
+          >
+            <h4 style={{ color: DARK_BROWN_COLORS.tertiary, margin: "0 0 10px 0", fontSize: "16px", textAlign: "center" }}>
+              Occupational Levels
+            </h4>
+            <div style={{ height: "180px" }}> {/* Reduced height from 220px */}
+              <Bar
+                data={occupationalData}
+                options={{
+                  indexAxis: "y",
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: {
+                      display: false,
+                    },
+                  },
+                  scales: {
+                    x: {
+                      beginAtZero: true,
+                      grid: {
+                        color: DARK_BROWN_COLORS.accent4,
+                        drawBorder: false,
+                      },
+                      ticks: {
+                        color: DARK_BROWN_COLORS.secondary,
+                        font: {
+                          size: 10, // Reduced font size
+                        },
+                        padding: 5,
+                      },
+                      title: {
+                        display: false,
+                      },
+                    },
+                    y: {
+                      grid: {
+                        display: false,
+                      },
+                      ticks: {
+                        color: DARK_BROWN_COLORS.secondary,
+                        font: {
+                          size: 10, // Reduced font size
+                          weight: "bold",
+                        },
+                        padding: 5,
+                      },
+                    },
+                  },
+                  layout: {
+                    padding: {
+                      left: 10,
+                      right: 10,
+                      top: 5,
+                      bottom: 5,
+                    }
+                  }
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Diversity Metrics Row - ALL THREE IN SAME ROW */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr 1fr",
+              gap: "20px",
+            }}
+          >
+            {/* Female Leadership */}
             <div
-              key={index}
               style={{
-                padding: "15px",
+                padding: "20px",
                 backgroundColor: "#f7f3f0",
-                borderRadius: "6px",
+                borderRadius: "12px",
                 textAlign: "center",
-                border: `1px solid ${DARK_BROWN_COLORS.accent4}`,
+                border: `2px solid ${DARK_BROWN_COLORS.accent4}`,
               }}
             >
-              <h4 style={{ color: DARK_BROWN_COLORS.tertiary, marginTop: 0 }}>{metric.name}</h4>
+              <h4 style={{ color: DARK_BROWN_COLORS.tertiary, margin: "0 0 15px 0", fontSize: "16px" }}>Female Leadership</h4>
               <div
                 style={{
-                  width: "120px",
-                  height: "120px",
+                  width: "140px", // Slightly reduced
+                  height: "140px", // Slightly reduced
                   margin: "0 auto",
                   position: "relative",
                 }}
@@ -1365,9 +1380,9 @@ const EmployeeComposition = ({ activeSection, userData, onOpenModal }) => {
                     labels: ["Achieved", "Remaining"],
                     datasets: [
                       {
-                        data: [metric.value, 100 - metric.value],
+                        data: [data.femaleLeadershipPercent, Math.max(0, 100 - data.femaleLeadershipPercent)],
                         backgroundColor: [
-                          metric.value >= metric.target ? DARK_BROWN_COLORS.success : DARK_BROWN_COLORS.warning,
+                          data.femaleLeadershipPercent >= 40 ? DARK_BROWN_COLORS.success : DARK_BROWN_COLORS.warning,
                           DARK_BROWN_COLORS.accent5,
                         ],
                         borderColor: DARK_BROWN_COLORS.primary,
@@ -1376,7 +1391,7 @@ const EmployeeComposition = ({ activeSection, userData, onOpenModal }) => {
                     ],
                   }}
                   options={{
-                    cutout: "70%",
+                    cutout: "65%", // Slightly smaller cutout
                     plugins: {
                       legend: {
                         display: false,
@@ -1395,25 +1410,171 @@ const EmployeeComposition = ({ activeSection, userData, onOpenModal }) => {
                 >
                   <span
                     style={{
-                      fontSize: "24px",
+                      fontSize: "24px", // Slightly reduced
                       fontWeight: "bold",
                       color: DARK_BROWN_COLORS.secondary,
                     }}
                   >
-                    {metric.value}%
+                    {data.femaleLeadershipPercent}%
                   </span>
                   <div
                     style={{
-                      fontSize: "12px",
+                      fontSize: "13px", // Slightly reduced
                       color: DARK_BROWN_COLORS.tertiary,
                     }}
                   >
-                    Target: {metric.target}%
+                    Target: 40%
                   </div>
                 </div>
               </div>
             </div>
-          ))}
+
+            {/* Youth Leadership */}
+            <div
+              style={{
+                padding: "20px",
+                backgroundColor: "#f7f3f0",
+                borderRadius: "12px",
+                textAlign: "center",
+                border: `2px solid ${DARK_BROWN_COLORS.accent4}`,
+              }}
+            >
+              <h4 style={{ color: DARK_BROWN_COLORS.tertiary, margin: "0 0 15px 0", fontSize: "16px" }}>Youth Leadership</h4>
+              <div
+                style={{
+                  width: "140px", // Slightly reduced
+                  height: "140px", // Slightly reduced
+                  margin: "0 auto",
+                  position: "relative",
+                }}
+              >
+                <Doughnut
+                  data={{
+                    labels: ["Achieved", "Remaining"],
+                    datasets: [
+                      {
+                        data: [data.youthLeadershipPercent, Math.max(0, 100 - data.youthLeadershipPercent)],
+                        backgroundColor: [
+                          data.youthLeadershipPercent >= 30 ? DARK_BROWN_COLORS.success : DARK_BROWN_COLORS.warning,
+                          DARK_BROWN_COLORS.accent5,
+                        ],
+                        borderColor: DARK_BROWN_COLORS.primary,
+                        borderWidth: 2,
+                      },
+                    ],
+                  }}
+                  options={{
+                    cutout: "65%", // Slightly smaller cutout
+                    plugins: {
+                      legend: {
+                        display: false,
+                      },
+                    },
+                  }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "50%",
+                    left: "50%",
+                    transform: "translate(-50%, -50%)",
+                    textAlign: "center",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "24px", // Slightly reduced
+                      fontWeight: "bold",
+                      color: DARK_BROWN_COLORS.secondary,
+                    }}
+                  >
+                    {data.youthLeadershipPercent}%
+                  </span>
+                  <div
+                    style={{
+                      fontSize: "13px", // Slightly reduced
+                      color: DARK_BROWN_COLORS.tertiary,
+                    }}
+                  >
+                    Target: 30%
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* HDI Ownership - NOW IN THE SAME ROW */}
+            <div
+              style={{
+                padding: "20px",
+                backgroundColor: "#f7f3f0",
+                borderRadius: "12px",
+                textAlign: "center",
+                border: `2px solid ${DARK_BROWN_COLORS.accent4}`,
+              }}
+            >
+              <h4 style={{ color: DARK_BROWN_COLORS.tertiary, margin: "0 0 15px 0", fontSize: "16px" }}>HDI Ownership</h4>
+              <div
+                style={{
+                  width: "140px", // Slightly reduced
+                  height: "140px", // Slightly reduced
+                  margin: "0 auto",
+                  position: "relative",
+                }}
+              >
+                <Doughnut
+                  data={{
+                    labels: ["Achieved", "Remaining"],
+                    datasets: [
+                      {
+                        data: [data.hdiOwnershipPercent, Math.max(0, 100 - data.hdiOwnershipPercent)],
+                        backgroundColor: [
+                          data.hdiOwnershipPercent >= 50 ? DARK_BROWN_COLORS.success : DARK_BROWN_COLORS.warning,
+                          DARK_BROWN_COLORS.accent5,
+                        ],
+                        borderColor: DARK_BROWN_COLORS.primary,
+                        borderWidth: 2,
+                      },
+                    ],
+                  }}
+                  options={{
+                    cutout: "65%", // Slightly smaller cutout
+                    plugins: {
+                      legend: {
+                        display: false,
+                      },
+                    },
+                  }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "50%",
+                    left: "50%",
+                    transform: "translate(-50%, -50%)",
+                    textAlign: "center",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "24px", // Slightly reduced
+                      fontWeight: "bold",
+                      color: DARK_BROWN_COLORS.secondary,
+                    }}
+                  >
+                    {data.hdiOwnershipPercent}%
+                  </span>
+                  <div
+                    style={{
+                      fontSize: "13px", // Slightly reduced
+                      color: DARK_BROWN_COLORS.tertiary,
+                    }}
+                  >
+                    Target: 50%
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
