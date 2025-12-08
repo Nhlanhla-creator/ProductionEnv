@@ -866,7 +866,7 @@ const [bigScore, setBigScore] = useState(null);
                 color: "#4CAF50",
                 fontSize: "24px",
                 fontWeight: "800"
-              }}>75%</div>
+              }}>85%</div>
             </div>
           </div>
 

@@ -79,28 +79,77 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
     }
   };
 
-  const loadSummaryFromFirebase = async (userId) => {
-    try {
-      const summaryRef = doc(db, "Aisummaryreports", userId);
-      const summarySnap = await getDoc(summaryRef);
+ const loadSummaryFromFirebase = async (userId) => {
+  try {
+    console.log(`Loading summary for userId: ${userId}`);
+    
+    // Check if summary exists at root level
+    const summaryRef = doc(db, "Aisummaryreports", userId);
+    console.log(`Checking document`);
+    
+    const summarySnap = await getDoc(summaryRef);
+    console.log(`Document exists: ${summarySnap.exists()}`);
 
-      if (summarySnap.exists()) {
-        const data = summarySnap.data();
-        return {
-          topPriorities: data.topPriorities || [],
-          improvementSummary: data.improvementSummary || "",
-          reportData: data.reportData || null,
-          createdAt: data.createdAt,
-          lastUpdated: data.lastUpdated
-        };
+    if (summarySnap.exists()) {
+      const data = summarySnap.data();
+      console.log("Found summary data:", {
+        hasTopPriorities: !!data.topPriorities,
+        hasImprovementSummary: !!data.improvementSummary,
+        hasReportData: !!data.reportData,
+        topPrioritiesLength: data.topPriorities?.length || 0
+      });
+      
+      return {
+        topPriorities: data.topPriorities || [],
+        improvementSummary: data.improvementSummary || "",
+        reportData: data.reportData || null,
+        createdAt: data.createdAt,
+        lastUpdated: data.lastUpdated,
+        userId: data.userId
+      };
+    } else {
+      // Also check for subcollection structure
+      console.log("No document at root, checking subcollections...");
+      
+      // Try alternative paths if needed
+      const altRef1 = doc(db, "users", userId, "summary", "latest");
+      const altRef2 = doc(db, "summaryReports", userId);
+      
+      const [altSnap1, altSnap2] = await Promise.all([
+        getDoc(altRef1),
+        getDoc(altRef2)
+      ]);
+      
+      if (altSnap1.exists()) {
+        console.log("Found summary in users/{userId}/summary/latest");
+        return processSnapshotData(altSnap1);
+      } else if (altSnap2.exists()) {
+        console.log("Found summary in summaryReports/{userId}");
+        return processSnapshotData(altSnap2);
       }
-      return null;
-    } catch (error) {
-      console.error("Error loading summary from Firebase:", error);
+      
+      console.log("No summary found in any location");
       return null;
     }
-  };
+  } catch (error) {
+    console.error("Error loading summary from Firebase:", error);
+    console.error("Error details:", error.message);
+    return null;
+  }
+};
 
+// Helper function to process snapshot data
+const processSnapshotData = (snap) => {
+  const data = snap.data();
+  return {
+    topPriorities: data.topPriorities || [],
+    improvementSummary: data.improvementSummary || "",
+    reportData: data.reportData || null,
+    createdAt: data.createdAt,
+    lastUpdated: data.lastUpdated,
+    userId: data.userId
+  };
+};
   const checkTriggerFundabilityEvaluation = async (userId) => {
     try {
       const profileRef = doc(db, "universalProfiles", userId);
@@ -128,14 +177,21 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
     }
   };
 
-  // Check if summary contains fallback or unavailable text
-  const needsRegeneration = (summary) => {
-    if (!summary) return false;
-    const lowerSummary = summary.toLowerCase();
-    return lowerSummary.includes("unavailable") || 
-           lowerSummary.includes("using fallback") ||
-           lowerSummary.includes("unable to generate");
-  };
+const needsRegeneration = (summary) => {
+  if (!summary) return true;
+  
+  const lowerSummary = summary.toLowerCase();
+  const fallbackIndicators = [
+    "unavailable",
+    "using fallback",
+    "unable to generate",
+    "pending",
+    "basic evaluation",
+    "no data"
+  ];
+  
+  return fallbackIndicators.some(indicator => lowerSummary.includes(indicator));
+};
 
   useEffect(() => {
     if (propUserId) {
@@ -155,67 +211,81 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
     });
     return () => unsubscribe();
   }, [propUserId]);
+useEffect(() => {
+  if (!userId || !apiKey) {
+    console.log("No userId or apiKey available, skipping data fetch");
+    return;
+  }
 
- useEffect(() => {
-    if (!userId || !apiKey) {
-      console.log("No userId available, skipping data fetch");
-      return;
-    }
+  console.log("Starting data fetch for userId:", userId);
 
-    console.log("Starting data fetch for userId:", userId);
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
 
-    const fetchData = async () => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        const shouldTriggerNew = await checkTriggerFundabilityEvaluation(userId);
-
-        if (shouldTriggerNew) {
-          console.log("Trigger detected, waiting 5 seconds then generating new evaluation...");
-          setIsGeneratingNew(true);
-
-          await new Promise(resolve => setTimeout(resolve, 5000));
+    try {
+      // 1. Always try to load existing summary first
+      const existingSummary = await loadSummaryFromFirebase(userId);
+      
+      // 2. Check if we should generate a new evaluation
+      const shouldTriggerNew = await checkTriggerFundabilityEvaluation(userId);
+      
+      if (shouldTriggerNew) {
+        console.log("Trigger detected, generating new evaluation...");
+        setIsGeneratingNew(true);
+        await generateNewEvaluation(userId);
+        await resetTrigger(userId);
+        setIsGeneratingNew(false);
+      } else if (existingSummary && existingSummary.reportData) {
+        console.log("Loading existing summary from Firebase");
+        
+        // 3. Only regenerate if summary has fallback text AND no valid data
+        const shouldRegenerate = needsRegeneration(existingSummary.improvementSummary) && 
+                                !hasValidEvaluationData(existingSummary.reportData);
+        
+        if (shouldRegenerate) {
+          console.log("Regenerating summary due to fallback text...");
           await generateNewEvaluation(userId);
-          await resetTrigger(userId);
-          setIsGeneratingNew(false);
         } else {
-          const existingSummary = await loadSummaryFromFirebase(userId);
-
-          // Check if existing summary needs regeneration
-          if (existingSummary && existingSummary.reportData) {
-            if (needsRegeneration(existingSummary.improvementSummary)) {
-              console.log("Existing summary contains fallback/unavailable text, regenerating...");
-              await generateNewEvaluation(userId);
-            } else {
-              console.log("Loading existing summary from Firebase");
-              // Fetch latest scores from bigEvaluations
-              const bigEvalQuery = query(collection(db, "bigEvaluations"), where("userId", "==", userId));
-              const bigEvalSnap = await getDocs(bigEvalQuery);
-              if (!bigEvalSnap.empty) {
-                const bigEvalData = bigEvalSnap.docs[0].data();
-                existingSummary.reportData.legitimacyScore = bigEvalData.scores?.legitimacy || 0;
-                existingSummary.reportData.leadershipScore = bigEvalData.scores?.leadership || 0;
-              }
-              setReportData(existingSummary.reportData);
-              setTopPriorities(existingSummary.topPriorities);
-              setImprovementSummary(existingSummary.improvementSummary);
-            }
-          } else {
-            console.log("No existing summary found, generating new one");
-            await generateNewEvaluation(userId);
-          }
+          // Load existing data
+          setReportData(existingSummary.reportData);
+          setTopPriorities(existingSummary.topPriorities);
+          setImprovementSummary(existingSummary.improvementSummary);
         }
-      } catch (err) {
-        console.error("Data Fetch Error:", err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
+      } else {
+        // No summary exists at all
+        console.log("No existing summary found, generating new one");
+        await generateNewEvaluation(userId);
       }
-    };
+    } catch (err) {
+      console.error("Data Fetch Error:", err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchData();
-  }, [userId, apiKey]);
+  fetchData();
+}, [userId]);
+// Helper to check if report has valid evaluation data
+const hasValidEvaluationData = (reportData) => {
+  if (!reportData) return false;
+  
+  // Check if we have at least one valid score
+  const hasScores = reportData.overallScore > 0 || 
+                   reportData.governanceScore > 0 || 
+                   reportData.leadershipScore > 0 ||
+                   reportData.profileEvaluationScore > 0;
+  
+  // Check if we have structured content
+  const hasStructuredContent = reportData.structuredContent && 
+                              Object.keys(reportData.structuredContent).length > 0;
+  
+  return hasScores || hasStructuredContent;
+};
+
+// Improved needsRegeneration function
+
 
   const generateNewEvaluation = async (userId) => {
     try {

@@ -195,18 +195,22 @@ const getCustomErrorMessage = (error) => {
         break
       case "Advisors":
       case "ADVISOR":
+           case "Advisor":
         navigate("/advisor-profile")
         break
-      case "Accelerators":
-      case "Catalyst":
+         case "Catalyst":
+        case"Catalysts":
+        case"Accelerators":
         navigate("/support-profile")
         break
       case "Interns":
       case "INTERN":
+        case"Intern":
         navigate("/intern-profile")
         break
       case "ProgramSponsor":
       case "PROGRAM_SPONSOR":
+        case "Program Sponsor":
         navigate("/program-sponsor-profile")
         break
       default:

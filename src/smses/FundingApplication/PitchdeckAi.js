@@ -11,12 +11,13 @@ import { doc, setDoc, getDoc } from "firebase/firestore"
 import { collection, query, where, getDocs, addDoc } from "firebase/firestore"
 import { API_KEYS } from '../../API';
 import { GoogleGenAI } from "@google/genai"
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
+// ✅ Initialize Firebase Functions
+const functions = getFunctions();
 // ✅ Initialize Google AI only
-const ai = new GoogleGenAI({ 
-  apiKey: "AIzaSyBV5LGcaYjT0qLWsfqpbKxo8ohz0SDkIvU"
-})
 
+// ✅ Replace GoogleGenAI with Firebase Functions
 export const fetchUserProfile = async () => {
   try {
     const userId = auth.currentUser?.uid;
@@ -38,75 +39,63 @@ export const fetchUserProfile = async () => {
   }
 };
 
-// ✅ Enhanced file extraction with Google AI
+// ✅ REPLACE extractWithGoogleAI with Firebase Function
 const extractWithGoogleAI = async (file, documentType = "Pitch Deck") => {
   try {
-    console.log(`🔍 Analyzing ${file.name} with Google AI...`)
+    console.log(`🔍 Extracting ${file.name} via Firebase Function...`)
 
-    // Convert file to base64 for Google AI
-    const base64Data = await new Promise((resolve) => {
+    // Convert file to base64
+    const base64Data = await new Promise((resolve, reject) => {
       const reader = new FileReader()
       reader.readAsDataURL(file)
       reader.onload = () => resolve(reader.result.split(',')[1])
+      reader.onerror = () => reject(new Error("Failed to read file"))
     })
 
-    const prompt = `
-EXTRACT ALL TEXT FROM THIS PITCH DECK:
+    // Call Firebase Function for extraction
+    const extractText = httpsCallable(functions, 'extractDocumentText');
+    
+    const result = await extractText({
+      base64Data,
+      mimeType: file.type,
+      fileName: file.name,
+      documentType
+    });
 
-DOCUMENT TYPE: ${documentType}
-FILE NAME: ${file.name}
+    if (!result.data.success) {
+      throw new Error(result.data.error || "Extraction failed");
+    }
 
-INSTRUCTIONS:
-1. Extract ALL readable text from this document
-2. Preserve numbers, financial data, business metrics, and strategic information
-3. Include headers, footers, tables, and any visible text
-4. Focus on business plans, financial projections, market analysis, and growth strategies
-5. Return the extracted text in a clean, readable format
-
-EXTRACTED TEXT:
-`
-
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [
-        {
-          parts: [
-            {
-              inlineData: {
-                mimeType: file.type,
-                data: base64Data,
-              }
-            },
-            {
-              text: prompt
-            }
-          ]
-        }
-      ]
-    })
-
-    console.log("✅ Google AI extraction successful")
-    return response.text || "[No text extracted by Google AI]"
+    console.log("✅ Firebase extraction successful")
+    return result.data.text || "[No text extracted]"
 
   } catch (error) {
-    console.error("❌ Google AI extraction failed:", error)
-    throw new Error(`AI extraction failed: ${error.message}`)
+    console.error("❌ Firebase extraction failed:", error)
+    
+    // Handle specific Firebase errors
+    if (error.code === 'functions/unauthenticated') {
+      throw new Error("Please sign in to extract documents");
+    } else if (error.code === 'functions/deadline-exceeded') {
+      throw new Error("Document extraction timed out. Try a smaller file.");
+    }
+    
+    throw new Error(`Extraction failed: ${error.message}`)
   }
 }
 
-// ✅ Enhanced PDF extraction with fallbacks
+// ✅ Enhanced PDF extraction with fallbacks (using Firebase Function)
 const extractFromPDF = async (file) => {
   try {
-    console.log("📄 Attempting PDF extraction with Google AI...")
+    console.log("📄 Attempting PDF extraction with Firebase Function...")
     
-    // Primary method: Use Google AI for best results
+    // Primary method: Use Firebase Function for best results
     const aiText = await extractWithGoogleAI(file, "Pitch Deck PDF")
     if (aiText && aiText.length > 100) {
-      console.log("✅ PDF extracted successfully with Google AI")
+      console.log("✅ PDF extracted successfully with Firebase Function")
       return aiText
     }
     
-    // Fallback: Traditional PDF.js extraction
+    // Fallback: Traditional PDF.js extraction (keep your existing fallback)
     console.log("🔄 Falling back to PDF.js extraction...")
     let pdfjsLib = null
     
@@ -189,7 +178,7 @@ const extractFromPDF = async (file) => {
   }
 }
 
-// ✅ Enhanced DOCX extraction with Google AI fallback
+// ✅ Enhanced DOCX extraction with Firebase Function fallback
 const extractFromDOCX = async (file) => {
   try {
     console.log("📝 Attempting DOCX extraction with Mammoth...")
@@ -201,15 +190,15 @@ const extractFromDOCX = async (file) => {
       return value.length > 20000 ? value.slice(0, 20000) + "…[truncated]" : value
     }
     
-    // Fallback to Google AI if Mammoth fails
-    console.log("🔄 Falling back to Google AI for DOCX...")
+    // Fallback to Firebase Function if Mammoth fails
+    console.log("🔄 Falling back to Firebase Function for DOCX...")
     const aiText = await extractWithGoogleAI(file, "Word Document")
     return aiText
     
   } catch (error) {
     console.error("❌ DOCX extraction failed:", error)
     
-    // Final fallback to Google AI
+    // Final fallback to Firebase Function
     try {
       const aiText = await extractWithGoogleAI(file, "Word Document")
       return aiText
@@ -219,10 +208,10 @@ const extractFromDOCX = async (file) => {
   }
 }
 
-// ✅ Enhanced image processing with Google AI
+// ✅ Enhanced image processing with Firebase Function
 const extractFromImage = async (file) => {
   try {
-    console.log("🖼️ Extracting text from image with Google AI...")
+    console.log("🖼️ Extracting text from image with Firebase Function...")
     const aiText = await extractWithGoogleAI(file, "Pitch Deck Image")
     
     if (aiText && aiText.length > 50) {
@@ -256,7 +245,7 @@ const extractFromXLS = async (file) => {
   try {
     const XLSX = await ensureXlsx()
     if (!XLSX) {
-      // Fallback to Google AI for Excel files
+      // Fallback to Firebase Function for Excel files
       const aiText = await extractWithGoogleAI(file, "Excel Spreadsheet with Financial Data")
       return aiText || "[Excel file - xlsx parser not installed]"
     }
@@ -279,7 +268,7 @@ const extractFromXLS = async (file) => {
   } catch (error) {
     console.error("❌ Excel extraction failed:", error)
     
-    // Fallback to Google AI
+    // Fallback to Firebase Function
     try {
       const aiText = await extractWithGoogleAI(file, "Excel Spreadsheet")
       return aiText
@@ -325,7 +314,7 @@ const extractTextFromFile = async (file) => {
         return await extractFromDOCX(file)
         
       case "doc":
-        // For .doc files, use Google AI directly
+        // For .doc files, use Firebase Function directly
         return await extractWithGoogleAI(file, "Legacy Word Document")
         
       case "xlsx":
@@ -342,17 +331,17 @@ const extractTextFromFile = async (file) => {
         return await extractFromText(file)
         
       default:
-        // For unknown types, try Google AI
-        console.log(`🔄 Unknown file type ${fileExt}, trying Google AI...`)
+        // For unknown types, try Firebase Function
+        console.log(`🔄 Unknown file type ${fileExt}, trying Firebase Function...`)
         return await extractWithGoogleAI(file, "Unknown Document Type")
     }
 
   } catch (error) {
     console.error(`❌ Error processing ${file.name}:`, error)
     
-    // Final fallback: try basic Google AI extraction
+    // Final fallback: try Firebase Function extraction
     try {
-      console.log("🔄 Attempting final fallback with Google AI...")
+      console.log("🔄 Attempting final fallback with Firebase Function...")
       const fallbackText = await extractWithGoogleAI(file, "Document of unknown type")
       return fallbackText || `[Extraction failed: ${error.message}]`
     } catch (finalError) {
@@ -360,76 +349,43 @@ const extractTextFromFile = async (file) => {
     }
   }
 }
-
-// ✅ NEW: Pitch deck analysis with Gemini AI
+// In your PitchDeckGPT component, replace the analyzeWithGeminiAI function with:
 const analyzeWithGeminiAI = async (extractedTexts, fileInfo, profileData, stageLabel) => {
   try {
-    const prompt = `
-PITCH DECK FUNDABILITY ANALYSIS REQUEST:
+    console.log("🔄 Calling Firebase Function for pitch deck analysis...");
+    
+    const analyzePitchDeck = httpsCallable(functions, 'analyzePitchDeck');
+    
+    const result = await analyzePitchDeck({
+      extractedTexts,
+      fileInfo,
+      profileData,
+      stageLabel
+    });
 
-You are evaluating a startup pitch using the BIG Fundability Scorecard (Pitch Deck). Score each item 0–5 with 1-2 sentence justification per line. Then provide a total weighted score out of 100 based on the startup's current stage: ${stageLabel}.
+    if (!result.data.success) {
+      throw new Error(result.data.error || "Analysis failed");
+    }
 
-Startup Summary:
-Stage: ${stageLabel}
-Description: ${profileData?.entityOverview?.businessDescription || "Not provided"}
-
-Use these 9 main criteria for the weighted score:
-1. Problem Clarity
-2. Solution Fit
-3. Market Understanding (TAM, SAM)
-4. Competitive Landscape and Advantage
-5. Revenue Streams
-6. Financial Projections
-7. Traction
-8. MVP (Minimum Viable Product) Maturity
-9. Investor IRR
-
-ADDITIONAL EVALUATION (not included in main score):
-10. Operational Strength & Operating Model Clarity
-
-Weighting by stage (for main 9 criteria only):
-
-For Pre-seed:
-- Problem Clarity: 3%, Solution Fit: 3%, Market: 2%, Competition: 2%, Revenue: 2%, Financials: 2%, Traction: 2%, MVP Maturity: 3%, IRR: 1%
-
-For Growth:
-- Problem Clarity: 2%, Solution Fit: 2%, Market: 2%, Competition: 2%, Revenue: 2%, Financials: 2%, Traction: 1%, MVP Maturity: 1%, IRR: 1%
-
-For Maturity:
-- Problem Clarity: 1%, Solution Fit: 1%, Market: 1%, Competition: 1%, Revenue: 1%, Financials: 2%, Traction: 1%, MVP Maturity: 1%, IRR: 1%
-
-DOCUMENTS TO ANALYZE:
-${fileInfo.map((file, index) => `
---- DOCUMENT ${index + 1} ---
-FILE: ${file.name}
-CONTENT:
-${file.text}
-`).join('\n')}
-
-RESPONSE FORMAT:
-- Score each of the 9 main items from 0–5 with short justification
-- Calculate a weighted total out of 100 using the stage-adjusted weights above
-- Score item 10 (Operational Strength & Operating Model Clarity) separately from 0–5 with justification
-- Label the main result: "Investment-Ready", "Fundable with Support", "Emerging Potential", or "Not Yet Ready"
-- Suggest 2–3 priority improvements in weak areas (score ≤ 3)
-- Clearly indicate: "Operational Strength Score: X/5" at the end
-- Include the final score clearly as "BIG Fundability Score: X/100"
-
-IMPORTANT: Provide a comprehensive analysis that investors would find valuable.
-`
-
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [{ parts: [{ text: prompt }] }]
-    })
-
-    return response.text
+    console.log("✅ Pitch deck analysis completed successfully");
+    return result.data.analysis;
 
   } catch (error) {
-    console.error("Gemini AI analysis failed:", error)
-    throw new Error(`AI analysis failed: ${error.message}`)
+    console.error("❌ Firebase Function pitch analysis failed:", error);
+    
+    // Check for specific error types
+    if (error.code === 'functions/unauthenticated') {
+      throw new Error("Please sign in to use pitch analysis");
+    } else if (error.code === 'functions/deadline-exceeded') {
+      throw new Error("Analysis timed out. Please try with fewer or smaller files.");
+    } else if (error.code === 'functions/resource-exhausted') {
+      throw new Error("Service temporarily unavailable. Please try again in a few minutes.");
+    }
+    
+    throw new Error(`Pitch analysis failed: ${error.message}`);
   }
-}
+};
+
 
 export default function PitchDeckGPT({ files = [], onEvaluationComplete }) {
   const [input, setInput] = useState('');
@@ -441,6 +397,10 @@ export default function PitchDeckGPT({ files = [], onEvaluationComplete }) {
   const [aiEvaluation, setAiEvaluation] = useState(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+
+   // ✅ NEW: Add processing stages
+  const [processingStage, setProcessingStage] = useState('');
+  const [processingProgress, setProcessingProgress] = useState(0);
   useEffect(() => {
     if (files && files.length > 0) {
       const validFile = files.some(file => {
@@ -503,6 +463,7 @@ export default function PitchDeckGPT({ files = [], onEvaluationComplete }) {
     return 'Not Yet Ready';
   };
 
+   // ✅ UPDATED: handleIncomingFiles with progress tracking
   const handleIncomingFiles = async (incomingFiles) => {
     if (!incomingFiles || incomingFiles.length === 0) {
       alert("No file was uploaded. Please upload a valid document.");
@@ -510,6 +471,9 @@ export default function PitchDeckGPT({ files = [], onEvaluationComplete }) {
     }
 
     setIsLoading(true);
+    setProcessingStage('Preparing files...');
+    setProcessingProgress(10);
+
     const newFiles = [];
 
     try {
@@ -524,6 +488,9 @@ export default function PitchDeckGPT({ files = [], onEvaluationComplete }) {
         }
 
         try {
+          setProcessingStage(`Extracting text from ${file.name}...`);
+          setProcessingProgress(20 + (newFiles.length / incomingFiles.length) * 20);
+
           const content = await extractTextFromFile(file);
 
           if (!content || content.trim().length < 20) {
@@ -537,7 +504,7 @@ export default function PitchDeckGPT({ files = [], onEvaluationComplete }) {
             type: file.type,
             content: content,
             id: Date.now() + Math.random(),
-            extractionMethod: "google_ai_enhanced"
+            extractionMethod: "firebase_function_enhanced"
           });
 
         } catch (error) {
@@ -553,64 +520,96 @@ export default function PitchDeckGPT({ files = [], onEvaluationComplete }) {
       }
 
       setUploadedFiles(prev => [...prev, ...newFiles]);
+      
+      setProcessingStage('Analyzing pitch deck with AI...');
+      setProcessingProgress(60);
+      
       await performEvaluation(newFiles);
+      
+      setProcessingStage('Saving results...');
+      setProcessingProgress(80);
 
     } catch (error) {
       console.error('Unhandled file processing error:', error);
       alert('An unexpected error occurred during file processing.');
     } finally {
-      setIsLoading(false);
+      setProcessingProgress(100);
+      setTimeout(() => {
+        setIsLoading(false);
+        setProcessingStage('');
+        setProcessingProgress(0);
+      }, 500);
     }
   };
 
-  const performEvaluation = async (filesToEvaluate) => {
-    const profileData = await fetchUserProfile();
-    const stage = (profileData?.entityOverview?.operationStage || "").toLowerCase();
 
-    const stageLabel = ["pre-seed", "preseed"].includes(stage) ? "Pre-seed"
-                      : ["growth", "scale-up", "scaling"].includes(stage) ? "Growth"
-                      : "Maturity";
+ // Also update the performEvaluation function to handle the new response structure:
+const performEvaluation = async (filesToEvaluate) => {
+  const profileData = await fetchUserProfile();
+  const stage = (profileData?.entityOverview?.operationStage || "").toLowerCase();
 
-    try {
-      const reply = await analyzeWithGeminiAI(
-        filesToEvaluate.map(f => f.content),
-        filesToEvaluate.map(f => ({ 
-          name: f.name, 
-          type: f.type, 
-          text: f.content
-        })),
-        profileData,
-        stageLabel
-      );
+  const stageLabel = ["pre-seed", "preseed"].includes(stage) ? "Pre-seed"
+                    : ["growth", "scale-up", "scaling"].includes(stage) ? "Growth"
+                    : "Maturity";
 
-      setResponse(reply);
+  try {
+    const result = await analyzeWithGeminiAI(
+      filesToEvaluate.map(f => f.content),
+      filesToEvaluate.map(f => ({ 
+        name: f.name, 
+        type: f.type, 
+        text: f.content,
+        extractionMethod: f.extractionMethod
+      })),
+      profileData,
+      stageLabel
+    );
 
-      const score = extractScoreFromResponse(reply);
-      const operationalScore = extractOperationalScoreFromResponse(reply);
-      const operationalSummary = extractOperationalSummaryFromResponse(reply);
+    // Handle the result - it could be the analysis text or an object
+    let analysisText, score, label, operationalScore, operationalSummary;
+    
+    if (typeof result === 'string') {
+      // Backward compatibility: result is just the analysis text
+      analysisText = result;
+      score = extractScoreFromResponse(result);
+      operationalScore = extractOperationalScoreFromResponse(result);
+      operationalSummary = extractOperationalSummaryFromResponse(result);
+      label = score !== null ? getFundabilityLabel(score) : 'Analysis Failed';
+    } else {
+      // New format: result is an object with all the data
+      analysisText = result.analysis || result;
+      score = result.score;
+      operationalScore = result.operationalScore;
+      operationalSummary = result.operationalSummary;
+      label = result.label || (score !== null ? getFundabilityLabel(score) : 'Analysis Failed');
+    }
 
-      if (score !== null) {
-        setExtractedScore(score);
-        const label = getFundabilityLabel(score);
-        setFundabilityLabel(label);
+    setResponse(analysisText);
 
-        if (onEvaluationComplete) {
-          onEvaluationComplete(reply, score, label, operationalScore);
-        }
+    if (score !== null) {
+      setExtractedScore(score);
+      setFundabilityLabel(label);
 
-        // ✅ Save with stage and operational score
-        await saveDataToFirebase(reply, score, label, stageLabel, operationalScore, operationalSummary);
-
-        console.log("Score:", score, "Label:", label, "Stage:", stageLabel, "Operational Score:", operationalScore);
-      } else {
-        console.warn("No score extracted");
-        setExtractedScore(null);
-        setFundabilityLabel('');
+      if (onEvaluationComplete) {
+        onEvaluationComplete(analysisText, score, label, operationalScore, operationalSummary);
       }
-    } catch (error) {
-      console.error("Evaluation error:", error);
+
+      await saveDataToFirebase(analysisText, score, label, stageLabel, operationalScore, operationalSummary);
+
+      console.log("Score:", score, "Label:", label, "Stage:", stageLabel, "Operational Score:", operationalScore);
+    } else {
+      console.warn("No score extracted");
+      setExtractedScore(null);
+      setFundabilityLabel('');
     }
-  };
+  } catch (error) {
+    console.error("Evaluation error:", error);
+    // Set error state
+    setResponse(`❌ Analysis Error: ${error.message}`);
+    setExtractedScore(0);
+    setFundabilityLabel('Analysis Failed');
+  }
+};
 
   // Operational score extraction functions (keep your existing ones)
   const extractOperationalScoreFromResponse = (responseText) => {
@@ -757,14 +756,121 @@ export default function PitchDeckGPT({ files = [], onEvaluationComplete }) {
         </div>
       )}
 
-      {isLoading && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <div className="flex items-center space-x-3">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-              <span className="text-gray-700">Processing...</span>
+       {isLoading && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999
+          }}
+        >
+          <div 
+            style={{
+              backgroundColor: 'white',
+              padding: '30px',
+              borderRadius: '12px',
+              textAlign: 'center',
+              minWidth: '300px',
+              maxWidth: '400px',
+              margin: '20px'
+            }}
+          >
+            {/* Spinner */}
+            <div 
+              style={{
+                width: '40px',
+                height: '40px',
+                border: '3px solid #f3f3f3',
+                borderTop: '3px solid #8d6e63',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite',
+                margin: '0 auto 16px auto'
+              }}
+            />
+            
+            {/* Title */}
+            <h3 
+              style={{
+                margin: '0 0 8px 0',
+                fontSize: '18px',
+                fontWeight: '600',
+                color: '#333'
+              }}
+            >
+              Analyzing Pitch Deck
+            </h3>
+            
+            {/* Stage Message */}
+            <p 
+              style={{
+                color: '#666',
+                fontSize: '14px',
+                margin: '0 0 20px 0',
+                minHeight: '20px'
+              }}
+            >
+              {processingStage || 'Initializing...'}
+            </p>
+            
+            {/* Progress Bar */}
+            <div 
+              style={{
+                width: '100%',
+                height: '6px',
+                backgroundColor: '#f0f0f0',
+                borderRadius: '3px',
+                overflow: 'hidden',
+                marginBottom: '8px'
+              }}
+            >
+              <div 
+                style={{
+                  height: '100%',
+                  backgroundColor: '#8d6e63',
+                  width: `${processingProgress}%`,
+                  transition: 'width 0.5s ease-out'
+                }}
+              />
+            </div>
+            
+            {/* Progress Percentage */}
+            <p 
+              style={{
+                fontSize: '14px',
+                fontWeight: '600',
+                color: '#8d6e63',
+                margin: '0 0 16px 0'
+              }}
+            >
+              {processingProgress}%
+            </p>
+            
+            {/* Simple Warning Message */}
+            <div 
+              style={{
+                fontSize: '12px',
+                color: '#666',
+                fontStyle: 'italic'
+              }}
+            >
+              Please don't close this window
             </div>
           </div>
+          
+          {/* Animation Styles */}
+          <style jsx>{`
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          `}</style>
         </div>
       )}
     </div>

@@ -12,68 +12,56 @@ import { collection, query, where, getDocs, addDoc } from "firebase/firestore"
 import PitchDeckGPT from './PitchdeckAi';
 import { API_KEYS } from '../../API';
 import { fetchUserProfile } from "./PitchdeckAi"
-import { GoogleGenAI } from "@google/genai"
 
-// ✅ Initialize Google AI only
-const ai = new GoogleGenAI({ 
-  apiKey: "AIzaSyBV5LGcaYjT0qLWsfqpbKxo8ohz0SDkIvU" // Consider moving to env var
-})
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
-// ✅ NEW: Enhanced file extraction with Google AI
+
+
+const functions = getFunctions();
+
 const extractWithGoogleAI = async (file, documentType = "Pitch Document") => {
   try {
-    console.log(`🔍 Analyzing ${file.name} with Google AI...`)
+    console.log(`🔍 Extracting ${file.name} via Firebase Function...`)
 
-    // Convert file to base64 for Google AI
-    const base64Data = await new Promise((resolve) => {
+    // Convert file to base64
+    const base64Data = await new Promise((resolve, reject) => {
       const reader = new FileReader()
       reader.readAsDataURL(file)
       reader.onload = () => resolve(reader.result.split(',')[1])
+      reader.onerror = () => reject(new Error("Failed to read file"))
     })
 
-    const prompt = `
-EXTRACT ALL TEXT FROM THIS PITCH DOCUMENT:
+    // Call Firebase Function for extraction
+    const extractText = httpsCallable(functions, 'extractDocumentText');
+    
+    const result = await extractText({
+      base64Data,
+      mimeType: file.type,
+      fileName: file.name,
+      documentType
+    });
 
-DOCUMENT TYPE: ${documentType}
-FILE NAME: ${file.name}
+    if (!result.data.success) {
+      throw new Error(result.data.error || "Extraction failed");
+    }
 
-INSTRUCTIONS:
-1. Extract ALL readable text from this document
-2. Preserve numbers, financial data, business metrics, and strategic information
-3. Include headers, footers, tables, and any visible text
-4. Focus on business plans, financial projections, market analysis, and growth strategies
-5. Return the extracted text in a clean, readable format
-
-EXTRACTED TEXT:
-`
-
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [
-        {
-          parts: [
-            {
-              inlineData: {
-                mimeType: file.type,
-                data: base64Data,
-              }
-            },
-            {
-              text: prompt
-            }
-          ]
-        }
-      ]
-    })
-
-    console.log("✅ Google AI extraction successful")
-    return response.text || "[No text extracted by Google AI]"
+    console.log("✅ Firebase extraction successful")
+    return result.data.text || "[No text extracted]"
 
   } catch (error) {
-    console.error("❌ Google AI extraction failed:", error)
-    throw new Error(`AI extraction failed: ${error.message}`)
+    console.error("❌ Firebase extraction failed:", error)
+    
+    // Handle specific Firebase errors
+    if (error.code === 'functions/unauthenticated') {
+      throw new Error("Please sign in to extract documents");
+    } else if (error.code === 'functions/deadline-exceeded') {
+      throw new Error("Document extraction timed out. Try a smaller file.");
+    }
+    
+    throw new Error(`Extraction failed: ${error.message}`)
   }
 }
+
 
 // ✅ Enhanced PDF extraction with fallbacks
 const extractFromPDF = async (file) => {
@@ -379,69 +367,40 @@ const extractTextFromFile = async (file) => {
 // ✅ NEW: Fundability analysis with Gemini AI
 const analyzeWithGeminiAI = async (extractedTexts, fileInfo, profileData, stageLabel) => {
   try {
-    const prompt = `
-STARTUP FUNDABILITY ANALYSIS REQUEST:
+    console.log("🔄 Calling Firebase Function for analysis...");
+    
+    const analyzeFundability = httpsCallable(functions, 'analyzeFundability');
+    
+    const result = await analyzeFundability({
+      extractedTexts,
+      fileInfo,
+      profileData,
+      stageLabel
+    });
 
-You are evaluating a startup pitch using the BIG Fundability Scorecard (Business Plan Evaluation). Score each item 0–5 with 1-2 sentence justification per line. Then provide a total weighted score out of 100 based on the startup's current stage: ${stageLabel}.
+    if (!result.data.success) {
+      throw new Error(result.data.error || "Analysis failed");
+    }
 
-Startup Summary:
-Stage: ${stageLabel}
-Description: ${profileData?.entityOverview?.businessDescription || "Not provided"}
-
-
-Use these 9 criteria:
-1. Problem Clarity
-2. Solution Fit
-3. Market Understanding (TAM, SAM)
-4. Competitive Landscape and Advantage
-5. Revenue Streams
-6. Financial Projections
-7. Traction
-8. MVP (Minimum Viable Product) Maturity
-9. Investor IRR
-
-Weighting by stage:
-
-For Pre-seed:
-- Problem Clarity: 3%, Solution Fit: 3%, Market: 2%, Competition: 2%, Revenue: 2%, Financials: 2%, Traction: 2%, MVP Maturity: 3%, IRR: 1%
-
-For Growth:
-- Problem Clarity: 2%, Solution Fit: 2%, Market: 2%, Competition: 2%, Revenue: 2%, Financials: 2%, Traction: 1%, MVP Maturity: 1%, IRR: 1%
-
-For Maturity:
-- Problem Clarity: 1%, Solution Fit: 1%, Market: 1%, Competition: 1%, Revenue: 1%, Financials: 2%, Traction: 1%, MVP Maturity: 1%, IRR: 1%
-
-DOCUMENTS TO ANALYZE:
-${fileInfo.map((file, index) => `
---- DOCUMENT ${index + 1} ---
-FILE: ${file.name}
-EXTRACTION METHOD: ${file.extractionMethod}
-CONTENT:
-${file.text}
-`).join('\n')}
-
-RESPONSE FORMAT:
-- Score each of the 9 items from 0–5 with short justification
-- Calculate a weighted total out of 100 using the stage-adjusted weights above
-- Label the result: "Investment-Ready", "Fundable with Support", "Emerging Potential", or "Not Yet Ready"
-- Suggest 2–3 priority improvements in weak areas (score ≤ 3)
-- Include the final score clearly as "BIG Fundability Score: X/100"
-
-IMPORTANT: Provide a comprehensive analysis that investors would find valuable.
-`
-
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [{ parts: [{ text: prompt }] }]
-    })
-
-    return response.text
+    console.log("✅ Analysis completed successfully");
+    return result.data.analysis;
 
   } catch (error) {
-    console.error("Gemini AI analysis failed:", error)
-    throw new Error(`AI analysis failed: ${error.message}`)
+    console.error("❌ Firebase Function analysis failed:", error);
+    
+    // Check for specific error types
+    if (error.code === 'functions/unauthenticated') {
+      throw new Error("Please sign in to use AI analysis");
+    } else if (error.code === 'functions/deadline-exceeded') {
+      throw new Error("Analysis timed out. Please try with fewer or smaller files.");
+    } else if (error.code === 'functions/resource-exhausted') {
+      throw new Error("Service temporarily unavailable. Please try again in a few minutes.");
+    }
+    
+    throw new Error(`AI analysis failed: ${error.message}`);
   }
-}
+};
+
 
 export default function GPT({ files = [], onEvaluationComplete }) {
   const [input, setInput] = useState('');
@@ -452,7 +411,14 @@ export default function GPT({ files = [], onEvaluationComplete }) {
   const [fundabilityLabel, setFundabilityLabel] = useState('');
   const [aiEvaluation, setAiEvaluation] = useState(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
-
+// Initialize functions (add near your other Firebase imports)
+  const [isProcessingFiles, setIsProcessingFiles] = useState(false);
+  
+  // Add these states for the processing modal
+  const [showProcessingModal, setShowProcessingModal] = useState(false);
+  const [processingStatus, setProcessingStatus] = useState('');
+  const [currentFileIndex, setCurrentFileIndex] = useState(0);
+  const [totalFiles, setTotalFiles] = useState(0);
   const extractScoreFromResponse = (responseText) => {
     try {
       // Pattern 1: Look for "BIG Fundability Score: X/100" or "Score: X/100"
@@ -498,14 +464,26 @@ export default function GPT({ files = [], onEvaluationComplete }) {
     return 'Not Yet Ready';
   };
 
-  const handleIncomingFiles = async (incomingFiles) => {
+    const handleIncomingFiles = async (incomingFiles) => {
     if (incomingFiles.length === 0) return;
 
-    setIsLoading(true);
+    // Show processing modal
+    setShowProcessingModal(true);
+    setProcessingStatus('Starting file processing...');
+    setIsProcessingFiles(true);
+    setTotalFiles(incomingFiles.length);
+    setCurrentFileIndex(0);
+
     const newFiles = [];
 
     try {
-      for (const file of incomingFiles) {
+      for (let i = 0; i < incomingFiles.length; i++) {
+        const file = incomingFiles[i];
+        
+        // Update processing status
+        setCurrentFileIndex(i + 1);
+        setProcessingStatus(`Processing file ${i + 1} of ${incomingFiles.length}: ${file.name}`);
+        
         try {
           const content = await extractTextFromFile(file);
           newFiles.push({
@@ -530,42 +508,70 @@ export default function GPT({ files = [], onEvaluationComplete }) {
       }
 
       setUploadedFiles(prev => [...prev, ...newFiles]);
-
+      
+      // Update status for AI analysis
+      setProcessingStatus('File extraction complete. Starting AI analysis...');
+      
       // Auto-trigger evaluation
       await performEvaluation(newFiles);
+      
+      // Close modal after completion
+      setTimeout(() => {
+        setShowProcessingModal(false);
+        setIsProcessingFiles(false);
+      }, 500);
 
     } catch (error) {
       console.error('File processing error:', error);
-    } finally {
-      setIsLoading(false);
+      setProcessingStatus(`Error: ${error.message}`);
+      
+      // Keep modal open with error for a bit before closing
+      setTimeout(() => {
+        setShowProcessingModal(false);
+        setIsProcessingFiles(false);
+      }, 3000);
     }
   };
 
   const performEvaluation = async (filesToEvaluate) => {
-    const profileData = await fetchUserProfile();
-
-    const mapToBIGStage = (stage) => {
-      switch (stage?.toLowerCase()) {
-        case 'startup': return 'Pre-seed';
-        case 'growth': return 'Seed';
-        case 'scaling': return 'Series A/B';
-        case 'mature':
-        case 'turnaround': return 'Maturity';
-        default: return 'Not specified';
-      }
-    };
-
-    const stageLabel = mapToBIGStage(profileData?.entityOverview?.operationStage);
-
+    // Show processing modal if not already showing
+    if (!showProcessingModal) {
+      setShowProcessingModal(true);
+      setProcessingStatus('Starting AI analysis...');
+    }
+    
+    setIsLoading(true);
+    
     try {
+      setProcessingStatus('Fetching user profile...');
+      const profileData = await fetchUserProfile();
+
+      const mapToBIGStage = (stage) => {
+        switch (stage?.toLowerCase()) {
+          case 'startup': return 'Pre-seed';
+          case 'growth': return 'Seed';
+          case 'scaling': return 'Series A/B';
+          case 'mature':
+          case 'turnaround': return 'Maturity';
+          default: return 'Pre-seed';
+        }
+      };
+
+      const stageLabel = mapToBIGStage(profileData?.entityOverview?.operationStage);
+
+      // Prepare data for Firebase Function
+      const extractedTexts = filesToEvaluate.map(f => f.content);
+      const fileMetadata = filesToEvaluate.map(f => ({ 
+        name: f.name, 
+        type: f.type,
+        extractionMethod: f.extractionMethod || 'standard'
+      }));
+
+      setProcessingStatus('Analyzing content with AI... This may take a moment.');
+      
       const reply = await analyzeWithGeminiAI(
-        filesToEvaluate.map(f => f.content),
-        filesToEvaluate.map(f => ({ 
-          name: f.name, 
-          type: f.type, 
-          text: f.content,
-          extractionMethod: f.extractionMethod 
-        })),
+        extractedTexts,
+        fileMetadata,
         profileData,
         stageLabel
       );
@@ -582,17 +588,32 @@ export default function GPT({ files = [], onEvaluationComplete }) {
           onEvaluationComplete(reply, score, label);
         }
 
-        // ✅ Save with stage
+        setProcessingStatus('Saving results...');
+        // Save to Firebase
         await saveDataToFirebase(reply, score, label, stageLabel);
 
         console.log("Score:", score, "Label:", label, "Stage:", stageLabel);
+        
+        setProcessingStatus('Analysis complete!');
       } else {
-        console.warn("No score extracted");
+        console.warn("No score extracted from response");
         setExtractedScore(null);
         setFundabilityLabel('');
+        setProcessingStatus('Analysis complete (no score extracted)');
       }
     } catch (error) {
       console.error("Evaluation error:", error);
+      setProcessingStatus(`Error: ${error.message}`);
+      setResponse(`❌ Analysis Error: ${error.message}\n\nPlease try again or contact support if the issue persists.`);
+      setExtractedScore(null);
+      setFundabilityLabel('');
+    } finally {
+      setIsLoading(false);
+      
+      // Close modal after a delay
+      setTimeout(() => {
+        setShowProcessingModal(false);
+      }, 1000);
     }
   };
 
@@ -687,6 +708,7 @@ export default function GPT({ files = [], onEvaluationComplete }) {
 
   return (
     <div className="max-w-4xl mx-auto p-6 bg-white min-h-screen">
+      
       {extractedScore !== null && (
         <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <h3 className="text-lg font-semibold text-blue-800 mb-2">BIG Fundability Assessment</h3>

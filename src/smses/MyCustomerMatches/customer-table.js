@@ -1223,7 +1223,7 @@ export function CustomerTable() {
   const handleViewDetails = async (application) => {
     try {
       // First, find the complete customer profile from universalProfiles
-      const customerProfile = universalProfiles.find(profile => profile.id === application.customerId);
+      const customerProfile = universalProfiles.find(profile => profile.id === application.supplierId);
 
       if (customerProfile) {
         // Merge the application data with the complete customer profile

@@ -4,140 +4,45 @@ import mammoth from "mammoth"
 import { collection, query, where, getDocs, addDoc, setDoc } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
 import { GoogleGenAI } from "@google/genai"
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
-// ✅ Initialize Google AI only
-const ai = new GoogleGenAI({ 
-  apiKey: "AIzaSyBV5LGcaYjT0qLWsfqpbKxo8ohz0SDkIvU" // Consider moving to env var
-})
+// ✅ Initialize Firebase Functions
+const functions = getFunctions();
 
-// ✅ NEW: Credit analysis with Gemini AI
+
 const analyzeWithGeminiAI = async (extractedTexts, fileInfo) => {
   try {
-    const prompt = `
-CREDIT REPORT ANALYSIS REQUEST:
+    console.log("🔄 Calling Firebase Function for credit analysis...");
+    
+    const analyzeCreditReport = httpsCallable(functions, 'analyzeCreditReport');
+    
+    const result = await analyzeCreditReport({
+      extractedTexts,
+      fileInfo
+    });
 
-You are a financial analyst specializing in credit report analysis. Analyze the following document(s) for credit information.
-
-INSTRUCTIONS:
-1. FIRST determine if this is actually a credit report or contains credible credit score data
-2. If NOT a credit report, clearly state this and return a score of 0
-3. If it IS a credit report, extract:
-   - Credit Score (FICO/VantageScore or similar; 300–850 range)
-   - Credit Rating (Excellent/Very Good/Good/Fair/Poor)
-   - Key positive factors
-   - Negative items (late payments, collections, bankruptcies)
-   - Overall credit assessment
-
-DOCUMENTS TO ANALYZE:
-${fileInfo.map((file, index) => `
---- DOCUMENT ${index + 1} ---
-FILE: ${file.name}
-TYPE: ${file.type}
-CONTENT:
-${file.text}
-`).join('\n')}
-
-RESPONSE FORMAT (JSON only):
-{
-  "isCreditReport": true/false,
-  "creditScore": number (0 if not credit report, null if not found),
-  "creditRating": "Excellent/Very Good/Good/Fair/Poor/Not Applicable",
-  "keyFindings": ["array", "of", "key", "points"],
-  "negativeItems": ["array", "of", "negative", "items", "or", "empty"],
-  "overallAssessment": "detailed summary analysis",
-  "confidence": "high/medium/low"
-}
-
-If not a credit report, return:
-{
-  "isCreditReport": false,
-  "creditScore": 0,
-  "creditRating": "Not a Credit Report",
-  "keyFindings": ["Document does not appear to be a credit report"],
-  "negativeItems": [],
-  "overallAssessment": "The provided documents do not contain credit report information. Please upload actual credit reports from recognized credit bureaus.",
-  "confidence": "high"
-}
-`
-
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [{ parts: [{ text: prompt }] }]
-    })
-
-    // Parse JSON response
-    try {
-      const jsonMatch = response.text.match(/\{[\s\S]*\}/)
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0])
-      }
-    } catch (parseError) {
-      console.error("JSON parse error:", parseError)
+    if (!result.data.success) {
+      throw new Error(result.data.error || "Analysis failed");
     }
 
-    // Fallback: try to extract score from text response
-    const fallbackResponse = {
-      isCreditReport: false,
-      creditScore: 0,
-      creditRating: "Analysis Failed",
-      keyFindings: ["Could not parse analysis results"],
-      negativeItems: [],
-      overallAssessment: response.text || "Analysis completed but format was unexpected",
-      confidence: "low"
-    }
-
-    // Try to detect if it's a credit report from text
-    const responseText = response.text.toLowerCase()
-    const creditReportIndicators = [
-      /credit.*report/i,
-      /fico/i,
-      /vantage/i,
-      /equifax/i,
-      /experian/i,
-      /transunion/i,
-      /credit.*score/i,
-      /payment.*history/i,
-      /credit.*utilization/i
-    ]
-
-    const isLikelyCreditReport = creditReportIndicators.some(pattern => 
-      pattern.test(responseText)
-    )
-
-    if (isLikelyCreditReport) {
-      // Try to extract score from text
-      const scorePatterns = [
-        /(\d{3})\s*(?:point|score)/i,
-        /score.*?(\d{3})/i,
-        /rating.*?(\d{3})/i,
-        /\b([3-8]\d{2})\b/
-      ]
-
-      let extractedScore = null
-      for (const pattern of scorePatterns) {
-        const match = responseText.match(pattern)
-        if (match) {
-          const score = parseInt(match[1])
-          if (score >= 300 && score <= 850) {
-            extractedScore = score
-            break
-          }
-        }
-      }
-
-      fallbackResponse.isCreditReport = true
-      fallbackResponse.creditScore = extractedScore
-      fallbackResponse.creditRating = extractedScore ? getRatingFromScore(extractedScore) : "Score Not Found"
-      fallbackResponse.overallAssessment = "Credit report detected but analysis format was unexpected. " + response.text.slice(0, 500)
-    }
-
-    return fallbackResponse
+    console.log("✅ Credit analysis completed successfully");
+    return result.data.analysis;
 
   } catch (error) {
-    console.error("Gemini AI analysis failed:", error)
-    throw new Error(`AI analysis failed: ${error.message}`)
+    console.error("❌ Firebase Function credit analysis failed:", error);
+    
+    // Check for specific error types
+    if (error.code === 'functions/unauthenticated') {
+      throw new Error("Please sign in to use credit analysis");
+    } else if (error.code === 'functions/deadline-exceeded') {
+      throw new Error("Analysis timed out. Please try with fewer or smaller files.");
+    } else if (error.code === 'functions/resource-exhausted') {
+      throw new Error("Service temporarily unavailable. Please try again in a few minutes.");
+    }
+    
+    throw new Error(`Credit analysis failed: ${error.message}`);
   }
-}
+};
 
 // ✅ Helper function to get rating from score
 const getRatingFromScore = (score) => {
@@ -161,59 +66,47 @@ const cleanText = (bufOrStr) => {
   }
 }
 
-// ✅ Enhanced PDF extraction using Google AI
+// ✅ REPLACE extractWithGoogleAI to use Firebase Function
 const extractWithGoogleAI = async (file, documentType = "Credit Report") => {
   try {
-    console.log(`🔍 Analyzing ${file.name} with Google AI...`)
+    console.log(`🔍 Extracting ${file.name} via Firebase Function...`)
 
-    // Convert file to base64 for Google AI
-    const base64Data = await new Promise((resolve) => {
+    // Convert file to base64
+    const base64Data = await new Promise((resolve, reject) => {
       const reader = new FileReader()
       reader.readAsDataURL(file)
       reader.onload = () => resolve(reader.result.split(',')[1])
+      reader.onerror = () => reject(new Error("Failed to read file"))
     })
 
-    const prompt = `
-EXTRACT ALL TEXT FROM THIS DOCUMENT:
+    // Call Firebase Function for extraction
+    const extractText = httpsCallable(functions, 'extractCreditDocumentText');
+    
+    const result = await extractText({
+      base64Data,
+      mimeType: file.type,
+      fileName: file.name,
+      documentType
+    });
 
-DOCUMENT TYPE: ${documentType}
-FILE NAME: ${file.name}
+    if (!result.data.success) {
+      throw new Error(result.data.error || "Extraction failed");
+    }
 
-INSTRUCTIONS:
-1. Extract ALL readable text from this document
-2. Preserve numbers, dates, scores, and financial terms
-3. Include headers, footers, and any visible text
-4. If this is a credit report, focus on credit scores, ratings, and financial data
-5. Return the extracted text in a clean, readable format
-
-EXTRACTED TEXT:
-`
-
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [
-        {
-          parts: [
-            {
-              inlineData: {
-                mimeType: file.type,
-                data: base64Data,
-              }
-            },
-            {
-              text: prompt
-            }
-          ]
-        }
-      ]
-    })
-
-    console.log("✅ Google AI extraction successful")
-    return response.text || "[No text extracted by Google AI]"
+    console.log("✅ Firebase extraction successful")
+    return result.data.text || "[No text extracted]"
 
   } catch (error) {
-    console.error("❌ Google AI extraction failed:", error)
-    throw new Error(`AI extraction failed: ${error.message}`)
+    console.error("❌ Firebase extraction failed:", error)
+    
+    // Handle specific Firebase errors
+    if (error.code === 'functions/unauthenticated') {
+      throw new Error("Please sign in to extract documents");
+    } else if (error.code === 'functions/deadline-exceeded') {
+      throw new Error("Document extraction timed out. Try a smaller file.");
+    }
+    
+    throw new Error(`Extraction failed: ${error.message}`)
   }
 }
 
@@ -525,7 +418,7 @@ const extractTextFromFile = async (file) => {
   }
 }
 
-// ✅ Main CreditGPT Component
+
 export default function CreditGPT({ files = [], onEvaluationComplete }) {
   const [uploadedFiles, setUploadedFiles] = useState([])
   const [response, setResponse] = useState("")
@@ -534,8 +427,54 @@ export default function CreditGPT({ files = [], onEvaluationComplete }) {
   const [fundabilityLabel, setFundabilityLabel] = useState("")
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [analysisResult, setAnalysisResult] = useState(null)
-
   
+  // ✅ NEW: Add processing stages
+  const [processingStage, setProcessingStage] = useState('');
+  const [processingProgress, setProcessingProgress] = useState(0);
+
+  const performEvaluation = async (filesToEvaluate, setters) => {
+  const { setAnalysisResult, setResponse, setExtractedScore, setFundabilityLabel } = setters;
+  
+  try {
+    const analysis = await analyzeWithGeminiAI(
+      filesToEvaluate.map(f => f.text),
+      filesToEvaluate.map(f => ({ name: f.name, type: f.type, text: f.text }))
+    )
+
+    setAnalysisResult(analysis)
+    
+    const formattedResponse = formatAnalysisResponse(analysis)
+    setResponse(formattedResponse)
+
+    const finalScore = analysis.isCreditReport ? (analysis.creditScore || 0) : 0
+    const finalLabel = getFundabilityLabel(finalScore, analysis.isCreditReport)
+
+    setExtractedScore(finalScore)
+    setFundabilityLabel(finalLabel)
+    
+    return { formattedResponse, finalScore, finalLabel, analysis }
+
+  } catch (error) {
+    console.error("Evaluation error:", error)
+    const errorResponse = `❌ Credit Analysis Error: ${error.message}\n\nPlease try again or contact support if the issue persists.`
+    
+    setResponse(errorResponse)
+    setExtractedScore(0)
+    setFundabilityLabel("Analysis Failed")
+    
+    const errorAnalysis = {
+      isCreditReport: false,
+      creditScore: 0,
+      creditRating: "Analysis Failed",
+      overallAssessment: errorResponse,
+      confidence: "low"
+    }
+    
+    setAnalysisResult(errorAnalysis)
+    
+    return { formattedResponse: errorResponse, finalScore: 0, finalLabel: "Analysis Failed", analysis: errorAnalysis }
+  }
+}
   const formatAnalysisResponse = (result) => {
     if (!result) return "Analysis in progress..."
     
@@ -572,13 +511,23 @@ Confidence: ${result.confidence}
     return "Poor"
   }
 
+  // ✅ ENHANCED: handleIncomingFiles with progress tracking
   const handleIncomingFiles = async (incomingFiles) => {
     if (!incomingFiles?.length) return
     setIsLoading(true)
+    setProcessingStage('Preparing files...');
+    setProcessingProgress(10);
 
     try {
       const processed = []
-      for (const file of incomingFiles) {
+      const totalFiles = incomingFiles.length;
+      
+      for (let i = 0; i < incomingFiles.length; i++) {
+        const file = incomingFiles[i];
+        
+        setProcessingStage(`Extracting text from ${file.name}...`);
+        setProcessingProgress(10 + (i / totalFiles) * 40);
+        
         try {
           console.log(`📁 Processing file: ${file.name}`)
           const extracted = await extractTextFromFile(file)
@@ -609,48 +558,37 @@ Confidence: ${result.confidence}
           })
         }
       }
+      
       setUploadedFiles((prev) => [...prev, ...processed])
-      await performEvaluation(processed)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const performEvaluation = async (filesToEvaluate) => {
-    try {
-      const analysis = await analyzeWithGeminiAI(
-        filesToEvaluate.map(f => f.text),
-        filesToEvaluate.map(f => ({ name: f.name, type: f.type, text: f.text }))
-      )
-
-      setAnalysisResult(analysis)
+      setProcessingProgress(50);
       
-      const formattedResponse = formatAnalysisResponse(analysis)
-      setResponse(formattedResponse)
-
-      const finalScore = analysis.isCreditReport ? (analysis.creditScore || 0) : 0
-      const finalLabel = getFundabilityLabel(finalScore, analysis.isCreditReport)
-
-      setExtractedScore(finalScore)
-      setFundabilityLabel(finalLabel)
+      setProcessingStage('Analyzing credit report with AI...');
+      setProcessingProgress(60);
       
-      onEvaluationComplete?.(formattedResponse, finalScore, finalLabel, analysis)
-      await saveDataToFirebase(formattedResponse, finalScore, finalLabel, filesToEvaluate, analysis)
-
-    } catch (error) {
-      console.error("Evaluation error:", error)
-      const errorResponse = "Analysis failed due to an error. Please try again with different files."
-      setResponse(errorResponse)
-      setExtractedScore(0)
-      setFundabilityLabel("Analysis Failed")
-      setAnalysisResult({
-        isCreditReport: false,
-        creditScore: 0,
-        creditRating: "Analysis Failed",
-        overallAssessment: errorResponse,
-        confidence: "low"
+      const result = await performEvaluation(processed, {
+        setAnalysisResult,
+        setResponse,
+        setExtractedScore,
+        setFundabilityLabel
       })
-      onEvaluationComplete?.(errorResponse, 0, "Analysis Failed", null)
+      
+      setProcessingProgress(85);
+      setProcessingStage('Saving results...');
+      
+      onEvaluationComplete?.(result.formattedResponse, result.finalScore, result.finalLabel, result.analysis)
+      await saveDataToFirebase(result.formattedResponse, result.finalScore, result.finalLabel, processed, result.analysis)
+      
+      setProcessingProgress(100);
+      
+    } catch (error) {
+      console.error('File processing error:', error);
+      setProcessingStage('Error occurred');
+    } finally {
+      setTimeout(() => {
+        setIsLoading(false)
+        setProcessingStage('');
+        setProcessingProgress(0);
+      }, 500);
     }
   }
 
@@ -769,16 +707,124 @@ Confidence: ${result.confidence}
         </div>
       )}
 
-      {isLoading && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <div className="flex items-center space-x-3">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-              <span className="text-gray-700">Analyzing credit report...</span>
-            </div>
-          </div>
-        </div>
-      )}
+
+{isLoading && (
+  <div 
+    style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      width: '100%',
+      height: '100%',
+      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 9999
+    }}
+  >
+    <div 
+      style={{
+        backgroundColor: 'white',
+        padding: '30px',
+        borderRadius: '12px',
+        textAlign: 'center',
+        minWidth: '300px',
+        maxWidth: '400px',
+        margin: '20px'
+      }}
+    >
+      {/* Spinner */}
+      <div 
+        style={{
+          width: '40px',
+          height: '40px',
+          border: '3px solid #f3f3f3',
+          borderTop: '3px solid #8d6e63',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite',
+          margin: '0 auto 16px auto'
+        }}
+      />
+      
+      {/* Title */}
+      <h3 
+        style={{
+          margin: '0 0 8px 0',
+          fontSize: '18px',
+          fontWeight: '600',
+          color: '#333'
+        }}
+      >
+        Analyzing Credit Report
+      </h3>
+      
+      {/* Stage Message */}
+      <p 
+        style={{
+          color: '#666',
+          fontSize: '14px',
+          margin: '0 0 20px 0',
+          minHeight: '20px'
+        }}
+      >
+        {processingStage || 'Initializing...'}
+      </p>
+      
+      {/* Progress Bar */}
+      <div 
+        style={{
+          width: '100%',
+          height: '6px',
+          backgroundColor: '#f0f0f0',
+          borderRadius: '3px',
+          overflow: 'hidden',
+          marginBottom: '8px'
+        }}
+      >
+        <div 
+          style={{
+            height: '100%',
+            backgroundColor: '#8d6e63',
+            width: `${processingProgress}%`,
+            transition: 'width 0.5s ease-out'
+          }}
+        />
+      </div>
+      
+      {/* Progress Percentage */}
+      <p 
+        style={{
+          fontSize: '14px',
+          fontWeight: '600',
+          color: '#8d6e63',
+          margin: '0 0 16px 0'
+        }}
+      >
+        {processingProgress}%
+      </p>
+      
+      {/* Simple Warning Message */}
+      <div 
+        style={{
+          fontSize: '12px',
+          color: '#666',
+          fontStyle: 'italic'
+        }}
+      >
+        Please don't close this window
+      </div>
+    </div>
+    
+    {/* Animation Styles */}
+    <style jsx>{`
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    `}</style>
+  </div>
+)}
     </div>
   )
 }
