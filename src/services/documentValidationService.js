@@ -102,6 +102,20 @@ export const documentValidationRules = {
     ],
     strictChecks: ["issued_by_cipc", "has_registration_number", "matches_company_name"]
   },
+  "Company Letterhead": {
+    requiredElements: [
+      "Company name clearly displayed",
+      "Contact information (phone OR email OR website OR address)",
+      "Official company branding/design",
+      "✅ ACCEPT: Official letterhead OR company stationery",
+      "✅ ACCEPT: Both single-page letters AND multi-page documents",
+      "✅ COMPANY LOGO: Optional - accept even if logo is not present",
+      "✅ REGISTRATION NUMBER: Optional - not always required on letterhead",
+      "✅ DATE: Optional - letterhead may or may not have date",
+      "✅ ACCEPT VARIATIONS: Official business letter, company stationery, business communication paper"
+    ],
+    strictChecks: ["has_company_details", "has_contact_info"]
+  },
   "COIDA Letter of Good Standing": {
     requiredElements: [
       "Issued by Compensation Fund",
@@ -236,6 +250,20 @@ const createStrictPrompt = (docLabel, rules, registeredName) => {
 `;
   }
 
+   if (docLabel === "Company Letterhead") {
+    customInstructions = `SPECIAL INSTRUCTIONS FOR COMPANY LETTERHEAD:
+- ✅ ACCEPT ANY OFFICIAL BUSINESS STATIONERY: Letterhead, business letter, official company paper
+- ✅ COMPANY LOGO: Optional - accept even if logo is missing
+- ✅ REGISTRATION NUMBER: Optional - not always required on letterhead
+- ✅ DATE: Optional - letterhead may or may not have a date
+- ✅ MINIMAL REQUIREMENTS: Company name + at least one contact method (phone, email, address, or website)
+- ✅ DESIGN: Must look like official business stationery (not plain paper)
+- ✅ REJECT: Plain blank paper without company branding
+- ✅ ACCEPT MULTIPLE FORMATS: Single-page letters, multi-page documents, scanned stationery
+- ✅ MATCHING COMPANY NAME: Should contain or match "${registeredName}" (be flexible with abbreviations)
+`;
+  }
+  
   if (docLabel === "IDs of Directors & Shareholders") {
     customInstructions = `SPECIAL INSTRUCTIONS FOR ID DOCUMENTS:
 - ACCEPT ANY OFFICIAL ID DOCUMENT: South African ID Card, Passport, Driver's License, Refugee ID, Asylum Seeker Certificate

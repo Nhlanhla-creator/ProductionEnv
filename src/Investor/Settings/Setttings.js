@@ -1,20 +1,40 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { auth, db } from '../../firebaseConfig';
+import { doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore"
+import { updatePassword, deleteUser, EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth"
+import { onAuthStateChanged } from "firebase/auth"
 
 const InvestorSettings = () => {
   const [activeTab, setActiveTab] = useState("Account")
-  const [showDeleteRolePopup, setShowDeleteRolePopup] = useState(false)
-  const [showDeleteAccountPopup, setShowDeleteAccountPopup] = useState(false)
-  const [roles, setRoles] = useState([])
-  const [loadingRoles, setLoadingRoles] = useState(false)
+  const [currentUser, setCurrentUser] = useState(null)
+  const [userData, setUserData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [changePasswordData, setChangePasswordData] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: ""
+  })
+  const [showPasswords, setShowPasswords] = useState({
+    currentPassword: false,
+    newPassword: false,
+    confirmPassword: false
+  });
+
+  // Danger Zone States
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteMessage, setDeleteMessage] = useState("")
+  const [userRoles, setUserRoles] = useState([]);
+  const [showPopup, setShowPopup] = useState(false);
+  const [deletedRoles, setDeletedRoles] = useState([])
 
   const [formData, setFormData] = useState({
     account: {
-      email: "investor@example.com",
+      email: "",
       password: "••••••••••",
-      name: "John Doe",
-      phone: "+27 12 345 6789",
+      name: "",
+      phone: "",
     },
     notifications: {
       emailNotifications: true,
@@ -24,11 +44,8 @@ const InvestorSettings = () => {
       documentAlerts: true,
       newsletterSubscription: true,
     },
-    privacy: {
-      profileVisibility: "public",
-      contactInfoVisibility: "matches",
-      experienceVisibility: "public",
-      allowDataSharing: true,
+      privacy: {
+      anonymousName: false,
     },
     preferences: {
       language: "english",
@@ -49,6 +66,55 @@ const InvestorSettings = () => {
     paleBrown: "#f0e6d9",
   }
 
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setCurrentUser(user)
+        await fetchUserData(user.uid)
+      } else {
+        setCurrentUser(null)
+        setUserData(null)
+        setLoading(false)
+      }
+    })
+
+    return () => unsubscribe()
+  }, [])
+
+ const fetchUserData = async (uid) => {
+  try {
+    setLoading(true)
+    
+    const userDocRef = doc(db, "MyuniversalProfiles", uid)
+    const userDoc = await getDoc(userDocRef)
+    
+    if (userDoc.exists()) {
+      const userData = userDoc.data()
+      setUserData(userData)
+      
+      const user = auth.currentUser;
+      
+      setFormData(prev => ({
+        ...prev,
+        account: {
+          ...prev.account,
+          email: user?.email || userData.email || "",
+          name: userData.formData?.fundManageOverview?.registeredName || "",
+          phone: userData.formData?.contactDetails?.primaryContactMobile || "",
+        }, 
+         privacy: {
+          ...prev.privacy,
+          anonymousName: userData.anonymous || false, // ← This line sets the toggle state
+        }
+      }))
+    }
+  } catch (error) {
+    console.error("Error fetching user data:", error)
+  } finally {
+    setLoading(false)
+  }
+}
+
   const handleInputChange = (section, field, value) => {
     setFormData({
       ...formData,
@@ -59,40 +125,265 @@ const InvestorSettings = () => {
     })
   }
 
-  const handleSubmit = (e) => {
-    e.preventDefault()
+  const togglePasswordVisibility = (field) => {
+    setShowPasswords(prev => ({
+      ...prev,
+      [field]: !prev[field]
+    }));
+  };
+
+  const handlePasswordChange = (field, value) => {
+    setChangePasswordData(prev => ({
+      ...prev,
+      [field]: value
+    }))
+  }
+const handleChangePassword = async () => {
+  if (!currentUser) {
+    alert("You must be logged in to change your password!")
+    return
+  }
+
+  // Validation checks
+  if (!changePasswordData.currentPassword) {
+    alert("Please enter your current password!")
+    return
+  }
+
+  if (!changePasswordData.newPassword) {
+    alert("Please enter a new password!")
+    return
+  }
+
+  if (changePasswordData.newPassword !== changePasswordData.confirmPassword) {
+    alert("New passwords do not match!")
+    return
+  }
+
+  // Enhanced password validation
+  if (changePasswordData.newPassword.length < 8) {
+    alert("Password must be at least 8 characters long!")
+    return
+  }
+
+  if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(changePasswordData.newPassword)) {
+    alert("Password must contain at least one uppercase letter, one lowercase letter, and one number.")
+    return
+  }
+
+  // Confirmation dialog
+  const isConfirmed = window.confirm(
+    "Are you sure you want to change your password? You will be logged out and need to sign in again with your new password."
+  )
+  
+  if (!isConfirmed) {
+    return
+  }
+
+  try {
+    const credential = EmailAuthProvider.credential(
+      currentUser.email,
+      changePasswordData.currentPassword
+    )
+    
+    await reauthenticateWithCredential(currentUser, credential)
+    await updatePassword(currentUser, changePasswordData.newPassword)
+    
+    alert("Password changed successfully! You will now be logged out")
+    
+    // Clear form and log out
+    setChangePasswordData({
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: ""
+    })
+    
+    // Sign out and redirect
+    await auth.signOut()
+    window.location.href = "/auth"
+    
+ } catch (error) {
+  console.error("Error changing password:", error)
+  
+  if (error.code === 'auth/invalid-credential') {
+    alert("Current password is incorrect. Please try again!")
+  } else if (error.code === 'auth/requires-recent-login') {
+    alert("For security reasons, your session has expired. Please log out and log in again to change your password.")
+  } else {
+    alert("Error changing password. Please try again!")
+  }
+}
+}
+
+  const handleSubmit = async (e) => {
+  e.preventDefault()
+  
+  if (!currentUser) {
+    alert("You must be logged in to update settings.")
+    return
+  }
+
+  try {
+    const userDocRef = doc(db, "MyuniversalProfiles", currentUser.uid)
+    await updateDoc(userDocRef, {
+      "formData.fundManageOverview.registeredName": formData.account.name,
+      "formData.contactDetails.primaryContactMobile": formData.account.phone, 
+      updatedAt: new Date()
+    })
+
     alert("Settings saved successfully!")
+  } catch (error) {
+    console.error("Error saving settings:", error)
+    alert("Error saving settings. Please try again.")
   }
-
-  const handleDeleteRole = async () => {
-    setLoadingRoles(true)
-    try {
-      // Simulate fetching roles - replace with actual Firebase call
-      setTimeout(() => {
-        setRoles(["Lead Investor", "Angel Investor", "Venture Partner"])
-        setLoadingRoles(false)
-        setShowDeleteRolePopup(true)
-      }, 1000)
-    } catch (error) {
-      console.error("Error fetching roles:", error)
-      setLoadingRoles(false)
+}
+  const openDeletePopup = async () => {
+    setShowPopup(true);
+  
+    const user = auth.currentUser;
+    if (!user) return;
+  
+    const userDocRef = doc(db, "users", user.uid);
+    const userDocSnap = await getDoc(userDocRef);
+    if (!userDocSnap.exists()) return;
+  
+    const userData = userDocSnap.data();
+    const activeRoles = [];
+  
+    // From roles object
+    if (userData.roles && typeof userData.roles === "object") {
+      Object.keys(userData.roles).forEach((r) => {
+        if (!userData.roles[r].deletedStatus) activeRoles.push(r);
+      });
     }
-  }
+  
+    // From roleArray
+    if (Array.isArray(userData.roleArray)) {
+      userData.roleArray.forEach((r) => {
+        if (!activeRoles.includes(r)) activeRoles.push(r);
+      });
+    }
+  
+    // From role string
+    if (typeof userData.role === "string") {
+      userData.role.split(",").forEach((r) => {
+        const trimmed = r.trim();
+        if (!activeRoles.includes(trimmed)) activeRoles.push(trimmed);
+      });
+    }
+  
+    setUserRoles(activeRoles);
+  };
 
-  const handleDeleteAccount = () => {
-    setShowDeleteAccountPopup(true)
-  }
+  const handleRoleClick = async (roleToDelete) => {
+    try {
+      const confirmDelete = window.confirm(
+        `Are you sure you want to delete the role "${roleToDelete}"?`
+      );
+      if (!confirmDelete) return;
+  
+      const user = auth.currentUser;
+      if (!user) return;
+  
+      const userDocRef = doc(db, "users", user.uid);
+      const userDocSnap = await getDoc(userDocRef);
+      if (!userDocSnap.exists()) {
+        alert("User profile not found.");
+        return;
+      }
+  
+      const userData = userDocSnap.data();
+  
+      // 1️⃣ Remove role from roleArray (active roles)
+      let updatedRoleArray = [];
+      if (userData.roleArray && Array.isArray(userData.roleArray)) {
+        updatedRoleArray = userData.roleArray.filter(r => r !== roleToDelete);
+      }
+  
+      // 2️⃣ Remove role from role string if it exists
+      let updatedRoleString = "";
+      if (userData.role && typeof userData.role === "string") {
+        const rolesSplit = userData.role.split(",").map(r => r.trim());
+        const filteredRoles = rolesSplit.filter(r => r !== roleToDelete);
+        updatedRoleString = filteredRoles.join(",");
+      }
+  
+      // 3️⃣ Add role to deletedRoles map with timestamp
+      const updatedRolesMap = { ...(userData.roles || {}) };
+      updatedRolesMap[roleToDelete] = {
+        deletedStatus: true,
+        deletedAt: Date.now(),
+      };
+  
+      // 4️⃣ Update Firestore
+      await updateDoc(userDocRef, {
+        roleArray: updatedRoleArray,
+        role: updatedRoleString,
+        roles: updatedRolesMap,
+      });
+  
+      alert(
+        `Role "${roleToDelete}" has been soft-deleted. You can retrieve it within 30 days.`
+      );
+  
+      // 5️⃣ Update local state
+      setUserRoles(prev => prev.filter(r => r !== roleToDelete));
+      setDeletedRoles(prev => [...prev, roleToDelete]);
+      setShowPopup(false);
+  
+    } catch (err) {
+      console.error("Error deleting role:", err);
+      alert("Failed to delete role. Please try again.");
+    }
+  };
+  
+  const handleDeleteAccount = async () => {
+    setDeleteLoading(true);
+    setDeleteMessage("");
+    
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error("No authenticated user found");
+      }
 
-  const confirmDeleteRole = (role) => {
-    console.log("Deleting role:", role)
-    setShowDeleteRolePopup(false)
-    // Add actual role deletion logic here
-  }
+      await deleteDoc(doc(db, "users", user.uid));
+      await deleteUser(user);
+      
+      setDeleteMessage("Account deleted successfully.");
+      auth.signOut();
+      window.location.href = "/";
+      
+    } catch (error) {
+      console.error("Error deleting account:", error);
+      
+      let errorMessage = "Error deleting account. Please try again.";
+      if (error.code === 'auth/requires-recent-login') {
+        errorMessage = "For security, please re-authenticate before deleting your account.";
+      }
+      
+      setDeleteMessage(errorMessage);
+      setDeleteLoading(false);
+    }
+  };
 
-  const confirmDeleteAccount = () => {
-    console.log("Deleting account")
-    setShowDeleteAccountPopup(false)
-    // Add actual account deletion logic here
+  if (loading) {
+    return (
+      <div
+        style={{
+          backgroundColor: "white",
+          minHeight: "100vh",
+          marginLeft: "240px",
+          padding: "32px 48px",
+          fontFamily: "system-ui, -apple-system, sans-serif",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <div>Loading...</div>
+      </div>
+    )
   }
 
   return (
@@ -100,7 +391,7 @@ const InvestorSettings = () => {
       style={{
         backgroundColor: "white",
         minHeight: "100vh",
-        marginLeft: "240px", // Account for sidebar
+        marginLeft: "240px",
         padding: "32px 48px",
         fontFamily: "system-ui, -apple-system, sans-serif",
       }}
@@ -113,7 +404,7 @@ const InvestorSettings = () => {
             fontWeight: "600",
             color: colors.textBrown,
             margin: "0",
-             marginTop: "5rem",
+            marginTop: "5rem",
           }}
         >
           Settings
@@ -217,27 +508,128 @@ const InvestorSettings = () => {
                       color: colors.textBrown,
                     }}
                   >
-                    Password
+                    Change Password
                   </label>
-                  <div style={{ display: "flex", gap: "12px" }}>
-                    <input
-                      type="password"
-                      value={formData.account.password}
-                      onChange={(e) => handleInputChange("account", "password", e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "12px 16px",
-                        border: `1px solid ${colors.mediumBrown}`,
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        color: colors.textBrown,
-                        backgroundColor: colors.backgroundBrown,
-                        transition: "all 0.2s ease",
-                        outline: "none",
-                        flex: 1,
-                      }}
-                    />
+                  <div style={{ display: "grid", gap: "12px" }}>
+                    {/* Current Password */}
+                    <div style={{ position: "relative" }}>
+                      <input
+                        type={showPasswords.currentPassword ? "text" : "password"}
+                        placeholder="Current Password"
+                        value={changePasswordData.currentPassword}
+                        onChange={(e) => handlePasswordChange("currentPassword", e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "12px 16px",
+                          paddingRight: "48px",
+                          border: `1px solid ${colors.mediumBrown}`,
+                          borderRadius: "8px",
+                          fontSize: "14px",
+                          color: colors.textBrown,
+                          backgroundColor: colors.backgroundBrown,
+                          transition: "all 0.2s ease",
+                          outline: "none",
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => togglePasswordVisibility("currentPassword")}
+                        style={{
+                          position: "absolute",
+                          right: "12px",
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          color: colors.textBrown,
+                          opacity: 0.7,
+                        }}
+                      >
+                        {showPasswords.currentPassword ? "🙈" : "👁️"}
+                      </button>
+                    </div>
+
+                    {/* New Password */}
+                    <div style={{ position: "relative" }}>
+                      <input
+                        type={showPasswords.newPassword ? "text" : "password"}
+                        placeholder="New Password"
+                        value={changePasswordData.newPassword}
+                        onChange={(e) => handlePasswordChange("newPassword", e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "12px 16px",
+                          paddingRight: "48px",
+                          border: `1px solid ${colors.mediumBrown}`,
+                          borderRadius: "8px",
+                          fontSize: "14px",
+                          color: colors.textBrown,
+                          backgroundColor: colors.backgroundBrown,
+                          transition: "all 0.2s ease",
+                          outline: "none",
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => togglePasswordVisibility("newPassword")}
+                        style={{
+                          position: "absolute",
+                          right: "12px",
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          color: colors.textBrown,
+                          opacity: 0.7,
+                        }}
+                      >
+                        {showPasswords.newPassword ? "🙈" : "👁️"}
+                      </button>
+                    </div>
+
+                    {/* Confirm Password */}
+                    <div style={{ position: "relative" }}>
+                      <input
+                        type={showPasswords.confirmPassword ? "text" : "password"}
+                        placeholder="Confirm New Password"
+                        value={changePasswordData.confirmPassword}
+                        onChange={(e) => handlePasswordChange("confirmPassword", e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "12px 16px",
+                          paddingRight: "48px",
+                          border: `1px solid ${colors.mediumBrown}`,
+                          borderRadius: "8px",
+                          fontSize: "14px",
+                          color: colors.textBrown,
+                          backgroundColor: colors.backgroundBrown,
+                          transition: "all 0.2s ease",
+                          outline: "none",
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => togglePasswordVisibility("confirmPassword")}
+                        style={{
+                          position: "absolute",
+                          right: "12px",
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          color: colors.textBrown,
+                          opacity: 0.7,
+                        }}
+                      >
+                        {showPasswords.confirmPassword ? "🙈" : "👁️"}
+                      </button>
+                    </div>
+
                     <button
+                      onClick={handleChangePassword}
                       style={{
                         padding: "12px 24px",
                         backgroundColor: colors.accentBrown,
@@ -248,13 +640,58 @@ const InvestorSettings = () => {
                         fontSize: "14px",
                         fontWeight: "500",
                         transition: "all 0.2s ease",
+                        alignSelf: "flex-start",
                       }}
                     >
                       Change Password
                     </button>
                   </div>
-                </div>
+                          {changePasswordData.newPassword && (
+                            <div style={{ fontSize: "12px", marginTop: "4px" }}>
+                              {changePasswordData.newPassword.length < 8 && (
+                                <p style={{ color: "#dc2626", margin: "2px 0" }}>
+                                  ✗ At least 8 characters
+                                </p>
+                              )}
+                              {!/[a-z]/.test(changePasswordData.newPassword) && (
+                                <p style={{ color: "#dc2626", margin: "2px 0" }}>
+                                  ✗ One lowercase letter
+                                </p>
+                              )}
+                              {!/[A-Z]/.test(changePasswordData.newPassword) && (
+                                <p style={{ color: "#dc2626", margin: "2px 0" }}>
+                                  ✗ One uppercase letter
+                                </p>
+                              )}
+                              {!/\d/.test(changePasswordData.newPassword) && (
+                                <p style={{ color: "#dc2626", margin: "2px 0" }}>
+                                  ✗ One number
+                                </p>
+                              )}
+                              {changePasswordData.newPassword.length >= 8 && 
+                              /[a-z]/.test(changePasswordData.newPassword) && 
+                              /[A-Z]/.test(changePasswordData.newPassword) && 
+                              /\d/.test(changePasswordData.newPassword) && (
+                                <p style={{ color: "#059669", margin: "2px 0" }}>
+                                  ✓ Strong password
+                                </p>
+                              )}
+                            </div>
+                          )}
 
+                          {changePasswordData.confirmPassword && changePasswordData.newPassword !== changePasswordData.confirmPassword && (
+                            <p style={{ color: "#dc2626", fontSize: "12px", margin: "4px 0 0 0" }}>
+                              ✗ Passwords do not match
+                            </p>
+                          )}
+
+                          {changePasswordData.confirmPassword && changePasswordData.newPassword === changePasswordData.confirmPassword && (
+                            <p style={{ color: "#059669", fontSize: "12px", margin: "4px 0 0 0" }}>
+                              ✓ Passwords match
+                            </p>
+                          )}
+                </div>
+      
                 <div>
                   <label
                     style={{
@@ -317,122 +754,6 @@ const InvestorSettings = () => {
               </div>
             </div>
 
-            {/* Danger Zone */}
-            <div style={{ marginTop: "48px" }}>
-              <h3
-                style={{
-                  fontSize: "18px",
-                  fontWeight: "600",
-                  color: "#dc3545",
-                  margin: "0 0 16px 0",
-                }}
-              >
-                Danger Zone
-              </h3>
-              <div
-                style={{
-                  backgroundColor: "#fefefe",
-                  border: "1px solid #f3f4f6",
-                  borderRadius: "12px",
-                  padding: "24px",
-                }}
-              >
-                <div style={{ marginBottom: "20px" }}>
-                  <h4
-                    style={{
-                      fontSize: "16px",
-                      fontWeight: "600",
-                      color: colors.textBrown,
-                      margin: "0 0 8px 0",
-                    }}
-                  >
-                    Delete Role
-                  </h4>
-                  <p
-                    style={{
-                      fontSize: "14px",
-                      color: "#6b7280",
-                      margin: "0 0 16px 0",
-                      lineHeight: "1.5",
-                    }}
-                  >
-                    Permanently remove one of your investor roles. This action cannot be undone.
-                  </p>
-                  <button
-                    onClick={handleDeleteRole}
-                    style={{
-                      padding: "10px 20px",
-                      backgroundColor: "white",
-                      color: "#dc3545",
-                      border: "1px solid #dc3545",
-                      borderRadius: "8px",
-                      fontSize: "14px",
-                      fontWeight: "500",
-                      cursor: "pointer",
-                      transition: "all 0.2s ease",
-                    }}
-                    onMouseOver={(e) => {
-                      e.target.style.backgroundColor = "#dc3545"
-                      e.target.style.color = "white"
-                    }}
-                    onMouseOut={(e) => {
-                      e.target.style.backgroundColor = "white"
-                      e.target.style.color = "#dc3545"
-                    }}
-                  >
-                    Delete Role
-                  </button>
-                </div>
-
-                <div>
-                  <h4
-                    style={{
-                      fontSize: "16px",
-                      fontWeight: "600",
-                      color: colors.textBrown,
-                      margin: "0 0 8px 0",
-                    }}
-                  >
-                    Delete Account
-                  </h4>
-                  <p
-                    style={{
-                      fontSize: "14px",
-                      color: "#6b7280",
-                      margin: "0 0 16px 0",
-                      lineHeight: "1.5",
-                    }}
-                  >
-                    Permanently delete your investor account and all associated data. This action cannot be undone.
-                  </p>
-                  <button
-                    onClick={handleDeleteAccount}
-                    style={{
-                      padding: "10px 20px",
-                      backgroundColor: "white",
-                      color: "#dc3545",
-                      border: "1px solid #dc3545",
-                      borderRadius: "8px",
-                      fontSize: "14px",
-                      fontWeight: "500",
-                      cursor: "pointer",
-                      transition: "all 0.2s ease",
-                    }}
-                    onMouseOver={(e) => {
-                      e.target.style.backgroundColor = "#dc3545"
-                      e.target.style.color = "white"
-                    }}
-                    onMouseOut={(e) => {
-                      e.target.style.backgroundColor = "white"
-                      e.target.style.color = "#dc3545"
-                    }}
-                  >
-                    Delete Account
-                  </button>
-                </div>
-              </div>
-            </div>
-
             {/* Save Changes Button */}
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "32px" }}>
               <button
@@ -452,10 +773,267 @@ const InvestorSettings = () => {
                 Save Changes
               </button>
             </div>
+            
+            {/* DANGER ZONE SECTION  */}
+            <div
+              style={{
+                backgroundColor: "white",
+                borderRadius: "16px",
+                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+                overflow: "hidden",
+                marginTop: "2rem",
+              }}
+            >
+              <div
+                style={{
+                  backgroundColor: "#fafafa",
+                  padding: "1.5rem 3rem",
+                  borderBottom: "1px solid #f3f4f6",
+                }}
+              >
+                <h3
+                  style={{
+                    color: "#dc2626",
+                    fontSize: "1.25rem",
+                    fontWeight: "600",
+                    margin: 0,
+                    letterSpacing: "-0.025em",
+                  }}
+                >
+                  Danger Zone
+                </h3>
+                <p
+                  style={{
+                    color: "#6b7280",
+                    fontSize: "0.95rem",
+                    margin: "0.5rem 0 0 0",
+                  }}
+                >
+                  These actions cannot be undone. Please proceed with caution.
+                </p>
+              </div>
+
+              <div style={{ padding: "3rem" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "1.5rem",
+                    padding: "1.5rem",
+                    backgroundColor: "#fef2f2",
+                    borderRadius: "8px",
+                    border: "1px solid #fecaca",
+                  }}
+                >
+                  <div>
+                    <h4
+                      style={{
+                        color: "#dc2626",
+                        fontSize: "1rem",
+                        fontWeight: "600",
+                        margin: "0 0 0.25rem 0",
+                      }}
+                    >
+                      Delete Role
+                    </h4>
+                    <p
+                      style={{
+                        color: "#6b7280",
+                        fontSize: "0.9rem",
+                        margin: 0,
+                      }}
+                    >
+                      Remove a specific role from your account
+                    </p>
+                  </div>
+                  <button
+                    onClick={openDeletePopup}
+                    style={{
+                      padding: "0.75rem 1.5rem",
+                      backgroundColor: "#dc2626",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "8px",
+                      fontSize: "0.9rem",
+                      fontWeight: "500",
+                      cursor: "pointer",
+                      transition: "background-color 0.2s ease",
+                    }}
+                  >
+                    Delete Role
+                  </button>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "1.5rem",
+                    backgroundColor: "#fef2f2",
+                    borderRadius: "8px",
+                    border: "1px solid #fecaca",
+                  }}
+                >
+                  <div>
+                    <h4
+                      style={{
+                        color: "#dc2626",
+                        fontSize: "1rem",
+                        fontWeight: "600",
+                        margin: "0 0 0.25rem 0",
+                      }}
+                    >
+                      Delete Account
+                    </h4>
+                    <p
+                      style={{
+                        color: "#6b7280",
+                        fontSize: "0.9rem",
+                        margin: 0,
+                      }}
+                    >
+                      Permanently delete your account and all associated data
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleDeleteAccount}
+                    disabled={deleteLoading}
+                    style={{
+                      padding: "0.75rem 1.5rem",
+                      backgroundColor: "#dc2626",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "8px",
+                      fontSize: "0.9rem",
+                      fontWeight: "500",
+                      cursor: deleteLoading ? "not-allowed" : "pointer",
+                      transition: "background-color 0.2s ease",
+                      opacity: deleteLoading ? 0.7 : 1,
+                    }}
+                  >
+                    {deleteLoading ? "Deleting..." : "Delete Account"}
+                  </button>
+                </div>
+
+                {deleteMessage && (
+                  <div style={{ marginTop: "1rem" }}>
+                    <span
+                      style={{
+                        color: deleteMessage.includes("Error") ? "#dc2626" : "#059669",
+                        fontSize: "0.95rem",
+                        fontWeight: "500",
+                        padding: "0.75rem 1rem",
+                        backgroundColor: deleteMessage.includes("Error") ? "#fef2f2" : "#f0fdf4",
+                        borderRadius: "8px",
+                        display: "inline-block",
+                        border: `1px solid ${deleteMessage.includes("Error") ? "#fecaca" : "#bbf7d0"}`,
+                      }}
+                    >
+                      {deleteMessage}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {showPopup && (
+              <div
+                style={{
+                  position: "fixed",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundColor: "rgba(0, 0, 0, 0.6)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  zIndex: 1000,
+                  backdropFilter: "blur(4px)",
+                }}
+              >
+                <div
+                  style={{
+                    backgroundColor: "white",
+                    padding: "2.5rem",
+                    borderRadius: "20px",
+                    boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+                    maxWidth: "450px",
+                    width: "90%",
+                  }}
+                >
+                  <h3
+                    style={{
+                      color: colors.textBrown,
+                      fontSize: "1.5rem",
+                      fontWeight: "600",
+                      margin: "0 0 2rem 0",
+                      textAlign: "center",
+                      letterSpacing: "-0.025em",
+                    }}
+                  >
+                    Select a Role to Delete
+                  </h3>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "1rem",
+                      marginBottom: "2rem",
+                    }}
+                  >
+                    {userRoles.map((role) => (
+                      <button
+                        key={role}
+                        onClick={() => handleRoleClick(role)}
+                        style={{
+                          padding: "1rem 1.5rem",
+                          backgroundColor: "#dc2626",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "12px",
+                          fontWeight: "500",
+                          cursor: "pointer",
+                          transition: "all 0.2s ease",
+                          fontSize: "1rem",
+                        }}
+                        onMouseOver={(e) => (e.target.style.backgroundColor = "#b91c1c")}
+                        onMouseOut={(e) => (e.target.style.backgroundColor = "#dc2626")}
+                      >
+                        {role}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={() => setShowPopup(false)}
+                    style={{
+                      width: "100%",
+                      padding: "1rem",
+                      backgroundColor: colors.lightBrown,
+                      color: colors.textBrown,
+                      border: "none",
+                      borderRadius: "12px",
+                      fontWeight: "500",
+                      cursor: "pointer",
+                      transition: "background-color 0.2s ease",
+                      fontSize: "1rem",
+                    }}
+                    onMouseOver={(e) => (e.target.style.backgroundColor = colors.mediumBrown)}
+                    onMouseOut={(e) => (e.target.style.backgroundColor = colors.lightBrown)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {activeTab === "Notifications" && (
+       {activeTab === "Notifications" && (
           <div>
             <h2
               style={{
@@ -622,127 +1200,27 @@ const InvestorSettings = () => {
               Control who can see your profile information
             </p>
 
-            <div style={{ display: "grid", gap: "24px" }}>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "8px",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    color: colors.textBrown,
-                  }}
-                >
-                  Profile Visibility
-                </label>
-                <select
-                  value={formData.privacy.profileVisibility}
-                  onChange={(e) => handleInputChange("privacy", "profileVisibility", e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "12px 16px",
-                    border: `1px solid ${colors.mediumBrown}`,
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    color: colors.textBrown,
-                    backgroundColor: colors.backgroundBrown,
-                    transition: "all 0.2s ease",
-                    outline: "none",
-                  }}
-                >
-                  <option value="public">Public - Visible to all users</option>
-                  <option value="matches">Matches Only - Visible to matched SMEs</option>
-                  <option value="private">Private - Limited visibility</option>
-                </select>
-              </div>
-
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "8px",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    color: colors.textBrown,
-                  }}
-                >
-                  Contact Information Visibility
-                </label>
-                <select
-                  value={formData.privacy.contactInfoVisibility}
-                  onChange={(e) => handleInputChange("privacy", "contactInfoVisibility", e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "12px 16px",
-                    border: `1px solid ${colors.mediumBrown}`,
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    color: colors.textBrown,
-                    backgroundColor: colors.backgroundBrown,
-                    transition: "all 0.2s ease",
-                    outline: "none",
-                  }}
-                >
-                  <option value="public">Public - Visible to all users</option>
-                  <option value="matches">Matches Only - Visible to matched SMEs</option>
-                  <option value="private">Private - Not visible to others</option>
-                </select>
-              </div>
-
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "8px",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    color: colors.textBrown,
-                  }}
-                >
-                  Experience & Expertise Visibility
-                </label>
-                <select
-                  value={formData.privacy.experienceVisibility}
-                  onChange={(e) => handleInputChange("privacy", "experienceVisibility", e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "12px 16px",
-                    border: `1px solid ${colors.mediumBrown}`,
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    color: colors.textBrown,
-                    backgroundColor: colors.backgroundBrown,
-                    transition: "all 0.2s ease",
-                    outline: "none",
-                  }}
-                >
-                  <option value="public">Public - Visible to all users</option>
-                  <option value="matches">Matches Only - Visible to matched SMEs</option>
-                  <option value="private">Private - Limited visibility</option>
-                </select>
-              </div>
-
               <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "20px",
-                  backgroundColor: "white",
-                  borderRadius: "8px",
-                  border: `1px solid ${colors.lightBrown}`,
-                }}
-              >
-                <div>
-                  <h3
-                    style={{
-                      fontSize: "14px",
-                      fontWeight: "600",
-                      color: colors.textBrown,
-                      margin: "0 0 4px 0",
-                    }}
-                  >
-                    Data Sharing for Matching
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "20px",
+                    backgroundColor: "white",
+                    borderRadius: "8px",
+                    border: `1px solid ${colors.lightBrown}`,
+                  }}
+                >
+              <div>
+                <h3
+                  style={{
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    color: colors.textBrown,
+                    margin: "0 0 4px 0",
+                  }}
+                >
+                    Name Visibility
                   </h3>
                   <p
                     style={{
@@ -752,74 +1230,78 @@ const InvestorSettings = () => {
                       margin: "0",
                     }}
                   >
-                    Allow your profile data to be used for improved matching algorithms
+                    Keep your name anonymous from other users
                   </p>
                 </div>
-                <label
-                  style={{
-                    position: "relative",
-                    display: "inline-block",
-                    width: "44px",
-                    height: "24px",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={formData.privacy.allowDataSharing}
-                    onChange={(e) => handleInputChange("privacy", "allowDataSharing", e.target.checked)}
-                    style={{ opacity: 0, width: 0, height: 0 }}
-                  />
-                  <span
-                    style={{
-                      position: "absolute",
-                      cursor: "pointer",
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      backgroundColor: formData.privacy.allowDataSharing ? colors.primaryBrown : colors.mediumBrown,
-                      transition: "0.2s",
-                      borderRadius: "24px",
-                    }}
-                  >
-                    <span
-                      style={{
-                        position: "absolute",
-                        content: "",
-                        height: "18px",
-                        width: "18px",
-                        left: formData.privacy.allowDataSharing ? "23px" : "3px",
-                        bottom: "3px",
-                        backgroundColor: "white",
-                        transition: "0.2s",
-                        borderRadius: "50%",
-                      }}
-                    />
-                  </span>
-                </label>
-              </div>
-            </div>
-
-            {/* Save Changes Button */}
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "32px" }}>
-              <button
+          <label
+            style={{
+              position: "relative",
+              display: "inline-block",
+              width: "44px",
+              height: "24px",
+            }}
+          >
+        <input
+              type="checkbox"
+             checked={formData.privacy.anonymousName}
+              onChange={async (e) => {
+                const isAnonymous = e.target.checked;
+                
+                // Update local state immediately
+                handleInputChange("privacy", "anonymousName", isAnonymous);
+                
+                // Save to database immediately
+                if (currentUser) {
+                  try {
+                    const userDocRef = doc(db, "MyuniversalProfiles", currentUser.uid);
+                    await updateDoc(userDocRef, {
+                      anonymous: isAnonymous,
+                      updatedAt: new Date()
+                    });
+                    
+                    // Optional: Show quick feedback
+                    console.log(`Anonymous mode ${isAnonymous ? 'enabled' : 'disabled'}`);
+                  } catch (error) {
+                    console.error("Error updating anonymous setting:", error);
+                    alert("Error updating privacy setting. Please try again.");
+                    
+                    // Revert local state if save failed
+                    handleInputChange("privacy", "anonymousName", !isAnonymous);
+                  }
+                }
+              }}
+              style={{ opacity: 0, width: 0, height: 0 }}
+            />
+            <span
+              style={{
+                position: "absolute",
+                cursor: "pointer",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: formData.privacy.anonymousName ? colors.primaryBrown : colors.mediumBrown,
+                transition: "0.2s",
+                borderRadius: "24px",
+              }}
+            >
+              <span
                 style={{
-                  padding: "12px 24px",
-                  backgroundColor: colors.primaryBrown,
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  fontWeight: "500",
-                  cursor: "pointer",
-                  transition: "all 0.2s ease",
+                  position: "absolute",
+                  content: "",
+                  height: "18px",
+                  width: "18px",
+                  left: formData.privacy.anonymousName ? "23px" : "3px",
+                  bottom: "3px",
+                  backgroundColor: "white",
+                  transition: "0.2s",
+                  borderRadius: "50%",
                 }}
-                onClick={handleSubmit}
-              >
-                Save Changes
-              </button>
-            </div>
+              />
+              </span>
+          </label>
           </div>
+        </div>
         )}
 
         {activeTab === "Appearance" && (
@@ -999,183 +1481,6 @@ const InvestorSettings = () => {
           </div>
         )}
       </div>
-
-      {/* Delete Role Popup */}
-      {showDeleteRolePopup && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: "white",
-              borderRadius: "12px",
-              padding: "24px",
-              maxWidth: "400px",
-              width: "90%",
-              maxHeight: "80vh",
-              overflow: "auto",
-            }}
-          >
-            <h3
-              style={{
-                fontSize: "18px",
-                fontWeight: "600",
-                color: "#dc3545",
-                margin: "0 0 16px 0",
-              }}
-            >
-              Delete Role
-            </h3>
-            <p
-              style={{
-                fontSize: "14px",
-                color: colors.textBrown,
-                margin: "0 0 20px 0",
-              }}
-            >
-              Select a role to delete. This action cannot be undone.
-            </p>
-            <div style={{ marginBottom: "20px" }}>
-              {roles.map((role, index) => (
-                <button
-                  key={index}
-                  onClick={() => confirmDeleteRole(role)}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    padding: "12px 16px",
-                    marginBottom: "8px",
-                    backgroundColor: "white",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: "8px",
-                    color: colors.textBrown,
-                    cursor: "pointer",
-                    fontSize: "14px",
-                    textAlign: "left",
-                    transition: "all 0.2s ease",
-                  }}
-                  onMouseOver={(e) => {
-                    e.target.style.backgroundColor = "#f9fafb"
-                    e.target.style.borderColor = colors.primaryBrown
-                  }}
-                  onMouseOut={(e) => {
-                    e.target.style.backgroundColor = "white"
-                    e.target.style.borderColor = "#e5e7eb"
-                  }}
-                >
-                  Delete "{role}" role
-                </button>
-              ))}
-            </div>
-            <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
-              <button
-                onClick={() => setShowDeleteRolePopup(false)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: colors.mediumBrown,
-                  color: colors.textBrown,
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "14px",
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Account Popup */}
-      {showDeleteAccountPopup && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: "white",
-              borderRadius: "12px",
-              padding: "24px",
-              maxWidth: "400px",
-              width: "90%",
-            }}
-          >
-            <h3
-              style={{
-                fontSize: "18px",
-                fontWeight: "600",
-                color: "#dc3545",
-                margin: "0 0 16px 0",
-              }}
-            >
-              Delete Account
-            </h3>
-            <p
-              style={{
-                fontSize: "14px",
-                color: colors.textBrown,
-                margin: "0 0 20px 0",
-              }}
-            >
-              Are you sure you want to delete your account? This action cannot be undone and will permanently remove all
-              your data.
-            </p>
-            <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
-              <button
-                onClick={() => setShowDeleteAccountPopup(false)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: colors.mediumBrown,
-                  color: colors.textBrown,
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "14px",
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmDeleteAccount}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#dc3545",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "14px",
-                }}
-              >
-                Delete Account
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

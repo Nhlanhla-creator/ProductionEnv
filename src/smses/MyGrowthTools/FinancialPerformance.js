@@ -1783,6 +1783,8 @@ const BalanceSheet = ({
     month: currentMonth,
     notes: "",
   })
+  
+  // Enhanced health details state
   const [healthDetails, setHealthDetails] = useState({
     receivables: Array(12).fill(""),
     payables: Array(12).fill(""),
@@ -1793,6 +1795,63 @@ const BalanceSheet = ({
     date: "",
     notes: "",
   })
+  
+  // New state for validation and calculations
+  const [validationWarnings, setValidationWarnings] = useState([])
+  const [showValidationSummary, setShowValidationSummary] = useState(false)
+  const [calculatedTheoreticalValues, setCalculatedTheoreticalValues] = useState({
+    receivablesDays: Array(12).fill(0),
+    payablesDays: Array(12).fill(0),
+    inventoryDays: Array(12).fill(0)
+  })
+
+  // Add state to store original P&L data (not divided by 1,000,000)
+  const [originalPnlData, setOriginalPnlData] = useState({
+    sales: Array(12).fill(0),
+    cogs: Array(12).fill(0),
+    opex: Array(12).fill(0)
+  })
+
+  // Variance reasons for explanation
+  const varianceReasons = {
+    "seasonal": "Seasonal business patterns",
+    "client_terms": "Specific client payment terms",
+    "one_off": "One-off large payment/invoice",
+    "dispute": "Payment dispute/delay",
+    "early_payment": "Early payment discount taken",
+    "extended_terms": "Extended terms for strategic reasons",
+    "cash_flow": "Cash flow management decision",
+    "other": "Other business reason"
+  }
+
+  // NEW: Load original P&L data when component mounts
+  useEffect(() => {
+    if (user) {
+      loadOriginalPnlData()
+    }
+  }, [user])
+
+  // NEW FUNCTION: Load original P&L data (not divided by 1,000,000)
+  const loadOriginalPnlData = async () => {
+    if (!user) return
+
+    try {
+      const pnlManualDoc = await getDoc(doc(db, "financialData", `${user.uid}_pnlManual`))
+
+      if (pnlManualDoc.exists()) {
+        const firebaseData = pnlManualDoc.data()
+        console.log("Loaded original P&L data from Firebase:", firebaseData)
+
+        setOriginalPnlData({
+          sales: firebaseData.sales?.map(val => Number.parseFloat(val) || 0) || Array(12).fill(0),
+          cogs: firebaseData.cogs?.map(val => Number.parseFloat(val) || 0) || Array(12).fill(0),
+          opex: firebaseData.opex?.map(val => Number.parseFloat(val) || 0) || Array(12).fill(0)
+        })
+      }
+    } catch (error) {
+      console.error("Error loading original P&L data:", error)
+    }
+  }
 
   if (activeSection !== "balance-sheet") return null
 
@@ -1899,6 +1958,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
 
     setShowModal(false)
   }
+  
   const handleViewModeToggle = (newViewMode) => {
     if (onViewModeToggle) {
       onViewModeToggle(newViewMode)
@@ -1958,9 +2018,232 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
       date: chartData.balanceSheetHealth?.date || "",
       notes: chartData.balanceSheetHealth?.notes || "",
     })
+    
+    // Calculate theoretical values when opening modal
+    calculateTheoreticalValuesForValidation()
+  }
+
+  // FIXED FUNCTION: Calculate theoretical values for validation
+  const calculateTheoreticalValuesForValidation = () => {
+    // Use original P&L data (not divided by 1,000,000)
+    const salesData = originalPnlData.sales || Array(12).fill(0)
+    const cogsData = originalPnlData.cogs || Array(12).fill(0)
+    
+    console.log("Sales data for calculation:", salesData)
+    console.log("COGS data for calculation:", cogsData)
+    console.log("Health details receivables:", healthDetails.receivables)
+    
+    const theoreticalReceivablesDays = healthDetails.receivables.map((val, i) => {
+      const receivableValue = Number.parseFloat(val) || 0
+      const sales = salesData[i] || 1 // Avoid division by zero
+      console.log(`Month ${i}: Receivables ${receivableValue}, Sales ${sales}`)
+      return sales > 0 ? Math.round((receivableValue / sales) * 30) : 0
+    })
+    
+    const theoreticalPayablesDays = healthDetails.payables.map((val, i) => {
+      const payableValue = Number.parseFloat(val) || 0
+      const cogs = cogsData[i] || 1 // Avoid division by zero
+      console.log(`Month ${i}: Payables ${payableValue}, COGS ${cogs}`)
+      return cogs > 0 ? Math.round((payableValue / cogs) * 30) : 0
+    })
+    
+    const theoreticalInventoryDays = healthDetails.inventory.map((val, i) => {
+      const inventoryValue = Number.parseFloat(val) || 0
+      const cogs = cogsData[i] || 1 // Avoid division by zero
+      console.log(`Month ${i}: Inventory ${inventoryValue}, COGS ${cogs}`)
+      return cogs > 0 ? Math.round((inventoryValue / cogs) * 30) : 0
+    })
+    
+    console.log("Calculated theoretical days:", {
+      receivablesDays: theoreticalReceivablesDays,
+      payablesDays: theoreticalPayablesDays,
+      inventoryDays: theoreticalInventoryDays
+    })
+    
+    setCalculatedTheoreticalValues({
+      receivablesDays: theoreticalReceivablesDays,
+      payablesDays: theoreticalPayablesDays,
+      inventoryDays: theoreticalInventoryDays
+    })
+  }
+
+  // FIXED FUNCTION: Validate health data with intelligent tolerances
+  const validateHealthData = () => {
+    const warnings = []
+    const salesData = originalPnlData.sales || Array(12).fill(0)
+    const cogsData = originalPnlData.cogs || Array(12).fill(0)
+    
+    console.log("Validating with sales data:", salesData)
+    console.log("Validating with COGS data:", cogsData)
+    
+    // Validate Receivables Days
+    healthDetails.receivables.forEach((receivable, i) => {
+      const receivableValue = Number.parseFloat(receivable) || 0
+      const sales = salesData[i] || 1
+      const enteredDays = Number.parseFloat(healthDetails.receivablesDays[i]) || 0
+      
+      // Calculate theoretical days
+      const theoreticalDays = sales > 0 ? (receivableValue / sales) * 30 : 0
+      
+      // Check if days are within reasonable range (±20 days of theoretical)
+      if (Math.abs(theoreticalDays - enteredDays) > 20 && enteredDays > 0) {
+        warnings.push({
+          month: i + 1,
+          metric: "Receivables Days",
+          entered: enteredDays,
+          theoretical: Math.round(theoreticalDays),
+          variance: Math.round(Math.abs(theoreticalDays - enteredDays)),
+          type: "warning"
+        })
+      }
+      
+      // Check for extreme values
+      if (enteredDays > 90 && sales > 0) {
+        warnings.push({
+          month: i + 1,
+          metric: "Receivables Days",
+          entered: enteredDays,
+          note: "Extremely high receivables days (>90 days). Consider reviewing payment terms.",
+          type: "alert"
+        })
+      }
+    })
+    
+    // Validate Payables Days
+    healthDetails.payables.forEach((payable, i) => {
+      const payableValue = Number.parseFloat(payable) || 0
+      const cogs = cogsData[i] || 1
+      const enteredDays = Number.parseFloat(healthDetails.payablesDays[i]) || 0
+      
+      // Calculate theoretical days
+      const theoreticalDays = cogs > 0 ? (payableValue / cogs) * 30 : 0
+      
+      // Check if days are within reasonable range (±25 days of theoretical)
+      if (Math.abs(theoreticalDays - enteredDays) > 25 && enteredDays > 0) {
+        warnings.push({
+          month: i + 1,
+          metric: "Payables Days",
+          entered: enteredDays,
+          theoretical: Math.round(theoreticalDays),
+          variance: Math.round(Math.abs(theoreticalDays - enteredDays)),
+          type: "warning"
+        })
+      }
+    })
+    
+    // Validate Inventory Days
+    healthDetails.inventory.forEach((inventoryVal, i) => {
+      const inventoryValue = Number.parseFloat(inventoryVal) || 0
+      const cogs = cogsData[i] || 1
+      const enteredDays = Number.parseFloat(healthDetails.inventoryDays[i]) || 0
+      
+      // Calculate theoretical days
+      const theoreticalDays = cogs > 0 ? (inventoryValue / cogs) * 30 : 0
+      
+      // Check if days are within reasonable range (±30 days of theoretical - inventory can vary more)
+      if (Math.abs(theoreticalDays - enteredDays) > 30 && enteredDays > 0) {
+        warnings.push({
+          month: i + 1,
+          metric: "Inventory Days",
+          entered: enteredDays,
+          theoretical: Math.round(theoreticalDays),
+          variance: Math.round(Math.abs(theoreticalDays - enteredDays)),
+          type: "warning"
+        })
+      }
+      
+      // Check for excessive inventory
+      if (enteredDays > 120 && cogs > 0) {
+        warnings.push({
+          month: i + 1,
+          metric: "Inventory Days",
+          entered: enteredDays,
+          note: "Very high inventory days (>120 days). Consider reviewing inventory management.",
+          type: "alert"
+        })
+      }
+    })
+    
+    setValidationWarnings(warnings)
+    setShowValidationSummary(warnings.length > 0)
+    return warnings
+  }
+
+  // FIXED FUNCTION: Calculate and apply theoretical values
+  const calculateAndApplyTheoreticalValues = () => {
+    const salesData = originalPnlData.sales || Array(12).fill(0)
+    const cogsData = originalPnlData.cogs || Array(12).fill(0)
+    
+    console.log("Calculating with sales data:", salesData)
+    console.log("Calculating with COGS data:", cogsData)
+    
+    const theoreticalReceivablesDays = healthDetails.receivables.map((val, i) => {
+      const sales = salesData[i] || 1
+      const receivableValue = Number.parseFloat(val) || 0
+      const calculated = sales > 0 ? Math.round((receivableValue / sales) * 30) : 0
+      console.log(`Month ${i}: Receivables ${receivableValue} / Sales ${sales} × 30 = ${calculated} days`)
+      return calculated
+    })
+    
+    const theoreticalPayablesDays = healthDetails.payables.map((val, i) => {
+      const cogs = cogsData[i] || 1
+      const payableValue = Number.parseFloat(val) || 0
+      const calculated = cogs > 0 ? Math.round((payableValue / cogs) * 30) : 0
+      console.log(`Month ${i}: Payables ${payableValue} / COGS ${cogs} × 30 = ${calculated} days`)
+      return calculated
+    })
+    
+    const theoreticalInventoryDays = healthDetails.inventory.map((val, i) => {
+      const cogs = cogsData[i] || 1
+      const inventoryValue = Number.parseFloat(val) || 0
+      const calculated = cogs > 0 ? Math.round((inventoryValue / cogs) * 30) : 0
+      console.log(`Month ${i}: Inventory ${inventoryValue} / COGS ${cogs} × 30 = ${calculated} days`)
+      return calculated
+    })
+    
+    const confirmationMessage = `Theoretical calculations based on your amounts:\n\n` +
+      `Receivables Days: ${theoreticalReceivablesDays.join(", ")}\n` +
+      `Payables Days: ${theoreticalPayablesDays.join(", ")}\n` +
+      `Inventory Days: ${theoreticalInventoryDays.join(", ")}\n\n` +
+      `Apply these calculated values? You can still edit them manually if needed.`
+    
+    console.log("Confirmation message:", confirmationMessage)
+    
+    if (window.confirm(confirmationMessage)) {
+      setHealthDetails(prev => ({
+        ...prev,
+        receivablesDays: theoreticalReceivablesDays.map(String),
+        payablesDays: theoreticalPayablesDays.map(String),
+        inventoryDays: theoreticalInventoryDays.map(String)
+      }))
+      
+      // Recalculate theoretical values after applying
+      setCalculatedTheoreticalValues({
+        receivablesDays: theoreticalReceivablesDays,
+        payablesDays: theoreticalPayablesDays,
+        inventoryDays: theoreticalInventoryDays
+      })
+      
+      // Run validation again
+      setTimeout(() => validateHealthData(), 100)
+    }
   }
 
   const handleSaveHealthDetails = async () => {
+    // Run validation before saving
+    const warnings = validateHealthData()
+    
+    if (warnings.length > 0) {
+      const proceed = window.confirm(
+        `Found ${warnings.length} data consistency warning(s).\n\n` +
+        `Do you want to save anyway? Click OK to save, Cancel to review.`
+      )
+      
+      if (!proceed) {
+        return
+      }
+    }
+
     const updatedData = {
       receivables: { actual: healthDetails.receivables.map((val) => Number.parseFloat(val) || 0) },
       payables: { actual: healthDetails.payables.map((val) => Number.parseFloat(val) || 0) },
@@ -2006,6 +2289,8 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
     }
 
     setShowHealthModal(false)
+    setValidationWarnings([])
+    setShowValidationSummary(false)
   }
 
   const generateMonths = () => {
@@ -2169,12 +2454,26 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
       ...prev,
       [category]: prev[category].map((val, idx) => (idx === monthIndex ? value : val)),
     }))
+    
+    // Recalculate theoretical values when amounts change
+    if (category === "receivables" || category === "payables" || category === "inventory") {
+      setTimeout(() => calculateTheoreticalValuesForValidation(), 100)
+    }
   }
 
-  const renderHealthMonthlyInputs = (category, label) => {
+  const renderHealthMonthlyInputs = (category, label, showCalculated = false, calculatedValues = []) => {
+    const isDaysField = category.includes("Days")
+    
     return (
       <div style={{ marginBottom: "20px" }}>
-        <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>{label}</h5>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+          <h5 style={{ color: "#5d4037", fontWeight: "600" }}>{label}</h5>
+          {isDaysField && showCalculated && (
+            <span style={{ fontSize: "12px", color: "#8b6914", fontStyle: "italic" }}>
+              Theoretical: ~{calculatedValues[0] || 0} days
+            </span>
+          )}
+        </div>
         <div
           style={{
             display: "grid",
@@ -2184,16 +2483,23 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
         >
           {months.map((month, index) => (
             <div key={month} style={{ display: "flex", flexDirection: "column" }}>
-              <label
-                style={{
-                  fontSize: "12px",
-                  color: "#72542b",
-                  marginBottom: "5px",
-                  fontWeight: "500",
-                }}
-              >
-                {month}
-              </label>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <label
+                  style={{
+                    fontSize: "12px",
+                    color: "#72542b",
+                    marginBottom: "5px",
+                    fontWeight: "500",
+                  }}
+                >
+                  {month}
+                </label>
+                {isDaysField && showCalculated && calculatedValues[index] > 0 && (
+                  <span style={{ fontSize: "10px", color: "#9c7c5f" }}>
+                    ~{calculatedValues[index]}
+                  </span>
+                )}
+              </div>
               <input
                 type="number"
                 value={healthDetails[category][index] || ""}
@@ -2204,6 +2510,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
                   borderRadius: "4px",
                   border: "1px solid #e8ddd4",
                   fontSize: "14px",
+                  backgroundColor: isDaysField && showCalculated ? "#f9f7f4" : "#fff"
                 }}
               />
             </div>
@@ -2540,179 +2847,179 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
       )}
 
       {balanceSheetTab === "health" && (
-  <>
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: "20px",
-        flexWrap: "wrap",
-        gap: "15px",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          gap: "15px",
-          alignItems: "center",
-        }}
-      >
-        <button
-          onClick={() => handleViewModeToggle("month")}
-          style={{
-            padding: "8px 16px",
-            backgroundColor: viewMode === "month" ? "#5d4037" : "#e8ddd4",
-            color: viewMode === "month" ? "#fdfcfb" : "#5d4037",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-            fontWeight: "500",
-            fontSize: "14px",
-            transition: "all 0.3s ease",
-          }}
-        >
-          Monthly View
-        </button>
-        <button
-          onClick={() => handleViewModeToggle("quarter")}
-          style={{
-            padding: "8px 16px",
-            backgroundColor: viewMode === "quarter" ? "#5d4037" : "#e8ddd4",
-            color: viewMode === "quarter" ? "#fdfcfb" : "#5d4037",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-            fontWeight: "500",
-            fontSize: "14px",
-            transition: "all 0.3s ease",
-          }}
-        >
-          Quarterly View
-        </button>
-        <button
-          onClick={() => handleViewModeToggle("year")}
-          style={{
-            padding: "8px 16px",
-            backgroundColor: viewMode === "year" ? "#5d4037" : "#e8ddd4",
-            color: viewMode === "year" ? "#fdfcfb" : "#5d4037",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-            fontWeight: "500",
-            fontSize: "14px",
-            transition: "all 0.3s ease",
-          }}
-        >
-          Yearly View
-        </button>
-      </div>
+        <>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "20px",
+              flexWrap: "wrap",
+              gap: "15px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                gap: "15px",
+                alignItems: "center",
+              }}
+            >
+              <button
+                onClick={() => handleViewModeToggle("month")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: viewMode === "month" ? "#5d4037" : "#e8ddd4",
+                  color: viewMode === "month" ? "#fdfcfb" : "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                  fontSize: "14px",
+                  transition: "all 0.3s ease",
+                }}
+              >
+                Monthly View
+              </button>
+              <button
+                onClick={() => handleViewModeToggle("quarter")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: viewMode === "quarter" ? "#5d4037" : "#e8ddd4",
+                  color: viewMode === "quarter" ? "#fdfcfb" : "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                  fontSize: "14px",
+                  transition: "all 0.3s ease",
+                }}
+              >
+                Quarterly View
+              </button>
+              <button
+                onClick={() => handleViewModeToggle("year")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: viewMode === "year" ? "#5d4037" : "#e8ddd4",
+                  color: viewMode === "year" ? "#fdfcfb" : "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                  fontSize: "14px",
+                  transition: "all 0.3s ease",
+                }}
+              >
+                Yearly View
+              </button>
+            </div>
 
-      {!isInvestorView && (
-        <button
-          onClick={handleAddHealthDetails}
-          style={{
-            padding: "10px 20px",
-            backgroundColor: "#8b6914",
-            color: "#fdfcfb",
-            border: "none",
-            borderRadius: "6px",
-            cursor: "pointer",
-            fontWeight: "600",
-            fontSize: "14px",
-          }}
-        >
-          Add KPI
-        </button>
+            {!isInvestorView && (
+              <button
+                onClick={handleAddHealthDetails}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#8b6914",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                }}
+              >
+                Add KPI
+              </button>
+            )}
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: "20px",
+              justifyContent: "space-between",
+            }}
+          >
+            <div style={{ flex: 1, height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
+              <Bar
+                data={{
+                  labels: displayLabels,
+                  datasets: [
+                    {
+                      label: "Receivables",
+                      data: aggregateDataForView(receivablesData),
+                      backgroundColor: "rgba(93, 64, 55, 0.6)",
+                      borderColor: "rgb(93, 64, 55)",
+                      borderWidth: 2,
+                    },
+                    {
+                      label: "Payables",
+                      data: aggregateDataForView(payablesData),
+                      backgroundColor: "rgba(139, 105, 20, 0.6)",
+                      borderColor: "rgb(139, 105, 20)",
+                      borderWidth: 2,
+                    },
+                  ],
+                }}
+                options={receivablesPayablesOptions}
+              />
+            </div>
+
+            <div style={{ flex: 1, height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
+              <Bar
+                data={{
+                  labels: displayLabels,
+                  datasets: [
+                    {
+                      label: "Receivables Days",
+                      data: aggregateDataForView(receivablesDaysData),
+                      backgroundColor: "rgba(114, 84, 43, 0.6)",
+                      borderColor: "rgb(114, 84, 43)",
+                      borderWidth: 2,
+                    },
+                    {
+                      label: "Payables Days",
+                      data: aggregateDataForView(payablesDaysData),
+                      backgroundColor: "rgba(156, 124, 95, 0.6)",
+                      borderColor: "rgb(156, 124, 95)",
+                      borderWidth: 2,
+                    },
+                  ],
+                }}
+                options={daysOptions}
+              />
+            </div>
+
+            <div style={{ flex: 1, height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
+              <Bar
+                data={{
+                  labels: displayLabels,
+                  datasets: [
+                    {
+                      label: "Inventory",
+                      data: aggregateDataForView(inventoryData),
+                      backgroundColor: "rgba(76, 175, 80, 0.6)",
+                      borderColor: "rgb(76, 175, 80)",
+                      borderWidth: 2,
+                      yAxisID: "y",
+                    },
+                    {
+                      label: "Inventory Days",
+                      data: aggregateDataForView(inventoryDaysData),
+                      backgroundColor: "rgba(139, 105, 20, 0.6)",
+                      borderColor: "rgb(139, 105, 20)",
+                      borderWidth: 2,
+                      yAxisID: "y1",
+                    },
+                  ],
+                }}
+                options={inventoryOptions}
+              />
+            </div>
+          </div>
+        </>
       )}
-    </div>
-
-    <div
-      style={{
-        display: "flex",
-        gap: "20px",
-        justifyContent: "space-between",
-      }}
-    >
-      <div style={{ flex: 1, height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
-        <Bar
-          data={{
-            labels: displayLabels,
-            datasets: [
-              {
-                label: "Receivables",
-                data: aggregateDataForView(receivablesData),
-                backgroundColor: "rgba(93, 64, 55, 0.6)",
-                borderColor: "rgb(93, 64, 55)",
-                borderWidth: 2,
-              },
-              {
-                label: "Payables",
-                data: aggregateDataForView(payablesData),
-                backgroundColor: "rgba(139, 105, 20, 0.6)",
-                borderColor: "rgb(139, 105, 20)",
-                borderWidth: 2,
-              },
-            ],
-          }}
-          options={receivablesPayablesOptions}
-        />
-      </div>
-
-      <div style={{ flex: 1, height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
-        <Bar
-          data={{
-            labels: displayLabels,
-            datasets: [
-              {
-                label: "Receivables Days",
-                data: aggregateDataForView(receivablesDaysData),
-                backgroundColor: "rgba(114, 84, 43, 0.6)",
-                borderColor: "rgb(114, 84, 43)",
-                borderWidth: 2,
-              },
-              {
-                label: "Payables Days",
-                data: aggregateDataForView(payablesDaysData),
-                backgroundColor: "rgba(156, 124, 95, 0.6)",
-                borderColor: "rgb(156, 124, 95)",
-                borderWidth: 2,
-              },
-            ],
-          }}
-          options={daysOptions}
-        />
-      </div>
-
-      <div style={{ flex: 1, height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
-        <Bar
-          data={{
-            labels: displayLabels,
-            datasets: [
-              {
-                label: "Inventory",
-                data: aggregateDataForView(inventoryData),
-                backgroundColor: "rgba(76, 175, 80, 0.6)",
-                borderColor: "rgb(76, 175, 80)",
-                borderWidth: 2,
-                yAxisID: "y",
-              },
-              {
-                label: "Inventory Days",
-                data: aggregateDataForView(inventoryDaysData),
-                backgroundColor: "rgba(139, 105, 20, 0.6)",
-                borderColor: "rgb(139, 105, 20)",
-                borderWidth: 2,
-                yAxisID: "y1",
-              },
-            ],
-          }}
-          options={inventoryOptions}
-        />
-      </div>
-    </div>
-  </>
-)}
 
       {showModal && !isInvestorView && (
         <div
@@ -3160,13 +3467,147 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
             }}
           >
             <h3 style={{ color: "#5d4037", marginBottom: "20px" }}>Add Balance Sheet Health Details</h3>
+            
+            {/* Validation Summary */}
+            {showValidationSummary && (
+              <div style={{
+                backgroundColor: validationWarnings.some(w => w.type === "alert") ? "#fff3cd" : "#d4edda",
+                border: validationWarnings.some(w => w.type === "alert") ? "1px solid #ffeaa7" : "1px solid #c3e6cb",
+                padding: "15px",
+                marginBottom: "20px",
+                borderRadius: "6px"
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div>
+                    <h4 style={{ 
+                      color: validationWarnings.some(w => w.type === "alert") ? "#856404" : "#155724", 
+                      marginBottom: "10px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px"
+                    }}>
+                      {validationWarnings.some(w => w.type === "alert") ? "⚠️ Data Consistency Warnings" : "ℹ️ Data Validation Notes"}
+                      <span style={{ fontSize: "12px", fontWeight: "normal" }}>
+                        ({validationWarnings.length} issue{validationWarnings.length !== 1 ? 's' : ''})
+                      </span>
+                    </h4>
+                    <ul style={{ margin: 0, paddingLeft: "20px", maxHeight: "150px", overflowY: "auto" }}>
+                      {validationWarnings.map((warning, idx) => (
+                        <li key={idx} style={{ 
+                          color: warning.type === "alert" ? "#856404" : "#0c5460", 
+                          fontSize: "14px",
+                          marginBottom: "5px"
+                        }}>
+                          <strong>Month {warning.month}: {warning.metric}</strong> - 
+                          {warning.note ? ` ${warning.note}` : 
+                           ` Entered as ${warning.entered} days, but based on sales/COGS should be ~${warning.theoretical} days (variance: ${warning.variance} days)`}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <button
+                    onClick={() => setShowValidationSummary(false)}
+                    style={{
+                      padding: "4px 8px",
+                      backgroundColor: "transparent",
+                      color: validationWarnings.some(w => w.type === "alert") ? "#856404" : "#155724",
+                      border: "none",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                      fontSize: "12px",
+                    }}
+                  >
+                    Hide
+                  </button>
+                </div>
+              </div>
+            )}
 
-            {renderHealthMonthlyInputs("receivables", "Receivables")}
-            {renderHealthMonthlyInputs("payables", "Payables")}
-            {renderHealthMonthlyInputs("receivablesDays", "Receivables Days")}
-            {renderHealthMonthlyInputs("payablesDays", "Payables Days")}
-            {renderHealthMonthlyInputs("inventory", "Inventory")}
-            {renderHealthMonthlyInputs("inventoryDays", "Inventory Days")}
+            {/* Information Box */}
+            <div style={{
+              backgroundColor: "#e8f4fd",
+              padding: "15px",
+              marginBottom: "20px",
+              borderRadius: "4px",
+              fontSize: "14px",
+              color: "#0c5460"
+            }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                <span style={{ fontSize: "16px" }}>💡</span>
+                <div>
+                  <strong>Note:</strong> Days metrics should reflect actual payment patterns, which may vary from theoretical calculations. 
+                  Common reasons for variance include: seasonal patterns, specific client payment terms, one-off payments, payment disputes, 
+                  early payment discounts, and cash flow management decisions.
+                </div>
+              </div>
+            </div>
+
+            {/* Calculation Button */}
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
+              <button
+                onClick={calculateAndApplyTheoreticalValues}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#8b6914",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px"
+                }}
+              >
+                <span>🧮</span>
+                Calculate Theoretical Days from Amounts
+              </button>
+            </div>
+
+            {/* Input Sections */}
+            {renderHealthMonthlyInputs("receivables", "Receivables (R)")}
+            {renderHealthMonthlyInputs("receivablesDays", "Receivables Days", true, calculatedTheoreticalValues.receivablesDays)}
+            
+            {renderHealthMonthlyInputs("payables", "Payables (R)")}
+            {renderHealthMonthlyInputs("payablesDays", "Payables Days", true, calculatedTheoreticalValues.payablesDays)}
+            
+            {renderHealthMonthlyInputs("inventory", "Inventory (R)")}
+            {renderHealthMonthlyInputs("inventoryDays", "Inventory Days", true, calculatedTheoreticalValues.inventoryDays)}
+
+            {/* Validation Button */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <button
+                onClick={() => {
+                  const warnings = validateHealthData()
+                  if (warnings.length === 0) {
+                    alert("✅ All data looks consistent!")
+                  } else {
+                    setShowValidationSummary(true)
+                  }
+                }}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                  fontSize: "14px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px"
+                }}
+              >
+                <span>🔍</span>
+                Validate Data Consistency
+              </button>
+              
+              <span style={{ fontSize: "12px", color: "#72542b", fontStyle: "italic" }}>
+                Theoretical values shown are based on: (Amount ÷ Sales/COGS) × 30 days
+              </span>
+            </div>
 
             <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>Date:</label>
             <input
@@ -3183,12 +3624,12 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
             />
 
             <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
-              Notes:
+              Notes (explain any significant variances):
             </label>
             <textarea
               value={healthDetails.notes}
               onChange={(e) => setHealthDetails({ ...healthDetails, notes: e.target.value })}
-              placeholder="Enter any additional notes"
+              placeholder="Enter any additional notes or explanations for significant variances from theoretical calculations..."
               style={{
                 width: "100%",
                 padding: "10px",
@@ -3201,7 +3642,11 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
 
             <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
               <button
-                onClick={() => setShowHealthModal(false)}
+                onClick={() => {
+                  setShowHealthModal(false)
+                  setValidationWarnings([])
+                  setShowValidationSummary(false)
+                }}
                 style={{
                   padding: "10px 20px",
                   backgroundColor: "#e8ddd4",
