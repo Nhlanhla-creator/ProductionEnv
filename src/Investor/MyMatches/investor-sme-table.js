@@ -1331,24 +1331,27 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
     )
   }
 
-  const handleNextStageChange = (sme) => {
-    setSelectedSMEForStage(sme)
-    setShowNextStageModal(true)
-    setNextStage("")
-    setMessage("")
-    setMeetingTime("")
-    setMeetingLocation("")
-    setMeetingPurpose("")
-    setFormErrors({})
-    setDocumentFile(null)
-    setFundingAmount("")
-    setInvestmentType("")
-    setAmountAsked("")
-    setAmountApproved("")
-    setPaymentDeployment("")
+const handleNextStageChange = (sme) => {
+  setSelectedSMEForStage(sme)
+  setShowNextStageModal(true)
+  setNextStage("")
+  setMessage("")
+  setMeetingTime("")
+  setMeetingLocation("")
+  setMeetingPurpose("")
+  setFormErrors({})
+  setDocumentFile(null)
+  
+  // Auto-populate the amountAsked with SME's requested amount
+  const smeAmount = sme.fundingNeeded || sme.useOfFunds?.amountRequested || ""
+  setAmountAsked(smeAmount)
+  
+  setAmountApproved("")
+  setPaymentDeployment("")
+  setInvestmentType("")
 
-    loadApplicationAvailability(sme)
-  }
+  loadApplicationAvailability(sme)
+}
 
   const deriveNextStage = (stage) => {
     switch (stage) {
@@ -4642,53 +4645,55 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
                       marginBottom: "24px",
                     }}
                   >
-                    <div>
-                      <label
-                        style={{
-                          display: "block",
-                          marginBottom: "12px",
-                          fontWeight: "700",
-                          color: "#3e2723",
-                          fontSize: "16px",
-                        }}
-                      >
-                        Amount Asked:
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Enter amount (e.g., R500,000)"
-                        value={amountAsked}
-                        onChange={(e) => {
-                          setAmountAsked(e.target.value)
-                          if (e.target.value.trim()) {
-                            setFormErrors({ ...formErrors, amountAsked: null })
-                          }
-                        }}
-                        style={{
-                          padding: "16px",
-                          borderRadius: "12px",
-                          border: formErrors.amountAsked ? "3px solid #d32f2f" : "2px solid #388e3c",
-                          width: "100%",
-                          fontSize: "16px",
-                          fontWeight: "500",
-                          backgroundColor: "#ffffff",
-                        }}
-                      />
-                      {formErrors.amountAsked && (
-                        <p
-                          style={{
-                            color: "#d32f2f",
-                            fontSize: "14px",
-                            marginTop: "8px",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "8px",
-                          }}
-                        >
-                          <AlertTriangle size={14} /> {formErrors.amountAsked}
-                        </p>
-                      )}
-                    </div>
+                     <div>
+          <label
+            style={{
+              display: "block",
+              marginBottom: "12px",
+              fontWeight: "700",
+              color: "#3e2723",
+              fontSize: "16px",
+            }}
+          >
+            Amount Asked:
+          </label>
+          <div
+            style={{
+              padding: "16px",
+              borderRadius: "12px",
+              border: "2px solid #388e3c",
+              width: "100%",
+              fontSize: "16px",
+              fontWeight: "600",
+              backgroundColor: "#f1f8e9",
+              color: "#1b5e20",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <span>
+              {selectedSMEForStage?.fundingNeeded 
+                ? `R${Number(selectedSMEForStage.fundingNeeded).toLocaleString()}`
+                : selectedSMEForStage?.useOfFunds?.amountRequested || "Not specified"}
+            </span>
+            <Info 
+              size={16} 
+              color="#388e3c"
+              title="Auto-populated from SME's funding request"
+            />
+          </div>
+          <p
+            style={{
+              color: "#5d4037",
+              fontSize: "14px",
+              marginTop: "8px",
+              fontStyle: "italic",
+            }}
+          >
+            Auto-populated from SME's original request
+          </p>
+        </div>
 
                     <div>
                       <label

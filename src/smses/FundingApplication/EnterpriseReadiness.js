@@ -370,18 +370,19 @@ export const renderEnterpriseReadiness = (data, updateFormData, apiKey, handleAi
                 value={data.creditReportDocs || []}
               />
    
-              {Array.isArray(data.creditReportDocs) &&
-                data.creditReportDocs.length > 0 &&
-                !data.creditReportDocs.some(file =>
-                  typeof file === "string" ||
-                  (file?.url && file.url.startsWith("https://firebasestorage.googleapis.com"))
-                ) && (
-                  <CreditGPT
-                    files={data.creditReportDocs}
-                    onEvaluationComplete={handleAiResponse}
-                    apiKey={apiKey}
-                  />
-                )}
+         
+{Array.isArray(data.creditReportDocs) &&
+  data.creditReportDocs.length > 0 && (
+    <CreditGPT
+      files={data.creditReportDocs.filter(file => 
+        // Only pass files that are new (File objects) and not from Firebase
+        file instanceof File && 
+        !(file?.url && file.url.startsWith("https://firebasestorage.googleapis.com"))
+      )}
+      onEvaluationComplete={handleAiResponse}
+      apiKey={apiKey}
+    />
+  )}
             </div>
           )}
         </div>
