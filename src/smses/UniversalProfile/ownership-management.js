@@ -8,8 +8,13 @@ import { db, auth, storage } from '../../firebaseConfig';
 import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { validateDocument } from '../../services/documentValidationService';
+// Add these imports at the top
+import { 
+  uploadDocumentWithSync, 
+  deleteDocumentWithSync,
+  getSyncConfig 
+} from '../../utils/documentSyncService';
 
-// Constants (all your existing constants remain the same)
 const raceOptions = [
   { value: "black", label: "Black African" },
   { value: "coloured", label: "Coloured" },
@@ -165,7 +170,12 @@ const DEFAULT_EXECUTIVE = {
 
 export default function OwnershipManagement({ data = { shareholders: [], directors: [], executives: [] }, updateData }) {
   const [formData, setFormData] = useState({ shareholders: [], directors: [], executives: [] });
-  const [isLoading, setIsLoading] = useState(true);
+  const [uploadingCVs, setUploadingCVs] = useState({
+  director: {},
+  executive: {}
+});
+const [isUploadOverlayVisible, setIsUploadOverlayVisible] = useState(false);
+const [isLoading, setIsLoading] = useState(true);
 
   // Helper functions
   const updateFormData = (newData) => {
@@ -205,9 +215,17 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
       console.error("Error syncing to Growth Suite:", error);
     }
   };
-
-// Fix the handleDeleteCV function
 const handleDeleteCV = async (type, index) => {
+  // Show confirmation
+  const confirmDelete = window.confirm(`Are you sure you want to delete this ${type}'s CV?`);
+  if (!confirmDelete) return;
+
+  // Set loading state
+  setUploadingCVs(prev => ({
+    ...prev,
+    [type]: { ...prev[type], [index]: true }
+  }));
+
   try {
     const userId = auth.currentUser?.uid;
     if (!userId) return;
@@ -236,16 +254,35 @@ const handleDeleteCV = async (type, index) => {
       [`documents.cv_count`]: updatedCVs.length
     });
 
+    // Clear CV from local state
+    if (type === 'director') {
+      updateDirector(index, "cv", null);
+    } else if (type === 'executive') {
+      updateExecutive(index, "cv", null);
+    }
+
     console.log(`CV deleted and synced from MyDocuments for ${type} ${index}`);
   } catch (error) {
     console.error("Error deleting CV from MyDocuments:", error);
+    alert('Failed to delete CV. Please try again.');
+  } finally {
+    // Clear loading state
+    setUploadingCVs(prev => ({
+      ...prev,
+      [type]: { ...prev[type], [index]: false }
+    }));
   }
 };
 
-
-
  const handleDirectorCVUpload = async (index, file) => {
   if (!file) return;
+
+  // Set loading state
+  setUploadingCVs(prev => ({
+    ...prev,
+    director: { ...prev.director, [index]: true }
+  }));
+  setIsUploadOverlayVisible(true);
 
   try {
     const userId = auth.currentUser?.uid;
@@ -296,19 +333,19 @@ const handleDeleteCV = async (type, index) => {
     const existingCVs = existingData.documents?.cv_multiple || [];
     
     // Create CV data for MyDocuments system
-   const cvData = {
-  url: downloadURL,
-  status: validationResult.status,
-  message: validationResult.message,
-  uploadedAt: new Date().toISOString(),
-  directorIndex: index,
-  directorName: formData.directors[index]?.name || `Director ${index + 1}`,
-  source: "ownership_management",
-  documentType: "CV",
-  role: "Director", // ADD THIS
-  roleLabel: `Director ${index + 1}`, // ADD THIS - you can customize
-  personName: formData.directors[index]?.name || `Director ${index + 1}` // ADD THIS
-};
+    const cvData = {
+      url: downloadURL,
+      status: validationResult.status,
+      message: validationResult.message,
+      uploadedAt: new Date().toISOString(),
+      directorIndex: index,
+      directorName: formData.directors[index]?.name || `Director ${index + 1}`,
+      source: "ownership_management",
+      documentType: "CV",
+      role: "Director",
+      roleLabel: `Director ${index + 1}`,
+      personName: formData.directors[index]?.name || `Director ${index + 1}`
+    };
 
     // Find if this director already has a CV in the system
     const existingIndex = existingCVs.findIndex(cv => 
@@ -334,15 +371,29 @@ const handleDeleteCV = async (type, index) => {
     });
 
     console.log("Director CV uploaded and synced to MyDocuments with AI validation");
+    
   } catch (error) {
     console.error("Error uploading director CV:", error);
     alert("Failed to upload CV. Please try again.");
+  } finally {
+    // Clear loading state
+    setUploadingCVs(prev => ({
+      ...prev,
+      director: { ...prev.director, [index]: false }
+    }));
+    setIsUploadOverlayVisible(false);
   }
 };
 
-// Enhanced executive CV upload handler with AI validation
 const handleExecutiveCVUpload = async (index, file) => {
   if (!file) return;
+
+  // Set loading state
+  setUploadingCVs(prev => ({
+    ...prev,
+    executive: { ...prev.executive, [index]: true }
+  }));
+  setIsUploadOverlayVisible(true);
 
   try {
     const userId = auth.currentUser?.uid;
@@ -402,9 +453,9 @@ const handleExecutiveCVUpload = async (index, file) => {
       executiveName: formData.executives[index]?.name || `Executive ${index + 1}`,
       source: "ownership_management",
       documentType: "CV",
-      role: "Executive", // ADD THIS
-      roleLabel: `Executive ${index + 1}`, // ADD THIS
-      personName: formData.executives[index]?.name || `Executive ${index + 1}` // ADD THIS
+      role: "Executive",
+      roleLabel: `Executive ${index + 1}`,
+      personName: formData.executives[index]?.name || `Executive ${index + 1}`
     };
 
     // Find if this executive already has a CV in the system
@@ -431,12 +482,19 @@ const handleExecutiveCVUpload = async (index, file) => {
     });
 
     console.log("Executive CV uploaded and synced to MyDocuments with AI validation");
+    
   } catch (error) {
     console.error("Error uploading executive CV:", error);
     alert("Failed to upload CV. Please try again.");
+  } finally {
+    // Clear loading state
+    setUploadingCVs(prev => ({
+      ...prev,
+      executive: { ...prev.executive, [index]: false }
+    }));
+    setIsUploadOverlayVisible(false);
   }
 };
-
 
 const getRegisteredName = async () => {
   const user = auth.currentUser;
@@ -1034,51 +1092,61 @@ const removeExecutive = (index) => {
                       ))}
                     </select>
                   </td>
-                  <td className="px-4 py-2 border-b">
-                    <div className="space-y-2">
-                      <input
-                        type="text"
-                        placeholder="LinkedIn URL"
-                        value={director.linkedin || ""}
-                        onChange={(e) => updateDirector(index, "linkedin", e.target.value)}
-                        className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500"
-                        disabled={director.linkedShareholderId !== null}
-                      />
-                      
-                      <div className="flex items-center space-x-2">
-                        {director.cv ? (
+                <td className="px-4 py-2 border-b">
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      placeholder="LinkedIn URL"
+                      value={director.linkedin || ""}
+                      onChange={(e) => updateDirector(index, "linkedin", e.target.value)}
+                      className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500"
+                      disabled={director.linkedShareholderId !== null}
+                    />
+                    
+                    <div className="flex items-center space-x-2">
+                      {director.cv ? (
+                        <>
                           <a
                             href={director.cv.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex-1 text-brown-600 hover:text-brown-800 text-xs truncate"
+                            className={`flex-1 text-brown-600 hover:text-brown-800 text-xs truncate ${uploadingCVs.director[index] ? 'opacity-50' : ''}`}
                             title={`View ${director.cv.name}`}
                           >
                             CV: {director.cv.name}
                           </a>
-                        ) : (
-                          <span className="flex-1 text-xs text-gray-400">No CV uploaded</span>
-                        )}
-                        
-                        <label className="cursor-pointer">
-                          <input
-                            type="file"
-                            accept=".pdf,.doc,.docx"
-                            onChange={(e) => {
-                              const file = e.target.files[0];
-                              if (file) {
-                                handleDirectorCVUpload(index, file);
-                              }
-                            }}
-                            className="hidden"
-                          />
-                          <span className="text-xs text-brown-600 hover:text-brown-800 underline">
-                            {director.cv ? 'Replace' : 'Upload CV'}
-                          </span>
-                        </label>
-                      </div>
+                          {uploadingCVs.director[index] && (
+                            <div className="ml-2 flex items-center">
+                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-brown-600"></div>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <span className={`flex-1 text-xs ${uploadingCVs.director[index] ? 'text-brown-400' : 'text-gray-400'}`}>
+                          {uploadingCVs.director[index] ? 'Uploading...' : 'No CV uploaded'}
+                        </span>
+                      )}
+                      
+                      <label className={`cursor-pointer ${uploadingCVs.director[index] ? 'opacity-50 pointer-events-none' : ''}`}>
+                        <input
+                          type="file"
+                          accept=".pdf,.doc,.docx"
+                          onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (file) {
+                              handleDirectorCVUpload(index, file);
+                            }
+                          }}
+                          className="hidden"
+                          disabled={uploadingCVs.director[index]}
+                        />
+                        <span className="text-xs text-brown-600 hover:text-brown-800 underline">
+                          {uploadingCVs.director[index] ? 'Uploading...' : director.cv ? 'Replace' : 'Upload CV'}
+                        </span>
+                      </label>
                     </div>
-                  </td>
+                  </div>
+                </td>
                   <td className="px-4 py-2 border-b">
                     <select
                       value={director.execType || ""}
@@ -1255,20 +1323,29 @@ const removeExecutive = (index) => {
                       
                       <div className="flex items-center space-x-2">
                         {executive.cv ? (
-                          <a
-                            href={executive.cv.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex-1 text-brown-600 hover:text-brown-800 text-xs truncate"
-                            title={`View ${executive.cv.name}`}
-                          >
-                            CV: {executive.cv.name}
-                          </a>
+                          <>
+                            <a
+                              href={executive.cv.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={`flex-1 text-brown-600 hover:text-brown-800 text-xs truncate ${uploadingCVs.executive[index] ? 'opacity-50' : ''}`}
+                              title={`View ${executive.cv.name}`}
+                            >
+                              CV: {executive.cv.name}
+                            </a>
+                            {uploadingCVs.executive[index] && (
+                              <div className="ml-2 flex items-center">
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-brown-600"></div>
+                              </div>
+                            )}
+                          </>
                         ) : (
-                          <span className="flex-1 text-xs text-gray-400">No CV uploaded</span>
+                          <span className={`flex-1 text-xs ${uploadingCVs.executive[index] ? 'text-brown-400' : 'text-gray-400'}`}>
+                            {uploadingCVs.executive[index] ? 'Uploading...' : 'No CV uploaded'}
+                          </span>
                         )}
                         
-                        <label className="cursor-pointer">
+                        <label className={`cursor-pointer ${uploadingCVs.executive[index] ? 'opacity-50 pointer-events-none' : ''}`}>
                           <input
                             type="file"
                             accept=".pdf,.doc,.docx"
@@ -1279,9 +1356,10 @@ const removeExecutive = (index) => {
                               }
                             }}
                             className="hidden"
+                            disabled={uploadingCVs.executive[index]}
                           />
                           <span className="text-xs text-brown-600 hover:text-brown-800 underline">
-                            {executive.cv ? 'Replace' : 'Upload CV'}
+                            {uploadingCVs.executive[index] ? 'Uploading...' : executive.cv ? 'Replace' : 'Upload CV'}
                           </span>
                         </label>
                       </div>
@@ -1347,6 +1425,21 @@ const removeExecutive = (index) => {
           </table>
         </div>
       </div>
+        {isUploadOverlayVisible && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-sm mx-4">
+              <div className="flex flex-col items-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brown-600 mb-4"></div>
+                <h3 className="text-lg font-semibold text-brown-800 mb-2">Processing CV</h3>
+                <p className="text-brown-600 text-center">
+                  Uploading and validating your CV with AI...
+                  <br />
+                  <span className="text-sm text-brown-500">This may take a moment</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
     </div>
   );
 }
