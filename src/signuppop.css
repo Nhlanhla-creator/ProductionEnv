@@ -181,6 +181,8 @@
   justify-content: flex-end;
   gap: 15px; 
   margin-top: 25px; 
+  padding-right: .5rem;
+  padding-bottom: .5rem;
 }
 
 .btn {

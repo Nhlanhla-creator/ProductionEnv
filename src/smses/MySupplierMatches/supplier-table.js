@@ -31,6 +31,7 @@ import {
   X
 } from "lucide-react"
 import { useNavigate } from "react-router-dom"
+import { useLocation } from "react-router-dom";
 import emailjs from '@emailjs/browser'
 import { API_KEYS } from "../../API"
 import SupplierDetailsModal from './SupplierDetailsModal'
@@ -588,7 +589,89 @@ function calculateOwnershipPercentages(ownershipManagement) {
   return result
 }
 
-export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSupplierAccepted }) {
+const mergeSupplierHistory = (newMatches, contactedHistory) => {
+  const supplierMap = new Map();
+
+  // Add contacted suppliers first (priority)
+  contactedHistory.forEach(supplier => {
+    if (supplier && supplier.id) {
+      supplierMap.set(supplier.id, {
+        ...supplier,
+        isPreviousContact: true,
+        previousServiceRequested: supplier.serviceRequired || supplier.originalRequest?.serviceRequested,
+        previousContactDate: supplier.lastContacted || supplier.contactDate,
+        contactHistory: [{
+          date: supplier.lastContacted || supplier.contactDate,
+          serviceRequested: supplier.serviceRequired || supplier.originalRequest?.serviceRequested,
+          matchScore: supplier.matchPercentage || supplier.matchScore
+        }]
+      });
+    }
+  });
+
+  // Add new matches (don't override previous contacts)
+  newMatches.forEach(supplier => {
+    if (supplier && supplier.id) {
+      if (supplierMap.has(supplier.id)) {
+        // Update existing supplier (previously contacted)
+        const existing = supplierMap.get(supplier.id);
+        existing.hasNewMatch = true;
+        existing.newMatchScore = supplier.matchPercentage;
+        existing.newServiceRequired = supplier.serviceRequired;
+      } else {
+        // New supplier
+        supplierMap.set(supplier.id, {
+          ...supplier,
+          isPreviousContact: false,
+          hasNewMatch: true
+        });
+      }
+    }
+  });
+
+  return Array.from(supplierMap.values());
+};
+
+const fetchContactedHistory = async (userId) => {
+  try {
+    if (!userId) return [];
+
+    const userDocRef = doc(db, "userApplications", userId);
+    const userDoc = await getDoc(userDocRef);
+
+    if (userDoc.exists()) {
+      const data = userDoc.data();
+      // Flatten all contacted suppliers from all applications
+      const allContactedSuppliers = [];
+
+      data.contactedApplications?.forEach(app => {
+        if (app.matches && app.contactedSuppliers) {
+          app.contactedSuppliers.forEach(supplierId => {
+            const supplierMatch = app.matches.find(m => m.id === supplierId);
+            if (supplierMatch) {
+              allContactedSuppliers.push({
+                ...supplierMatch,
+                contactDate: app.lastContacted,
+                originalApplication: {
+                  id: app.id,
+                  purpose: app.data?.requestOverview?.purpose
+                }
+              });
+            }
+          });
+        }
+      });
+
+      return allContactedSuppliers;
+    }
+    return [];
+  } catch (error) {
+    console.error("Error fetching contacted history:", error);
+    return [];
+  }
+};
+
+export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSupplierAccepted, onNewRequest  }) {
   const [showFilters, setShowFilters] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [modalContent, setModalContent] = useState({ type: "", supplier: null })
@@ -618,6 +701,12 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
   })
   const [tableKey, setTableKey] = useState(0);
 
+  const [showLegend, setShowLegend] = useState(false);
+  const [combinedSuppliers, setCombinedSuppliers] = useState([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [hasPreviousContacts, setHasPreviousContacts] = useState(false);
+
+
 
   const [contactedApplications, setContactedApplications] = useState([])
   const [showContactedApplications, setShowContactedApplications] = useState(false)
@@ -632,6 +721,7 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
   const [aiAnalysisError, setAiAnalysisError] = useState("")
 
   const navigate = useNavigate()
+  const location = useLocation()
 
 
   // NEW: Load cached secondary matches
@@ -1124,8 +1214,515 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
   }
 
   const handleNewRequest = () => {
-    navigate("/applications/product/request-overview")
-  }
+    console.log("New request triggered from SupplierTable");
+    
+    // Clear current matches and data
+    setAllSuppliers([]);
+    setFilteredSuppliers([]);
+    setSuppliers([]);
+    setCombinedSuppliers([]);
+    setCurrentUserApplication(null);
+    setSecondaryMatchData({});
+    
+    setNotification({
+      type: "info",
+      message: "Starting new request. Switch to Application tab to update criteria."
+    });
+    
+    // Call the parent's onNewRequest callback to switch tabs
+    if (onNewRequest) {  // Now using the prop parameter
+      onNewRequest();
+    } else {
+      // Fallback: Show instruction
+      setNotification({
+        type: "warning",
+        message: "Please switch to the 'Product & Service Application' tab to start a new request."
+      });
+    }
+    
+    setTimeout(() => setNotification(null), 3000);
+  };
+
+  // Add a useEffect to handle navigation state
+  useEffect(() => {
+    if (location.state?.newApplicationSubmitted) {
+      setNotification({
+        type: "success",
+        message: "New application submitted! Loading matches..."
+      });
+
+      // Trigger refresh of matches
+      if (currentUser) {
+        loadUserApplicationAndMatches();
+      }
+    }
+  }, [location.state]);
+
+  useEffect(() => {
+    const loadDataWithHistory = async () => {
+      if (!currentUser || !currentUserApplication) return;
+
+      setIsLoadingHistory(true);
+      try {
+        // 1. Calculate new matches (existing logic)
+        const profilesSnapshot = await getDocs(collection(db, "universalProfiles"));
+        const profilesData = profilesSnapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            productsServices: data.productsServices || {},
+            financialOverview: data.financialOverview || {},
+            legalCompliance: data.legalCompliance || {},
+            entityOverview: data.entityOverview || {},
+            currentStage: "Potential Supplier",
+            status: "New Lead",
+          };
+        });
+
+        const ratingsData = await fetchSupplierRatings();
+
+        const suppliersWithMatches = profilesData.map((supplier) => {
+          const matchScore = calculateEnhancedMatchScore(currentUserApplication, supplier, ratingsData);
+          const firstCategory = getFirstCategory(supplier.productsServices);
+          const supplierRatingData = ratingsData[supplier.id] || {
+            average: 0,
+            count: 0,
+            latestComment: "No ratings yet"
+          };
+          const actualRating = supplierRatingData.average;
+
+          return {
+            ...supplier,
+            matchPercentage: matchScore.totalScore,
+            matchDetails: matchScore.breakdown,
+            status: getStatusBasedOnScore(matchScore.totalScore),
+            rating: actualRating,
+            avgResponseTime: "1-2 days",
+            lastActivity: new Date().toLocaleDateString(),
+            urgency: supplier.applicationOverview?.urgency || "1 month",
+            dealSize: supplier.financialOverview?.annualRevenue || "Not specified",
+            serviceCategory: firstCategory,
+            currentStage: "Potential Supplier",
+            nextStage: "Initial Contact",
+            bbbeeLevel: supplier.legalCompliance?.bbbeeLevel || "N/A",
+            applicationId: null,
+            ratingCount: supplierRatingData.count,
+            serviceRequired: currentUserApplication?.requestOverview?.purpose || "Not specified"
+          };
+        });
+
+        const relevantSuppliers = suppliersWithMatches
+          .filter(supplier => supplier.matchPercentage > 0 && supplier.id !== currentUser?.uid)
+          .sort((a, b) => b.matchPercentage - a.matchPercentage);
+
+        // 2. Fetch contacted history
+        const contactedHistory = await fetchContactedHistory(currentUser.uid);
+
+        // 3. Merge with new matches
+        const mergedSuppliers = mergeSupplierHistory(relevantSuppliers, contactedHistory);
+
+        // 4. Update states
+        setAllSuppliers(mergedSuppliers);
+        setCombinedSuppliers(mergedSuppliers);
+        setFilteredSuppliers(mergedSuppliers);
+
+        // 5. Check if we have previous contacts
+        const hasPrevious = mergedSuppliers.some(s => s.isPreviousContact);
+        setHasPreviousContacts(hasPrevious);
+        setShowLegend(hasPrevious);
+
+        // Notify parent component
+        if (onSuppliersUpdate) {
+          onSuppliersUpdate(mergedSuppliers, mergedSuppliers);
+        }
+
+      } catch (error) {
+        console.error("Error loading data with history:", error);
+        setError("Failed to load supplier matches with history.");
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    };
+
+    loadDataWithHistory();
+  }, [currentUserApplication, currentUser]);
+
+  // Update the table rendering to show combined suppliers
+  const renderSupplierRows = () => {
+    return filteredSuppliers.map((supplier) => {
+      const statusStyle = getStatusStyle(supplier.status);
+      const stageStyle = getStageStyle(supplier.currentStage);
+
+      const isPreviousContact = supplier.isPreviousContact;
+      const hasNewMatch = supplier.hasNewMatch;
+
+      return (
+        <tr
+          key={supplier.id}
+          style={{
+            ...tableRowStyle,
+            backgroundColor: isPreviousContact ? '#FFF8E1' : 'white',
+            borderLeft: isPreviousContact ? '4px solid #F57C00' : 'none',
+            opacity: isPreviousContact && !hasNewMatch ? 0.8 : 1
+          }}
+        >
+          <td style={tableCellStyle}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+              <div>
+                <span onClick={() => handleViewDetails(supplier)} style={supplierNameStyle}>
+                  <TruncatedText
+                    text={supplier.entityOverview?.tradingName || supplier.entityOverview?.registeredName}
+                    maxLength={15}
+                  />
+                </span>
+                {isPreviousContact && (
+                  <div style={{ fontSize: "0.6rem", color: "#F57C00", marginTop: "2px" }}>
+                    ✓ Previously Contacted
+                  </div>
+                )}
+              </div>
+            </div>
+          </td>
+
+          <td style={tableCellStyle}>
+            <TruncatedText text={supplier.entityOverview?.location || "Not specified"} maxLength={12} />
+          </td>
+
+          <td style={tableCellStyle}>
+            <TruncatedText
+              text={supplier.entityOverview?.economicSectors?.[0] || "Not specified"}
+              maxLength={12}
+            />
+          </td>
+
+          <td style={tableCellStyle}>
+            <TruncatedText text={supplier.legalCompliance?.bbbeeLevel || "N/A"} maxLength={8} />
+          </td>
+
+          <td style={tableCellStyle}>
+            <TruncatedText
+              text={supplier.financialOverview?.annualRevenue || "Not specified"}
+              maxLength={12}
+            />
+          </td>
+
+          <td style={tableCellStyle}>
+            <TruncatedText
+              text={
+                supplier.productsServices?.productCategories?.[0]?.name ||
+                supplier.productsServices?.serviceCategories?.[0]?.name ||
+                "Not specified"
+              }
+              maxLength={10}
+            />
+          </td>
+
+          {/* Updated Service Required Column */}
+          <td style={tableCellStyle}>
+            {isPreviousContact ? (
+              <div>
+                <div style={{ fontSize: '0.7rem', color: '#F57C00', fontWeight: 'bold' }}>
+                  Previous: {supplier.previousServiceRequested || "Not specified"}
+                </div>
+                {hasNewMatch && (
+                  <div style={{ fontSize: '0.7rem', color: '#388E3C', marginTop: '4px' }}>
+                    New Match: {supplier.serviceRequired || supplier.newServiceRequired || "Not specified"}
+                  </div>
+                )}
+                {supplier.previousContactDate && (
+                  <div style={{ fontSize: '0.6rem', color: '#666', marginTop: '2px' }}>
+                    Contacted: {new Date(supplier.previousContactDate).toLocaleDateString()}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <TruncatedText
+                text={supplier.serviceRequired || "Not specified"}
+                maxLength={15}
+              />
+            )}
+          </td>
+
+          <td style={tableCellStyle}>
+            <TruncatedText text={supplier.urgency || "1 month"} maxLength={10} />
+          </td>
+
+          <td style={tableCellStyle}>
+            <div style={matchContainerStyle}>
+              <div style={progressBarStyle}>
+                <div
+                  style={{
+                    ...progressFillStyle,
+                    width: `${supplier.matchPercentage || supplier.newMatchScore || 0}%`,
+                    background:
+                      (supplier.matchPercentage || supplier.newMatchScore || 0) > 75
+                        ? "#48BB78"
+                        : (supplier.matchPercentage || supplier.newMatchScore || 0) > 50
+                          ? "#F6AD55"
+                          : "#F56565",
+                  }}
+                />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "4px" }}>
+                <span
+                  style={{
+                    ...matchScoreStyle,
+                    color:
+                      (supplier.matchPercentage || supplier.newMatchScore || 0) > 75
+                        ? "#48BB78"
+                        : (supplier.matchPercentage || supplier.newMatchScore || 0) > 50
+                          ? "#D69E2E"
+                          : "#E53E3E",
+                  }}
+                >
+                  {supplier.matchPercentage || supplier.newMatchScore || 0}%
+                </span>
+                <Eye
+                  size={14}
+                  style={{
+                    cursor: "pointer",
+                    color: "#a67c52",
+                  }}
+                  onClick={() => handleShowMatchBreakdown(supplier)}
+                  title="View match breakdown"
+                />
+              </div>
+            </div>
+          </td>
+
+          <td style={tableCellStyle}>
+            {supplier.secondaryMatchScore !== null && supplier.secondaryMatchScore !== undefined ? (
+              <div style={matchContainerStyle}>
+                <div style={progressBarStyle}>
+                  <div
+                    style={{
+                      ...progressFillStyle,
+                      width: `${calculateCombinedMatchScore(
+                        supplier.matchPercentage || supplier.newMatchScore || 0,
+                        supplier.secondaryMatchScore
+                      )}%`,
+                      backgroundColor: getSecondaryMatchColor(
+                        calculateCombinedMatchScore(
+                          supplier.matchPercentage || supplier.newMatchScore || 0,
+                          supplier.secondaryMatchScore
+                        )
+                      ),
+                    }}
+                  />
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "4px" }}>
+                  <span
+                    style={{
+                      ...matchScoreStyle,
+                      color: getSecondaryMatchColor(
+                        calculateCombinedMatchScore(
+                          supplier.matchPercentage || supplier.newMatchScore || 0,
+                          supplier.secondaryMatchScore
+                        )
+                      ),
+                      fontWeight: "bold",
+                    }}
+                  >
+                    {calculateCombinedMatchScore(
+                      supplier.matchPercentage || supplier.newMatchScore || 0,
+                      supplier.secondaryMatchScore
+                    )}%
+                  </span>
+                  <Eye
+                    size={14}
+                    style={{
+                      cursor: "pointer",
+                      color: "#a67c52",
+                    }}
+                    onClick={() => handleShowSecondaryBreakdown(supplier)}
+                    title="View secondary match breakdown"
+                  />
+                </div>
+              </div>
+            ) : (
+              <span style={{
+                color: "#999",
+                fontSize: "0.75rem",
+                fontStyle: "italic"
+              }}>
+                Pending analysis
+              </span>
+            )}
+          </td>
+
+          {/* Action Column - Updated for previous contacts */}
+          <td style={tableCellStyle}>
+            {isPreviousContact ? (
+              <span style={{
+                padding: '0.25rem 0.5rem',
+                backgroundColor: '#E0E0E0',
+                color: '#666',
+                fontSize: '0.65rem',
+                borderRadius: '3px',
+                display: 'inline-block',
+                cursor: 'default'
+              }}>
+                Previously Contacted
+              </span>
+            ) : (
+              <button
+                onClick={() => handleConnectClick(supplier)}
+                style={{
+                  ...statusBadgeStyle,
+                  backgroundColor: "#5D2A0A",
+                  color: "white",
+                  padding: "0.25rem 0.5rem",
+                  cursor: "pointer",
+                  border: "none",
+                  borderRadius: "3px",
+                  fontWeight: "500",
+                  fontSize: "0.65rem",
+                }}
+              >
+                Contact
+              </button>
+            )}
+          </td>
+
+          <td style={{ ...tableCellStyle, borderRight: "none" }}>
+            <div
+              style={{
+                ...statusBadgeStyle,
+                backgroundColor: stageStyle.backgroundColor,
+                color: stageStyle.color,
+                fontSize: "0.65rem",
+                padding: "0.15rem 0.3rem",
+                textAlign: "center",
+                lineHeight: "1.2",
+                minHeight: "2.5rem",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+              }}
+            >
+              {supplier.currentStage.split(" ").map((word, index) => (
+                <div key={index} style={{ fontSize: "0.6rem" }}>
+                  {word}
+                </div>
+              ))}
+            </div>
+          </td>
+        </tr>
+      );
+    });
+  };
+
+  // Add Legend/Info Panel component
+  const renderLegend = () => {
+    if (!hasPreviousContacts) return null;
+
+    return (
+      <div style={{
+        background: '#FFF3E0',
+        padding: '0.75rem',
+        borderRadius: '6px',
+        border: '1px solid #FFE0B2',
+        marginBottom: '1rem',
+        fontSize: '0.75rem',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }}>
+        <div>
+          <strong>Match Types:</strong>
+          <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <div style={{
+                width: '20px',
+                height: '12px',
+                background: '#FFF8E1',
+                border: '2px solid #F57C00',
+                borderRadius: '2px'
+              }}></div>
+              <span>Previously Contacted Suppliers</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <div style={{
+                width: '20px',
+                height: '12px',
+                background: 'white',
+                border: '1px solid #E8D5C4',
+                borderRadius: '2px'
+              }}></div>
+              <span>New Matches</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <div style={{
+                width: '20px',
+                height: '12px',
+                background: '#FFF8E1',
+                border: '2px dashed #F57C00',
+                borderRadius: '2px'
+              }}></div>
+              <span>Previously Contacted with New Match</span>
+            </div>
+          </div>
+        </div>
+        <button
+          onClick={() => setShowLegend(!showLegend)}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: '#F57C00',
+            cursor: 'pointer',
+            fontSize: '0.7rem',
+            padding: '0.25rem 0.5rem'
+          }}
+        >
+          {showLegend ? 'Hide Legend' : 'Show Legend'}
+        </button>
+      </div>
+    );
+  };
+
+  // Update the New Request button logic in the render
+  const renderNewRequestButton = () => {
+    const hasMatches = filteredSuppliers.length > 0;
+    const buttonStyle = hasMatches ? filterButtonStyle : {
+      ...newRequestButtonStyle,
+      background: "#5D2A0A",
+      color: "white",
+      fontWeight: "600",
+      fontSize: "1rem",
+      padding: "0.75rem 1.5rem",
+      margin: "0 auto",
+      display: "block"
+    };
+
+    return (
+      <button onClick={handleNewRequest} style={newRequestButtonStyle}>
+        {hasMatches ? "New Request" : "Start New Request"}
+      </button>
+    );
+  };
+
+  const loadUserApplicationAndMatches = async () => {
+    try {
+      if (!currentUser) return;
+
+      // Reload the user's application
+      const applicationDoc = await getDoc(doc(db, "productApplications", currentUser.uid));
+      if (applicationDoc.exists()) {
+        const applicationData = applicationDoc.data();
+        setCurrentUserApplication({
+          id: applicationDoc.id,
+          ...applicationData
+        });
+
+        // This will trigger the useEffect that loads data with history
+      } else {
+        setError("Please complete a product application first");
+      }
+    } catch (error) {
+      console.error("Error reloading application:", error);
+    }
+  };
 
   const getImprovementSuggestion = (criteriaKey, score) => {
     const suggestions = {
@@ -1835,6 +2432,43 @@ BIG Marketplace Africa Team`;
           </div>
         )}
 
+        {/* Loading state */}
+        {isLoadingHistory && (
+          <div style={{
+            textAlign: 'center',
+            padding: '2rem',
+            color: '#5D2A0A'
+          }}>
+            Loading matches with history...
+          </div>
+        )}
+
+        {/* No matches but has previous contacts */}
+        {!isLoadingHistory && filteredSuppliers.length === 0 && hasPreviousContacts && (
+          <div style={{ textAlign: 'center', padding: '3rem' }}>
+            <p style={{ fontSize: '1.1rem', color: '#5D2A0A', marginBottom: '1rem' }}>
+              No new matches found for your current request.
+            </p>
+            <p style={{ color: '#7d5a50', marginBottom: '2rem' }}>
+              However, you have previously contacted suppliers below.
+            </p>
+            {renderNewRequestButton()}
+          </div>
+        )}
+
+        {/* No matches at all */}
+        {!isLoadingHistory && filteredSuppliers.length === 0 && !hasPreviousContacts && (
+          <div style={{ textAlign: 'center', padding: '3rem' }}>
+            <p style={{ fontSize: '1.1rem', color: '#5D2A0A', marginBottom: '1rem' }}>
+              No matching suppliers found based on your product application criteria.
+            </p>
+            <p style={{ color: '#7d5a50', marginBottom: '2rem' }}>
+              Try creating a new request or check back later for new suppliers.
+            </p>
+            {renderNewRequestButton()}
+          </div>
+        )}
+
         {/* AI Analysis Progress Overlay */}
         {isAiAnalyzing && (
           <div
@@ -1901,10 +2535,14 @@ BIG Marketplace Africa Team`;
             border: "1px solid #E8D5C4",
             marginBottom: "1rem"
           }}>
-            {/* Table Header - UPDATED WITH AI BUTTON */}
+            {/* Table Header */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-              <h3 style={{ color: "#5D2A0A", margin: 0 }}>Current Request</h3>
+              <h3 style={{ color: "#5D2A0A", margin: 0 }}>
+                {hasPreviousContacts ? "Combined Matches" : "Current Request"}
+              </h3>
               <div style={{ display: "flex", gap: "0.5rem" }}>
+                {renderNewRequestButton()}
+                {/* Other buttons remain the same */}
                 <button
                   onClick={runSecondaryAiAnalysis}
                   disabled={isAiAnalyzing || filteredSuppliers.length === 0 || !currentUserApplication}
@@ -1922,9 +2560,6 @@ BIG Marketplace Africa Team`;
                 <button onClick={() => setShowFilters(true)} style={filterButtonStyle}>
                   <Filter size={16} />
                   Filter
-                </button>
-                <button onClick={handleNewRequest} style={newRequestButtonStyle}>
-                  New Requests
                 </button>
                 {contactedApplications.length > 0 && (
                   <button
@@ -1948,6 +2583,9 @@ BIG Marketplace Africa Team`;
                 )}
               </div>
             </div>
+
+            {/* Legend */}
+            {showLegend && renderLegend()}
 
             {/* Error Display */}
             {aiAnalysisError && (
@@ -1980,8 +2618,8 @@ BIG Marketplace Africa Team`;
                   <col style={{ width: "5%" }} />
                   <col style={{ width: "5%" }} />
                   <col style={{ width: "8%" }} />
-                  <col style={{ width: "8%" }} />
-                  <col style={{ width: "8%" }} />
+                  <col style={{ width: "10%" }} /> {/* Increased width for service required */}
+                  <col style={{ width: "7%" }} />
                   <col style={{ width: "8%" }} />
                   <col style={{ width: "8%" }} />
                   <col style={{ width: "8%" }} />
@@ -2005,207 +2643,7 @@ BIG Marketplace Africa Team`;
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredSuppliers.map((supplier) => {
-                    const statusStyle = getStatusStyle(supplier.status)
-                    const stageStyle = getStageStyle(supplier.currentStage)
-
-                    return (
-                      <tr key={supplier.id} style={tableRowStyle}>
-                        <td style={tableCellStyle}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                            <div>
-                              <span onClick={() => handleViewDetails(supplier)} style={supplierNameStyle}>
-                                <TruncatedText
-                                  text={supplier.entityOverview?.tradingName || supplier.entityOverview?.registeredName}
-                                  maxLength={15}
-                                />
-                              </span>
-                            </div>
-                          </div>
-                        </td>
-
-                        <td style={tableCellStyle}>
-                          <TruncatedText text={supplier.entityOverview?.location || "Not specified"} maxLength={12} />
-                        </td>
-
-                        <td style={tableCellStyle}>
-                          <TruncatedText
-                            text={supplier.entityOverview?.economicSectors?.[0] || "Not specified"}
-                            maxLength={12}
-                          />
-                        </td>
-
-                        <td style={tableCellStyle}>
-                          <TruncatedText text={supplier.legalCompliance?.bbbeeLevel || "N/A"} maxLength={8} />
-                        </td>
-
-                        <td style={tableCellStyle}>
-                          <TruncatedText
-                            text={supplier.financialOverview?.annualRevenue || "Not specified"}
-                            maxLength={12}
-                          />
-                        </td>
-
-                        <td style={tableCellStyle}>
-                          <TruncatedText
-                            text={
-                              supplier.productsServices?.productCategories?.[0]?.name ||
-                              supplier.productsServices?.serviceCategories?.[0]?.name ||
-                              "Not specified"
-                            }
-                            maxLength={10}
-                          />
-                        </td>
-
-                        <td style={tableCellStyle}>
-                          <TruncatedText
-                            text={supplier.serviceRequired || "Not specified"}
-                            maxLength={15}
-                          />
-                        </td>
-
-                        <td style={tableCellStyle}>
-                          <TruncatedText text={supplier.urgency || "1 month"} maxLength={10} />
-                        </td>
-
-                        <td style={tableCellStyle}>
-                          <div style={matchContainerStyle}>
-                            <div style={progressBarStyle}>
-                              <div
-                                style={{
-                                  ...progressFillStyle,
-                                  width: `${supplier.matchPercentage}%`,
-                                  background:
-                                    supplier.matchPercentage > 75
-                                      ? "#48BB78"
-                                      : supplier.matchPercentage > 50
-                                        ? "#F6AD55"
-                                        : "#F56565",
-                                }}
-                              />
-                            </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "4px" }}>
-                              <span
-                                style={{
-                                  ...matchScoreStyle,
-                                  color:
-                                    supplier.matchPercentage > 75
-                                      ? "#48BB78"
-                                      : supplier.matchPercentage > 50
-                                        ? "#D69E2E"
-                                        : "#E53E3E",
-                                }}
-                              >
-                                {supplier.matchPercentage}%
-                              </span>
-                              <Eye
-                                size={14}
-                                style={{
-                                  cursor: "pointer",
-                                  color: "#a67c52",
-                                }}
-                                onClick={() => handleShowMatchBreakdown(supplier)}
-                                title="View match breakdown"
-                              />
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* NEW: Secondary Match Column */}
-
-                        <td style={tableCellStyle}>
-                          {supplier.secondaryMatchScore !== null && supplier.secondaryMatchScore !== undefined ? (
-                            <div style={matchContainerStyle}>
-                              <div style={progressBarStyle}>
-                                <div
-                                  style={{
-                                    ...progressFillStyle,
-                                    width: `${calculateCombinedMatchScore(supplier.matchPercentage, supplier.secondaryMatchScore)}%`,
-                                    backgroundColor: getSecondaryMatchColor(
-                                      calculateCombinedMatchScore(supplier.matchPercentage, supplier.secondaryMatchScore)
-                                    ),
-                                  }}
-                                />
-                              </div>
-                              <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "4px" }}>
-                                <span
-                                  style={{
-                                    ...matchScoreStyle,
-                                    color: getSecondaryMatchColor(
-                                      calculateCombinedMatchScore(supplier.matchPercentage, supplier.secondaryMatchScore)
-                                    ),
-                                    fontWeight: "bold",
-                                  }}
-                                >
-                                  {calculateCombinedMatchScore(supplier.matchPercentage, supplier.secondaryMatchScore)}%
-                                </span>
-                                <Eye
-                                  size={14}
-                                  style={{
-                                    cursor: "pointer",
-                                    color: "#a67c52",
-                                  }}
-                                  onClick={() => handleShowSecondaryBreakdown(supplier)}
-                                  title="View secondary match breakdown"
-                                />
-                              </div>
-                            </div>
-                          ) : (
-                            <span style={{
-                              color: "#999",
-                              fontSize: "0.75rem",
-                              fontStyle: "italic"
-                            }}>
-                              Pending analysis
-                            </span>
-                          )}
-                        </td>
-
-                        <td style={tableCellStyle}>
-                          <button
-                            onClick={() => handleConnectClick(supplier)}
-                            style={{
-                              ...statusBadgeStyle,
-                              backgroundColor: "#5D2A0A",
-                              color: "white",
-                              padding: "0.25rem 0.5rem",
-                              cursor: "pointer",
-                              border: "none",
-                              borderRadius: "3px",
-                              fontWeight: "500",
-                              fontSize: "0.65rem",
-                            }}
-                          >
-                            Contact
-                          </button>
-                        </td>
-
-                        <td style={{ ...tableCellStyle, borderRight: "none" }}>
-                          <div
-                            style={{
-                              ...statusBadgeStyle,
-                              backgroundColor: stageStyle.backgroundColor,
-                              color: stageStyle.color,
-                              fontSize: "0.65rem",
-                              padding: "0.15rem 0.3rem",
-                              textAlign: "center",
-                              lineHeight: "1.2",
-                              minHeight: "2.5rem",
-                              display: "flex",
-                              flexDirection: "column",
-                              justifyContent: "center",
-                            }}
-                          >
-                            {supplier.currentStage.split(" ").map((word, index) => (
-                              <div key={index} style={{ fontSize: "0.6rem" }}>
-                                {word}
-                              </div>
-                            ))}
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
+                  {renderSupplierRows()} {/* Use the new render function */}
                 </tbody>
               </table>
             </div>
@@ -3646,7 +4084,7 @@ const newRequestButtonStyle = {
   fontSize: "0.875rem",
   fontWeight: "500",
   transition: "all 0.2s",
-}
+};
 
 const filterButtonStyle = {
   background: "#F5EBE0",

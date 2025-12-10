@@ -212,6 +212,10 @@ import CatalystDeclarationConsent from "./catalyst/CatalystUniversalProfile/cata
 import FundingApplication from "./smses/FundingApplication/FundingApplication"
 import ProductApplication from "./smses/ProductApplication/ProductApplication"
 import AdvisoryApplication from "./smses/AdvisorApplication/AdvisorApplication"
+// NEW: Import RequestOverview and MatchingPreferences
+import RequestOverview from "./smses/ProductApplication/RequestOverview"
+import MatchingPreferences from "./smses/ProductApplication/MatchingPreferences"
+import SupplierTabbedTables from "./smses/MySupplierMatches/supplier-tabbed-tables"
 // Matches Components
 import CustomerMatchesPage from "./smses/MyCustomerMatches/customer-matches"
 import FundingMatchesPage from "./smses/MyFunderMatches/funders-matches"
@@ -248,7 +252,7 @@ import BigInsights from "./smses/BigInsights/BigInsights"
 import { AdvisorInsights } from "./advisors/AdvisorInsights/AdvisorInsights"
 import { Insights as InternInsights } from "./Interns/InternInsights/internInsights"
 import { AcceleratorInsights as CatalystInsights } from "./catalyst/CatalystInsights/catalystInsights"
-import {InvestorInsights}  from "./Investor/InvestorInsights/investorInsights"
+import { InvestorInsights } from "./Investor/InvestorInsights/investorInsights"
 import MyCohorts from "Investor/MyCohorts/MyCohorts"
 // Initial Data States
 const initialFormData = {
@@ -606,7 +610,7 @@ function App() {
         ]}
         currentSection={section}
         completedSections={new Set()}
-        onSectionChange={() => {}}
+        onSectionChange={() => { }}
       />
       <div className="bg-white rounded-lg shadow-md p-6 mt-6">
         {formData.advisorProfile[section] !== undefined ? (
@@ -635,7 +639,7 @@ function App() {
         ]}
         currentSection={section}
         completedSections={new Set()}
-        onSectionChange={() => {}}
+        onSectionChange={() => { }}
       />
       <div className="bg-white rounded-lg shadow-md p-6 mt-6">
         {formData.internProfile[section] !== undefined ? (
@@ -661,7 +665,7 @@ function App() {
         ]}
         currentSection={section}
         completedSections={new Set()}
-        onSectionChange={() => {}}
+        onSectionChange={() => { }}
       />
       <div className="bg-white rounded-lg shadow-md p-6 mt-6">
         {formData.programSponsorProfile[section] !== undefined ? (
@@ -691,7 +695,7 @@ function App() {
         <Route path="/HowItWorksAdvisors" element={<HowItWorksAdvisors />} />
         <Route path="/HowItWorksInterns" element={<HowItWorksInterns />} />
         <Route path="/LoginRegister" element={<LoginRegister />} />
-         <Route path="/RetrieveAccount" element={<RetrieveAccount />} />
+        <Route path="/RetrieveAccount" element={<RetrieveAccount />} />
         <Route path="/AboutPage" element={<AboutPage />} />
         <Route path="/FAQPage" element={<FAQPage />} />
         <Route path="/HomePage" element={<HomePage />} />
@@ -932,8 +936,15 @@ function App() {
         <Route path="/applications/funding/:section" element={renderSMERoute(FundingApplication)} />
         <Route path="/applications/product" element={renderSMERoute(ProductApplication)} />
         <Route path="/applications/product/:section" element={renderSMERoute(ProductApplication)} />
+
+        {/* NEW: Direct rotes for the New Request Feature */}
+        <Route path="/applications/new-request" element={renderSMERoute(RequestOverview)} />
+        <Route path="/applications/new-request/overview" element={renderSMERoute(RequestOverview)} />
+        <Route path="/applications/new-request/preferences" element={renderSMERoute(MatchingPreferences)} />
+
         <Route path="/applications/advisory" element={renderSMERoute(AdvisoryApplication)} />
-        <Route path="/applications/advisory/:section" element={renderSMERoute(AdvisoryApplication)} />
+        <Route path="/applications/advisory/:section" element={renderSMERoute(AdvisoryApplication)} />u
+
         {/* NEW: Intern Application Routes */}
         <Route path="/applications/intern" element={renderSMERoute(InternApplication)} />
         <Route path="/applications/intern/:section" element={renderSMERoute(InternApplication)} />
@@ -941,6 +952,7 @@ function App() {
         <Route path="/applications/intern/job-overview" element={renderSMERoute(InternJobOverview)} />
         <Route path="/applications/intern/internship-request" element={renderSMERoute(InternInternshipRequest)} />
         <Route path="/applications/intern/matching-agreement" element={renderSMERoute(InternMatchingAgreement)} />
+
         {/* SME Universal Profile Sub-Routes */}
         <Route path="/profile/instructions" element={renderSMEProfileSection(SMEInstructions, "instructions")} />
         <Route path="/profile/entity-overview" element={renderSMEProfileSection(SMEEntityOverview, "entityOverview")} />
@@ -1028,6 +1040,18 @@ function App() {
           path="/support-profile/summary"
           element={renderSupportProfileSection(CatalystUniversalProfile, "summary")} // This will render the main CatalystUniversalProfile which handles the summary step
         />
+
+        <Route
+          path="/supplier-matches"
+          element={renderSMERoute(() => (
+            <SupplierTabbedTables
+              onNewRequest={() => {
+                console.log("New request callback called");
+              }}
+            />
+          ))}
+        />
+
         {/* Matches Routes */}
         <Route path="/customer-matches" element={renderSMERoute(CustomerMatchesPage)} />
         <Route path="/funding-matches" element={renderSMERoute(FundingMatchesPage)} />
@@ -1070,7 +1094,7 @@ function App() {
         />
         <Route path="/applications/intern-application" element={<Navigate to="/applications/intern" replace />} />
 
-        <Route path ="/my-cohorts" element={renderInvestorRoute(MyCohorts)} />
+        <Route path="/my-cohorts" element={renderInvestorRoute(MyCohorts)} />
       </Routes>
     </Router>
   )

@@ -28,6 +28,7 @@
     "emailjs-com": "^3.2.0",
     "express": "^5.1.0",
     "express-rate-limit": "^7.5.1",
+    "fabric": "^6.9.0",
     "firebase": "^11.7.3",
     "firebase-admin": "^13.4.0",
     "framer-motion": "^12.9.2",

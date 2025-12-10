@@ -2,6 +2,23 @@
 import FormField from "./FormField"
 import { bbeeLevels, ownershipTypes, engagementTypes, deliveryModes, africanCountries } from "./applicationOptions"
 import "./ProductApplication.css"
+import { getAuth } from "firebase/auth"
+import {
+  addDoc,
+  collection,
+  getDocs,
+  doc,
+  getDoc,
+  onSnapshot,
+  query,
+  where,
+  updateDoc,
+  serverTimestamp,
+  setDoc,
+  arrayUnion
+} from "firebase/firestore"
+import { db } from "../../firebaseConfig"
+import { useNavigate } from "react-router-dom"
 
 // Currency formatter function
 const formatCurrency = (value) => {
@@ -28,9 +45,53 @@ const MatchingPreferences = ({ data = {}, updateData, onSubmit }) => {
     ...data,
   }
 
+  // Add navigation hook
+  const navigate = useNavigate();
+
+  const handleSubmit = async () => {
+    try {
+      // Save application data to Firestore
+      const user = getAuth().currentUser;
+      if (!user) {
+        console.error("No user logged in");
+        return;
+      }
+
+      const applicationData = {
+        ...formData,
+        matchingPreferences: formData,
+        updatedAt: serverTimestamp(),
+        applicationType: "product",
+        status: "submitted"
+      };
+
+      // Save to Firestore
+      await setDoc(doc(db, "productApplications", user.uid), applicationData, { merge: true });
+
+      console.log("Application saved successfully");
+
+      // CHECK: If we're in embedded mode (from ProductApplication), call onSubmit prop
+      if (onSubmit) {
+        // This will trigger the parent ProductApplication to handle submission
+        onSubmit();
+      } else {
+        // Fallback: Navigate to supplier-matches (with hyphen)
+        navigate('/supplier-matches', {
+          state: {
+            newApplicationSubmitted: true,
+            applicationId: user.uid
+          }
+        });
+      }
+
+    } catch (error) {
+      console.error("Error saving application:", error);
+    }
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target
-    
+
     // Handle currency formatting for budget fields
     if (name === 'minBudget' || name === 'maxBudget') {
       const formattedValue = formatCurrency(value);
@@ -54,7 +115,7 @@ const MatchingPreferences = ({ data = {}, updateData, onSubmit }) => {
     const newValues = currentValues.includes(value)
       ? currentValues.filter(v => v !== value)
       : [...currentValues, value];
-    
+
     updateData({ ...formData, [field]: newValues });
   };
 
@@ -252,28 +313,28 @@ const MatchingPreferences = ({ data = {}, updateData, onSubmit }) => {
       </div>
 
       {/* Submit Button */}
-      <div className="action-buttons" style={{ 
-        display: "flex", 
-        gap: 10, 
-        justifyContent: "flex-end", 
-        alignItems: "center", 
-        marginTop: 30, 
-        padding: "20px 0", 
-        borderTop: "1px solid #eee", 
-        width: "100%" 
+      <div className="action-buttons" style={{
+        display: "flex",
+        gap: 10,
+        justifyContent: "flex-end",
+        alignItems: "center",
+        marginTop: 30,
+        padding: "20px 0",
+        borderTop: "1px solid #eee",
+        width: "100%"
       }}>
-        <button 
-          type="button" 
-          onClick={onSubmit} 
-          className="btn btn-primary" 
-          style={{ 
-            display: "flex", 
-            alignItems: "center", 
-            gap: 5, 
-            padding: "12px 24px", 
-            fontSize: "clamp(0.9rem, 2vw, 1rem)", 
-            minWidth: 140, 
-            justifyContent: "center" 
+        <button
+          type="button"
+          onClick={handleSubmit} // Changed to handleSubmit
+          className="btn btn-primary"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            padding: "12px 24px",
+            fontSize: "clamp(0.9rem, 2vw, 1rem)",
+            minWidth: 140,
+            justifyContent: "center"
           }}
         >
           Submit Application

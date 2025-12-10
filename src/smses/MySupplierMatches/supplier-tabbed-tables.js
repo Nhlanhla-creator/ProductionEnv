@@ -50,9 +50,9 @@ const TruncatedText = ({ text, maxLength = 40 }) => {
 // Empty table row component for when there are no deals
 const EmptyTableRow = () => (
   <tr style={{ borderBottom: "1px solid #E8D5C4" }}>
-    <td colSpan="10" style={{ 
+    <td colSpan="10" style={{
       padding: "2rem",
-      textAlign: "center", 
+      textAlign: "center",
       color: "#999",
       fontStyle: "italic",
       borderRight: "none"
@@ -766,10 +766,10 @@ const ProductApplicationWrapper = () => {
 
   if (!isMounted) {
     return (
-      <div style={{ 
-        display: "flex", 
-        justifyContent: "center", 
-        alignItems: "center", 
+      <div style={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
         minHeight: "400px",
         backgroundColor: "#f9f9f9",
         borderRadius: "8px",
@@ -784,16 +784,16 @@ const ProductApplicationWrapper = () => {
   }
 
   return (
-    <div style={{ 
-      width: "100%", 
+    <div style={{
+      width: "100%",
       border: "2px solid #e0e0e0",
       borderRadius: "12px",
       overflow: "hidden",
       boxShadow: "0 4px 12px rgba(0,0,0,0.1)"
     }}>
-      <div style={{ 
-        backgroundColor: "#f8f9fa", 
-        padding: "16px", 
+      <div style={{
+        backgroundColor: "#f8f9fa",
+        padding: "16px",
         borderBottom: "1px solid #e0e0e0",
         display: "flex",
         alignItems: "center",
@@ -810,21 +810,40 @@ const ProductApplicationWrapper = () => {
 };
 
 // Main Tabbed Component for Suppliers
-const SupplierTabbedTables = ({ 
-  onSupplierContacted, 
-  onSuppliersUpdate, 
-  defaultActiveTab = "my-matches"  // Changed default to "my-matches"
+const SupplierTabbedTables = ({
+  onSupplierContacted,
+  onSuppliersUpdate,
+  defaultActiveTab = "my-matches",
+  // ADD THIS PROP:
+  onNewRequest = null  // Callback for new request
 }) => {
   const [activeTab, setActiveTab] = useState(defaultActiveTab)
   const [allSuppliers, setAllSuppliers] = useState([])
   const [filteredSuppliers, setFilteredSuppliers] = useState([])
   const [acceptedSuppliers, setAcceptedSuppliers] = useState([])
+  // ADD STATE FOR RESETTING APPLICATION
+  const [resetApplicationKey, setResetApplicationKey] = useState(Date.now())
 
   // Reset active tab when defaultActiveTab prop changes
   useEffect(() => {
     console.log("Default active tab changed to:", defaultActiveTab)
     setActiveTab(defaultActiveTab)
   }, [defaultActiveTab])
+
+  const handleNewRequest = () => {
+    console.log("Starting new request from tabbed tables")
+
+    // Switch to application tab
+    setActiveTab("application")
+
+    // Reset the application form by updating the key
+    setResetApplicationKey(Date.now())
+
+    // Notify parent if needed
+    if (onNewRequest) {
+      onNewRequest()
+    }
+  }
 
   const handleTabChange = (tab) => {
     console.log("Changing tab to:", tab)
@@ -1010,18 +1029,15 @@ const SupplierTabbedTables = ({
         }}
       >
         {activeTab === "application" && (
-  <div style={{ width: "100%" }}>
-  
-
-    <div style={{ padding: 0 }}>
-      <ProductServiceApplication
-        embedded
-        onNavigateToMatches={() => setActiveTab("my-matches")}
-        onNavigateToDashboard={() => setActiveTab("my-matches")} // or a different tab if you prefer
-      />
-    </div>
-  </div>
-)}
+          <div style={{ width: "100%" }}>
+            <ProductServiceApplication
+              key={resetApplicationKey} // This will reset the component when key changes
+              embedded
+              onNavigateToMatches={() => setActiveTab("my-matches")}
+              onNewRequest={() => { }} // Already in application tab
+            />
+          </div>
+        )}
 
 
         {activeTab === "my-matches" && (
@@ -1030,6 +1046,7 @@ const SupplierTabbedTables = ({
               onSupplierContacted={onSupplierContacted}
               onSuppliersUpdate={handleSuppliersUpdate}
               onSupplierAccepted={handleSupplierAccepted}
+              onNewRequest={handleNewRequest}  // Add this line
             />
           </div>
         )}
