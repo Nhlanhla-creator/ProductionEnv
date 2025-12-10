@@ -3,7 +3,7 @@ import { useState } from "react"
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom"
 import "./App.css"
 import HomeHeader from "./main_pages/SMEs/HomeHeader"
-// Admin Components - NEW
+// Admin Components - UPDATED
 import AdminSidebar from "./admin/layout/AdminSidebar"
 import AdminHeader from "./admin/layout/AdminHeader"
 import AdminDashboard from "./admin/pages/AdminDashboard"
@@ -11,6 +11,11 @@ import AllSMEs from "./admin/pages/AllSMEs"
 import AllInvestors from "./admin/pages/AllInvestors"
 import AllCatalysts from "./admin/pages/AllCatalysts"
 import AllAdvisors from "./admin/pages/AllAdvisors"
+import AllInterns from "./admin/pages/AllInterns"
+import AllSponsors from "./admin/pages/AllSponsors"
+import Subscriptions from "./admin/pages/Subscriptions"
+import QRCodes from "./admin/pages/QRCodes"
+import CardLandingPage from "./admin/pages/CardLandingPage" // NEW - Landing page for scanned QR codes
 import DocumentManagement from "./admin/pages/growth-tools-purchased"
 import AdminSettings from "./admin/pages/AdminSettings"
 // Admin Settings Subcategory Components
@@ -212,10 +217,6 @@ import CatalystDeclarationConsent from "./catalyst/CatalystUniversalProfile/cata
 import FundingApplication from "./smses/FundingApplication/FundingApplication"
 import ProductApplication from "./smses/ProductApplication/ProductApplication"
 import AdvisoryApplication from "./smses/AdvisorApplication/AdvisorApplication"
-// NEW: Import RequestOverview and MatchingPreferences
-import RequestOverview from "./smses/ProductApplication/RequestOverview"
-import MatchingPreferences from "./smses/ProductApplication/MatchingPreferences"
-import SupplierTabbedTables from "./smses/MySupplierMatches/supplier-tabbed-tables"
 // Matches Components
 import CustomerMatchesPage from "./smses/MyCustomerMatches/customer-matches"
 import FundingMatchesPage from "./smses/MyFunderMatches/funders-matches"
@@ -252,8 +253,9 @@ import BigInsights from "./smses/BigInsights/BigInsights"
 import { AdvisorInsights } from "./advisors/AdvisorInsights/AdvisorInsights"
 import { Insights as InternInsights } from "./Interns/InternInsights/internInsights"
 import { AcceleratorInsights as CatalystInsights } from "./catalyst/CatalystInsights/catalystInsights"
-import { InvestorInsights } from "./Investor/InvestorInsights/investorInsights"
+import {InvestorInsights}  from "./Investor/InvestorInsights/investorInsights"
 import MyCohorts from "Investor/MyCohorts/MyCohorts"
+
 // Initial Data States
 const initialFormData = {
   entityOverview: {},
@@ -610,7 +612,7 @@ function App() {
         ]}
         currentSection={section}
         completedSections={new Set()}
-        onSectionChange={() => { }}
+        onSectionChange={() => {}}
       />
       <div className="bg-white rounded-lg shadow-md p-6 mt-6">
         {formData.advisorProfile[section] !== undefined ? (
@@ -639,7 +641,7 @@ function App() {
         ]}
         currentSection={section}
         completedSections={new Set()}
-        onSectionChange={() => { }}
+        onSectionChange={() => {}}
       />
       <div className="bg-white rounded-lg shadow-md p-6 mt-6">
         {formData.internProfile[section] !== undefined ? (
@@ -665,7 +667,7 @@ function App() {
         ]}
         currentSection={section}
         completedSections={new Set()}
-        onSectionChange={() => { }}
+        onSectionChange={() => {}}
       />
       <div className="bg-white rounded-lg shadow-md p-6 mt-6">
         {formData.programSponsorProfile[section] !== undefined ? (
@@ -757,15 +759,24 @@ function App() {
         <Route path="/BookSession" element={<BookSession />} />
         <Route path="/HomePageAdvisor" element={<HomePageAdvisor />} />
         <Route path="/CharmSchool" element={<CharmSchool />} />
-        {/* Admin Dashboard Routes - NEW */}
+
+        {/* NEW: QR Code Landing Page Route - PUBLIC (No layout, shows when QR is scanned) */}
+        <Route path="/card/:cardId" element={<CardLandingPage />} />
+        
+        {/* Admin Dashboard Routes - UPDATED */}
         <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
         <Route path="/admin/dashboard" element={renderAdminRoute(AdminDashboard)} />
         <Route path="/admin/smes" element={renderAdminRoute(AllSMEs)} />
         <Route path="/admin/investors" element={renderAdminRoute(AllInvestors)} />
         <Route path="/admin/catalysts" element={renderAdminRoute(AllCatalysts)} />
         <Route path="/admin/advisors" element={renderAdminRoute(AllAdvisors)} />
+        <Route path="/admin/interns" element={renderAdminRoute(AllInterns)} />
+        <Route path="/admin/sponsors" element={renderAdminRoute(AllSponsors)} />
+        <Route path="/admin/qr-codes" element={renderAdminRoute(QRCodes)} />
+        <Route path="/admin/subscriptions" element={renderAdminRoute(Subscriptions)} />
         <Route path="/admin/documents" element={renderAdminRoute(DocumentManagement)} />
         <Route path="/admin/settings" element={renderAdminRoute(AdminSettings)} />
+        
         {/* Admin Settings Subcategory Routes */}
         <Route path="/admin/settings/admin-users" element={renderAdminRoute(AdminUsers)} />
         <Route path="/admin/settings/approval-workflows" element={renderAdminRoute(ApprovalWorkflows)} />
@@ -773,6 +784,7 @@ function App() {
         <Route path="/admin/settings/email-templates" element={renderAdminRoute(EmailTemplates)} />
         <Route path="/admin/settings/system-config" element={renderAdminRoute(SystemConfig)} />
         <Route path="/admin/settings/backup-export" element={renderAdminRoute(BackupExport)} />
+        
         {/* Protected SME Dashboard Routes */}
         <Route path="/dashboard" element={renderSMERoute(Dashboard)} />
         <Route path="/profile" element={renderSMERoute(Profile)} />
@@ -833,8 +845,7 @@ function App() {
           element={renderProgramSponsorRoute(ProgramSponsorBillingHistory)}
         />
         {/* Protected Support Program Dashboard Routes */}
-        <Route path="/support-profile" element={renderSupportProgramRoute(CatalystUniversalProfile)} />{" "}
-        {/* Corrected component name */}
+        <Route path="/support-profile" element={renderSupportProgramRoute(CatalystUniversalProfile)} />
         <Route path="/support-beneficiaries" element={renderSupportProgramRoute(FindMatches)} />
         <Route path="/support-matches" element={renderSupportProgramRoute(SupportMatchesPage)} />
         <Route path="/support-documents" element={renderSupportProgramRoute(CatalystDocuments)} />
@@ -936,15 +947,8 @@ function App() {
         <Route path="/applications/funding/:section" element={renderSMERoute(FundingApplication)} />
         <Route path="/applications/product" element={renderSMERoute(ProductApplication)} />
         <Route path="/applications/product/:section" element={renderSMERoute(ProductApplication)} />
-
-        {/* NEW: Direct rotes for the New Request Feature */}
-        <Route path="/applications/new-request" element={renderSMERoute(RequestOverview)} />
-        <Route path="/applications/new-request/overview" element={renderSMERoute(RequestOverview)} />
-        <Route path="/applications/new-request/preferences" element={renderSMERoute(MatchingPreferences)} />
-
         <Route path="/applications/advisory" element={renderSMERoute(AdvisoryApplication)} />
-        <Route path="/applications/advisory/:section" element={renderSMERoute(AdvisoryApplication)} />u
-
+        <Route path="/applications/advisory/:section" element={renderSMERoute(AdvisoryApplication)} />
         {/* NEW: Intern Application Routes */}
         <Route path="/applications/intern" element={renderSMERoute(InternApplication)} />
         <Route path="/applications/intern/:section" element={renderSMERoute(InternApplication)} />
@@ -952,7 +956,6 @@ function App() {
         <Route path="/applications/intern/job-overview" element={renderSMERoute(InternJobOverview)} />
         <Route path="/applications/intern/internship-request" element={renderSMERoute(InternInternshipRequest)} />
         <Route path="/applications/intern/matching-agreement" element={renderSMERoute(InternMatchingAgreement)} />
-
         {/* SME Universal Profile Sub-Routes */}
         <Route path="/profile/instructions" element={renderSMEProfileSection(SMEInstructions, "instructions")} />
         <Route path="/profile/entity-overview" element={renderSMEProfileSection(SMEEntityOverview, "entityOverview")} />
@@ -1038,20 +1041,8 @@ function App() {
         />
         <Route
           path="/support-profile/summary"
-          element={renderSupportProfileSection(CatalystUniversalProfile, "summary")} // This will render the main CatalystUniversalProfile which handles the summary step
+          element={renderSupportProfileSection(CatalystUniversalProfile, "summary")}
         />
-
-        <Route
-          path="/supplier-matches"
-          element={renderSMERoute(() => (
-            <SupplierTabbedTables
-              onNewRequest={() => {
-                console.log("New request callback called");
-              }}
-            />
-          ))}
-        />
-
         {/* Matches Routes */}
         <Route path="/customer-matches" element={renderSMERoute(CustomerMatchesPage)} />
         <Route path="/funding-matches" element={renderSMERoute(FundingMatchesPage)} />
