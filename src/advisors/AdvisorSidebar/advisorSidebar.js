@@ -35,6 +35,21 @@ function AdvisorSidebar({ companyName }) {
   const [userName, setUserName] = useState(user ? user.displayName || user.email.split("@")[0] : "User")
   const [date, setDate] = useState(new Date())
   const [showHelpModal, setShowHelpModal] = useState(false)
+const handleLogout = async () => {
+  try {
+    await auth.signOut();
+    // Clear any session storage
+    sessionStorage.clear();
+    // Clear any local storage related to auth
+    localStorage.removeItem('sidebarCollapsed');
+    // Navigate to login
+    navigate('/LoginRegister');
+  } catch (error) {
+    console.error("Error signing out: ", error);
+    // You might want to show a toast notification here
+    alert('Error signing out. Please try again.');
+  }
+};
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
@@ -282,7 +297,7 @@ function AdvisorSidebar({ companyName }) {
         </div>
 
         {/* Logout */}
-        <div className={styles.logoutSection} onClick={() => navigate("/auth")}>
+        <div className={styles.logoutSection} onClick={handleLogout}>
           <div className={styles.logoutIcon}>
             <LogOut size={18} />
           </div>

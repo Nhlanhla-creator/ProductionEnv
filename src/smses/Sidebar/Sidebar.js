@@ -387,6 +387,22 @@ const Sidebar = ({ companyName = "Company Name" }) => {
     }
   }
 
+const handleLogout = async () => {
+  try {
+    await auth.signOut();
+    // Clear any session storage
+    sessionStorage.clear();
+    // Clear any local storage related to auth
+    localStorage.removeItem('sidebarCollapsed');
+    // Navigate to login
+    navigate('/LoginRegister');
+  } catch (error) {
+    console.error("Error signing out: ", error);
+    // You might want to show a toast notification here
+    alert('Error signing out. Please try again.');
+  }
+};
+
   const handleSubItemClick = (subItem, e) => {
     console.log("Clicking:", subItem.label, "Route:", subItem.route)
     e.stopPropagation()
@@ -528,7 +544,7 @@ const Sidebar = ({ companyName = "Company Name" }) => {
           </nav>
         </div>
         {/* Footer - Logout */}
-        <div className="logout-section" onClick={() => navigate("/auth")}>
+       <div className="logout-section" onClick={handleLogout}>
           <div className="logout-icon">
             <LogOut size={18} />
           </div>
