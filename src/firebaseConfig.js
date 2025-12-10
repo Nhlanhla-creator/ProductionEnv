@@ -3,7 +3,7 @@ import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
 import 'firebase/compat/storage';
-import { getAuth,  } from 'firebase/auth';
+import { getAuth } from 'firebase/auth';
 import 'firebase/compat/functions'; 
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 import { initializeApp } from 'firebase/app';
@@ -34,7 +34,6 @@ if (window.location.hostname === 'localhost') {
 }
 
 if(process.env.NODE_ENV === "development"){
- 
   connectFunctionsEmulator(getFunctions(app),"localhost",5001)
 }
 
@@ -56,6 +55,10 @@ const sendEmailVerification = (user) => {
   return user.sendEmailVerification();
 };
 
+// ADDED THIS FUNCTION
+const sendPasswordResetEmail = (auth, email) => {
+  return auth.sendPasswordResetEmail(email);
+};
 
 // Export Firestore functions
 const doc = (db, collection, id) => {
@@ -104,5 +107,6 @@ export {
   getDownloadURL,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  sendEmailVerification
+  sendEmailVerification,
+  sendPasswordResetEmail
 };

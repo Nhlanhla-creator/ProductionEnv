@@ -3,6 +3,10 @@ import FormField from "./FormField";
 import FileUpload from "./FileUpload";
 import { engagementTypes, deliveryModes, africanCountries, productCategories } from "./applicationOptions";
 import "./ProductApplication.css";
+import { useNavigate } from "react-router-dom";
+import { getAuth } from "firebase/auth";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "../../firebaseConfig";
 
 // Currency formatter function
 const formatCurrency = (value) => {
@@ -436,8 +440,7 @@ const MultiSelectField = ({
   );
 };
 
-const RequestOverview = ({ data = {}, updateData }) => {
-  // Initialize with default values
+const RequestOverview = ({ data = {}, updateData, onSaveAndContinue }) => {
   const [formData, setFormData] = useState({
     purpose: '',
     categories: [],
@@ -447,6 +450,9 @@ const RequestOverview = ({ data = {}, updateData }) => {
     ...data
   });
 
+  const navigate = useNavigate();
+
+  
   const handleInputChange = (field, value) => {
     const updatedData = { ...formData, [field]: value };
     
@@ -457,6 +463,24 @@ const RequestOverview = ({ data = {}, updateData }) => {
     
     setFormData(updatedData);
     updateData(updatedData);
+    
+    // Auto-save progress to Firestore
+    autoSaveProgress(updatedData);
+  };
+  
+  const autoSaveProgress = async (data) => {
+    try {
+      const user = getAuth().currentUser;
+      if (!user) return;
+      
+      // Save to temporary storage or Firestore
+      localStorage.setItem('applicationDraft', JSON.stringify({
+        ...data,
+        savedAt: new Date().toISOString()
+      }));
+    } catch (error) {
+      console.error("Error auto-saving:", error);
+    }
   };
 
   const handleMultiSelectChange = (field, option) => {

@@ -46,6 +46,7 @@ const ProductApplication = ({
   const [applicationSubmitted, setApplicationSubmitted] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
 
+  const [forceShowTitle, setForceShowTitle] = useState(true);
   const [showWelcomePopup, setShowWelcomePopup] = useState(false)
   const [showCongratulationsPopup, setShowCongratulationsPopup] = useState(false)
   const [currentOnboardingStep, setCurrentOnboardingStep] = useState(0)
@@ -311,24 +312,45 @@ const ProductApplication = ({
   }
 
   const renderActiveSection = () => {
-    const sectionData = formData[activeSection] || {}
-    const sectionProps = { 
-      data: sectionData, 
+    const sectionData = formData[activeSection] || {};
+    const sectionProps = {
+      data: sectionData,
       updateData: (newData) => updateFormData(activeSection, newData),
-      onSubmit: activeSection === "matchingPreferences" ? submitApplication : undefined
-    }
+      // Update this to handle submission properly
+      onSubmit: activeSection === "matchingPreferences" ? handleMatchingPreferencesSubmit : undefined
+    };
 
     switch (activeSection) {
       case "matchingPreferences":
-        return <MatchingPreferences {...sectionProps} />
+        return <MatchingPreferences {...sectionProps} />;
       case "requestOverview":
-        return <RequestOverview {...sectionProps} />
+        return <RequestOverview {...sectionProps} />;
       case "productsServices":
-        return <ProductsServices {...sectionProps} />
+        return <ProductsServices {...sectionProps} />;
       default:
-        return <MatchingPreferences {...sectionProps} />
+        return <MatchingPreferences {...sectionProps} />;
     }
   }
+
+  const handleMatchingPreferencesSubmit = async () => {
+    try {
+      // Save the application data
+      await submitApplication(); // This already exists in your code
+
+      // After successful submission:
+      if (embedded) {
+        // If embedded, notify parent to switch to matches tab
+        if (onNavigateToMatches) {
+          onNavigateToMatches();
+        }
+      } else {
+        // If not embedded, navigate to matches
+        // navigate('/supplier-matches'); // Commented out since we'll handle in MatchingPreferences
+      }
+    } catch (error) {
+      console.error("Error submitting application:", error);
+    }
+  };
 
   const isLastSection = activeSection === sections[sections.length - 1].id
   const isFirstSection = activeSection === sections[0].id
@@ -351,25 +373,34 @@ const ProductApplication = ({
   }, [embedded])
 
   // Embedded gets tight, route page gets padded
-  const getContainerStyles = () =>
-    embedded
-      ? {
-          width: "100%",
-          maxWidth: "100%",
-          margin: 0,
-          padding: 0,
-        }
-      : {
-          width: "100%",
-          minHeight: "100vh",
-          maxWidth: "100vw",
-          overflowX: "hidden",
-          padding: isSidebarCollapsed ? "80px 20px 20px 80px" : "80px 10px 20px 280px",
-          margin: "0",
-          boxSizing: "border-box",
-          position: "relative",
-          transition: "padding 0.3s ease",
-        }
+  const getContainerStyles = () => {
+    if (embedded) {
+      return {
+        width: "100%",
+        maxWidth: "100%",
+        margin: 0,
+        padding: "10px",
+        backgroundColor: "#f9f9f9",
+        borderRadius: "8px",
+        minHeight: "auto", // Don't force full height
+        boxSizing: "border-box"
+      };
+    } else {
+      // Original non-embedded styles
+      return {
+        width: "100%",
+        minHeight: "100vh",
+        maxWidth: "100vw",
+        overflowX: "hidden",
+        padding: isSidebarCollapsed ? "80px 20px 20px 80px" : "80px 10px 20px 280px",
+        margin: "0",
+        boxSizing: "border-box",
+        position: "relative",
+        transition: "padding 0.3s ease",
+      };
+    }
+  }
+
 
   // Summary: in embedded mode, don't gate on urlSection
   if (showSummary && !showWelcomePopup && (embedded || !urlSection)) {
@@ -377,7 +408,10 @@ const ProductApplication = ({
   }
 
   return (
-    <div style={getContainerStyles()} className="product-application-container">
+    <div
+      style={getContainerStyles()}
+      className={`product-application-container ${embedded ? 'embedded' : ''}`}
+    >
       {/* Welcome Popup */}
       {showWelcomePopup && (
         <div className="popup-overlay" style={{ position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", backgroundColor: "rgba(0, 0, 0, 0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 9999, padding: 20, boxSizing: "border-box" }}>
@@ -426,26 +460,84 @@ const ProductApplication = ({
         </div>
       )}
 
-      {/* Embedded header should be outside in parent, but keep title here too (harmless) */}
-      <h1 style={{ width: "100%", textAlign: "center", margin: "20px 0", fontSize: "clamp(1.5rem, 4vw, 2.5rem)", lineHeight: 1.2, wordBreak: "break-word" }}>
+      {/* Title - only show if not embedded or force show */}
+      <h1 style={{
+        width: "100%",
+        textAlign: "center",
+        margin: embedded ? "0 0 15px 0" : "20px 0",
+        fontSize: embedded ? "1.2rem" : "clamp(1.5rem, 4vw, 2.5rem)",
+        lineHeight: 1.2,
+        wordBreak: "break-word",
+        color: embedded ? "#333" : "inherit",
+        display: embedded ? "block" : "block" // Always show
+      }}>
         Products/Services Request
       </h1>
 
-      {/* Progress Tracker */}
-      <div className="profile-tracker" style={{ width: "100%", maxWidth: "100%", overflowX: "auto", padding: "10px 0", margin: "20px 0", boxSizing: "border-box" }}>
-        <div className="profile-tracker-inner" style={{ display: "flex", gap: 8, justifyContent: "center", alignItems: "center", minWidth: "max-content", padding: "0 10px", flexWrap: "wrap" }}>
+
+      {/* Progress Tracker - make it more compact for embedded */}
+      <div className="profile-tracker" style={{
+        width: "100%",
+        maxWidth: "100%",
+        overflowX: "auto",
+        padding: embedded ? "5px 0" : "10px 0",
+        margin: embedded ? "0 0 15px 0" : "20px 0",
+        boxSizing: "border-box",
+        backgroundColor: embedded ? "#fff" : "transparent",
+        borderRadius: embedded ? "6px" : "0",
+        border: embedded ? "1px solid #e0e0e0" : "none"
+      }}>
+        <div className="profile-tracker-inner" style={{
+          display: "flex",
+          gap: embedded ? "4px" : "8px",
+          justifyContent: "center",
+          alignItems: "center",
+          minWidth: "max-content",
+          padding: "0 10px",
+          flexWrap: embedded ? "nowrap" : "wrap"
+        }}>
           {sections.map((section) => (
             <button
               key={section.id}
               onClick={() => goToSection(section.id)}
               className={`profile-tracker-button ${activeSection === section.id ? "active" : completedSections[section.id] ? "completed" : "pending"}`}
-              style={{ minWidth: 100, maxWidth: 190, padding: "10px 8px", fontSize: "clamp(0.7rem, 1.5vw, 0.9rem)", lineHeight: 1.2, textAlign: "center", cursor: "pointer", transition: "all 0.3s ease", wordBreak: "break-word", hyphens: "auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", position: "relative", minHeight: 60 }}
+              style={{
+                minWidth: embedded ? "80px" : "100px",
+                maxWidth: embedded ? "120px" : "190px",
+                padding: embedded ? "6px 4px" : "10px 8px",
+                fontSize: embedded ? "0.7rem" : "clamp(0.7rem, 1.5vw, 0.9rem)",
+                lineHeight: 1.2,
+                textAlign: "center",
+                cursor: "pointer",
+                transition: "all 0.3s ease",
+                wordBreak: "break-word",
+                hyphens: "auto",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                position: "relative",
+                minHeight: embedded ? "45px" : "60px",
+                backgroundColor: embedded ? "#f5f5f5" : "inherit",
+                border: embedded ? "1px solid #ddd" : "none",
+                borderRadius: embedded ? "4px" : "0"
+              }}
             >
               {section.label.split("\n").map((line, i) => (
-                <span key={i} className="tracker-label-line" style={{ display: "block", margin: "1px 0" }}>{line}</span>
+                <span key={i} className="tracker-label-line" style={{
+                  display: "block",
+                  margin: "1px 0",
+                  fontSize: embedded ? "0.65rem" : "inherit"
+                }}>{line}</span>
               ))}
               {completedSections[section.id] && (
-                <CheckCircle className="check-icon" style={{ position: "absolute", top: 2, right: 2, width: 16, height: 16 }} />
+                <CheckCircle className="check-icon" style={{
+                  position: "absolute",
+                  top: 2,
+                  right: 2,
+                  width: embedded ? "12px" : "16px",
+                  height: embedded ? "12px" : "16px"
+                }} />
               )}
             </button>
           ))}
@@ -453,25 +545,70 @@ const ProductApplication = ({
       </div>
 
       {/* Form Content */}
-      <div className="content-card" style={{ width: "100%", maxWidth: "100%", padding: 20, margin: "0 auto", backgroundColor: "white", borderRadius: 8, boxShadow: "0 2px 4px rgba(0,0,0,0.1)", boxSizing: "border-box", overflow: "hidden" }}>
+      <div className="content-card" style={{
+        width: "100%",
+        maxWidth: "100%",
+        padding: embedded ? "15px" : "20px",
+        margin: "0 auto",
+        backgroundColor: "white",
+        borderRadius: embedded ? "6px" : "8px",
+        boxShadow: embedded ? "0 1px 3px rgba(0,0,0,0.1)" : "0 2px 4px rgba(0,0,0,0.1)",
+        boxSizing: "border-box",
+        overflow: "hidden",
+        border: embedded ? "1px solid #e0e0e0" : "none"
+      }}>
         <div style={{ width: "100%", overflowX: "auto" }}>{renderActiveSection()}</div>
 
-        {/* Navigation Buttons - Only show if NOT on Matching Preferences (first section) */}
+        {/* Navigation Buttons - make more compact for embedded */}
         {activeSection !== "matchingPreferences" && (
-          <div className="action-buttons" style={{ display: "flex", gap: 10, justifyContent: "space-between", alignItems: "center", marginTop: 30, padding: "20px 0", borderTop: "1px solid #eee", flexWrap: "wrap", width: "100%" }}>
+          <div className="action-buttons" style={{
+            display: "flex",
+            gap: embedded ? "8px" : "10px",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginTop: embedded ? "20px" : "30px",
+            padding: embedded ? "15px 0" : "20px 0",
+            borderTop: "1px solid #eee",
+            flexWrap: embedded ? "wrap" : "wrap",
+            width: "100%"
+          }}>
             {activeSection !== sections[0].id && (
-              <button type="button" onClick={goToPreviousSection} className="btn btn-secondary" style={{ display: "flex", alignItems: "center", gap: 5, padding: "10px 15px", fontSize: "clamp(0.8rem, 2vw, 1rem)", minWidth: 100, justifyContent: "center" }}>
-                <ChevronLeft size={16} /> Previous
+              <button type="button" onClick={goToPreviousSection} className="btn btn-secondary" style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                padding: embedded ? "8px 12px" : "10px 15px",
+                fontSize: embedded ? "0.8rem" : "clamp(0.8rem, 2vw, 1rem)",
+                minWidth: embedded ? "80px" : "100px",
+                justifyContent: "center"
+              }}>
+                <ChevronLeft size={embedded ? 14 : 16} /> Previous
               </button>
             )}
 
-            <button type="button" onClick={handleSaveSection} className="btn btn-secondary" style={{ display: "flex", alignItems: "center", gap: 5, padding: "10px 15px", fontSize: "clamp(0.8rem, 2vw, 1rem)", minWidth: 100, justifyContent: "center" }}>
-              <Save size={16} /> Save
+            <button type="button" onClick={handleSaveSection} className="btn btn-secondary" style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              padding: embedded ? "8px 12px" : "10px 15px",
+              fontSize: embedded ? "0.8rem" : "clamp(0.8rem, 2vw, 1rem)",
+              minWidth: embedded ? "80px" : "100px",
+              justifyContent: "center"
+            }}>
+              <Save size={embedded ? 14 : 16} /> Save
             </button>
 
             {activeSection !== sections[sections.length - 1].id && (
-              <button type="button" onClick={handleSaveAndContinue} className="btn btn-primary" style={{ display: "flex", alignItems: "center", gap: 5, padding: "10px 15px", fontSize: "clamp(0.8rem, 2vw, 1rem)", minWidth: 140, justifyContent: "center" }}>
-                Save & Continue <ChevronRight size={16} />
+              <button type="button" onClick={handleSaveAndContinue} className="btn btn-primary" style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                padding: embedded ? "8px 12px" : "10px 15px",
+                fontSize: embedded ? "0.8rem" : "clamp(0.8rem, 2vw, 1rem)",
+                minWidth: embedded ? "120px" : "140px",
+                justifyContent: "center"
+              }}>
+                Save & Continue <ChevronRight size={embedded ? 14 : 16} />
               </button>
             )}
           </div>
