@@ -164,6 +164,7 @@ export default function LoginRegister() {
       Catalyst: <Building2 size={16} />,
       Interns: <GraduationCap size={16} />,
       ProgramSponsor: <Award size={16} />,
+       Admin: <TrendingUp size={16} />
     };
     return iconMap[roleValue] || <Smile size={16} />;
   };
@@ -185,6 +186,10 @@ export default function LoginRegister() {
       INTERN: "/intern-profile",
       ProgramSponsor: "/program-sponsor-profile",
       PROGRAM_SPONSOR: "/program-sponsor-profile",
+      // admin
+       Admin: "/admin/dashboard",
+    admin: "/admin/dashboard",
+    ADMIN: "/admin/dashboard",
     };
     navigate(routeMap[role] || "/auth");
   };
@@ -446,6 +451,10 @@ const getRoleDashboardName = (role) => {
     Catalyst: "Catalyst Dashboard",
     Interns: "Intern Dashboard",
     ProgramSponsor: "Program Sponsor Dashboard",
+//admin
+     Admin: "Admin Dashboard",
+    admin: "Admin Dashboard",
+    ADMIN: "Admin Dashboard",
   };
   return dashboardMap[role] || role;
 };
@@ -463,6 +472,9 @@ const getRoleDescription = (role) => {
     Catalyst: "Support startups and drive innovation",
     Interns: "Access internship opportunities and career development",
     ProgramSponsor: "Manage intern programs and track placements",
+    //admin
+      Admin: "Manage platform users, settings, and analytics",
+    admin: "Manage platform users, settings, and analytics",
   };
   return descriptionMap[role] || "Access your dashboard";
 };
