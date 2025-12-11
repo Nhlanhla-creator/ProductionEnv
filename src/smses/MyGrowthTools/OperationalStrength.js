@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Bar, Line } from "react-chartjs-2"
-import { doc, getDoc, setDoc } from "firebase/firestore"
+import { doc, getDoc, setDoc, collection, query, where, getDocs } from "firebase/firestore"
 import { db, auth } from "../../firebaseConfig"
 import { onAuthStateChanged } from "firebase/auth"
 import Sidebar from "smses/Sidebar/Sidebar"
@@ -63,8 +63,49 @@ const StatusIndicator = ({ variance, target }) => {
   )
 }
 
-// KPI Dashboard Component - Summary of all tabs
-const KPIDashboard = ({ activeSection, isInvestorView, allData, onKpiClick, onBackToDashboard, selectedMonth, selectedYear, onMonthChange, onYearChange }) => {
+// Helper function to get financial year months
+const getFinancialYearMonths = (financialYearStartMonth) => {
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  const startMonthIndex = financialYearStartMonth - 1 // Convert to 0-indexed
+  const months = []
+  
+  for (let i = 0; i < 12; i++) {
+    const monthIndex = (startMonthIndex + i) % 12
+    months.push(monthNames[monthIndex])
+  }
+  
+  return months
+}
+
+// Helper function to get current month index in financial year
+const getCurrentMonthIndex = (financialYearStartMonth) => {
+  const currentDate = new Date()
+  const currentMonth = currentDate.getMonth() + 1 // 1-1
+    
+  let monthIndex
+  if (currentMonth >= financialYearStartMonth) {
+    monthIndex = currentMonth - financialYearStartMonth
+  } else {
+    monthIndex = (12 - financialYearStartMonth) + currentMonth
+  }
+  
+  // Cap at 11 (0-indexed) for display purposes
+  return Math.min(monthIndex, 11)
+}
+
+// KPI Dashboard Component
+const KPIDashboard = ({ activeSection, isInvestorView, allData, onCategoryClick, financialYearStartMonth }) => {
+  const [financialYearMonths, setFinancialYearMonths] = useState([])
+  const [currentMonthIndex, setCurrentMonthIndex] = useState(5) // Default to 6th month (0-indexed 5)
+
+  useEffect(() => {
+    if (financialYearStartMonth) {
+      const months = getFinancialYearMonths(financialYearStartMonth)
+      setFinancialYearMonths(months)
+      setCurrentMonthIndex(getCurrentMonthIndex(financialYearStartMonth))
+    }
+  }, [financialYearStartMonth])
+
   const formatValue = (value, decimals = 0) => {
     if (value === null || value === undefined) return "0"
     return Number(value).toFixed(decimals)
@@ -78,226 +119,154 @@ const KPIDashboard = ({ activeSection, isInvestorView, allData, onKpiClick, onBa
   const buildKPIRows = () => {
     const rows = []
 
-    // Get month index (0-5 for Jan-Jun)
-    const monthIndex = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"].indexOf(selectedMonth)
-
-    // Productivity Procurement Category
+    // Productivity Category
     if (allData.productivity) {
-      const productivityValue = allData.productivity.productivityData?.[monthIndex] || 0
-      const efficiencyValue = allData.productivity.efficiencyData?.[monthIndex] || 0
+      const productivityValue = allData.productivity.productivityData?.[currentMonthIndex] || 0
+      const efficiencyValue = allData.productivity.efficiencyData?.[currentMonthIndex] || 0
       
-      // Calculate YTD (average of all months up to selected month)
-      const ytdProdAvg = allData.productivity.productivityData?.slice(0, monthIndex + 1).reduce((a, b) => a + b, 0) / (monthIndex + 1) || 0
-      const ytdEffAvg = allData.productivity.efficiencyData?.slice(0, monthIndex + 1).reduce((a, b) => a + b, 0) / (monthIndex + 1) || 0
+      // Calculate YTD (average of all months up to current month)
+      const ytdProdAvg = allData.productivity.productivityData?.slice(0, currentMonthIndex + 1).reduce((a, b) => a + b, 0) / (currentMonthIndex + 1) || 0
+      const ytdEffAvg = allData.productivity.efficiencyData?.slice(0, currentMonthIndex + 1).reduce((a, b) => a + b, 0) / (currentMonthIndex + 1) || 0
 
-      // Only add if there are actual values
-      if (productivityValue > 0 || ytdProdAvg > 0) {
-        rows.push({
-          category: "Productivity Procurement",
-          kpi: "Productivity Index",
-          units: "index",
-          thisMonthTarget: 75,
-          thisMonthActual: productivityValue,
-          ytdTarget: 75,
-          ytdActual: ytdProdAvg,
-          chartType: "productivity",
-          chartSubType: "productivity"
-        })
-      }
-      
-      if (efficiencyValue > 0 || ytdEffAvg > 0) {
-        rows.push({
-          category: "Productivity Procurement",
-          kpi: "Efficiency Ratio",
-          units: "%",
-          thisMonthTarget: 80,
-          thisMonthActual: efficiencyValue,
-          ytdTarget: 80,
-          ytdActual: ytdEffAvg,
-          chartType: "productivity",
-          chartSubType: "efficiency"
-        })
-      }
+      rows.push({
+        category: "Productivity",
+        kpi: "Productivity Index",
+        units: "index",
+        thisMonthTarget: 75,
+        thisMonthActual: productivityValue,
+        ytdTarget: 75,
+        ytdActual: ytdProdAvg,
+      })
+      rows.push({
+        category: "Productivity",
+        kpi: "Efficiency Ratio",
+        units: "%",
+        thisMonthTarget: 80,
+        thisMonthActual: efficiencyValue,
+        ytdTarget: 80,
+        ytdActual: ytdEffAvg,
+      })
     }
 
-    // Operation Unit Category
+    // Unit Cost Category
     if (allData.unitCost?.products) {
       allData.unitCost.products.forEach(product => {
         const margin = product.price > 0 ? ((product.price - product.cost) / product.price) * 100 : 0
-        if (product.cost > 0) {
-          rows.push({
-            category: "Operation Unit",
-            kpi: `${product.name} - Cost`,
-            units: "R",
-            thisMonthTarget: product.cost * 0.95,
-            thisMonthActual: product.cost,
-            ytdTarget: product.cost * 0.95,
-            ytdActual: product.cost,
-            chartType: "unit-cost"
-          })
-        }
-        if (margin > 0) {
-          rows.push({
-            category: "Operation Unit",
-            kpi: `${product.name} - Margin`,
-            units: "%",
-            thisMonthTarget: 30,
-            thisMonthActual: margin,
-            ytdTarget: 30,
-            ytdActual: margin,
-            chartType: "unit-cost"
-          })
-        }
+        rows.push({
+          category: "Unit Cost",
+          kpi: `${product.name} - Cost`,
+          units: "R",
+          thisMonthTarget: product.cost * 0.95,
+          thisMonthActual: product.cost,
+          ytdTarget: product.cost * 0.95,
+          ytdActual: product.cost,
+        })
+        rows.push({
+          category: "Unit Cost",
+          kpi: `${product.name} - Margin`,
+          units: "%",
+          thisMonthTarget: 30,
+          thisMonthActual: margin,
+          ytdTarget: 30,
+          ytdActual: margin,
+        })
       })
     }
 
     // Order Fulfillment Category
     if (allData.orderFulfillment?.metrics) {
       allData.orderFulfillment.metrics.forEach(metric => {
-        if (metric.value > 0) {
-          rows.push({
-            category: "Order Fulfillment",
-            kpi: metric.name,
-            units: "%",
-            thisMonthTarget: metric.target,
-            thisMonthActual: metric.value,
-            ytdTarget: metric.target,
-            ytdActual: metric.value,
-            chartType: "order-fulfillment"
-          })
-        }
+        rows.push({
+          category: "Order Fulfillment",
+          kpi: metric.name,
+          units: "%",
+          thisMonthTarget: metric.target,
+          thisMonthActual: metric.value,
+          ytdTarget: metric.target,
+          ytdActual: metric.value,
+        })
       })
     }
 
     // Tech Stack Category
     if (allData.techStack?.systems) {
       allData.techStack.systems.forEach(system => {
-        if (system.adoption > 0) {
-          rows.push({
-            category: "Tech Stack",
-            kpi: `${system.name} - Adoption`,
-            units: "%",
-            thisMonthTarget: 90,
-            thisMonthActual: system.adoption,
-            ytdTarget: 90,
-            ytdActual: system.adoption,
-            chartType: "tech-stack"
-          })
-        }
-        if (system.users > 0) {
-          rows.push({
-            category: "Tech Stack",
-            kpi: `${system.name} - Users`,
-            units: "#",
-            thisMonthTarget: 100,
-            thisMonthActual: system.users,
-            ytdTarget: 100,
-            ytdActual: system.users,
-            chartType: "tech-stack"
-          })
-        }
+        rows.push({
+          category: "Tech Stack",
+          kpi: `${system.name} - Adoption`,
+          units: "%",
+          thisMonthTarget: 90,
+          thisMonthActual: system.adoption,
+          ytdTarget: 90,
+          ytdActual: system.adoption,
+        })
+        rows.push({
+          category: "Tech Stack",
+          kpi: `${system.name} - Users`,
+          units: "#",
+          thisMonthTarget: 100,
+          thisMonthActual: system.users,
+          ytdTarget: 100,
+          ytdActual: system.users,
+        })
       })
     }
 
     // Process Automation Category
     if (allData.processAutomation?.processes) {
       allData.processAutomation.processes.forEach(process => {
-        if (process.automation > 0) {
-          rows.push({
-            category: "Process Automation",
-            kpi: process.name,
-            units: "%",
-            thisMonthTarget: 80,
-            thisMonthActual: process.automation,
-            ytdTarget: 80,
-            ytdActual: process.automation,
-            chartType: "process-automation"
-          })
-        }
+        rows.push({
+          category: "Process Automation",
+          kpi: process.name,
+          units: "%",
+          thisMonthTarget: 80,
+          thisMonthActual: process.automation,
+          ytdTarget: 80,
+          ytdActual: process.automation,
+        })
       })
     }
 
     // Customer Retention Category
     if (allData.customerRetention) {
-      const retentionValue = allData.customerRetention.retentionData?.[monthIndex] || 0
-      const churnValue = allData.customerRetention.churnData?.[monthIndex] || 0
+      const retentionValue = allData.customerRetention.retentionData?.[currentMonthIndex] || 0
+      const churnValue = allData.customerRetention.churnData?.[currentMonthIndex] || 0
       
-      const ytdRetAvg = allData.customerRetention.retentionData?.slice(0, monthIndex + 1).reduce((a, b) => a + b, 0) / (monthIndex + 1) || 0
-      const ytdChurnAvg = allData.customerRetention.churnData?.slice(0, monthIndex + 1).reduce((a, b) => a + b, 0) / (monthIndex + 1) || 0
+      const ytdRetAvg = allData.customerRetention.retentionData?.slice(0, currentMonthIndex + 1).reduce((a, b) => a + b, 0) / (currentMonthIndex + 1) || 0
+      const ytdChurnAvg = allData.customerRetention.churnData?.slice(0, currentMonthIndex + 1).reduce((a, b) => a + b, 0) / (currentMonthIndex + 1) || 0
 
-      if (retentionValue > 0 || ytdRetAvg > 0) {
-        rows.push({
-          category: "Customer Retention",
-          kpi: "Retention Rate",
-          units: "%",
-          thisMonthTarget: 85,
-          thisMonthActual: retentionValue,
-          ytdTarget: 85,
-          ytdActual: ytdRetAvg,
-          chartType: "customer-retention",
-          chartSubType: "retention"
-        })
-      }
-      
-      if (churnValue > 0 || ytdChurnAvg > 0) {
-        rows.push({
-          category: "Customer Retention",
-          kpi: "Churn Rate",
-          units: "%",
-          thisMonthTarget: 15,
-          thisMonthActual: churnValue,
-          ytdTarget: 15,
-          ytdActual: ytdChurnAvg,
-          chartType: "customer-retention",
-          chartSubType: "churn"
-        })
-      }
-    }
-
-    // Supply Chain Category
-    if (allData.supplyChain) {
-      const metrics = [
-        { name: "Inventory Turnover", key: "inventoryTurnover", unit: "times" },
-        { name: "Lead Time", key: "leadTime", unit: "days" },
-        { name: "Perfect Order Rate", key: "perfectOrderRate", unit: "%" },
-        { name: "Supply Chain Cost", key: "supplyChainCost", unit: "R" }
-      ]
-      
-      metrics.forEach(metric => {
-        const value = allData.supplyChain[metric.key]?.[monthIndex] || 0
-        const ytdAvg = allData.supplyChain[metric.key]?.slice(0, monthIndex + 1).reduce((a, b) => a + b, 0) / (monthIndex + 1) || 0
-        
-        if (value > 0 || ytdAvg > 0) {
-          rows.push({
-            category: "Supply Chain",
-            kpi: metric.name,
-            units: metric.unit,
-            thisMonthTarget: metric.name === "Lead Time" ? 7 : 85,
-            thisMonthActual: value,
-            ytdTarget: metric.name === "Lead Time" ? 7 : 85,
-            ytdActual: ytdAvg,
-            chartType: "supply-chain",
-            chartSubType: metric.key
-          })
-        }
+      rows.push({
+        category: "Customer Retention",
+        kpi: "Retention Rate",
+        units: "%",
+        thisMonthTarget: 85,
+        thisMonthActual: retentionValue,
+        ytdTarget: 85,
+        ytdActual: ytdRetAvg,
+      })
+      rows.push({
+        category: "Customer Retention",
+        kpi: "Churn Rate",
+        units: "%",
+        thisMonthTarget: 15,
+        thisMonthActual: churnValue,
+        ytdTarget: 15,
+        ytdActual: ytdChurnAvg,
       })
     }
 
     // Custom KPIs
     if (allData.customKPIs) {
       allData.customKPIs.forEach(kpi => {
-        if (kpi.actual > 0) {
-          rows.push({
-            category: "Custom KPIs",
-            kpi: kpi.name,
-            units: kpi.units || "",
-            thisMonthTarget: kpi.target || 0,
-            thisMonthActual: kpi.actual || 0,
-            ytdTarget: kpi.target || 0,
-            ytdActual: kpi.actual || 0,
-            chartType: "custom-kpis"
-          })
-        }
+        rows.push({
+          category: "Custom KPIs",
+          kpi: kpi.name,
+          units: kpi.units || "",
+          thisMonthTarget: kpi.target || 0,
+          thisMonthActual: kpi.actual || 0,
+          ytdTarget: kpi.target || 0,
+          ytdActual: kpi.actual || 0,
+        })
       })
     }
 
@@ -341,18 +310,30 @@ const KPIDashboard = ({ activeSection, isInvestorView, allData, onKpiClick, onBa
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = `kpi-dashboard-${selectedMonth}-${selectedYear}.csv`
+    a.download = `kpi-dashboard.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
 
-  const handleKpiClick = (kpi) => {
-    if (onKpiClick && kpi.chartType) {
-      onKpiClick(kpi.chartType, kpi.chartSubType)
+  const handleCategoryClick = (category) => {
+    if (onCategoryClick) {
+      const sectionMap = {
+        "Productivity": "productivity",
+        "Unit Cost": "unit-cost",
+        "Order Fulfillment": "order-fulfillment",
+        "Tech Stack": "tech-stack",
+        "Process Automation": "process-automation",
+        "Customer Retention": "customer-retention",
+        "Custom KPIs": "custom-kpis"
+      }
+      onCategoryClick(sectionMap[category] || category.toLowerCase())
     }
   }
 
   if (activeSection !== "kpi-dashboard") return null
+
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  const financialYearStartMonthName = monthNames[financialYearStartMonth - 1]
 
   return (
     <div
@@ -366,45 +347,10 @@ const KPIDashboard = ({ activeSection, isInvestorView, allData, onKpiClick, onBa
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <div>
-          <h2 style={{ color: "#4a352f", marginTop: 0, marginBottom: "10px" }}>KPI Dashboard Summary</h2>
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            <select
-              value={selectedMonth}
-              onChange={(e) => onMonthChange(e.target.value)}
-              style={{
-                padding: "8px 12px",
-                border: "1px solid #d4c4b0",
-                borderRadius: "4px",
-                backgroundColor: "white",
-                color: "#4a352f",
-                fontSize: "14px",
-              }}
-            >
-              <option value="Jan">January</option>
-              <option value="Feb">February</option>
-              <option value="Mar">March</option>
-              <option value="Apr">April</option>
-              <option value="May">May</option>
-              <option value="Jun">June</option>
-            </select>
-            <select
-              value={selectedYear}
-              onChange={(e) => onYearChange(e.target.value)}
-              style={{
-                padding: "8px 12px",
-                border: "1px solid #d4c4b0",
-                borderRadius: "4px",
-                backgroundColor: "white",
-                color: "#4a352f",
-                fontSize: "14px",
-              }}
-            >
-              <option value="2024">2024</option>
-              <option value="2023">2023</option>
-              <option value="2022">2022</option>
-              <option value="2021">2021</option>
-            </select>
-          </div>
+          <h2 style={{ color: "#4a352f", marginTop: 0, marginBottom: "5px" }}>KPI Dashboard Summary</h2>
+          <p style={{ color: "#7d5a50", fontSize: "14px", margin: 0 }}>
+            Financial Year starts in {financialYearStartMonthName}
+          </p>
         </div>
         <button
           onClick={handleDownloadCSV}
@@ -425,7 +371,7 @@ const KPIDashboard = ({ activeSection, isInvestorView, allData, onKpiClick, onBa
 
       {kpiRows.length === 0 ? (
         <div style={{ textAlign: "center", padding: "40px", color: "#72542b" }}>
-          <p>No data available. Please add data in the other tabs to see the KPI summary here.</p>
+          <p>No data available. Please add data in the other tabs (Productivity, Unit Cost, etc.) to see the KPI summary here.</p>
         </div>
       ) : (
         <div style={{ overflowX: "auto" }}>
@@ -513,23 +459,16 @@ const KPIDashboard = ({ activeSection, isInvestorView, allData, onKpiClick, onBa
                               borderRight: "2px solid #999",
                               backgroundColor: categoryIndex % 2 === 0 ? "#e6d7c3" : "#d4c4b0",
                               verticalAlign: "top",
+                              cursor: "pointer",
+                              textDecoration: "underline",
                             }}
+                            onClick={() => handleCategoryClick(category)}
+                            title={`Click to navigate to ${category} tab`}
                           >
                             {category}
                           </td>
                         )}
-                        <td 
-                          style={{ 
-                            padding: "12px", 
-                            color: "#4a352f", 
-                            borderRight: "1px solid #ddd",
-                            cursor: "pointer",
-                            textDecoration: "underline",
-                            fontWeight: "bold"
-                          }}
-                          onClick={() => handleKpiClick(row)}
-                          title={`Click to view ${row.kpi} chart`}
-                        >
+                        <td style={{ padding: "12px", color: "#4a352f", borderRight: "1px solid #ddd" }}>
                           {row.kpi}
                         </td>
                         <td style={{ padding: "12px", textAlign: "center", color: "#4a352f", borderRight: "1px solid #ddd" }}>
@@ -572,21 +511,625 @@ const KPIDashboard = ({ activeSection, isInvestorView, allData, onKpiClick, onBa
   )
 }
 
-// Productivity Procurement Component
-const ProductivityMeasures = ({ activeSection, isInvestorView, onDataChange, onBackToDashboard, showBackButton, viewingChart, viewingSubChart }) => {
-  const [productivityData, setProductivityData] = useState([0, 0, 0, 0, 0, 0])
-  const [efficiencyData, setEfficiencyData] = useState([0, 0, 0, 0, 0, 0])
+// Custom KPIs Component
+const CustomKPIs = ({ activeSection, isInvestorView, onDataChange, financialYearStartMonth }) => {
+  const [customKPIs, setCustomKPIs] = useState([])
+  const [showAddForm, setShowAddForm] = useState(false)
   const [showEditForm, setShowEditForm] = useState(false)
-  const [showAddKPIForm, setShowAddKPIForm] = useState(false)
   const [currentUser, setCurrentUser] = useState(null)
+  const [financialYearMonths, setFinancialYearMonths] = useState([])
   const [newKPI, setNewKPI] = useState({
     name: "",
     units: "",
     target: 0,
     actual: 0,
+    displayType: "chart",
+    data: [],
     description: ""
   })
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
+
+  useEffect(() => {
+    if (financialYearStartMonth) {
+      const months = getFinancialYearMonths(financialYearStartMonth)
+      setFinancialYearMonths(months)
+      setNewKPI(prev => ({
+        ...prev,
+        data: Array(12).fill(0)
+      }))
+    }
+  }, [financialYearStartMonth])
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setCurrentUser(user)
+        loadCustomKPIs(user.uid)
+      } else {
+        setCurrentUser(null)
+      }
+    })
+
+    return () => unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    if (onDataChange) {
+      onDataChange('customKPIs', customKPIs)
+    }
+  }, [customKPIs])
+
+  const loadCustomKPIs = async (userId) => {
+    try {
+      const docRef = doc(db, "custom-kpis", userId)
+      const docSnap = await getDoc(docRef)
+      if (docSnap.exists()) {
+        const loadedKPIs = docSnap.data().kpis || []
+        // Ensure each KPI has 12 months of data
+        const updatedKPIs = loadedKPIs.map(kpi => ({
+          ...kpi,
+          data: kpi.data && kpi.data.length === 12 ? kpi.data : Array(12).fill(0)
+        }))
+        setCustomKPIs(updatedKPIs)
+      }
+    } catch (error) {
+      console.error("Error loading custom KPIs:", error)
+    }
+  }
+
+  const saveCustomKPIs = async () => {
+    if (isInvestorView) {
+      alert("You are in investor view mode. You cannot edit SME data.")
+      return
+    }
+
+    if (!currentUser) {
+      alert("User not authenticated")
+      return
+    }
+
+    try {
+      await setDoc(doc(db, "custom-kpis", currentUser.uid), {
+        kpis: customKPIs,
+        userId: currentUser.uid,
+      })
+      alert("Custom KPIs saved successfully!")
+    } catch (error) {
+      console.error("Error saving custom KPIs:", error)
+      alert("Error saving data")
+    }
+  }
+
+  const addNewKPI = () => {
+    if (!newKPI.name.trim()) {
+      alert("Please enter a KPI name")
+      return
+    }
+
+    const newKpiData = {
+      ...newKPI,
+      id: Date.now().toString(),
+      data: newKPI.displayType === "chart" ? Array(12).fill(0) : []
+    }
+
+    setCustomKPIs([...customKPIs, newKpiData])
+    setNewKPI({
+      name: "",
+      units: "",
+      target: 0,
+      actual: 0,
+      displayType: "chart",
+      data: Array(12).fill(0),
+      description: ""
+    })
+    setShowAddForm(false)
+  }
+
+  const updateKPI = (index, field, value) => {
+    const newKPIs = [...customKPIs]
+    if (field === "data") {
+      const dataIndex = value.index
+      const dataValue = value.value
+      newKPIs[index].data[dataIndex] = Number.parseFloat(dataValue) || 0
+    } else {
+      newKPIs[index][field] = field === "name" || field === "units" || field === "description" 
+        ? value 
+        : Number.parseFloat(value) || 0
+    }
+    setCustomKPIs(newKPIs)
+  }
+
+  const removeKPI = (index) => {
+    const newKPIs = customKPIs.filter((_, i) => i !== index)
+    setCustomKPIs(newKPIs)
+  }
+
+  const handleDownload = () => {
+    const csvContent = [
+      ["KPI Name", "Units", "Target", "Actual", "Display Type", "Description"],
+      ...customKPIs.map(kpi => [
+        kpi.name,
+        kpi.units,
+        kpi.target,
+        kpi.actual,
+        kpi.displayType,
+        kpi.description
+      ]),
+    ]
+      .map((row) => row.join(","))
+      .join("\n")
+
+    const blob = new Blob([csvContent], { type: "text/csv" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "custom-kpis.csv"
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  if (activeSection !== "custom-kpis") return null
+
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  const financialYearStartMonthName = monthNames[financialYearStartMonth - 1]
+
+  return (
+    <div
+      style={{
+        backgroundColor: "#fdfcfb",
+        padding: "20px",
+        margin: "20px 0",
+        borderRadius: "8px",
+        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+        <div>
+          <h2 style={{ color: "#5d4037", marginTop: 0 }}>Custom KPIs</h2>
+          <p style={{ color: "#7d5a50", fontSize: "14px", margin: "5px 0 0 0" }}>
+            Financial Year starts in {financialYearStartMonthName}
+          </p>
+        </div>
+        {!isInvestorView && (
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button
+              onClick={handleDownload}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#a67c52",
+                color: "#faf7f2",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
+            >
+              Download CSV
+            </button>
+            <button
+              onClick={() => setShowAddForm(!showAddForm)}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#4a352f",
+                color: "#faf7f2",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
+            >
+              {showAddForm ? "Cancel" : "Add New KPI"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {showAddForm && (
+        <div
+          style={{
+            backgroundColor: "#f5f0e1",
+            padding: "20px",
+            borderRadius: "6px",
+            marginBottom: "20px",
+          }}
+        >
+          <h3 style={{ color: "#7d5a50", marginTop: 0 }}>Add New KPI</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+            <div>
+              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>KPI Name</label>
+              <input
+                type="text"
+                value={newKPI.name}
+                onChange={(e) => setNewKPI({...newKPI, name: e.target.value})}
+                style={{
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                  width: "100%",
+                }}
+                placeholder="Enter KPI name"
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Units of Measure</label>
+              <input
+                type="text"
+                value={newKPI.units}
+                onChange={(e) => setNewKPI({...newKPI, units: e.target.value})}
+                style={{
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                  width: "100%",
+                }}
+                placeholder="e.g., %, R, index"
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Target Value</label>
+              <input
+                type="number"
+                value={newKPI.target}
+                onChange={(e) => setNewKPI({...newKPI, target: Number.parseFloat(e.target.value) || 0})}
+                style={{
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                  width: "100%",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Actual Value</label>
+              <input
+                type="number"
+                value={newKPI.actual}
+                onChange={(e) => setNewKPI({...newKPI, actual: Number.parseFloat(e.target.value) || 0})}
+                style={{
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                  width: "100%",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Display Type</label>
+              <select
+                value={newKPI.displayType}
+                onChange={(e) => setNewKPI({...newKPI, displayType: e.target.value})}
+                style={{
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                  width: "100%",
+                }}
+              >
+                <option value="chart">Chart</option>
+                <option value="metric">Metric Card</option>
+                <option value="progress">Progress Bar</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Description</label>
+              <input
+                type="text"
+                value={newKPI.description}
+                onChange={(e) => setNewKPI({...newKPI, description: e.target.value})}
+                style={{
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                  width: "100%",
+                }}
+                placeholder="Optional description"
+              />
+            </div>
+          </div>
+          <button
+            onClick={addNewKPI}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#16a34a",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              marginTop: "15px",
+            }}
+          >
+            Add KPI
+          </button>
+        </div>
+      )}
+
+      {customKPIs.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "40px", color: "#72542b" }}>
+          <p>No custom KPIs added yet. Click "Add New KPI" to create your first custom KPI.</p>
+        </div>
+      ) : (
+        <>
+          {!isInvestorView && (
+            <div style={{ marginBottom: "20px", textAlign: "right" }}>
+              <button
+                onClick={() => setShowEditForm(!showEditForm)}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#72542b",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                }}
+              >
+                {showEditForm ? "Hide Edit Mode" : "Edit KPIs"}
+              </button>
+            </div>
+          )}
+
+          {showEditForm && (
+            <div
+              style={{
+                backgroundColor: "#f5f0e1",
+                padding: "20px",
+                borderRadius: "6px",
+                marginBottom: "20px",
+              }}
+            >
+              <h3 style={{ color: "#7d5a50", marginTop: 0 }}>Edit KPIs</h3>
+              {customKPIs.map((kpi, index) => (
+                <div
+                  key={kpi.id}
+                  style={{
+                    backgroundColor: "#fdfcfb",
+                    padding: "15px",
+                    borderRadius: "6px",
+                    marginBottom: "15px",
+                  }}
+                >
+                  <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr auto", gap: "10px", alignItems: "center" }}>
+                    <input
+                      type="text"
+                      value={kpi.name}
+                      onChange={(e) => updateKPI(index, "name", e.target.value)}
+                      style={{
+                        padding: "8px",
+                        border: "1px solid #d4c4b0",
+                        borderRadius: "4px",
+                      }}
+                    />
+                    <input
+                      type="text"
+                      value={kpi.units}
+                      onChange={(e) => updateKPI(index, "units", e.target.value)}
+                      style={{
+                        padding: "8px",
+                        border: "1px solid #d4c4b0",
+                        borderRadius: "4px",
+                      }}
+                    />
+                    <input
+                      type="number"
+                      value={kpi.target}
+                      onChange={(e) => updateKPI(index, "target", e.target.value)}
+                      style={{
+                        padding: "8px",
+                        border: "1px solid #d4c4b0",
+                        borderRadius: "4px",
+                      }}
+                    />
+                    <input
+                      type="number"
+                      value={kpi.actual}
+                      onChange={(e) => updateKPI(index, "actual", e.target.value)}
+                      style={{
+                        padding: "8px",
+                        border: "1px solid #d4c4b0",
+                        borderRadius: "4px",
+                      }}
+                    />
+                    <select
+                      value={kpi.displayType}
+                      onChange={(e) => updateKPI(index, "displayType", e.target.value)}
+                      style={{
+                        padding: "8px",
+                        border: "1px solid #d4c4b0",
+                        borderRadius: "4px",
+                      }}
+                    >
+                      <option value="chart">Chart</option>
+                      <option value="metric">Metric Card</option>
+                      <option value="progress">Progress Bar</option>
+                    </select>
+                    <button
+                      onClick={() => removeKPI(index)}
+                      style={{
+                        padding: "8px",
+                        backgroundColor: "#dc2626",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "4px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  {kpi.displayType === "chart" && (
+                    <div style={{ marginTop: "10px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                        {financialYearMonths.map((month, monthIndex) => (
+                          <div key={monthIndex} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                            <span style={{ color: "#7d5a50", fontSize: "12px" }}>{month}:</span>
+                            <input
+                              type="number"
+                              value={kpi.data[monthIndex] || 0}
+                              onChange={(e) => updateKPI(index, "data", {index: monthIndex, value: e.target.value})}
+                              style={{
+                                padding: "4px",
+                                border: "1px solid #d4c4b0",
+                                borderRadius: "4px",
+                                width: "60px",
+                              }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ marginTop: "10px" }}>
+                    <input
+                      type="text"
+                      value={kpi.description || ""}
+                      onChange={(e) => updateKPI(index, "description", e.target.value)}
+                      placeholder="Description"
+                      style={{
+                        padding: "8px",
+                        border: "1px solid #d4c4b0",
+                        borderRadius: "4px",
+                        width: "100%",
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+              <button
+                onClick={saveCustomKPIs}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#16a34a",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  marginTop: "10px",
+                }}
+              >
+                Save Changes
+              </button>
+            </div>
+          )}
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
+            {customKPIs.map((kpi, index) => (
+              <div
+                key={kpi.id}
+                style={{
+                  backgroundColor: "#f5f0e1",
+                  padding: "15px",
+                  borderRadius: "6px",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: "10px" }}>
+                  <div>
+                    <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "5px" }}>{kpi.name}</h3>
+                    {kpi.description && (
+                      <p style={{ color: "#72542b", fontSize: "12px", margin: 0 }}>{kpi.description}</p>
+                    )}
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ color: "#4a352f", fontWeight: "bold", fontSize: "18px" }}>
+                      {kpi.actual} {kpi.units}
+                    </div>
+                    <div style={{ color: "#7d5a50", fontSize: "12px" }}>
+                      Target: {kpi.target} {kpi.units}
+                    </div>
+                  </div>
+                </div>
+
+                {kpi.displayType === "chart" && (
+                  <div style={{ height: "150px", marginTop: "15px" }}>
+                    <Line
+                      data={{
+                        labels: financialYearMonths,
+                        datasets: [
+                          {
+                            label: kpi.name,
+                            data: kpi.data || Array(12).fill(0),
+                            borderColor: "#a67c52",
+                            backgroundColor: "rgba(166, 124, 82, 0.1)",
+                            borderWidth: 2,
+                            tension: 0.1,
+                            fill: true,
+                          },
+                        ],
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: {
+                            display: false,
+                          },
+                        },
+                        scales: {
+                          y: {
+                            beginAtZero: true,
+                          },
+                        },
+                      }}
+                    />
+                  </div>
+                )}
+
+                {kpi.displayType === "metric" && (
+                  <div style={{ textAlign: "center", padding: "20px 0" }}>
+                    <div style={{ fontSize: "36px", fontWeight: "bold", color: "#4a352f" }}>
+                      {kpi.actual} {kpi.units}
+                    </div>
+                    <div style={{ color: "#7d5a50", fontSize: "14px", marginTop: "5px" }}>
+                      vs Target: {kpi.target} {kpi.units}
+                    </div>
+                  </div>
+                )}
+
+                {kpi.displayType === "progress" && (
+                  <div style={{ marginTop: "15px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                      <span style={{ color: "#7d5a50" }}>Progress</span>
+                      <span style={{ color: "#4a352f", fontWeight: "bold" }}>
+                        {kpi.target > 0 ? Math.min(100, (kpi.actual / kpi.target) * 100).toFixed(1) : 0}%
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        height: "10px",
+                        backgroundColor: "#e6d7c3",
+                        borderRadius: "5px",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${kpi.target > 0 ? Math.min(100, (kpi.actual / kpi.target) * 100) : 0}%`,
+                          height: "100%",
+                          backgroundColor: kpi.actual >= kpi.target ? "#4CAF50" : "#FF9800",
+                          borderRadius: "5px",
+                        }}
+                      ></div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// Productivity Measures Component
+const ProductivityMeasures = ({ activeSection, isInvestorView, onDataChange, financialYearStartMonth }) => {
+  const [productivityData, setProductivityData] = useState(Array(12).fill(0))
+  const [efficiencyData, setEfficiencyData] = useState(Array(12).fill(0))
+  const [showEditForm, setShowEditForm] = useState(false)
+  const [currentUser, setCurrentUser] = useState(null)
+  const [financialYearMonths, setFinancialYearMonths] = useState([])
+
+  useEffect(() => {
+    if (financialYearStartMonth) {
+      const months = getFinancialYearMonths(financialYearStartMonth)
+      setFinancialYearMonths(months)
+    }
+  }, [financialYearStartMonth])
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -638,8 +1181,8 @@ const ProductivityMeasures = ({ activeSection, isInvestorView, onDataChange, onB
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         const data = docSnap.data()
-        setProductivityData(data.productivityData || [0, 0, 0, 0, 0, 0])
-        setEfficiencyData(data.efficiencyData || [0, 0, 0, 0, 0, 0])
+        setProductivityData(data.productivityData || Array(12).fill(0))
+        setEfficiencyData(data.efficiencyData || Array(12).fill(0))
       }
     } catch (error) {
       console.error("Error loading productivity data:", error)
@@ -658,23 +1201,10 @@ const ProductivityMeasures = ({ activeSection, isInvestorView, onDataChange, onB
     setEfficiencyData(newData)
   }
 
-  const addNewKPI = () => {
-    // This would be saved to custom KPIs collection
-    alert("Custom KPI added. This feature saves to Custom KPIs collection.")
-    setShowAddKPIForm(false)
-    setNewKPI({
-      name: "",
-      units: "",
-      target: 0,
-      actual: 0,
-      description: ""
-    })
-  }
-
   const handleDownload = () => {
     const csvContent = [
       ["Month", "Productivity Index", "Efficiency Ratio"],
-      ...months.map((month, index) => [month, productivityData[index], efficiencyData[index]]),
+      ...financialYearMonths.map((month, index) => [month, productivityData[index], efficiencyData[index]]),
     ]
       .map((row) => row.join(","))
       .join("\n")
@@ -683,45 +1213,15 @@ const ProductivityMeasures = ({ activeSection, isInvestorView, onDataChange, onB
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = "productivity-procurement.csv"
+    a.download = "productivity-measures.csv"
     a.click()
     URL.revokeObjectURL(url)
   }
 
-  // If viewing specific chart and not in the productivity section, show only that chart
-  const isViewingChart = viewingChart === "productivity" && activeSection !== "productivity"
+  if (activeSection !== "productivity") return null
 
-  if (!isViewingChart && activeSection !== "productivity") return null
-
-  const datasets = []
-  if (viewingSubChart === "productivity" || !viewingSubChart) {
-    datasets.push({
-      label: "Productivity Index",
-      data: productivityData,
-      borderColor: "#a67c52",
-      backgroundColor: "rgba(166, 124, 82, 0.1)",
-      borderWidth: 2,
-      tension: 0.1,
-      fill: true,
-    })
-  }
-  if (viewingSubChart === "efficiency" || !viewingSubChart) {
-    datasets.push({
-      label: "Efficiency Ratio",
-      data: efficiencyData,
-      borderColor: "#8b7355",
-      backgroundColor: "rgba(139, 115, 85, 0.1)",
-      borderWidth: 2,
-      tension: 0.1,
-      fill: true,
-    })
-  }
-
-  const chartTitle = viewingSubChart === "productivity" 
-    ? "Productivity Index" 
-    : viewingSubChart === "efficiency" 
-    ? "Efficiency Ratio" 
-    : "Productivity Procurement"
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  const financialYearStartMonthName = monthNames[financialYearStartMonth - 1]
 
   return (
     <div
@@ -734,26 +1234,13 @@ const ProductivityMeasures = ({ activeSection, isInvestorView, onDataChange, onB
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-          {showBackButton && (
-            <button
-              onClick={onBackToDashboard}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#4a352f",
-                color: "#faf7f2",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-              }}
-            >
-              ← Back to Dashboard
-            </button>
-          )}
-          <h2 style={{ color: "#5d4037", marginTop: 0 }}>{chartTitle}</h2>
+        <div>
+          <h2 style={{ color: "#5d4037", marginTop: 0 }}>Productivity Measures</h2>
+          <p style={{ color: "#7d5a50", fontSize: "14px", margin: "5px 0 0 0" }}>
+            Financial Year starts in {financialYearStartMonthName}
+          </p>
         </div>
-        {!isInvestorView && !isViewingChart && (
+        {!isInvestorView && (
           <div style={{ display: "flex", gap: "10px" }}>
             <button
               onClick={handleDownload}
@@ -769,7 +1256,7 @@ const ProductivityMeasures = ({ activeSection, isInvestorView, onDataChange, onB
               Download CSV
             </button>
             <button
-              onClick={() => setShowAddKPIForm(!showAddKPIForm)}
+              onClick={() => setShowEditForm(!showEditForm)}
               style={{
                 padding: "8px 16px",
                 backgroundColor: "#4a352f",
@@ -779,129 +1266,13 @@ const ProductivityMeasures = ({ activeSection, isInvestorView, onDataChange, onB
                 cursor: "pointer",
               }}
             >
-              Add KPI
+              {showEditForm ? "Cancel" : "Edit Data"}
             </button>
           </div>
         )}
       </div>
 
-      {showAddKPIForm && !isInvestorView && !isViewingChart && (
-        <div
-          style={{
-            backgroundColor: "#f5f0e1",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#7d5a50", marginTop: 0 }}>Add Custom KPI</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>KPI Name</label>
-              <input
-                type="text"
-                value={newKPI.name}
-                onChange={(e) => setNewKPI({...newKPI, name: e.target.value})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-                placeholder="Enter KPI name"
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Units of Measure</label>
-              <input
-                type="text"
-                value={newKPI.units}
-                onChange={(e) => setNewKPI({...newKPI, units: e.target.value})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-                placeholder="e.g., %, R, index"
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Target Value</label>
-              <input
-                type="number"
-                value={newKPI.target}
-                onChange={(e) => setNewKPI({...newKPI, target: Number.parseFloat(e.target.value) || 0})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Actual Value</label>
-              <input
-                type="number"
-                value={newKPI.actual}
-                onChange={(e) => setNewKPI({...newKPI, actual: Number.parseFloat(e.target.value) || 0})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-              />
-            </div>
-            <div style={{ gridColumn: "span 2" }}>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Description</label>
-              <input
-                type="text"
-                value={newKPI.description}
-                onChange={(e) => setNewKPI({...newKPI, description: e.target.value})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-                placeholder="Optional description"
-              />
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: "10px", marginTop: "15px" }}>
-            <button
-              onClick={addNewKPI}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#16a34a",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Add KPI
-            </button>
-            <button
-              onClick={() => setShowAddKPIForm(false)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#dc2626",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {!isInvestorView && showEditForm && !isViewingChart && (
+      {showEditForm && (
         <div
           style={{
             backgroundColor: "#f5f0e1",
@@ -914,7 +1285,7 @@ const ProductivityMeasures = ({ activeSection, isInvestorView, onDataChange, onB
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
             <div>
               <h4 style={{ color: "#7d5a50" }}>Productivity Index</h4>
-              {months.map((month, index) => (
+              {financialYearMonths.map((month, index) => (
                 <div key={month} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
                   <span style={{ minWidth: "40px", color: "#72542b" }}>{month}:</span>
                   <input
@@ -933,7 +1304,7 @@ const ProductivityMeasures = ({ activeSection, isInvestorView, onDataChange, onB
             </div>
             <div>
               <h4 style={{ color: "#7d5a50" }}>Efficiency Ratio</h4>
-              {months.map((month, index) => (
+              {financialYearMonths.map((month, index) => (
                 <div key={month} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
                   <span style={{ minWidth: "40px", color: "#72542b" }}>{month}:</span>
                   <input
@@ -968,64 +1339,54 @@ const ProductivityMeasures = ({ activeSection, isInvestorView, onDataChange, onB
         </div>
       )}
 
-      <div style={{ marginBottom: "20px", textAlign: "center" }}>
-        <button
-          onClick={() => setShowEditForm(!showEditForm)}
-          style={{
-            padding: "10px 20px",
-            backgroundColor: showEditForm ? "#dc2626" : "#4a352f",
-            color: "#faf7f2",
-            border: "none",
-            borderRadius: "6px",
-            cursor: "pointer",
-            fontWeight: "600",
-            fontSize: "14px",
-            marginRight: "10px",
-          }}
-        >
-          {showEditForm ? "Cancel Editing" : "Edit Data"}
-        </button>
-      </div>
-
-      {(!isViewingChart || viewingChart === "productivity") && (
-        <div style={{ height: "400px" }}>
-          <Line
-            data={{
-              labels: months,
-              datasets: datasets,
-            }}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: {
-                  position: "top",
-                },
-                title: {
-                  display: false,
-                },
+      <div style={{ height: "400px" }}>
+        <Line
+          data={{
+            labels: financialYearMonths,
+            datasets: [
+              {
+                label: "Productivity Index",
+                data: productivityData,
+                borderColor: "#a67c52",
+                backgroundColor: "rgba(166, 124, 82, 0.1)",
+                borderWidth: 2,
+                tension: 0.1,
+                fill: true,
               },
-            }}
-          />
-        </div>
-      )}
+              {
+                label: "Efficiency Ratio",
+                data: efficiencyData,
+                borderColor: "#8b7355",
+                backgroundColor: "rgba(139, 115, 85, 0.1)",
+                borderWidth: 2,
+                tension: 0.1,
+                fill: true,
+              },
+            ],
+          }}
+          options={{
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: "top",
+              },
+              title: {
+                display: false,
+              },
+            },
+          }}
+        />
+      </div>
     </div>
   )
 }
 
-// Operation Unit Component
-const UnitCost = ({ activeSection, isInvestorView, onDataChange, onBackToDashboard, showBackButton, viewingChart }) => {
+// Unit Cost Component
+const UnitCost = ({ activeSection, isInvestorView, onDataChange }) => {
   const [products, setProducts] = useState([])
   const [showEditForm, setShowEditForm] = useState(false)
-  const [showAddKPIForm, setShowAddKPIForm] = useState(false)
   const [currentUser, setCurrentUser] = useState(null)
-  const [newKPI, setNewKPI] = useState({
-    name: "",
-    units: "",
-    target: 0,
-    actual: 0,
-    description: ""
-  })
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -1063,9 +1424,9 @@ const UnitCost = ({ activeSection, isInvestorView, onDataChange, onBackToDashboa
         userId: currentUser.uid,
       })
       setShowEditForm(false)
-      alert("Operation unit data saved successfully!")
+      alert("Unit cost data saved successfully!")
     } catch (error) {
-      console.error("Error saving operation unit data:", error)
+      console.error("Error saving unit cost data:", error)
       alert("Error saving data")
     }
   }
@@ -1078,7 +1439,7 @@ const UnitCost = ({ activeSection, isInvestorView, onDataChange, onBackToDashboa
         setProducts(docSnap.data().products || [])
       }
     } catch (error) {
-      console.error("Error loading operation unit data:", error)
+      console.error("Error loading unit cost data:", error)
     }
   }
 
@@ -1095,18 +1456,6 @@ const UnitCost = ({ activeSection, isInvestorView, onDataChange, onBackToDashboa
   const removeProduct = (index) => {
     const newProducts = products.filter((_, i) => i !== index)
     setProducts(newProducts)
-  }
-
-  const addNewKPI = () => {
-    alert("Custom KPI added. This feature saves to Custom KPIs collection.")
-    setShowAddKPIForm(false)
-    setNewKPI({
-      name: "",
-      units: "",
-      target: 0,
-      actual: 0,
-      description: ""
-    })
   }
 
   const handleDownload = () => {
@@ -1126,19 +1475,12 @@ const UnitCost = ({ activeSection, isInvestorView, onDataChange, onBackToDashboa
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = "operation-unit.csv"
+    a.download = "unit-cost.csv"
     a.click()
     URL.revokeObjectURL(url)
   }
 
-  // If viewing specific chart and not in the unit-cost section, show only that chart
-  const isViewingChart = viewingChart === "unit-cost" && activeSection !== "unit-cost"
-
-  if (!isViewingChart && activeSection !== "unit-cost") return null
-
-  const productNames = products.map((p) => p.name)
-  const costData = products.map((p) => p.cost)
-  const priceData = products.map((p) => p.price)
+  if (activeSection !== "unit-cost") return null
 
   return (
     <div
@@ -1151,26 +1493,8 @@ const UnitCost = ({ activeSection, isInvestorView, onDataChange, onBackToDashboa
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-          {showBackButton && (
-            <button
-              onClick={onBackToDashboard}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#4a352f",
-                color: "#faf7f2",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-              }}
-            >
-              ← Back to Dashboard
-            </button>
-          )}
-          <h2 style={{ color: "#5d4037", marginTop: 0 }}>Operation Unit</h2>
-        </div>
-        {!isInvestorView && !isViewingChart && (
+        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Unit Cost per Output</h2>
+        {!isInvestorView && (
           <div style={{ display: "flex", gap: "10px" }}>
             <button
               onClick={handleDownload}
@@ -1186,7 +1510,7 @@ const UnitCost = ({ activeSection, isInvestorView, onDataChange, onBackToDashboa
               Download CSV
             </button>
             <button
-              onClick={() => setShowAddKPIForm(!showAddKPIForm)}
+              onClick={() => setShowEditForm(!showEditForm)}
               style={{
                 padding: "8px 16px",
                 backgroundColor: "#4a352f",
@@ -1196,147 +1520,13 @@ const UnitCost = ({ activeSection, isInvestorView, onDataChange, onBackToDashboa
                 cursor: "pointer",
               }}
             >
-              Add KPI
+              {showEditForm ? "Cancel" : "Edit Data"}
             </button>
           </div>
         )}
       </div>
 
-      {showAddKPIForm && !isInvestorView && !isViewingChart && (
-        <div
-          style={{
-            backgroundColor: "#f5f0e1",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#7d5a50", marginTop: 0 }}>Add Custom KPI</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>KPI Name</label>
-              <input
-                type="text"
-                value={newKPI.name}
-                onChange={(e) => setNewKPI({...newKPI, name: e.target.value})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-                placeholder="Enter KPI name"
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Units of Measure</label>
-              <input
-                type="text"
-                value={newKPI.units}
-                onChange={(e) => setNewKPI({...newKPI, units: e.target.value})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-                placeholder="e.g., %, R, index"
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Target Value</label>
-              <input
-                type="number"
-                value={newKPI.target}
-                onChange={(e) => setNewKPI({...newKPI, target: Number.parseFloat(e.target.value) || 0})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Actual Value</label>
-              <input
-                type="number"
-                value={newKPI.actual}
-                onChange={(e) => setNewKPI({...newKPI, actual: Number.parseFloat(e.target.value) || 0})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-              />
-            </div>
-            <div style={{ gridColumn: "span 2" }}>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Description</label>
-              <input
-                type="text"
-                value={newKPI.description}
-                onChange={(e) => setNewKPI({...newKPI, description: e.target.value})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-                placeholder="Optional description"
-              />
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: "10px", marginTop: "15px" }}>
-            <button
-              onClick={addNewKPI}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#16a34a",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Add KPI
-            </button>
-            <button
-              onClick={() => setShowAddKPIForm(false)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#dc2626",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div style={{ marginBottom: "20px", textAlign: "center" }}>
-        <button
-          onClick={() => setShowEditForm(!showEditForm)}
-          style={{
-            padding: "10px 20px",
-            backgroundColor: showEditForm ? "#dc2626" : "#4a352f",
-            color: "#faf7f2",
-            border: "none",
-            borderRadius: "6px",
-            cursor: "pointer",
-            fontWeight: "600",
-            fontSize: "14px",
-          }}
-        >
-          {showEditForm ? "Cancel Editing" : "Edit Data"}
-        </button>
-      </div>
-
-      {showEditForm && !isInvestorView && !isViewingChart && (
+      {showEditForm && (
         <div
           style={{
             backgroundColor: "#f5f0e1",
@@ -1454,18 +1644,18 @@ const UnitCost = ({ activeSection, isInvestorView, onDataChange, onBackToDashboa
         <div style={{ height: "400px" }}>
           <Bar
             data={{
-              labels: productNames,
+              labels: products.map((p) => p.name),
               datasets: [
                 {
                   label: "Production Cost",
-                  data: costData,
+                  data: products.map((p) => p.cost),
                   backgroundColor: "#d4c4b0",
                   borderColor: "#5d4037",
                   borderWidth: 1,
                 },
                 {
                   label: "Selling Price",
-                  data: priceData,
+                  data: products.map((p) => p.price),
                   backgroundColor: "#9c7c5f",
                   borderColor: "#5d4037",
                   borderWidth: 1,
@@ -1492,18 +1682,10 @@ const UnitCost = ({ activeSection, isInvestorView, onDataChange, onBackToDashboa
 }
 
 // Order Fulfillment Component
-const OrderFulfillment = ({ activeSection, isInvestorView, onDataChange, onBackToDashboard, showBackButton, viewingChart }) => {
+const OrderFulfillment = ({ activeSection, isInvestorView, onDataChange }) => {
   const [metrics, setMetrics] = useState([])
   const [showEditForm, setShowEditForm] = useState(false)
-  const [showAddKPIForm, setShowAddKPIForm] = useState(false)
   const [currentUser, setCurrentUser] = useState(null)
-  const [newKPI, setNewKPI] = useState({
-    name: "",
-    units: "",
-    target: 0,
-    actual: 0,
-    description: ""
-  })
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -1575,18 +1757,6 @@ const OrderFulfillment = ({ activeSection, isInvestorView, onDataChange, onBackT
     setMetrics(newMetrics)
   }
 
-  const addNewKPI = () => {
-    alert("Custom KPI added. This feature saves to Custom KPIs collection.")
-    setShowAddKPIForm(false)
-    setNewKPI({
-      name: "",
-      units: "",
-      target: 0,
-      actual: 0,
-      description: ""
-    })
-  }
-
   const handleDownload = () => {
     const csvContent = [
       ["Metric Name", "Current Value %", "Target Value %", "Performance %"],
@@ -1609,10 +1779,7 @@ const OrderFulfillment = ({ activeSection, isInvestorView, onDataChange, onBackT
     URL.revokeObjectURL(url)
   }
 
-  // If viewing specific chart and not in the order-fulfillment section, show only that chart
-  const isViewingChart = viewingChart === "order-fulfillment" && activeSection !== "order-fulfillment"
-
-  if (!isViewingChart && activeSection !== "order-fulfillment") return null
+  if (activeSection !== "order-fulfillment") return null
 
   return (
     <div
@@ -1625,26 +1792,8 @@ const OrderFulfillment = ({ activeSection, isInvestorView, onDataChange, onBackT
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-          {showBackButton && (
-            <button
-              onClick={onBackToDashboard}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#4a352f",
-                color: "#faf7f2",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-              }}
-            >
-              ← Back to Dashboard
-            </button>
-          )}
-          <h2 style={{ color: "#5d4037", marginTop: 0 }}>Order Fulfillment & Delivery Metrics</h2>
-        </div>
-        {!isInvestorView && !isViewingChart && (
+        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Order Fulfillment & Delivery Metrics</h2>
+        {!isInvestorView && (
           <div style={{ display: "flex", gap: "10px" }}>
             <button
               onClick={handleDownload}
@@ -1660,7 +1809,7 @@ const OrderFulfillment = ({ activeSection, isInvestorView, onDataChange, onBackT
               Download CSV
             </button>
             <button
-              onClick={() => setShowAddKPIForm(!showAddKPIForm)}
+              onClick={() => setShowEditForm(!showEditForm)}
               style={{
                 padding: "8px 16px",
                 backgroundColor: "#4a352f",
@@ -1670,147 +1819,13 @@ const OrderFulfillment = ({ activeSection, isInvestorView, onDataChange, onBackT
                 cursor: "pointer",
               }}
             >
-              Add KPI
+              {showEditForm ? "Cancel" : "Edit Data"}
             </button>
           </div>
         )}
       </div>
 
-      {showAddKPIForm && !isInvestorView && !isViewingChart && (
-        <div
-          style={{
-            backgroundColor: "#f5f0e1",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#7d5a50", marginTop: 0 }}>Add Custom KPI</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>KPI Name</label>
-              <input
-                type="text"
-                value={newKPI.name}
-                onChange={(e) => setNewKPI({...newKPI, name: e.target.value})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-                placeholder="Enter KPI name"
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Units of Measure</label>
-              <input
-                type="text"
-                value={newKPI.units}
-                onChange={(e) => setNewKPI({...newKPI, units: e.target.value})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-                placeholder="e.g., %, R, index"
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Target Value</label>
-              <input
-                type="number"
-                value={newKPI.target}
-                onChange={(e) => setNewKPI({...newKPI, target: Number.parseFloat(e.target.value) || 0})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Actual Value</label>
-              <input
-                type="number"
-                value={newKPI.actual}
-                onChange={(e) => setNewKPI({...newKPI, actual: Number.parseFloat(e.target.value) || 0})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-              />
-            </div>
-            <div style={{ gridColumn: "span 2" }}>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Description</label>
-              <input
-                type="text"
-                value={newKPI.description}
-                onChange={(e) => setNewKPI({...newKPI, description: e.target.value})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-                placeholder="Optional description"
-              />
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: "10px", marginTop: "15px" }}>
-            <button
-              onClick={addNewKPI}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#16a34a",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Add KPI
-            </button>
-            <button
-              onClick={() => setShowAddKPIForm(false)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#dc2626",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div style={{ marginBottom: "20px", textAlign: "center" }}>
-        <button
-          onClick={() => setShowEditForm(!showEditForm)}
-          style={{
-            padding: "10px 20px",
-            backgroundColor: showEditForm ? "#dc2626" : "#4a352f",
-            color: "#faf7f2",
-            border: "none",
-            borderRadius: "6px",
-            cursor: "pointer",
-            fontWeight: "600",
-            fontSize: "14px",
-          }}
-        >
-          {showEditForm ? "Cancel Editing" : "Edit Data"}
-        </button>
-      </div>
-
-      {showEditForm && !isInvestorView && !isViewingChart && (
+      {showEditForm && (
         <div
           style={{
             backgroundColor: "#f5f0e1",
@@ -2012,18 +2027,10 @@ const OrderFulfillment = ({ activeSection, isInvestorView, onDataChange, onBackT
 }
 
 // Tech Stack Component
-const TechStackUsage = ({ activeSection, isInvestorView, onDataChange, onBackToDashboard, showBackButton, viewingChart }) => {
+const TechStackUsage = ({ activeSection, isInvestorView, onDataChange }) => {
   const [systems, setSystems] = useState([])
   const [showEditForm, setShowEditForm] = useState(false)
-  const [showAddKPIForm, setShowAddKPIForm] = useState(false)
   const [currentUser, setCurrentUser] = useState(null)
-  const [newKPI, setNewKPI] = useState({
-    name: "",
-    units: "",
-    target: 0,
-    actual: 0,
-    description: ""
-  })
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -2095,18 +2102,6 @@ const TechStackUsage = ({ activeSection, isInvestorView, onDataChange, onBackToD
     setSystems(newSystems)
   }
 
-  const addNewKPI = () => {
-    alert("Custom KPI added. This feature saves to Custom KPIs collection.")
-    setShowAddKPIForm(false)
-    setNewKPI({
-      name: "",
-      units: "",
-      target: 0,
-      actual: 0,
-      description: ""
-    })
-  }
-
   const handleDownload = () => {
     const csvContent = [
       ["System Name", "Adoption Rate %", "Active Users"],
@@ -2124,10 +2119,7 @@ const TechStackUsage = ({ activeSection, isInvestorView, onDataChange, onBackToD
     URL.revokeObjectURL(url)
   }
 
-  // If viewing specific chart and not in the tech-stack section, show only that chart
-  const isViewingChart = viewingChart === "tech-stack" && activeSection !== "tech-stack"
-
-  if (!isViewingChart && activeSection !== "tech-stack") return null
+  if (activeSection !== "tech-stack") return null
 
   return (
     <div
@@ -2140,26 +2132,8 @@ const TechStackUsage = ({ activeSection, isInvestorView, onDataChange, onBackToD
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-          {showBackButton && (
-            <button
-              onClick={onBackToDashboard}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#4a352f",
-                color: "#faf7f2",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-              }}
-            >
-              ← Back to Dashboard
-            </button>
-          )}
-          <h2 style={{ color: "#5d4037", marginTop: 0 }}>Tech Stack Usage</h2>
-        </div>
-        {!isInvestorView && !isViewingChart && (
+        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Tech Stack Usage</h2>
+        {!isInvestorView && (
           <div style={{ display: "flex", gap: "10px" }}>
             <button
               onClick={handleDownload}
@@ -2175,7 +2149,7 @@ const TechStackUsage = ({ activeSection, isInvestorView, onDataChange, onBackToD
               Download CSV
             </button>
             <button
-              onClick={() => setShowAddKPIForm(!showAddKPIForm)}
+              onClick={() => setShowEditForm(!showEditForm)}
               style={{
                 padding: "8px 16px",
                 backgroundColor: "#4a352f",
@@ -2185,147 +2159,13 @@ const TechStackUsage = ({ activeSection, isInvestorView, onDataChange, onBackToD
                 cursor: "pointer",
               }}
             >
-              Add KPI
+              {showEditForm ? "Cancel" : "Edit Data"}
             </button>
           </div>
         )}
       </div>
 
-      {showAddKPIForm && !isInvestorView && !isViewingChart && (
-        <div
-          style={{
-            backgroundColor: "#f5f0e1",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#7d5a50", marginTop: 0 }}>Add Custom KPI</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>KPI Name</label>
-              <input
-                type="text"
-                value={newKPI.name}
-                onChange={(e) => setNewKPI({...newKPI, name: e.target.value})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-                placeholder="Enter KPI name"
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Units of Measure</label>
-              <input
-                type="text"
-                value={newKPI.units}
-                onChange={(e) => setNewKPI({...newKPI, units: e.target.value})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-                placeholder="e.g., %, R, index"
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Target Value</label>
-              <input
-                type="number"
-                value={newKPI.target}
-                onChange={(e) => setNewKPI({...newKPI, target: Number.parseFloat(e.target.value) || 0})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Actual Value</label>
-              <input
-                type="number"
-                value={newKPI.actual}
-                onChange={(e) => setNewKPI({...newKPI, actual: Number.parseFloat(e.target.value) || 0})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-              />
-            </div>
-            <div style={{ gridColumn: "span 2" }}>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Description</label>
-              <input
-                type="text"
-                value={newKPI.description}
-                onChange={(e) => setNewKPI({...newKPI, description: e.target.value})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-                placeholder="Optional description"
-              />
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: "10px", marginTop: "15px" }}>
-            <button
-              onClick={addNewKPI}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#16a34a",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Add KPI
-            </button>
-            <button
-              onClick={() => setShowAddKPIForm(false)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#dc2626",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div style={{ marginBottom: "20px", textAlign: "center" }}>
-        <button
-          onClick={() => setShowEditForm(!showEditForm)}
-          style={{
-            padding: "10px 20px",
-            backgroundColor: showEditForm ? "#dc2626" : "#4a352f",
-            color: "#faf7f2",
-            border: "none",
-            borderRadius: "6px",
-            cursor: "pointer",
-            fontWeight: "600",
-            fontSize: "14px",
-          }}
-        >
-          {showEditForm ? "Cancel Editing" : "Edit Data"}
-        </button>
-      </div>
-
-      {showEditForm && !isInvestorView && !isViewingChart && (
+      {showEditForm && (
         <div
           style={{
             backgroundColor: "#f5f0e1",
@@ -2525,18 +2365,10 @@ const TechStackUsage = ({ activeSection, isInvestorView, onDataChange, onBackToD
 }
 
 // Process Automation Component
-const ProcessAutomation = ({ activeSection, isInvestorView, onDataChange, onBackToDashboard, showBackButton, viewingChart }) => {
+const ProcessAutomation = ({ activeSection, isInvestorView, onDataChange }) => {
   const [processes, setProcesses] = useState([])
   const [showEditForm, setShowEditForm] = useState(false)
-  const [showAddKPIForm, setShowAddKPIForm] = useState(false)
   const [currentUser, setCurrentUser] = useState(null)
-  const [newKPI, setNewKPI] = useState({
-    name: "",
-    units: "",
-    target: 0,
-    actual: 0,
-    description: ""
-  })
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -2608,18 +2440,6 @@ const ProcessAutomation = ({ activeSection, isInvestorView, onDataChange, onBack
     setProcesses(newProcesses)
   }
 
-  const addNewKPI = () => {
-    alert("Custom KPI added. This feature saves to Custom KPIs collection.")
-    setShowAddKPIForm(false)
-    setNewKPI({
-      name: "",
-      units: "",
-      target: 0,
-      actual: 0,
-      description: ""
-    })
-  }
-
   const handleDownload = () => {
     const csvContent = [
       ["Process Name", "Automation Level %"],
@@ -2637,10 +2457,7 @@ const ProcessAutomation = ({ activeSection, isInvestorView, onDataChange, onBack
     URL.revokeObjectURL(url)
   }
 
-  // If viewing specific chart and not in the process-automation section, show only that chart
-  const isViewingChart = viewingChart === "process-automation" && activeSection !== "process-automation"
-
-  if (!isViewingChart && activeSection !== "process-automation") return null
+  if (activeSection !== "process-automation") return null
 
   const overallIndex = processes.length > 0 ? processes.reduce((sum, p) => sum + p.automation, 0) / processes.length : 0
 
@@ -2655,26 +2472,8 @@ const ProcessAutomation = ({ activeSection, isInvestorView, onDataChange, onBack
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-          {showBackButton && (
-            <button
-              onClick={onBackToDashboard}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#4a352f",
-                color: "#faf7f2",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-              }}
-            >
-              ← Back to Dashboard
-            </button>
-          )}
-          <h2 style={{ color: "#5d4037", marginTop: 0 }}>Process Automation Index</h2>
-        </div>
-        {!isInvestorView && !isViewingChart && (
+        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Process Automation Index</h2>
+        {!isInvestorView && (
           <div style={{ display: "flex", gap: "10px" }}>
             <button
               onClick={handleDownload}
@@ -2690,7 +2489,7 @@ const ProcessAutomation = ({ activeSection, isInvestorView, onDataChange, onBack
               Download CSV
             </button>
             <button
-              onClick={() => setShowAddKPIForm(!showAddKPIForm)}
+              onClick={() => setShowEditForm(!showEditForm)}
               style={{
                 padding: "8px 16px",
                 backgroundColor: "#4a352f",
@@ -2700,147 +2499,13 @@ const ProcessAutomation = ({ activeSection, isInvestorView, onDataChange, onBack
                 cursor: "pointer",
               }}
             >
-              Add KPI
+              {showEditForm ? "Cancel" : "Edit Data"}
             </button>
           </div>
         )}
       </div>
 
-      {showAddKPIForm && !isInvestorView && !isViewingChart && (
-        <div
-          style={{
-            backgroundColor: "#f5f0e1",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#7d5a50", marginTop: 0 }}>Add Custom KPI</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>KPI Name</label>
-              <input
-                type="text"
-                value={newKPI.name}
-                onChange={(e) => setNewKPI({...newKPI, name: e.target.value})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-                placeholder="Enter KPI name"
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Units of Measure</label>
-              <input
-                type="text"
-                value={newKPI.units}
-                onChange={(e) => setNewKPI({...newKPI, units: e.target.value})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-                placeholder="e.g., %, R, index"
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Target Value</label>
-              <input
-                type="number"
-                value={newKPI.target}
-                onChange={(e) => setNewKPI({...newKPI, target: Number.parseFloat(e.target.value) || 0})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Actual Value</label>
-              <input
-                type="number"
-                value={newKPI.actual}
-                onChange={(e) => setNewKPI({...newKPI, actual: Number.parseFloat(e.target.value) || 0})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-              />
-            </div>
-            <div style={{ gridColumn: "span 2" }}>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Description</label>
-              <input
-                type="text"
-                value={newKPI.description}
-                onChange={(e) => setNewKPI({...newKPI, description: e.target.value})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-                placeholder="Optional description"
-              />
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: "10px", marginTop: "15px" }}>
-            <button
-              onClick={addNewKPI}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#16a34a",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Add KPI
-            </button>
-            <button
-              onClick={() => setShowAddKPIForm(false)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#dc2626",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div style={{ marginBottom: "20px", textAlign: "center" }}>
-        <button
-          onClick={() => setShowEditForm(!showEditForm)}
-          style={{
-            padding: "10px 20px",
-            backgroundColor: showEditForm ? "#dc2626" : "#4a352f",
-            color: "#faf7f2",
-            border: "none",
-            borderRadius: "6px",
-            cursor: "pointer",
-            fontWeight: "600",
-            fontSize: "14px",
-          }}
-        >
-          {showEditForm ? "Cancel Editing" : "Edit Data"}
-        </button>
-      </div>
-
-      {showEditForm && !isInvestorView && !isViewingChart && (
+      {showEditForm && (
         <div
           style={{
             backgroundColor: "#f5f0e1",
@@ -3034,20 +2699,19 @@ const ProcessAutomation = ({ activeSection, isInvestorView, onDataChange, onBack
 }
 
 // Customer Retention Component
-const CustomerRetention = ({ activeSection, isInvestorView, onDataChange, onBackToDashboard, showBackButton, viewingChart, viewingSubChart }) => {
-  const [retentionData, setRetentionData] = useState([0, 0, 0, 0, 0, 0])
-  const [churnData, setChurnData] = useState([0, 0, 0, 0, 0, 0])
+const CustomerRetention = ({ activeSection, isInvestorView, onDataChange, financialYearStartMonth }) => {
+  const [retentionData, setRetentionData] = useState(Array(12).fill(0))
+  const [churnData, setChurnData] = useState(Array(12).fill(0))
   const [showEditForm, setShowEditForm] = useState(false)
-  const [showAddKPIForm, setShowAddKPIForm] = useState(false)
   const [currentUser, setCurrentUser] = useState(null)
-  const [newKPI, setNewKPI] = useState({
-    name: "",
-    units: "",
-    target: 0,
-    actual: 0,
-    description: ""
-  })
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
+  const [financialYearMonths, setFinancialYearMonths] = useState([])
+
+  useEffect(() => {
+    if (financialYearStartMonth) {
+      const months = getFinancialYearMonths(financialYearStartMonth)
+      setFinancialYearMonths(months)
+    }
+  }, [financialYearStartMonth])
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -3099,8 +2763,8 @@ const CustomerRetention = ({ activeSection, isInvestorView, onDataChange, onBack
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         const data = docSnap.data()
-        setRetentionData(data.retentionData || [0, 0, 0, 0, 0, 0])
-        setChurnData(data.churnData || [0, 0, 0, 0, 0, 0])
+        setRetentionData(data.retentionData || Array(12).fill(0))
+        setChurnData(data.churnData || Array(12).fill(0))
       }
     } catch (error) {
       console.error("Error loading customer retention data:", error)
@@ -3119,22 +2783,10 @@ const CustomerRetention = ({ activeSection, isInvestorView, onDataChange, onBack
     setChurnData(newData)
   }
 
-  const addNewKPI = () => {
-    alert("Custom KPI added. This feature saves to Custom KPIs collection.")
-    setShowAddKPIForm(false)
-    setNewKPI({
-      name: "",
-      units: "",
-      target: 0,
-      actual: 0,
-      description: ""
-    })
-  }
-
   const handleDownload = () => {
     const csvContent = [
       ["Month", "Retention Rate %", "Churn Rate %"],
-      ...months.map((month, index) => [month, retentionData[index], churnData[index]]),
+      ...financialYearMonths.map((month, index) => [month, retentionData[index], churnData[index]]),
     ]
       .map((row) => row.join(","))
       .join("\n")
@@ -3148,40 +2800,10 @@ const CustomerRetention = ({ activeSection, isInvestorView, onDataChange, onBack
     URL.revokeObjectURL(url)
   }
 
-  // If viewing specific chart and not in the customer-retention section, show only that chart
-  const isViewingChart = viewingChart === "customer-retention" && activeSection !== "customer-retention"
+  if (activeSection !== "customer-retention") return null
 
-  if (!isViewingChart && activeSection !== "customer-retention") return null
-
-  const datasets = []
-  if (viewingSubChart === "retention" || !viewingSubChart) {
-    datasets.push({
-      label: "Retention Rate (%)",
-      data: retentionData,
-      borderColor: "#4CAF50",
-      backgroundColor: "rgba(76, 175, 80, 0.1)",
-      borderWidth: 2,
-      tension: 0.1,
-      fill: true,
-    })
-  }
-  if (viewingSubChart === "churn" || !viewingSubChart) {
-    datasets.push({
-      label: "Churn Rate (%)",
-      data: churnData,
-      borderColor: "#F44336",
-      backgroundColor: "rgba(244, 67, 54, 0.1)",
-      borderWidth: 2,
-      tension: 0.1,
-      fill: true,
-    })
-  }
-
-  const chartTitle = viewingSubChart === "retention" 
-    ? "Retention Rate" 
-    : viewingSubChart === "churn" 
-    ? "Churn Rate" 
-    : "Customer Retention"
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  const financialYearStartMonthName = monthNames[financialYearStartMonth - 1]
 
   return (
     <div
@@ -3194,26 +2816,13 @@ const CustomerRetention = ({ activeSection, isInvestorView, onDataChange, onBack
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-          {showBackButton && (
-            <button
-              onClick={onBackToDashboard}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#4a352f",
-                color: "#faf7f2",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-              }}
-            >
-              ← Back to Dashboard
-            </button>
-          )}
-          <h2 style={{ color: "#5d4037", marginTop: 0 }}>{chartTitle}</h2>
+        <div>
+          <h2 style={{ color: "#5d4037", marginTop: 0 }}>Customer Retention & Churn Rates</h2>
+          <p style={{ color: "#7d5a50", fontSize: "14px", margin: "5px 0 0 0" }}>
+            Financial Year starts in {financialYearStartMonthName}
+          </p>
         </div>
-        {!isInvestorView && !isViewingChart && (
+        {!isInvestorView && (
           <div style={{ display: "flex", gap: "10px" }}>
             <button
               onClick={handleDownload}
@@ -3229,7 +2838,7 @@ const CustomerRetention = ({ activeSection, isInvestorView, onDataChange, onBack
               Download CSV
             </button>
             <button
-              onClick={() => setShowAddKPIForm(!showAddKPIForm)}
+              onClick={() => setShowEditForm(!showEditForm)}
               style={{
                 padding: "8px 16px",
                 backgroundColor: "#4a352f",
@@ -3239,147 +2848,13 @@ const CustomerRetention = ({ activeSection, isInvestorView, onDataChange, onBack
                 cursor: "pointer",
               }}
             >
-              Add KPI
+              {showEditForm ? "Cancel" : "Edit Data"}
             </button>
           </div>
         )}
       </div>
 
-      {showAddKPIForm && !isInvestorView && !isViewingChart && (
-        <div
-          style={{
-            backgroundColor: "#f5f0e1",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#7d5a50", marginTop: 0 }}>Add Custom KPI</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>KPI Name</label>
-              <input
-                type="text"
-                value={newKPI.name}
-                onChange={(e) => setNewKPI({...newKPI, name: e.target.value})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-                placeholder="Enter KPI name"
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Units of Measure</label>
-              <input
-                type="text"
-                value={newKPI.units}
-                onChange={(e) => setNewKPI({...newKPI, units: e.target.value})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-                placeholder="e.g., %, R, index"
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Target Value</label>
-              <input
-                type="number"
-                value={newKPI.target}
-                onChange={(e) => setNewKPI({...newKPI, target: Number.parseFloat(e.target.value) || 0})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Actual Value</label>
-              <input
-                type="number"
-                value={newKPI.actual}
-                onChange={(e) => setNewKPI({...newKPI, actual: Number.parseFloat(e.target.value) || 0})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-              />
-            </div>
-            <div style={{ gridColumn: "span 2" }}>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Description</label>
-              <input
-                type="text"
-                value={newKPI.description}
-                onChange={(e) => setNewKPI({...newKPI, description: e.target.value})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-                placeholder="Optional description"
-              />
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: "10px", marginTop: "15px" }}>
-            <button
-              onClick={addNewKPI}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#16a34a",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Add KPI
-            </button>
-            <button
-              onClick={() => setShowAddKPIForm(false)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#dc2626",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div style={{ marginBottom: "20px", textAlign: "center" }}>
-        <button
-          onClick={() => setShowEditForm(!showEditForm)}
-          style={{
-            padding: "10px 20px",
-            backgroundColor: showEditForm ? "#dc2626" : "#4a352f",
-            color: "#faf7f2",
-            border: "none",
-            borderRadius: "6px",
-            cursor: "pointer",
-            fontWeight: "600",
-            fontSize: "14px",
-          }}
-        >
-          {showEditForm ? "Cancel Editing" : "Edit Data"}
-        </button>
-      </div>
-
-      {showEditForm && !isInvestorView && !isViewingChart && (
+      {showEditForm && (
         <div
           style={{
             backgroundColor: "#f5f0e1",
@@ -3392,7 +2867,7 @@ const CustomerRetention = ({ activeSection, isInvestorView, onDataChange, onBack
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
             <div>
               <h4 style={{ color: "#7d5a50" }}>Retention Rate (%)</h4>
-              {months.map((month, index) => (
+              {financialYearMonths.map((month, index) => (
                 <div key={month} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
                   <span style={{ minWidth: "40px", color: "#72542b" }}>{month}:</span>
                   <input
@@ -3411,7 +2886,7 @@ const CustomerRetention = ({ activeSection, isInvestorView, onDataChange, onBack
             </div>
             <div>
               <h4 style={{ color: "#7d5a50" }}>Churn Rate (%)</h4>
-              {months.map((month, index) => (
+              {financialYearMonths.map((month, index) => (
                 <div key={month} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
                   <span style={{ minWidth: "40px", color: "#72542b" }}>{month}:</span>
                   <input
@@ -3446,490 +2921,63 @@ const CustomerRetention = ({ activeSection, isInvestorView, onDataChange, onBack
         </div>
       )}
 
-      {(!isViewingChart || viewingChart === "customer-retention") && (
-        <div style={{ height: "400px" }}>
-          <Line
-            data={{
-              labels: months,
-              datasets: datasets,
-            }}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: {
-                  position: "top",
-                },
+      <div style={{ height: "400px" }}>
+        <Line
+          data={{
+            labels: financialYearMonths,
+            datasets: [
+              {
+                label: "Retention Rate (%)",
+                data: retentionData,
+                borderColor: "#4CAF50",
+                backgroundColor: "rgba(76, 175, 80, 0.1)",
+                borderWidth: 2,
+                tension: 0.1,
+                fill: true,
+              },
+              {
+                label: "Churn Rate (%)",
+                data: churnData,
+                borderColor: "#F44336",
+                backgroundColor: "rgba(244, 67, 54, 0.1)",
+                borderWidth: 2,
+                tension: 0.1,
+                fill: true,
+              },
+            ],
+          }}
+          options={{
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: "top",
+              },
+              title: {
+                display: false,
+              },
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                max: 100,
                 title: {
-                  display: false,
+                  display: true,
+                  text: "Rate (%)",
+                  color: "#72542b",
                 },
               },
-              scales: {
-                y: {
-                  beginAtZero: true,
-                  max: 100,
-                  title: {
-                    display: true,
-                    text: "Rate (%)",
-                    color: "#72542b",
-                  },
-                },
-                x: {
-                  title: {
-                    display: true,
-                    text: "Months",
-                    color: "#72542b",
-                  },
-                },
-              },
-            }}
-          />
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Supply Chain Component
-const SupplyChain = ({ activeSection, isInvestorView, onDataChange, onBackToDashboard, showBackButton, viewingChart, viewingSubChart }) => {
-  const [supplyChainData, setSupplyChainData] = useState({
-    inventoryTurnover: [0, 0, 0, 0, 0, 0],
-    leadTime: [0, 0, 0, 0, 0, 0],
-    perfectOrderRate: [0, 0, 0, 0, 0, 0],
-    supplyChainCost: [0, 0, 0, 0, 0, 0]
-  })
-  const [showEditForm, setShowEditForm] = useState(false)
-  const [showAddKPIForm, setShowAddKPIForm] = useState(false)
-  const [currentUser, setCurrentUser] = useState(null)
-  const [newKPI, setNewKPI] = useState({
-    name: "",
-    units: "",
-    target: 0,
-    actual: 0,
-    description: ""
-  })
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setCurrentUser(user)
-        loadSupplyChainData(user.uid)
-      } else {
-        setCurrentUser(null)
-      }
-    })
-
-    return () => unsubscribe()
-  }, [])
-
-  useEffect(() => {
-    if (onDataChange) {
-      onDataChange('supplyChain', supplyChainData)
-    }
-  }, [supplyChainData])
-
-  const saveSupplyChainData = async () => {
-    if (isInvestorView) {
-      alert("You are in investor view mode. You cannot edit SME data.")
-      return
-    }
-
-    if (!currentUser) {
-      alert("User not authenticated")
-      return
-    }
-
-    try {
-      await setDoc(doc(db, "supply-chain", currentUser.uid), {
-        ...supplyChainData,
-        userId: currentUser.uid,
-      })
-      setShowEditForm(false)
-      alert("Supply chain data saved successfully!")
-    } catch (error) {
-      console.error("Error saving supply chain data:", error)
-      alert("Error saving data")
-    }
-  }
-
-  const loadSupplyChainData = async (userId) => {
-    try {
-      const docRef = doc(db, "supply-chain", userId)
-      const docSnap = await getDoc(docRef)
-      if (docSnap.exists()) {
-        const data = docSnap.data()
-        setSupplyChainData({
-          inventoryTurnover: data.inventoryTurnover || [0, 0, 0, 0, 0, 0],
-          leadTime: data.leadTime || [0, 0, 0, 0, 0, 0],
-          perfectOrderRate: data.perfectOrderRate || [0, 0, 0, 0, 0, 0],
-          supplyChainCost: data.supplyChainCost || [0, 0, 0, 0, 0, 0]
-        })
-      }
-    } catch (error) {
-      console.error("Error loading supply chain data:", error)
-    }
-  }
-
-  const updateSupplyChainValue = (metric, index, value) => {
-    setSupplyChainData(prev => ({
-      ...prev,
-      [metric]: prev[metric].map((val, i) => i === index ? Number.parseFloat(value) || 0 : val)
-    }))
-  }
-
-  const addNewKPI = () => {
-    alert("Custom KPI added. This feature saves to Custom KPIs collection.")
-    setShowAddKPIForm(false)
-    setNewKPI({
-      name: "",
-      units: "",
-      target: 0,
-      actual: 0,
-      description: ""
-    })
-  }
-
-  const handleDownload = () => {
-    const csvContent = [
-      ["Month", "Inventory Turnover", "Lead Time (days)", "Perfect Order Rate %", "Supply Chain Cost (R)"],
-      ...months.map((month, index) => [
-        month,
-        supplyChainData.inventoryTurnover[index],
-        supplyChainData.leadTime[index],
-        supplyChainData.perfectOrderRate[index],
-        supplyChainData.supplyChainCost[index]
-      ]),
-    ]
-      .map((row) => row.join(","))
-      .join("\n")
-
-    const blob = new Blob([csvContent], { type: "text/csv" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "supply-chain.csv"
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-
-  // If viewing specific chart and not in the supply-chain section, show only that chart
-  const isViewingChart = viewingChart === "supply-chain" && activeSection !== "supply-chain"
-
-  if (!isViewingChart && activeSection !== "supply-chain") return null
-
-  const chartConfigs = {
-    inventoryTurnover: {
-      label: "Inventory Turnover",
-      color: "#4CAF50",
-      unit: "times"
-    },
-    leadTime: {
-      label: "Lead Time",
-      color: "#2196F3",
-      unit: "days"
-    },
-    perfectOrderRate: {
-      label: "Perfect Order Rate",
-      color: "#9C27B0",
-      unit: "%"
-    },
-    supplyChainCost: {
-      label: "Supply Chain Cost",
-      color: "#FF9800",
-      unit: "R"
-    }
-  }
-
-  const currentChart = viewingSubChart ? chartConfigs[viewingSubChart] : null
-  const chartTitle = currentChart ? currentChart.label : "Supply Chain Metrics"
-
-  return (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "20px",
-        margin: "20px 0",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-          {showBackButton && (
-            <button
-              onClick={onBackToDashboard}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#4a352f",
-                color: "#faf7f2",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-              }}
-            >
-              ← Back to Dashboard
-            </button>
-          )}
-          <h2 style={{ color: "#5d4037", marginTop: 0 }}>{chartTitle}</h2>
-        </div>
-        {!isInvestorView && !isViewingChart && (
-          <div style={{ display: "flex", gap: "10px" }}>
-            <button
-              onClick={handleDownload}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#a67c52",
-                color: "#faf7f2",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Download CSV
-            </button>
-            <button
-              onClick={() => setShowAddKPIForm(!showAddKPIForm)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#4a352f",
-                color: "#faf7f2",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Add KPI
-            </button>
-          </div>
-        )}
-      </div>
-
-      {showAddKPIForm && !isInvestorView && !isViewingChart && (
-        <div
-          style={{
-            backgroundColor: "#f5f0e1",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#7d5a50", marginTop: 0 }}>Add Custom KPI</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>KPI Name</label>
-              <input
-                type="text"
-                value={newKPI.name}
-                onChange={(e) => setNewKPI({...newKPI, name: e.target.value})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-                placeholder="Enter KPI name"
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Units of Measure</label>
-              <input
-                type="text"
-                value={newKPI.units}
-                onChange={(e) => setNewKPI({...newKPI, units: e.target.value})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-                placeholder="e.g., %, R, index"
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Target Value</label>
-              <input
-                type="number"
-                value={newKPI.target}
-                onChange={(e) => setNewKPI({...newKPI, target: Number.parseFloat(e.target.value) || 0})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Actual Value</label>
-              <input
-                type="number"
-                value={newKPI.actual}
-                onChange={(e) => setNewKPI({...newKPI, actual: Number.parseFloat(e.target.value) || 0})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-              />
-            </div>
-            <div style={{ gridColumn: "span 2" }}>
-              <label style={{ display: "block", marginBottom: "5px", color: "#7d5a50" }}>Description</label>
-              <input
-                type="text"
-                value={newKPI.description}
-                onChange={(e) => setNewKPI({...newKPI, description: e.target.value})}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  width: "100%",
-                }}
-                placeholder="Optional description"
-              />
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: "10px", marginTop: "15px" }}>
-            <button
-              onClick={addNewKPI}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#16a34a",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Add KPI
-            </button>
-            <button
-              onClick={() => setShowAddKPIForm(false)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#dc2626",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div style={{ marginBottom: "20px", textAlign: "center" }}>
-        <button
-          onClick={() => setShowEditForm(!showEditForm)}
-          style={{
-            padding: "10px 20px",
-            backgroundColor: showEditForm ? "#dc2626" : "#4a352f",
-            color: "#faf7f2",
-            border: "none",
-            borderRadius: "6px",
-            cursor: "pointer",
-            fontWeight: "600",
-            fontSize: "14px",
-          }}
-        >
-          {showEditForm ? "Cancel Editing" : "Edit Data"}
-        </button>
-      </div>
-
-      {showEditForm && !isInvestorView && !isViewingChart && (
-        <div
-          style={{
-            backgroundColor: "#f5f0e1",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#7d5a50", marginTop: 0 }}>Edit Supply Chain Data</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-            {Object.entries(chartConfigs).map(([metric, config]) => (
-              <div key={metric}>
-                <h4 style={{ color: "#7d5a50" }}>{config.label} ({config.unit})</h4>
-                {months.map((month, index) => (
-                  <div key={month} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                    <span style={{ minWidth: "40px", color: "#72542b" }}>{month}:</span>
-                    <input
-                      type="number"
-                      value={supplyChainData[metric][index]}
-                      onChange={(e) => updateSupplyChainValue(metric, index, e.target.value)}
-                      style={{
-                        padding: "6px",
-                        border: "1px solid #d4c4b0",
-                        borderRadius: "4px",
-                        width: "80px",
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-          <button
-            onClick={saveSupplyChainData}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              marginTop: "15px",
-            }}
-          >
-            Save Data
-          </button>
-        </div>
-      )}
-
-      {(!isViewingChart || viewingChart === "supply-chain") && (
-        <div style={{ height: "400px" }}>
-          <Line
-            data={{
-              labels: months,
-              datasets: viewingSubChart 
-                ? [{
-                    label: currentChart.label,
-                    data: supplyChainData[viewingSubChart],
-                    borderColor: currentChart.color,
-                    backgroundColor: currentChart.color + "20",
-                    borderWidth: 2,
-                    tension: 0.1,
-                    fill: true,
-                  }]
-                : Object.entries(chartConfigs).map(([metric, config]) => ({
-                    label: config.label,
-                    data: supplyChainData[metric],
-                    borderColor: config.color,
-                    backgroundColor: config.color + "20",
-                    borderWidth: 2,
-                    tension: 0.1,
-                    fill: false,
-                  }))
-            }}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: {
-                  position: "top",
-                },
+              x: {
                 title: {
-                  display: false,
+                  display: true,
+                  text: "Financial Year Months",
+                  color: "#72542b",
                 },
               },
-            }}
-          />
-        </div>
-      )}
+            },
+          }}
+        />
+      </div>
     </div>
   )
 }
@@ -3945,17 +2993,116 @@ const OperationalStrength = () => {
     techStack: null,
     processAutomation: null,
     customerRetention: null,
-    supplyChain: null,
     customKPIs: null,
   })
 
   const [isInvestorView, setIsInvestorView] = useState(false)
   const [viewingSMEId, setViewingSMEId] = useState(null)
   const [viewingSMEName, setViewingSMEName] = useState("")
-  const [viewingChart, setViewingChart] = useState(null)
-  const [viewingSubChart, setViewingSubChart] = useState(null)
-  const [selectedMonth, setSelectedMonth] = useState("Jun")
-  const [selectedYear, setSelectedYear] = useState("2024")
+  const [financialYearStartMonth, setFinancialYearStartMonth] = useState(1) // Default to January (1)
+  const [loadingFinancialYear, setLoadingFinancialYear] = useState(true)
+
+  // Fetch financial year start month from user profile
+  useEffect(() => {
+    const fetchFinancialYearStart = async (userId) => {
+      try {
+        setLoadingFinancialYear(true)
+        
+        // Get from universalProfiles collection - query for the logged in user's profile
+        const profilesQuery = query(
+          collection(db, "universalProfiles"),
+          where("userId", "==", userId)
+        )
+        
+        const querySnapshot = await getDocs(profilesQuery)
+        
+        if (!querySnapshot.empty) {
+          // Get the first matching document
+          const profileDoc = querySnapshot.docs[0]
+          const profileData = profileDoc.data()
+          
+          console.log("Profile data found:", profileData)
+          
+          if (profileData.entityOverview?.financialYearEnd) {
+            // financialYearEnd is in format "2025-02" where 02 is February
+            // The month number is the financial year start month
+            const financialYearEndStr = profileData.entityOverview.financialYearEnd
+            console.log("Financial Year End string:", financialYearEndStr)
+
+            // Split by "-" and get the month part
+            const parts = financialYearEndStr.split("-")
+            if (parts.length === 2) {
+              const month = parseInt(parts[1])
+              console.log("Parsed month:", month)
+              
+              if (!isNaN(month) && month >= 1 && month <= 12) {
+                setFinancialYearStartMonth(month)
+                console.log("Financial year start month set to:", month)
+              } else {
+                console.log("Invalid month parsed:", month)
+                setFinancialYearStartMonth(1) // Default to January
+              }
+            
+            } else {
+              console.log("Invalid financialYearEnd format:", financialYearEndStr)
+              setFinancialYearStartMonth(1) // Default to January
+            }
+          } else {
+            console.log("No financialYearEnd found in entityOverview")
+            setFinancialYearStartMonth(1) // Default to January
+          }
+        } else {
+          console.log("No universalProfiles document found for user:", userId)
+          
+          // Fallback: Try to get from user document
+          try {
+            const userDoc = await getDoc(doc(db, "universalProfiles", userId))
+            if (userDoc.exists()) {
+              const userData = userDoc.data()
+              console.log("User data found:", userData)
+              
+              if (userData.entityOverview?.financialYearEnd) {
+                const financialYearEndStr = userData.entityOverview.financialYearEnd
+                console.log("Financial Year End from user doc:", financialYearEndStr)
+                
+                const parts = financialYearEndStr.split("-")
+                if (parts.length === 2) {
+                  const month = parseInt(parts[1])
+                  if (!isNaN(month) && month >= 1 && month <= 12) {
+                    setFinancialYearStartMonth(month)
+                    console.log("Financial year start month set to:", month)
+                  }
+                }
+              }
+            }
+          } catch (fallbackError) {
+            console.error("Error in fallback fetch:", fallbackError)
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching financial year start:", error)
+        setFinancialYearStartMonth(1) // Default to January
+      } finally {
+        setLoadingFinancialYear(false)
+      }
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        if (isInvestorView && viewingSMEId) {
+          // If in investor view, fetch the SME's financial year
+          await fetchFinancialYearStart(viewingSMEId)
+        } else {
+          // If not in investor view, fetch the logged in user's financial year
+          await fetchFinancialYearStart(user.uid)
+        }
+      } else {
+        setLoadingFinancialYear(false)
+      }
+    })
+
+    return () => unsubscribe()
+  }, [isInvestorView, viewingSMEId])
 
   useEffect(() => {
     const investorViewMode = sessionStorage.getItem("investorViewMode")
@@ -3999,20 +3146,12 @@ const OperationalStrength = () => {
     }))
   }
 
-  const handleKpiClick = (chartType, subChartType = null) => {
-    setViewingChart(chartType)
-    setViewingSubChart(subChartType)
-    setActiveSection(chartType)
-    // Scroll to the chart
+  const handleCategoryClick = (section) => {
+    setActiveSection(section)
+    // Scroll to the section
     setTimeout(() => {
-      document.querySelector(`[data-section="${chartType}"]`)?.scrollIntoView({ behavior: 'smooth' })
+      document.querySelector(`[data-section="${section}"]`)?.scrollIntoView({ behavior: 'smooth' })
     }, 100)
-  }
-
-  const handleBackToDashboard = () => {
-    setViewingChart(null)
-    setViewingSubChart(null)
-    setActiveSection("kpi-dashboard")
   }
 
   const getContentStyles = () => ({
@@ -4027,14 +3166,18 @@ const OperationalStrength = () => {
 
   const sectionButtons = [
     { id: "kpi-dashboard", label: "KPI Dashboard" },
-    { id: "productivity", label: "Productivity Procurement" },
-    { id: "unit-cost", label: "Operation Unit" },
+    { id: "productivity", label: "Productivity" },
+    { id: "unit-cost", label: "Unit Costs" },
     { id: "order-fulfillment", label: "Order Fulfillment" },
     { id: "tech-stack", label: "Tech Stack" },
     { id: "process-automation", label: "Process Automation" },
     { id: "customer-retention", label: "Customer Retention" },
-    { id: "supply-chain", label: "Supply Chain" },
+    { id: "custom-kpis", label: "Add KPI" },
   ]
+
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  const financialYearMonths = getFinancialYearMonths(financialYearStartMonth)
+  const financialYearStartMonthName = monthNames[financialYearStartMonth - 1]
 
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
@@ -4087,11 +3230,15 @@ const OperationalStrength = () => {
         )}
 
         <div style={{ padding: "20px" }}>
+          <div style={{ margin: "50px 0 10px 0" }}>
+            <h2 style={{ color: "#4a352f", margin: 0 }}>Operational Strength Dashboard</h2>
+          </div>
+
           <div
             style={{
               display: "flex",
               gap: "10px",
-              margin: "50px 0 20px 0",
+              margin: "10px 0 20px 0",
               padding: "15px",
               backgroundColor: "#fdfcfb",
               borderRadius: "8px",
@@ -4103,11 +3250,7 @@ const OperationalStrength = () => {
             {sectionButtons.map((button) => (
               <button
                 key={button.id}
-                onClick={() => {
-                  setViewingChart(null)
-                  setViewingSubChart(null)
-                  setActiveSection(button.id)
-                }}
+                onClick={() => setActiveSection(button.id)}
                 style={{
                   padding: "10px 15px",
                   backgroundColor: activeSection === button.id ? "#4a352f" : "#e6d7c3",
@@ -4118,7 +3261,7 @@ const OperationalStrength = () => {
                   fontWeight: "600",
                   fontSize: "14px",
                   transition: "all 0.3s ease",
-                  minWidth: "140px",
+                  minWidth: "120px",
                   textAlign: "center",
                   flexShrink: 0,
                 }}
@@ -4134,12 +3277,8 @@ const OperationalStrength = () => {
               isInvestorView={isInvestorView} 
               viewingSMEId={viewingSMEId}
               allData={allData}
-              onKpiClick={handleKpiClick}
-              onBackToDashboard={handleBackToDashboard}
-              selectedMonth={selectedMonth}
-              selectedYear={selectedYear}
-              onMonthChange={setSelectedMonth}
-              onYearChange={setSelectedYear}
+              onCategoryClick={handleCategoryClick}
+              financialYearStartMonth={financialYearStartMonth}
             />
           </div>
           
@@ -4148,10 +3287,7 @@ const OperationalStrength = () => {
               activeSection={activeSection} 
               isInvestorView={isInvestorView}
               onDataChange={handleDataChange}
-              onBackToDashboard={handleBackToDashboard}
-              showBackButton={viewingChart === "productivity"}
-              viewingChart={viewingChart}
-              viewingSubChart={viewingSubChart}
+              financialYearStartMonth={financialYearStartMonth}
             />
           </div>
           
@@ -4160,9 +3296,6 @@ const OperationalStrength = () => {
               activeSection={activeSection} 
               isInvestorView={isInvestorView}
               onDataChange={handleDataChange}
-              onBackToDashboard={handleBackToDashboard}
-              showBackButton={viewingChart === "unit-cost"}
-              viewingChart={viewingChart}
             />
           </div>
           
@@ -4171,9 +3304,6 @@ const OperationalStrength = () => {
               activeSection={activeSection} 
               isInvestorView={isInvestorView}
               onDataChange={handleDataChange}
-              onBackToDashboard={handleBackToDashboard}
-              showBackButton={viewingChart === "order-fulfillment"}
-              viewingChart={viewingChart}
             />
           </div>
           
@@ -4182,9 +3312,6 @@ const OperationalStrength = () => {
               activeSection={activeSection} 
               isInvestorView={isInvestorView}
               onDataChange={handleDataChange}
-              onBackToDashboard={handleBackToDashboard}
-              showBackButton={viewingChart === "tech-stack"}
-              viewingChart={viewingChart}
             />
           </div>
           
@@ -4193,9 +3320,6 @@ const OperationalStrength = () => {
               activeSection={activeSection} 
               isInvestorView={isInvestorView}
               onDataChange={handleDataChange}
-              onBackToDashboard={handleBackToDashboard}
-              showBackButton={viewingChart === "process-automation"}
-              viewingChart={viewingChart}
             />
           </div>
           
@@ -4204,22 +3328,16 @@ const OperationalStrength = () => {
               activeSection={activeSection} 
               isInvestorView={isInvestorView}
               onDataChange={handleDataChange}
-              onBackToDashboard={handleBackToDashboard}
-              showBackButton={viewingChart === "customer-retention"}
-              viewingChart={viewingChart}
-              viewingSubChart={viewingSubChart}
+              financialYearStartMonth={financialYearStartMonth}
             />
           </div>
           
-          <div data-section="supply-chain">
-            <SupplyChain 
+          <div data-section="custom-kpis">
+            <CustomKPIs 
               activeSection={activeSection} 
               isInvestorView={isInvestorView}
               onDataChange={handleDataChange}
-              onBackToDashboard={handleBackToDashboard}
-              showBackButton={viewingChart === "supply-chain"}
-              viewingChart={viewingChart}
-              viewingSubChart={viewingSubChart}
+              financialYearStartMonth={financialYearStartMonth}
             />
           </div>
         </div>

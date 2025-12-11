@@ -52,3 +52,64 @@
       width: 100%;
     }
   }
+  /* App.css - Add these styles */
+.loading-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  color: #333;
+  gap: 20px;
+}
+
+.loading-screen .animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.unauthorized-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  text-align: center;
+  padding: 20px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+}
+
+.unauthorized-page h1 {
+  color: #d32f2f;
+  margin-bottom: 20px;
+}
+
+.unauthorized-page p {
+  color: #666;
+  margin-bottom: 30px;
+  font-size: 18px;
+}
+
+.unauthorized-page button {
+  padding: 12px 24px;
+  background-color: #8B4513;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.3s;
+}
+
+.unauthorized-page button:hover {
+  background-color: #A0522D;
+}

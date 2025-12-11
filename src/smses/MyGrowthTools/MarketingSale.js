@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Bar, Pie, Line, Scatter } from "react-chartjs-2"
-import { doc, getDoc, setDoc } from "firebase/firestore"
+import { doc, getDoc, setDoc, collection, query, where, getDocs } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
 import { onAuthStateChanged } from "firebase/auth"
 import Sidebar from "smses/Sidebar/Sidebar"
@@ -22,6 +22,20 @@ import {
 
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, PointElement, LineElement, Title, Tooltip, Legend)
+
+// Helper function to get financial year months
+const getFinancialYearMonths = (financialYearStartMonth) => {
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  const startMonthIndex = financialYearStartMonth - 1 // Convert to 0-indexed
+  const months = []
+  
+  for (let i = 0; i < 12; i++) {
+    const monthIndex = (startMonthIndex + i) % 12
+    months.push(monthNames[monthIndex])
+  }
+  
+  return months
+}
 
 // Download functionality
 const downloadData = (data, filename, selectedSections) => {
@@ -144,14 +158,21 @@ const DownloadModal = ({ isOpen, onClose, onDownload, availableSections, section
   )
 }
 
-// NewLeads Component
-const NewLeads = ({ activeSection, currentUser, isInvestorView }) => {
-  const [leadData, setLeadData] = useState([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-  const [qualifiedData, setQualifiedData] = useState([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+// NewLeads Component - HAS MONTHLY X-AXIS
+const NewLeads = ({ activeSection, currentUser, isInvestorView, financialYearStartMonth }) => {
+  const [leadData, setLeadData] = useState(Array(12).fill(0))
+  const [qualifiedData, setQualifiedData] = useState(Array(12).fill(0))
   const [showEditForm, setShowEditForm] = useState(false)
   const [showDownloadModal, setShowDownloadModal] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  const [financialYearMonths, setFinancialYearMonths] = useState([])
+
+  useEffect(() => {
+    if (financialYearStartMonth) {
+      const months = getFinancialYearMonths(financialYearStartMonth)
+      setFinancialYearMonths(months)
+    }
+  }, [financialYearStartMonth])
 
   const saveLeadsData = async () => {
     if (!currentUser) {
@@ -180,13 +201,13 @@ const NewLeads = ({ activeSection, currentUser, isInvestorView }) => {
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         const data = docSnap.data()
-        setLeadData(data.leadData || [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-        setQualifiedData(data.qualifiedData || [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+        setLeadData(data.leadData || Array(12).fill(0))
+        setQualifiedData(data.qualifiedData || Array(12).fill(0))
       } else {
         // Initialize with empty data if no document exists
         await setDoc(docRef, {
-          leadData: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-          qualifiedData: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          leadData: Array(12).fill(0),
+          qualifiedData: Array(12).fill(0),
           lastUpdated: new Date().toISOString()
         })
       }
@@ -262,7 +283,14 @@ const NewLeads = ({ activeSection, currentUser, isInvestorView }) => {
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ color: "#5d4037", marginTop: 0 }}>New Leads & Qualified Leads</h2>
+        <div>
+          <h2 style={{ color: "#5d4037", marginTop: 0 }}>New Leads & Qualified Leads</h2>
+          {financialYearStartMonth && (
+            <p style={{ color: "#7d5a50", fontSize: "14px", margin: "5px 0 0 0" }}>
+              Financial Year starts in {financialYearMonths[0]}
+            </p>
+          )}
+        </div>
         <div style={{ display: "flex", gap: "10px" }}>
           {!isInvestorView && (
             <button
@@ -308,7 +336,7 @@ const NewLeads = ({ activeSection, currentUser, isInvestorView }) => {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
             <div>
               <h4 style={{ color: "#72542b" }}>New Leads</h4>
-              {months.map((month, index) => (
+              {financialYearMonths.map((month, index) => (
                 <div key={month} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
                   <span style={{ minWidth: "40px", color: "#72542b" }}>{month}:</span>
                   <input
@@ -327,7 +355,7 @@ const NewLeads = ({ activeSection, currentUser, isInvestorView }) => {
             </div>
             <div>
               <h4 style={{ color: "#72542b" }}>Qualified Leads</h4>
-              {months.map((month, index) => (
+              {financialYearMonths.map((month, index) => (
                 <div key={month} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
                   <span style={{ minWidth: "40px", color: "#72542b" }}>{month}:</span>
                   <input
@@ -365,7 +393,7 @@ const NewLeads = ({ activeSection, currentUser, isInvestorView }) => {
       <div style={{ height: "400px" }}>
         <Bar
           data={{
-            labels: months,
+            labels: financialYearMonths,
             datasets: [
               {
                 label: "New Leads",
@@ -424,7 +452,7 @@ const NewLeads = ({ activeSection, currentUser, isInvestorView }) => {
   )
 }
 
-// LeadSourceAnalysis Component
+// LeadSourceAnalysis Component - NO MONTHLY X-AXIS (Pie Chart)
 const LeadSourceAnalysis = ({ activeSection, currentUser, isInvestorView }) => {
   const [sources, setSources] = useState([])
   const [showEditForm, setShowEditForm] = useState(false)
@@ -753,7 +781,7 @@ const LeadSourceAnalysis = ({ activeSection, currentUser, isInvestorView }) => {
   )
 }
 
-// CostPerLead Component
+// CostPerLead Component - NO MONTHLY X-AXIS (Bar chart with campaign names)
 const CostPerLead = ({ activeSection, currentUser, isInvestorView }) => {
   const [campaigns, setCampaigns] = useState([])
   const [industryAvg, setIndustryAvg] = useState(0)
@@ -1092,14 +1120,21 @@ const CostPerLead = ({ activeSection, currentUser, isInvestorView }) => {
   )
 }
 
-// CustomerAcquisitionCost Component
-const CustomerAcquisitionCost = ({ activeSection, currentUser, isInvestorView }) => {
-  const [cacData, setCacData] = useState([0, 0, 0, 0, 0])
-  const [ltvData, setLtvData] = useState([0, 0, 0, 0, 0])
+// CustomerAcquisitionCost Component - HAS MONTHLY X-AXIS (Line chart)
+const CustomerAcquisitionCost = ({ activeSection, currentUser, isInvestorView, financialYearStartMonth }) => {
+  const [cacData, setCacData] = useState(Array(12).fill(0))
+  const [ltvData, setLtvData] = useState(Array(12).fill(0))
   const [showEditForm, setShowEditForm] = useState(false)
   const [showDownloadModal, setShowDownloadModal] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-  const quarters = ["Q1 2022", "Q2 2022", "Q3 2022", "Q4 2022", "Q1 2023"]
+  const [financialYearMonths, setFinancialYearMonths] = useState([])
+
+  useEffect(() => {
+    if (financialYearStartMonth) {
+      const months = getFinancialYearMonths(financialYearStartMonth)
+      setFinancialYearMonths(months)
+    }
+  }, [financialYearStartMonth])
 
   const saveCacData = async () => {
     if (!currentUser) {
@@ -1128,13 +1163,13 @@ const CustomerAcquisitionCost = ({ activeSection, currentUser, isInvestorView })
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         const data = docSnap.data()
-        setCacData(data.cacData || [0, 0, 0, 0, 0])
-        setLtvData(data.ltvData || [0, 0, 0, 0, 0])
+        setCacData(data.cacData || Array(12).fill(0))
+        setLtvData(data.ltvData || Array(12).fill(0))
       } else {
         // Initialize with empty data if no document exists
         await setDoc(docRef, {
-          cacData: [0, 0, 0, 0, 0],
-          ltvData: [0, 0, 0, 0, 0],
+          cacData: Array(12).fill(0),
+          ltvData: Array(12).fill(0),
           lastUpdated: new Date().toISOString()
         })
       }
@@ -1175,7 +1210,7 @@ const CustomerAcquisitionCost = ({ activeSection, currentUser, isInvestorView })
         currentCAC: currentCac,
         currentLTV: currentLtv,
         ratio: ratio,
-        quarters: quarters,
+        months: financialYearMonths,
       },
     }
     downloadData(data, "customer_acquisition_cost", selectedSections)
@@ -1213,7 +1248,14 @@ const CustomerAcquisitionCost = ({ activeSection, currentUser, isInvestorView })
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Customer Acquisition Cost (CAC) vs LTV</h2>
+        <div>
+          <h2 style={{ color: "#5d4037", marginTop: 0 }}>Customer Acquisition Cost (CAC) vs LTV</h2>
+          {financialYearStartMonth && (
+            <p style={{ color: "#7d5a50", fontSize: "14px", margin: "5px 0 0 0" }}>
+              Financial Year starts in {financialYearMonths[0]}
+            </p>
+          )}
+        </div>
         <div style={{ display: "flex", gap: "10px" }}>
           {!isInvestorView && (
             <button
@@ -1259,9 +1301,9 @@ const CustomerAcquisitionCost = ({ activeSection, currentUser, isInvestorView })
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
             <div>
               <h4 style={{ color: "#72542b" }}>CAC (ZAR)</h4>
-              {quarters.map((quarter, index) => (
-                <div key={quarter} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                  <span style={{ minWidth: "60px", color: "#72542b" }}>{quarter}:</span>
+              {financialYearMonths.map((month, index) => (
+                <div key={month} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+                  <span style={{ minWidth: "60px", color: "#72542b" }}>{month}:</span>
                   <input
                     type="number"
                     value={cacData[index]}
@@ -1278,9 +1320,9 @@ const CustomerAcquisitionCost = ({ activeSection, currentUser, isInvestorView })
             </div>
             <div>
               <h4 style={{ color: "#72542b" }}>LTV (ZAR)</h4>
-              {quarters.map((quarter, index) => (
-                <div key={quarter} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                  <span style={{ minWidth: "60px", color: "#72542b" }}>{quarter}:</span>
+              {financialYearMonths.map((month, index) => (
+                <div key={month} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+                  <span style={{ minWidth: "60px", color: "#72542b" }}>{month}:</span>
                   <input
                     type="number"
                     value={ltvData[index]}
@@ -1316,7 +1358,7 @@ const CustomerAcquisitionCost = ({ activeSection, currentUser, isInvestorView })
       <div style={{ height: "400px" }}>
         <Line
           data={{
-            labels: quarters,
+            labels: financialYearMonths,
             datasets: [
               {
                 label: "CAC (ZAR)",
@@ -1392,7 +1434,7 @@ const CustomerAcquisitionCost = ({ activeSection, currentUser, isInvestorView })
   )
 }
 
-// CampaignROI Component
+// CampaignROI Component - NO MONTHLY X-AXIS (Scatter chart)
 const CampaignROI = ({ activeSection, currentUser, isInvestorView }) => {
   const [campaigns, setCampaigns] = useState([])
   const [showEditForm, setShowEditForm] = useState(false)
@@ -1799,7 +1841,7 @@ const CampaignROI = ({ activeSection, currentUser, isInvestorView }) => {
   )
 }
 
-// ConversionRate Component
+// ConversionRate Component - NO MONTHLY X-AXIS (Progress bars)
 const ConversionRate = ({ activeSection, currentUser, isInvestorView }) => {
   const [stages, setStages] = useState([])
   const [showEditForm, setShowEditForm] = useState(false)
@@ -2111,7 +2153,7 @@ const ConversionRate = ({ activeSection, currentUser, isInvestorView }) => {
   )
 }
 
-// RetentionLTV Component
+// RetentionLTV Component - NO MONTHLY X-AXIS (Has years, not months)
 const RetentionLTV = ({ activeSection, currentUser, isInvestorView }) => {
   const [retentionRates, setRetentionRates] = useState([0, 0, 0, 0, 0, 0])
   const [ltvValues, setLtvValues] = useState([0, 0, 0, 0, 0, 0])
@@ -2467,13 +2509,20 @@ const RetentionLTV = ({ activeSection, currentUser, isInvestorView }) => {
   )
 }
 
-// SalesVelocity Component
-const SalesVelocity = ({ activeSection, currentUser, isInvestorView }) => {
-  const [velocityData, setVelocityData] = useState([0, 0, 0, 0, 0, 0, 0, 0])
+// SalesVelocity Component - HAS MONTHLY X-AXIS (Line chart)
+const SalesVelocity = ({ activeSection, currentUser, isInvestorView, financialYearStartMonth }) => {
+  const [velocityData, setVelocityData] = useState(Array(12).fill(0))
   const [showEditForm, setShowEditForm] = useState(false)
   const [showDownloadModal, setShowDownloadModal] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug"]
+  const [financialYearMonths, setFinancialYearMonths] = useState([])
+
+  useEffect(() => {
+    if (financialYearStartMonth) {
+      const months = getFinancialYearMonths(financialYearStartMonth)
+      setFinancialYearMonths(months)
+    }
+  }, [financialYearStartMonth])
 
   const saveSalesVelocityData = async () => {
     if (!currentUser) {
@@ -2500,11 +2549,11 @@ const SalesVelocity = ({ activeSection, currentUser, isInvestorView }) => {
       const docRef = doc(db, "sales-velocity", currentUser.uid)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
-        setVelocityData(docSnap.data().velocityData || [0, 0, 0, 0, 0, 0, 0, 0])
+        setVelocityData(docSnap.data().velocityData || Array(12).fill(0))
       } else {
         // Initialize with empty data if no document exists
         await setDoc(docRef, {
-          velocityData: [0, 0, 0, 0, 0, 0, 0, 0],
+          velocityData: Array(12).fill(0),
           lastUpdated: new Date().toISOString()
         })
       }
@@ -2541,7 +2590,7 @@ const SalesVelocity = ({ activeSection, currentUser, isInvestorView }) => {
           velocityData.length > 0
             ? (velocityData.reduce((sum, val) => sum + val, 0) / velocityData.length).toFixed(2)
             : 0,
-        months: months,
+        months: financialYearMonths,
       },
     }
     downloadData(data, "sales_velocity", selectedSections)
@@ -2579,7 +2628,14 @@ const SalesVelocity = ({ activeSection, currentUser, isInvestorView }) => {
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Sales Velocity (Days to Close)</h2>
+        <div>
+          <h2 style={{ color: "#5d4037", marginTop: 0 }}>Sales Velocity (Days to Close)</h2>
+          {financialYearStartMonth && (
+            <p style={{ color: "#7d5a50", fontSize: "14px", margin: "5px 0 0 0" }}>
+              Financial Year starts in {financialYearMonths[0]}
+            </p>
+          )}
+        </div>
         <div style={{ display: "flex", gap: "10px" }}>
           {!isInvestorView && (
             <button
@@ -2623,7 +2679,7 @@ const SalesVelocity = ({ activeSection, currentUser, isInvestorView }) => {
         >
           <h3 style={{ color: "#72542b", marginTop: 0 }}>Edit Sales Velocity Data</h3>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "15px" }}>
-            {months.map((month, index) => (
+            {financialYearMonths.map((month, index) => (
               <div key={month} style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
                 <label style={{ color: "#72542b", fontSize: "14px" }}>{month}:</label>
                 <input
@@ -2660,7 +2716,7 @@ const SalesVelocity = ({ activeSection, currentUser, isInvestorView }) => {
       <div style={{ height: "400px" }}>
         <Line
           data={{
-            labels: months,
+            labels: financialYearMonths,
             datasets: [
               {
                 label: "Average Days to Close",
@@ -2769,7 +2825,7 @@ const SalesVelocity = ({ activeSection, currentUser, isInvestorView }) => {
   )
 }
 
-// RepeatCustomers Component
+// RepeatCustomers Component - NO MONTHLY X-AXIS (Has years, not months)
 const RepeatCustomers = ({ activeSection, currentUser, isInvestorView }) => {
   const [repeatData, setRepeatData] = useState([0, 0, 0, 0, 0])
   const [churnData, setChurnData] = useState([0, 0, 0, 0, 0])
@@ -3138,6 +3194,110 @@ const MarketingSales = () => {
   const [viewingSMEId, setViewingSMEId] = useState(null)
   const [viewingSMEName, setViewingSMEName] = useState("")
   const [currentUser, setCurrentUser] = useState(null)
+  const [financialYearStartMonth, setFinancialYearStartMonth] = useState(1) // Default to January (1)
+  const [loadingFinancialYear, setLoadingFinancialYear] = useState(true)
+
+  // Fetch financial year start month from user profile
+  useEffect(() => {
+    const fetchFinancialYearStart = async (userId) => {
+      try {
+        setLoadingFinancialYear(true)
+        
+        // Get from universalProfiles collection - query for the logged in user's profile
+        const profilesQuery = query(
+          collection(db, "universalProfiles"),
+          where("userId", "==", userId)
+        )
+        
+        const querySnapshot = await getDocs(profilesQuery)
+        
+        if (!querySnapshot.empty) {
+          // Get the first matching document
+          const profileDoc = querySnapshot.docs[0]
+          const profileData = profileDoc.data()
+          
+          console.log("Profile data found:", profileData)
+          
+          if (profileData.entityOverview?.financialYearEnd) {
+            // financialYearEnd is in format "2025-02" where 02 is February
+            // The month number is the financial year start month
+            const financialYearEndStr = profileData.entityOverview.financialYearEnd
+            console.log("Financial Year End string:", financialYearEndStr)
+
+            // Split by "-" and get the month part
+            const parts = financialYearEndStr.split("-")
+            if (parts.length === 2) {
+              const month = parseInt(parts[1])
+              console.log("Parsed month:", month)
+              
+              if (!isNaN(month) && month >= 1 && month <= 12) {
+                setFinancialYearStartMonth(month)
+                console.log("Financial year start month set to:", month)
+              } else {
+                console.log("Invalid month parsed:", month)
+                setFinancialYearStartMonth(1) // Default to January
+              }
+            
+            } else {
+              console.log("Invalid financialYearEnd format:", financialYearEndStr)
+              setFinancialYearStartMonth(1) // Default to January
+            }
+          } else {
+            console.log("No financialYearEnd found in entityOverview")
+            setFinancialYearStartMonth(1) // Default to January
+          }
+        } else {
+          console.log("No universalProfiles document found for user:", userId)
+          
+          // Fallback: Try to get from user document
+          try {
+            const userDoc = await getDoc(doc(db, "universalProfiles", userId))
+            if (userDoc.exists()) {
+              const userData = userDoc.data()
+              console.log("User data found:", userData)
+              
+              if (userData.entityOverview?.financialYearEnd) {
+                const financialYearEndStr = userData.entityOverview.financialYearEnd
+                console.log("Financial Year End from user doc:", financialYearEndStr)
+                
+                const parts = financialYearEndStr.split("-")
+                if (parts.length === 2) {
+                  const month = parseInt(parts[1])
+                  if (!isNaN(month) && month >= 1 && month <= 12) {
+                    setFinancialYearStartMonth(month)
+                    console.log("Financial year start month set to:", month)
+                  }
+                }
+              }
+            }
+          } catch (fallbackError) {
+            console.error("Error in fallback fetch:", fallbackError)
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching financial year start:", error)
+        setFinancialYearStartMonth(1) // Default to January
+      } finally {
+        setLoadingFinancialYear(false)
+      }
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        if (isInvestorView && viewingSMEId) {
+          // If in investor view, fetch the SME's financial year
+          await fetchFinancialYearStart(viewingSMEId)
+        } else {
+          // If not in investor view, fetch the logged in user's financial year
+          await fetchFinancialYearStart(user.uid)
+        }
+      } else {
+        setLoadingFinancialYear(false)
+      }
+    })
+
+    return () => unsubscribe()
+  }, [isInvestorView, viewingSMEId])
 
   useEffect(() => {
     const investorViewMode = sessionStorage.getItem("investorViewMode")
@@ -3298,15 +3458,54 @@ const MarketingSales = () => {
             ))}
           </div>
 
-          <NewLeads activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
-          <LeadSourceAnalysis activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
-          <CostPerLead activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
-          <CustomerAcquisitionCost activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
-          <CampaignROI activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
-          <ConversionRate activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
-          <RetentionLTV activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
-          <SalesVelocity activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
-          <RepeatCustomers activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
+          <NewLeads 
+            activeSection={activeSection} 
+            currentUser={currentUser} 
+            isInvestorView={isInvestorView} 
+            financialYearStartMonth={financialYearStartMonth}
+          />
+          <LeadSourceAnalysis 
+            activeSection={activeSection} 
+            currentUser={currentUser} 
+            isInvestorView={isInvestorView} 
+          />
+          <CostPerLead 
+            activeSection={activeSection} 
+            currentUser={currentUser} 
+            isInvestorView={isInvestorView} 
+          />
+          <CustomerAcquisitionCost 
+            activeSection={activeSection} 
+            currentUser={currentUser} 
+            isInvestorView={isInvestorView} 
+            financialYearStartMonth={financialYearStartMonth}
+          />
+          <CampaignROI 
+            activeSection={activeSection} 
+            currentUser={currentUser} 
+            isInvestorView={isInvestorView} 
+          />
+          <ConversionRate 
+            activeSection={activeSection} 
+            currentUser={currentUser} 
+            isInvestorView={isInvestorView} 
+          />
+          <RetentionLTV 
+            activeSection={activeSection} 
+            currentUser={currentUser} 
+            isInvestorView={isInvestorView} 
+          />
+          <SalesVelocity 
+            activeSection={activeSection} 
+            currentUser={currentUser} 
+            isInvestorView={isInvestorView} 
+            financialYearStartMonth={financialYearStartMonth}
+          />
+          <RepeatCustomers 
+            activeSection={activeSection} 
+            currentUser={currentUser} 
+            isInvestorView={isInvestorView} 
+          />
         </div>
       </div>
     </div>
