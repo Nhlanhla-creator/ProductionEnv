@@ -1,176 +1,164 @@
+// AdminDashboard.jsx - Fixed Chart Layouts
 "use client"
-import { useState, useEffect } from "react"
+import React, { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import {
-  Users,
-  TrendingUp,
-  Zap,
-  Target,
-  FileText,
-  DollarSign,
-  Building2,
-  ArrowUpRight,
-  ArrowDownRight,
-  BarChart3,
-  PieChart,
+  ResponsiveContainer,
   LineChart,
-  CheckCircle,
-  ShoppingCart,
-  CreditCard,
-  XCircle,
-} from "lucide-react"
-import {
-  AreaChart,
-  Area,
-  BarChart,
-  Bar,
-  PieChart as RechartsPieChart,
-  Pie,
-  Cell,
+  Line,
+  CartesianGrid,
   XAxis,
   YAxis,
-  CartesianGrid,
   Tooltip,
-  ResponsiveContainer,
-  LineChart as RechartsLineChart,
-  Line,
+  Legend,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  ComposedChart,
+  AreaChart,
+  Area,
 } from "recharts"
+import {
+  DollarSign,
+  Users,
+  TrendingUp,
+  Activity,
+  CheckCircle,
+  Cpu,
+  BarChart3,
+  Shield,
+  Zap,
+  Clock,
+  AlertCircle,
+  Target,
+  MessageSquare,
+} from "lucide-react"
 import styles from "./admin-dashboard.module.css"
 
-function AdminDashboard() {
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
+
+// 1. User Growth & Composition
+const userGrowth = [
+  { month: "Jan", total: 1200, mau: 580 },
+  { month: "Feb", total: 1350, mau: 640 },
+  { month: "Mar", total: 1520, mau: 720 },
+  { month: "Apr", total: 1780, mau: 860 },
+  { month: "May", total: 1980, mau: 980 },
+  { month: "Jun", total: 2200, mau: 1130 },
+]
+
+const userTypes = [
+  { name: "SMEs", value: 1430, color: "#a67c52" },
+  { name: "Funders", value: 330, color: "#7d5a50" },
+  { name: "Service Providers", value: 360, color: "#c8b6a6" },
+  { name: "Catalysts", value: 80, color: "#e6d7c3" },
+]
+
+// 2. Platform Activity
+const platformActivity = [
+  { month: "Jan", applications: 310, matches: 45, messages: 2800 },
+  { month: "Feb", applications: 350, matches: 55, messages: 3200 },
+  { month: "Mar", applications: 380, matches: 62, messages: 3800 },
+  { month: "Apr", applications: 420, matches: 70, messages: 4200 },
+  { month: "May", applications: 455, matches: 78, messages: 4500 },
+  { month: "Jun", applications: 490, matches: 85, messages: 4800 },
+]
+
+// 3. Financial Performance
+const revenueOpex = [
+  { month: "Jan", revenue: 320000, opex: 220000 },
+  { month: "Feb", revenue: 350000, opex: 240000 },
+  { month: "Mar", revenue: 380000, opex: 250000 },
+  { month: "Apr", revenue: 400000, opex: 260000 },
+  { month: "May", revenue: 420000, opex: 280000 },
+  { month: "Jun", revenue: 450000, opex: 290000 },
+]
+
+const costBreakdown = [
+  { category: "Infra", value: 22, amount: 61600 },
+  { category: "Tools", value: 18, amount: 50400 },
+  { category: "Team", value: 40, amount: 112000 },
+  { category: "Marketing", value: 20, amount: 56000 },
+]
+
+// 4. System Health
+const systemHealth = [
+  { day: "Mon", uptime: 99.8, latency: 820 },
+  { day: "Tue", uptime: 99.9, latency: 790 },
+  { day: "Wed", uptime: 99.7, latency: 850 },
+  { day: "Thu", uptime: 99.9, latency: 810 },
+  { day: "Fri", uptime: 99.6, latency: 880 },
+  { day: "Sat", uptime: 99.8, latency: 830 },
+  { day: "Sun", uptime: 99.9, latency: 800 },
+]
+
+// 5. AI Usage
+const aiUsage = [
+  { week: "W1", calls: 3200, cost: 1600 },
+  { week: "W2", calls: 4200, cost: 2100 },
+  { week: "W3", calls: 5200, cost: 2600 },
+  { week: "W4", calls: 4800, cost: 2400 },
+]
+
+
+const formatCurrency = (value) =>
+  new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR", minimumFractionDigits: 0 }).format(value)
+
+function MetricCard({ title, value, subtitle, icon, trend, size = "medium" }) {
+  const isPositive = trend > 0
+  return (
+    <div className={`${styles.metricCard} ${size === "large" ? styles.metricCardLarge : ""}`}>
+      <div className={styles.metricHeader}>
+        <div className={styles.metricIcon}>{icon}</div>
+        <span className={styles.metricTitle}>{title}</span>
+        {trend !== undefined && (
+          <div className={`${styles.trendIndicator} ${isPositive ? styles.trendUp : styles.trendDown}`}>
+            {isPositive ? "↗" : "↘"} {Math.abs(trend)}%
+          </div>
+        )}
+      </div>
+      <div className={styles.metricValue}>{value}</div>
+      {subtitle && <div className={styles.metricSubtitle}>{subtitle}</div>}
+    </div>
+  )
+}
+
+function SimpleGauge({ value, label, size = "medium" }) {
+  return (
+    <div className={styles.simpleGauge}>
+      <div className={styles.gaugeValue}>{value}%</div>
+      <div className={styles.gaugeLabel}>{label}</div>
+    </div>
+  )
+}
+
+
+export default function AdminDashboard() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
 
-  // Mock data - replace with real API calls
-  const [dashboardData, setDashboardData] = useState({
-    userStats: {
-      totalUsers: 1247,
-      smes: 856,
-      investors: 234,
-      catalysts: 89,
-      advisors: 68,
-      growth: 12.5,
-    },
-    applicationStats: {
-      totalApplications: 342,
-      pending: 45,
-      approved: 267,
-      rejected: 30,
-      growth: 8.3,
-    },
-    documentStats: {
-      totalDocuments: 2156,
-      pendingReview: 23,
-      approved: 2089,
-      rejected: 44,
-      growth: 15.7,
-    },
-    revenueStats: {
-      totalRevenue: 2156430, // In ZAR
-      monthlyGrowth: 9.2,
-      subscriptions: 1089,
-      growth: 6.8,
-    },
-  })
-
-  // Chart data for new users per month by type
-  const [newUsersData] = useState([
-    { month: 'Jan', smes: 45, investors: 12, catalysts: 6, advisors: 4 },
-    { month: 'Feb', smes: 52, investors: 15, catalysts: 8, advisors: 5 },
-    { month: 'Mar', smes: 48, investors: 18, catalysts: 7, advisors: 6 },
-    { month: 'Apr', smes: 61, investors: 14, catalysts: 9, advisors: 7 },
-    { month: 'May', smes: 58, investors: 20, catalysts: 11, advisors: 8 },
-    { month: 'Jun', smes: 67, investors: 22, catalysts: 12, advisors: 9 },
-  ])
-
-  const [userTypeData] = useState([
-    { name: 'SMEs', value: 856, color: '#a67c52' },
-    { name: 'Investors', value: 234, color: '#7d5a50' },
-    { name: 'Catalysts', value: 89, color: '#c8b6a6' },
-    { name: 'Advisors', value: 68, color: '#e6d7c3' },
-  ])
-
-  // Approvals data
-  const [approvalsData] = useState([
-    { month: 'Jan', funding: 15, support: 8, advisory: 12 },
-    { month: 'Feb', funding: 18, support: 11, advisory: 14 },
-    { month: 'Mar', funding: 22, support: 9, advisory: 16 },
-    { month: 'Apr', funding: 19, support: 13, advisory: 18 },
-    { month: 'May', funding: 25, support: 15, advisory: 20 },
-    { month: 'Jun', funding: 28, support: 17, advisory: 22 },
-  ])
-
-  // Growth tools purchased data
-  const [growthToolsData] = useState([
-    { month: 'Jan', compliance: 12, legitimacy: 8, fundability: 6, pis: 4 },
-    { month: 'Feb', compliance: 15, legitimacy: 11, fundability: 8, pis: 6 },
-    { month: 'Mar', compliance: 18, legitimacy: 14, fundability: 10, pis: 7 },
-    { month: 'Apr', compliance: 16, legitimacy: 12, fundability: 9, pis: 8 },
-    { month: 'May', compliance: 22, legitimacy: 16, fundability: 12, pis: 9 },
-    { month: 'Jun', compliance: 25, legitimacy: 19, fundability: 14, pis: 11 },
-  ])
-
-  // Active subscriptions data
-  const [subscriptionsData] = useState([
-    { month: 'Jan', basic: 245, premium: 89, enterprise: 23 },
-    { month: 'Feb', basic: 267, premium: 95, enterprise: 26 },
-    { month: 'Mar', basic: 289, premium: 102, enterprise: 28 },
-    { month: 'Apr', basic: 312, premium: 108, enterprise: 31 },
-    { month: 'May', basic: 334, premium: 115, enterprise: 34 },
-    { month: 'Jun', basic: 356, premium: 122, enterprise: 37 },
-  ])
-
-  // Rejections data
-  const [rejectionsData] = useState([
-    { month: 'Jan', applications: 8, documents: 5, funding: 3, support: 2 },
-    { month: 'Feb', applications: 6, documents: 7, funding: 4, support: 1 },
-    { month: 'Mar', applications: 9, documents: 4, funding: 2, support: 3 },
-    { month: 'Apr', applications: 7, documents: 6, funding: 5, support: 2 },
-    { month: 'May', applications: 5, documents: 8, funding: 3, support: 4 },
-    { month: 'Jun', applications: 4, documents: 6, funding: 2, support: 3 },
-  ])
-
   useEffect(() => {
-    // Simulate loading
-    const timer = setTimeout(() => {
-      setLoading(false)
-    }, 1000)
-
-    return () => clearTimeout(timer)
+    const t = setTimeout(() => setLoading(false), 600)
+    return () => clearTimeout(t)
   }, [])
 
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-ZA', {
-      style: 'currency',
-      currency: 'ZAR',
-      minimumFractionDigits: 0,
-    }).format(amount)
-  }
-
-  const StatCard = ({ title, value, subtitle, icon: Icon, trend, color, onClick, isCurrency = false }) => (
-    <div className={`${styles.statCard} ${color ? styles[color] : ""}`} onClick={onClick}>
-      <div className={styles.statCardHeader}>
-        <div className={styles.statCardIcon}>
-          <Icon size={20} />
-        </div>
-        <div className={styles.statCardTrend}>
-          {trend > 0 ? (
-            <ArrowUpRight size={14} className={styles.trendUp} />
-          ) : (
-            <ArrowDownRight size={14} className={styles.trendDown} />
-          )}
-          <span className={trend > 0 ? styles.trendUp : styles.trendDown}>{Math.abs(trend)}%</span>
-        </div>
-      </div>
-      <div className={styles.statCardBody}>
-        <h3 className={styles.statCardValue}>
-          {isCurrency ? formatCurrency(value) : value.toLocaleString()}
-        </h3>
-        <p className={styles.statCardTitle}>{title}</p>
-        {subtitle && <p className={styles.statCardSubtitle}>{subtitle}</p>}
-      </div>
-    </div>
-  )
+  // Derived metrics
+  const latestRevenue = revenueOpex[revenueOpex.length - 1].revenue
+  const latestOpex = revenueOpex[revenueOpex.length - 1].opex
+  const totalUsers = userGrowth[userGrowth.length - 1].total
+  const mau = userGrowth[userGrowth.length - 1].mau
+  const grossMargin = Math.round(((latestRevenue - latestOpex) / latestRevenue) * 100)
+  const latestMatches = platformActivity[platformActivity.length - 1].matches
+  const avgUptime = 99.4
+  const burnRate = 83000
+  const runway = 9.5
+  const cac = 48
+  const verifiedSMEs = 72
+  const aiCostPerCall = 0.23
+  const errorRate = 0.8
 
   if (loading) {
     return (
@@ -183,336 +171,243 @@ function AdminDashboard() {
 
   return (
     <div className={styles.dashboard}>
+      {/* Header */}
       <div className={styles.dashboardHeader}>
         <div className={styles.headerContent}>
           <h1 className={styles.dashboardTitle}>Admin Dashboard</h1>
-          <p className={styles.dashboardSubtitle}>Monitor and manage your platform</p>
+          <p className={styles.dashboardSubtitle}>Key business metrics at a glance</p>
         </div>
-        <div className={styles.headerActions}>
-          <button className={styles.actionButton} onClick={() => navigate("/admin/reports")}>
-            <FileText size={16} />
-            Export Report
-          </button>
-        </div>
+        <button className={styles.dateButton}>Last 30 Days</button>
       </div>
 
-      {/* Stats Overview - Compact */}
-      <div className={styles.statsGrid}>
-        <StatCard
-          title="Total Users"
-          value={dashboardData.userStats.totalUsers}
-          subtitle={`${dashboardData.userStats.smes} SMEs`}
-          icon={Users}
-          trend={dashboardData.userStats.growth}
-          color="primary"
-          onClick={() => navigate("/admin/smes")}
+      {/* Primary KPIs */}
+      <div className={styles.primaryKPIs}>
+        <MetricCard
+          title="Monthly Revenue"
+          value={formatCurrency(latestRevenue)}
+          subtitle={`${grossMargin}% gross margin`}
+          icon={<DollarSign size={18} />}
+          trend={8.2}
+          size="large"
         />
-        <StatCard
-          title="Applications"
-          value={dashboardData.applicationStats.totalApplications}
-          subtitle={`${dashboardData.applicationStats.pending} pending`}
-          icon={FileText}
-          trend={dashboardData.applicationStats.growth}
-          color="secondary"
-          onClick={() => navigate("/admin/applications")}
+
+        <MetricCard
+          title="Active Users"
+          value={mau.toLocaleString()}
+          subtitle={`${Math.round((mau / totalUsers) * 100)}% of total`}
+          icon={<Users size={18} />}
+          trend={12.5}
+          size="large"
         />
-        <StatCard
-          title="Documents"
-          value={dashboardData.documentStats.totalDocuments}
-          subtitle={`${dashboardData.documentStats.pendingReview} pending`}
-          icon={FileText}
-          trend={dashboardData.documentStats.growth}
-          color="tertiary"
-          onClick={() => navigate("/admin/documents")}
+
+        <MetricCard
+          title="Successful Matches"
+          value={latestMatches}
+          subtitle="SME ↔ Funder connections"
+          icon={<CheckCircle size={18} />}
+          trend={15.8}
         />
-        <StatCard
-          title="Revenue"
-          value={dashboardData.revenueStats.totalRevenue}
-          subtitle={`${dashboardData.revenueStats.subscriptions} subs`}
-          icon={DollarSign}
-          trend={dashboardData.revenueStats.monthlyGrowth}
-          color="success"
-          onClick={() => navigate("/admin/revenue")}
-          isCurrency="true"
+
+        <MetricCard
+          title="Platform Uptime"
+          value={`${avgUptime}%`}
+          subtitle="30-day reliability"
+          icon={<Activity size={18} />}
         />
       </div>
 
-      {/* Quick Actions */}
-      <div className={styles.quickActions}>
-        <h2 className={styles.sectionTitle}>Quick Actions</h2>
-        <div className={styles.actionsGrid}>
-          <button className={styles.quickActionCard} onClick={() => navigate("/admin/smes")}>
-            <Building2 size={24} />
-            <span>Manage SMEs</span>
-            <span className={styles.actionCount}>{dashboardData.userStats.smes}</span>
-          </button>
-          <button className={styles.quickActionCard} onClick={() => navigate("/admin/investors")}>
-            <TrendingUp size={24} />
-            <span>Manage Investors</span>
-            <span className={styles.actionCount}>{dashboardData.userStats.investors}</span>
-          </button>
-          <button className={styles.quickActionCard} onClick={() => navigate("/admin/catalysts")}>
-            <Zap size={24} />
-            <span>Manage Catalysts</span>
-            <span className={styles.actionCount}>{dashboardData.userStats.catalysts}</span>
-          </button>
-          <button className={styles.quickActionCard} onClick={() => navigate("/admin/advisors")}>
-            <Target size={24} />
-            <span>Manage Advisors</span>
-            <span className={styles.actionCount}>{dashboardData.userStats.advisors}</span>
-          </button>
-        </div>
+      {/* Secondary KPIs */}
+      <div className={styles.secondaryKPIs}>
+        <MetricCard
+          title="Customer Acquisition Cost"
+          value={formatCurrency(cac)}
+          subtitle="Cost per new user"
+          icon={<Target size={16} />}
+          trend={-5.3}
+        />
+
+        <MetricCard
+          title="Monthly Burn Rate"
+          value={formatCurrency(burnRate)}
+          subtitle={`${runway} months runway`}
+          icon={<TrendingUp size={16} />}
+        />
+
+        <MetricCard
+          title="AI Cost Efficiency"
+          value={formatCurrency(aiCostPerCall)}
+          subtitle="Cost per API call"
+          icon={<Zap size={16} />}
+          trend={-12.1}
+        />
+
+        <MetricCard
+          title="System Health"
+          value={`${errorRate}%`}
+          subtitle="Error rate"
+          icon={<AlertCircle size={16} />}
+          trend={-25.0}
+        />
       </div>
 
-      {/* Charts Section */}
-      <div className={styles.chartsSection}>
-        {/* New Users Per Month by Type */}
-        <div className={styles.chartCard}>
-          <div className={styles.chartHeader}>
-            <h3>New Users Registration by Type</h3>
-            <BarChart3 size={20} className={styles.chartIcon} />
-          </div>
-          <div className={styles.chartContainer}>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={newUsersData}>
-                <XAxis dataKey="month" stroke="#7d5a50" />
-                <YAxis stroke="#7d5a50" label={{ value: 'New Users', angle: -90, position: 'insideLeft' }} />
-                <CartesianGrid strokeDasharray="3 3" stroke="#e6d7c3" />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#faf7f2', 
-                    border: '1px solid #c8b6a6',
-                    borderRadius: '8px',
-                    color: '#4a352f'
-                  }} 
-                />
-                <Bar dataKey="smes" stackId="a" fill="#a67c52" name="SMEs" />
-                <Bar dataKey="investors" stackId="a" fill="#7d5a50" name="Investors" />
-                <Bar dataKey="catalysts" stackId="a" fill="#c8b6a6" name="Catalysts" />
-                <Bar dataKey="advisors" stackId="a" fill="#e6d7c3" name="Advisors" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* User Type Distribution */}
-        <div className={styles.chartCard}>
-          <div className={styles.chartHeader}>
-            <h3>User Type Distribution</h3>
-            <PieChart size={20} className={styles.chartIcon} />
-          </div>
-          <div className={styles.chartContainer}>
-            <ResponsiveContainer width="100%" height={300}>
-              <RechartsPieChart>
-                <Pie
-                  data={userTypeData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {userTypeData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#faf7f2', 
-                    border: '1px solid #c8b6a6',
-                    borderRadius: '8px',
-                    color: '#4a352f'
-                  }} 
-                />
-              </RechartsPieChart>
-            </ResponsiveContainer>
-            <div className={styles.chartLegend}>
-              {userTypeData.map((item, index) => (
-                <div key={index} className={styles.legendItem}>
-                  <div 
-                    className={styles.legendColor} 
-                    style={{ backgroundColor: item.color }}
-                  ></div>
-                  <span>{item.name}: {item.value}</span>
-                </div>
-              ))}
+      <div className={styles.chartsGrid}>
+        
+        {/* Chart 1: User Growth (Left) + User Composition (Right) */}
+        <div className={styles.chartRow}>
+          <div className={styles.chartCard}>
+            <div className={styles.chartHeader}>
+              <h3>User Growth Trend</h3>
+              <Users size={16} />
             </div>
-          </div>
-        </div>
-
-        {/* Service Approvals */}
-        <div className={styles.chartCard}>
-          <div className={styles.chartHeader}>
-            <h3>Service Approvals by Month</h3>
-            <CheckCircle size={20} className={styles.chartIcon} />
-          </div>
-          <div className={styles.chartContainer}>
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={approvalsData}>
-                <defs>
-                  <linearGradient id="colorFunding" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#a67c52" stopOpacity={0.8}/>
-                    <stop offset="95%" stopColor="#a67c52" stopOpacity={0.1}/>
-                  </linearGradient>
-                  <linearGradient id="colorSupport" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#7d5a50" stopOpacity={0.8}/>
-                    <stop offset="95%" stopColor="#7d5a50" stopOpacity={0.1}/>
-                  </linearGradient>
-                  <linearGradient id="colorAdvisory" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#c8b6a6" stopOpacity={0.8}/>
-                    <stop offset="95%" stopColor="#c8b6a6" stopOpacity={0.1}/>
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="month" stroke="#7d5a50" />
-                <YAxis stroke="#7d5a50" label={{ value: 'Approvals', angle: -90, position: 'insideLeft' }} />
-                <CartesianGrid strokeDasharray="3 3" stroke="#e6d7c3" />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#faf7f2', 
-                    border: '1px solid #c8b6a6',
-                    borderRadius: '8px',
-                    color: '#4a352f'
-                  }} 
-                />
-                <Area
-                  type="monotone"
-                  dataKey="funding"
-                  stackId="1"
-                  stroke="#a67c52"
-                  fill="url(#colorFunding)"
-                  name="Funding Approved"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="support"
-                  stackId="1"
-                  stroke="#7d5a50"
-                  fill="url(#colorSupport)"
-                  name="Support Program Approved"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="advisory"
-                  stackId="1"
-                  stroke="#c8b6a6"
-                  fill="url(#colorAdvisory)"
-                  name="Advisory Services Approved"
-                />
+            <ResponsiveContainer width="100%" height={240}>
+              <AreaChart data={userGrowth}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip />
+                <Area type="monotone" dataKey="total" stroke="#a67c52" fill="#a67c52" fillOpacity={0.2} name="Total Users" />
+                <Area type="monotone" dataKey="mau" stroke="#7d5a50" fill="#7d5a50" fillOpacity={0.2} name="Active Users" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
+
+          <div className={styles.chartCard}>
+            <div className={styles.chartHeader}>
+              <h3>User Composition</h3>
+              <BarChart3 size={16} />
+            </div>
+            <ResponsiveContainer width="100%" height={240}>
+              <PieChart>
+                <Pie
+                  data={userTypes}
+                  dataKey="value"
+                  nameKey="name"
+                  outerRadius={80}
+                  innerRadius={40}
+                  paddingAngle={2}
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                >
+                  {userTypes.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value) => [`${value} users`, 'Count']} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
-        {/* Growth Tools Purchased */}
-        <div className={styles.chartCard}>
-          <div className={styles.chartHeader}>
-            <h3>Growth Tools Purchased</h3>
-            <ShoppingCart size={20} className={styles.chartIcon} />
+        {/* Chart 2: Financial Performance (Left) + Cost Breakdown (Right) */}
+        <div className={styles.chartRow}>
+          <div className={styles.chartCard}>
+            <div className={styles.chartHeader}>
+              <h3>Revenue vs Operating Costs</h3>
+              <DollarSign size={16} />
+            </div>
+            <ResponsiveContainer width="100%" height={240}>
+              <LineChart data={revenueOpex}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip formatter={(value) => formatCurrency(value)} />
+                <Line type="monotone" dataKey="revenue" stroke="#a67c52" strokeWidth={3} name="Revenue" dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="opex" stroke="#7d5a50" strokeWidth={2} name="Operating Costs" dot={{ r: 4 }} />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
-          <div className={styles.chartContainer}>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={growthToolsData}>
-                <XAxis dataKey="month" stroke="#7d5a50" />
-                <YAxis stroke="#7d5a50" label={{ value: 'Tools Sold', angle: -90, position: 'insideLeft' }} />
-                <CartesianGrid strokeDasharray="3 3" stroke="#e6d7c3" />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#faf7f2', 
-                    border: '1px solid #c8b6a6',
-                    borderRadius: '8px',
-                    color: '#4a352f'
-                  }} 
-                />
-                <Bar dataKey="compliance" fill="#a67c52" name="Compliance Tools" />
-                <Bar dataKey="legitimacy" fill="#7d5a50" name="Legitimacy Tools" />
-                <Bar dataKey="fundability" fill="#c8b6a6" name="Fundability Tools" />
-                <Bar dataKey="pis" fill="#e6d7c3" name="PIS Tools" />
+
+          <div className={styles.chartCard}>
+            <div className={styles.chartHeader}>
+              <h3>Operating Cost Breakdown</h3>
+              <TrendingUp size={16} />
+            </div>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={costBreakdown} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
+                <XAxis type="number" tickFormatter={(value) => `${value}%`} />
+                <YAxis type="category" dataKey="category" width={80} />
+                <Tooltip formatter={(value) => [`${value}%`, 'Percentage']} />
+                <Bar dataKey="value" fill="#a67c52" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Active Subscriptions */}
-        <div className={styles.chartCard}>
-          <div className={styles.chartHeader}>
-            <h3>Active Subscriptions</h3>
-            <CreditCard size={20} className={styles.chartIcon} />
+        {/* Chart 3: Platform Activity (Left) + System Health (Right) */}
+        <div className={styles.chartRow}>
+          <div className={styles.chartCard}>
+            <div className={styles.chartHeader}>
+              <h3>Platform Activity</h3>
+              <Activity size={16} />
+            </div>
+            <ResponsiveContainer width="100%" height={240}>
+              <ComposedChart data={platformActivity}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="month" />
+                <YAxis yAxisId="left" />
+                <YAxis yAxisId="right" orientation="right" />
+                <Tooltip />
+                <Bar yAxisId="left" dataKey="applications" fill="#a67c52" name="Applications" radius={[2, 2, 0, 0]} />
+                <Bar yAxisId="left" dataKey="matches" fill="#7d5a50" name="Matches" radius={[2, 2, 0, 0]} />
+                <Line yAxisId="right" type="monotone" dataKey="messages" stroke="#c8b6a6" name="Messages" strokeWidth={2} />
+              </ComposedChart>
+            </ResponsiveContainer>
           </div>
-          <div className={styles.chartContainer}>
-            <ResponsiveContainer width="100%" height={300}>
-              <RechartsLineChart data={subscriptionsData}>
-                <XAxis dataKey="month" stroke="#7d5a50" />
-                <YAxis stroke="#7d5a50" label={{ value: 'Active Subscriptions', angle: -90, position: 'insideLeft' }} />
-                <CartesianGrid strokeDasharray="3 3" stroke="#e6d7c3" />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#faf7f2', 
-                    border: '1px solid #c8b6a6',
-                    borderRadius: '8px',
-                    color: '#4a352f'
-                  }} 
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="basic" 
-                  stroke="#a67c52" 
-                  strokeWidth={3}
-                  dot={{ fill: '#a67c52', strokeWidth: 2, r: 4 }}
-                  name="Basic Plan"
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="premium" 
-                  stroke="#7d5a50" 
-                  strokeWidth={3}
-                  dot={{ fill: '#7d5a50', strokeWidth: 2, r: 4 }}
-                  name="Premium Plan"
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="enterprise" 
-                  stroke="#c8b6a6" 
-                  strokeWidth={3}
-                  dot={{ fill: '#c8b6a6', strokeWidth: 2, r: 4 }}
-                  name="Enterprise Plan"
-                />
-              </RechartsLineChart>
+
+          <div className={styles.chartCard}>
+            <div className={styles.chartHeader}>
+              <h3>System Performance</h3>
+              <Cpu size={16} />
+            </div>
+            <ResponsiveContainer width="100%" height={240}>
+              <LineChart data={systemHealth}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="day" />
+                <YAxis yAxisId="left" domain={[99, 100]} tickFormatter={(value) => `${value}%`} />
+                <YAxis yAxisId="right" orientation="right" domain={[700, 900]} />
+                <Tooltip />
+                <Line yAxisId="left" type="monotone" dataKey="uptime" stroke="#2ecc71" strokeWidth={3} name="Uptime %" dot={{ r: 3 }} />
+                <Line yAxisId="right" type="monotone" dataKey="latency" stroke="#a67c52" strokeWidth={2} name="Latency (ms)" dot={{ r: 3 }} />
+              </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Rejections Overview */}
-        <div className={styles.chartCard}>
-          <div className={styles.chartHeader}>
-            <h3>Rejections by Category</h3>
-            <XCircle size={20} className={styles.chartIcon} />
-          </div>
-          <div className={styles.chartContainer}>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={rejectionsData}>
-                <XAxis dataKey="month" stroke="#7d5a50" />
-                <YAxis stroke="#7d5a50" label={{ value: 'Rejections', angle: -90, position: 'insideLeft' }} />
-                <CartesianGrid strokeDasharray="3 3" stroke="#e6d7c3" />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#faf7f2', 
-                    border: '1px solid #c8b6a6',
-                    borderRadius: '8px',
-                    color: '#4a352f'
-                  }} 
-                />
-                <Bar dataKey="applications" stackId="a" fill="#e74c3c" name="Application Rejections" />
-                <Bar dataKey="documents" stackId="a" fill="#c0392b" name="Document Rejections" />
-                <Bar dataKey="funding" stackId="a" fill="#a93226" name="Funding Rejections" />
-                <Bar dataKey="support" stackId="a" fill="#922b21" name="Support Rejections" />
-              </BarChart>
-            </ResponsiveContainer>
+        {/* Chart 4: AI Usage & Efficiency - Full Width */}
+        <div className={styles.chartRow}>
+          <div className={styles.chartCardFull}>
+            <div className={styles.chartHeader}>
+              <h3>AI Usage & Cost Efficiency</h3>
+              <Zap size={16} />
+            </div>
+            <div className={styles.aiMetrics}>
+              <div className={styles.aiChart}>
+                <ResponsiveContainer width="100%" height={200}>
+                  <ComposedChart data={aiUsage}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="week" />
+                    <YAxis yAxisId="left" />
+                    <YAxis yAxisId="right" orientation="right" />
+                    <Tooltip formatter={(value, name) => 
+                      name === 'cost' ? [formatCurrency(value), 'Cost'] : [value, name]
+                    } />
+                    <Bar yAxisId="left" dataKey="calls" fill="#a67c52" name="API Calls" radius={[2, 2, 0, 0]} />
+                    <Line yAxisId="right" type="monotone" dataKey="cost" stroke="#7d5a50" strokeWidth={2} name="Cost (ZAR)" dot={{ r: 4 }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+              <div className={styles.aiGauges}>
+                <div className={styles.gaugeGroup}>
+                  <SimpleGauge value={97.8} label="AI Success Rate" />
+                  <SimpleGauge value={72} label="Verified SMEs" />
+                  <SimpleGauge value={98} label="Data Integrity" />
+                  <SimpleGauge value={63} label="Cache Hit Rate" />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
   )
 }
-
-export default AdminDashboard
