@@ -12,6 +12,31 @@ const CharmSchool = () => {
     setOpenAccordion(openAccordion === index ? null : index);
   };
 
+  // Tab content with images
+  const tabContent = {
+    graduates: {
+      title: "Unlock confidence, executive presence, and workplace readiness to stand out and succeed in your career.",
+      images: [
+        "https://www.keg.com/hubfs/Keystone%20August%202018%20Folder/Images/52834_NAGAP_Thumbnail_2.jpg",
+        "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTywJXpneFrKGIm8n41FlTonZuuyGYRiq_UAg&s"
+      ]
+    },
+    smes: {
+      title: "Access polished, high-attitude, job-ready graduates who integrate quickly and add value from Day One.",
+      images: [
+        "https://theunagroup.co.uk/wp-content/uploads/2023/06/SMEs-workplace-The-Una-Group.jpg-1.jpg",
+        "https://www.oecd.org/adobe/dynamicmedia/deliver/dm-aid--5a27b860-87ea-4ef9-9a69-0f5bc805dac6/sme-financing-new.jpg?quality=80&preferwebp=true"
+      ]
+    },
+    sponsors: {
+      title: "Drive measurable CSI/ESD impact by funding talent development that strengthens SMEs and creates employment pathways.",
+      images: [
+        "https://i2icenter.org/wp-content/uploads/2021/03/partnership-gears-pic.jpg",
+        "https://worldfinancialreview.com/wp-content/uploads/2021/08/men-shaking-hands-800x534-1.jpg"
+      ]
+    }
+  };
+
   return (
     <div style={styles.container}>
       <Header />
@@ -178,6 +203,23 @@ const CharmSchool = () => {
             </button>
           </div>
 
+          {/* Tab Images */}
+          <div style={styles.tabImagesContainer}>
+            {tabContent[activeSponsorTab].images.map((img, index) => (
+              <div key={index} style={styles.tabImageWrapper}>
+                <img 
+                  src={img} 
+                  alt={`${activeSponsorTab} example ${index + 1}`}
+                  style={styles.tabImage}
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = "https://images.unsplash.com/photo-1552664730-d307ca884978?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80";
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+
           {activeSponsorTab === 'graduates' && (
             <div style={styles.advantageContent}>
               <h3 style={styles.advantageSubtitle}>Unlock confidence, executive presence, and workplace readiness to stand out and succeed in your career.</h3>
@@ -231,11 +273,11 @@ const CharmSchool = () => {
                   <h4 style={styles.advantageSectionTitle}>YOUR EXCLUSIVE CHARM SCHOOL TOOLKIT</h4>
                   <p style={styles.advantageParagraph}>Every participant receives:</p>
                   <div style={styles.toolkitList}>
-                    <div style={styles.toolkitItem}>📘 Digital Handbook</div>
-                    <div style={styles.toolkitItem}>📇 Networking Directory</div>
-                    <div style={styles.toolkitItem}>🧩 Customisable Templates</div>
-                    <div style={styles.toolkitItem}>🤝 Mentorship 101 Guide</div>
-                    <div style={styles.toolkitItem}>🎓 Charm School Certificate — Your Degree in Charm</div>
+                    <div style={styles.toolkitItem}>• Digital Handbook</div>
+                    <div style={styles.toolkitItem}>• Networking Directory</div>
+                    <div style={styles.toolkitItem}>• Customisable Templates</div>
+                    <div style={styles.toolkitItem}>• Mentorship 101 Guide</div>
+                    <div style={styles.toolkitItem}>• Charm School Certificate — Your Degree in Charm</div>
                   </div>
 
                   <h4 style={styles.advantageSectionTitle}>CHARM SCHOOL EXPERIENCE</h4>
@@ -943,37 +985,37 @@ const CharmSchool = () => {
                   </div>
 
                   <div style={styles.scheduleItem}>
-                    <span style={styles.scheduleTime}>🕐 11:15 AM – 12:15 PM |</span>
+                    <span style={styles.scheduleTime}>🕐 11:15 AM – 12:15 AM |</span>
                     <span style={styles.scheduleEvent}>Emotional Intelligence in Practice</span>
                   </div>
 
                   <div style={styles.scheduleItem}>
-                    <span style={styles.scheduleTime}>🕐 12:15 PM – 1:15 PM |</span>
+                    <span style={styles.scheduleTime}>🕐 12:15 AM – 1:15 AM |</span>
                     <span style={styles.scheduleEvent}>Networking Excellence & Relationship Building</span>
                   </div>
 
                   <div style={styles.scheduleItem}>
-                    <span style={styles.scheduleTime}>🍴 1:15 PM – 2:15 PM |</span>
+                    <span style={styles.scheduleTime}>🍴 1:15 AM – 2:15 AM |</span>
                     <span style={styles.scheduleEvent}>Lunch & Professional Networking</span>
                   </div>
 
                   <div style={styles.scheduleItem}>
-                    <span style={styles.scheduleTime}>🕐 2:15 PM – 3:30 PM |</span>
+                    <span style={styles.scheduleTime}>🕐 2:15 AM – 3:30 AM |</span>
                     <span style={styles.scheduleEvent}>Career Acceleration Workshop</span>
                   </div>
 
                   <div style={styles.scheduleItem}>
-                    <span style={styles.scheduleTime}>🕐 3:30 PM – 4:30 PM |</span>
+                    <span style={styles.scheduleTime}>🕐 3:30 AM – 4:30 AM |</span>
                     <span style={styles.scheduleEvent}>Personal Branding & Digital Presence</span>
                   </div>
 
                   <div style={styles.scheduleItem}>
-                    <span style={styles.scheduleTime}>🕐 4:30 PM – 5:00 PM |</span>
+                    <span style={styles.scheduleTime}>🕐 4:30 AM – 5:00 AM |</span>
                     <span style={styles.scheduleEvent}>Graduation Ceremony & Certificate Distribution</span>
                   </div>
 
                   <div style={styles.scheduleItem}>
-                    <span style={styles.scheduleTime}>🎓 5:00 PM – 6:00 PM |</span>
+                    <span style={styles.scheduleTime}>🎓 5:00 AM – 6:00 AM |</span>
                     <span style={styles.scheduleEvent}>Celebration & Final Networking</span>
                   </div>
                 </div>
@@ -1480,6 +1522,53 @@ const styles = {
     color: '#374151',
   },
   
+  // Tab Navigation
+  tabNavigation: {
+    display: 'flex',
+    gap: '1rem',
+    justifyContent: 'center',
+    marginBottom: '2rem',
+    flexWrap: 'wrap',
+  },
+  tabButton: {
+    padding: '0.75rem 1.5rem',
+    backgroundColor: 'white',
+    color: '#8B5A2B',
+    border: '2px solid #8B5A2B',
+    borderRadius: '2rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'all 0.3s ease',
+  },
+  tabButtonActive: {
+    padding: '0.75rem 1.5rem',
+    backgroundColor: '#8B5A2B',
+    color: 'white',
+    border: '2px solid #8B5A2B',
+    borderRadius: '2rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+  },
+  
+  // Tab Images
+  tabImagesContainer: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, 1fr)',
+    gap: '1.5rem',
+    marginBottom: '2rem',
+  },
+  tabImageWrapper: {
+    borderRadius: '0.5rem',
+    overflow: 'hidden',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+  },
+  tabImage: {
+    width: '100%',
+    height: '250px',
+    objectFit: 'cover',
+    transition: 'transform 0.3s ease',
+  },
+  
   // Section 2 Styles
   section2: {
     position: 'relative',
@@ -1687,34 +1776,6 @@ const styles = {
     color: '#d1d5db',
     fontSize: '0.875rem',
     lineHeight: '1.6',
-  },
-
-  // Tab Navigation
-  tabNavigation: {
-    display: 'flex',
-    gap: '1rem',
-    justifyContent: 'center',
-    marginBottom: '2rem',
-    flexWrap: 'wrap',
-  },
-  tabButton: {
-    padding: '0.75rem 1.5rem',
-    backgroundColor: 'white',
-    color: '#8B5A2B',
-    border: '2px solid #8B5A2B',
-    borderRadius: '2rem',
-    fontWeight: '600',
-    cursor: 'pointer',
-    transition: 'all 0.3s ease',
-  },
-  tabButtonActive: {
-    padding: '0.75rem 1.5rem',
-    backgroundColor: '#8B5A2B',
-    color: 'white',
-    border: '2px solid #8B5A2B',
-    borderRadius: '2rem',
-    fontWeight: '600',
-    cursor: 'pointer',
   },
 
   // Section 6 - The Upcoming Charm School Experience
