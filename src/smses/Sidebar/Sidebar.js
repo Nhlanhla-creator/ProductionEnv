@@ -246,6 +246,12 @@ const Sidebar = ({ companyName = "Company Name" }) => {
           route: "/support-program-matches",
         },
         {
+          id: "opportunity-matches",
+          label: "Opportunities",
+          icon: <FileText size={16} />, // Using FileText icon for tenders/documents
+          route: "/opportunity-matches",
+        },
+        {
           id: "advisor-matches",
           label: "Advisors",
           icon: <UserCheck size={16} />,
@@ -278,7 +284,7 @@ const Sidebar = ({ companyName = "Company Name" }) => {
           icon: <PieChart size={16} />,
           route: "/FinancialPerformance",
         },
-      
+
         {
           id: "operational-strength",
           label: "Operational Performance",
@@ -387,21 +393,21 @@ const Sidebar = ({ companyName = "Company Name" }) => {
     }
   }
 
-const handleLogout = async () => {
-  try {
-    await auth.signOut();
-    // Clear any session storage
-    sessionStorage.clear();
-    // Clear any local storage related to auth
-    localStorage.removeItem('sidebarCollapsed');
-    // Navigate to login
-    navigate('/LoginRegister');
-  } catch (error) {
-    console.error("Error signing out: ", error);
-    // You might want to show a toast notification here
-    alert('Error signing out. Please try again.');
-  }
-};
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+      // Clear any session storage
+      sessionStorage.clear();
+      // Clear any local storage related to auth
+      localStorage.removeItem('sidebarCollapsed');
+      // Navigate to login
+      navigate('/LoginRegister');
+    } catch (error) {
+      console.error("Error signing out: ", error);
+      // You might want to show a toast notification here
+      alert('Error signing out. Please try again.');
+    }
+  };
 
   const handleSubItemClick = (subItem, e) => {
     console.log("Clicking:", subItem.label, "Route:", subItem.route)
@@ -493,9 +499,8 @@ const handleLogout = async () => {
             {filteredMenuItems.map((item, index) => (
               <div
                 key={item.id}
-                className={`menu-item ${isMenuItemActive(item) ? "active" : ""} ${
-                  item.hasSubmenu ? "has-submenu" : ""
-                } ${item.hasSubmenu && expandedMenus[item.id] ? "expanded" : ""}`}
+                className={`menu-item ${isMenuItemActive(item) ? "active" : ""} ${item.hasSubmenu ? "has-submenu" : ""
+                  } ${item.hasSubmenu && expandedMenus[item.id] ? "expanded" : ""}`}
                 style={{
                   "--index": index,
                   backgroundColor: isMenuItemActive(item) ? "#b89f8d" : "transparent",
@@ -544,7 +549,7 @@ const handleLogout = async () => {
           </nav>
         </div>
         {/* Footer - Logout */}
-       <div className="logout-section" onClick={handleLogout}>
+        <div className="logout-section" onClick={handleLogout}>
           <div className="logout-icon">
             <LogOut size={18} />
           </div>

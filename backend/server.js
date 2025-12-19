@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const path = require("path");
+const cron = require("node-cron");
 
 // Load environment variables
 dotenv.config();
@@ -18,8 +19,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// Import your payment routes
+// Import your routes
 const paymentRoutes = require("./routes/peachPayments");
+const tenderRoutes = require("./routes/tenders");
 
 // Enhanced logging middleware
 app.use((req, res, next) => {
@@ -45,17 +47,17 @@ const corsOptions = {
     // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
 
-  const allowedOrigins = [
-  "http://localhost:3000",
-  "http://localhost:3001", 
-  "http://127.0.0.1:3000",
-  "https://www.bigmarketplace.africa",
-  "https://bigmarketplace.africa",
-  process.env.FRONTEND_URL,
-  "https://testsecure.peachpayments.com",
-  "https://checkout.peachpayments.com",
-  "https://sandbox-dashboard.peachpayments.com",
-].filter(Boolean);
+    const allowedOrigins = [
+      "http://localhost:3000",
+      "http://localhost:3001", 
+      "http://127.0.0.1:3000",
+      "https://www.bigmarketplace.africa",
+      "https://bigmarketplace.africa",
+      process.env.FRONTEND_URL,
+      "https://testsecure.peachpayments.com",
+      "https://checkout.peachpayments.com",
+      "https://sandbox-dashboard.peachpayments.com",
+    ].filter(Boolean);
 
     const isNgrokDomain = origin.includes("ngrok-free.app") || origin.includes("ngrok.io");
     const isPeachDomain = origin.includes("peachpayments.com");
@@ -92,11 +94,21 @@ app.use((req, res, next) => {
   next();
 });
 
-// Mount payment routes with bypass header
+// ==================== MOUNT ROUTES ====================
+
+// Payment routes with bypass header
 app.use("/api/payments", (req, res, next) => {
   res.setHeader('x-vercel-protection-bypass', '1');
   next();
 }, paymentRoutes);
+
+// Tender routes with bypass header
+app.use("/api/tenders", (req, res, next) => {
+  res.setHeader('x-vercel-protection-bypass', '1');
+  next();
+}, tenderRoutes.router);
+
+// ==================== EXISTING ROUTES ====================
 
 // Email confirmation endpoint
 app.post('/api/payments/send-confirmation-email', async (req, res) => {
@@ -169,15 +181,44 @@ app.get("/test-email", async (req, res) => {
 
 // Health check endpoint
 app.get("/health", (req, res) => {
+  const tenderCache = tenderRoutes.getTenderCache();
+  
   res.json({
     status: "healthy",
     timestamp: new Date().toISOString(),
     services: {
       peachPayments: !!process.env.PEACH_ENTITY_ID,
-      email: !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD)
+      email: !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD),
+      tenderScraping: !!tenderCache.data
+    },
+    tenders: {
+      cached: tenderCache.data ? tenderCache.data.length : 0,
+      lastScraped: tenderCache.lastScraped
     }
   });
 });
+
+// ==================== SCHEDULED SCRAPING ====================
+
+// Schedule automatic scraping every 6 hours
+cron.schedule('0 */6 * * *', async () => {
+  console.log('⏰ Running scheduled tender scraping...');
+  await tenderRoutes.refreshTenderCache();
+});
+
+// Initialize cache on server start
+async function initializeServer() {
+  console.log('🚀 Initializing BIG BIDS Tender Engine...');
+  
+  // Initial cache load
+  await tenderRoutes.refreshTenderCache();
+  
+  const tenderCache = tenderRoutes.getTenderCache();
+  console.log('✅ Tender engine ready!');
+  console.log(`📊 Loaded ${tenderCache.data?.length || 0} tenders`);
+}
+
+// ==================== ERROR HANDLING ====================
 
 // Error handling middleware
 app.use((error, req, res, next) => {
@@ -196,12 +237,18 @@ app.use("*", (req, res) => {
   });
 });
 
+// ==================== START SERVER ====================
+
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🔧 Vercel auth bypass enabled for /api routes`);
   console.log(`🌐 CORS configured for frontend: ${process.env.FRONTEND_URL}`);
   console.log(`💳 Peach Payments configured: ${!!process.env.PEACH_ENTITY_ID}`);
+  console.log(`🔍 Tender scraping initialized`);
+  
+  // Initialize tender cache
+  await initializeServer();
 });
 
 module.exports = app;
