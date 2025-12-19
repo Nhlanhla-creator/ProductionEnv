@@ -21,6 +21,9 @@ import {
   Repeat,
   Package,
   Lightbulb,
+  Users,
+  PieChart,
+  TrendingUp
 } from "lucide-react"
 import styles from "./AcceleratorSidebar.module.css"
 import { auth } from "../../firebaseConfig"
@@ -39,21 +42,21 @@ function AcceleratorSidebar({ companyName }) {
   const [userName, setUserName] = useState(user ? user.displayName || user.email.split("@")[0] : "User")
   const [date, setDate] = useState(new Date())
   const [showHelpModal, setShowHelpModal] = useState(false)
-const handleLogout = async () => {
-  try {
-    await auth.signOut();
-    // Clear any session storage
-    sessionStorage.clear();
-    // Clear any local storage related to auth
-    localStorage.removeItem('sidebarCollapsed');
-    // Navigate to login
-    navigate('/LoginRegister');
-  } catch (error) {
-    console.error("Error signing out: ", error);
-    // You might want to show a toast notification here
-    alert('Error signing out. Please try again.');
-  }
-};
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+      // Clear any session storage
+      sessionStorage.clear();
+      // Clear any local storage related to auth
+      localStorage.removeItem('sidebarCollapsed');
+      // Navigate to login
+      navigate('/LoginRegister');
+    } catch (error) {
+      console.error("Error signing out: ", error);
+      // You might want to show a toast notification here
+      alert('Error signing out. Please try again.');
+    }
+  };
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
@@ -119,11 +122,23 @@ const handleLogout = async () => {
       icon: <User size={18} />,
       route: "/support-profile",
     },
-     {
+    {
       id: "insights",
       label: "BIG Insights",
       icon: <Lightbulb size={18} />,
       route: "/support-insights",
+    },
+    {
+      id: "my-cohorts",
+      label: "My Cohorts",
+      icon: <Users size={18} />, // or <Trophy size={18} />
+      route: "/catalyst/cohorts",
+    },
+    {
+      id: "investments",
+      label: "My Investments",
+      icon: <PieChart size={18} />,
+      route: "/catalyst/investments"
     },
     {
       id: "matches",
@@ -131,7 +146,7 @@ const handleLogout = async () => {
       icon: <HeartHandshake size={18} />,
       route: "/support-matches",
     },
-   
+
     {
       id: "documents",
       label: "My Documents",
@@ -227,7 +242,7 @@ const handleLogout = async () => {
   const toggleSidebar = () => {
     const newState = !isSidebarCollapsed;
     setIsSidebarCollapsed(newState);
-    
+
     // Update the body class to match the BigInsights component
     if (newState) {
       document.body.classList.add("sidebar-collapsed");
@@ -283,9 +298,8 @@ const handleLogout = async () => {
             {menuItems.map((item, index) => (
               <div
                 key={item.id}
-                className={`${styles.menuItem}${
-                  isMenuItemActive(item) ? ` ${styles.active}` : ""
-                }${item.hasSubmenu ? ` ${styles.hasSubmenu}` : ""}${expandedMenus[item.id] ? ` ${styles.expanded}` : ""}
+                className={`${styles.menuItem}${isMenuItemActive(item) ? ` ${styles.active}` : ""
+                  }${item.hasSubmenu ? ` ${styles.hasSubmenu}` : ""}${expandedMenus[item.id] ? ` ${styles.expanded}` : ""}
                 `}
                 style={{
                   "--index": index,
@@ -345,7 +359,7 @@ const handleLogout = async () => {
         </div>
 
         {/* Logout */}
-        <div className={styles.logoutSection}onClick={handleLogout}>
+        <div className={styles.logoutSection} onClick={handleLogout}>
           <div className={styles.logoutIcon}>
             <LogOut size={18} />
           </div>
