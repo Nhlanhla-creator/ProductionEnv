@@ -30,9 +30,10 @@ import {
   sendEmailVerification,
   sendPasswordResetEmail,
 } from "../firebaseConfig";
-import { doc, setDoc, getDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import { onAuthStateChanged, deleteUser } from "firebase/auth";
+import { normalizeRoleName } from "../utils/profileHelpers"
 import NDASignupPopup from "../NDAsign";
 import TermsConditionsCheckbox from "./Ts&cs";
 import FormInput from "./FormInput";
@@ -164,7 +165,7 @@ export default function LoginRegister() {
       Catalyst: <Building2 size={16} />,
       Interns: <GraduationCap size={16} />,
       ProgramSponsor: <Award size={16} />,
-       Admin: <TrendingUp size={16} />
+      Admin: <TrendingUp size={16} />,
     };
     return iconMap[roleValue] || <Smile size={16} />;
   };
@@ -187,9 +188,9 @@ export default function LoginRegister() {
       ProgramSponsor: "/program-sponsor-profile",
       PROGRAM_SPONSOR: "/program-sponsor-profile",
       // admin
-       Admin: "/admin/dashboard",
-    admin: "/admin/dashboard",
-    ADMIN: "/admin/dashboard",
+      Admin: "/admin/dashboard",
+      admin: "/admin/dashboard",
+      ADMIN: "/admin/dashboard",
     };
     navigate(routeMap[role] || "/auth");
   };
@@ -289,130 +290,135 @@ export default function LoginRegister() {
       setIsLoading(false);
     }
   };
-const handleLogin = async () => {
-  setIsLoading(true);
-  setErrors({});
-  setAuthError("");
 
-  if (!validateEmail(email)) {
-    setErrors({ email: "Enter your email!" });
-    setIsLoading(false);
-    return;
-  }
-  if (!password) {
-    setErrors({ password: "Enter your password!" });
-    setIsLoading(false);
-    return;
-  }
+  const handleLogin = async () => {
+    setIsLoading(true);
+    setErrors({});
+    setAuthError("");
 
-  try {
-    const userCredential = await signInWithEmailAndPassword(
-      auth,
-      email,
-      password
-    );
-    const user = userCredential.user;
-
-    // IMPORTANT: Wait a moment for auth state to update
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    // Reload user to get fresh emailVerified status
-    await user.reload();
-    const refreshedUser = auth.currentUser;
-    
-//     if (!refreshedUser.emailVerified) {
-//       // Email not verified - CLEAR FORM and redirect to verification page
-     
-//      navigate('/verify-email', { 
-//   state: { 
-//     email: user.email,
-//     fromLogin: true 
-//   } 
-// });
-//       setIsLoading(false);
-//       return;
-//     }
-
-    // Email is verified, continue with normal login flow
-    const userDocRef = doc(db, "users", user.uid);
-    const userDocSnap = await getDoc(userDocRef);
-
-    if (!userDocSnap.exists()) {
-      setAuthError("Registration incomplete. Please complete your registration.");
-      setResumingRegistration(true);
-      setIsRegistering(true);
-      setCodeSent(true);
-
-      setRegistrationData({
-        email: user.email,
-        username: "",
-        uid: user.uid,
-        termsAccepted: false,
-        termsAcceptedDate: null,
-        roleArray: [],
-      });
-
-      setShowNDA(true);
+    if (!validateEmail(email)) {
+      setErrors({ email: "Enter your email!" });
+      setIsLoading(false);
+      return;
+    }
+    if (!password) {
+      setErrors({ password: "Enter your password!" });
       setIsLoading(false);
       return;
     }
 
-    const userData = userDocSnap.data();
-    let activeRoles = [];
-    let deletedRoles = [];
+    try {
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+      const user = userCredential.user;
 
-    if (userData.roles && typeof userData.roles === "object") {
-      Object.keys(userData.roles).forEach((r) => {
-        const roleObj = userData.roles[r];
-        if (roleObj.deletedStatus === true) {
-          deletedRoles.push({
-            name: r,
-            deletedStatus: true,
-            deletedAt: roleObj.deletedAt,
-          });
-        } else {
-          activeRoles.push({ name: r });
+      // IMPORTANT: Wait a moment for auth state to update and refresh emailVerified status
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      await user.reload();
+      const refreshedUser = auth.currentUser;
+      // If you want to redirect unverified users to a verification page, uncomment below
+      // if (!refreshedUser.emailVerified) {
+      //   navigate('/verify-email', { state: { email: user.email, fromLogin: true } });
+      //   setIsLoading(false);
+      //   return;
+      // }
+
+      const userDocRef = doc(db, "users", user.uid);
+      const userDocSnap = await getDoc(userDocRef);
+
+      if (!userDocSnap.exists()) {
+        setAuthError(
+          "Registration incomplete. Please complete your registration."
+        );
+        setResumingRegistration(true);
+        setIsRegistering(true);
+        setCodeSent(true);
+
+        setRegistrationData({
+          email: user.email,
+          username: "",
+          uid: user.uid,
+          termsAccepted: false,
+          termsAcceptedDate: null,
+          roleArray: [],
+        });
+
+        setShowNDA(true);
+        setIsLoading(false);
+        return;
+      }
+
+      const userData = userDocSnap.data();
+      let activeRoles = [];
+      let deletedRoles = [];
+
+      if (userData.roles && typeof userData.roles === "object") {
+        Object.keys(userData.roles).forEach((r) => {
+          const roleObj = userData.roles[r];
+          if (roleObj.deletedStatus === true) {
+            deletedRoles.push({
+              name: r,
+              deletedStatus: true,
+              deletedAt: roleObj.deletedAt,
+            });
+          } else {
+            activeRoles.push({ name: r });
+          }
+        });
+      }
+
+      if (Array.isArray(userData.roleArray)) {
+        userData.roleArray.forEach((r) => {
+          if (!activeRoles.find((ar) => ar.name === r)) {
+            activeRoles.push({ name: r });
+          }
+        });
+      }
+
+      if (typeof userData.role === "string") {
+        userData.role.split(",").forEach((r) => {
+          const roleName = r.trim();
+          if (!activeRoles.find((ar) => ar.name === roleName)) {
+            activeRoles.push({ name: roleName });
+          }
+        });
+      }
+
+      const allRoles = [...activeRoles, ...deletedRoles];
+      setRoleSelectionModal({ show: true, roles: allRoles });
+
+      if (activeRoles.length === 1) {
+        // Persist chosen role as currentRole for the user so header reflects it
+        try {
+          const singleRole = activeRoles[0].name || activeRoles[0];
+          const normalized = normalizeRoleName(singleRole);
+          if (auth.currentUser) {
+            const userDocRef = doc(db, "users", auth.currentUser.uid);
+            await updateDoc(userDocRef, { currentRole: normalized });
+          }
+          localStorage.setItem("selectedRole", normalized);
+        } catch (err) {
+          console.error("Error persisting single role:", err);
         }
-      });
-    }
+        setRoleSelectionModal({ show: false, roles: [] });
+        navigateToRoleDashboard(activeRoles[0].name);
+      }
 
-    if (Array.isArray(userData.roleArray)) {
-      userData.roleArray.forEach((r) => {
-        if (!activeRoles.find((ar) => ar.name === r)) {
-          activeRoles.push({ name: r });
-        }
-      });
+      if (activeRoles.length === 0 && deletedRoles.length > 0) {
+        navigate("/RetrieveAccount", {
+          state: { roleToRetrieve: deletedRoles[0].name },
+        });
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      setAuthError(getCustomErrorMessage(error));
+    } finally {
+      setIsLoading(false);
     }
-
-    if (typeof userData.role === "string") {
-      userData.role.split(",").forEach((r) => {
-        const roleName = r.trim();
-        if (!activeRoles.find((ar) => ar.name === roleName)) {
-          activeRoles.push({ name: roleName });
-        }
-      });
-    }
-
-    const allRoles = [...activeRoles, ...deletedRoles];
-    setRoleSelectionModal({ show: true, roles: allRoles });
-
-    if (activeRoles.length === 1) {
-      setRoleSelectionModal({ show: false, roles: [] });
-      navigateToRoleDashboard(activeRoles[0].name);
-    }
-
-    if (activeRoles.length === 0 && deletedRoles.length > 0) {
-      navigate("/RetrieveAccount", {
-        state: { roleToRetrieve: deletedRoles[0].name },
-      });
-    }
-  } catch (error) {
-    console.error("Login error:", error);
-    setAuthError(getCustomErrorMessage(error));
-  } finally {
-    setIsLoading(false);
-  }
-};
+  };
 
   const handleVerify = async () => {
     setCheckingVerification(true);
@@ -456,138 +462,142 @@ const handleLogin = async () => {
 
   // Add these helper functions at the end of the file
 
-const getRoleDashboardName = (role) => {
-  const dashboardMap = {
-    "Small and Medium Social Enterprises": "SMSEs Dashboard",
-    SMSEs: "SMSEs Dashboard",
-    SMSE: "SMSEs Dashboard",
-    SME: "SMSEs Dashboard",
-    "SME/BUSINESS": "SMSEs Dashboard",
-    Investor: "Investor Dashboard",
-    Advisors: "Advisor Dashboard",
-    Accelerators: "Catalyst Dashboard",
-    Catalyst: "Catalyst Dashboard",
-    Interns: "Intern Dashboard",
-    ProgramSponsor: "Program Sponsor Dashboard",
-//admin
-     Admin: "Admin Dashboard",
-    admin: "Admin Dashboard",
-    ADMIN: "Admin Dashboard",
+  const getRoleDashboardName = (role) => {
+    const dashboardMap = {
+      "Small and Medium Social Enterprises": "SMSEs Dashboard",
+      SMSEs: "SMSEs Dashboard",
+      SMSE: "SMSEs Dashboard",
+      SME: "SMSEs Dashboard",
+      "SME/BUSINESS": "SMSEs Dashboard",
+      Investor: "Investor Dashboard",
+      Advisors: "Advisor Dashboard",
+      Accelerators: "Catalyst Dashboard",
+      Catalyst: "Catalyst Dashboard",
+      Interns: "Intern Dashboard",
+      ProgramSponsor: "Program Sponsor Dashboard",
+      //admin
+      Admin: "Admin Dashboard",
+      admin: "Admin Dashboard",
+      ADMIN: "Admin Dashboard",
+    };
+    return dashboardMap[role] || role;
   };
-  return dashboardMap[role] || role;
-};
 
-const getRoleDescription = (role) => {
-  const descriptionMap = {
-    "Small and Medium Social Enterprises":
-      "Access funding, growth tools, and partnerships",
-    SMSEs: "Access funding, growth tools, and partnerships",
-    SMSE: "Access funding, growth tools, and partnerships",
-    SME: "Access funding, growth tools, and partnerships",
-    Investor: "Discover investment opportunities and manage portfolio",
-    Advisors: "Connect with businesses and offer expertise",
-    Accelerators: "Support startups and drive innovation",
-    Catalyst: "Support startups and drive innovation",
-    Interns: "Access internship opportunities and career development",
-    ProgramSponsor: "Manage intern programs and track placements",
-    //admin
+  const getRoleDescription = (role) => {
+    const descriptionMap = {
+      "Small and Medium Social Enterprises":
+        "Access funding, growth tools, and partnerships",
+      SMSEs: "Access funding, growth tools, and partnerships",
+      SMSE: "Access funding, growth tools, and partnerships",
+      SME: "Access funding, growth tools, and partnerships",
+      Investor: "Discover investment opportunities and manage portfolio",
+      Advisors: "Connect with businesses and offer expertise",
+      Accelerators: "Support startups and drive innovation",
+      Catalyst: "Support startups and drive innovation",
+      Interns: "Access internship opportunities and career development",
+      ProgramSponsor: "Manage intern programs and track placements",
+      //admin
       Admin: "Manage platform users, settings, and analytics",
-    admin: "Manage platform users, settings, and analytics",
+      admin: "Manage platform users, settings, and analytics",
+    };
+    return descriptionMap[role] || "Access your dashboard";
   };
-  return descriptionMap[role] || "Access your dashboard";
-};
 
-// Add handleRegistrationComplete function
-const handleRegistrationComplete = async (ndaData) => {
-  if (ndaData.cancelled) {
-    setShowNDA(false);
-    if (auth.currentUser) {
-      try {
-        await deleteUser(auth.currentUser);
-        setAuthError("Registration cancelled. Your account has been removed.");
-        setEmail("");
-        setUsername("");
-        setPassword("");
-        setConfirmPassword("");
-        setRoles([]);
-        setCodeSent(false);
-        setRegistrationData(null);
-        setAgreeToTerms(false);
-      } catch (error) {
-        console.error("Error deleting user account:", error);
-        setAuthError(
-          "Registration cancelled, but there was an error cleaning up. Please contact support."
-        );
+  // Add handleRegistrationComplete function
+  const handleRegistrationComplete = async (ndaData) => {
+    if (ndaData.cancelled) {
+      setShowNDA(false);
+      if (auth.currentUser) {
+        try {
+          await deleteUser(auth.currentUser);
+          setAuthError(
+            "Registration cancelled. Your account has been removed."
+          );
+          setEmail("");
+          setUsername("");
+          setPassword("");
+          setConfirmPassword("");
+          setRoles([]);
+          setCodeSent(false);
+          setRegistrationData(null);
+          setAgreeToTerms(false);
+        } catch (error) {
+          console.error("Error deleting user account:", error);
+          setAuthError(
+            "Registration cancelled, but there was an error cleaning up. Please contact support."
+          );
+        }
       }
-    }
-    return;
-  }
-
-  try {
-    if (!auth.currentUser) {
-      setAuthError("User authentication lost. Please try again.");
       return;
     }
 
-    if (!username || username.trim() === "") {
-      setAuthError("Please provide a username to complete registration.");
+    try {
+      if (!auth.currentUser) {
+        setAuthError("User authentication lost. Please try again.");
+        return;
+      }
+
+      if (!username || username.trim() === "") {
+        setAuthError("Please provide a username to complete registration.");
+        setShowNDA(false);
+        return;
+      }
+
+      if (roles.length === 0) {
+        setAuthError(
+          "Please select at least one role to complete registration."
+        );
+        setShowNDA(false);
+        return;
+      }
+
+      if (!agreeToTerms) {
+        setAuthError(
+          "Please agree to the Terms & Conditions to complete registration."
+        );
+        setShowNDA(false);
+        return;
+      }
+
+      const finalUsername = username.trim();
+
+      await setDoc(doc(db, "users", auth.currentUser.uid), {
+        email: email,
+        username: finalUsername,
+        role: roles.join(","),
+        roleArray: roles,
+        ndaSigned: true,
+        ndaSignedDate: new Date().toISOString(),
+        termsAccepted: agreeToTerms,
+        termsAcceptedDate: new Date().toISOString(),
+        createdAt: new Date(),
+        ndaInfo: {
+          pdfUrl: ndaData.pdfUrl || null,
+          signatureUrl: ndaData.signatureUrl || null,
+          userId: ndaData.userId || auth.currentUser.uid,
+        },
+        termsVersion: "1.0",
+        termsContent: "BIG Marketplace Platform Terms & Conditions",
+        registrationCompleted: true,
+      });
+
+      setNdaComplete(true);
       setShowNDA(false);
-      return;
+
+      if (roles.length > 1) {
+        setRoleSelectionModal({ show: true, roles: roles });
+      } else {
+        navigateToRoleDashboard(roles[0]);
+      }
+    } catch (error) {
+      console.error("Error saving user data:", error);
+      setAuthError(getCustomErrorMessage(error));
     }
+  };
 
-    if (roles.length === 0) {
-      setAuthError("Please select at least one role to complete registration.");
-      setShowNDA(false);
-      return;
-    }
-
-    if (!agreeToTerms) {
-      setAuthError(
-        "Please agree to the Terms & Conditions to complete registration."
-      );
-      setShowNDA(false);
-      return;
-    }
-
-    const finalUsername = username.trim();
-
-    await setDoc(doc(db, "users", auth.currentUser.uid), {
-      email: email,
-      username: finalUsername,
-      role: roles.join(","),
-      roleArray: roles,
-      ndaSigned: true,
-      ndaSignedDate: new Date().toISOString(),
-      termsAccepted: agreeToTerms,
-      termsAcceptedDate: new Date().toISOString(),
-      createdAt: new Date(),
-      ndaInfo: {
-        pdfUrl: ndaData.pdfUrl || null,
-        signatureUrl: ndaData.signatureUrl || null,
-        userId: ndaData.userId || auth.currentUser.uid,
-      },
-      termsVersion: "1.0",
-      termsContent: "BIG Marketplace Platform Terms & Conditions",
-      registrationCompleted: true,
-    });
-
-    setNdaComplete(true);
-    setShowNDA(false);
-
-    if (roles.length > 1) {
-      setRoleSelectionModal({ show: true, roles: roles });
-    } else {
-      navigateToRoleDashboard(roles[0]);
-    }
-  } catch (error) {
-    console.error("Error saving user data:", error);
-    setAuthError(getCustomErrorMessage(error));
-  }
-};
-
-const handleAdvisorCriteriaCancel = () => {
-  setShowAdvisorCriteria(false);
-};
+  const handleAdvisorCriteriaCancel = () => {
+    setShowAdvisorCriteria(false);
+  };
 
   // Effects
   useEffect(() => {
@@ -699,7 +709,7 @@ const handleAdvisorCriteriaCancel = () => {
                 <button
                   key={roleObj.name || index}
                   className={`role-option ${isDeleted ? "deleted" : ""}`}
-                  onClick={() => {
+                  onClick={async () => {
                     if (isDeleted) {
                       localStorage.setItem(
                         "selectedDeletedRole",
@@ -707,6 +717,23 @@ const handleAdvisorCriteriaCancel = () => {
                       );
                       window.location.href = "/RetrieveAccount";
                     } else {
+                      try {
+                        const normalized = normalizeRoleName(roleObj.name);
+                        if (auth.currentUser) {
+                          const userDocRef = doc(
+                            db,
+                            "users",
+                            auth.currentUser.uid
+                          );
+                          await updateDoc(userDocRef, {
+                            currentRole: normalized,
+                          });
+                        }
+                        localStorage.setItem("selectedRole", normalized);
+                      } catch (err) {
+                        console.error("Error setting selected role:", err);
+                      }
+                      setRoleSelectionModal({ show: false, roles: [] });
                       navigateToRoleDashboard(roleObj.name);
                     }
                   }}
@@ -1039,4 +1066,3 @@ const handleAdvisorCriteriaCancel = () => {
     </div>
   );
 }
-

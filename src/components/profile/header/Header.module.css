@@ -1,0 +1,846 @@
+.header {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 72px;
+  background-color: #fff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  z-index: 100;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+  
+  /* Dynamic width based on sidebar state */
+  margin-left: 280px;
+  width: calc(100% - 280px);
+}
+
+.header[data-sidebar-collapsed="true"] {
+  margin-left: 80px;
+  width: calc(100% - 80px);
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  flex: 1;
+  min-width: 0; /* Allow flex items to shrink */
+}
+
+.headerLogo {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.logoImage {
+  height: 100%;
+  width: auto;
+  object-fit: contain;
+}
+
+.welcomeContainer {
+  display: flex;
+  flex-direction: column;
+  min-width: 0; /* Allow flex items to shrink */
+}
+
+.welcomeMessage {
+  font-size: 1.15rem;
+  color: #624635;
+  font-weight: 500;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.userName {
+  color: #5b4a43;
+  font-weight: 700;
+}
+
+.dateDisplay {
+  font-size: 0.8rem;
+  color: #878787;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.calendarIcon {
+  color: #9E6E3C;
+  flex-shrink: 0;
+}
+
+.headerButtons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-shrink: 0;
+}
+
+.headerIcons {
+  display: flex;
+  gap: 12px;
+}
+
+.iconWrapper {
+  position: relative;
+}
+
+.iconButton {
+  background-color: #F8F7F3;
+  border: none;
+  cursor: pointer;
+  padding: 10px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  color: #372c27;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  position: relative;
+}
+
+.iconButton:hover {
+  background-color: #F2EEE6;
+  transform: translateY(-2px);
+}
+
+.iconButton.active {
+  background-color: #9E6E3C;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(158, 110, 60, 0.3);
+}
+
+.messageBadge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background-color: #E74C3C;
+  color: white;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+.profileWrapper {
+  position: relative;
+}
+
+.profileButton {
+  padding: 3px;
+  border-radius: 50%;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.profileImageContainer {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background-color: #b89f8d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: transform 0.3s ease;
+  border: 2px solid #F2F0E6;
+}
+
+.profileButton:hover .profileImageContainer {
+  transform: scale(1.08);
+  border-color: #372c27;
+  box-shadow: 0 2px 8px rgba(158, 110, 60, 0.3);
+}
+
+.profileImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profilePlaceholder {
+  font-size: 1.2rem;
+  color: #F2F0E6;
+  font-weight: bold;
+}
+
+.dropdownMenu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  width: 320px;
+  z-index: 1000;
+  overflow: hidden;
+  animation: dropdown-fade 0.2s ease;
+  border: 1px solid rgba(117, 74, 45, 0.1);
+  /* Keep the menu within the viewport */
+  max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+}
+
+@keyframes dropdown-fade {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dropdownHeader {
+  padding: 16px;
+}
+
+.profileInfoLarge {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.profileImageLarge {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+  background-color: #9E6E3C;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.profileImageLarge img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profilePlaceholderLarge {
+  font-size: 2rem;
+  color: #F2F0E6;
+  font-weight: bold;
+}
+
+.changeAvatarButton {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  font-size: 0.7rem;
+  text-align: center;
+  padding: 2px 0;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+  opacity: 0;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.profileImageLarge:hover .changeAvatarButton {
+  opacity: 1;
+}
+
+.profileNameLarge {
+  margin: 0 0 2px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #624635;
+}
+
+.profileEmailLarge {
+  margin: 0 0 2px;
+  font-size: 0.8rem;
+  color: #878787;
+  word-break: break-all;
+}
+
+.profileRole {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #9E6E3C;
+  font-weight: 500;
+}
+
+.dropdownDivider {
+  height: 1px;
+  background-color: rgba(117, 74, 45, 0.1);
+}
+
+.dropdownMenuItems {
+  padding: 8px 0;
+}
+
+.dropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  width: 100%;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: #624635;
+  font-size: 0.9rem;
+}
+
+.dropdownItem:hover {
+  background-color: #F8F7F3;
+}
+
+/* Visually and functionally indicate when a role is already selected */
+.dropdownItem[disabled] {
+  pointer-events: none;
+  cursor: default;
+  opacity: 0.9; /* keep it visible when active */
+}
+
+.dropdownItem[disabled] span {
+  font-weight: 700;
+}
+
+.addRoleTrigger {
+  background: linear-gradient(135deg, #F8F7F3 0%, #F2EEE6 100%);
+  border-left: 3px solid #9E6E3C;
+  font-weight: 500;
+}
+
+.addRoleTrigger:hover {
+  background: linear-gradient(135deg, #F2EEE6 0%, #EDE8DD 100%);
+}
+
+.addRoleTrigger span {
+  background: linear-gradient(135deg, #9E6E3C 0%, #B8834F 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 600;
+}
+
+.dropdownSubheader {
+  padding: 8px 16px 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #9E6E3C;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Scrollable container for roles so the profile dropdown stays within 100vh */
+.rolesList {
+  max-height: calc(100vh - 240px);
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.activeRole {
+  background-color: rgba(158, 110, 60, 0.1);
+  border-left: 3px solid #9E6E3C;
+}
+
+.dropdownFooter {
+  padding: 12px 16px;
+}
+
+.logoutButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px;
+  background-color: #F8F7F3;
+  border: 1px solid rgba(117, 74, 45, 0.2);
+  border-radius: 6px;
+  color: #E74C3C;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.logoutButton:hover {
+  background-color: #FEEEED;
+  border-color: #E74C3C;
+}
+
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.3s ease;
+}
+
+/* Messages Dropdown Specific Styles */
+.messagesDropdown {
+  width: 320px;
+}
+
+.markReadButton {
+  background: none;
+  border: none;
+  color: #9E6E3C;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.markReadButton:hover {
+  background-color: #F8F7F3;
+}
+
+.messagesList {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.messageItem {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(117, 74, 45, 0.05);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.messageItem:hover {
+  background-color: #F8F7F3;
+}
+
+.messageText {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #624635;
+  line-height: 1.4;
+}
+
+.noMessages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  color: #AAA199;
+  text-align: center;
+}
+
+.noMessagesIcon {
+  margin-bottom: 8px;
+  opacity: 0.5;
+}
+
+.noMessages p {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.viewAllButton {
+  background: none;
+  border: none;
+  color: #9E6E3C;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  width: 100%;
+  padding: 6px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.viewAllButton:hover {
+  background-color: #F8F7F3;
+}
+
+.messageBadge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background-color: #3498DB;
+  color: white;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+/* Notification alias used in Header component */
+.notificationBadge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background-color: #3498DB;
+  color: white;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+/* Add Role Modal and related controls */
+.addRoleModal {
+  background-color: rgb(255, 255, 255);
+  border-radius: 16px;
+  width: 420px;
+  max-width: 90vw;
+  box-shadow: rgba(0, 0, 0, 0.25) 0px 25px 50px -12px;
+  overflow: hidden;
+  position: relative;
+  border: 0; /* cleaner border handling */
+  animation: modalSlideIn 0.3s ease-out both;
+}
+
+.modalHeader {
+  background-color: #8B4513; /* SaddleBrown */
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #ffffff;
+}
+
+.modalClose {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  cursor: pointer;
+  padding: 10px;
+  border-radius: 50%;
+  color: #fff;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease;
+}
+
+.modalClose:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.modalContent {
+  padding: 24px;
+  background-color: #fff;
+}
+
+.modalContent p {
+  margin: 0 0 20px;
+  color: #6b7280; /* gray-500 */
+  font-size: 1rem;
+  line-height: 1.5;
+  text-align: left;
+}
+
+.modalContent label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #374151; /* gray-700 */
+}
+
+.roleSelector {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 24px;
+  position: relative; /* for select arrow placement */
+}
+
+.roleSelect {
+  width: 100%;
+  padding: 12px 40px 12px 16px;
+  border-radius: 8px;
+  font-size: 1rem;
+  background-color: #fff;
+  color: #111827;
+  border: 2px solid #E5E7EB; /* gray-200 */
+  outline: none;
+  transition: border-color 0.2s ease;
+  appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 12px center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+}
+
+.roleSelect:focus {
+  border-color: rgba(158, 110, 60, 0.9);
+}
+
+.modalActions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.btnCancel {
+  padding: 10px 20px;
+  border: 2px solid #E5E7EB;
+  background-color: #ffffff;
+  color: #374151;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: 0.2s ease;
+  min-width: 80px;
+}
+
+.btnAdd {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  justify-content: center;
+  min-width: 110px;
+}
+
+.btnAdd:disabled {
+  background-color: #D1D5DB;
+  color: #ffffff;
+  cursor: not-allowed;
+  opacity: 1; /* keep opacity consistent but change color */
+}
+
+/* Primary variant when enabled */
+.btnAdd:not(:disabled) {
+  background: linear-gradient(135deg, #9E6E3C 0%, #B8834F 100%);
+  color: #fff;
+}
+
+/* modal animation */
+@keyframes modalSlideIn {
+  0% { opacity: 0; transform: translateY(-10px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Uploading state */
+.uploading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Messages Dropdown Specific Styles */
+.messageIconContainer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.messagesDropdown {
+  width: 320px;
+}
+
+.markReadButton {
+  background: none;
+  border: none;
+  color: #9E6E3C;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.markReadButton:hover {
+  background-color: #F8F7F3;
+}
+
+.messagesList {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.messageItem {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(117, 74, 45, 0.05);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  gap: 12px;
+}
+
+.messageItem:hover {
+  background-color: #F8F7F3;
+}
+
+.messageItem.unread {
+  background-color: rgba(158, 110, 60, 0.05);
+}
+
+.messageAvatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 1px solid rgba(117, 74, 45, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #9E6E3C;
+}
+
+.avatarPlaceholder {
+  color: #F2F0E6;
+  font-weight: bold;
+  font-size: 1rem;
+}
+
+.messageContent {
+  flex-grow: 1;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.messageSender {
+  margin: 0 0 2px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #624635;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.messageText {
+  margin: 0 0 4px;
+  font-size: 0.8rem;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.messageTime {
+  margin: 0;
+  font-size: 0.7rem;
+  color: #AAA199;
+}
+
+.messageArrow {
+  color: #AAA199;
+  flex-shrink: 0;
+}
+
+.noMessages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  color: #AAA199;
+  text-align: center;
+}
+
+.noMessagesIcon {
+  margin-bottom: 8px;
+  opacity: 0.5;
+}
+
+.viewAllButton {
+  background: none;
+  border: none;
+  color: #9E6E3C;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  width: 100%;
+  padding: 6px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.viewAllButton:hover {
+  background-color: #F8F7F3;
+}
+
+/* Active state for icon buttons */
+.iconButton.active {
+  background-color: #9E6E3C;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(158, 110, 60, 0.3);
+}
+
+.iconButton.active .messageBadge {
+  background-color: white;
+  color: #9E6E3C;
+}
