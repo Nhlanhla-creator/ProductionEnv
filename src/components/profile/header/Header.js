@@ -37,7 +37,7 @@ function Header({
   NotificationComponent,
   roleOptions = [],
   onRoleSwitch,
-  enableAdvancedMessages = false,
+  enableAdvancedMessages = true,
   messagesRoute = "/messages",
   messageSenderCollection = "MyuniversalProfiles",
 }) {

@@ -53,41 +53,35 @@ function Sidebar({
     }
   }, [isCollapsed, storageKey])
 
-  // Memoize the auto-expand logic
-  const getExpandedMenusBasedOnRoute = useCallback(() => {
+  // Route-driven expansion logic is implemented inline in the
+  // effect below (and merges with user toggles). The previous
+  // `getExpandedMenusBasedOnRoute` helper was unused and removed to
+  // avoid dead code and reduce confusion.
+
+  // Update expanded menus when the route changes.
+  // Merge route-driven expansions with the existing state so
+  // user toggles are preserved instead of being overridden.
+  useEffect(() => {
     const currentPath = location.pathname
-    const newExpandedMenus = { ...autoExpandMenus }
-    
+    const desiredExpansions = {}
+
     memoizedMenuItems.forEach((item) => {
       if (item.hasSubmenu && item.subItems) {
         const shouldExpand = item.subItems.some(
-          (subItem) => 
-            currentPath === subItem.route || 
+          (subItem) =>
+            currentPath === subItem.route ||
             (subItem.route && currentPath.startsWith(subItem.route + "/"))
         )
-        if (shouldExpand) {
-          newExpandedMenus[item.id] = true
-        }
+        if (shouldExpand) desiredExpansions[item.id] = true
       }
     })
-    
-    return newExpandedMenus
-  }, [location.pathname, memoizedMenuItems, autoExpandMenus])
 
-  // Update expanded menus when route or autoExpandMenus changes
-  useEffect(() => {
-    const newExpandedMenus = getExpandedMenusBasedOnRoute()
-
-    // Only update if there are actual changes. Do NOT include
-    // `expandedMenus` in the dependency list — otherwise user
-    // toggles get immediately overridden by this effect.
     setExpandedMenus((prev) => {
-      if (JSON.stringify(prev) === JSON.stringify(newExpandedMenus)) {
-        return prev
-      }
-      return newExpandedMenus
+      const merged = { ...prev, ...desiredExpansions }
+      if (JSON.stringify(prev) === JSON.stringify(merged)) return prev
+      return merged
     })
-  }, [getExpandedMenusBasedOnRoute])
+  }, [location.pathname, memoizedMenuItems])
 
   // Alternative: Simpler approach that only runs when pathname changes
   // Uncomment this and remove the above useEffect if you prefer
