@@ -6,6 +6,7 @@ import HomeHeader from "./main_pages/SMEs/HomeHeader"
 import { useAuth } from "./context/useAuth" // Import the auth hook
 import ProtectedRoute from "./context/ProtectedRoute" // Import the ProtectedRoute component
 import EmailVerification from "./EmailVerification"
+
 // Admin Components - NEW
 import AdminSidebar from "./admin/layout/AdminSidebar"
 import AdminHeader from "./admin/layout/AdminHeader"
@@ -45,9 +46,9 @@ import CatalystDocuments from "./catalyst/CatalystDocuments/support-documents"
 import Sidebar from "./smses/Sidebar/Sidebar"
 import InvestorSidebar from "./Investor/Sidebar/InvestorSidebar"
 import SupportProgramSidebar from "./catalyst/CatalystSidebar/AcceleratorSidebar"
-import DashboardHeader from "./smses/DashboardHeader/DashboardHeader"
+import SMSEHeader from "./smses/DashboardHeader/SMSEHeader"
 import InvestorHeader from "./Investor/Header/InvestorHeader"
-import SupportProgramHeader from "./catalyst/CatalystProgramHeader/SupportHeader"
+import SupportProgramHeader from "./catalyst/CatalystProgramHeader/CatalystHeader"
 // FIXED: Import AdvisorHeader - create this component if it doesn't exist
 import AdvisorHeader from "./advisors/AdvisorHeader/advisorHeader"
 import Documents from "./Investor/Documents"
@@ -55,7 +56,7 @@ import BetaSignupForm from "./BetaForm"
 // Intern Components - NEW
 import InternSidebar from "./Interns/sidebar/sidebar"
 import InternDashboard from "./Interns/InternDashboard/intern-dashboard"
-import InternHeader from "./Interns/Header/header"
+import InternHeader from "./Interns/Header/InternHeader"
 import InternCalendar from "./Interns/calender/calendar"
 import InternMessages from "./Interns/messages/messages"
 import InternDocuments from "./Interns/MyDocuments/intern-documents"
@@ -432,7 +433,7 @@ function App() {
       <div className="app-layout">
         <Sidebar companyName={companyName} />
         <div className="main-content">
-          <DashboardHeader companyName={companyName} profileImage={profileImage} setProfileImage={setProfileImage} />
+          <SMSEHeader companyName={companyName} profileImage={profileImage} setProfileImage={setProfileImage} />
           <div className="page-content">{children}</div>
         </div>
         <RegistrationSummary data={formData} open={showSummary} onClose={() => setShowSummary(false)} />
@@ -475,7 +476,7 @@ function App() {
     )
   }
 
-  // FIXED: Advisor Protected Layout - Now uses AdvisorHeader instead of DashboardHeader
+  // FIXED: Advisor Protected Layout - Now uses AdvisorHeader instead of SMSEHeader
   const AdvisorLayout = ({ children }) => {
     const location = useLocation()
     return (
@@ -781,9 +782,9 @@ function App() {
 
         {/* NEW: QR Code Landing Page Route - PUBLIC (No layout, shows when QR is scanned) */}
         <Route path="/card/:cardId" element={<CardLandingPage />} />
+        <Route path="/verify-email" element={<EmailVerification />} />
         
- <Route path="/verify-email" element={<EmailVerification />} />
-
+ 
 
         <Route path="/admin" element={<Navigate to="/Auth" replace />} />
         <Route path="/admin/dashboard" element={withAdminProtection(AdminDashboard)} />
