@@ -5,7 +5,7 @@ import "./App.css"
 import HomeHeader from "./main_pages/SMEs/HomeHeader"
 import { useAuth } from "./context/useAuth" // Import the auth hook
 import ProtectedRoute from "./context/ProtectedRoute" // Import the ProtectedRoute component
-
+import EmailVerification from "./EmailVerification"
 // Admin Components - NEW
 import AdminSidebar from "./admin/layout/AdminSidebar"
 import AdminHeader from "./admin/layout/AdminHeader"
@@ -21,7 +21,7 @@ import AllInterns from "./admin/pages/AllInterns"
 import AllSponsors from "./admin/pages/AllSponsors"
 import Subscriptions from "./admin/pages/Subscriptions"
 import QRCodes from "./admin/pages/QRCodes"
-import CardLandingPage from "./admin/pages/CardLandingPage"
+import CardLandingPage from "./admin/pages/CardLandingPage" 
 // Admin Settings Subcategory Components
 import AdminUsers from "./admin/pages/AdminUserManagement"
 import ApprovalWorkflows from "./admin/pages/ApprovalWorkflows"
@@ -217,8 +217,6 @@ import CatalystContactDetails from "./catalyst/CatalystUniversalProfile/catalyst
 import CatalystApplicationBrief from "./catalyst/CatalystUniversalProfile/catalyst-application-brief"
 import CatalystMatchingPreference from "./catalyst/CatalystUniversalProfile/catalyst-matching-preference"
 import CatalystDeclarationConsent from "./catalyst/CatalystUniversalProfile/catalyst-declaration-consent"
-import CatalystCohorts from "./catalyst/MyCohorts/MyCohorts"  
-import CatalystInvestments from "./catalyst/MyInvestment/MyInvestments"
 // Application Components
 import FundingApplication from "./smses/FundingApplication/FundingApplication"
 import ProductApplication from "./smses/ProductApplication/ProductApplication"
@@ -230,8 +228,6 @@ import SupplierMatchesPage from "./smses/MySupplierMatches/supplier-matches"
 import SupportProgramMatchesPage from "./smses/MyAccelatorMatches/accelearator-matches"
 import MatchesPage from "./Investor/MyMatches/investor-matches"
 import SMSEAdvisorMatchesPage from "./smses/MyAdvisorMatches/advisor-matches"
-import OpportunityMatchesPage from "./smses/MyOpportunityMatches/opportunity-matches"
-
 // Growth Tools Components
 import ShopToolsPage from "./smses/MyGrowthTools/shop"
 import MyToolsPage from "./smses/MyGrowthTools/my-tools"
@@ -261,7 +257,7 @@ import BigInsights from "./smses/BigInsights/BigInsights"
 import { AdvisorInsights } from "./advisors/AdvisorInsights/AdvisorInsights"
 import { Insights as InternInsights } from "./Interns/InternInsights/internInsights"
 import { AcceleratorInsights as CatalystInsights } from "./catalyst/CatalystInsights/catalystInsights"
-import { InvestorInsights } from "./Investor/InvestorInsights/investorInsights"
+import {InvestorInsights}  from "./Investor/InvestorInsights/investorInsights"
 import MyCohorts from "Investor/MyCohorts/MyCohorts"
 // Initial Data States
 const initialFormData = {
@@ -400,21 +396,21 @@ function App() {
   const handleFormSubmit = () => {
     setShowSummary(true)
   }
-  const withProtection = (Component, props = {}, layoutFn = renderSMERoute) => {
+ const withProtection = (Component, props = {}, layoutFn = renderSMERoute) => {
     return (
       <ProtectedRoute>
         {layoutFn(Component, props)}
       </ProtectedRoute>
     );
   };
-  const withAdminProtection = (Component, props = {}) => {
+ const withAdminProtection = (Component, props = {}) => {
     return (
       <ProtectedRoute allowedRoles={['Admin', 'admin']}>
         {renderAdminRoute(Component, props)}
       </ProtectedRoute>
     );
   };
-
+  
   // Admin Protected Layout - NEW
   const AdminLayout = ({ children }) => {
     const location = useLocation()
@@ -634,7 +630,7 @@ function App() {
         ]}
         currentSection={section}
         completedSections={new Set()}
-        onSectionChange={() => { }}
+        onSectionChange={() => {}}
       />
       <div className="bg-white rounded-lg shadow-md p-6 mt-6">
         {formData.advisorProfile[section] !== undefined ? (
@@ -663,7 +659,7 @@ function App() {
         ]}
         currentSection={section}
         completedSections={new Set()}
-        onSectionChange={() => { }}
+        onSectionChange={() => {}}
       />
       <div className="bg-white rounded-lg shadow-md p-6 mt-6">
         {formData.internProfile[section] !== undefined ? (
@@ -689,7 +685,7 @@ function App() {
         ]}
         currentSection={section}
         completedSections={new Set()}
-        onSectionChange={() => { }}
+        onSectionChange={() => {}}
       />
       <div className="bg-white rounded-lg shadow-md p-6 mt-6">
         {formData.programSponsorProfile[section] !== undefined ? (
@@ -719,7 +715,7 @@ function App() {
         <Route path="/HowItWorksAdvisors" element={<HowItWorksAdvisors />} />
         <Route path="/HowItWorksInterns" element={<HowItWorksInterns />} />
         <Route path="/LoginRegister" element={<LoginRegister />} />
-        <Route path="/RetrieveAccount" element={<RetrieveAccount />} />
+         <Route path="/RetrieveAccount" element={<RetrieveAccount />} />
         <Route path="/AboutPage" element={<AboutPage />} />
         <Route path="/FAQPage" element={<FAQPage />} />
         <Route path="/HomePage" element={<HomePage />} />
@@ -785,7 +781,8 @@ function App() {
 
         {/* NEW: QR Code Landing Page Route - PUBLIC (No layout, shows when QR is scanned) */}
         <Route path="/card/:cardId" element={<CardLandingPage />} />
-
+        
+ <Route path="/verify-email" element={<EmailVerification />} />
 
 
         <Route path="/admin" element={<Navigate to="/Auth" replace />} />
@@ -796,7 +793,7 @@ function App() {
         <Route path="/admin/advisors" element={withAdminProtection(AllAdvisors)} />
         <Route path="/admin/documents" element={withAdminProtection(DocumentManagement)} />
         <Route path="/admin/settings" element={withAdminProtection(AdminSettings)} />
-        <Route path="/admin/interns" element={withAdminProtection(AllInterns)} />
+                       <Route path="/admin/interns" element={withAdminProtection(AllInterns)} />
         <Route path="/admin/sponsors" element={withAdminProtection(AllSponsors)} />
         <Route path="/admin/qr-codes" element={withAdminProtection(QRCodes)} />
         <Route path="/admin/subscriptions" element={withAdminProtection(Subscriptions)} />
@@ -847,46 +844,46 @@ function App() {
         <Route path="/intern-calendar" element={withProtection(InternCalendar, {}, renderInternRoute)} />
         <Route path="/intern-settings" element={withProtection(Settings, {}, renderInternRoute)} />
         {/* NEW: Protected Program Sponsor Dashboard Routes - FIXED */}
-        <Route path="/program-sponsor-dashboard" element={withProtection(ProgramSponsorDealflow, {}, renderProgramSponsorRoute)} />
-        <Route path="/program-sponsor-profile" element={withProtection(ProgramSponsorUniversalProfile, {}, renderProgramSponsorRoute)} />
-        <Route path="/program-sponsor-matches" element={withProtection(ProgramSponsorMatchesPage, {}, renderProgramSponsorRoute)} />
-        <Route path="/program-sponsor-insights" element={withProtection(ProgramSponsorInsights, {}, renderProgramSponsorRoute)} />
-        <Route path="/program-sponsor-table" element={withProtection(ProgramSponsorInternTable, {}, renderProgramSponsorRoute)} />
-        <Route path="/program-sponsor-documents" element={withProtection(ProgramSponsorDocuments, {}, renderProgramSponsorRoute)} />
-        <Route path="/program-sponsor-messages" element={withProtection(ProgramSponsorMessages, {}, renderProgramSponsorRoute)} />
-        <Route path="/program-sponsor-calendar" element={withProtection(ProgramSponsorCalendar, {}, renderProgramSponsorRoute)} />
-        <Route path="/program-sponsor-settings" element={withProtection(ProgramSponsorSettings, {}, renderProgramSponsorRoute)} />
+        <Route path="/program-sponsor-dashboard" element={withProtection(ProgramSponsorDealflow, {} ,renderProgramSponsorRoute)} />
+        <Route path="/program-sponsor-profile" element={withProtection(ProgramSponsorUniversalProfile, {} ,renderProgramSponsorRoute)} />
+        <Route path="/program-sponsor-matches" element={withProtection(ProgramSponsorMatchesPage, {} ,renderProgramSponsorRoute)} />
+        <Route path="/program-sponsor-insights" element={withProtection(ProgramSponsorInsights, {} ,renderProgramSponsorRoute)} />
+        <Route path="/program-sponsor-table" element={withProtection(ProgramSponsorInternTable, {} ,renderProgramSponsorRoute)} />
+        <Route path="/program-sponsor-documents" element={withProtection(ProgramSponsorDocuments, {} ,renderProgramSponsorRoute)} />
+        <Route path="/program-sponsor-messages" element={withProtection(ProgramSponsorMessages, {} ,renderProgramSponsorRoute)} />
+        <Route path="/program-sponsor-calendar" element={withProtection(ProgramSponsorCalendar, {} ,renderProgramSponsorRoute)} />
+        <Route path="/program-sponsor-settings" element={withProtection(ProgramSponsorSettings, {} ,renderProgramSponsorRoute)} />
         {/* NEW: Program Sponsor Billing Routes */}
-        <Route path="/program-sponsor/billing/info" element={withProtection(ProgramSponsorBillingInfo, {}, renderProgramSponsorRoute)} />
+        <Route path="/program-sponsor/billing/info" element={withProtection(ProgramSponsorBillingInfo, {} ,renderProgramSponsorRoute)} />
         <Route
           path="/program-sponsor/billing/subscriptions"
-          element={withProtection(ProgramSponsorSubscription, {}, renderProgramSponsorRoute)}
+          element={withProtection(ProgramSponsorSubscription, {} ,renderProgramSponsorRoute)}
         />
         <Route
           path="/program-sponsor/billing/history"
-          element={withProtection(ProgramSponsorBillingHistory, {}, renderProgramSponsorRoute)}
+          element={withProtection(ProgramSponsorBillingHistory, {} ,renderProgramSponsorRoute)}
         />
         {/* Protected Support Program Dashboard Routes */}
-        <Route path="/support-profile" element={withProtection(CatalystUniversalProfile, {}, renderSupportProgramRoute)} />
+        <Route path="/support-profile" element={withProtection(CatalystUniversalProfile, {} ,renderSupportProgramRoute)} />
         {/* Corrected component name */}
-        <Route path="/support-beneficiaries" element={withProtection(FindMatches, {}, renderSupportProgramRoute)} />
-        <Route path="/support-matches" element={withProtection(SupportMatchesPage, {}, renderSupportProgramRoute)} />
-        <Route path="/support-documents" element={withProtection(CatalystDocuments, {}, renderSupportProgramRoute)} />
-        <Route path="/support-messages" element={withProtection(Messages, {}, renderSupportProgramRoute)} />
-        <Route path="/support-calendar" element={withProtection(Calendar, {}, renderSupportProgramRoute)} />
-        <Route path="/support-analytics" element={withProtection(GrowthEnabler, {}, renderSupportProgramRoute)} />
-        <Route path="/support-settings" element={withProtection(CatalystSettings, {}, renderSupportProgramRoute)} />
+        <Route path="/support-beneficiaries" element={withProtection(FindMatches, {} ,renderSupportProgramRoute)} />
+        <Route path="/support-matches" element={withProtection(SupportMatchesPage, {} ,renderSupportProgramRoute)} />
+        <Route path="/support-documents" element={withProtection(CatalystDocuments, {} ,renderSupportProgramRoute)} />
+        <Route path="/support-messages" element={withProtection(Messages, {} ,renderSupportProgramRoute)} />
+        <Route path="/support-calendar" element={withProtection(Calendar, {} ,renderSupportProgramRoute)} />
+        <Route path="/support-analytics" element={withProtection(GrowthEnabler, {} ,renderSupportProgramRoute)} />
+        <Route path="/support-settings" element={withProtection(CatalystSettings, {} ,renderSupportProgramRoute)} />
         {/* Protected Advisor Routes */}
-        <Route path="/advisor-dashboard" element={withProtection(AdvisorDashboardPage, {}, renderAdvisorRoute)} />
-        <Route path="/advisor-profile" element={withProtection(AdvisorProfile, {}, renderAdvisorRoute)} />
-        <Route path="/advisor-documents" element={withProtection(AdvisorDocuments, {}, renderAdvisorRoute)} />
-        <Route path="/advisor-messages" element={withProtection(AdvisorMessages, {}, renderAdvisorRoute)} />
-        <Route path="/advisor-calendar" element={withProtection(Calendar, {}, renderAdvisorRoute)} />
-        <Route path="/advisor-settings" element={withProtection(AdvisorSettings, {}, renderAdvisorRoute)} />
+        <Route path="/advisor-dashboard" element={withProtection(AdvisorDashboardPage, {} ,renderAdvisorRoute)} />
+        <Route path="/advisor-profile" element={withProtection(AdvisorProfile, {} ,renderAdvisorRoute)} />
+        <Route path="/advisor-documents" element={withProtection(AdvisorDocuments, {} ,renderAdvisorRoute)} />
+        <Route path="/advisor-messages" element={withProtection(AdvisorMessages, {} ,renderAdvisorRoute)} />
+        <Route path="/advisor-calendar" element={withProtection(Calendar, {} ,renderAdvisorRoute)} />
+        <Route path="/advisor-settings" element={withProtection(AdvisorSettings, {} ,renderAdvisorRoute)} />
         {/* Advisor Billing Routes */}
-        <Route path="/advisor/billing/info" element={withProtection(BillingInfo, {}, renderAdvisorRoute)} />
-        <Route path="/advisor/billing/subscriptions" element={withProtection(MySubscriptions, {}, renderAdvisorRoute)} />
-        <Route path="/advisor/billing/history" element={withProtection(MyDocuments, {}, renderAdvisorRoute)} />
+        <Route path="/advisor/billing/info" element={withProtection(BillingInfo, {} ,renderAdvisorRoute)} />
+        <Route path="/advisor/billing/subscriptions" element={withProtection(MySubscriptions, {} ,renderAdvisorRoute)} />
+        <Route path="/advisor/billing/history" element={withProtection(MyDocuments, {} ,renderAdvisorRoute)} />
         {/*MY NAVIGATIONS */}
         <Route path="/my-investments" element={withProtection(MyInvestments, {}, renderInvestorRoute)} />
         {/* Advisor Profile Sub-Routes */}
@@ -1067,7 +1064,6 @@ function App() {
           element={renderSupportProfileSection(CatalystUniversalProfile, "summary")} // This will render the main CatalystUniversalProfile which handles the summary step
         />
         {/* Matches Routes */}
-        <Route path="/opportunity-matches" element={withProtection(OpportunityMatchesPage, {}, renderSMERoute)} />
         <Route path="/customer-matches" element={withProtection(CustomerMatchesPage, {}, renderSMERoute)} />
         <Route path="/funding-matches" element={withProtection(FundingMatchesPage, {}, renderSMERoute)} />
         <Route path="/supplier-matches" element={withProtection(SupplierMatchesPage, {}, renderSMERoute)} />
@@ -1103,8 +1099,6 @@ function App() {
         <Route path="/intern" element={<Navigate to="/intern-profile" replace />} />
         <Route path="/intern-profile-main" element={<Navigate to="/intern-profile/instructions" replace />} />
         <Route path="/program-sponsor" element={<Navigate to="/program-sponsor-profile" replace />} />
-        <Route path="/catalyst/cohorts" element={withProtection(CatalystCohorts, {}, renderSupportProgramRoute)} />
-        <Route path="/catalyst/investments" element={withProtection(CatalystInvestments, {}, renderSupportProgramRoute)} />
         <Route
           path="/program-sponsor-profile-main"
           element={<Navigate to="/program-sponsor-profile/instructions" replace />}
@@ -1112,7 +1106,7 @@ function App() {
         <Route path="/applications/intern-application" element={<Navigate to="/applications/intern" replace />} />
 
 
-        <Route path="/my-cohorts" element={withProtection(MyCohorts, {}, renderInvestorRoute)} />
+        <Route path ="/my-cohorts" element={withProtection(MyCohorts, {}, renderInvestorRoute)} />
       </Routes>
     </Router>
   )
