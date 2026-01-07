@@ -1,8 +1,8 @@
 "use client"
-import { useState, useRef, useEffect } from "react"
-import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore"
-import { db, auth } from "../../firebaseConfig"
+import { useState, useEffect } from "react"
 import { Trophy, Users, TrendingUp, Building, MapPin, DollarSign, Calendar, Eye, Wrench, Loader, RefreshCw, X, BarChart3, ChevronDown } from "lucide-react"
+import { collection, query, where, getDocs, doc, getDoc, orderBy } from "firebase/firestore"
+import { db, auth } from "../../firebaseConfig"
 
 const formatLabel = (value) => {
   if (!value) return ""
@@ -36,10 +36,6 @@ const formatDate = (dateString) => {
   })
 }
 
-// Cache key for localStorage
-const COHORTS_CACHE_KEY = 'myCohorts_cache'
-const CACHE_TIMEOUT = 5 * 60 * 1000 // 5 minutes
-
 function MyCohorts() {
   const [cohorts, setCohorts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -50,7 +46,6 @@ function MyCohorts() {
   useEffect(() => {
     fetchCohorts()
     
-    // Check sidebar state from localStorage or a global state
     const checkSidebarState = () => {
       const sidebarState = localStorage.getItem('sidebarOpen')
       setIsSidebarOpen(sidebarState !== 'false')
@@ -58,7 +53,6 @@ function MyCohorts() {
     
     checkSidebarState()
     
-    // Listen for sidebar toggle events
     window.addEventListener('sidebarToggle', checkSidebarState)
     window.addEventListener('storage', checkSidebarState)
     
@@ -68,50 +62,11 @@ function MyCohorts() {
     }
   }, [])
 
-  const getCachedCohorts = () => {
-    try {
-      const cached = localStorage.getItem(COHORTS_CACHE_KEY)
-      if (!cached) return null
-
-      const { data, timestamp } = JSON.parse(cached)
-      
-      if (Date.now() - timestamp < CACHE_TIMEOUT) {
-        return data
-      } else {
-        localStorage.removeItem(COHORTS_CACHE_KEY)
-        return null
-      }
-    } catch (error) {
-      console.error("Error reading cache:", error)
-      return null
-    }
-  }
-
-  const setCachedCohorts = (data) => {
-    try {
-      const cacheData = {
-        data,
-        timestamp: Date.now()
-      }
-      localStorage.setItem(COHORTS_CACHE_KEY, JSON.stringify(cacheData))
-    } catch (error) {
-      console.error("Error setting cache:", error)
-    }
-  }
-
+  // Fetch successful support deals from Firestore
   const fetchCohorts = async (forceRefresh = false) => {
     try {
       setLoading(true)
       
-      if (!forceRefresh) {
-        const cachedCohorts = getCachedCohorts()
-        if (cachedCohorts) {
-          setCohorts(cachedCohorts)
-          setLoading(false)
-          return
-        }
-      }
-
       const currentUser = auth.currentUser
       
       if (!currentUser) {
@@ -120,67 +75,98 @@ function MyCohorts() {
         return
       }
 
+      // Query catalystApplications for successful deals
       const q = query(
-        collection(db, "investorApplications"),
-        where("pipelineStage", "==", "Deal Complete")
+        collection(db, "catalystApplications"),
+        where("catalystId", "==", currentUser.uid),
+        where("status", "in", ["Support Approved", "Active Support", "Deal Closed"])
       )
 
       const querySnapshot = await getDocs(q)
-      console.log("Found successful deals:", querySnapshot.docs.length)
+      console.log("Found successful support deals:", querySnapshot.docs.length)
 
       const cohortsData = await Promise.all(
         querySnapshot.docs.map(async (docSnap) => {
           const data = docSnap.data()
           
           try {
-            let profileData = {}
-
-            if (data.smeId) {
-              const profileRef = doc(db, "universalProfiles", data.smeId)
-              const profileSnap = await getDoc(profileRef)
-
-              if (profileSnap.exists()) {
-                profileData = profileSnap.data()
-              } else if (data.userId) {
-                const userProfileRef = doc(db, "universalProfiles", data.userId)
-                const userProfileSnap = await getDoc(userProfileRef)
-                if (userProfileSnap.exists()) {
-                  profileData = userProfileSnap.data()
-                }
-              }
+            // Extract SME ID from the document ID
+            const docIdParts = docSnap.id.split('_')
+            const smeId = docIdParts[1] // Format: catalystId_smeId_programIndex
+            
+            if (!smeId) {
+              console.error("No SME ID found in document ID:", docSnap.id)
+              return null
             }
 
-            const smeName =
-              profileData.entityOverview?.tradingName ||
-              profileData.entityOverview?.registeredName ||
-              data.companyName ||
-              data.smeName ||
-              "Unnamed Business"
+            // Get SME profile data
+            let smeName = "Unnamed Business"
+            let sector = "Not specified"
+            let location = "Not specified"
+            let teamSize = "Not specified"
+            let description = "No description available"
+            let fundingRequired = data.fundingRequired || "Not specified"
+            let equityOffered = data.equityOffered || "Not specified"
+            let guarantees = data.guarantees || "Not specified"
+
+            const profileRef = doc(db, "universalProfiles", smeId)
+            const profileSnap = await getDoc(profileRef)
+
+            if (profileSnap.exists()) {
+              const profileData = profileSnap.data()
+              const entity = profileData.entityOverview || {}
+              
+              smeName = entity.registeredName || entity.tradingName || "Unnamed Business"
+              sector = formatLabel(entity.economicSectors?.[0]) || "Not specified"
+              location = formatLabel(entity.location) || "Not specified"
+              teamSize = entity.employeeCount || "Not specified"
+              description = entity.shortBusinessDescription || "No description available"
+              
+              // Get funding details from useOfFunds if available
+              const useOfFunds = profileData.useOfFunds || {}
+              fundingRequired = fundingRequired === "Not specified" ? 
+                (useOfFunds.amountRequested || "Not specified") : fundingRequired
+              equityOffered = equityOffered === "Not specified" ?
+                (useOfFunds.equityType || "Not specified") : equityOffered
+            }
+
+            // Extract program index from document ID
+            const programIndex = docIdParts[2] || '0'
+            const programSuffix = programIndex !== '0' ? ` (Program ${parseInt(programIndex) + 1})` : ""
 
             return {
               id: docSnap.id,
-              smeId: data.smeId || data.userId,
-              smeName,
-              dealAmount: data.fundingDetails?.amountApproved || data.fundingRequired || "Not specified",
-              dealType: data.fundingDetails?.investmentType || data.investmentType || "equity",
-              completionDate: data.updatedAt || data.createdAt,
-              sector: formatLabel(profileData.entityOverview?.economicSectors?.[0]) || formatLabel(data.sector) || "Not specified",
-              location: formatLabel(profileData.entityOverview?.location) || formatLabel(data.location) || "Not specified",
-              teamSize: profileData.entityOverview?.employeeCount || data.teamSize || "Not specified",
-              description: profileData.entityOverview?.shortBusinessDescription || "No description available",
-              currentStatus: "Active Investment",
-              profileData: profileData,
+              smeId: smeId,
+              smeName: `${smeName}${programSuffix}`,
+              dealAmount: fundingRequired,
+              dealType: equityOffered,
+              completionDate: data.updatedAt || data.createdAt || new Date().toISOString(),
+              sector: sector,
+              location: location,
+              teamSize: teamSize,
+              description: description,
+              currentStatus: data.status || "Active Support",
               lastUpdated: new Date().toISOString(),
-              dealStructure: data.fundingDetails?.paymentDeployment || "Not specified",
-              dealDuration: "Not specified",
-              supportProvided: "Funding and Strategic Support",
-              roi: "Pending",
+              dealStructure: "Support Program",
+              dealDuration: "Ongoing",
+              supportProvided: data.servicesRequired || "Funding and Strategic Support",
+              roi: "To be determined",
               exitStrategy: "To be determined",
               revenueGrowth: "Pending",
-              fundingDetails: data.fundingDetails || {},
+              fundingDetails: {
+                amountRequested: fundingRequired,
+                equityType: equityOffered,
+                guarantees: guarantees,
+                servicesRequired: data.servicesRequired || "Not specified",
+              },
+              // Additional fields from successful deals
+              guarantees: guarantees,
+              servicesRequired: data.servicesRequired || "Not specified",
+              applicationDate: data.createdAt ? new Date(data.createdAt.toDate()).toLocaleDateString() : "Not specified",
+              programIndex: programIndex,
             }
           } catch (error) {
-            console.error("Error fetching profile:", error)
+            console.error("Error processing cohort:", error)
             return null
           }
         })
@@ -188,7 +174,6 @@ function MyCohorts() {
 
       const validCohorts = cohortsData.filter(cohort => cohort !== null)
       setCohorts(validCohorts)
-      setCachedCohorts(validCohorts)
       setLoading(false)
     } catch (error) {
       console.error("Error fetching cohorts:", error)
@@ -215,17 +200,19 @@ function MyCohorts() {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case "Active Investment":
+      case "Active Support":
         return "#4caf50"
-      case "Exited (Successful)":
+      case "Support Approved":
         return "#2196f3"
+      case "Deal Closed":
+        return "#4caf50"
       default:
         return "#666"
     }
   }
 
   const getRoiColor = (roi) => {
-    if (roi === "Pending") return "#666"
+    if (roi === "Pending" || roi === "To be determined") return "#666"
     const percentage = Number.parseInt(roi.replace(/[+%]/g, ""))
     if (percentage >= 100) return "#4caf50"
     if (percentage >= 50) return "#8bc34a"
@@ -305,10 +292,10 @@ function MyCohorts() {
         }}>
           <div>
             <h1 style={{ fontSize: "28px", fontWeight: "700", color: "#4a352f", marginBottom: "8px" }}>
-              My Investment Cohorts
+              My Support Portfolio
             </h1>
             <p style={{ color: "#7d5a50", fontSize: "16px" }}>
-              View and manage your portfolio of successful SME investments
+              View and manage your portfolio of successful SME support deals
             </p>
           </div>
           
@@ -362,7 +349,7 @@ function MyCohorts() {
             <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
               <Trophy size={20} style={{ color: "#a67c52" }} />
               <h3 style={{ fontSize: "14px", fontWeight: "600", color: "#7d5a50", margin: 0 }}>
-                Total Investments
+                Total Support Deals
               </h3>
             </div>
             <p style={{ fontSize: "32px", fontWeight: "700", color: "#a67c52", margin: 0 }}>
@@ -380,11 +367,11 @@ function MyCohorts() {
             <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
               <TrendingUp size={20} style={{ color: "#4caf50" }} />
               <h3 style={{ fontSize: "14px", fontWeight: "600", color: "#7d5a50", margin: 0 }}>
-                Active Deals
+                Active Support
               </h3>
             </div>
             <p style={{ fontSize: "32px", fontWeight: "700", color: "#4caf50", margin: 0 }}>
-              {cohorts.filter(c => c.currentStatus === "Active Investment").length}
+              {cohorts.filter(c => c.currentStatus === "Active Support").length}
             </p>
           </div>
 
@@ -470,7 +457,7 @@ function MyCohorts() {
                       letterSpacing: "0.5px",
                       whiteSpace: "nowrap"
                     }}>
-                      Investment
+                      Support Value
                     </th>
                     <th style={{ 
                       padding: "16px 20px", 
@@ -494,7 +481,7 @@ function MyCohorts() {
                       letterSpacing: "0.5px",
                       whiteSpace: "nowrap"
                     }}>
-                      Date
+                      Start Date
                     </th>
                     <th style={{ 
                       padding: "16px 20px", 
@@ -612,8 +599,8 @@ function MyCohorts() {
                       {/* Status */}
                       <td style={{ padding: "20px", minWidth: "150px" }}>
                         <span style={{
-                          backgroundColor: "#4caf5020",
-                          color: "#4caf50",
+                          backgroundColor: getStatusColor(cohort.currentStatus) + "20",
+                          color: getStatusColor(cohort.currentStatus),
                           padding: "6px 12px",
                           borderRadius: "20px",
                           fontSize: "12px",
@@ -710,10 +697,14 @@ function MyCohorts() {
           }}>
             <Trophy size={60} style={{ color: "#c8b6a6", marginBottom: "20px" }} />
             <h3 style={{ fontSize: "22px", fontWeight: "600", color: "#4a352f", marginBottom: "12px" }}>
-              No Portfolio Companies Yet
+              No Support Portfolio Yet
             </h3>
             <p style={{ color: "#7d5a50", fontSize: "15px", maxWidth: "500px", margin: "0 auto" }}>
-              Your successful investment deals will appear here once you complete funding transactions with SMEs.
+              Your successful support deals will appear here once you approve support for SMEs.
+              <br />
+              <span style={{ fontSize: "13px", color: "#a67c52" }}>
+                Current statuses that appear: "Support Approved", "Active Support", "Deal Closed"
+              </span>
             </p>
           </div>
         )}
@@ -746,7 +737,7 @@ function MyCohorts() {
                 }}
               >
                 <Trophy size={32} style={{ color: "#ffd700" }} />
-                Investment Details: {selectedCohort.smeName}
+                Support Deal Details: {selectedCohort.smeName}
               </h2>
               <button
                 onClick={() => setSelectedCohort(null)}
@@ -763,7 +754,7 @@ function MyCohorts() {
               </button>
             </div>
 
-            {/* Investment Overview Cards */}
+            {/* Support Deal Overview Cards */}
             <div
               style={{
                 display: "grid",
@@ -790,21 +781,20 @@ function MyCohorts() {
                   }}
                 >
                   <DollarSign size={20} />
-                  Investment Details
+                  Financial Details
                 </h3>
                 <div style={{ display: "grid", gap: "12px" }}>
                   <div>
-                    <strong>Investment Amount:</strong> {formatCurrency(selectedCohort.dealAmount)}
+                    <strong>Funding Required:</strong> {formatCurrency(selectedCohort.dealAmount)}
                   </div>
                   <div>
-                    <strong>Deal Type:</strong> {selectedCohort.dealType}
+                    <strong>Equity Offered:</strong> {selectedCohort.dealType}
+                  </div>
+                  <div>
+                    <strong>Guarantees:</strong> {selectedCohort.guarantees || "Not specified"}
                   </div>
                   <div>
                     <strong>Deal Structure:</strong> {selectedCohort.dealStructure}
-                  </div>
-                  <div>
-                    <strong>ROI:</strong>{" "}
-                    <span style={{ color: getRoiColor(selectedCohort.roi), fontWeight: "700" }}>{selectedCohort.roi}</span>
                   </div>
                 </div>
               </div>
@@ -831,21 +821,15 @@ function MyCohorts() {
                 </h3>
                 <div style={{ display: "grid", gap: "12px" }}>
                   <div>
-                    <strong>Investment Date:</strong> {formatDate(selectedCohort.completionDate)}
+                    <strong>Start Date:</strong> {formatDate(selectedCohort.completionDate)}
                   </div>
                   <div>
-                    <strong>Investment Duration:</strong> {selectedCohort.dealDuration}
+                    <strong>Support Duration:</strong> {selectedCohort.dealDuration}
                   </div>
                   <div>
-                    <strong>Revenue Growth:</strong>
-                    <span
-                      style={{
-                        color: getRoiColor(selectedCohort.revenueGrowth),
-                        fontWeight: "600",
-                        marginLeft: "8px",
-                      }}
-                    >
-                      {selectedCohort.revenueGrowth}
+                    <strong>ROI:</strong>
+                    <span style={{ color: getRoiColor(selectedCohort.roi), fontWeight: "700", marginLeft: "8px" }}>
+                      {selectedCohort.roi}
                     </span>
                   </div>
                   <div>
@@ -898,7 +882,7 @@ function MyCohorts() {
                     <strong>Team Size:</strong> {selectedCohort.teamSize}
                   </div>
                   <div>
-                    <strong>Exit Strategy:</strong> {selectedCohort.exitStrategy}
+                    <strong>Description:</strong> {selectedCohort.description}
                   </div>
                 </div>
               </div>
@@ -923,8 +907,8 @@ function MyCohorts() {
                   gap: "8px",
                 }}
               >
-                <TrendingUp size={20} />
-                Value-Add Support Provided
+                <Wrench size={20} />
+                Support Services Provided
               </h3>
               <p style={{ fontSize: "16px", color: "#333", lineHeight: "1.6", margin: 0 }}>
                 {selectedCohort.supportProvided}
@@ -951,7 +935,7 @@ function MyCohorts() {
                 }}
               >
                 <BarChart3 size={20} />
-                Investment Performance Summary
+                Support Program Summary
               </h3>
               <div
                 style={{
@@ -968,7 +952,7 @@ function MyCohorts() {
                 </div>
                 <div style={{ textAlign: "center" }}>
                   <div style={{ fontSize: "24px", fontWeight: "700", color: "#2196f3" }}>{formatCurrency(selectedCohort.dealAmount)}</div>
-                  <div style={{ fontSize: "14px", color: "#666" }}>Investment Amount</div>
+                  <div style={{ fontSize: "14px", color: "#666" }}>Support Value</div>
                 </div>
                 <div style={{ textAlign: "center" }}>
                   <div style={{ fontSize: "24px", fontWeight: "700", color: getRoiColor(selectedCohort.revenueGrowth) }}>
