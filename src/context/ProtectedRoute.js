@@ -7,7 +7,6 @@ export default function ProtectedRoute({ children, allowedRoles = [] }) {
   const { user, userRoles, loading } = useAuth();
   const location = useLocation();
 
-  
   if (loading) {
     return (
       <div className="loading-screen">
@@ -23,10 +22,24 @@ export default function ProtectedRoute({ children, allowedRoles = [] }) {
   }
 
   // If email needs verification, redirect to verification page
-  // Note: You might want to allow access to verification page itself
-  if (!user.emailVerified && !location.pathname.includes('/verify-email')) {
-    return <Navigate to="/auth?mode=verify" state={{ from: location }} replace />;
-  }
+  // BUT allow access to verification page itself and auth page
+  // if (!user.emailVerified) {
+  //   // List of pages that unverified users CAN access
+  //   const allowedPages = [
+  //     '/verify-email',
+  //     '/auth',
+  //     '/',
+  //     '/LoginRegister',
+  //     '/RetrieveAccount'
+  //   ];
+    
+  //   if (!allowedPages.includes(location.pathname)) {
+  //     return <Navigate to="/verify-email" state={{ from: location }} replace />;
+  //   }
+    
+  //   // If user is already on verify-email page, allow them to stay
+  //   return children;
+  // }
 
   // If specific roles are required, check them
   if (allowedRoles.length > 0) {
