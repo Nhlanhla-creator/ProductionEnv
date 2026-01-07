@@ -289,112 +289,130 @@ export default function LoginRegister() {
       setIsLoading(false);
     }
   };
+const handleLogin = async () => {
+  setIsLoading(true);
+  setErrors({});
+  setAuthError("");
 
-  const handleLogin = async () => {
-    setIsLoading(true);
-    setErrors({});
-    setAuthError("");
+  if (!validateEmail(email)) {
+    setErrors({ email: "Enter your email!" });
+    setIsLoading(false);
+    return;
+  }
+  if (!password) {
+    setErrors({ password: "Enter your password!" });
+    setIsLoading(false);
+    return;
+  }
 
-    if (!validateEmail(email)) {
-      setErrors({ email: "Enter your email!" });
+  try {
+    const userCredential = await signInWithEmailAndPassword(
+      auth,
+      email,
+      password
+    );
+    const user = userCredential.user;
+
+    // IMPORTANT: Wait a moment for auth state to update
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Reload user to get fresh emailVerified status
+    await user.reload();
+    const refreshedUser = auth.currentUser;
+    
+//     if (!refreshedUser.emailVerified) {
+//       // Email not verified - CLEAR FORM and redirect to verification page
+     
+//      navigate('/verify-email', { 
+//   state: { 
+//     email: user.email,
+//     fromLogin: true 
+//   } 
+// });
+//       setIsLoading(false);
+//       return;
+//     }
+
+    // Email is verified, continue with normal login flow
+    const userDocRef = doc(db, "users", user.uid);
+    const userDocSnap = await getDoc(userDocRef);
+
+    if (!userDocSnap.exists()) {
+      setAuthError("Registration incomplete. Please complete your registration.");
+      setResumingRegistration(true);
+      setIsRegistering(true);
+      setCodeSent(true);
+
+      setRegistrationData({
+        email: user.email,
+        username: "",
+        uid: user.uid,
+        termsAccepted: false,
+        termsAcceptedDate: null,
+        roleArray: [],
+      });
+
+      setShowNDA(true);
       setIsLoading(false);
       return;
     }
-    if (!password) {
-      setErrors({ password: "Enter your password!" });
-      setIsLoading(false);
-      return;
+
+    const userData = userDocSnap.data();
+    let activeRoles = [];
+    let deletedRoles = [];
+
+    if (userData.roles && typeof userData.roles === "object") {
+      Object.keys(userData.roles).forEach((r) => {
+        const roleObj = userData.roles[r];
+        if (roleObj.deletedStatus === true) {
+          deletedRoles.push({
+            name: r,
+            deletedStatus: true,
+            deletedAt: roleObj.deletedAt,
+          });
+        } else {
+          activeRoles.push({ name: r });
+        }
+      });
     }
 
-    try {
-      const userCredential = await signInWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
-      const user = userCredential.user;
-
-      const userDocRef = doc(db, "users", user.uid);
-      const userDocSnap = await getDoc(userDocRef);
-
-      if (!userDocSnap.exists()) {
-        setAuthError(
-          "Registration incomplete. Please complete your registration."
-        );
-        setResumingRegistration(true);
-        setIsRegistering(true);
-        setCodeSent(true);
-
-        setRegistrationData({
-          email: user.email,
-          username: "",
-          uid: user.uid,
-          termsAccepted: false,
-          termsAcceptedDate: null,
-          roleArray: [],
-        });
-
-        setShowNDA(true);
-        setIsLoading(false);
-        return;
-      }
-
-      const userData = userDocSnap.data();
-      let activeRoles = [];
-      let deletedRoles = [];
-
-      if (userData.roles && typeof userData.roles === "object") {
-        Object.keys(userData.roles).forEach((r) => {
-          const roleObj = userData.roles[r];
-          if (roleObj.deletedStatus === true) {
-            deletedRoles.push({
-              name: r,
-              deletedStatus: true,
-              deletedAt: roleObj.deletedAt,
-            });
-          } else {
-            activeRoles.push({ name: r });
-          }
-        });
-      }
-
-      if (Array.isArray(userData.roleArray)) {
-        userData.roleArray.forEach((r) => {
-          if (!activeRoles.find((ar) => ar.name === r)) {
-            activeRoles.push({ name: r });
-          }
-        });
-      }
-
-      if (typeof userData.role === "string") {
-        userData.role.split(",").forEach((r) => {
-          const roleName = r.trim();
-          if (!activeRoles.find((ar) => ar.name === roleName)) {
-            activeRoles.push({ name: roleName });
-          }
-        });
-      }
-
-      const allRoles = [...activeRoles, ...deletedRoles];
-      setRoleSelectionModal({ show: true, roles: allRoles });
-
-      if (activeRoles.length === 1) {
-        setRoleSelectionModal({ show: false, roles: [] });
-        navigateToRoleDashboard(activeRoles[0].name);
-      }
-
-      if (activeRoles.length === 0 && deletedRoles.length > 0) {
-        navigate("/RetrieveAccount", {
-          state: { roleToRetrieve: deletedRoles[0].name },
-        });
-      }
-    } catch (error) {
-      console.error("Login error:", error);
-      setAuthError(getCustomErrorMessage(error));
-    } finally {
-      setIsLoading(false);
+    if (Array.isArray(userData.roleArray)) {
+      userData.roleArray.forEach((r) => {
+        if (!activeRoles.find((ar) => ar.name === r)) {
+          activeRoles.push({ name: r });
+        }
+      });
     }
-  };
+
+    if (typeof userData.role === "string") {
+      userData.role.split(",").forEach((r) => {
+        const roleName = r.trim();
+        if (!activeRoles.find((ar) => ar.name === roleName)) {
+          activeRoles.push({ name: roleName });
+        }
+      });
+    }
+
+    const allRoles = [...activeRoles, ...deletedRoles];
+    setRoleSelectionModal({ show: true, roles: allRoles });
+
+    if (activeRoles.length === 1) {
+      setRoleSelectionModal({ show: false, roles: [] });
+      navigateToRoleDashboard(activeRoles[0].name);
+    }
+
+    if (activeRoles.length === 0 && deletedRoles.length > 0) {
+      navigate("/RetrieveAccount", {
+        state: { roleToRetrieve: deletedRoles[0].name },
+      });
+    }
+  } catch (error) {
+    console.error("Login error:", error);
+    setAuthError(getCustomErrorMessage(error));
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const handleVerify = async () => {
     setCheckingVerification(true);

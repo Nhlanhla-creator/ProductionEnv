@@ -2,13 +2,12 @@
 import { useState } from "react"
 import { getFirestore, collection, addDoc, serverTimestamp } from "firebase/firestore"
 import { getAuth } from "firebase/auth"
-import { Check, ShoppingCart, Globe, Palette, Monitor, TrendingUp, Star } from "lucide-react"
+import { Check, ShoppingCart, Globe, Palette, Monitor, TrendingUp, Star, CreditCard } from "lucide-react"
 import EmbeddedCheckout from "../../components/EmbeddedCheckout"
 
-// UPDATED: Use the new one-time checkout function
 const createOneTimeCheckout = async (amount, currency, userId, toolName, toolCategory) => {
   try {
-    console.log('💳 Creating one-time checkout for growth tool:', { amount, currency, userId, toolName, toolCategory });
+    console.log('💳 Creating one-time checkout:', { amount, currency, userId, toolName, toolCategory });
     
     const response = await fetch(`${process.env.REACT_APP_API_URL}/api/payments/create-checkout`, {
       method: 'POST',
@@ -28,7 +27,7 @@ const createOneTimeCheckout = async (amount, currency, userId, toolName, toolCat
     });
 
     const data = await response.json();
-    console.log('✅ One-time checkout response:', data);
+    console.log('✅ Checkout response:', data);
 
     if (!data.success) {
       throw new Error(data.error || 'Failed to create checkout');
@@ -36,7 +35,7 @@ const createOneTimeCheckout = async (amount, currency, userId, toolName, toolCat
 
     return data;
   } catch (error) {
-    console.error('❌ One-time checkout error:', error);
+    console.error('❌ Checkout error:', error);
     throw error;
   }
 };
@@ -48,6 +47,7 @@ const LegitimacyTab = () => {
   const [showCheckout, setShowCheckout] = useState(false)
   const [checkoutId, setCheckoutId] = useState(null)
   const [paymentProcessing, setPaymentProcessing] = useState(false)
+  const [eBusinessCardUsers, setEBusinessCardUsers] = useState(1) // For eBusiness card user count
 
   const colors = {
     darkBrown: "#372C27",
@@ -61,9 +61,6 @@ const LegitimacyTab = () => {
     lightText: "#F5F2F0",
     gradientStart: "#4A352F",
     gradientEnd: "#7D5A50",
-    featureCheck: "#A67C52",
-    success: "#10b981",
-    error: "#dc2626",
   }
 
   const legitimacyCategories = {
@@ -93,6 +90,56 @@ const LegitimacyTab = () => {
         },
       ],
       bundlePrice: 4500,
+    },
+    ebusinesscard: {
+      name: "eBusiness Cards",
+      scoreArea: "Digital Networking",
+      description: "Professional digital business cards for your team - pricing based on your subscription tier.",
+      icon: <CreditCard size={24} />,
+      items: [
+        {
+          name: "Freemium Plan",
+          description: "R299 per annum for 1 user, additional R199 per extra user per annum",
+          basePrice: 299,
+          additionalUserPrice: 199,
+          includedUsers: 1,
+          deliveryTime: "24 hours",
+          tier: "freemium"
+        },
+        {
+          name: "Standard Plan",
+          description: "Free for 2 users whilst subscribed, additional R150 per extra user per annum",
+          basePrice: 0,
+          additionalUserPrice: 150,
+          includedUsers: 2,
+          deliveryTime: "24 hours",
+          tier: "standard",
+          requiresSubscription: true
+        },
+        {
+          name: "Premium Plan",
+          description: "Free for up to 5 users whilst subscribed, additional R75 per extra user per annum",
+          basePrice: 0,
+          additionalUserPrice: 75,
+          includedUsers: 5,
+          deliveryTime: "24 hours",
+          tier: "premium",
+          requiresSubscription: true
+        },
+        {
+          name: "Enterprise Plan (11-25 users)",
+          description: "R70 per user per annum. For 25+ users, contact us for custom pricing",
+          basePrice: 70,
+          additionalUserPrice: 70,
+          includedUsers: 0,
+          minUsers: 11,
+          maxUsers: 25,
+          deliveryTime: "48 hours",
+          tier: "enterprise"
+        },
+      ],
+      bundlePrice: null,
+      isEBusinessCard: true
     },
     branding: {
       name: "First Impressions",
@@ -201,7 +248,7 @@ const LegitimacyTab = () => {
       items: [
         {
           name: "Complete Legitimacy Bundle",
-          description: "All 4 packs (Digital Foundation, First Impressions, Digital Presence, and Legitimacy Accelerator) at 20% discount.",
+          description: "All 4 packs at 20% discount (excluding eBusiness Cards).",
           price: 17200,
           deliveryTime: "7-14 business days",
           isBundle: true
@@ -365,6 +412,35 @@ const LegitimacyTab = () => {
       borderRadius: "6px",
       border: `1px solid ${colors.accentGold}40`,
     },
+    userSelector: {
+      display: "flex",
+      alignItems: "center",
+      gap: "1rem",
+      marginTop: "1rem",
+      padding: "1rem",
+      background: `${colors.cream}`,
+      borderRadius: "8px",
+      border: `1px solid ${colors.lightTan}`,
+    },
+    userButton: {
+      width: "36px",
+      height: "36px",
+      borderRadius: "50%",
+      border: `2px solid ${colors.accentGold}`,
+      background: colors.offWhite,
+      color: colors.darkBrown,
+      fontSize: "1.2rem",
+      fontWeight: "bold",
+      cursor: "pointer",
+      transition: "all 0.2s ease",
+    },
+    userCount: {
+      fontSize: "1.2rem",
+      fontWeight: "600",
+      color: colors.darkBrown,
+      minWidth: "40px",
+      textAlign: "center",
+    },
     totalSection: {
       background: `linear-gradient(135deg, ${colors.gradientStart} 0%, ${colors.gradientEnd} 100%)`,
       color: colors.lightText,
@@ -426,10 +502,29 @@ const LegitimacyTab = () => {
       width: "100%",
       maxHeight: "90vh",
       overflow: "auto",
-      boxShadow: `0 24px 60px ${colors.darkBrown}33`,
+      boxShadow: `${colors.darkBrown}33 0px 24px 60px`,
       border: `1px solid ${colors.lightTan}`,
       position: "relative",
     },
+  }
+
+  // Calculate eBusiness card price based on user count
+  const calculateEBusinessCardPrice = (item, users) => {
+    const userCount = Math.max(item.minUsers || 1, users)
+    
+    if (item.tier === "enterprise") {
+      if (userCount > 25) {
+        return "Custom Pricing"
+      }
+      return item.basePrice * userCount
+    }
+    
+    if (userCount <= item.includedUsers) {
+      return item.basePrice
+    }
+    
+    const extraUsers = userCount - item.includedUsers
+    return item.basePrice + (extraUsers * item.additionalUserPrice)
   }
 
   const toggleItem = (itemIndex) => {
@@ -449,13 +544,19 @@ const LegitimacyTab = () => {
     category.items.forEach((item, itemIdx) => {
       const key = `${activeSubTab}-${itemIdx}`
       if (selectedItems[key]) {
-        selectedPrices.push(item.price)
+        if (category.isEBusinessCard) {
+          const price = calculateEBusinessCardPrice(item, eBusinessCardUsers)
+          if (typeof price === 'number') {
+            selectedPrices.push(price)
+          }
+        } else {
+          selectedPrices.push(item.price)
+        }
         selectedCount++
       }
     })
 
-    // Check if all items are selected and bundle price exists (excluding the complete bundle tab)
-    if (activeSubTab !== "complete" && selectedCount === category.items.length && category.bundlePrice) {
+    if (activeSubTab !== "complete" && activeSubTab !== "ebusinesscard" && selectedCount === category.items.length && category.bundlePrice) {
       total = category.bundlePrice
     } else {
       total = selectedPrices.reduce((sum, price) => sum + price, 0)
@@ -472,7 +573,11 @@ const LegitimacyTab = () => {
     category.items.forEach((item, itemIdx) => {
       const key = `${activeSubTab}-${itemIdx}`
       if (selectedItems[key]) {
-        selectedItemsList.push(`${category.name}: ${item.name}`)
+        if (category.isEBusinessCard) {
+          selectedItemsList.push(`${category.name}: ${item.name} (${eBusinessCardUsers} user${eBusinessCardUsers !== 1 ? 's' : ''})`)
+        } else {
+          selectedItemsList.push(`${category.name}: ${item.name}`)
+        }
       }
     })
     return selectedItemsList
@@ -531,6 +636,13 @@ const LegitimacyTab = () => {
         }
       }
 
+      // Add eBusiness card specific data
+      if (category.isEBusinessCard) {
+        purchaseData.eBusinessCard = {
+          userCount: eBusinessCardUsers
+        }
+      }
+
       await addDoc(collection(db, "growthToolsPurchases"), purchaseData)
 
       setCheckoutId(result.checkoutId)
@@ -577,6 +689,7 @@ const LegitimacyTab = () => {
       setShowCheckout(false)
       setSelectedItems({})
       setPaymentProcessing(false)
+      setEBusinessCardUsers(1) // Reset user count
     }
   }
 
@@ -594,11 +707,10 @@ const LegitimacyTab = () => {
 
   const currentCategory = legitimacyCategories[activeSubTab]
   
-  // Calculate bundle savings (excluding complete bundle tab)
-  const individualTotal = activeSubTab !== "complete" 
+  const individualTotal = activeSubTab !== "complete" && !currentCategory.isEBusinessCard
     ? currentCategory.items.reduce((sum, item) => sum + item.price, 0)
     : 0
-  const bundleSavings = currentCategory.bundlePrice && activeSubTab !== "complete" 
+  const bundleSavings = currentCategory.bundlePrice && activeSubTab !== "complete" && !currentCategory.isEBusinessCard
     ? individualTotal - currentCategory.bundlePrice 
     : 0
 
@@ -613,7 +725,6 @@ const LegitimacyTab = () => {
         </p>
       </div>
 
-      {/* Sub-tabs */}
       <div style={styles.subTabsContainer}>
         {Object.entries(legitimacyCategories).map(([key, category], index, array) => (
           <button
@@ -641,7 +752,6 @@ const LegitimacyTab = () => {
         ))}
       </div>
 
-      {/* Items Table */}
       <div style={styles.tableContainer}>
         <table style={styles.table}>
           <thead>
@@ -656,6 +766,8 @@ const LegitimacyTab = () => {
               const key = `${activeSubTab}-${itemIndex}`
               const isSelected = selectedItems[key]
               const isLastItem = itemIndex === currentCategory.items.length - 1
+              const isEBusinessCard = currentCategory.isEBusinessCard
+              const price = isEBusinessCard ? calculateEBusinessCardPrice(item, eBusinessCardUsers) : item.price
               
               return (
                 <tr
@@ -664,20 +776,25 @@ const LegitimacyTab = () => {
                     ...styles.itemRow,
                     ...(isSelected ? styles.itemRowSelected : {}),
                   }}
-                  onClick={() => toggleItem(itemIndex)}
+                  onClick={() => !isEBusinessCard && toggleItem(itemIndex)} // Only toggle if not eBusiness card row
                   onMouseEnter={(e) => {
-                    if (!isSelected) {
+                    if (!isSelected && !isEBusinessCard) {
                       e.currentTarget.style.backgroundColor = colors.cream
                     }
                   }}
                   onMouseLeave={(e) => {
-                    if (!isSelected) {
+                    if (!isSelected && !isEBusinessCard) {
                       e.currentTarget.style.backgroundColor = colors.offWhite
                     }
                   }}
                 >
                   <td style={styles.td}>
-                    <div style={styles.checkboxContainer}>
+                    <div style={styles.checkboxContainer} onClick={(e) => {
+                      if (isEBusinessCard) {
+                        e.stopPropagation()
+                        toggleItem(itemIndex)
+                      }
+                    }}>
                       <div
                         style={{
                           ...styles.checkbox,
@@ -693,9 +810,52 @@ const LegitimacyTab = () => {
                             ⚡ {item.deliveryTime}
                           </div>
                         )}
+                        {item.requiresSubscription && (
+                          <div style={{ fontSize: "0.75rem", color: colors.accentGold, marginTop: "0.25rem", fontStyle: "italic" }}>
+                            ⭐ Requires active subscription
+                          </div>
+                        )}
                       </div>
                     </div>
-                    {isLastItem && !item.isBundle && currentCategory.bundlePrice && bundleSavings > 0 && (
+                    {/* User selector for eBusiness cards */}
+                    {isEBusinessCard && isSelected && (
+                      <div style={styles.userSelector} onClick={(e) => e.stopPropagation()}>
+                        <button
+                          style={styles.userButton}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setEBusinessCardUsers(Math.max((item.minUsers || 1), eBusinessCardUsers - 1))
+                          }}
+                          disabled={eBusinessCardUsers <= (item.minUsers || 1)}
+                        >
+                          -
+                        </button>
+                        <div>
+                          <div style={styles.userCount}>{eBusinessCardUsers}</div>
+                          <div style={{ fontSize: "0.7rem", color: colors.mediumBrown }}>
+                            {eBusinessCardUsers === 1 ? "user" : "users"}
+                          </div>
+                        </div>
+                        <button
+                          style={styles.userButton}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (!item.maxUsers || eBusinessCardUsers < item.maxUsers) {
+                              setEBusinessCardUsers(eBusinessCardUsers + 1)
+                            }
+                          }}
+                          disabled={item.maxUsers && eBusinessCardUsers >= item.maxUsers}
+                        >
+                          +
+                        </button>
+                        {item.maxUsers && eBusinessCardUsers >= item.maxUsers && (
+                          <div style={{ fontSize: "0.75rem", color: colors.mediumBrown, marginLeft: "0.5rem" }}>
+                            For 25+ users, contact us for custom pricing
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {isLastItem && !item.isBundle && !isEBusinessCard && currentCategory.bundlePrice && bundleSavings > 0 && (
                       <p style={styles.bundleNote}>
                         Select all items for R{currentCategory.bundlePrice.toLocaleString()} (Save R{bundleSavings.toLocaleString()})
                       </p>
@@ -705,7 +865,14 @@ const LegitimacyTab = () => {
                     <p style={styles.itemDescription}>{item.description}</p>
                   </td>
                   <td style={{ ...styles.td, textAlign: "right" }}>
-                    <span style={styles.itemPrice}>R{item.price.toLocaleString()}</span>
+                    <span style={styles.itemPrice}>
+                      {typeof price === 'number' ? `R${price.toLocaleString()}` : price}
+                      {isEBusinessCard && typeof price === 'number' && (
+                        <div style={{ fontSize: "0.7rem", marginTop: "0.25rem", fontWeight: "normal" }}>
+                          per annum
+                        </div>
+                      )}
+                    </span>
                   </td>
                 </tr>
               )
@@ -720,7 +887,12 @@ const LegitimacyTab = () => {
           <div style={styles.totalAmount}>R{total.toLocaleString()}</div>
           <p style={{ margin: "0 0 1.5rem 0", opacity: "0.9" }}>
             {selectedCount} item{selectedCount !== 1 ? "s" : ""} selected
-            {activeSubTab !== "complete" && selectedCount === currentCategory.items.length && bundleSavings > 0 && (
+            {currentCategory.isEBusinessCard && (
+              <span style={{ display: "block", marginTop: "0.5rem", fontSize: "0.9rem" }}>
+                👥 {eBusinessCardUsers} user{eBusinessCardUsers !== 1 ? "s" : ""}
+              </span>
+            )}
+            {activeSubTab !== "complete" && !currentCategory.isEBusinessCard && selectedCount === currentCategory.items.length && bundleSavings > 0 && (
               <span style={{ display: "block", marginTop: "0.5rem", fontSize: "0.9rem" }}>
                 💰 Bundle savings: R{bundleSavings.toLocaleString()}
               </span>
@@ -765,7 +937,6 @@ const LegitimacyTab = () => {
         </div>
       )}
 
-      {/* Checkout Modal */}
       {showCheckout && checkoutId && (
         <div style={styles.checkoutModal}>
           <div style={styles.checkoutContent}>
@@ -788,6 +959,7 @@ const LegitimacyTab = () => {
               </div>
               <div style={{ fontSize: "0.9rem", color: colors.mediumBrown, fontStyle: "italic" }}>
                 {selectedCount} item{selectedCount !== 1 ? "s" : ""} selected
+                {currentCategory.isEBusinessCard && ` • ${eBusinessCardUsers} user${eBusinessCardUsers !== 1 ? 's' : ''}`}
               </div>
             </div>
 
@@ -866,12 +1038,6 @@ const LegitimacyTab = () => {
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
-        }
-        
-        @media (max-width: 768px) {
-          .subTabsContainer {
-            flex-direction: column;
-          }
         }
       `}</style>
     </div>
