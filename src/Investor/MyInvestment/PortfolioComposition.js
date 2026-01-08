@@ -1,9 +1,9 @@
 // tabs/PortfolioComposition.js
 import React, { useState, useEffect } from 'react';
 import { Pie, Doughnut } from 'react-chartjs-2';
-import { FiEye } from 'react-icons/fi';
+import { FiEye, FiGrid, FiCheck } from 'react-icons/fi';
 import { db, auth } from '../../firebaseConfig'; 
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -32,12 +32,169 @@ const styles = `
   width: 100%;
 }
 
+.controls-row {
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 10px;
+}
+
+.chart-selection-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+}
+
+.chart-selector-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #f5f5f5;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chart-selector-btn:hover {
+  background: #e0e0e0;
+}
+
+.chart-selector-btn.active {
+  background-color: #6E260E;
+  color: white;
+}
+
+.chart-selector-popup {
+  position: absolute;
+  top: 40px;
+  left: 0;
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  min-width: 300px;
+  border: 1px solid #e0e0e0;
+}
+
+.chart-selector-popup h4 {
+  margin: 0 0 15px 0;
+  color: #6E260E;
+  font-size: 16px;
+  font-weight: 600;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #ede4d8;
+}
+
+.chart-selection-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.chart-selection-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chart-selection-item:hover {
+  background: #e9ecef;
+}
+
+.chart-selection-item.selected {
+  background: #e8f5e8;
+  border: 1px solid #4CAF50;
+}
+
+.chart-selection-checkbox {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #6E260E;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chart-selection-checkbox.checked {
+  background: #6E260E;
+  color: white;
+}
+
+.chart-selection-label {
+  font-size: 13px;
+  color: #333;
+  font-weight: 500;
+}
+
+.chart-selection-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.chart-selection-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex: 1;
+}
+
+.chart-selection-btn.primary {
+  background-color: #6E260E;
+  color: white;
+}
+
+.chart-selection-btn.primary:hover {
+  background-color: #4a1a0a;
+}
+
+.chart-selection-btn.secondary {
+  background-color: #f5f5f5;
+  color: #666;
+}
+
+.chart-selection-btn.secondary:hover {
+  background-color: #e0e0e0;
+}
+
 .composition-charts-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
   gap: 20px;
   padding: 0 10px;
 }
+
+.composition-charts-dynamic {
+  display: grid;
+  gap: 20px;
+  padding: 0 10px;
+}
+
+/* Dynamic grid classes */
+.composition-charts-1 { grid-template-columns: 1fr; }
+.composition-charts-2 { grid-template-columns: repeat(2, 1fr); }
+.composition-charts-3 { grid-template-columns: repeat(3, 1fr); }
+.composition-charts-4 { grid-template-columns: repeat(2, 1fr); }
+.composition-charts-5 { grid-template-columns: repeat(2, 1fr); }
 
 .chart-container {
   background: white;
@@ -149,6 +306,16 @@ const styles = `
 .empty-state small {
   font-size: 12px;
   color: #999;
+}
+
+.no-charts-message {
+  text-align: center;
+  padding: 60px 20px;
+  color: #666;
+  font-size: 16px;
+  background: #f8f9fa;
+  border-radius: '8px';
+  margin: 20px 10px;
 }
 
 /* Popup Styles */
@@ -264,8 +431,21 @@ const styles = `
 }
 
 /* Responsive Design */
+@media (max-width: 1200px) {
+  .composition-charts-2,
+  .composition-charts-3,
+  .composition-charts-4,
+  .composition-charts-5 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 @media (max-width: 992px) {
-  .composition-charts-grid {
+  .composition-charts-grid,
+  .composition-charts-2,
+  .composition-charts-3,
+  .composition-charts-4,
+  .composition-charts-5 {
     grid-template-columns: 1fr;
   }
   
@@ -279,6 +459,29 @@ const styles = `
     height: 350px;
     padding: 15px;
   }
+  
+  .controls-row {
+    flex-direction: column;
+    gap: 15px;
+    align-items: stretch;
+  }
+  
+  .chart-selection-controls {
+    justify-content: space-between;
+  }
+  
+  .chart-selector-popup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    max-width: 400px;
+  }
+  
+  .chart-selection-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 576px) {
@@ -287,7 +490,9 @@ const styles = `
     height: 320px;
   }
   
-  .composition-charts-grid {
+  .controls-row,
+  .composition-charts-grid,
+  .composition-charts-dynamic {
     padding: 0 5px;
   }
 }
@@ -373,6 +578,40 @@ const industrySectorMapping = {
   
   // Other
   'Other': 'Other'
+};
+
+// Save user preferences to Firebase
+const saveUserChartPreferences = async (userId, preferences) => {
+  try {
+    const userPrefsRef = doc(db, "userPreferences", userId);
+    await setDoc(userPrefsRef, {
+      portfolioCompositionPreferences: preferences,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+    console.log('✅ Portfolio composition chart preferences saved to Firebase');
+  } catch (error) {
+    console.error('❌ Error saving portfolio composition chart preferences:', error);
+  }
+};
+
+// Load user preferences from Firebase
+const loadUserChartPreferences = async (userId) => {
+  try {
+    const userPrefsRef = doc(db, "userPreferences", userId);
+    const userPrefsSnap = await getDoc(userPrefsRef);
+    
+    if (userPrefsSnap.exists()) {
+      const preferences = userPrefsSnap.data().portfolioCompositionPreferences;
+      console.log('✅ Portfolio composition chart preferences loaded from Firebase:', preferences);
+      return preferences;
+    } else {
+      console.log('⚠️ No portfolio composition chart preferences found, using defaults');
+      return null;
+    }
+  } catch (error) {
+    console.error('❌ Error loading portfolio composition chart preferences:', error);
+    return null;
+  }
 };
 
 // UPDATED: Fetch Investor's Successful Deals - EXACT SAME LOGIC AS MyCohorts
@@ -991,6 +1230,15 @@ const getFallbackDataBasedOnUser = () => {
 };
 
 const PortfolioComposition = ({ openPopup }) => {
+  const [showChartSelector, setShowChartSelector] = useState(false);
+  const [selectedCharts, setSelectedCharts] = useState({
+    lifecycle: true,
+    industry: true,
+    geography: true,
+    funding: true,
+    demographic: true
+  });
+  
   const [compositionData, setCompositionData] = useState({
     lifecycle: { 'Startup': 0, 'Growth': 0, 'Scaling': 0, 'Turnaround': 0, 'Mature': 0 },
     industry: { 
@@ -1012,6 +1260,39 @@ const PortfolioComposition = ({ openPopup }) => {
     totalSMEs: 0,
     totalApplications: 0
   });
+
+  // Load chart preferences on component mount
+  useEffect(() => {
+    const loadPreferences = async () => {
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        const savedPreferences = await loadUserChartPreferences(currentUser.uid);
+        if (savedPreferences) {
+          setSelectedCharts(savedPreferences.selectedCharts || selectedCharts);
+        }
+      }
+    };
+    
+    loadPreferences();
+  }, []);
+
+  // Save preferences when they change
+  useEffect(() => {
+    const savePreferences = async () => {
+      const currentUser = auth.currentUser;
+      if (currentUser && !compositionData.loading) {
+        const preferences = {
+          selectedCharts,
+          updatedAt: new Date().toISOString()
+        };
+        await saveUserChartPreferences(currentUser.uid, preferences);
+      }
+    };
+
+    // Debounce the save to prevent too many writes
+    const timeoutId = setTimeout(savePreferences, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [selectedCharts]);
 
   // Fetch composition data when component mounts
   useEffect(() => {
@@ -1114,6 +1395,77 @@ const PortfolioComposition = ({ openPopup }) => {
     
     fetchCompositionData();
   }, []);
+
+  // Chart Selection Component
+  const ChartSelectionPopup = () => {
+    const chartOptions = [
+      { id: 'lifecycle', label: 'Lifecycle Stage' },
+      { id: 'industry', label: 'Industry / Sector' },
+      { id: 'geography', label: 'Geography' },
+      { id: 'funding', label: 'Funding Instrument' },
+      { id: 'demographic', label: 'Demographic / Ownership' }
+    ];
+
+    const handleToggleChart = (chartId) => {
+      setSelectedCharts(prev => ({
+        ...prev,
+        [chartId]: !prev[chartId]
+      }));
+    };
+
+    const handleSelectAll = () => {
+      const allSelected = {};
+      chartOptions.forEach(option => {
+        allSelected[option.id] = true;
+      });
+      setSelectedCharts(allSelected);
+    };
+
+    const handleDeselectAll = () => {
+      const noneSelected = {};
+      chartOptions.forEach(option => {
+        noneSelected[option.id] = false;
+      });
+      setSelectedCharts(noneSelected);
+    };
+
+    const handleSaveSelection = () => {
+      setShowChartSelector(false);
+    };
+
+    const selectedCount = Object.values(selectedCharts).filter(Boolean).length;
+
+    return (
+      <div className="chart-selector-popup">
+        <h4>Select Composition Charts ({selectedCount} selected)</h4>
+        <div className="chart-selection-grid">
+          {chartOptions.map(option => (
+            <div
+              key={option.id}
+              className={`chart-selection-item ${selectedCharts[option.id] ? 'selected' : ''}`}
+              onClick={() => handleToggleChart(option.id)}
+            >
+              <div className={`chart-selection-checkbox ${selectedCharts[option.id] ? 'checked' : ''}`}>
+                {selectedCharts[option.id] && <FiCheck size={12} />}
+              </div>
+              <span className="chart-selection-label">{option.label}</span>
+            </div>
+          ))}
+        </div>
+        <div className="chart-selection-actions">
+          <button className="chart-selection-btn secondary" onClick={handleDeselectAll}>
+            Deselect All
+          </button>
+          <button className="chart-selection-btn secondary" onClick={handleSelectAll}>
+            Select All
+          </button>
+          <button className="chart-selection-btn primary" onClick={handleSaveSelection}>
+            Apply
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   // Data generation functions for pie charts
   const generatePieData = (labels, data, startIndex = 0) => ({
@@ -1292,49 +1644,134 @@ const PortfolioComposition = ({ openPopup }) => {
     'Limpopo', 'Mpumalanga', 'North West', 'Free State', 'Northern Cape'
   ];
 
-  return (
-    <div className="portfolio-composition">
-      <div className="composition-charts-grid">
+  // Get selected charts in the correct order
+  const selectedChartComponents = [];
+  
+  // Add lifecycle chart if selected
+  if (selectedCharts.lifecycle) {
+    selectedChartComponents.push({
+      id: 'lifecycle',
+      component: (
         <PieChartWithNumbers
+          key="lifecycle"
           title="By Lifecycle Stage - Successful Deals"
           labels={['Startup', 'Growth', 'Scaling', 'Turnaround', 'Mature']}
           data={lifecyclePercentages()}
           chartId="lifecycle-stage"
           startIndex={0}
         />
+      )
+    });
+  }
 
+  // Add industry chart if selected
+  if (selectedCharts.industry) {
+    selectedChartComponents.push({
+      id: 'industry',
+      component: (
         <PieChartWithNumbers
+          key="industry"
           title="By Industry / Sector - Successful Deals"
           labels={['Business, Finance & Consulting', 'Technology & Engineering', 'Logistics, Manufacturing & Industry', 'Media, Creative & Entertainment', 'Health, Environment & Community', 'Other']}
           data={industryPercentages()}
           chartId="industry-sector"
           startIndex={5}
         />
+      )
+    });
+  }
 
+  // Add geography chart if selected
+  if (selectedCharts.geography) {
+    selectedChartComponents.push({
+      id: 'geography',
+      component: (
         <PieChartWithNumbers
+          key="geography"
           title="By Geography - Successful Deals"
           labels={allProvinces}
           data={geographicPercentages()}
           chartId="geography"
           startIndex={11}
         />
+      )
+    });
+  }
 
+  // Add funding chart if selected
+  if (selectedCharts.funding) {
+    selectedChartComponents.push({
+      id: 'funding',
+      component: (
         <PieChartWithNumbers
+          key="funding"
           title="By Funding Instrument - Successful Deals"
           labels={['Equity', 'Debt', 'Grant', 'Other']}
           data={fundingInstrumentPercentages()}
           chartId="funding-instrument"
           startIndex={20}
         />
+      )
+    });
+  }
 
+  // Add demographic chart if selected
+  if (selectedCharts.demographic) {
+    selectedChartComponents.push({
+      id: 'demographic',
+      component: (
         <PieChartWithNumbers
+          key="demographic"
           title="By Demographic / Ownership - Successful Deals"
           labels={['Women-led', 'Youth-led', 'Black-owned', 'Other']}
           data={demographicPercentages()}
           chartId="demographic-ownership"
           startIndex={24}
         />
+      )
+    });
+  }
+
+  // Determine grid class based on number of selected charts
+  const getGridClass = (count) => {
+    if (count === 0) return '';
+    if (count === 1) return 'composition-charts-1';
+    if (count === 2) return 'composition-charts-2';
+    if (count === 3) return 'composition-charts-3';
+    if (count === 4) return 'composition-charts-4';
+    return 'composition-charts-5';
+  };
+
+  const selectedCount = selectedChartComponents.length;
+  const gridClass = getGridClass(selectedCount);
+
+  return (
+    <div className="portfolio-composition">
+      <div className="controls-row">
+        <div className="chart-selection-controls">
+          <div style={{ position: 'relative' }}>
+            <button 
+              className={`chart-selector-btn ${showChartSelector ? 'active' : ''}`}
+              onClick={() => setShowChartSelector(!showChartSelector)}
+              title="Select charts to display"
+            >
+              <FiGrid />
+              Select Charts ({Object.values(selectedCharts).filter(Boolean).length} selected)
+            </button>
+            {showChartSelector && <ChartSelectionPopup />}
+          </div>
+        </div>
       </div>
+      
+      {selectedCount === 0 ? (
+        <div className="no-charts-message">
+          <p>No charts selected. Please select charts to display using the "Select Charts" button above.</p>
+        </div>
+      ) : (
+        <div className={`composition-charts-dynamic ${gridClass}`}>
+          {selectedChartComponents.map(chart => chart.component)}
+        </div>
+      )}
     </div>
   );
 };

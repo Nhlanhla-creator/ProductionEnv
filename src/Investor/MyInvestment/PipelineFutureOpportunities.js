@@ -1,7 +1,7 @@
 // tabs/PipelineFutureOpportunities.js
 import React, { useState, useEffect } from 'react';
 import { Bar, Doughnut } from 'react-chartjs-2';
-import { FiEye } from 'react-icons/fi';
+import { FiEye, FiGrid, FiCheck } from 'react-icons/fi';
 import { Loader } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -13,7 +13,7 @@ import {
   Tooltip,
   Legend
 } from 'chart.js';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebaseConfig';
 
 // Register ChartJS components
@@ -45,6 +45,150 @@ const styles = `
 .loading-text {
   color: #7d5a50;
   font-size: 16px;
+}
+
+.controls-row {
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 10px;
+}
+
+.chart-selection-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+}
+
+.chart-selector-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #f5f5f5;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chart-selector-btn:hover {
+  background: #e0e0e0;
+}
+
+.chart-selector-btn.active {
+  background-color: #7d5a36;
+  color: white;
+}
+
+.chart-selector-popup {
+  position: absolute;
+  top: 40px;
+  left: 0;
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  min-width: 300px;
+  border: 1px solid #e0e0e0;
+}
+
+.chart-selector-popup h4 {
+  margin: 0 0 15px 0;
+  color: #5e3f26;
+  font-size: 16px;
+  font-weight: 600;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #ede4d8;
+}
+
+.chart-selection-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.chart-selection-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chart-selection-item:hover {
+  background: #e9ecef;
+}
+
+.chart-selection-item.selected {
+  background: #e8f5e8;
+  border: 1px solid #4CAF50;
+}
+
+.chart-selection-checkbox {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #7d5a36;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chart-selection-checkbox.checked {
+  background: #7d5a36;
+  color: white;
+}
+
+.chart-selection-label {
+  font-size: 13px;
+  color: #333;
+  font-weight: 500;
+}
+
+.chart-selection-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.chart-selection-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex: 1;
+}
+
+.chart-selection-btn.primary {
+  background-color: #7d5a36;
+  color: white;
+}
+
+.chart-selection-btn.primary:hover {
+  background-color: #5e3f26;
+}
+
+.chart-selection-btn.secondary {
+  background-color: #f5f5f5;
+  color: #666;
+}
+
+.chart-selection-btn.secondary:hover {
+  background-color: #e0e0e0;
 }
 
 .charts-grid-4x4 {
@@ -418,6 +562,25 @@ const styles = `
   .chart-container {
     height: 380px;
   }
+  
+  .controls-row {
+    flex-direction: column;
+    gap: 15px;
+    align-items: stretch;
+  }
+  
+  .chart-selection-controls {
+    justify-content: space-between;
+  }
+  
+  .chart-selector-popup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    max-width: 400px;
+  }
 }
 
 @media (max-width: 768px) {
@@ -457,6 +620,10 @@ const styles = `
   .funnel-value {
     font-size: 12px;
   }
+  
+  .chart-selection-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @keyframes spin {
@@ -493,6 +660,40 @@ const staticPieOptions = {
   plugins: { legend: { position: 'bottom' } }
 };
 
+// Save user preferences to Firebase
+const saveUserChartPreferences = async (userId, preferences) => {
+  try {
+    const userPrefsRef = doc(db, "userPreferences", userId);
+    await setDoc(userPrefsRef, {
+      pipelineChartPreferences: preferences,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+    console.log('✅ Pipeline chart preferences saved to Firebase');
+  } catch (error) {
+    console.error('❌ Error saving pipeline chart preferences:', error);
+  }
+};
+
+// Load user preferences from Firebase
+const loadUserChartPreferences = async (userId) => {
+  try {
+    const userPrefsRef = doc(db, "userPreferences", userId);
+    const userPrefsSnap = await getDoc(userPrefsRef);
+    
+    if (userPrefsSnap.exists()) {
+      const preferences = userPrefsSnap.data().pipelineChartPreferences;
+      console.log('✅ Pipeline chart preferences loaded from Firebase:', preferences);
+      return preferences;
+    } else {
+      console.log('⚠️ No pipeline chart preferences found, using defaults');
+      return null;
+    }
+  } catch (error) {
+    console.error('❌ Error loading pipeline chart preferences:', error);
+    return null;
+  }
+};
+
 const PipelineFutureOpportunities = ({ openPopup }) => {
   const [loading, setLoading] = useState(true);
   const [cohorts, setCohorts] = useState([]);
@@ -503,6 +704,48 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
     dataConfidence: { labels: [], values: [] },
     coInvestOpportunities: []
   });
+  
+  const [showChartSelector, setShowChartSelector] = useState(false);
+  const [selectedCharts, setSelectedCharts] = useState({
+    pipelineAging: true,
+    pipelineDistribution: true,
+    capitalDeployment: true,
+    dataConfidence: true,
+    activeOpportunities: true
+  });
+
+  // Load chart preferences on component mount
+  useEffect(() => {
+    const loadPreferences = async () => {
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        const savedPreferences = await loadUserChartPreferences(currentUser.uid);
+        if (savedPreferences) {
+          setSelectedCharts(savedPreferences.selectedCharts || selectedCharts);
+        }
+      }
+    };
+    
+    loadPreferences();
+  }, []);
+
+  // Save preferences when they change
+  useEffect(() => {
+    const savePreferences = async () => {
+      const currentUser = auth.currentUser;
+      if (currentUser && !loading) {
+        const preferences = {
+          selectedCharts,
+          updatedAt: new Date().toISOString()
+        };
+        await saveUserChartPreferences(currentUser.uid, preferences);
+      }
+    };
+
+    // Debounce the save to prevent too many writes
+    const timeoutId = setTimeout(savePreferences, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [selectedCharts, loading]);
 
   useEffect(() => {
     fetchInvestorData();
@@ -801,6 +1044,77 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
     return `R${numAmount}`;
   };
 
+  // Chart Selection Component
+  const ChartSelectionPopup = () => {
+    const chartOptions = [
+      { id: 'pipelineAging', label: 'Pipeline Stage Aging' },
+      { id: 'pipelineDistribution', label: 'Pipeline Distribution' },
+      { id: 'capitalDeployment', label: 'Capital Deployment' },
+      { id: 'dataConfidence', label: 'Data Confidence Meter' },
+      { id: 'activeOpportunities', label: 'Active Opportunities' }
+    ];
+
+    const handleToggleChart = (chartId) => {
+      setSelectedCharts(prev => ({
+        ...prev,
+        [chartId]: !prev[chartId]
+      }));
+    };
+
+    const handleSelectAll = () => {
+      const allSelected = {};
+      chartOptions.forEach(option => {
+        allSelected[option.id] = true;
+      });
+      setSelectedCharts(allSelected);
+    };
+
+    const handleDeselectAll = () => {
+      const noneSelected = {};
+      chartOptions.forEach(option => {
+        noneSelected[option.id] = false;
+      });
+      setSelectedCharts(noneSelected);
+    };
+
+    const handleSaveSelection = () => {
+      setShowChartSelector(false);
+    };
+
+    const selectedCount = Object.values(selectedCharts).filter(Boolean).length;
+
+    return (
+      <div className="chart-selector-popup">
+        <h4>Select Charts to Display ({selectedCount} selected)</h4>
+        <div className="chart-selection-grid">
+          {chartOptions.map(option => (
+            <div
+              key={option.id}
+              className={`chart-selection-item ${selectedCharts[option.id] ? 'selected' : ''}`}
+              onClick={() => handleToggleChart(option.id)}
+            >
+              <div className={`chart-selection-checkbox ${selectedCharts[option.id] ? 'checked' : ''}`}>
+                {selectedCharts[option.id] && <FiCheck size={12} />}
+              </div>
+              <span className="chart-selection-label">{option.label}</span>
+            </div>
+          ))}
+        </div>
+        <div className="chart-selection-actions">
+          <button className="chart-selection-btn secondary" onClick={handleDeselectAll}>
+            Deselect All
+          </button>
+          <button className="chart-selection-btn secondary" onClick={handleSelectAll}>
+            Select All
+          </button>
+          <button className="chart-selection-btn primary" onClick={handleSaveSelection}>
+            Apply
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   // Data generation functions
   const generateBarData = (labels, data, label, colorIndex) => ({
     labels,
@@ -1022,135 +1336,227 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
     );
   }
 
-  return (
-    <div className="pipeline-opportunities">
-      {/* TOP ROW - 4 charts */}
-      <div className="charts-grid-4x4">
-        <div className="top-row">
-          <BarChartWithTitle
-            data={generateBarData(
-              pipelineData.agingData.labels,
-              pipelineData.agingData.values,
-              '# of Deals',
-              0
-            )}
-            title="Pipeline Stage Aging"
-            chartTitle="Active deals by time in current stage"
-            chartId="pipeline-aging"
-          />
+  // Get selected charts
+  const selectedChartComponents = [];
+  
+  // Add Pipeline Stage Aging chart if selected
+  if (selectedCharts.pipelineAging) {
+    selectedChartComponents.push({
+      id: 'pipelineAging',
+      component: (
+        <BarChartWithTitle
+          key="pipelineAging"
+          data={generateBarData(
+            pipelineData.agingData.labels,
+            pipelineData.agingData.values,
+            '# of Deals',
+            0
+          )}
+          title="Pipeline Stage Aging"
+          chartTitle="Active deals by time in current stage"
+          chartId="pipeline-aging"
+        />
+      )
+    });
+  }
 
-          <FunnelChart 
-            stages={pipelineData.conversionData.stages}
-            values={pipelineData.conversionData.values}
-            colors={[brownShades[0], brownShades[1], brownShades[2], brownShades[3]]}
-            title="Current Pipeline Distribution"
-          />
+  // Add Pipeline Distribution chart if selected
+  if (selectedCharts.pipelineDistribution) {
+    selectedChartComponents.push({
+      id: 'pipelineDistribution',
+      component: (
+        <FunnelChart 
+          key="pipelineDistribution"
+          stages={pipelineData.conversionData.stages}
+          values={pipelineData.conversionData.values}
+          colors={[brownShades[0], brownShades[1], brownShades[2], brownShades[3]]}
+          title="Current Pipeline Distribution"
+        />
+      )
+    });
+  }
 
-          <BarChartWithTitle
-            data={generateStackedBarData(
-              pipelineData.capitalRequirement.quarters,
-              [
-                { label: 'Debt', values: pipelineData.capitalRequirement.debt },
-                { label: 'Equity', values: pipelineData.capitalRequirement.equity },
-                { label: 'Grants', values: pipelineData.capitalRequirement.grants }
-              ]
-            )}
-            title="Forecasted Capital Deployment"
-            chartTitle="Capital required for active pipeline (R millions)"
-            chartId="capital-requirement"
-          />
+  // Add Capital Deployment chart if selected
+  if (selectedCharts.capitalDeployment) {
+    selectedChartComponents.push({
+      id: 'capitalDeployment',
+      component: (
+        <BarChartWithTitle
+          key="capitalDeployment"
+          data={generateStackedBarData(
+            pipelineData.capitalRequirement.quarters,
+            [
+              { label: 'Debt', values: pipelineData.capitalRequirement.debt },
+              { label: 'Equity', values: pipelineData.capitalRequirement.equity },
+              { label: 'Grants', values: pipelineData.capitalRequirement.grants }
+            ]
+          )}
+          title="Forecasted Capital Deployment"
+          chartTitle="Capital required for active pipeline (R millions)"
+          chartId="capital-requirement"
+        />
+      )
+    });
+  }
 
-          <PieChartWithNumbers
-            title="Data Confidence Meter"
-            labels={pipelineData.dataConfidence.labels}
-            data={pipelineData.dataConfidence.values}
-            chartId="data-confidence"
-          />
-        </div>
+  // Add Data Confidence Meter chart if selected
+  if (selectedCharts.dataConfidence) {
+    selectedChartComponents.push({
+      id: 'dataConfidence',
+      component: (
+        <PieChartWithNumbers
+          key="dataConfidence"
+          title="Data Confidence Meter"
+          labels={pipelineData.dataConfidence.labels}
+          data={pipelineData.dataConfidence.values}
+          chartId="data-confidence"
+        />
+      )
+    });
+  }
 
-        {/* BOTTOM - Full width table */}
-        <div className="bottom-full">
-          <div className="chart-container full-width">
-            <div className="chart-header">
-              <h3 className="chart-title">Active Pipeline Opportunities</h3>
-              <button 
-                className="breakdown-icon-btn"
-                onClick={() => openPopup(
-                  <div className="popup-content">
-                    <h3>Active Pipeline Opportunities</h3>
-                    <div className="popup-description">
-                      Your current active deals that haven't reached completion
-                    </div>
-                    <div className="table-container-popup">
-                      <table className="data-table">
-                        <thead>
-                          <tr>
-                            <th>SME</th>
-                            <th>Current Stage</th>
-                            <th>Investment Ask</th>
-                            <th>Deal Score</th>
-                            <th>Time in Stage</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {pipelineData.coInvestOpportunities.map((opp, idx) => (
-                            <tr key={idx}>
-                              <td>{opp.smeName}</td>
-                              <td>{opp.stage}</td>
-                              <td>{opp.ask}</td>
-                              <td>{opp.score}</td>
-                              <td>{opp.daysInStage}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+  // Add Active Opportunities table if selected
+  if (selectedCharts.activeOpportunities) {
+    selectedChartComponents.push({
+      id: 'activeOpportunities',
+      component: (
+        <div key="activeOpportunities" className="chart-container full-width">
+          <div className="chart-header">
+            <h3 className="chart-title">Active Pipeline Opportunities</h3>
+            <button 
+              className="breakdown-icon-btn"
+              onClick={() => openPopup(
+                <div className="popup-content">
+                  <h3>Active Pipeline Opportunities</h3>
+                  <div className="popup-description">
+                    Your current active deals that haven't reached completion
                   </div>
-                )}
-                title="View details"
-              >
-                <FiEye />
-              </button>
-            </div>
-            <div className="table-container">
-              {pipelineData.coInvestOpportunities.length > 0 ? (
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>SME</th>
-                      <th>Current Stage</th>
-                      <th>Investment Ask</th>
-                      <th>Deal Score</th>
-                      <th>Time in Stage</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pipelineData.coInvestOpportunities.map((opp, idx) => (
-                      <tr key={idx}>
-                        <td>{opp.smeName}</td>
-                        <td>{opp.stage}</td>
-                        <td>{opp.ask}</td>
-                        <td>{opp.score}</td>
-                        <td>{opp.daysInStage}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center', 
-                  height: '100%',
-                  color: '#7d5a50',
-                  fontSize: '14px'
-                }}>
-                  No active pipeline opportunities found
+                  <div className="table-container-popup">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>SME</th>
+                          <th>Current Stage</th>
+                          <th>Investment Ask</th>
+                          <th>Deal Score</th>
+                          <th>Time in Stage</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pipelineData.coInvestOpportunities.map((opp, idx) => (
+                          <tr key={idx}>
+                            <td>{opp.smeName}</td>
+                            <td>{opp.stage}</td>
+                            <td>{opp.ask}</td>
+                            <td>{opp.score}</td>
+                            <td>{opp.daysInStage}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
-            </div>
+              title="View details"
+            >
+              <FiEye />
+            </button>
+          </div>
+          <div className="table-container">
+            {pipelineData.coInvestOpportunities.length > 0 ? (
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>SME</th>
+                    <th>Current Stage</th>
+                    <th>Investment Ask</th>
+                    <th>Deal Score</th>
+                    <th>Time in Stage</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pipelineData.coInvestOpportunities.map((opp, idx) => (
+                    <tr key={idx}>
+                      <td>{opp.smeName}</td>
+                      <td>{opp.stage}</td>
+                      <td>{opp.ask}</td>
+                      <td>{opp.score}</td>
+                      <td>{opp.daysInStage}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                height: '100%',
+                color: '#7d5a50',
+                fontSize: '14px'
+              }}>
+                No active pipeline opportunities found
+              </div>
+            )}
           </div>
         </div>
+      )
+    });
+  }
+
+  // Split charts into top row (max 4) and bottom full width
+  const topRowCharts = selectedChartComponents
+    .filter(chart => chart.id !== 'activeOpportunities')
+    .slice(0, 4);
+  const bottomFullChart = selectedChartComponents
+    .find(chart => chart.id === 'activeOpportunities');
+
+  return (
+    <div className="pipeline-opportunities">
+      {/* Chart Selection Controls */}
+      <div className="controls-row">
+        <div className="chart-selection-controls">
+          <div style={{ position: 'relative' }}>
+            <button 
+              className={`chart-selector-btn ${showChartSelector ? 'active' : ''}`}
+              onClick={() => setShowChartSelector(!showChartSelector)}
+              title="Select charts to display"
+            >
+              <FiGrid />
+              Select Charts ({Object.values(selectedCharts).filter(Boolean).length} selected)
+            </button>
+            {showChartSelector && <ChartSelectionPopup />}
+          </div>
+        </div>
+      </div>
+      
+      {/* Charts Grid */}
+      <div className="charts-grid-4x4">
+        {topRowCharts.length > 0 && (
+          <div className="top-row">
+            {topRowCharts.map(chart => chart.component)}
+          </div>
+        )}
+        
+        {bottomFullChart && (
+          <div className="bottom-full">
+            {bottomFullChart.component}
+          </div>
+        )}
+        
+        {selectedChartComponents.length === 0 && (
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            height: '200px',
+            color: '#666',
+            fontSize: '16px',
+            textAlign: 'center'
+          }}>
+            No charts selected. Click "Select Charts" to choose which charts to display.
+          </div>
+        )}
       </div>
     </div>
   );
