@@ -1,12 +1,12 @@
 import Header from "../../components/profile/header/Header"
-import Notifications from "../../Notifications"
+import CatalystNotifications from "../Notifications"
 import { useHeaderProfile } from "../../hooks/useHeaderProfile"
 import { useMessages } from "../../hooks/useMessages"
 import { useRoles } from "../../hooks/useRoles"
 import { headerProfiles, profileRoleOptions } from "../../config/headerConfig"
 
-function AdvisorHeader() {
-  const config = headerProfiles.advisor
+function CatalystHeader() {
+  const config = headerProfiles.catalyst
 
   const { user, userName, profileLogo, profileData } = useHeaderProfile(
     config.collection,
@@ -28,13 +28,13 @@ function AdvisorHeader() {
       portalName={config.portalName}
       availableRoles={availableRoles}
       selectedRole={selectedRole}
-      roleOptions={profileRoleOptions.advisor}
+      roleOptions={profileRoleOptions.catalyst}
       onAddRole={addRole}
-      NotificationComponent={Notifications}
+      NotificationComponent={CatalystNotifications}
       userCollection={config.collection}
       logoField={config.logoField}
     />
   )
 }
 
-export default AdvisorHeader
+export default CatalystHeader
