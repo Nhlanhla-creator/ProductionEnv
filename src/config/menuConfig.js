@@ -97,6 +97,18 @@ export const catalystMenuItems = [
     route: "/support-insights",
   },
   {
+    id: "cohorts",
+    label: "My Cohorts",
+    icon: <Users size={18} />,
+    route: "/catalyst/cohorts",
+  },
+  {
+    id: "investments",
+    label: "My Investments",
+    icon: <PieChart size={18} />,
+    route: "/catalyst/investments",
+  },
+  {
     id: "matches",
     label: "My Matches",
     icon: <HeartHandshake size={18} />,
