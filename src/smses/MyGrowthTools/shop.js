@@ -1,13 +1,15 @@
 "use client"
 import { useState, useEffect } from "react"
-import { Package, Target, Settings, Lock, Megaphone, TrendingUp, Brain, Users, ChevronDown } from "lucide-react"
+import { Package, Target, Settings, Lock, Megaphone, TrendingUp, Brain, Users, ChevronDown, ShoppingBag, Wrench } from "lucide-react"
 import ComplianceTab from "./compliance-tab"
 import LegitimacyTab from "./legitimacy-tab"
 import FundabilityTab from "./fundability-tab"
 import GovernanceTab from "./governance-tab"
+import MyToolsPage from "./my-tools" // Import your existing MyToolsPage
 
 const ShopToolsPage = () => {
   const [activeTab, setActiveTab] = useState("compliance")
+  const [activeView, setActiveView] = useState("my-tools") // New state for "My Tools" vs "My Purchases"
   const [paystackLoaded, setPaystackLoaded] = useState(false)
   const [isPaymentLoading, setIsPaymentLoading] = useState(false)
   const [showScoreDropdown, setShowScoreDropdown] = useState(false)
@@ -99,12 +101,10 @@ const ShopToolsPage = () => {
   }, [])
 
   const getContentStyles = () => ({
-    // marginLeft: isSidebarCollapsed ? "80px" : "250px",
     padding: "0 1rem 0 0.5rem",
     fontFamily: "'Inter', 'Segoe UI', 'Roboto', sans-serif",
     background: colors.offWhite,
     minHeight: "100vh",
-    // width: isSidebarCollapsed ? "calc(100vw - 110px)" : "calc(100vw - 280px)",
     maxWidth: "none",
     transition: "all 0.3s ease",
   })
@@ -112,6 +112,38 @@ const ShopToolsPage = () => {
   // Inline styles object with new dark brown theme
   const styles = {
     container: getContentStyles(),
+    viewTabsContainer: {
+      display: "flex",
+      justifyContent: "flex-end",
+      marginBottom: "1.5rem",
+      gap: "0.5rem",
+      background: colors.darkBrown,
+      borderRadius: "0.75rem",
+      padding: "0.5rem",
+      maxWidth: "fit-content",
+      marginLeft: "auto",
+      boxShadow: "0 4px 12px rgba(0, 0, 0, 0.2)",
+    },
+    viewTab: {
+      display: "flex",
+      alignItems: "center",
+      gap: "0.6rem",
+      padding: "0.75rem 1.5rem",
+      background: colors.mediumBrown,
+      color: colors.offWhite,
+      border: "none",
+      cursor: "pointer",
+      fontWeight: "600",
+      fontSize: "1rem",
+      transition: "all 0.3s ease",
+      borderRadius: "0.5rem",
+      whiteSpace: "nowrap",
+    },
+    viewTabActive: {
+      background: colors.offWhite,
+      color: colors.darkBrown,
+      boxShadow: "0 2px 8px rgba(0, 0, 0, 0.2)",
+    },
     betaNotice: {
       background: "linear-gradient(135deg, #FFF3CD 0%, #FFF8E1 100%)",
       color: "#856404",
@@ -410,6 +442,15 @@ const ShopToolsPage = () => {
       justifyContent: "center",
       flexWrap: "wrap",
     },
+    // Wrapper for MyToolsPage to make it fit properly
+    purchasesWrapper: {
+      background: colors.offWhite,
+      padding: "0",
+      margin: "0",
+      width: "100%",
+      minHeight: "calc(100vh - 100px)",
+      overflow: "visible",
+    },
   }
 
   const publicKey = "pk_test_e99e9d341c8fa3182737cd26c5838dece90e3ed9"
@@ -443,10 +484,6 @@ const ShopToolsPage = () => {
     })
   }
 
-  const handleMyPurchases = () => {
-    window.location.href = "/growth/my-tools"
-  }
-
   const handleBrowseAll = () => {
     setShowScoreDropdown(!showScoreDropdown)
   }
@@ -471,373 +508,431 @@ const ShopToolsPage = () => {
 
   return (
     <div style={styles.container}>
-      {/* Beta Testing Notice */}
-      <div style={styles.betaNotice}>
-        <Settings className="w-5 h-5" style={{ color: "#856404" }} />
-        <span>
-          <strong>Beta Testing Phase:</strong> This Growth Tools Shop is currently unavailable in beta testing. Features
-          and pricing may change before final release.
-        </span>
+      {/* View Tabs - Top Right */}
+      <div style={styles.viewTabsContainer}>
+        <button
+          onClick={() => setActiveView("my-tools")}
+          style={{
+            ...styles.viewTab,
+            ...(activeView === "my-tools" ? styles.viewTabActive : {}),
+          }}
+          onMouseEnter={(e) => {
+            if (activeView !== "my-tools") {
+              e.currentTarget.style.background = colors.lightBrown
+              e.currentTarget.style.color = colors.darkText
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (activeView !== "my-tools") {
+              e.currentTarget.style.background = colors.mediumBrown
+              e.currentTarget.style.color = colors.offWhite
+            }
+          }}
+        >
+          <Wrench className="w-5 h-5" />
+          My Tools & Templates
+        </button>
+        <button
+          onClick={() => setActiveView("my-purchases")}
+          style={{
+            ...styles.viewTab,
+            ...(activeView === "my-purchases" ? styles.viewTabActive : {}),
+          }}
+          onMouseEnter={(e) => {
+            if (activeView !== "my-purchases") {
+              e.currentTarget.style.background = colors.lightBrown
+              e.currentTarget.style.color = colors.darkText
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (activeView !== "my-purchases") {
+              e.currentTarget.style.background = colors.mediumBrown
+              e.currentTarget.style.color = colors.offWhite
+            }
+          }}
+        >
+          <ShoppingBag className="w-5 h-5" />
+          My Purchases
+        </button>
       </div>
 
-      {/* Hero Section */}
-      <div style={styles.heroSection}>
-        <div style={styles.heroContent}>
-          <div style={styles.heroBadge}>BIG Growth Suite</div>
-          <h1 style={styles.heroTitle}>Your Shortcut to a higher BIG Score</h1>
-          <p style={styles.heroDescription}>
-            Unlock business growth with curated tools, policies, and templates—targeted to the exact areas funders care
-            about most. Build credibility. Boost readiness. Secure funding faster.
-          </p>
-          <div style={styles.heroButtons}>
-            <button
-              style={styles.heroButton}
-              onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-3px)")}
-              onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)")}
-              onClick={handleMyPurchases}
-            >
-              <Package className="w-5 h-5" />
-              My Purchases
-            </button>
-            <div style={{ position: "relative" }}>
-              <button
-                style={styles.heroButtonSecondary}
-                onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-3px)")}
-                onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)")}
-                onClick={handleBrowseAll}
-              >
-                <TrendingUp className="w-5 h-5" />
-                Improve My BIG Score
-                <ChevronDown className="w-5 h-5" />
-              </button>
-              {showScoreDropdown && (
-                <div style={styles.dropdown}>
-                  <div
-                    style={{
-                      ...styles.dropdownItem,
-                      ...styles.dropdownItemHover,
-                    }}
-                    onClick={() => handleTabChange("compliance")}
-                  >
-                    <Lock className="w-5 h-5" />
-                    Compliance
-                  </div>
-                  <div
-                    style={{
-                      ...styles.dropdownItem,
-                      ...styles.dropdownItemHover,
-                    }}
-                    onClick={() => handleTabChange("legitimacy")}
-                  >
-                    <Megaphone className="w-5 h-5" />
-                    Legitimacy
-                  </div>
-                  <div
-                    style={{
-                      ...styles.dropdownItem,
-                      ...styles.dropdownItemHover,
-                    }}
-                    onClick={() => handleTabChange("fundability")}
+      {/* Show My Purchases view (your existing MyToolsPage) */}
+      {activeView === "my-purchases" ? (
+        <div style={styles.purchasesWrapper}>
+          <MyToolsPage />
+        </div>
+      ) : (
+        /* Show My Tools view (original shop content) */
+        <>
+          {/* Beta Testing Notice */}
+          <div style={styles.betaNotice}>
+            <Settings className="w-5 h-5" style={{ color: "#856404" }} />
+            <span>
+              <strong>Beta Testing Phase:</strong> This Growth Tools Shop is currently unavailable in beta testing. Features
+              and pricing may change before final release.
+            </span>
+          </div>
+
+          {/* Hero Section */}
+          <div style={styles.heroSection}>
+            <div style={styles.heroContent}>
+              <div style={styles.heroBadge}>BIG Growth Suite</div>
+              <h1 style={styles.heroTitle}>Your Shortcut to a higher BIG Score</h1>
+              <p style={styles.heroDescription}>
+                Unlock business growth with curated tools, policies, and templates—targeted to the exact areas funders care
+                about most. Build credibility. Boost readiness. Secure funding faster.
+              </p>
+              <div style={styles.heroButtons}>
+                <button
+                  style={styles.heroButton}
+                  onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-3px)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)")}
+                  onClick={() => setActiveView("my-purchases")}
+                >
+                  <Package className="w-5 h-5" />
+                  My Purchases
+                </button>
+                <div style={{ position: "relative" }}>
+                  <button
+                    style={styles.heroButtonSecondary}
+                    onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-3px)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)")}
+                    onClick={handleBrowseAll}
                   >
                     <TrendingUp className="w-5 h-5" />
-                    Capital Appeal
-                  </div>
-                  <div
-                    style={{
-                      ...styles.dropdownItem,
-                      ...styles.dropdownItemHover,
-                    }}
-                    onClick={() => handleTabChange("governance")}
-                  >
-                    <Brain className="w-5 h-5" />
-                    Governance
-                  </div>
+                    Improve My BIG Score
+                    <ChevronDown className="w-5 h-5" />
+                  </button>
+                  {showScoreDropdown && (
+                    <div style={styles.dropdown}>
+                      <div
+                        style={{
+                          ...styles.dropdownItem,
+                          ...styles.dropdownItemHover,
+                        }}
+                        onClick={() => handleTabChange("compliance")}
+                      >
+                        <Lock className="w-5 h-5" />
+                        Compliance
+                      </div>
+                      <div
+                        style={{
+                          ...styles.dropdownItem,
+                          ...styles.dropdownItemHover,
+                        }}
+                        onClick={() => handleTabChange("legitimacy")}
+                      >
+                        <Megaphone className="w-5 h-5" />
+                        Legitimacy
+                      </div>
+                      <div
+                        style={{
+                          ...styles.dropdownItem,
+                          ...styles.dropdownItemHover,
+                        }}
+                        onClick={() => handleTabChange("fundability")}
+                      >
+                        <TrendingUp className="w-5 h-5" />
+                        Capital Appeal
+                      </div>
+                      <div
+                        style={{
+                          ...styles.dropdownItem,
+                          ...styles.dropdownItemHover,
+                        }}
+                        onClick={() => handleTabChange("governance")}
+                      >
+                        <Brain className="w-5 h-5" />
+                        Governance
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Navigation Tabs */}
-      <div style={styles.navTabs}>
-        <div style={styles.navTabsContainer}>
-          <button
-            onClick={() => setActiveTab("compliance")}
-            style={{
-              ...styles.navTab,
-              ...(activeTab === "compliance" ? styles.navTabActive : {}),
-            }}
-            onMouseEnter={(e) => {
-              if (activeTab !== "compliance") {
-                e.currentTarget.style.background = colors.lightBrown
-                e.currentTarget.style.color = colors.darkText
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (activeTab !== "compliance") {
-                e.currentTarget.style.background = colors.mediumBrown
-                e.currentTarget.style.color = colors.offWhite
-              }
-            }}
-          >
-            <Lock className="w-5 h-5" />
-            Compliance
-          </button>
-          <button
-            onClick={() => setActiveTab("legitimacy")}
-            style={{
-              ...styles.navTab,
-              ...(activeTab === "legitimacy" ? styles.navTabActive : {}),
-            }}
-            onMouseEnter={(e) => {
-              if (activeTab !== "legitimacy") {
-                e.currentTarget.style.background = colors.lightBrown
-                e.currentTarget.style.color = colors.darkText
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (activeTab !== "legitimacy") {
-                e.currentTarget.style.background = colors.mediumBrown
-                e.currentTarget.style.color = colors.offWhite
-              }
-            }}
-          >
-            <Megaphone className="w-5 h-5" />
-            Legitimacy
-          </button>
-          <button
-            onClick={() => setActiveTab("fundability")}
-            style={{
-              ...styles.navTab,
-              ...(activeTab === "fundability" ? styles.navTabActive : {}),
-            }}
-            onMouseEnter={(e) => {
-              if (activeTab !== "fundability") {
-                e.currentTarget.style.background = colors.lightBrown
-                e.currentTarget.style.color = colors.darkText
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (activeTab !== "fundability") {
-                e.currentTarget.style.background = colors.mediumBrown
-                e.currentTarget.style.color = colors.offWhite
-              }
-            }}
-          >
-            <TrendingUp className="w-5 h-5" />
-            Capital Appeal
-          </button>
-          <button
-            onClick={() => setActiveTab("governance")}
-            style={{
-              ...styles.navTab,
-              ...(activeTab === "governance" ? styles.navTabActive : {}),
-            }}
-            onMouseEnter={(e) => {
-              if (activeTab !== "governance") {
-                e.currentTarget.style.background = colors.lightBrown
-                e.currentTarget.style.color = colors.darkText
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (activeTab !== "governance") {
-                e.currentTarget.style.background = colors.mediumBrown
-                e.currentTarget.style.color = colors.offWhite
-              }
-            }}
-          >
-            <Brain className="w-5 h-5" />
-            Governance
-          </button>
-          <button
-            onClick={() => setActiveTab("all-toolkits")}
-            style={{
-              ...styles.navTab,
-              ...(activeTab === "all-toolkits" ? styles.navTabActive : {}),
-            }}
-            onMouseEnter={(e) => {
-              if (activeTab !== "all-toolkits") {
-                e.currentTarget.style.background = colors.lightBrown
-                e.currentTarget.style.color = colors.darkText
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (activeTab !== "all-toolkits") {
-                e.currentTarget.style.background = colors.mediumBrown
-                e.currentTarget.style.color = colors.offWhite
-              }
-            }}
-          >
-            <Package className="w-5 h-5" />
-            All Toolkits
-          </button>
-        </div>
-      </div>
-
-      {/* Content Area */}
-      <div style={styles.contentArea}>
-        {activeTab === "all-toolkits" ? (
-          <>
-            <h2 style={styles.sectionTitle}>All Growth Toolkits</h2>
-            <p style={styles.sectionSubtitle}>Explore all available tools to boost every aspect of your BIG Score.</p>
-            <div style={styles.sectionDivider}></div>
-            <div style={{ marginTop: "2.5rem" }}>
-              <ComplianceTab {...tabProps} />
-              <div style={{ margin: "3rem 0", borderBottom: `1px dashed ${colors.lightTan}` }}></div>
-              <LegitimacyTab {...tabProps} />
-              <div style={{ margin: "3rem 0", borderBottom: `1px dashed ${colors.lightTan}` }}></div>
-              <FundabilityTab {...tabProps} />
-              <div style={{ margin: "3rem 0", borderBottom: `1px dashed ${colors.lightTan}` }}></div>
-              <GovernanceTab {...tabProps} />
-            </div>
-          </>
-        ) : (
-          <>
-            {activeTab === "compliance" && (
-              <ComplianceTab
-                paystackLoaded={paystackLoaded}
-                isPaymentLoading={isPaymentLoading}
-                setIsPaymentLoading={setIsPaymentLoading}
-                initializePayment={initializePayment}
-                publicKey={publicKey}
-              />
-            )}
-            {activeTab === "legitimacy" && (
-              <LegitimacyTab
-                paystackLoaded={paystackLoaded}
-                isPaymentLoading={isPaymentLoading}
-                setIsPaymentLoading={setIsPaymentLoading}
-                initializePayment={initializePayment}
-                publicKey={publicKey}
-              />
-            )}
-            {activeTab === "fundability" && (
-              <FundabilityTab
-                paystackLoaded={paystackLoaded}
-                isPaymentLoading={isPaymentLoading}
-                setIsPaymentLoading={setIsPaymentLoading}
-                initializePayment={initializePayment}
-                publicKey={publicKey}
-              />
-            )}
-            {activeTab === "governance" && (
-              <GovernanceTab
-                paystackLoaded={paystackLoaded}
-                isPaymentLoading={isPaymentLoading}
-                setIsPaymentLoading={setIsPaymentLoading}
-                initializePayment={initializePayment}
-                publicKey={publicKey}
-              />
-            )}
-          </>
-        )}
-
-        {/* The BIG Difference Section */}
-        <div style={styles.differenceSection}>
-          <div style={styles.differenceContent}>
-            <h2 style={styles.differenceTitle}>THE BIG DIFFERENCE</h2>
-            <p style={styles.differenceDescription}>
-              We don't just help you start – we help you succeed. Our tools are specifically designed to boost your BIG
-              Score, making your business more attractive to funders, corporates, and investors.
-            </p>
-            <p style={styles.differenceTagline}>Let's build your business success story together.</p>
-            <button
-              style={styles.ctaBtn}
-              onClick={handleMyPurchases}
-              onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-3px)")}
-              onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)")}
-            >
-              View My Purchases
-            </button>
-          </div>
-        </div>
-
-        {/* Final CTA Section */}
-        <div style={styles.finalCtaSection}>
-          <Target className="w-12 h-12 mx-auto mb-4" />
-          <h3 style={styles.finalCtaTitle}>Ready to boost your BIG Score?</h3>
-          <p style={styles.finalCtaDescription}>
-            Choose a toolkit that speaks directly to funders, corporates, and investors.
-          </p>
-          <div style={styles.finalCtaButtons}>
-            <button
-              style={styles.heroButton}
-              onClick={handleMyPurchases}
-              onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-3px)")}
-              onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)")}
-            >
-              <Package className="w-5 h-5" />
-              My Purchases
-            </button>
-            <div style={{ position: "relative" }}>
+          {/* Navigation Tabs */}
+          <div style={styles.navTabs}>
+            <div style={styles.navTabsContainer}>
               <button
-                style={styles.heroButtonSecondary}
-                onClick={handleBrowseAll}
-                onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-3px)")}
-                onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)")}
+                onClick={() => setActiveTab("compliance")}
+                style={{
+                  ...styles.navTab,
+                  ...(activeTab === "compliance" ? styles.navTabActive : {}),
+                }}
+                onMouseEnter={(e) => {
+                  if (activeTab !== "compliance") {
+                    e.currentTarget.style.background = colors.lightBrown
+                    e.currentTarget.style.color = colors.darkText
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (activeTab !== "compliance") {
+                    e.currentTarget.style.background = colors.mediumBrown
+                    e.currentTarget.style.color = colors.offWhite
+                  }
+                }}
+              >
+                <Lock className="w-5 h-5" />
+                Compliance
+              </button>
+              <button
+                onClick={() => setActiveTab("legitimacy")}
+                style={{
+                  ...styles.navTab,
+                  ...(activeTab === "legitimacy" ? styles.navTabActive : {}),
+                }}
+                onMouseEnter={(e) => {
+                  if (activeTab !== "legitimacy") {
+                    e.currentTarget.style.background = colors.lightBrown
+                    e.currentTarget.style.color = colors.darkText
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (activeTab !== "legitimacy") {
+                    e.currentTarget.style.background = colors.mediumBrown
+                    e.currentTarget.style.color = colors.offWhite
+                  }
+                }}
+              >
+                <Megaphone className="w-5 h-5" />
+                Legitimacy
+              </button>
+              <button
+                onClick={() => setActiveTab("fundability")}
+                style={{
+                  ...styles.navTab,
+                  ...(activeTab === "fundability" ? styles.navTabActive : {}),
+                }}
+                onMouseEnter={(e) => {
+                  if (activeTab !== "fundability") {
+                    e.currentTarget.style.background = colors.lightBrown
+                    e.currentTarget.style.color = colors.darkText
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (activeTab !== "fundability") {
+                    e.currentTarget.style.background = colors.mediumBrown
+                    e.currentTarget.style.color = colors.offWhite
+                  }
+                }}
               >
                 <TrendingUp className="w-5 h-5" />
-                Improve My BIG Score
-                <ChevronDown className="w-5 h-5" />
+                Capital Appeal
               </button>
-              {showScoreDropdown && (
-                <div style={styles.dropdown}>
-                  <div
-                    style={{
-                      ...styles.dropdownItem,
-                      ...styles.dropdownItemHover,
-                    }}
-                    onClick={() => handleTabChange("compliance")}
-                  >
-                    <Lock className="w-5 h-5" />
-                    Compliance
-                  </div>
-                  <div
-                    style={{
-                      ...styles.dropdownItem,
-                      ...styles.dropdownItemHover,
-                    }}
-                    onClick={() => handleTabChange("legitimacy")}
-                  >
-                    <Megaphone className="w-5 h-5" />
-                    Legitimacy
-                  </div>
-                  <div
-                    style={{
-                      ...styles.dropdownItem,
-                      ...styles.dropdownItemHover,
-                    }}
-                    onClick={() => handleTabChange("fundability")}
+              <button
+                onClick={() => setActiveTab("governance")}
+                style={{
+                  ...styles.navTab,
+                  ...(activeTab === "governance" ? styles.navTabActive : {}),
+                }}
+                onMouseEnter={(e) => {
+                  if (activeTab !== "governance") {
+                    e.currentTarget.style.background = colors.lightBrown
+                    e.currentTarget.style.color = colors.darkText
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (activeTab !== "governance") {
+                    e.currentTarget.style.background = colors.mediumBrown
+                    e.currentTarget.style.color = colors.offWhite
+                  }
+                }}
+              >
+                <Brain className="w-5 h-5" />
+                Governance
+              </button>
+              <button
+                onClick={() => setActiveTab("all-toolkits")}
+                style={{
+                  ...styles.navTab,
+                  ...(activeTab === "all-toolkits" ? styles.navTabActive : {}),
+                }}
+                onMouseEnter={(e) => {
+                  if (activeTab !== "all-toolkits") {
+                    e.currentTarget.style.background = colors.lightBrown
+                    e.currentTarget.style.color = colors.darkText
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (activeTab !== "all-toolkits") {
+                    e.currentTarget.style.background = colors.mediumBrown
+                    e.currentTarget.style.color = colors.offWhite
+                  }
+                }}
+              >
+                <Package className="w-5 h-5" />
+                All Toolkits
+              </button>
+            </div>
+          </div>
+
+          {/* Content Area */}
+          <div style={styles.contentArea}>
+            {activeTab === "all-toolkits" ? (
+              <>
+                <h2 style={styles.sectionTitle}>All Growth Toolkits</h2>
+                <p style={styles.sectionSubtitle}>Explore all available tools to boost every aspect of your BIG Score.</p>
+                <div style={styles.sectionDivider}></div>
+                <div style={{ marginTop: "2.5rem" }}>
+                  <ComplianceTab {...tabProps} />
+                  <div style={{ margin: "3rem 0", borderBottom: `1px dashed ${colors.lightTan}` }}></div>
+                  <LegitimacyTab {...tabProps} />
+                  <div style={{ margin: "3rem 0", borderBottom: `1px dashed ${colors.lightTan}` }}></div>
+                  <FundabilityTab {...tabProps} />
+                  <div style={{ margin: "3rem 0", borderBottom: `1px dashed ${colors.lightTan}` }}></div>
+                  <GovernanceTab {...tabProps} />
+                </div>
+              </>
+            ) : (
+              <>
+                {activeTab === "compliance" && (
+                  <ComplianceTab
+                    paystackLoaded={paystackLoaded}
+                    isPaymentLoading={isPaymentLoading}
+                    setIsPaymentLoading={setIsPaymentLoading}
+                    initializePayment={initializePayment}
+                    publicKey={publicKey}
+                  />
+                )}
+                {activeTab === "legitimacy" && (
+                  <LegitimacyTab
+                    paystackLoaded={paystackLoaded}
+                    isPaymentLoading={isPaymentLoading}
+                    setIsPaymentLoading={setIsPaymentLoading}
+                    initializePayment={initializePayment}
+                    publicKey={publicKey}
+                  />
+                )}
+                {activeTab === "fundability" && (
+                  <FundabilityTab
+                    paystackLoaded={paystackLoaded}
+                    isPaymentLoading={isPaymentLoading}
+                    setIsPaymentLoading={setIsPaymentLoading}
+                    initializePayment={initializePayment}
+                    publicKey={publicKey}
+                  />
+                )}
+                {activeTab === "governance" && (
+                  <GovernanceTab
+                    paystackLoaded={paystackLoaded}
+                    isPaymentLoading={isPaymentLoading}
+                    setIsPaymentLoading={setIsPaymentLoading}
+                    initializePayment={initializePayment}
+                    publicKey={publicKey}
+                  />
+                )}
+              </>
+            )}
+
+            {/* The BIG Difference Section */}
+            <div style={styles.differenceSection}>
+              <div style={styles.differenceContent}>
+                <h2 style={styles.differenceTitle}>THE BIG DIFFERENCE</h2>
+                <p style={styles.differenceDescription}>
+                  We don't just help you start – we help you succeed. Our tools are specifically designed to boost your BIG
+                  Score, making your business more attractive to funders, corporates, and investors.
+                </p>
+                <p style={styles.differenceTagline}>Let's build your business success story together.</p>
+                <button
+                  style={styles.ctaBtn}
+                  onClick={() => setActiveView("my-purchases")}
+                  onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-3px)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)")}
+                >
+                  View My Purchases
+                </button>
+              </div>
+            </div>
+
+            {/* Final CTA Section */}
+            <div style={styles.finalCtaSection}>
+              <Target className="w-12 h-12 mx-auto mb-4" />
+              <h3 style={styles.finalCtaTitle}>Ready to boost your BIG Score?</h3>
+              <p style={styles.finalCtaDescription}>
+                Choose a toolkit that speaks directly to funders, corporates, and investors.
+              </p>
+              <div style={styles.finalCtaButtons}>
+                <button
+                  style={styles.heroButton}
+                  onClick={() => setActiveView("my-purchases")}
+                  onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-3px)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)")}
+                >
+                  <Package className="w-5 h-5" />
+                  My Purchases
+                </button>
+                <div style={{ position: "relative" }}>
+                  <button
+                    style={styles.heroButtonSecondary}
+                    onClick={handleBrowseAll}
+                    onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-3px)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)")}
                   >
                     <TrendingUp className="w-5 h-5" />
-                    Capital Appeal
-                  </div>
-                  <div
-                    style={{
-                      ...styles.dropdownItem,
-                      ...styles.dropdownItemHover,
-                    }}
-                    onClick={() => handleTabChange("governance")}
-                  >
-                    <Brain className="w-5 h-5" />
-                    Governance
-                  </div>
+                    Improve My BIG Score
+                    <ChevronDown className="w-5 h-5" />
+                  </button>
+                  {showScoreDropdown && (
+                    <div style={styles.dropdown}>
+                      <div
+                        style={{
+                          ...styles.dropdownItem,
+                          ...styles.dropdownItemHover,
+                        }}
+                        onClick={() => handleTabChange("compliance")}
+                      >
+                        <Lock className="w-5 h-5" />
+                        Compliance
+                      </div>
+                      <div
+                        style={{
+                          ...styles.dropdownItem,
+                          ...styles.dropdownItemHover,
+                        }}
+                        onClick={() => handleTabChange("legitimacy")}
+                      >
+                        <Megaphone className="w-5 h-5" />
+                        Legitimacy
+                      </div>
+                      <div
+                        style={{
+                          ...styles.dropdownItem,
+                          ...styles.dropdownItemHover,
+                        }}
+                        onClick={() => handleTabChange("fundability")}
+                      >
+                        <TrendingUp className="w-5 h-5" />
+                        Capital Appeal
+                      </div>
+                      <div
+                        style={{
+                          ...styles.dropdownItem,
+                          ...styles.dropdownItemHover,
+                        }}
+                        onClick={() => handleTabChange("governance")}
+                      >
+                        <Brain className="w-5 h-5" />
+                        Governance
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
+                <button
+                  style={styles.heroButtonSecondary}
+                  onClick={handleTalkToAdvisor}
+                  onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-3px)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)")}
+                >
+                  <Users className="w-5 h-5" />
+                  Talk to a Growth Advisor
+                </button>
+              </div>
             </div>
-            <button
-              style={styles.heroButtonSecondary}
-              onClick={handleTalkToAdvisor}
-              onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-3px)")}
-              onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)")}
-            >
-              <Users className="w-5 h-5" />
-              Talk to a Growth Advisor
-            </button>
           </div>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   )
 }
