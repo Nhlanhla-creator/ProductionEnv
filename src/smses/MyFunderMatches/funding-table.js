@@ -1648,9 +1648,14 @@ const [bigScore, setBigScore] = useState(null);
           const entityOverview = investor.formData?.entityOverview || {}
           const contact = investor.formData?.contactDetails || {}
 
+           const isAnonymous = investor.anonymous || false
+
           funds.forEach((fund, index) => {
             const fundProfile = investor.formData?.fundDetails?.funds?.[index]
             const estimatedReviewTime = investor.formData?.applicationBrief?.equityDocuments?.estimatedReviewTime || "-"
+
+             const displayName = isAnonymous ? "Anonymous" : investor.formData?.fundManageOverview?.registeredName || "Unnamed Fund"
+    
 
             let minTicket =
               fundProfile?.minimumTicket ??
@@ -1717,7 +1722,7 @@ const [bigScore, setBigScore] = useState(null);
               matchedFunds.push({
                 id: fundKey,
                 funderId: docSnap.id,
-                name: investor.formData?.fundManageOverview?.registeredName || "Unnamed Fund",
+                name: displayName,
                 fullProfile: investor.formData,
                 matchPercentage: scoreResult.score,
                 investmentType: enrichedFund.type.join(", ") || "Various",
@@ -2057,6 +2062,7 @@ const [bigScore, setBigScore] = useState(null);
         name: funder.name,
         data: data.formData,
         matchPercentage: funder.matchPercentage,
+        anonymous: data.anonymous || false,
       })
       funder.fullProfile = data.formData
     } catch (err) {
@@ -2632,9 +2638,9 @@ const [bigScore, setBigScore] = useState(null);
                   >
                     Registered Name:
                   </span>
-                  <span style={{ fontSize: "16px", color: "#333" }}>
-                    {modalFunder.fullProfile?.fundManageOverview?.registeredName}
-                  </span>
+                 <span style={{ fontSize: "16px", color: "#333" }}>
+                  {modalFunder.anonymous ? "Anonymous" : modalFunder.fullProfile?.fundManageOverview?.registeredName}
+                </span>
                 </div>
                 <div>
                   <span
