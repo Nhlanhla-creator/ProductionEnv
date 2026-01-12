@@ -7,55 +7,191 @@ import "./AdvisoryApplication.css"
 
 // Advisory options
 const advisoryRoleOptions = [
-  { value: "governance-advisor", label: "Governance Advisor" },
-  { value: "interim-cfo", label: "Interim CFO" },
-  { value: "technical-expert", label: "Technical Expert" },
-  { value: "marketing-strategist", label: "Marketing Strategist" },
-  { value: "legal-compliance", label: "Legal Compliance" },
-  { value: "mentor", label: "Mentor" },
-  { value: "board-member", label: "Board Member" },
-  { value: "subject-matter-expert", label: "Subject-matter expert" },
-  { value: "other", label: "Other" },
+  { 
+    value: "governance-advisor", 
+    label: "Governance Advisor",
+    tooltip: "Expert in board structures, corporate governance, compliance, and policy development"
+  },
+  { 
+    value: "interim-cfo", 
+    label: "Interim CFO",
+    tooltip: "Temporary Chief Financial Officer for financial management, reporting, and strategy"
+  },
+  { 
+    value: "technical-expert", 
+    label: "Technical Expert",
+    tooltip: "Specialist in specific technical areas like engineering, IT, or manufacturing"
+  },
+  { 
+    value: "marketing-strategist", 
+    label: "Marketing Strategist",
+    tooltip: "Expert in brand development, market positioning, and customer acquisition strategies"
+  },
+  { 
+    value: "legal-compliance", 
+    label: "Legal Compliance",
+    tooltip: "Professional specializing in legal requirements, regulations, and compliance frameworks"
+  },
+  { 
+    value: "mentor", 
+    label: "Mentor",
+    tooltip: "Experienced guide providing personal development and leadership coaching"
+  },
+  { 
+    value: "board-member", 
+    label: "Board Member",
+    tooltip: "Independent director providing strategic oversight and governance"
+  },
+  { 
+    value: "subject-matter-expert", 
+    label: "Subject-matter expert",
+    tooltip: "Deep expertise in specific industry or functional area"
+  },
+  { 
+    value: "other", 
+    label: "Other",
+    tooltip: "Select if you need a different advisory role not listed"
+  },
 ]
 
 const supportFocusOptions = [
-  { value: "financial-structuring", label: "Financial Structuring" },
-  { value: "board-governance", label: "Board Governance" },
-  { value: "fundraising", label: "Fundraising" },
-  { value: "digital-transformation", label: "Digital Transformation" },
-  { value: "esg-strategy", label: "ESG Strategy" },
-  { value: "other", label: "Other" },
+  { 
+    value: "financial-structuring", 
+    label: "Financial Structuring",
+    tooltip: "Setting up financial systems, capital structure, and investment planning"
+  },
+  { 
+    value: "board-governance", 
+    label: "Board Governance",
+    tooltip: "Board effectiveness, governance frameworks, and director training"
+  },
+  { 
+    value: "fundraising", 
+    label: "Fundraising",
+    tooltip: "Assistance with investor pitches, funding strategies, and capital raising"
+  },
+  { 
+    value: "digital-transformation", 
+    label: "Digital Transformation",
+    tooltip: "Technology adoption, digital strategy, and business process automation"
+  },
+  { 
+    value: "esg-strategy", 
+    label: "ESG Strategy",
+    tooltip: "Environmental, Social, and Governance strategy and reporting"
+  },
+  { 
+    value: "other", 
+    label: "Other",
+    tooltip: "Select if you need a different support focus not listed"
+  },
 ]
 
 const functionalExpertiseOptions = [
-  { value: "finance", label: "Finance" },
-  { value: "hr", label: "HR" },
-  { value: "legal", label: "Legal" },
-  { value: "strategy", label: "Strategy" },
-  { value: "esg", label: "ESG" },
-  { value: "tech", label: "Tech" },
-  { value: "governance", label: "Governance" },
-  { value: "other", label: "Other" },
+  { 
+    value: "finance", 
+    label: "Finance",
+    tooltip: "Financial management, accounting, budgeting, and investment analysis"
+  },
+  { 
+    value: "hr", 
+    label: "HR",
+    tooltip: "Human resources, talent management, and organizational development"
+  },
+  { 
+    value: "legal", 
+    label: "Legal",
+    tooltip: "Legal advisory, contracts, compliance, and regulatory affairs"
+  },
+  { 
+    value: "strategy", 
+    label: "Strategy",
+    tooltip: "Business strategy, market analysis, and strategic planning"
+  },
+  { 
+    value: "esg", 
+    label: "ESG",
+    tooltip: "Environmental, Social, and Governance performance and reporting"
+  },
+  { 
+    value: "tech", 
+    label: "Tech",
+    tooltip: "Technology implementation, IT infrastructure, and digital solutions"
+  },
+  { 
+    value: "governance", 
+    label: "Governance",
+    tooltip: "Corporate governance, board effectiveness, and compliance frameworks"
+  },
+  { 
+    value: "other", 
+    label: "Other",
+    tooltip: "Select if you need a different functional expertise not listed"
+  },
 ]
 
 const timeCommitmentOptions = [
-  { value: "1-5-hours", label: "1-5 hrs/month" },
-  { value: "5-10-hours", label: "5-10 hrs/month" },
-  { value: "full-time-interim", label: "Full-time Interim" },
+  { 
+    value: "1-5-hours", 
+    label: "1-5 hrs/month",
+    tooltip: "Part-time advisory with 1-5 hours per month commitment"
+  },
+  { 
+    value: "5-10-hours", 
+    label: "5-10 hrs/month",
+    tooltip: "Moderate advisory role with 5-10 hours per month commitment"
+  },
+  { 
+    value: "full-time-interim", 
+    label: "Full-time Interim",
+    tooltip: "Full-time temporary executive role (typically 3-12 months)"
+  },
 ]
 
 const compensationTypeOptions = [
-  { value: "pro-bono", label: "Pro-Bono" },
-  { value: "equity", label: "Equity" },
-  { value: "fee-based", label: "Fee-Based" },
-  { value: "hourly-rate", label: "Hourly Rate" },
-  { value: "retainer", label: "Retainer" },
+  { 
+    value: "pro-bono", 
+    label: "Pro-Bono",
+    tooltip: "Voluntary service without payment (typically for social impact or community projects)"
+  },
+  { 
+    value: "equity", 
+    label: "Equity",
+    tooltip: "Payment through company shares or ownership stake instead of cash"
+  },
+  { 
+    value: "fee-based", 
+    label: "Fee-Based",
+    tooltip: "Fixed fee for specific deliverables or project completion"
+  },
+  { 
+    value: "hourly-rate", 
+    label: "Hourly Rate",
+    tooltip: "Payment based on hourly rate for time spent"
+  },
+  { 
+    value: "retainer", 
+    label: "Retainer",
+    tooltip: "Regular monthly fee for ongoing advisory services"
+  },
 ]
 
 const meetingFormatOptions = [
-  { value: "virtual", label: "Virtual" },
-  { value: "in-person", label: "In-Person" },
-  { value: "hybrid", label: "Hybrid" },
+  { 
+    value: "virtual", 
+    label: "Virtual",
+    tooltip: "Online meetings via video conferencing platforms"
+  },
+  { 
+    value: "in-person", 
+    label: "In-Person",
+    tooltip: "Face-to-face meetings at your location or advisor's office"
+  },
+  { 
+    value: "hybrid", 
+    label: "Hybrid",
+    tooltip: "Mix of virtual and in-person meetings based on convenience"
+  },
 ]
 
 const provinceOptions = [
@@ -127,6 +263,7 @@ function MultiSelect({ options, selected = [], onChange, label }) {
                 key={option.value}
                 className={`multi-select-option ${selected.includes(option.value) ? "selected" : ""}`}
                 onClick={() => handleSelect(option.value)}
+                title={option.tooltip || ""}
               >
                 <input
                   type="checkbox"
@@ -344,7 +481,7 @@ const renderAdvisoryNeedsAssessment = (data = {}, updateFormData) => {
               >
                 <option value="">Select Time Commitment</option>
                 {timeCommitmentOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
+                  <option key={option.value} value={option.value} title={option.tooltip || ""}>
                     {option.label}
                   </option>
                 ))}
@@ -363,7 +500,7 @@ const renderAdvisoryNeedsAssessment = (data = {}, updateFormData) => {
               >
                 <option value="">Select Compensation Type</option>
                 {compensationTypeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
+                  <option key={option.value} value={option.value} title={option.tooltip || ""}>
                     {option.label}
                   </option>
                 ))}
@@ -404,7 +541,7 @@ const renderAdvisoryNeedsAssessment = (data = {}, updateFormData) => {
               >
                 <option value="">Select Meeting Format</option>
                 {meetingFormatOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
+                  <option key={option.value} value={option.value} title={option.tooltip || ""}>
                     {option.label}
                   </option>
                 ))}
