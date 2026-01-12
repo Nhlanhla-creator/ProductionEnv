@@ -53,7 +53,10 @@ export const renderSocialImpact = (data, updateFormData) => {
         </div>
 
         <div>
-          <FormField label="CSI/CSR Spend" >
+          <FormField 
+            label="CSI/CSR Spend" 
+            tooltip="Money spent on community programs, education, healthcare, or environmental initiatives as part of social responsibility"
+          >
             <input
               type="text"
               name="csiCsrSpend"
@@ -234,7 +237,10 @@ export const renderSocialImpact = (data, updateFormData) => {
         </div>
 
         <div className="form-field" style={{ marginBottom: '1rem' }}>
-          <FormField label="CSR/CSI Focus Areas">
+          <FormField 
+            label="CSR/CSI Focus Areas"
+            tooltip="Main areas for your social programs (education, healthcare, environment, youth development, women empowerment)"
+          >
             <textarea
               name="csrFocusAreas"
               value={data.csrFocusAreas || ""}
@@ -261,7 +267,10 @@ export const renderSocialImpact = (data, updateFormData) => {
       </div>
 
       <div className="form-field" style={{ marginBottom: '1rem' }}>
-        <FormField label="Alignment with SDGs or ESD priorities">
+        <FormField 
+          label="Alignment with SDGs or ESD priorities"
+          tooltip="SDGs: UN global goals (poverty, education, gender equality, climate). ESD: SA programs for black/women/youth-owned businesses"
+        >
           <textarea
             name="sdgAlignment"
             value={data.sdgAlignment || ""}

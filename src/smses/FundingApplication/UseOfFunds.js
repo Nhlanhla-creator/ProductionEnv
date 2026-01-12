@@ -7,15 +7,47 @@ import "./FundingApplication.css"
 
 // Funding Instrument options
 const fundingInstrumentOptions = [
-{ value: "Any", label: "Any" },
-  { value: "Equity", label: "Equity (Buying shares in the business)" },
-  { value: "Debt", label: "Debt (Loan-based funding)" },
-  { value: "Grants", label: "Grants (Non-repayable funding)" },
-  { value: "Convertible Notes", label: "Convertible Notes (Loan that can turn into shares)" },
-  { value: "Revenue-based Financing", label: "Revenue-based Financing" },
-    { value: "Hybrid/Structured Instruments", label: "Hybrid/Structured Instruments" },
-  { value: "Secondary Market Strategies", label: "Secondary Market Strategies" },
-  { value: "Special Strategies", label: "Special Strategies" },
+  { value: "Any", label: "Any" },
+  { 
+    value: "Equity", 
+    label: "Equity (Buying shares in the business)",
+    tooltip: "Investor purchases ownership stake in your company in exchange for capital"
+  },
+  { 
+    value: "Debt", 
+    label: "Debt (Loan-based funding)",
+    tooltip: "Borrowed money that must be repaid with interest over time"
+  },
+  { 
+    value: "Grants", 
+    label: "Grants (Non-repayable funding)",
+    tooltip: "Funds provided by government or organizations that do not need to be repaid"
+  },
+  { 
+    value: "Convertible Notes", 
+    label: "Convertible Notes (Loan that can turn into shares)",
+    tooltip: "Short-term debt that converts to equity during future financing round"
+  },
+  { 
+    value: "Revenue-based Financing", 
+    label: "Revenue-based Financing",
+    tooltip: "Repayment tied to company's monthly revenue rather than fixed installments"
+  },
+  { 
+    value: "Hybrid/Structured Instruments", 
+    label: "Hybrid/Structured Instruments",
+    tooltip: "Combination of debt and equity features tailored to specific needs"
+  },
+  { 
+    value: "Secondary Market Strategies", 
+    label: "Secondary Market Strategies",
+    tooltip: "Investments in existing shares rather than new company equity"
+  },
+  { 
+    value: "Special Strategies", 
+    label: "Special Strategies",
+    tooltip: "Customized or non-traditional funding approaches"
+  },
   { value: "Other", label: "Other (please specify)" },
 ]
 
@@ -30,127 +62,447 @@ const equityType = [
 // Type of Funder options
 const funderTypeOptions = [
   { value: "Any", label: "Any" },
-  { value: "Venture Capital", label: "Venture Capital" },
-  { value: "Angel Investment", label: "Angel Investment" },
-  { value: "Private Equity", label: "Private Equity" },
-  { value: "Government Fund", label: "Government Fund" },
-  { value: "Grant / Non-Profit", label: "Grant / Non-Profit" },
-  { value: "Development Finance", label: "Development Finance" },
-  { value: "Corporate Investment", label: "Corporate Investment" },
+  { 
+    value: "Venture Capital", 
+    label: "Venture Capital",
+    tooltip: "Professional investors in high-growth startups, typically taking equity"
+  },
+  { 
+    value: "Angel Investment", 
+    label: "Angel Investment",
+    tooltip: "Individual investors using personal funds for early-stage companies"
+  },
+  { 
+    value: "Private Equity", 
+    label: "Private Equity",
+    tooltip: "Investment in established companies for expansion or restructuring"
+  },
+  { 
+    value: "Government Fund", 
+    label: "Government Fund",
+    tooltip: "Public sector funding through agencies or development programs"
+  },
+  { 
+    value: "Grant / Non-Profit", 
+    label: "Grant / Non-Profit",
+    tooltip: "Non-repayable funding from foundations or charitable organizations"
+  },
+  { 
+    value: "Development Finance", 
+    label: "Development Finance",
+    tooltip: "Funding from development banks focused on economic growth"
+  },
+  { 
+    value: "Corporate Investment", 
+    label: "Corporate Investment",
+    tooltip: "Investment from established companies for strategic partnerships"
+  },
   { value: "Other (specify)", label: "Other (specify)" },
 ]
 
 // Support Focus categories and subtypes
 const supportFocusCategories = [
-  { value: "funding", label: "Funding Support" },
-  { value: "capacity_building", label: "Capacity Building" },
-  { value: "market_access", label: "Market Access" },
-  { value: "technology", label: "Technology & Innovation" },
-  { value: "social_impact", label: "Social Impact" },
+  { 
+    value: "funding", 
+    label: "Funding Support",
+    tooltip: "Direct financial assistance and capital access"
+  },
+  { 
+    value: "capacity_building", 
+    label: "Capacity Building",
+    tooltip: "Skills development, training, and operational improvement"
+  },
+  { 
+    value: "market_access", 
+    label: "Market Access",
+    tooltip: "Connections, distribution channels, and market entry support"
+  },
+  { 
+    value: "technology", 
+    label: "Technology & Innovation",
+    tooltip: "Tech infrastructure, digital tools, and innovation resources"
+  },
+  { 
+    value: "social_impact", 
+    label: "Social Impact",
+    tooltip: "Support for community development and social responsibility"
+  },
 ]
 
 const supportFocusSubtypes = {
   funding: [
-    { value: "grants", label: "Grants (non-repayable funding)" },
-    { value: "low_interest_loans", label: "Low-Interest Loans" },
-    { value: "seed_funding", label: "Seed Funding" },
-    { value: "crowdfunding_support", label: "Crowdfunding Support" },
+    { 
+      value: "grants", 
+      label: "Grants (non-repayable funding)",
+      tooltip: "Funding that does not require repayment or equity exchange"
+    },
+    { 
+      value: "low_interest_loans", 
+      label: "Low-Interest Loans",
+      tooltip: "Loans with below-market interest rates"
+    },
+    { 
+      value: "seed_funding", 
+      label: "Seed Funding",
+      tooltip: "Early-stage capital for product development and market testing"
+    },
+    { 
+      value: "crowdfunding_support", 
+      label: "Crowdfunding Support",
+      tooltip: "Assistance with raising funds from many small investors online"
+    },
   ],
   capacity_building: [
-    { value: "skills_training", label: "Skills Training & Development" },
-    { value: "business_mentorship", label: "Business Mentorship" },
-    { value: "leadership_development", label: "Leadership Development" },
-    { value: "financial_literacy", label: "Financial Literacy" },
+    { 
+      value: "skills_training", 
+      label: "Skills Training & Development",
+      tooltip: "Workshops and courses for employee skills enhancement"
+    },
+    { 
+      value: "business_mentorship", 
+      label: "Business Mentorship",
+      tooltip: "One-on-one guidance from experienced entrepreneurs"
+    },
+    { 
+      value: "leadership_development", 
+      label: "Leadership Development",
+      tooltip: "Training for management and executive team building"
+    },
+    { 
+      value: "financial_literacy", 
+      label: "Financial Literacy",
+      tooltip: "Education on financial management, accounting, and planning"
+    },
   ],
   market_access: [
-    { value: "networking", label: "Networking & Partnerships" },
-    { value: "market_linkages", label: "Market Linkages" },
-    { value: "trade_facilitation", label: "Trade Facilitation" },
-    { value: "export_support", label: "Export Support" },
+    { 
+      value: "networking", 
+      label: "Networking & Partnerships",
+      tooltip: "Connections to potential partners, clients, and collaborators"
+    },
+    { 
+      value: "market_linkages", 
+      label: "Market Linkages",
+      tooltip: "Direct connections to buyers, distributors, or suppliers"
+    },
+    { 
+      value: "trade_facilitation", 
+      label: "Trade Facilitation",
+      tooltip: "Support with export/import procedures and documentation"
+    },
+    { 
+      value: "export_support", 
+      label: "Export Support",
+      tooltip: "Assistance with entering and succeeding in international markets"
+    },
   ],
   technology: [
-    { value: "digital_tools", label: "Digital Tools & Platforms" },
-    { value: "tech_training", label: "Technology Training" },
-    { value: "innovation_labs", label: "Innovation Labs" },
-    { value: "research_development", label: "Research & Development" },
+    { 
+      value: "digital_tools", 
+      label: "Digital Tools & Platforms",
+      tooltip: "Software, apps, and digital infrastructure"
+    },
+    { 
+      value: "tech_training", 
+      label: "Technology Training",
+      tooltip: "Education on using specific technologies or software"
+    },
+    { 
+      value: "innovation_labs", 
+      label: "Innovation Labs",
+      tooltip: "Access to research facilities and experimental spaces"
+    },
+    { 
+      value: "research_development", 
+      label: "Research & Development",
+      tooltip: "Support for product research and technological innovation"
+    },
   ],
   social_impact: [
-    { value: "community_development", label: "Community Development" },
-    { value: "environmental_programs", label: "Environmental Programs" },
-    { value: "youth_development", label: "Youth Development" },
-    { value: "women_empowerment", label: "Women Empowerment" },
+    { 
+      value: "community_development", 
+      label: "Community Development",
+      tooltip: "Projects benefiting local communities and stakeholders"
+    },
+    { 
+      value: "environmental_programs", 
+      label: "Environmental Programs",
+      tooltip: "Initiatives focused on sustainability and environmental protection"
+    },
+    { 
+      value: "youth_development", 
+      label: "Youth Development",
+      tooltip: "Programs supporting young entrepreneurs and employees"
+    },
+    { 
+      value: "women_empowerment", 
+      label: "Women Empowerment",
+      tooltip: "Initiatives supporting women-led businesses and gender equality"
+    },
   ],
 }
 
 // Funding Category options
 const fundingCategoryOptions = [
-  { value: "Business Establishment (New ventures only)", label: "Business Establishment (New ventures only)" },
-  { value: "Capital Expenditure (CapEx) - Physical/long-term assets", label: "Capital Expenditure (CapEx) - Physical/long-term assets" },
-  { value: "Working Capital - Short-term operational liquidity", label: "Working Capital - Short-term operational liquidity" },
-  { value: "Growth & Market Expansion - Revenue-driving investments", label: "Growth & Market Expansion - Revenue-driving investments" },
-  { value: "Product & Innovation - R&D and commercialization", label: "Product & Innovation - R&D and commercialization" },
-  { value: "Operational Efficiency - Process optimization", label: "Operational Efficiency - Process optimization" },
-  { value: "Sales & Marketing - Customer acquisition", label: "Sales & Marketing - Customer acquisition" },
-  { value: "Debt Refinancing - Balance sheet management", label: "Debt Refinancing - Balance sheet management" },
+  { 
+    value: "Business Establishment (New ventures only)", 
+    label: "Business Establishment (New ventures only)",
+    tooltip: "Startup costs for new businesses including legal setup and initial operations"
+  },
+  { 
+    value: "Capital Expenditure (CapEx) - Physical/long-term assets", 
+    label: "Capital Expenditure (CapEx) - Physical/long-term assets",
+    tooltip: "Investment in long-term physical assets like equipment, buildings, or vehicles"
+  },
+  { 
+    value: "Working Capital - Short-term operational liquidity", 
+    label: "Working Capital - Short-term operational liquidity",
+    tooltip: "Funds for day-to-day operations, inventory, and short-term expenses"
+  },
+  { 
+    value: "Growth & Market Expansion - Revenue-driving investments", 
+    label: "Growth & Market Expansion - Revenue-driving investments",
+    tooltip: "Funding to enter new markets, acquire businesses, or expand operations"
+  },
+  { 
+    value: "Product & Innovation - R&D and commercialization", 
+    label: "Product & Innovation - R&D and commercialization",
+    tooltip: "Costs for developing new products, patents, and bringing innovations to market"
+  },
+  { 
+    value: "Operational Efficiency - Process optimization", 
+    label: "Operational Efficiency - Process optimization",
+    tooltip: "Investments to improve business processes, automation, and systems"
+  },
+  { 
+    value: "Sales & Marketing - Customer acquisition", 
+    label: "Sales & Marketing - Customer acquisition",
+    tooltip: "Funding for marketing campaigns, sales teams, and customer growth"
+  },
+  { 
+    value: "Debt Refinancing - Balance sheet management", 
+    label: "Debt Refinancing - Balance sheet management",
+    tooltip: "Replacing existing debt with better terms to improve financial position"
+  },
 ]
 
 // Sub-area options based on categories
 const subAreaOptions = {
   "Business Establishment (New ventures only)": [
-    { value: "Feasibility Studies", label: "Feasibility Studies" },
-    { value: "Legal Entity Formation", label: "Legal Entity Formation" },
-    { value: "Licensing & Permits", label: "Licensing & Permits" },
-    { value: "Pre-revenue Operating Costs", label: "Pre-revenue Operating Costs" },
+    { 
+      value: "Feasibility Studies", 
+      label: "Feasibility Studies",
+      tooltip: "Research to assess business viability before full launch"
+    },
+    { 
+      value: "Legal Entity Formation", 
+      label: "Legal Entity Formation",
+      tooltip: "Costs for business registration, legal structure setup"
+    },
+    { 
+      value: "Licensing & Permits", 
+      label: "Licensing & Permits",
+      tooltip: "Government approvals, industry licenses, operating permits"
+    },
+    { 
+      value: "Pre-revenue Operating Costs", 
+      label: "Pre-revenue Operating Costs",
+      tooltip: "Initial expenses before business generates income"
+    },
   ],
   "Capital Expenditure (CapEx) - Physical/long-term assets": [
-    { value: "Equipment: New Purchase", label: "Equipment: New Purchase" },
-    { value: "Equipment: Upgrades", label: "Equipment: Upgrades" },
-    { value: "Equipment: Maintenance", label: "Equipment: Maintenance" },
-    { value: "Facilities: Construction", label: "Facilities: Construction" },
-    { value: "Facilities: Expansion", label: "Facilities: Expansion" },
-    { value: "Facilities: Renovation", label: "Facilities: Renovation" },
-    { value: "Technology: Hardware", label: "Technology: Hardware" },
-    { value: "Technology: Machinery", label: "Technology: Machinery" },
-    { value: "Technology: Production Systems", label: "Technology: Production Systems" },
-    { value: "Vehicles: Commercial Fleet", label: "Vehicles: Commercial Fleet" },
-    { value: "Vehicles: Logistics", label: "Vehicles: Logistics" },
+    { 
+      value: "Equipment: New Purchase", 
+      label: "Equipment: New Purchase",
+      tooltip: "Buying new machinery, tools, or production equipment"
+    },
+    { 
+      value: "Equipment: Upgrades", 
+      label: "Equipment: Upgrades",
+      tooltip: "Modernizing or improving existing equipment"
+    },
+    { 
+      value: "Equipment: Maintenance", 
+      label: "Equipment: Maintenance",
+      tooltip: "Routine servicing, repairs, and upkeep of equipment"
+    },
+    { 
+      value: "Facilities: Construction", 
+      label: "Facilities: Construction",
+      tooltip: "Building new premises, factories, or offices"
+    },
+    { 
+      value: "Facilities: Expansion", 
+      label: "Facilities: Expansion",
+      tooltip: "Increasing size or capacity of existing facilities"
+    },
+    { 
+      value: "Facilities: Renovation", 
+      label: "Facilities: Renovation",
+      tooltip: "Upgrading or remodeling current facilities"
+    },
+    { 
+      value: "Technology: Hardware", 
+      label: "Technology: Hardware",
+      tooltip: "Computers, servers, and physical tech infrastructure"
+    },
+    { 
+      value: "Technology: Machinery", 
+      label: "Technology: Machinery",
+      tooltip: "Specialized tech-enabled production machinery"
+    },
+    { 
+      value: "Technology: Production Systems", 
+      label: "Technology: Production Systems",
+      tooltip: "Complete production line systems and automation"
+    },
+    { 
+      value: "Vehicles: Commercial Fleet", 
+      label: "Vehicles: Commercial Fleet",
+      tooltip: "Business vehicles for transportation or delivery"
+    },
+    { 
+      value: "Vehicles: Logistics", 
+      label: "Vehicles: Logistics",
+      tooltip: "Vehicles specifically for supply chain operations"
+    },
   ],
   "Working Capital - Short-term operational liquidity": [
-    { value: "Inventory Purchase", label: "Inventory Purchase" },
-    { value: "Accounts Receivable Bridging", label: "Accounts Receivable Bridging" },
-    { value: "Seasonal Cash Flow Support", label: "Seasonal Cash Flow Support" },
-    { value: "Emergency Reserve Buffer", label: "Emergency Reserve Buffer" },
+    { 
+      value: "Inventory Purchase", 
+      label: "Inventory Purchase",
+      tooltip: "Stock and materials for production or resale"
+    },
+    { 
+      value: "Accounts Receivable Bridging", 
+      label: "Accounts Receivable Bridging",
+      tooltip: "Covering cash flow gaps while waiting for customer payments"
+    },
+    { 
+      value: "Seasonal Cash Flow Support", 
+      label: "Seasonal Cash Flow Support",
+      tooltip: "Funding for businesses with seasonal demand fluctuations"
+    },
+    { 
+      value: "Emergency Reserve Buffer", 
+      label: "Emergency Reserve Buffer",
+      tooltip: "Contingency funds for unexpected expenses or opportunities"
+    },
   ],
   "Growth & Market Expansion - Revenue-driving investments": [
-    { value: "Market Entry: New Geographic Markets", label: "Market Entry: New Geographic Markets" },
-    { value: "Market Entry: Export Development", label: "Market Entry: Export Development" },
-    { value: "Acquisitions: Franchise Fees", label: "Acquisitions: Franchise Fees" },
-    { value: "Acquisitions: Business Purchase", label: "Acquisitions: Business Purchase" },
-    { value: "Partnerships: Joint Ventures", label: "Partnerships: Joint Ventures" },
-    { value: "Partnerships: Distribution Networks", label: "Partnerships: Distribution Networks" },
+    { 
+      value: "Market Entry: New Geographic Markets", 
+      label: "Market Entry: New Geographic Markets",
+      tooltip: "Entering new cities, regions, or countries"
+    },
+    { 
+      value: "Market Entry: Export Development", 
+      label: "Market Entry: Export Development",
+      tooltip: "Developing international export capabilities"
+    },
+    { 
+      value: "Acquisitions: Franchise Fees", 
+      label: "Acquisitions: Franchise Fees",
+      tooltip: "Costs to acquire franchise rights and setup"
+    },
+    { 
+      value: "Acquisitions: Business Purchase", 
+      label: "Acquisitions: Business Purchase",
+      tooltip: "Buying existing businesses to expand operations"
+    },
+    { 
+      value: "Partnerships: Joint Ventures", 
+      label: "Partnerships: Joint Ventures",
+      tooltip: "Forming collaborative partnerships with other companies"
+    },
+    { 
+      value: "Partnerships: Distribution Networks", 
+      label: "Partnerships: Distribution Networks",
+      tooltip: "Establishing or expanding product distribution channels"
+    },
   ],
   "Product & Innovation - R&D and commercialization": [
-    { value: "Product Design & Prototyping", label: "Product Design & Prototyping" },
-    { value: "Packaging Development", label: "Packaging Development" },
-    { value: "Certification & Compliance Testing (ISO, FDA, CE etc.)", label: "Certification & Compliance Testing (ISO, FDA, CE etc.)" },
-    { value: "Patent Filing & IP Protection", label: "Patent Filing & IP Protection" },
+    { 
+      value: "Product Design & Prototyping", 
+      label: "Product Design & Prototyping",
+      tooltip: "Developing product concepts and creating prototypes"
+    },
+    { 
+      value: "Packaging Development", 
+      label: "Packaging Development",
+      tooltip: "Designing and producing product packaging"
+    },
+    { 
+      value: "Certification & Compliance Testing (ISO, FDA, CE etc.)", 
+      label: "Certification & Compliance Testing (ISO, FDA, CE etc.)",
+      tooltip: "Testing and certification for regulatory standards compliance"
+    },
+    { 
+      value: "Patent Filing & IP Protection", 
+      label: "Patent Filing & IP Protection",
+      tooltip: "Legal costs for protecting intellectual property rights"
+    },
   ],
   "Operational Efficiency - Process optimization": [
-    { value: "IT Systems (ERP/CRM Software, Cybersecurity)", label: "IT Systems (ERP/CRM Software, Cybersecurity)" },
-    { value: "Automation & Robotics", label: "Automation & Robotics" },
-    { value: "Lean Manufacturing Setup", label: "Lean Manufacturing Setup" },
-    { value: "Supply Chain Reengineering", label: "Supply Chain Reengineering" },
+    { 
+      value: "IT Systems (ERP/CRM Software, Cybersecurity)", 
+      label: "IT Systems (ERP/CRM Software, Cybersecurity)",
+      tooltip: "Enterprise software systems and security infrastructure"
+    },
+    { 
+      value: "Automation & Robotics", 
+      label: "Automation & Robotics",
+      tooltip: "Implementing automated systems and robotic processes"
+    },
+    { 
+      value: "Lean Manufacturing Setup", 
+      label: "Lean Manufacturing Setup",
+      tooltip: "Implementing efficient, waste-reducing production systems"
+    },
+    { 
+      value: "Supply Chain Reengineering", 
+      label: "Supply Chain Reengineering",
+      tooltip: "Redesigning and optimizing supply chain operations"
+    },
   ],
   "Sales & Marketing - Customer acquisition": [
-    { value: "Brand Development", label: "Brand Development" },
-    { value: "Digital Marketing (Ads, SEO, Social)", label: "Digital Marketing (Ads, SEO, Social)" },
-    { value: "Trade Shows & Sponsorships", label: "Trade Shows & Sponsorships" },
-    { value: "Sales Team Expansion", label: "Sales Team Expansion" },
+    { 
+      value: "Brand Development", 
+      label: "Brand Development",
+      tooltip: "Creating and establishing brand identity and awareness"
+    },
+    { 
+      value: "Digital Marketing (Ads, SEO, Social)", 
+      label: "Digital Marketing (Ads, SEO, Social)",
+      tooltip: "Online advertising, search engine optimization, social media"
+    },
+    { 
+      value: "Trade Shows & Sponsorships", 
+      label: "Trade Shows & Sponsorships",
+      tooltip: "Exhibiting at industry events and sponsorship opportunities"
+    },
+    { 
+      value: "Sales Team Expansion", 
+      label: "Sales Team Expansion",
+      tooltip: "Hiring and training additional sales personnel"
+    },
   ],
   "Debt Refinancing - Balance sheet management": [
-    { value: "High-interest Loan Replacement", label: "High-interest Loan Replacement" },
-    { value: "Equipment Lease Buyouts", label: "Equipment Lease Buyouts" },
-    { value: "Credit Line Consolidation", label: "Credit Line Consolidation" },
+    { 
+      value: "High-interest Loan Replacement", 
+      label: "High-interest Loan Replacement",
+      tooltip: "Replacing expensive loans with lower-interest alternatives"
+    },
+    { 
+      value: "Equipment Lease Buyouts", 
+      label: "Equipment Lease Buyouts",
+      tooltip: "Purchasing leased equipment to own it outright"
+    },
+    { 
+      value: "Credit Line Consolidation", 
+      label: "Credit Line Consolidation",
+      tooltip: "Combining multiple credit facilities into one better arrangement"
+    },
   ],
 }
 
@@ -194,6 +546,7 @@ function MultiSelect({ options, selected, onChange, label }) {
                 key={option.value}
                 className={`multi-select-option ${selected.includes(option.value) ? "selected" : ""}`}
                 onClick={() => handleSelect(option.value)}
+                title={option.tooltip || ""}
               >
                 <input
                   type="checkbox"
@@ -576,7 +929,11 @@ const UseOfFunds = ({ data, updateData }) => {
                     >
                       <option value="">Select Category</option>
                       {fundingCategoryOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
+                        <option 
+                          key={option.value} 
+                          value={option.value}
+                          title={option.tooltip || ""}
+                        >
                           {option.label}
                         </option>
                       ))}
@@ -597,7 +954,11 @@ const UseOfFunds = ({ data, updateData }) => {
                     >
                       <option value="">Select Sub-area</option>
                       {getSubAreaOptions(item.category).map((option) => (
-                        <option key={option.value} value={option.value}>
+                        <option 
+                          key={option.value} 
+                          value={option.value}
+                          title={option.tooltip || ""}
+                        >
                           {option.label}
                         </option>
                       ))}
@@ -726,7 +1087,11 @@ const UseOfFunds = ({ data, updateData }) => {
               >
                 <option value="">Select Support Focus</option>
                 {supportFocusCategories.map((category) => (
-                  <option key={category.value} value={category.value}>
+                  <option 
+                    key={category.value} 
+                    value={category.value}
+                    title={category.tooltip || ""}
+                  >
                     {category.label}
                   </option>
                 ))}
@@ -747,7 +1112,11 @@ const UseOfFunds = ({ data, updateData }) => {
                   {data.additionalSupportFocus ? "Select Support Focus Subtype" : "Select Support Focus first"}
                 </option>
                 {getSupportFocusSubtypes().map((option) => (
-                  <option key={option.value} value={option.value}>
+                  <option 
+                    key={option.value} 
+                    value={option.value}
+                    title={option.tooltip || ""}
+                  >
                     {option.label}
                   </option>
                 ))}
