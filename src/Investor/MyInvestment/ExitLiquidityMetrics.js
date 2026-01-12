@@ -408,9 +408,9 @@ const styles = `
 }
 `;
 
-// Add styles to document
+// Add styles to document (keep existing styles)
 const styleSheet = document.createElement('style');
-styleSheet.textContent = styles;
+styleSheet.textContent = styles; // Use your existing styles constant
 document.head.appendChild(styleSheet);
 
 const brownShades = [
@@ -418,7 +418,7 @@ const brownShades = [
   '#3f2a18', '#d4c4b0', '#5D4037', '#3E2723'
 ];
 
-// Static options
+// Static options (keep existing)
 const staticBarOptions = {
   responsive: true,
   maintainAspectRatio: false,
@@ -491,20 +491,20 @@ const staticPieOptions = {
 };
 
 const ExitLiquidityMetrics = ({ openPopup }) => {
-  const [timeToExitView, setTimeToExitView] = useState('Quarterly');
+  const [timeToCompleteView, setTimeToCompleteView] = useState('Quarterly');
   const [loading, setLoading] = useState(true);
-  const [exitData, setExitData] = useState({
-    exitHistory: { q1: 0, q2: 0, q3: 0, q4: 0 },
-    timeToExit: { q1: 0, q2: 0, q3: 0, q4: 0 },
-    exitMultiples: [],
-    reinvestmentRatio: { reinvested: 0, held: 100 }
+  const [completionData, setCompletionData] = useState({
+    programHistory: { q1: 0, q2: 0, q3: 0, q4: 0 },
+    timeToComplete: { q1: 0, q2: 0, q3: 0, q4: 0 },
+    programOutcomes: [],
+    followOnRatio: { continued: 0, completed: 100 }
   });
 
   useEffect(() => {
-    fetchExitData();
+    fetchCompletionData();
   }, []);
 
-  const fetchExitData = async () => {
+  const fetchCompletionData = async () => {
     try {
       setLoading(true);
       const currentUser = auth.currentUser;
@@ -515,17 +515,17 @@ const ExitLiquidityMetrics = ({ openPopup }) => {
         return;
       }
 
-      // Fetch investor's portfolio SMEs
+      // Fetch catalyst's support programs
       const applicationsQuery = query(
-        collection(db, "investorApplications"),
-        where("funderId", "==", currentUser.uid)
+        collection(db, "catalystApplications"),
+        where("catalystId", "==", currentUser.uid)
       );
 
       const applicationsSnapshot = await getDocs(applicationsQuery);
-      console.log("Found applications for exit analysis:", applicationsSnapshot.docs.length);
+      console.log("Found support programs for completion analysis:", applicationsSnapshot.docs.length);
 
-      // Process each SME's exit/liquidity data
-      const exitPromises = applicationsSnapshot.docs.map(async (appDoc) => {
+      // Process each support program's completion data
+      const completionPromises = applicationsSnapshot.docs.map(async (appDoc) => {
         const appData = appDoc.data();
         
         try {
@@ -548,128 +548,138 @@ const ExitLiquidityMetrics = ({ openPopup }) => {
             appData.smeName ||
             "Unnamed Business";
 
-          // Extract exit metrics
+          // Extract completion metrics
+          const status = appData.status || '';
           const pipelineStage = appData.pipelineStage || '';
-          const fundingData = appData.fundingData || {};
           
           // Parse dates
           const createdAt = appData.createdAt?.toDate ? appData.createdAt.toDate() : 
                            (appData.createdAt ? new Date(appData.createdAt) : new Date());
           const updatedAt = appData.updatedAt?.toDate ? appData.updatedAt.toDate() : 
                            (appData.updatedAt ? new Date(appData.updatedAt) : new Date());
-          const exitDate = appData.exitDate?.toDate ? appData.exitDate.toDate() : 
-                          (appData.exitDate ? new Date(appData.exitDate) : null);
-          const disbursementDate = fundingData.disbursementDate?.toDate ? fundingData.disbursementDate.toDate() :
-                                  (fundingData.disbursementDate ? new Date(fundingData.disbursementDate) : null);
+          const completionDate = appData.completionDate?.toDate ? appData.completionDate.toDate() : 
+                                (appData.completionDate ? new Date(appData.completionDate) : null);
+          const programStartDate = appData.programStartDate?.toDate ? appData.programStartDate.toDate() :
+                                  (appData.programStartDate ? new Date(appData.programStartDate) : createdAt);
 
-          // Determine if exited
-          const isExited = pipelineStage.toLowerCase().includes('exit') || 
-                          pipelineStage.toLowerCase().includes('complete') ||
-                          pipelineStage === 'Deal Complete' ||
-                          exitDate !== null;
+          // Determine if program is completed
+          const isCompleted = status.toLowerCase().includes('completed') || 
+                             pipelineStage.toLowerCase().includes('closed') ||
+                             pipelineStage.toLowerCase().includes('deal closed') ||
+                             status === 'Deal Closed' ||
+                             completionDate !== null;
 
-          // Calculate time to exit (months)
-          let monthsToExit = 0;
-          if (isExited && disbursementDate) {
-            const exitDateFinal = exitDate || updatedAt;
-            monthsToExit = Math.round((exitDateFinal - disbursementDate) / (1000 * 60 * 60 * 24 * 30));
+          // Calculate program duration (months)
+          let monthsToComplete = 0;
+          if (isCompleted && programStartDate) {
+            const completionDateFinal = completionDate || updatedAt;
+            monthsToComplete = Math.round((completionDateFinal - programStartDate) / (1000 * 60 * 60 * 24 * 30));
           }
 
-          // Determine quarter based on exit date or current date
-          const dateForQuarter = exitDate || createdAt;
+          // Determine quarter based on completion date or current date
+          const dateForQuarter = completionDate || updatedAt;
           const month = dateForQuarter.getMonth();
           const quarter = Math.floor(month / 3) + 1; // 1-4
 
-          // Calculate exit multiple (return on investment)
-          const amountInvested = parseFloat(fundingData.amountApproved || appData.amountApproved || 0);
-          const amountReturned = parseFloat(appData.amountReturned || amountInvested * 1.5); // Default 1.5x if not specified
-          const exitMultiple = amountInvested > 0 ? (amountReturned / amountInvested) : 0;
+          // Calculate program outcome score
+          const programValue = parseFloat(appData.programValue || appData.fundingRequired || 0);
+          const impactScore = parseFloat(appData.impactScore || appData.outcomeScore || 0);
+          const bigScore = parseFloat(profileData.bigScore || 0);
+          
+          // Calculate overall outcome score (0-100)
+          let outcomeScore = 0;
+          if (isCompleted) {
+            // Weighted score: 40% program value, 30% impact score, 30% BIG score improvement
+            const valueScore = Math.min(programValue / 1000000, 100); // Normalize to 0-100
+            const impactScoreNormalized = Math.min(impactScore * 10, 100); // Scale 0-10 to 0-100
+            outcomeScore = Math.round((valueScore * 0.4) + (impactScoreNormalized * 0.3) + (bigScore * 0.3));
+          }
 
-          // Check reinvestment status
-          const hasReinvested = appData.reinvested === true || 
-                               (isExited && appData.portfolioReinvestment === true);
+          // Check follow-on status (continued support)
+          const hasFollowOn = appData.hasFollowOn === true || 
+                              appData.continuedSupport === true ||
+                              (isCompleted && appData.followOnProgram === true);
 
           return {
             id: appDoc.id,
             smeId: appData.smeId,
             smeName,
+            status,
             pipelineStage,
-            isExited,
-            exitDate: exitDate || updatedAt,
+            isCompleted,
+            completionDate: completionDate || updatedAt,
             quarter,
-            monthsToExit,
-            exitMultiple,
-            amountInvested,
-            amountReturned,
-            hasReinvested,
-            createdAt,
-            disbursementDate,
+            monthsToComplete,
+            outcomeScore,
+            programValue,
+            impactScore,
+            bigScore,
+            hasFollowOn,
+            programStartDate,
             month: dateForQuarter.getMonth() // Add month for monthly view
           };
         } catch (error) {
-          console.error("Error processing SME exit data:", error);
+          console.error("Error processing program completion data:", error);
           return null;
         }
       });
 
-      const allExitData = (await Promise.all(exitPromises)).filter(data => data !== null);
-      console.log("Processed exit data:", allExitData.length);
+      const allCompletionData = (await Promise.all(completionPromises)).filter(data => data !== null);
+      console.log("Processed completion data:", allCompletionData.length);
 
-      // Calculate portfolio-wide exit metrics
-      const metrics = calculateExitMetrics(allExitData);
-      setExitData(metrics);
+      // Calculate portfolio-wide completion metrics
+      const metrics = calculateCompletionMetrics(allCompletionData);
+      setCompletionData(metrics);
 
       setLoading(false);
     } catch (error) {
-      console.error("Error fetching exit data:", error);
+      console.error("Error fetching completion data:", error);
       setLoading(false);
     }
   };
 
-  const calculateExitMetrics = (allData) => {
+  const calculateCompletionMetrics = (allData) => {
     if (allData.length === 0) {
       return {
-        exitHistory: { q1: 0, q2: 0, q3: 0, q4: 0 },
-        timeToExit: { q1: 0, q2: 0, q3: 0, q4: 0 },
-        exitMultiples: [],
-        reinvestmentRatio: { reinvested: 0, held: 100 }
+        programHistory: { q1: 0, q2: 0, q3: 0, q4: 0 },
+        timeToComplete: { q1: 0, q2: 0, q3: 0, q4: 0 },
+        programOutcomes: [],
+        followOnRatio: { continued: 0, completed: 100 }
       };
     }
 
-    // 1. Calculate Exit/Repayment History by Quarter
-    const exitedSMEs = allData.filter(sme => sme.isExited);
-    const exitsByQuarter = { q1: 0, q2: 0, q3: 0, q4: 0 };
-    const exitsByMonth = Array(12).fill(0); // For monthly data
+    // 1. Calculate Program Completion History by Quarter
+    const completedPrograms = allData.filter(program => program.isCompleted);
+    const completionsByQuarter = { q1: 0, q2: 0, q3: 0, q4: 0 };
+    const completionsByMonth = Array(12).fill(0);
     
-    exitedSMEs.forEach(sme => {
-      const qKey = `q${sme.quarter}`;
-      if (exitsByQuarter[qKey] !== undefined) {
-        exitsByQuarter[qKey]++;
+    completedPrograms.forEach(program => {
+      const qKey = `q${program.quarter}`;
+      if (completionsByQuarter[qKey] !== undefined) {
+        completionsByQuarter[qKey]++;
       }
-      // Count by month
-      if (sme.month !== undefined && sme.month >= 0 && sme.month < 12) {
-        exitsByMonth[sme.month]++;
+      if (program.month !== undefined && program.month >= 0 && program.month < 12) {
+        completionsByMonth[program.month]++;
       }
     });
 
-    // 2. Calculate Average Time-to-Exit by Quarter
+    // 2. Calculate Average Time-to-Complete by Quarter
     const timeByQuarter = { q1: [], q2: [], q3: [], q4: [] };
-    const timeByMonth = Array(12).fill().map(() => []); // For monthly data
+    const timeByMonth = Array(12).fill().map(() => []);
     
-    exitedSMEs.forEach(sme => {
-      if (sme.monthsToExit > 0) {
-        const qKey = `q${sme.quarter}`;
+    completedPrograms.forEach(program => {
+      if (program.monthsToComplete > 0) {
+        const qKey = `q${program.quarter}`;
         if (timeByQuarter[qKey]) {
-          timeByQuarter[qKey].push(sme.monthsToExit);
+          timeByQuarter[qKey].push(program.monthsToComplete);
         }
-        // Time by month
-        if (sme.month !== undefined && sme.month >= 0 && sme.month < 12) {
-          timeByMonth[sme.month].push(sme.monthsToExit);
+        if (program.month !== undefined && program.month >= 0 && program.month < 12) {
+          timeByMonth[program.month].push(program.monthsToComplete);
         }
       }
     });
 
-    const avgTimeToExit = {
+    const avgTimeToComplete = {
       q1: timeByQuarter.q1.length > 0 ? Math.round(timeByQuarter.q1.reduce((a, b) => a + b, 0) / timeByQuarter.q1.length) : 0,
       q2: timeByQuarter.q2.length > 0 ? Math.round(timeByQuarter.q2.reduce((a, b) => a + b, 0) / timeByQuarter.q2.length) : 0,
       q3: timeByQuarter.q3.length > 0 ? Math.round(timeByQuarter.q3.reduce((a, b) => a + b, 0) / timeByQuarter.q3.length) : 0,
@@ -681,32 +691,34 @@ const ExitLiquidityMetrics = ({ openPopup }) => {
       monthData.length > 0 ? Math.round(monthData.reduce((a, b) => a + b, 0) / monthData.length) : 0
     );
 
-    // 3. Calculate Exit Multiples for Top 5 Exits
-    const exitMultiples = exitedSMEs
-      .filter(sme => sme.exitMultiple > 0)
-      .sort((a, b) => b.exitMultiple - a.exitMultiple)
+    // 3. Calculate Program Outcomes for Top 5 Completed Programs
+    const programOutcomes = completedPrograms
+      .filter(program => program.outcomeScore > 0)
+      .sort((a, b) => b.outcomeScore - a.outcomeScore)
       .slice(0, 5)
-      .map(sme => ({
-        name: sme.smeName,
-        multiple: sme.exitMultiple.toFixed(1)
+      .map(program => ({
+        name: program.smeName,
+        score: program.outcomeScore,
+        duration: program.monthsToComplete,
+        value: program.programValue
       }));
 
-    // 4. Calculate Reinvestment Ratio
-    const totalExited = exitedSMEs.length;
-    const reinvestedCount = exitedSMEs.filter(sme => sme.hasReinvested).length;
+    // 4. Calculate Follow-on Support Ratio
+    const totalCompleted = completedPrograms.length;
+    const followOnCount = completedPrograms.filter(program => program.hasFollowOn).length;
     
-    const reinvestmentRatio = {
-      reinvested: totalExited > 0 ? Math.round((reinvestedCount / totalExited) * 100) : 0,
-      held: totalExited > 0 ? Math.round(((totalExited - reinvestedCount) / totalExited) * 100) : 100
+    const followOnRatio = {
+      continued: totalCompleted > 0 ? Math.round((followOnCount / totalCompleted) * 100) : 0,
+      completed: totalCompleted > 0 ? Math.round(((totalCompleted - followOnCount) / totalCompleted) * 100) : 100
     };
 
     return {
-      exitHistory: exitsByQuarter,
-      exitHistoryMonthly: exitsByMonth,
-      timeToExit: avgTimeToExit,
-      timeToExitMonthly: avgTimeByMonth,
-      exitMultiples,
-      reinvestmentRatio
+      programHistory: completionsByQuarter,
+      programHistoryMonthly: completionsByMonth,
+      timeToComplete: avgTimeToComplete,
+      timeToCompleteMonthly: avgTimeByMonth,
+      programOutcomes,
+      followOnRatio
     };
   };
 
@@ -789,7 +801,7 @@ const ExitLiquidityMetrics = ({ openPopup }) => {
   const generateEmptyPieData = (labels) => ({
     labels,
     datasets: [{
-      data: labels.map(() => 50), // Equal distribution for empty state
+      data: labels.map(() => 50),
       backgroundColor: labels.map((_, i) => brownShades[i % brownShades.length] + '40'),
       borderWidth: 2,
       borderColor: '#fff',
@@ -813,48 +825,44 @@ const ExitLiquidityMetrics = ({ openPopup }) => {
   };
 
   // Get data based on time view
-  const getExitHistoryData = (view) => {
+  const getProgramHistoryData = (view) => {
     const labels = getTimeLabels(view);
     
     switch (view) {
       case 'Monthly':
-        // Use monthly exit data
-        return exitData.exitHistoryMonthly || Array(12).fill(0);
+        return completionData.programHistoryMonthly || Array(12).fill(0);
       case 'Quarterly':
         return [
-          exitData.exitHistory.q1,
-          exitData.exitHistory.q2,
-          exitData.exitHistory.q3,
-          exitData.exitHistory.q4
+          completionData.programHistory.q1,
+          completionData.programHistory.q2,
+          completionData.programHistory.q3,
+          completionData.programHistory.q4
         ];
       case 'Yearly':
-        // For yearly view, show total exits per year
-        const yearlyTotal = exitData.exitHistory.q1 + exitData.exitHistory.q2 + 
-                          exitData.exitHistory.q3 + exitData.exitHistory.q4;
-        return [0, 0, yearlyTotal, 0]; // Show in current year
+        const yearlyTotal = completionData.programHistory.q1 + completionData.programHistory.q2 + 
+                          completionData.programHistory.q3 + completionData.programHistory.q4;
+        return [0, 0, yearlyTotal, 0];
       default:
         return Array(labels.length).fill(0);
     }
   };
 
-  const getTimeToExitData = (view) => {
+  const getTimeToCompleteData = (view) => {
     const labels = getTimeLabels(view);
     
     switch (view) {
       case 'Monthly':
-        // Use monthly time to exit data
-        return exitData.timeToExitMonthly || Array(12).fill(0);
+        return completionData.timeToCompleteMonthly || Array(12).fill(0);
       case 'Quarterly':
         return [
-          exitData.timeToExit.q1,
-          exitData.timeToExit.q2,
-          exitData.timeToExit.q3,
-          exitData.timeToExit.q4
+          completionData.timeToComplete.q1,
+          completionData.timeToComplete.q2,
+          completionData.timeToComplete.q3,
+          completionData.timeToComplete.q4
         ];
       case 'Yearly':
-        // For yearly view, use average time to exit
-        const avgTime = (exitData.timeToExit.q1 + exitData.timeToExit.q2 + 
-                        exitData.timeToExit.q3 + exitData.timeToExit.q4) / 4;
+        const avgTime = (completionData.timeToComplete.q1 + completionData.timeToComplete.q2 + 
+                        completionData.timeToComplete.q3 + completionData.timeToComplete.q4) / 4;
         return labels.map(() => Math.round(avgTime));
       default:
         return Array(labels.length).fill(0);
@@ -869,7 +877,7 @@ const ExitLiquidityMetrics = ({ openPopup }) => {
           <div className="popup-content">
             <h3>{title}</h3>
             <div className="popup-description">
-              No data available for {title.toLowerCase()}. Data will appear when deals are completed.
+              No data available for {title.toLowerCase()}. Data will appear when support programs are completed.
             </div>
             <div className="popup-chart">
               <div className="empty-state">
@@ -898,7 +906,7 @@ const ExitLiquidityMetrics = ({ openPopup }) => {
             {data.labels.map((label, index) => (
               <div key={label} className="detail-item">
                 <span className="detail-label">{label}:</span>
-                <span className="detail-value">{data.datasets[0].data[index]}</span>
+                <span className="detail-value">{data.datasets[0].data[index]} programs</span>
               </div>
             ))}
           </div>
@@ -935,7 +943,7 @@ const ExitLiquidityMetrics = ({ openPopup }) => {
           <div className="popup-content">
             <h3>{title}</h3>
             <div className="popup-description">
-              No data available for {title.toLowerCase()}. Data will appear when deals are completed.
+              No data available for {title.toLowerCase()}. Data will appear when support programs are completed.
             </div>
             <div className="popup-chart">
               <div className="empty-state">
@@ -965,7 +973,7 @@ const ExitLiquidityMetrics = ({ openPopup }) => {
               <div key={label} className="detail-item">
                 <span className="detail-label">{label}:</span>
                 <span className="detail-value">
-                  {data.datasets.map(ds => `${ds.label}: ${ds.data[index]}`).join(' | ')}
+                  {data.datasets.map(ds => `${ds.label}: ${ds.data[index]} months`).join(' | ')}
                 </span>
               </div>
             ))}
@@ -1029,7 +1037,7 @@ const ExitLiquidityMetrics = ({ openPopup }) => {
           <div className="popup-content">
             <h3>{title}</h3>
             <div className="popup-description">
-              No data available for {title.toLowerCase()}. Data will appear when deals are completed.
+              No data available for {title.toLowerCase()}. Data will appear when support programs are completed.
             </div>
             <div className="popup-chart">
               <div className="empty-state">
@@ -1092,73 +1100,75 @@ const ExitLiquidityMetrics = ({ openPopup }) => {
       <div className="exit-liquidity">
         <div className="loading-container">
           <Loader size={48} style={{ color: "#a67c52", animation: "spin 1s linear infinite" }} />
-          <p className="loading-text">Loading exit & liquidity data...</p>
+          <p className="loading-text">Loading program completion data...</p>
         </div>
       </div>
     );
   }
 
   // Check if we have any meaningful data
-  const hasExitData = exitData.exitHistory.q1 + exitData.exitHistory.q2 + exitData.exitHistory.q3 + exitData.exitHistory.q4 > 0;
-  const hasTimeToExitData = exitData.timeToExit.q1 + exitData.timeToExit.q2 + exitData.timeToExit.q3 + exitData.timeToExit.q4 > 0;
-  const hasExitMultiples = exitData.exitMultiples.length > 0;
-  const hasReinvestmentData = exitData.reinvestmentRatio.reinvested > 0;
+  const hasProgramData = completionData.programHistory.q1 + completionData.programHistory.q2 + 
+                        completionData.programHistory.q3 + completionData.programHistory.q4 > 0;
+  const hasTimeToCompleteData = completionData.timeToComplete.q1 + completionData.timeToComplete.q2 + 
+                               completionData.timeToComplete.q3 + completionData.timeToComplete.q4 > 0;
+  const hasProgramOutcomes = completionData.programOutcomes.length > 0;
+  const hasFollowOnData = completionData.followOnRatio.continued > 0;
 
   // Get current time labels
-  const currentLabels = getTimeLabels(timeToExitView);
+  const currentLabels = getTimeLabels(timeToCompleteView);
 
   return (
     <div className="exit-liquidity">
       <div className="time-view-controls">
         <TimeViewSelector 
-          currentView={timeToExitView} 
-          onViewChange={setTimeToExitView}
+          currentView={timeToCompleteView} 
+          onViewChange={setTimeToCompleteView}
         />
       </div>
       
       <div className="exit-charts-grid">
-        {/* Exit/Repayment History */}
-        {hasExitData ? (
+        {/* Program Completion History */}
+        {hasProgramData ? (
           <BarChartWithTitle
             data={generateBarData(
               currentLabels,
-              getExitHistoryData(timeToExitView),
-              '# of Exits',
+              getProgramHistoryData(timeToCompleteView),
+              '# of Programs',
               0
             )}
-            title="Exit / Repayment History"
-            chartTitle={`Number of exits or deal completions (${timeToExitView})`}
-            chartId="exit-repayment-history"
+            title="Program Completion History"
+            chartTitle={`Number of completed support programs (${timeToCompleteView})`}
+            chartId="program-completion-history"
           />
         ) : (
           <BarChartWithTitle
             data={generateEmptyBarData(
               currentLabels,
-              '# of Exits',
+              '# of Programs',
               0
             )}
-            title="Exit / Repayment History"
-            chartTitle={`Number of exits or deal completions (${timeToExitView})`}
-            chartId="exit-repayment-history"
+            title="Program Completion History"
+            chartTitle={`Number of completed support programs (${timeToCompleteView})`}
+            chartId="program-completion-history"
             isEmpty={true}
           />
         )}
 
-        {/* Avg. Time-to-Exit */}
-        {hasTimeToExitData ? (
+        {/* Avg. Time-to-Complete */}
+        {hasTimeToCompleteData ? (
           <LineChartWithTitle
             data={generateLineData(
               currentLabels,
               [
                 { 
                   label: 'Avg Months', 
-                  values: getTimeToExitData(timeToExitView)
+                  values: getTimeToCompleteData(timeToCompleteView)
                 }
               ]
             )}
-            title="Avg. Time-to-Exit"
-            chartTitle={`Average months from disbursement to exit (${timeToExitView})`}
-            chartId="time-to-exit"
+            title="Avg. Time-to-Complete"
+            chartTitle={`Average months from program start to completion (${timeToCompleteView})`}
+            chartId="time-to-complete"
           />
         ) : (
           <LineChartWithTitle
@@ -1168,54 +1178,54 @@ const ExitLiquidityMetrics = ({ openPopup }) => {
                 { label: 'Avg Months', values: [] }
               ]
             )}
-            title="Avg. Time-to-Exit"
-            chartTitle={`Average months from disbursement to exit (${timeToExitView})`}
-            chartId="time-to-exit"
+            title="Avg. Time-to-Complete"
+            chartTitle={`Average months from program start to completion (${timeToCompleteView})`}
+            chartId="time-to-complete"
             isEmpty={true}
           />
         )}
 
-        {/* Exit Multiple */}
-        {hasExitMultiples ? (
+        {/* Program Outcome Score */}
+        {hasProgramOutcomes ? (
           <BarChartWithTitle
             data={generateBarData(
-              exitData.exitMultiples.map(e => e.name),
-              exitData.exitMultiples.map(e => parseFloat(e.multiple)),
-              'Multiple (x)',
+              completionData.programOutcomes.map(p => p.name),
+              completionData.programOutcomes.map(p => p.score),
+              'Outcome Score',
               1
             )}
-            title="Exit Multiple"
-            chartTitle="Return multiples for top exited deals (x)"
-            chartId="exit-multiple"
+            title="Program Outcome Score"
+            chartTitle="Outcome scores for top completed programs (0-100)"
+            chartId="program-outcome"
           />
         ) : (
           <BarChartWithTitle
             data={generateEmptyBarData(
-              ['Deal 1', 'Deal 2', 'Deal 3', 'Deal 4', 'Deal 5'],
-              'Multiple (x)',
+              ['Program 1', 'Program 2', 'Program 3', 'Program 4', 'Program 5'],
+              'Outcome Score',
               1
             )}
-            title="Exit Multiple"
-            chartTitle="Return multiples for top exited deals (x)"
-            chartId="exit-multiple"
+            title="Program Outcome Score"
+            chartTitle="Outcome scores for top completed programs (0-100)"
+            chartId="program-outcome"
             isEmpty={true}
           />
         )}
 
-        {/* Reinvestment Ratio */}
-        {hasReinvestmentData ? (
+        {/* Follow-on Support Ratio */}
+        {hasFollowOnData ? (
           <PieChartWithNumbers
-            title="Reinvestment Ratio"
-            labels={['Reinvested', 'Held']}
-            data={[exitData.reinvestmentRatio.reinvested, exitData.reinvestmentRatio.held]}
-            chartId="reinvestment-ratio"
+            title="Follow-on Support Ratio"
+            labels={['Continued Support', 'Completed Only']}
+            data={[completionData.followOnRatio.continued, completionData.followOnRatio.completed]}
+            chartId="follow-on-ratio"
           />
         ) : (
           <PieChartWithNumbers
-            title="Reinvestment Ratio"
-            labels={['Reinvested', 'Held']}
+            title="Follow-on Support Ratio"
+            labels={['Continued Support', 'Completed Only']}
             data={[50, 50]}
-            chartId="reinvestment-ratio"
+            chartId="follow-on-ratio"
             isEmpty={true}
           />
         )}

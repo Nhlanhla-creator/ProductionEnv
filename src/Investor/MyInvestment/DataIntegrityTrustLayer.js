@@ -495,14 +495,16 @@ const DataIntegrityTrustLayer = ({ openPopup }) => {
         return;
       }
 
-      // Fetch investor's portfolio SMEs
+      console.log("Fetching portfolio scores for user:", currentUser.uid);
+
+      // CHANGED: Fetch accelerator's portfolio SMEs from acceleratorApplications
       const applicationsQuery = query(
-        collection(db, "investorApplications"),
-        where("funderId", "==", currentUser.uid)
+        collection(db, "acceleratorApplications"),
+        where("acceleratorId", "==", currentUser.uid)
       );
 
       const applicationsSnapshot = await getDocs(applicationsQuery);
-      console.log("Found applications for score analysis:", applicationsSnapshot.docs.length);
+      console.log("Found accelerator applications for score analysis:", applicationsSnapshot.docs.length);
 
       // Process each SME's BIG scores
       const scorePromises = applicationsSnapshot.docs.map(async (appDoc) => {
@@ -525,13 +527,25 @@ const DataIntegrityTrustLayer = ({ openPopup }) => {
             if (profileSnap.exists()) {
               profileData = profileSnap.data();
               
-              // Get individual scores from profile
-              bigScore = profileData.bigScore || 0;
-              complianceScore = profileData.complianceScore || 0;
-              legitimacyScore = profileData.legitimacyScore || 0;
-              fundabilityScore = profileData.fundabilityScore || 0;
-              governanceScore = profileData.governanceScore || 0;
-              leadershipScore = profileData.leadershipScore || 0;
+              // Get individual scores from profile - checking for support-related scores
+              // First check if there are support-specific scores
+              if (profileData.supportScores) {
+                bigScore = profileData.supportScores.bigScore || profileData.supportScores.overallScore || 0;
+                complianceScore = profileData.supportScores.complianceScore || 0;
+                legitimacyScore = profileData.supportScores.legitimacyScore || 0;
+                fundabilityScore = profileData.supportScores.fundabilityScore || profileData.supportScores.capitalAppealScore || 0;
+                governanceScore = profileData.supportScores.governanceScore || 0;
+                leadershipScore = profileData.supportScores.leadershipScore || 0;
+              }
+              // Fallback to general BIG scores
+              else {
+                bigScore = profileData.bigScore || profileData.supportScore || 0;
+                complianceScore = profileData.complianceScore || profileData.supportComplianceScore || 0;
+                legitimacyScore = profileData.legitimacyScore || profileData.supportLegitimacyScore || 0;
+                fundabilityScore = profileData.fundabilityScore || profileData.supportFundabilityScore || 0;
+                governanceScore = profileData.governanceScore || profileData.supportGovernanceScore || 0;
+                leadershipScore = profileData.leadershipScore || profileData.supportLeadershipScore || 0;
+              }
               
               // If individual scores aren't available but BIG score is, estimate them
               if (bigScore > 0 && complianceScore === 0) {
@@ -547,9 +561,12 @@ const DataIntegrityTrustLayer = ({ openPopup }) => {
           const smeName =
             profileData.entityOverview?.tradingName ||
             profileData.entityOverview?.registeredName ||
-            appData.companyName ||
             appData.smeName ||
+            appData.companyName ||
             "Unnamed Business";
+
+          // Get pipeline stage from accelerator application
+          const pipelineStage = appData.pipelineStage || appData.status || 'Active Support';
 
           return {
             id: appDoc.id,
@@ -561,8 +578,8 @@ const DataIntegrityTrustLayer = ({ openPopup }) => {
             fundabilityScore,
             governanceScore,
             leadershipScore,
-            pipelineStage: appData.pipelineStage,
-            lastUpdated: profileData.bigScoreUpdatedAt || profileData.updatedAt || appData.updatedAt
+            pipelineStage,
+            lastUpdated: profileData.supportScoreUpdatedAt || profileData.updatedAt || appData.updatedAt
           };
         } catch (error) {
           console.error("Error processing SME scores:", error);
@@ -571,7 +588,7 @@ const DataIntegrityTrustLayer = ({ openPopup }) => {
       });
 
       const allScores = (await Promise.all(scorePromises)).filter(data => data !== null);
-      console.log("Processed SME scores:", allScores.length);
+      console.log("Processed SME scores for accelerator:", allScores.length);
 
       // Calculate portfolio averages
       const calculatePortfolioAverages = (scores) => {
@@ -668,6 +685,22 @@ const DataIntegrityTrustLayer = ({ openPopup }) => {
     }
   };
 
+  // Function to get support pipeline stage badge color
+  const getPipelineStageBadge = (stage) => {
+    const stageColors = {
+      'Matching': '#8d6e63',
+      'Application': '#795548',
+      'Evaluation': '#6d4c41',
+      'Due diligence': '#5d4037',
+      'Decision': '#4e342e',
+      'Term sheet': '#3e2723',
+      'Deal closed': '#2e1b13',
+      'Withdrawn/Declined': '#d32f2f'
+    };
+    
+    return stageColors[stage] || '#666';
+  };
+
   if (loading) {
     return (
       <div className="data-integrity">
@@ -684,14 +717,14 @@ const DataIntegrityTrustLayer = ({ openPopup }) => {
       <div className="data-integrity-grid">
         <div className="chart-container full-width">
           <div className="chart-header">
-            <h3 className="chart-title">Portfolio BIG Scores Overview</h3>
+            <h3 className="chart-title">Support Portfolio BIG Scores Overview</h3>
             <button 
               className="breakdown-icon-btn"
               onClick={() => openPopup(
                 <div className="popup-content">
-                  <h3>Portfolio BIG Scores Breakdown</h3>
+                  <h3>Support Portfolio BIG Scores Breakdown</h3>
                   <div className="popup-description">
-                    Detailed view of all individual SME scores across all 5 BIG Score dimensions
+                    Detailed view of all individual SME scores across all 5 BIG Score dimensions for your support portfolio
                   </div>
                   
                   {/* Portfolio Summary in Popup */}
@@ -726,10 +759,11 @@ const DataIntegrityTrustLayer = ({ openPopup }) => {
                         <thead>
                           <tr>
                             <th>SME</th>
+                            <th>Support Stage</th>
                             <th>BIG Score</th>
                             <th>Compliance</th>
                             <th>Legitimacy</th>
-                            <th>Fundability</th>
+                            <th>Capital Appeal</th>
                             <th>Governance</th>
                             <th>Leadership</th>
                             <th>Last Updated</th>
@@ -739,6 +773,19 @@ const DataIntegrityTrustLayer = ({ openPopup }) => {
                           {smeScores.map((sme, idx) => (
                             <tr key={idx}>
                               <td>{sme.smeName}</td>
+                              <td>
+                                <span style={{
+                                  display: 'inline-block',
+                                  padding: '4px 8px',
+                                  borderRadius: '4px',
+                                  backgroundColor: getPipelineStageBadge(sme.pipelineStage),
+                                  color: 'white',
+                                  fontSize: '11px',
+                                  fontWeight: '500'
+                                }}>
+                                  {sme.pipelineStage}
+                                </span>
+                              </td>
                               <td>
                                 <strong style={{ 
                                   color: getScoreLevel(sme.bigScore).color,
@@ -787,7 +834,7 @@ const DataIntegrityTrustLayer = ({ openPopup }) => {
                     <div className="empty-state">
                       <div className="empty-state-icon">📊</div>
                       <div className="empty-state-text">
-                        No score data available for your portfolio
+                        No score data available for your support portfolio
                       </div>
                     </div>
                   )}
@@ -888,7 +935,7 @@ const DataIntegrityTrustLayer = ({ openPopup }) => {
                 </div>
               </div>
               <div className="score-description">
-                Investment readiness and financial health
+                Support readiness and impact potential
               </div>
             </div>
 
@@ -942,19 +989,32 @@ const DataIntegrityTrustLayer = ({ openPopup }) => {
                 <thead>
                   <tr>
                     <th>SME</th>
+                    <th>Support Stage</th>
                     <th>BIG Score</th>
                     <th>Compliance</th>
                     <th>Legitimacy</th>
-                    <th>Fundability</th>
+                    <th>Capital Appeal</th>
                     <th>Governance</th>
                     <th>Leadership</th>
-                    <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {smeScores.map((sme, idx) => (
                     <tr key={idx}>
                       <td>{sme.smeName}</td>
+                      <td>
+                        <span style={{
+                          display: 'inline-block',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          backgroundColor: getPipelineStageBadge(sme.pipelineStage),
+                          color: 'white',
+                          fontSize: '11px',
+                          fontWeight: '500'
+                        }}>
+                          {sme.pipelineStage}
+                        </span>
+                      </td>
                       <td>
                         <strong style={{ 
                           color: getScoreLevel(sme.bigScore).color,
@@ -993,7 +1053,6 @@ const DataIntegrityTrustLayer = ({ openPopup }) => {
                           {getScoreBadge(sme.leadershipScore)}
                         </div>
                       </td>
-                      <td>{sme.pipelineStage || 'Active'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1002,7 +1061,7 @@ const DataIntegrityTrustLayer = ({ openPopup }) => {
               <div className="empty-state">
                 <div className="empty-state-icon">📊</div>
                 <div className="empty-state-text">
-                  No BIG score data available for your portfolio yet.<br/>
+                  No BIG score data available for your support portfolio yet.<br/>
                   Scores will appear here as SMEs complete their assessments.
                 </div>
               </div>

@@ -206,16 +206,6 @@ const styles = `
   height: 420px;
   position: relative;
   overflow: hidden;
-  transition: none !important;
-  animation: none !important;
-  transform: none !important;
-}
-
-.chart-container:hover {
-  transform: none !important;
-  animation: none !important;
-  transition: none !important;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
 }
 
 .chart-header {
@@ -251,27 +241,10 @@ const styles = `
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: none !important;
-  animation: none !important;
-  transform: none !important;
 }
 
 .breakdown-icon-btn:hover {
   background: #f0f0f0;
-  transform: none !important;
-  animation: none !important;
-}
-
-.chart-title-fixed {
-  font-size: 14px;
-  font-weight: 600;
-  color: #7B3F00;
-  margin-bottom: 15px;
-  text-align: center;
-  padding: 8px 12px;
-  background: #f8f9fa;
-  border-radius: 4px;
-  border-left: 3px solid #7B3F00;
 }
 
 .chart-area {
@@ -314,7 +287,7 @@ const styles = `
   color: #666;
   font-size: 16px;
   background: #f8f9fa;
-  border-radius: '8px';
+  border-radius: 8px;
   margin: 20px 10px;
 }
 
@@ -355,16 +328,11 @@ const styles = `
   cursor: pointer;
   padding: 5px;
   border-radius: 4px;
-  transition: none !important;
-  animation: none !important;
-  transform: none !important;
 }
 
 .popup-close:hover {
   background: #f0f0f0;
   color: #333;
-  transform: none !important;
-  animation: none !important;
 }
 
 .popup-content {
@@ -499,9 +467,11 @@ const styles = `
 `;
 
 // Add styles to document
-const styleSheet = document.createElement('style');
-styleSheet.textContent = styles;
-document.head.appendChild(styleSheet);
+if (typeof document !== 'undefined') {
+  const styleSheet = document.createElement('style');
+  styleSheet.textContent = styles;
+  document.head.appendChild(styleSheet);
+}
 
 // New brown color palette without dark/blackish colors
 const brownShades = [
@@ -614,7 +584,7 @@ const loadUserChartPreferences = async (userId) => {
   }
 };
 
-// UPDATED: Fetch Investor's Successful Deals - EXACT SAME LOGIC AS MyCohorts
+// UPDATED: Fetch Investor's Successful Deals - Using the same logic as your existing components
 const fetchInvestorSuccessfulDeals = async () => {
   try {
     const currentUser = auth.currentUser;
@@ -628,20 +598,20 @@ const fetchInvestorSuccessfulDeals = async () => {
       };
     }
 
-    console.log('🔍 STEP 1: Fetching successful deals for investor:', currentUser.uid);
+    console.log('🔍 Fetching successful deals for investor:', currentUser.uid);
     
-    // STEP 1: Get all investorApplications where pipelineStage is "Deal Complete"
-    // This is the EXACT same query as in MyCohorts
+    // Query for Deal Complete applications - similar to your InvestorSMETable logic
     const q = query(
       collection(db, "investorApplications"),
+      where("funderId", "==", currentUser.uid),
       where("pipelineStage", "==", "Deal Complete")
     );
 
     const querySnapshot = await getDocs(q);
-    console.log('📊 STEP 1: Found successful deals (Deal Complete):', querySnapshot.docs.length);
+    console.log('📊 Found successful deals (Deal Complete):', querySnapshot.docs.length);
     
     if (querySnapshot.empty) {
-      console.log('❌ STEP 1: No successful deals found');
+      console.log('❌ No successful deals found');
       return {
         smeIds: [],
         applications: [],
@@ -656,31 +626,39 @@ const fetchInvestorSuccessfulDeals = async () => {
     
     querySnapshot.docs.forEach(doc => {
       const applicationData = doc.data();
+      
       console.log('📄 Successful deal data:', {
         smeId: applicationData.smeId,
-        investmentAmount: applicationData.fundingDetails?.amountApproved || applicationData.fundingRequired,
-        pipelineStage: applicationData.pipelineStage,
-        userId: applicationData.userId,
-        investmentType: applicationData.fundingDetails?.investmentType || applicationData.investmentType
+        fundingDetails: applicationData.fundingDetails,
+        pipelineStage: applicationData.pipelineStage
       });
       
-      // Use the same logic as MyCohorts to get SME ID
-      const smeId = applicationData.smeId || applicationData.userId;
-      if (smeId) {
-        smeIds.push(smeId);
-        applications.push(applicationData);
+      if (applicationData.smeId) {
+        smeIds.push(applicationData.smeId);
+        applications.push({
+          id: doc.id,
+          ...applicationData
+        });
         
-        // Sum investment amounts using same logic as MyCohorts
-        const investmentAmount = applicationData.fundingDetails?.amountApproved || applicationData.fundingRequired || 0;
-        totalInvestment += investmentAmount;
+        // Sum investment amounts - use the same logic as in InvestorSMETable
+        if (applicationData.fundingDetails?.amountApproved) {
+          // Try to parse the amount (remove R, commas, etc.)
+          const amountStr = applicationData.fundingDetails.amountApproved.toString().replace(/[^\d.]/g, '');
+          const amount = parseFloat(amountStr) || 0;
+          totalInvestment += amount;
+        } else if (applicationData.fundingRequired) {
+          const amountStr = applicationData.fundingRequired.toString().replace(/[^\d.]/g, '');
+          const amount = parseFloat(amountStr) || 0;
+          totalInvestment += amount;
+        }
       }
     });
     
     const uniqueSmeIds = [...new Set(smeIds)]; // Remove duplicates
     
-    console.log('🏢 STEP 1: Unique SME IDs from successful deals:', uniqueSmeIds);
-    console.log('💰 STEP 1: Total investment from successful deals:', totalInvestment);
-    console.log('📄 STEP 1: Number of successful applications:', applications.length);
+    console.log('🏢 Unique SME IDs from successful deals:', uniqueSmeIds);
+    console.log('💰 Total investment from successful deals:', totalInvestment);
+    console.log('📄 Number of successful applications:', applications.length);
     
     return {
       smeIds: uniqueSmeIds,
@@ -697,17 +675,16 @@ const fetchInvestorSuccessfulDeals = async () => {
   }
 };
 
-// UPDATED: Fetch Lifecycle Stage Data from Successful Deals
+// Fetch Lifecycle Stage Data from Successful Deals
 const fetchLifecycleStageData = async () => {
   try {
-    // First get the successful deals using the SAME logic as MyCohorts
     const successfulDeals = await fetchInvestorSuccessfulDeals();
     const { smeIds } = successfulDeals;
     
-    console.log('🔍 STEP 1: Fetching lifecycle stages from successful deals. Total SMEs:', smeIds.length);
+    console.log('🔍 Fetching lifecycle stages from successful deals. Total SMEs:', smeIds.length);
     
     if (smeIds.length === 0) {
-      console.log('❌ STEP 1: No SMEs found in successful deals for lifecycle analysis');
+      console.log('❌ No SMEs found in successful deals for lifecycle analysis');
       return {
         'Startup': 0,
         'Growth': 0,
@@ -726,10 +703,10 @@ const fetchLifecycleStageData = async () => {
       'Mature': 0
     };
     
-    // STEP 2: Fetch operationStage for each SME from successful deals
+    // Fetch operationStage for each SME from successful deals
     for (const smeId of smeIds) {
       try {
-        console.log('🔍 STEP 2: Fetching profile for SME from successful deal:', smeId);
+        console.log('🔍 Fetching profile for SME from successful deal:', smeId);
         const universalProfileRef = doc(db, "universalProfiles", smeId);
         const universalProfileSnap = await getDoc(universalProfileRef);
         
@@ -737,26 +714,23 @@ const fetchLifecycleStageData = async () => {
           const profileData = universalProfileSnap.data();
           const operationStage = profileData.entityOverview?.operationStage;
           
-          console.log('📋 STEP 2: Operation stage for successful deal SME', smeId, ':', operationStage);
+          console.log('📋 Operation stage for successful deal SME', smeId, ':', operationStage);
           
           if (operationStage && lifecycleCount.hasOwnProperty(operationStage)) {
             lifecycleCount[operationStage]++;
-            console.log(`✅ STEP 2: Counted ${operationStage} from successful deal: ${lifecycleCount[operationStage]}`);
           } else {
-            console.log('❌ STEP 2: Invalid operation stage for successful deal SME:', operationStage);
-            // Count as "Growth" if operationStage is missing or invalid (same as MyCohorts logic)
+            // Count as "Growth" if operationStage is missing or invalid
             lifecycleCount['Growth']++;
           }
         } else {
-          console.log('❌ STEP 2: Profile does not exist for successful deal SME:', smeId);
+          console.log('❌ Profile does not exist for successful deal SME:', smeId);
         }
       } catch (error) {
-        console.error(`❌ STEP 2: Error processing lifecycle for SME ${smeId}:`, error);
+        console.error(`❌ Error processing lifecycle for SME ${smeId}:`, error);
       }
     }
     
-    console.log('📈 FINAL: Lifecycle stage counts from successful deals:', lifecycleCount);
-    console.log('📊 FINAL: Total successful SMEs processed for lifecycle:', smeIds.length);
+    console.log('📈 Lifecycle stage counts from successful deals:', lifecycleCount);
     return lifecycleCount;
   } catch (error) {
     console.error('❌ ERROR: Failed to fetch lifecycle stage data from successful deals:', error);
@@ -770,17 +744,16 @@ const fetchLifecycleStageData = async () => {
   }
 };
 
-// UPDATED: Fetch Industry/Sector Data from Successful Deals
+// Fetch Industry/Sector Data from Successful Deals
 const fetchIndustrySectorData = async () => {
   try {
-    // First get the successful deals using the SAME logic as MyCohorts
     const successfulDeals = await fetchInvestorSuccessfulDeals();
     const { smeIds } = successfulDeals;
     
-    console.log('🔍 STEP 1: Fetching industry sectors from successful deals. Total SMEs:', smeIds.length);
+    console.log('🔍 Fetching industry sectors from successful deals. Total SMEs:', smeIds.length);
     
     if (smeIds.length === 0) {
-      console.log('❌ STEP 1: No SMEs found in successful deals for industry analysis');
+      console.log('❌ No SMEs found in successful deals for industry analysis');
       return {
         'Business, Finance & Consulting': 0,
         'Technology & Engineering': 0,
@@ -801,10 +774,10 @@ const fetchIndustrySectorData = async () => {
       'Other': 0
     };
     
-    // STEP 2: Fetch economicSectors for each SME from successful deals
+    // Fetch economicSectors for each SME from successful deals
     for (const smeId of smeIds) {
       try {
-        console.log('🔍 STEP 2: Fetching profile for SME from successful deal:', smeId);
+        console.log('🔍 Fetching profile for SME from successful deal:', smeId);
         const universalProfileRef = doc(db, "universalProfiles", smeId);
         const universalProfileSnap = await getDoc(universalProfileRef);
         
@@ -812,7 +785,7 @@ const fetchIndustrySectorData = async () => {
           const profileData = universalProfileSnap.data();
           const economicSectors = profileData.entityOverview?.economicSectors || [];
           
-          console.log('📋 STEP 2: Economic sectors for successful deal SME', smeId, ':', economicSectors);
+          console.log('📋 Economic sectors for successful deal SME', smeId, ':', economicSectors);
           
           if (economicSectors.length > 0) {
             // Process each economic sector and map to broader categories
@@ -822,30 +795,27 @@ const fetchIndustrySectorData = async () => {
               if (industryCount.hasOwnProperty(mappedSector)) {
                 industryCount[mappedSector]++;
                 sectorCounted = true;
-                console.log(`✅ STEP 2: Mapped ${sector} → ${mappedSector}: ${industryCount[mappedSector]}`);
               }
             });
             
             // If no sectors were successfully mapped, count as "Other"
             if (!sectorCounted) {
               industryCount['Other']++;
-              console.log(`✅ STEP 2: No valid sectors mapped, counted as Other: ${industryCount['Other']}`);
             }
           } else {
-            console.log('❌ STEP 2: No economic sectors found for successful deal SME:', smeId);
+            console.log('❌ No economic sectors found for successful deal SME:', smeId);
             // Count as "Other" if no sectors specified
             industryCount['Other']++;
           }
         } else {
-          console.log('❌ STEP 2: Profile does not exist for successful deal SME:', smeId);
+          console.log('❌ Profile does not exist for successful deal SME:', smeId);
         }
       } catch (error) {
-        console.error(`❌ STEP 2: Error processing industry sectors for SME ${smeId}:`, error);
+        console.error(`❌ Error processing industry sectors for SME ${smeId}:`, error);
       }
     }
     
-    console.log('📈 FINAL: Industry sector counts from successful deals:', industryCount);
-    console.log('📊 FINAL: Total successful SMEs processed for industry sectors:', smeIds.length);
+    console.log('📈 Industry sector counts from successful deals:', industryCount);
     return industryCount;
   } catch (error) {
     console.error('❌ ERROR: Failed to fetch industry sector data from successful deals:', error);
@@ -860,17 +830,16 @@ const fetchIndustrySectorData = async () => {
   }
 };
 
-// UPDATED: Fetch Geographic Data from Successful Deals - ALL 9 PROVINCES
+// Fetch Geographic Data from Successful Deals - ALL 9 PROVINCES
 const fetchGeographicData = async () => {
   try {
-    // First get the successful deals using the SAME logic as MyCohorts
     const successfulDeals = await fetchInvestorSuccessfulDeals();
     const { smeIds } = successfulDeals;
     
-    console.log('🔍 STEP 1: Fetching geographic data from successful deals. Total SMEs:', smeIds.length);
+    console.log('🔍 Fetching geographic data from successful deals. Total SMEs:', smeIds.length);
     
     if (smeIds.length === 0) {
-      console.log('❌ STEP 1: No SMEs found in successful deals for geographic analysis');
+      console.log('❌ No SMEs found in successful deals for geographic analysis');
       return {
         'Gauteng': 0,
         'Western Cape': 0,
@@ -897,10 +866,10 @@ const fetchGeographicData = async () => {
       'Northern Cape': 0
     };
     
-    // STEP 2: Fetch province data for each SME from successful deals
+    // Fetch province data for each SME from successful deals
     for (const smeId of smeIds) {
       try {
-        console.log('🔍 STEP 2: Fetching profile for SME from successful deal:', smeId);
+        console.log('🔍 Fetching profile for SME from successful deal:', smeId);
         const universalProfileRef = doc(db, "universalProfiles", smeId);
         const universalProfileSnap = await getDoc(universalProfileRef);
         
@@ -908,7 +877,7 @@ const fetchGeographicData = async () => {
           const profileData = universalProfileSnap.data();
           const province = profileData.entityOverview?.province;
           
-          console.log('📋 STEP 2: Province for successful deal SME', smeId, ':', province);
+          console.log('📋 Province for successful deal SME', smeId, ':', province);
           
           if (province) {
             // Clean and standardize province names for ALL 9 provinces
@@ -937,19 +906,19 @@ const fetchGeographicData = async () => {
               provinceCount['Gauteng']++;
             }
           } else {
-            console.log('❌ STEP 2: No province found for successful deal SME:', smeId);
+            console.log('❌ No province found for successful deal SME:', smeId);
             provinceCount['Gauteng']++; // Default to Gauteng if no province specified
           }
         } else {
-          console.log('❌ STEP 2: Profile does not exist for successful deal SME:', smeId);
+          console.log('❌ Profile does not exist for successful deal SME:', smeId);
         }
       } catch (error) {
-        console.error(`❌ STEP 2: Error processing province for SME ${smeId}:`, error);
+        console.error(`❌ Error processing province for SME ${smeId}:`, error);
         provinceCount['Gauteng']++; // Default to Gauteng on error
       }
     }
     
-    console.log('📈 FINAL: Geographic distribution from successful deals (9 provinces):', provinceCount);
+    console.log('📈 Geographic distribution from successful deals (9 provinces):', provinceCount);
     return provinceCount;
   } catch (error) {
     console.error('❌ ERROR: Failed to fetch geographic data from successful deals:', error);
@@ -967,17 +936,16 @@ const fetchGeographicData = async () => {
   }
 };
 
-// NEW: Fetch Funding Instrument Data from Successful Deals
+// Fetch Funding Instrument Data from Successful Deals
 const fetchFundingInstrumentData = async () => {
   try {
-    // First get the successful deals using the SAME logic as MyCohorts
     const successfulDeals = await fetchInvestorSuccessfulDeals();
     const { applications } = successfulDeals;
     
-    console.log('🔍 STEP 1: Fetching funding instrument data from successful deals. Total applications:', applications.length);
+    console.log('🔍 Fetching funding instrument data from successful deals. Total applications:', applications.length);
     
     if (applications.length === 0) {
-      console.log('❌ STEP 1: No successful deals found for funding instrument analysis');
+      console.log('❌ No successful deals found for funding instrument analysis');
       return {
         'Equity': 0,
         'Debt': 0,
@@ -994,11 +962,11 @@ const fetchFundingInstrumentData = async () => {
       'Other': 0
     };
     
-    // STEP 2: Process each successful application to get investment type
+    // Process each successful application to get investment type
     applications.forEach(application => {
       const investmentType = application.fundingDetails?.investmentType || application.investmentType;
       
-      console.log('📋 STEP 2: Investment type for successful deal:', investmentType);
+      console.log('📋 Investment type for successful deal:', investmentType);
       
       if (investmentType) {
         const typeLower = investmentType.toLowerCase().trim();
@@ -1013,12 +981,12 @@ const fetchFundingInstrumentData = async () => {
           fundingCount['Other']++;
         }
       } else {
-        console.log('❌ STEP 2: No investment type found for successful deal');
+        console.log('❌ No investment type found for successful deal');
         fundingCount['Other']++;
       }
     });
     
-    console.log('📈 FINAL: Funding instrument counts from successful deals:', fundingCount);
+    console.log('📈 Funding instrument counts from successful deals:', fundingCount);
     return fundingCount;
   } catch (error) {
     console.error('❌ ERROR: Failed to fetch funding instrument data from successful deals:', error);
@@ -1031,17 +999,16 @@ const fetchFundingInstrumentData = async () => {
   }
 };
 
-// NEW: Fetch Demographic/Ownership Data from Successful Deals
+// Fetch Demographic/Ownership Data from Successful Deals
 const fetchDemographicOwnershipData = async () => {
   try {
-    // First get the successful deals using the SAME logic as MyCohorts
     const successfulDeals = await fetchInvestorSuccessfulDeals();
     const { smeIds } = successfulDeals;
     
-    console.log('🔍 STEP 1: Fetching demographic/ownership data from successful deals. Total SMEs:', smeIds.length);
+    console.log('🔍 Fetching demographic/ownership data from successful deals. Total SMEs:', smeIds.length);
     
     if (smeIds.length === 0) {
-      console.log('❌ STEP 1: No SMEs found in successful deals for demographic analysis');
+      console.log('❌ No SMEs found in successful deals for demographic analysis');
       return {
         'Women-led': 0,
         'Youth-led': 0,
@@ -1058,86 +1025,50 @@ const fetchDemographicOwnershipData = async () => {
       'Other': 0
     };
     
-    // STEP 2: Fetch ownership data for each SME from successful deals
+    // Fetch ownership data for each SME from successful deals
     for (const smeId of smeIds) {
       try {
-        console.log('🔍 STEP 2: Fetching profile for SME from successful deal:', smeId);
+        console.log('🔍 Fetching profile for SME from successful deal:', smeId);
         const universalProfileRef = doc(db, "universalProfiles", smeId);
         const universalProfileSnap = await getDoc(universalProfileRef);
         
         if (universalProfileSnap.exists()) {
           const profileData = universalProfileSnap.data();
-          const shareholders = profileData.ownershipManagement?.shareholders || [];
+          const socialImpact = profileData.socialImpact || {};
           
-          console.log('📋 STEP 2: Shareholders for successful deal SME', smeId, ':', shareholders);
+          // Using the same logic as your existing components
+          const womenOwnership = parseFloat(socialImpact.womenOwnership) || 0;
+          const youthOwnership = parseFloat(socialImpact.youthOwnership) || 0;
+          const blackOwnership = parseFloat(socialImpact.blackOwnership) || 0;
           
-          if (shareholders.length > 0) {
-            // Find the shareholder with the highest shareholding (owner)
-            let highestShareholder = null;
-            let highestShareholding = 0;
-            
-            shareholders.forEach(shareholder => {
-              const shareholding = parseFloat(shareholder.shareholding) || 0;
-              if (shareholding > highestShareholding) {
-                highestShareholding = shareholding;
-                highestShareholder = shareholder;
-              }
-            });
-            
-            console.log('👑 STEP 2: Highest shareholder for SME', smeId, ':', highestShareholder);
-            
-            if (highestShareholder) {
-              // Check demographic characteristics of the main owner
-              const gender = highestShareholder.gender;
-              const isYouth = highestShareholder.isYouth;
-              const race = highestShareholder.race;
-              
-              console.log('📊 STEP 2: Owner demographics for SME', smeId, ':', {
-                gender,
-                isYouth,
-                race,
-                shareholding: highestShareholding
-              });
-              
-              // Count demographic categories (can be multiple)
-              if (gender && gender.toLowerCase() === 'female') {
-                demographicCount['Women-led']++;
-              }
-              
-              if (isYouth === true) {
-                demographicCount['Youth-led']++;
-              }
-              
-              if (race && race.toLowerCase() === 'black') {
-                demographicCount['Black-owned']++;
-              }
-              
-              // If none of the above categories apply, count as "Other"
-              if (!gender || gender.toLowerCase() !== 'female') {
-                if (isYouth !== true) {
-                  if (!race || race.toLowerCase() !== 'black') {
-                    demographicCount['Other']++;
-                  }
-                }
-              }
-            } else {
-              console.log('❌ STEP 2: No valid shareholder found for SME:', smeId);
-              demographicCount['Other']++;
-            }
-          } else {
-            console.log('❌ STEP 2: No shareholders found for successful deal SME:', smeId);
+          // Count based on ownership percentages (threshold of 50% for "led/owned")
+          if (womenOwnership >= 50) {
+            demographicCount['Women-led']++;
+          }
+          
+          if (youthOwnership >= 50) {
+            demographicCount['Youth-led']++;
+          }
+          
+          if (blackOwnership >= 50) {
+            demographicCount['Black-owned']++;
+          }
+          
+          // If none of the above categories apply, count as "Other"
+          if (womenOwnership < 50 && youthOwnership < 50 && blackOwnership < 50) {
             demographicCount['Other']++;
           }
         } else {
-          console.log('❌ STEP 2: Profile does not exist for successful deal SME:', smeId);
+          console.log('❌ Profile does not exist for successful deal SME:', smeId);
+          demographicCount['Other']++;
         }
       } catch (error) {
-        console.error(`❌ STEP 2: Error processing demographic data for SME ${smeId}:`, error);
+        console.error(`❌ Error processing demographic data for SME ${smeId}:`, error);
         demographicCount['Other']++;
       }
     }
     
-    console.log('📈 FINAL: Demographic/ownership counts from successful deals:', demographicCount);
+    console.log('📈 Demographic/ownership counts from successful deals:', demographicCount);
     return demographicCount;
   } catch (error) {
     console.error('❌ ERROR: Failed to fetch demographic/ownership data from successful deals:', error);
@@ -1150,7 +1081,7 @@ const fetchDemographicOwnershipData = async () => {
   }
 };
 
-// FALLBACK DATA for when investor has no successful deals - UPDATED FOR 9 PROVINCES
+// FALLBACK DATA for when investor has no successful deals
 const getFallbackDataBasedOnUser = () => {
   const currentUser = auth.currentUser;
   const userHash = currentUser?.uid ? currentUser.uid.charCodeAt(0) % 4 : 0;
@@ -1261,14 +1192,14 @@ const PortfolioComposition = ({ openPopup }) => {
     totalApplications: 0
   });
 
-  // Load chart preferences on component mount
+  // Load chart preferences from Firebase on component mount
   useEffect(() => {
     const loadPreferences = async () => {
       const currentUser = auth.currentUser;
       if (currentUser) {
         const savedPreferences = await loadUserChartPreferences(currentUser.uid);
-        if (savedPreferences) {
-          setSelectedCharts(savedPreferences.selectedCharts || selectedCharts);
+        if (savedPreferences && savedPreferences.selectedCharts) {
+          setSelectedCharts(savedPreferences.selectedCharts);
         }
       }
     };
@@ -1276,7 +1207,7 @@ const PortfolioComposition = ({ openPopup }) => {
     loadPreferences();
   }, []);
 
-  // Save preferences when they change
+  // Save preferences to Firebase when they change
   useEffect(() => {
     const savePreferences = async () => {
       const currentUser = auth.currentUser;
@@ -1292,7 +1223,7 @@ const PortfolioComposition = ({ openPopup }) => {
     // Debounce the save to prevent too many writes
     const timeoutId = setTimeout(savePreferences, 1000);
     return () => clearTimeout(timeoutId);
-  }, [selectedCharts]);
+  }, [selectedCharts, compositionData.loading]);
 
   // Fetch composition data when component mounts
   useEffect(() => {
@@ -1505,35 +1436,37 @@ const PortfolioComposition = ({ openPopup }) => {
     }];
 
     const handleEyeClick = () => {
-      openPopup(
-        <div className="popup-content">
-          <h3>{title}</h3>
-          <div className="popup-description">
-            Detailed percentage breakdown of {title.toLowerCase()} from your successful deals
-          </div>
-          <div className="popup-chart">
-            <Doughnut data={chartData} options={staticPieOptions} plugins={plugins} />
-          </div>
-          <div className="popup-details">
-            {labels.map((label, index) => (
-              <div key={label} className="detail-item">
-                <span className="detail-label">{label}:</span>
-                <span className="detail-value">{data[index]}%</span>
+      if (openPopup) {
+        openPopup(
+          <div className="popup-content">
+            <h3>{title}</h3>
+            <div className="popup-description">
+              Detailed percentage breakdown of {title.toLowerCase()} from your successful deals
+            </div>
+            <div className="popup-chart">
+              <Doughnut data={chartData} options={staticPieOptions} plugins={plugins} />
+            </div>
+            <div className="popup-details">
+              {labels.map((label, index) => (
+                <div key={label} className="detail-item">
+                  <span className="detail-label">{label}:</span>
+                  <span className="detail-value">{data[index]}%</span>
+                </div>
+              ))}
+              <div className="detail-item" style={{borderLeftColor: '#6E260E'}}>
+                <span className="detail-label">Data Source:</span>
+                <span className="detail-value">
+                  {compositionData.usingFallback ? 'Sample Portfolio' : 'Your Successful Deals'}
+                </span>
               </div>
-            ))}
-            <div className="detail-item" style={{borderLeftColor: '#6E260E'}}>
-              <span className="detail-label">Data Source:</span>
-              <span className="detail-value">
-                {compositionData.usingFallback ? 'Sample Portfolio' : 'Your Successful Deals'}
-              </span>
-            </div>
-            <div className="detail-item">
-              <span className="detail-label">Total SMEs:</span>
-              <span className="detail-value">{compositionData.totalSMEs}</span>
+              <div className="detail-item">
+                <span className="detail-label">Total SMEs:</span>
+                <span className="detail-value">{compositionData.totalSMEs}</span>
+              </div>
             </div>
           </div>
-        </div>
-      );
+        );
+      }
     };
 
     return (
