@@ -49,903 +49,6 @@ const downloadCSV = (data, filename) => {
   URL.revokeObjectURL(url)
 }
 
-// Loan Repayments Component (now includes Default Flags)
-const LoanRepayments = ({ activeSection, currentUser, isInvestorView }) => {
-  const [timeFrame, setTimeFrame] = useState("monthly")
-  const [monthlyData, setMonthlyData] = useState({
-    labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
-    scheduled: [0, 0, 0, 0, 0, 0],
-    actual: [0, 0, 0, 0, 0, 0],
-  })
-  const [quarterlyData, setQuarterlyData] = useState({
-    labels: ["Q1", "Q2", "Q3", "Q4"],
-    scheduled: [0, 0, 0, 0],
-    actual: [0, 0, 0, 0],
-  })
-  const [comment, setComment] = useState("")
-  const [comments, setComments] = useState([])
-  const [showEditForm, setShowEditForm] = useState(false)
-  const [showDownloadOptions, setShowDownloadOptions] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-
-  // Default Flags State
-  const [flags, setFlags] = useState([])
-  const [showFlagsEditForm, setShowFlagsEditForm] = useState(false)
-  const [showFlagsDownloadOptions, setShowFlagsDownloadOptions] = useState(false)
-
-  const saveLoanData = async () => {
-    if (!currentUser) return
-
-    try {
-      await setDoc(doc(db, "loan-repayments", currentUser.uid), {
-        monthlyData,
-        quarterlyData,
-        comments,
-        flags,
-        lastUpdated: new Date().toISOString(),
-      })
-      setShowEditForm(false)
-      setShowFlagsEditForm(false)
-      alert("Loan repayment data saved successfully!")
-    } catch (error) {
-      console.error("Error saving loan data:", error)
-      alert("Error saving data")
-    }
-  }
-
-  const loadLoanData = async () => {
-    if (!currentUser) return
-
-    try {
-      setIsLoading(true)
-      const docRef = doc(db, "loan-repayments", currentUser.uid)
-      const docSnap = await getDoc(docRef)
-      if (docSnap.exists()) {
-        const data = docSnap.data()
-        setMonthlyData(
-          data.monthlyData || {
-            labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
-            scheduled: [0, 0, 0, 0, 0, 0],
-            actual: [0, 0, 0, 0, 0, 0],
-          },
-        )
-        setQuarterlyData(
-          data.quarterlyData || {
-            labels: ["Q1", "Q2", "Q3", "Q4"],
-            scheduled: [0, 0, 0, 0],
-            actual: [0, 0, 0, 0],
-          },
-        )
-        setComments(data.comments || [])
-        setFlags(data.flags || [])
-      } else {
-        // Initialize with empty data if no document exists
-        await setDoc(docRef, {
-          monthlyData,
-          quarterlyData,
-          comments: [],
-          flags: [],
-          lastUpdated: new Date().toISOString(),
-        })
-      }
-    } catch (error) {
-      console.error("Error loading loan data:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (currentUser) {
-      loadLoanData()
-    }
-  }, [currentUser])
-
-  const updateScheduledValue = (index, value, period) => {
-    if (period === "monthly") {
-      const newData = { ...monthlyData }
-      newData.scheduled[index] = Number.parseFloat(value) || 0
-      setMonthlyData(newData)
-    } else {
-      const newData = { ...quarterlyData }
-      newData.scheduled[index] = Number.parseFloat(value) || 0
-      setQuarterlyData(newData)
-    }
-  }
-
-  const updateActualValue = (index, value, period) => {
-    if (period === "monthly") {
-      const newData = { ...monthlyData }
-      newData.actual[index] = Number.parseFloat(value) || 0
-      setMonthlyData(newData)
-    } else {
-      const newData = { ...quarterlyData }
-      newData.actual[index] = Number.parseFloat(value) || 0
-      setQuarterlyData(newData)
-    }
-  }
-
-  // Default Flags Functions
-  const updateFlag = (index, field, value) => {
-    const newFlags = [...flags]
-    newFlags[index][field] = field === "count" ? Number.parseFloat(value) || 0 : value
-    setFlags(newFlags)
-  }
-
-  const addFlag = () => {
-    const newFlag = {
-      id: flags.length + 1,
-      name: "New Flag",
-      status: "Watch",
-      count: 0,
-      action: "Monitor",
-    }
-    setFlags([...flags, newFlag])
-  }
-
-  const removeFlag = (index) => {
-    const newFlags = flags.filter((_, i) => i !== index)
-    setFlags(newFlags)
-  }
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "Critical":
-        return "#f44336"
-      case "Warning":
-        return "#FF9800"
-      case "Watch":
-        return "#FFC107"
-      default:
-        return "#9E9E9E"
-    }
-  }
-
-  const handleAction = (id, action) => {
-    alert(`Action "${action}" initiated for flag ${id}`)
-  }
-
-  const handleAddComment = () => {
-    if (comment.trim()) {
-      const newComment = {
-        id: comments.length + 1,
-        text: comment,
-        date: new Date().toISOString().split("T")[0],
-      }
-      const updatedComments = [...comments, newComment]
-      setComments(updatedComments)
-      setComment("")
-
-      // Auto-save comments
-      if (currentUser) {
-        setDoc(
-          doc(db, "loan-repayments", currentUser.uid),
-          {
-            monthlyData,
-            quarterlyData,
-            comments: updatedComments,
-            flags,
-            lastUpdated: new Date().toISOString(),
-          },
-          { merge: true },
-        )
-      }
-    }
-  }
-
-  const handleDownload = () => {
-    const data = timeFrame === "monthly" ? monthlyData : quarterlyData
-    const csvData = [
-      ["Metric", "Value"],
-      ["Time Frame", timeFrame],
-      ["", ""],
-      ["Month/Quarter", "Scheduled", "Actual"],
-      ...data.labels.map((label, index) => [label, data.scheduled[index], data.actual[index]]),
-    ]
-      .map((row) => row.join(","))
-      .join("\n")
-
-    const blob = new Blob([csvData], { type: "text/csv" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "loan-repayments.csv"
-    a.click()
-    URL.revokeObjectURL(url)
-    setShowDownloadOptions(false)
-  }
-
-  const handleFlagsDownload = (type) => {
-    if (type === "csv") {
-      const csvContent = [
-        ["Flag Name", "Status", "Count", "Action"],
-        ...flags.map((flag) => [flag.name, flag.status, flag.count, flag.action]),
-      ]
-        .map((row) => row.join(","))
-        .join("\n")
-
-      const blob = new Blob([csvContent], { type: "text/csv" })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = "default-flags.csv"
-      a.click()
-      URL.revokeObjectURL(url)
-    } else if (type === "json") {
-      const jsonContent = JSON.stringify(flags, null, 2)
-      const blob = new Blob([jsonContent], { type: "application/json" })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = "default-flags.json"
-      a.click()
-      URL.revokeObjectURL(url)
-    }
-    setShowFlagsDownloadOptions(false)
-  }
-
-  if (activeSection !== "loan-repayments") return null
-
-  if (isLoading) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "200px",
-          backgroundColor: "#fdfcfb",
-          borderRadius: "8px",
-        }}
-      >
-        <div>Loading loan repayment data...</div>
-      </div>
-    )
-  }
-
-  const data = timeFrame === "monthly" ? monthlyData : quarterlyData
-
-  const chartOptions = {
-    responsive: true,
-    plugins: {
-      legend: {
-        position: "top",
-      },
-      title: {
-        display: true,
-        text: `Loan Repayments vs Schedule (${timeFrame})`,
-        color: "#4a352f",
-      },
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        title: {
-          display: true,
-          text: "Amount (R)",
-          color: "#7d5a50",
-        },
-      },
-      x: {
-        title: {
-          display: false,
-        },
-      },
-    },
-  }
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {/* Loan Repayments Section */}
-      <div
-        style={{
-          display: "flex",
-          gap: "20px",
-          flexDirection: window.innerWidth < 768 ? "column" : "row",
-        }}
-      >
-        <div
-          style={{
-            flex: 2,
-            backgroundColor: "#fdfcfb",
-            padding: "20px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "20px",
-              flexDirection: window.innerWidth < 768 ? "column" : "row",
-              gap: window.innerWidth < 768 ? "10px" : "0",
-            }}
-          >
-            <h2 style={{ color: "#5d4037", margin: 0 }}>Loan Repayments</h2>
-            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-              <button
-                onClick={() => setTimeFrame("monthly")}
-                style={{
-                  padding: "8px 15px",
-                  backgroundColor: timeFrame === "monthly" ? "#4a352f" : "#e6d7c3",
-                  color: timeFrame === "monthly" ? "#faf7f2" : "#4a352f",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                }}
-              >
-                Monthly
-              </button>
-              <button
-                onClick={() => setTimeFrame("quarterly")}
-                style={{
-                  padding: "8px 15px",
-                  backgroundColor: timeFrame === "quarterly" ? "#4a352f" : "#e6d7c3",
-                  color: timeFrame === "quarterly" ? "#faf7f2" : "#4a352f",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                }}
-              >
-                Quarterly
-              </button>
-              {!isInvestorView && (
-                <button
-                  onClick={() => setShowEditForm(!showEditForm)}
-                  style={{
-                    padding: "8px 15px",
-                    backgroundColor: "#4a352f",
-                    color: "#faf7f2",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                  }}
-                >
-                  {showEditForm ? "Cancel" : "Edit Data"}
-                </button>
-              )}
-              <button
-                onClick={handleDownload}
-                style={{
-                  padding: "8px 15px",
-                  backgroundColor: "#a67c52",
-                  color: "#faf7f2",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                }}
-              >
-                Download CSV
-              </button>
-            </div>
-          </div>
-
-          {!isInvestorView && showEditForm && (
-            <div
-              style={{
-                backgroundColor: "#f7f3f0",
-                padding: "20px",
-                borderRadius: "6px",
-                marginBottom: "20px",
-              }}
-            >
-              <h3 style={{ color: "#72542b", marginTop: 0 }}>Edit Loan Repayment Data</h3>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-                <div>
-                  <h4 style={{ color: "#72542b" }}>Monthly Data</h4>
-                  <div style={{ marginBottom: "15px" }}>
-                    <h5 style={{ color: "#72542b" }}>Scheduled</h5>
-                    {monthlyData.labels.map((month, index) => (
-                      <div
-                        key={month}
-                        style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}
-                      >
-                        <span style={{ minWidth: "40px", color: "#72542b" }}>{month}:</span>
-                        <input
-                          type="number"
-                          value={monthlyData.scheduled[index]}
-                          onChange={(e) => updateScheduledValue(index, e.target.value, "monthly")}
-                          style={{
-                            padding: "6px",
-                            border: "1px solid #d4c4b0",
-                            borderRadius: "4px",
-                            width: "100px",
-                          }}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                  <div>
-                    <h5 style={{ color: "#72542b" }}>Actual</h5>
-                    {monthlyData.labels.map((month, index) => (
-                      <div
-                        key={month}
-                        style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}
-                      >
-                        <span style={{ minWidth: "40px", color: "#72542b" }}>{month}:</span>
-                        <input
-                          type="number"
-                          value={monthlyData.actual[index]}
-                          onChange={(e) => updateActualValue(index, e.target.value, "monthly")}
-                          style={{
-                            padding: "6px",
-                            border: "1px solid #d4c4b0",
-                            borderRadius: "4px",
-                            width: "100px",
-                          }}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <h4 style={{ color: "#72542b" }}>Quarterly Data</h4>
-                  <div style={{ marginBottom: "15px" }}>
-                    <h5 style={{ color: "#72542b" }}>Scheduled</h5>
-                    {quarterlyData.labels.map((quarter, index) => (
-                      <div
-                        key={quarter}
-                        style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}
-                      >
-                        <span style={{ minWidth: "40px", color: "#72542b" }}>{quarter}:</span>
-                        <input
-                          type="number"
-                          value={quarterlyData.scheduled[index]}
-                          onChange={(e) => updateScheduledValue(index, e.target.value, "quarterly")}
-                          style={{
-                            padding: "6px",
-                            border: "1px solid #d4c4b0",
-                            borderRadius: "4px",
-                            width: "100px",
-                          }}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                  <div>
-                    <h5 style={{ color: "#72542b" }}>Actual</h5>
-                    {quarterlyData.labels.map((quarter, index) => (
-                      <div
-                        key={quarter}
-                        style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}
-                      >
-                        <span style={{ minWidth: "40px", color: "#72542b" }}>{quarter}:</span>
-                        <input
-                          type="number"
-                          value={quarterlyData.actual[index]}
-                          onChange={(e) => updateActualValue(index, e.target.value, "quarterly")}
-                          style={{
-                            padding: "6px",
-                            border: "1px solid #d4c4b0",
-                            borderRadius: "4px",
-                            width: "100px",
-                          }}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={saveLoanData}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#16a34a",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  marginTop: "15px",
-                }}
-              >
-                Save Data
-              </button>
-            </div>
-          )}
-
-          <div style={{ height: "400px" }}>
-            <Bar
-              data={{
-                labels: data.labels,
-                datasets: [
-                  {
-                    label: "Scheduled",
-                    data: data.scheduled,
-                    backgroundColor: "#e6d7c3",
-                    borderColor: "#4a352f",
-                    borderWidth: 1,
-                  },
-                  {
-                    label: "Actual",
-                    data: data.actual,
-                    backgroundColor: "#a67c52",
-                    borderColor: "#4a352f",
-                    borderWidth: 1,
-                  },
-                ],
-              }}
-              options={chartOptions}
-            />
-          </div>
-        </div>
-
-        <div
-          style={{
-            flex: 1,
-            backgroundColor: "#fdfcfb",
-            padding: "20px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-          }}
-        >
-          <h3 style={{ color: "#5d4037", marginTop: 0 }}>Comments & Notes</h3>
-          {!isInvestorView && (
-            <div style={{ marginBottom: "15px" }}>
-              <textarea
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder="Add a comment..."
-                style={{
-                  width: "100%",
-                  minHeight: "80px",
-                  padding: "10px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                  resize: "vertical",
-                }}
-              />
-              <button
-                onClick={handleAddComment}
-                style={{
-                  padding: "8px 15px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  marginTop: "10px",
-                }}
-              >
-                Add Comment
-              </button>
-            </div>
-          )}
-
-          <div style={{ maxHeight: "300px", overflowY: "auto" }}>
-            {comments.length === 0 ? (
-              <div
-                style={{
-                  textAlign: "center",
-                  padding: "20px",
-                  color: "#72542b",
-                }}
-              >
-                <p>No comments yet.</p>
-              </div>
-            ) : (
-              comments.map((c) => (
-                <div
-                  key={c.id}
-                  style={{
-                    padding: "10px",
-                    marginBottom: "10px",
-                    backgroundColor: "#f7f3f0",
-                    borderRadius: "4px",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      marginBottom: "5px",
-                      fontSize: "0.9em",
-                      color: "#72542b",
-                    }}
-                  >
-                    <span>Comment #{c.id}</span>
-                    <span>{c.date}</span>
-                  </div>
-                  <p style={{ margin: 0 }}>{c.text}</p>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Default Flags Section - Now under Loan Repayments */}
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-          <h2 style={{ color: "#5d4037", marginTop: 0 }}>Default Flags & Early Warnings</h2>
-          <div style={{ display: "flex", gap: "10px" }}>
-            {!isInvestorView && (
-              <button
-                onClick={() => setShowFlagsEditForm(!showFlagsEditForm)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                }}
-              >
-                {showFlagsEditForm ? "Cancel" : "Edit Data"}
-              </button>
-            )}
-            <div style={{ position: "relative" }}>
-              <button
-                onClick={() => setShowFlagsDownloadOptions(!showFlagsDownloadOptions)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#72542b",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                }}
-              >
-                Download
-              </button>
-              {showFlagsDownloadOptions && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "100%",
-                    right: 0,
-                    backgroundColor: "#fdfcfb",
-                    border: "1px solid #d4c4b0",
-                    borderRadius: "4px",
-                    boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                    zIndex: 1000,
-                  }}
-                >
-                  <button
-                    onClick={() => handleFlagsDownload("json")}
-                    style={{
-                      display: "block",
-                      width: "100%",
-                      padding: "8px 15px",
-                      backgroundColor: "transparent",
-                      border: "none",
-                      textAlign: "left",
-                      cursor: "pointer",
-                      color: "#5d4037",
-                    }}
-                  >
-                    Download JSON
-                  </button>
-                  <button
-                    onClick={() => handleFlagsDownload("csv")}
-                    style={{
-                      display: "block",
-                      width: "100%",
-                      padding: "8px 15px",
-                      backgroundColor: "transparent",
-                      border: "none",
-                      textAlign: "left",
-                      cursor: "pointer",
-                      color: "#5d4037",
-                    }}
-                  >
-                    Download CSV
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {!isInvestorView && showFlagsEditForm && (
-          <div
-            style={{
-              backgroundColor: "#f7f3f0",
-              padding: "20px",
-              borderRadius: "6px",
-              marginBottom: "20px",
-            }}
-          >
-            <h3 style={{ color: "#72542b", marginTop: 0 }}>Edit Default Flags Data</h3>
-            {flags.map((flag, index) => (
-              <div
-                key={index}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "2fr 1fr 1fr 2fr auto",
-                  gap: "10px",
-                  alignItems: "center",
-                  marginBottom: "10px",
-                  padding: "10px",
-                  backgroundColor: "#fdfcfb",
-                  borderRadius: "4px",
-                }}
-              >
-                <input
-                  type="text"
-                  value={flag.name}
-                  onChange={(e) => updateFlag(index, "name", e.target.value)}
-                  style={{
-                    padding: "8px",
-                    border: "1px solid #d4c4b0",
-                    borderRadius: "4px",
-                  }}
-                  placeholder="Flag Name"
-                />
-                <select
-                  value={flag.status}
-                  onChange={(e) => updateFlag(index, "status", e.target.value)}
-                  style={{
-                    padding: "8px",
-                    border: "1px solid #d4c4b0",
-                    borderRadius: "4px",
-                  }}
-                >
-                  <option value="Watch">Watch</option>
-                  <option value="Warning">Warning</option>
-                  <option value="Critical">Critical</option>
-                </select>
-                <input
-                  type="number"
-                  value={flag.count}
-                  onChange={(e) => updateFlag(index, "count", e.target.value)}
-                  style={{
-                    padding: "8px",
-                    border: "1px solid #d4c4b0",
-                    borderRadius: "4px",
-                  }}
-                  placeholder="Count"
-                />
-                <input
-                  type="text"
-                  value={flag.action}
-                  onChange={(e) => updateFlag(index, "action", e.target.value)}
-                  style={{
-                    padding: "8px",
-                    border: "1px solid #d4c4b0",
-                    borderRadius: "4px",
-                  }}
-                  placeholder="Action"
-                />
-                <button
-                  onClick={() => removeFlag(index)}
-                  style={{
-                    padding: "8px",
-                    backgroundColor: "#dc2626",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                  }}
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
-            <div style={{ marginTop: "15px" }}>
-              <button
-                onClick={addFlag}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#72542b",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  marginRight: "10px",
-                }}
-              >
-                Add Flag
-              </button>
-              <button
-                onClick={saveLoanData}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#16a34a",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                }}
-              >
-                Save Data
-              </button>
-            </div>
-          </div>
-        )}
-
-        {flags.length === 0 ? (
-          <div
-            style={{
-              textAlign: "center",
-              padding: "40px",
-              color: "#72542b",
-            }}
-          >
-            <p>No flag data available. {!isInvestorView && 'Click "Edit Data" to add your first flag.'}</p>
-          </div>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                color: "#5d4037",
-              }}
-            >
-              <thead>
-                <tr
-                  style={{
-                    backgroundColor: "#e8ddd4",
-                    borderBottom: "2px solid #d4c4b0",
-                  }}
-                >
-                  <th style={{ padding: "12px", textAlign: "left" }}>Flag Name</th>
-                  <th style={{ padding: "12px", textAlign: "left" }}>Status</th>
-                  <th style={{ padding: "12px", textAlign: "left" }}>Count</th>
-                  <th style={{ padding: "12px", textAlign: "left" }}>Action</th>
-                  {!isInvestorView && <th style={{ padding: "12px", textAlign: "left" }}>Actions</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {flags.map((flag) => (
-                  <tr
-                    key={flag.id}
-                    style={{
-                      borderBottom: "1px solid #e8ddd4",
-                    }}
-                  >
-                    <td style={{ padding: "12px" }}>{flag.name}</td>
-                    <td style={{ padding: "12px" }}>
-                      <span
-                        style={{
-                          padding: "6px 12px",
-                          borderRadius: "4px",
-                          backgroundColor: getStatusColor(flag.status),
-                          color: "white",
-                          display: "inline-block",
-                        }}
-                      >
-                        {flag.status}
-                      </span>
-                    </td>
-                    <td style={{ padding: "12px" }}>{flag.count}</td>
-                    <td style={{ padding: "12px" }}>{flag.action}</td>
-                    {!isInvestorView && (
-                      <td style={{ padding: "12px" }}>
-                        <button
-                          onClick={() => handleAction(flag.id, flag.action)}
-                          style={{
-                            padding: "6px 12px",
-                            backgroundColor: "#5d4037",
-                            color: "#fdfcfb",
-                            border: "none",
-                            borderRadius: "4px",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Take Action
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
 
 // Investment Ratios Component (updated - removed mock data)
 const InvestmentRatios = ({ activeSection, currentUser, isInvestorView }) => {
@@ -954,6 +57,42 @@ const InvestmentRatios = ({ activeSection, currentUser, isInvestorView }) => {
   const [showEditForm, setShowEditForm] = useState(false)
   const [ratios, setRatios] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+
+  // Define the exact 4 ratios we want in the correct order
+  const defaultRatios = [
+    {
+      name: "NAV",
+      value: 0,
+      target: ">0",
+      description: "Net Asset Value - The value of a company's assets minus its liabilities",
+      status: "Fair",
+      unit: "RM"
+    },
+    {
+      name: "Current Ratio",
+      value: 0,
+      target: ">1.5",
+      description: "Current Assets divided by Current Liabilities - Measures short-term liquidity",
+      status: "Fair",
+      unit: ""
+    },
+    {
+      name: "Interest Coverage",
+      value: 0,
+      target: ">3",
+      description: "EBIT divided by Interest Expense - Measures ability to pay interest on debt",
+      status: "Fair",
+      unit: ""
+    },
+    {
+      name: "Debt/EBITDA",
+      value: 0,
+      target: "<3",
+      description: "Total Debt divided by EBITDA - Measures leverage and debt repayment ability",
+      status: "Fair",
+      unit: ""
+    }
+  ]
 
   const saveRatiosData = async () => {
     if (!currentUser) return
@@ -978,14 +117,49 @@ const InvestmentRatios = ({ activeSection, currentUser, isInvestorView }) => {
       setIsLoading(true)
       const docRef = doc(db, "investment-ratios", currentUser.uid)
       const docSnap = await getDoc(docRef)
+      
       if (docSnap.exists()) {
-        setRatios(docSnap.data().ratios || [])
+        const data = docSnap.data().ratios || []
+        
+        // Create a map to quickly find existing ratios by name
+        const existingRatiosMap = {}
+        data.forEach(ratio => {
+          existingRatiosMap[ratio.name] = ratio
+        })
+        
+        // Build the new ratios array in the correct order
+        const newRatios = defaultRatios.map(defaultRatio => {
+          // If we have existing data for this ratio name, use it
+          if (existingRatiosMap[defaultRatio.name]) {
+            return {
+              ...defaultRatio,
+              value: existingRatiosMap[defaultRatio.name].value || 0,
+              target: existingRatiosMap[defaultRatio.name].target || defaultRatio.target,
+              description: existingRatiosMap[defaultRatio.name].description || defaultRatio.description,
+              status: existingRatiosMap[defaultRatio.name].status || defaultRatio.status,
+              unit: existingRatiosMap[defaultRatio.name].unit || defaultRatio.unit
+            }
+          }
+          // Otherwise use the default
+          return defaultRatio
+        })
+        
+        setRatios(newRatios)
+        
+        // Update database with the new structure if it was different
+        if (JSON.stringify(data) !== JSON.stringify(newRatios)) {
+          await setDoc(docRef, {
+            ratios: newRatios,
+            lastUpdated: new Date().toISOString(),
+          })
+        }
       } else {
-        // Initialize with empty data if no document exists
+        // Initialize with new ratio structure if no document exists
         await setDoc(docRef, {
-          ratios: [],
+          ratios: defaultRatios,
           lastUpdated: new Date().toISOString(),
         })
+        setRatios(defaultRatios)
       }
     } catch (error) {
       console.error("Error loading ratios data:", error)
@@ -1004,6 +178,8 @@ const InvestmentRatios = ({ activeSection, currentUser, isInvestorView }) => {
     const newRatios = [...ratios]
     if (field === "value") {
       newRatios[index][field] = Number.parseFloat(value) || 0
+    } else if (field === "unit") {
+      newRatios[index][field] = value
     } else {
       newRatios[index][field] = value
     }
@@ -1017,11 +193,18 @@ const InvestmentRatios = ({ activeSection, currentUser, isInvestorView }) => {
       target: ">0",
       description: "Description of the ratio",
       status: "Fair",
+      unit: ""
     }
     setRatios([...ratios, newRatio])
   }
 
   const removeRatio = (index) => {
+    // Don't allow removal of the core 4 ratios
+    const coreRatios = ["NAV", "Current Ratio", "Interest Coverage", "Debt/EBITDA"]
+    if (coreRatios.includes(ratios[index].name)) {
+      alert("Core ratios cannot be removed. You can only remove additional ratios.")
+      return
+    }
     const newRatios = ratios.filter((_, i) => i !== index)
     setRatios(newRatios)
   }
@@ -1052,8 +235,15 @@ const InvestmentRatios = ({ activeSection, currentUser, isInvestorView }) => {
   const handleDownload = (type) => {
     if (type === "csv") {
       const csvContent = [
-        ["Ratio Name", "Value", "Target", "Status", "Description"],
-        ...ratios.map((ratio) => [ratio.name, ratio.value, ratio.target, ratio.status, ratio.description]),
+        ["Ratio Name", "Value", "Unit", "Target", "Status", "Description"],
+        ...ratios.map((ratio) => [
+          ratio.name, 
+          ratio.value, 
+          ratio.unit || "", 
+          ratio.target, 
+          ratio.status, 
+          ratio.description
+        ]),
       ]
         .map((row) => row.join(","))
         .join("\n")
@@ -1211,7 +401,7 @@ const InvestmentRatios = ({ activeSection, currentUser, isInvestorView }) => {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "2fr 1fr 1fr 1fr auto",
+                  gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr auto",
                   gap: "10px",
                   alignItems: "center",
                   marginBottom: "10px",
@@ -1227,6 +417,7 @@ const InvestmentRatios = ({ activeSection, currentUser, isInvestorView }) => {
                     borderRadius: "4px",
                   }}
                   placeholder="Ratio Name"
+                  disabled={["NAV", "Current Ratio", "Interest Coverage", "Debt/EBITDA"].includes(ratio.name)}
                 />
                 <input
                   type="number"
@@ -1239,6 +430,17 @@ const InvestmentRatios = ({ activeSection, currentUser, isInvestorView }) => {
                     borderRadius: "4px",
                   }}
                   placeholder="Value"
+                />
+                <input
+                  type="text"
+                  value={ratio.unit || ""}
+                  onChange={(e) => updateRatio(index, "unit", e.target.value)}
+                  style={{
+                    padding: "8px",
+                    border: "1px solid #d4c4b0",
+                    borderRadius: "4px",
+                  }}
+                  placeholder="Unit (e.g., RM)"
                 />
                 <input
                   type="text"
@@ -1269,12 +471,13 @@ const InvestmentRatios = ({ activeSection, currentUser, isInvestorView }) => {
                   onClick={() => removeRatio(index)}
                   style={{
                     padding: "8px",
-                    backgroundColor: "#dc2626",
+                    backgroundColor: ["NAV", "Current Ratio", "Interest Coverage", "Debt/EBITDA"].includes(ratio.name) ? "#9E9E9E" : "#dc2626",
                     color: "white",
                     border: "none",
                     borderRadius: "4px",
-                    cursor: "pointer",
+                    cursor: ["NAV", "Current Ratio", "Interest Coverage", "Debt/EBITDA"].includes(ratio.name) ? "not-allowed" : "pointer",
                   }}
+                  disabled={["NAV", "Current Ratio", "Interest Coverage", "Debt/EBITDA"].includes(ratio.name)}
                 >
                   Remove
                 </button>
@@ -1307,7 +510,7 @@ const InvestmentRatios = ({ activeSection, currentUser, isInvestorView }) => {
                 marginRight: "10px",
               }}
             >
-              Add Ratio
+              Add Additional Ratio
             </button>
             <button
               onClick={saveRatiosData}
@@ -1334,13 +537,13 @@ const InvestmentRatios = ({ activeSection, currentUser, isInvestorView }) => {
             color: "#72542b",
           }}
         >
-          <p>No ratio data available. {!isInvestorView && 'Click "Edit Data" to add your first investment ratio.'}</p>
+          <p>No ratio data available.</p>
         </div>
       ) : (
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: window.innerWidth < 768 ? "1fr" : "repeat(auto-fit, minmax(250px, 1fr))",
+            gridTemplateColumns: window.innerWidth < 768 ? "1fr" : "repeat(4, 1fr)",
             gap: "20px",
           }}
         >
@@ -1354,7 +557,9 @@ const InvestmentRatios = ({ activeSection, currentUser, isInvestorView }) => {
                 textAlign: "center",
               }}
             >
-              <h3 style={{ color: "#7d5a50" }}>{ratio.name}</h3>
+              <h3 style={{ color: "#7d5a50", fontSize: "18px", minHeight: "54px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {ratio.name}
+              </h3>
               <div
                 style={{
                   width: "120px",
@@ -1373,7 +578,7 @@ const InvestmentRatios = ({ activeSection, currentUser, isInvestorView }) => {
               >
                 <span
                   style={{
-                    fontSize: "24px",
+                    fontSize: ratio.value.toString().length > 6 ? "18px" : "24px",
                     fontWeight: "bold",
                     color: "#5d4037",
                   }}
@@ -1385,6 +590,15 @@ const InvestmentRatios = ({ activeSection, currentUser, isInvestorView }) => {
                     fontSize: "12px",
                     color: "#72542b",
                     marginTop: "5px",
+                  }}
+                >
+                  {ratio.unit ? `${ratio.unit}` : ''}
+                </span>
+                <span
+                  style={{
+                    fontSize: "10px",
+                    color: "#72542b",
+                    marginTop: "2px",
                   }}
                 >
                   Target: {ratio.target}
@@ -1433,6 +647,11 @@ const InvestmentRatios = ({ activeSection, currentUser, isInvestorView }) => {
                       {ratio.status}
                     </span>
                   </p>
+                  {ratio.unit && (
+                    <p>
+                      <strong>Unit:</strong> {ratio.unit}
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -2841,7 +2060,7 @@ const CapitalStructure = ({
     { id: "cap-table", label: "Cap Table" },
     { id: "investment-ratios", label: "Investment Ratios" },
     { id: "dividend-history", label: "Dividend History" },
-    { id: "loan-repayments", label: "Loan Repayments" },
+    
   ]
 
   if (isEmbedded) {
@@ -2923,7 +2142,6 @@ const CapitalStructure = ({
         <CapTable activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
         <InvestmentRatios activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
         <DividendHistory activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
-        <LoanRepayments activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
       </div>
     )
   }
@@ -3019,7 +2237,7 @@ const CapitalStructure = ({
           <CapTable activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
           <InvestmentRatios activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
           <DividendHistory activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
-          <LoanRepayments activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
+         
         </div>
       </div>
     </div>

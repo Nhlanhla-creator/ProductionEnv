@@ -714,13 +714,14 @@ const PnLSnapshot = ({
                 backgroundColor: "#5d4037",
                 color: "#fdfcfb",
                 border: "none",
+
                 borderRadius: "6px",
                 cursor: "pointer",
                 fontWeight: "600",
                 fontSize: "14px",
               }}
             >
-              Add P&L Details
+              Add Data
             </button>
           )}
 
@@ -1496,7 +1497,135 @@ const PnLSnapshot = ({
 }
 
 // Cashflow Trends Component - Second position
-const CashflowTrends = ({ activeSection, viewMode, financialYearStart, balanceSheetData, currentMonth }) => {
+const CashflowTrends = ({ 
+  activeSection, 
+  viewMode, 
+  financialYearStart, 
+  balanceSheetData, 
+  currentMonth,
+  user,
+  isInvestorView 
+}) => {
+  const [showModal, setShowModal] = useState(false)
+  const [cashflowDetails, setCashflowDetails] = useState({
+    cashflow: Array(12).fill(""),
+    burnRate: Array(12).fill(""),
+    loanRepayments: Array(12).fill(""),
+    cashflowBudget: Array(12).fill(""),
+    burnRateBudget: Array(12).fill(""),
+    loanRepaymentsBudget: Array(12).fill(""),
+    notes: "",
+  })
+
+  // Load data from Firebase
+  useEffect(() => {
+    if (user) {
+      loadCashflowDataFromFirebase()
+    }
+  }, [user])
+
+  const loadCashflowDataFromFirebase = async () => {
+    if (!user) return
+    
+    try {
+      const cashflowDoc = await getDoc(doc(db, "financialData", `${user.uid}_cashflowTrends`))
+      
+      if (cashflowDoc.exists()) {
+        const firebaseData = cashflowDoc.data()
+        setCashflowDetails({
+          cashflow: firebaseData.cashflow?.map(String) || Array(12).fill(""),
+          burnRate: firebaseData.burnRate?.map(String) || Array(12).fill(""),
+          loanRepayments: firebaseData.loanRepayments?.map(String) || Array(12).fill(""),
+          cashflowBudget: firebaseData.cashflowBudget?.map(String) || Array(12).fill(""),
+          burnRateBudget: firebaseData.burnRateBudget?.map(String) || Array(12).fill(""),
+          loanRepaymentsBudget: firebaseData.loanRepaymentsBudget?.map(String) || Array(12).fill(""),
+          notes: firebaseData.notes || "",
+        })
+      }
+    } catch (error) {
+      console.error("Error loading cashflow data:", error)
+    }
+  }
+
+  const handleSaveCashflowDetails = async () => {
+    if (!user) {
+      alert("Please log in to save cashflow data")
+      return
+    }
+    
+    try {
+      const firebaseData = {
+        userId: user.uid,
+        chartName: "cashflowTrends",
+        ...cashflowDetails,
+        lastUpdated: new Date().toISOString(),
+      }
+      
+      await setDoc(doc(db, "financialData", `${user.uid}_cashflowTrends`), firebaseData)
+      console.log("Cashflow data saved to Firebase")
+      setShowModal(false)
+    } catch (error) {
+      console.error("Error saving cashflow data:", error)
+      alert("Error saving cashflow data. Please try again.")
+    }
+  }
+
+  const updateCashflowDetailValue = (category, monthIndex, value) => {
+    setCashflowDetails((prev) => ({
+      ...prev,
+      [category]: prev[category].map((val, idx) => (idx === monthIndex ? value : val)),
+    }))
+  }
+
+  const renderMonthlyInputs = (category, label) => {
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    const startMonthIndex = months.indexOf(financialYearStart)
+    const orderedMonths = [...months.slice(startMonthIndex), ...months.slice(0, startMonthIndex)]
+    
+    return (
+      <div style={{ marginBottom: "20px" }}>
+        <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>{label}</h5>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+            gap: "10px",
+          }}
+        >
+          {orderedMonths.map((month, displayIndex) => {
+            const actualIndex = months.indexOf(month)
+            return (
+              <div key={month} style={{ display: "flex", flexDirection: "column" }}>
+                <label
+                  style={{
+                    fontSize: "12px",
+                    color: "#72542b",
+                    marginBottom: "5px",
+                    fontWeight: "500",
+                  }}
+                >
+                  {month}
+                </label>
+                <input
+                  type="number"
+                  value={cashflowDetails[category][actualIndex] || ""}
+                  onChange={(e) => updateCashflowDetailValue(category, actualIndex, e.target.value)}
+                  placeholder="0"
+                  style={{
+                    padding: "8px",
+                    borderRadius: "4px",
+                    border: "1px solid #e8ddd4",
+                    fontSize: "14px",
+                  }}
+                />
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
   if (activeSection !== "cashflow-trends") return null
 
   const generateMonths = () => {
@@ -1507,15 +1636,22 @@ const CashflowTrends = ({ activeSection, viewMode, financialYearStart, balanceSh
 
   const months = generateMonths()
 
+  // Use data from state for the charts
+  const cashflowData = cashflowDetails.cashflow.map(val => Number.parseFloat(val) || 0)
+  const burnRateData = cashflowDetails.burnRate.map(val => Number.parseFloat(val) || 0)
+  const loanRepaymentsData = cashflowDetails.loanRepayments.map(val => Number.parseFloat(val) || 0)
+
+  // REVERTED: Go back to the original runway calculation using balance sheet data
   const exampleCashflowData = [1.2, 1.1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.35, 0.3, 0.25, 0.2]
   const exampleBurnRateData = [0.1, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0.05, 0.05, 0.05, 0.05, 0.05]
 
-  const cashflowData = months.map((month, index) => {
+  // Original runway calculation from balance sheet data
+  const balanceSheetCashflowData = months.map((month, index) => {
     const balanceData = balanceSheetData?.[month]
     return balanceData ? Number.parseFloat(balanceData.cash) / 1000000 : exampleCashflowData[index]
   })
 
-  const burnRateData = months.map((month, index) => {
+  const balanceSheetBurnRateData = months.map((month, index) => {
     const balanceData = balanceSheetData?.[month]
     if (!balanceData) return exampleBurnRateData[index]
 
@@ -1555,10 +1691,12 @@ const CashflowTrends = ({ activeSection, viewMode, financialYearStart, balanceSh
   const displayLabels = getLabelsForView()
   const displayCashflow = aggregateDataForView(cashflowData)
   const displayBurnRate = aggregateDataForView(burnRateData)
+  const displayLoanRepayments = aggregateDataForView(loanRepaymentsData)
 
-  const currentCashBalance = cashflowData[months.indexOf(currentMonth)] || cashflowData[0]
+  // REVERTED: Original runway calculation
+  const currentCashBalance = balanceSheetCashflowData[months.indexOf(currentMonth)] || balanceSheetCashflowData[0]
   const avgBurnRate =
-    burnRateData.reduce((sum, rate) => sum + rate, 0) / burnRateData.filter((rate) => rate > 0).length || 1
+    balanceSheetBurnRateData.reduce((sum, rate) => sum + rate, 0) / balanceSheetBurnRateData.filter((rate) => rate > 0).length || 1
   const runwayMonths = avgBurnRate > 0 ? Math.round(currentCashBalance / avgBurnRate) : 999
 
   const cashflowOptions = {
@@ -1631,6 +1769,41 @@ const CashflowTrends = ({ activeSection, viewMode, financialYearStart, balanceSh
     },
   }
 
+  const loanRepaymentsOptions = {
+    responsive: true,
+    plugins: {
+      legend: {
+        display: false,
+      },
+      title: {
+        display: true,
+        text: "Loan Repayments (R m)",
+        color: "#5d4037",
+        font: {
+          size: 16,
+        },
+      },
+      tooltip: {
+        callbacks: {
+          label: (context) => `Loan Repayments: R${context.raw.toFixed(1)}m`,
+        },
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        title: {
+          display: false,
+        },
+      },
+      x: {
+        title: {
+          display: false,
+        },
+      },
+    },
+  }
+
   return (
     <div
       style={{
@@ -1641,13 +1814,62 @@ const CashflowTrends = ({ activeSection, viewMode, financialYearStart, balanceSh
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
     >
+      {/* FIXED: Better button layout that fits on one row */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "20px",
+          flexWrap: "nowrap", // Changed from wrap to nowrap
+          gap: "15px",
+        }}
+      >
+        <h3 style={{ 
+          color: "#5d4037", 
+          margin: 0,
+          whiteSpace: "nowrap", // Prevent text wrapping
+          minWidth: "150px" // Ensure minimum width
+        }}>
+          Cashflow Trends
+        </h3>
+        
+        <div style={{ 
+          display: "flex", 
+          gap: "10px", 
+          alignItems: "center",
+          flexShrink: 0, // Prevent shrinking
+        }}>
+          {!isInvestorView && (
+            <button
+              onClick={() => setShowModal(true)}
+              style={{
+                padding: "10px 20px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "14px",
+                whiteSpace: "nowrap", // Prevent button text wrapping
+              }}
+            >
+              Add Cashflow Data
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 4-column grid layout */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 1fr 1fr",
+          gridTemplateColumns: "repeat(4, 1fr)",
           gap: "20px",
         }}
       >
+        {/* Cashflow Chart */}
         <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
           <Line
             data={{
@@ -1667,6 +1889,8 @@ const CashflowTrends = ({ activeSection, viewMode, financialYearStart, balanceSh
             options={cashflowOptions}
           />
         </div>
+
+        {/* Burn Rate Chart */}
         <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
           <Line
             data={{
@@ -1686,6 +1910,29 @@ const CashflowTrends = ({ activeSection, viewMode, financialYearStart, balanceSh
             options={burnRateOptions}
           />
         </div>
+
+        {/* Loan Repayments Chart */}
+        <div style={{ height: "300px", padding: "15px", backgroundColor: "#f7f3f0", borderRadius: "6px" }}>
+          <Line
+            data={{
+              labels: displayLabels,
+              datasets: [
+                {
+                  label: "Loan Repayments",
+                  data: displayLoanRepayments,
+                  borderColor: "#9c7c5f",
+                  backgroundColor: "rgba(156, 124, 95, 0.1)",
+                  borderWidth: 2,
+                  tension: 0.1,
+                  fill: true,
+                },
+              ],
+            }}
+            options={loanRepaymentsOptions}
+          />
+        </div>
+
+        {/* Runway Circle */}
         <div
           style={{
             height: "300px",
@@ -1741,6 +1988,102 @@ const CashflowTrends = ({ activeSection, viewMode, financialYearStart, balanceSh
           </div>
         </div>
       </div>
+
+      {/* Modal for adding data */}
+      {showModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "#fdfcfb",
+              padding: "30px",
+              borderRadius: "8px",
+              maxWidth: "1200px",
+              maxHeight: "90vh",
+              overflow: "auto",
+              width: "95%",
+            }}
+          >
+            <h3 style={{ color: "#5d4037", marginBottom: "20px" }}>Add Cashflow Data</h3>
+            
+            <div style={{ marginBottom: "30px" }}>
+              <h4 style={{ color: "#5d4037", marginBottom: "20px", fontSize: "18px" }}>Actual Data</h4>
+              
+              {renderMonthlyInputs("cashflow", "Cashflow (R m)")}
+              {renderMonthlyInputs("burnRate", "Burn Rate (R m)")}
+              {renderMonthlyInputs("loanRepayments", "Loan Repayments (R m)")}
+            </div>
+            
+            <div style={{ marginBottom: "30px" }}>
+              <h4 style={{ color: "#5d4037", marginBottom: "20px", fontSize: "18px" }}>Budget Data</h4>
+              
+              {renderMonthlyInputs("cashflowBudget", "Cashflow Budget (R m)")}
+              {renderMonthlyInputs("burnRateBudget", "Burn Rate Budget (R m)")}
+              {renderMonthlyInputs("loanRepaymentsBudget", "Loan Repayments Budget (R m)")}
+            </div>
+            
+            <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+              Notes:
+            </label>
+            <textarea
+              value={cashflowDetails.notes}
+              onChange={(e) => setCashflowDetails({ ...cashflowDetails, notes: e.target.value })}
+              placeholder="Add any additional notes..."
+              style={{
+                width: "100%",
+                padding: "10px",
+                marginBottom: "20px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+                minHeight: "100px",
+              }}
+            />
+            
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setShowModal(false)}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveCashflowDetails}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                }}
+              >
+                Save Data
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1774,6 +2117,11 @@ const BalanceSheet = ({
     accumulatedDepreciation: "",
     accountsPayable: "",
     currentBorrowing: "",
+    // ADD THESE THREE NEW FIELDS:
+    thirdPartyLoan: "",
+    intercompanyLoan: "",
+    directorsLoan: "",
+    // END OF NEW FIELDS
     nonCurrentLiabilities: "",
     longTermLiabilities: "",
     ownersEquity: "",
@@ -1783,7 +2131,7 @@ const BalanceSheet = ({
     month: currentMonth,
     notes: "",
   })
-  
+
   // Enhanced health details state
   const [healthDetails, setHealthDetails] = useState({
     receivables: Array(12).fill(""),
@@ -1795,7 +2143,7 @@ const BalanceSheet = ({
     date: "",
     notes: "",
   })
-  
+
   // New state for validation and calculations
   const [validationWarnings, setValidationWarnings] = useState([])
   const [showValidationSummary, setShowValidationSummary] = useState(false)
@@ -1868,6 +2216,11 @@ const BalanceSheet = ({
 
   const accountsPayable = Number.parseFloat(currentData.accountsPayable) || 0
   const currentBorrowing = Number.parseFloat(currentData.currentBorrowing) || 0
+  // ADD THE NEW LOAN FIELDS
+  const thirdPartyLoan = Number.parseFloat(currentData.thirdPartyLoan) || 0
+  const intercompanyLoan = Number.parseFloat(currentData.intercompanyLoan) || 0
+  const directorsLoan = Number.parseFloat(currentData.directorsLoan) || 0
+  // END OF NEW FIELDS
   const nonCurrentLiabilities = Number.parseFloat(currentData.nonCurrentLiabilities) || 0
   const longTermLiabilities = Number.parseFloat(currentData.longTermLiabilities) || 0
   const ownersEquity = Number.parseFloat(currentData.ownersEquity) || 0
@@ -1876,7 +2229,10 @@ const BalanceSheet = ({
   const totalNonCurrentAssets = propertyPlantEquipment + intangibleAssets - accumulatedDepreciation
   const totalAssets = totalCurrentAssets + deposits + totalNonCurrentAssets
 
-  const totalCurrentLiabilities = accountsPayable + currentBorrowing
+  // UPDATE TOTAL CURRENT LIABILITIES TO INCLUDE NEW LOANS
+  const totalCurrentLiabilities = accountsPayable + currentBorrowing + 
+    thirdPartyLoan + intercompanyLoan + directorsLoan
+  
   const totalNonCurrentLiabilities = nonCurrentLiabilities
   const totalLiabilities = totalCurrentLiabilities + totalNonCurrentLiabilities + longTermLiabilities
   const totalLiabilitiesAndCapital = totalLiabilities + ownersEquity
@@ -1905,6 +2261,9 @@ Liabilities and Equity,
 Current Liabilities,
 Accounts Payable,${accountsPayable}
 Current Borrowing,${currentBorrowing}
+Third Party Loan,${thirdPartyLoan}
+Intercompany Loan,${intercompanyLoan}
+Directors Loan,${directorsLoan}
 Total Current Liabilities,${totalCurrentLiabilities}
 
 Non-Current Liabilities,${nonCurrentLiabilities}
@@ -1958,7 +2317,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
 
     setShowModal(false)
   }
-  
+
   const handleViewModeToggle = (newViewMode) => {
     if (onViewModeToggle) {
       onViewModeToggle(newViewMode)
@@ -2018,7 +2377,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
       date: chartData.balanceSheetHealth?.date || "",
       notes: chartData.balanceSheetHealth?.notes || "",
     })
-    
+
     // Calculate theoretical values when opening modal
     calculateTheoreticalValuesForValidation()
   }
@@ -2028,38 +2387,38 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
     // Use original P&L data (not divided by 1,000,000)
     const salesData = originalPnlData.sales || Array(12).fill(0)
     const cogsData = originalPnlData.cogs || Array(12).fill(0)
-    
+
     console.log("Sales data for calculation:", salesData)
     console.log("COGS data for calculation:", cogsData)
     console.log("Health details receivables:", healthDetails.receivables)
-    
+
     const theoreticalReceivablesDays = healthDetails.receivables.map((val, i) => {
       const receivableValue = Number.parseFloat(val) || 0
       const sales = salesData[i] || 1 // Avoid division by zero
       console.log(`Month ${i}: Receivables ${receivableValue}, Sales ${sales}`)
       return sales > 0 ? Math.round((receivableValue / sales) * 30) : 0
     })
-    
+
     const theoreticalPayablesDays = healthDetails.payables.map((val, i) => {
       const payableValue = Number.parseFloat(val) || 0
       const cogs = cogsData[i] || 1 // Avoid division by zero
       console.log(`Month ${i}: Payables ${payableValue}, COGS ${cogs}`)
       return cogs > 0 ? Math.round((payableValue / cogs) * 30) : 0
     })
-    
+
     const theoreticalInventoryDays = healthDetails.inventory.map((val, i) => {
       const inventoryValue = Number.parseFloat(val) || 0
       const cogs = cogsData[i] || 1 // Avoid division by zero
       console.log(`Month ${i}: Inventory ${inventoryValue}, COGS ${cogs}`)
       return cogs > 0 ? Math.round((inventoryValue / cogs) * 30) : 0
     })
-    
+
     console.log("Calculated theoretical days:", {
       receivablesDays: theoreticalReceivablesDays,
       payablesDays: theoreticalPayablesDays,
       inventoryDays: theoreticalInventoryDays
     })
-    
+
     setCalculatedTheoreticalValues({
       receivablesDays: theoreticalReceivablesDays,
       payablesDays: theoreticalPayablesDays,
@@ -2072,19 +2431,19 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
     const warnings = []
     const salesData = originalPnlData.sales || Array(12).fill(0)
     const cogsData = originalPnlData.cogs || Array(12).fill(0)
-    
+
     console.log("Validating with sales data:", salesData)
     console.log("Validating with COGS data:", cogsData)
-    
+
     // Validate Receivables Days
     healthDetails.receivables.forEach((receivable, i) => {
       const receivableValue = Number.parseFloat(receivable) || 0
       const sales = salesData[i] || 1
       const enteredDays = Number.parseFloat(healthDetails.receivablesDays[i]) || 0
-      
+
       // Calculate theoretical days
       const theoreticalDays = sales > 0 ? (receivableValue / sales) * 30 : 0
-      
+
       // Check if days are within reasonable range (±20 days of theoretical)
       if (Math.abs(theoreticalDays - enteredDays) > 20 && enteredDays > 0) {
         warnings.push({
@@ -2096,7 +2455,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
           type: "warning"
         })
       }
-      
+
       // Check for extreme values
       if (enteredDays > 90 && sales > 0) {
         warnings.push({
@@ -2108,16 +2467,16 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
         })
       }
     })
-    
+
     // Validate Payables Days
     healthDetails.payables.forEach((payable, i) => {
       const payableValue = Number.parseFloat(payable) || 0
       const cogs = cogsData[i] || 1
       const enteredDays = Number.parseFloat(healthDetails.payablesDays[i]) || 0
-      
+
       // Calculate theoretical days
       const theoreticalDays = cogs > 0 ? (payableValue / cogs) * 30 : 0
-      
+
       // Check if days are within reasonable range (±25 days of theoretical)
       if (Math.abs(theoreticalDays - enteredDays) > 25 && enteredDays > 0) {
         warnings.push({
@@ -2130,16 +2489,16 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
         })
       }
     })
-    
+
     // Validate Inventory Days
     healthDetails.inventory.forEach((inventoryVal, i) => {
       const inventoryValue = Number.parseFloat(inventoryVal) || 0
       const cogs = cogsData[i] || 1
       const enteredDays = Number.parseFloat(healthDetails.inventoryDays[i]) || 0
-      
+
       // Calculate theoretical days
       const theoreticalDays = cogs > 0 ? (inventoryValue / cogs) * 30 : 0
-      
+
       // Check if days are within reasonable range (±30 days of theoretical - inventory can vary more)
       if (Math.abs(theoreticalDays - enteredDays) > 30 && enteredDays > 0) {
         warnings.push({
@@ -2151,7 +2510,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
           type: "warning"
         })
       }
-      
+
       // Check for excessive inventory
       if (enteredDays > 120 && cogs > 0) {
         warnings.push({
@@ -2163,7 +2522,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
         })
       }
     })
-    
+
     setValidationWarnings(warnings)
     setShowValidationSummary(warnings.length > 0)
     return warnings
@@ -2173,10 +2532,10 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
   const calculateAndApplyTheoreticalValues = () => {
     const salesData = originalPnlData.sales || Array(12).fill(0)
     const cogsData = originalPnlData.cogs || Array(12).fill(0)
-    
+
     console.log("Calculating with sales data:", salesData)
     console.log("Calculating with COGS data:", cogsData)
-    
+
     const theoreticalReceivablesDays = healthDetails.receivables.map((val, i) => {
       const sales = salesData[i] || 1
       const receivableValue = Number.parseFloat(val) || 0
@@ -2184,7 +2543,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
       console.log(`Month ${i}: Receivables ${receivableValue} / Sales ${sales} × 30 = ${calculated} days`)
       return calculated
     })
-    
+
     const theoreticalPayablesDays = healthDetails.payables.map((val, i) => {
       const cogs = cogsData[i] || 1
       const payableValue = Number.parseFloat(val) || 0
@@ -2192,7 +2551,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
       console.log(`Month ${i}: Payables ${payableValue} / COGS ${cogs} × 30 = ${calculated} days`)
       return calculated
     })
-    
+
     const theoreticalInventoryDays = healthDetails.inventory.map((val, i) => {
       const cogs = cogsData[i] || 1
       const inventoryValue = Number.parseFloat(val) || 0
@@ -2200,15 +2559,15 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
       console.log(`Month ${i}: Inventory ${inventoryValue} / COGS ${cogs} × 30 = ${calculated} days`)
       return calculated
     })
-    
+
     const confirmationMessage = `Theoretical calculations based on your amounts:\n\n` +
       `Receivables Days: ${theoreticalReceivablesDays.join(", ")}\n` +
       `Payables Days: ${theoreticalPayablesDays.join(", ")}\n` +
       `Inventory Days: ${theoreticalInventoryDays.join(", ")}\n\n` +
       `Apply these calculated values? You can still edit them manually if needed.`
-    
+
     console.log("Confirmation message:", confirmationMessage)
-    
+
     if (window.confirm(confirmationMessage)) {
       setHealthDetails(prev => ({
         ...prev,
@@ -2216,14 +2575,14 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
         payablesDays: theoreticalPayablesDays.map(String),
         inventoryDays: theoreticalInventoryDays.map(String)
       }))
-      
+
       // Recalculate theoretical values after applying
       setCalculatedTheoreticalValues({
         receivablesDays: theoreticalReceivablesDays,
         payablesDays: theoreticalPayablesDays,
         inventoryDays: theoreticalInventoryDays
       })
-      
+
       // Run validation again
       setTimeout(() => validateHealthData(), 100)
     }
@@ -2232,13 +2591,13 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
   const handleSaveHealthDetails = async () => {
     // Run validation before saving
     const warnings = validateHealthData()
-    
+
     if (warnings.length > 0) {
       const proceed = window.confirm(
         `Found ${warnings.length} data consistency warning(s).\n\n` +
         `Do you want to save anyway? Click OK to save, Cancel to review.`
       )
-      
+
       if (!proceed) {
         return
       }
@@ -2454,7 +2813,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
       ...prev,
       [category]: prev[category].map((val, idx) => (idx === monthIndex ? value : val)),
     }))
-    
+
     // Recalculate theoretical values when amounts change
     if (category === "receivables" || category === "payables" || category === "inventory") {
       setTimeout(() => calculateTheoreticalValuesForValidation(), 100)
@@ -2463,7 +2822,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
 
   const renderHealthMonthlyInputs = (category, label, showCalculated = false, calculatedValues = []) => {
     const isDaysField = category.includes("Days")
-    
+
     return (
       <div style={{ marginBottom: "20px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
@@ -2619,7 +2978,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
                       fontSize: "14px",
                     }}
                   >
-                    Add Balance Sheet Details
+                    Add Data
                   </button>
                   <button
                     onClick={() => setShowUploadModal(true)}
@@ -2778,6 +3137,20 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
                   <span style={{ color: "#5d4037" }}>Current Borrowing</span>
                   <span style={{ color: "#5d4037", fontWeight: "600" }}>R{currentBorrowing.toLocaleString()}</span>
                 </div>
+                {/* ADD THE NEW LOAN FIELDS */}
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                  <span style={{ color: "#5d4037" }}>Third Party Loan</span>
+                  <span style={{ color: "#5d4037", fontWeight: "600" }}>R{thirdPartyLoan.toLocaleString()}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                  <span style={{ color: "#5d4037" }}>Intercompany Loan</span>
+                  <span style={{ color: "#5d4037", fontWeight: "600" }}>R{intercompanyLoan.toLocaleString()}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                  <span style={{ color: "#5d4037" }}>Directors Loan</span>
+                  <span style={{ color: "#5d4037", fontWeight: "600" }}>R{directorsLoan.toLocaleString()}</span>
+                </div>
+                {/* END OF NEW FIELDS */}
                 <div
                   style={{
                     display: "flex",
@@ -3220,6 +3593,56 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
                 }}
               />
 
+              {/* ADD THE NEW LOAN FIELDS TO THE MODAL */}
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Third Party Loan:
+              </label>
+              <input
+                type="number"
+                value={balanceSheetDetails.thirdPartyLoan || ""}
+                onChange={(e) => setBalanceSheetDetails({ ...balanceSheetDetails, thirdPartyLoan: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
+
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Intercompany Loan:
+              </label>
+              <input
+                type="number"
+                value={balanceSheetDetails.intercompanyLoan || ""}
+                onChange={(e) => setBalanceSheetDetails({ ...balanceSheetDetails, intercompanyLoan: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
+
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Directors Loan:
+              </label>
+              <input
+                type="number"
+                value={balanceSheetDetails.directorsLoan || ""}
+                onChange={(e) => setBalanceSheetDetails({ ...balanceSheetDetails, directorsLoan: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                }}
+              />
+              {/* END OF NEW FIELDS IN MODAL */}
+
               <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Non-Current Liabilities:
               </label>
@@ -3467,7 +3890,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
             }}
           >
             <h3 style={{ color: "#5d4037", marginBottom: "20px" }}>Add Balance Sheet Health Details</h3>
-            
+
             {/* Validation Summary */}
             {showValidationSummary && (
               <div style={{
@@ -3479,8 +3902,8 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div>
-                    <h4 style={{ 
-                      color: validationWarnings.some(w => w.type === "alert") ? "#856404" : "#155724", 
+                    <h4 style={{
+                      color: validationWarnings.some(w => w.type === "alert") ? "#856404" : "#155724",
                       marginBottom: "10px",
                       display: "flex",
                       alignItems: "center",
@@ -3493,14 +3916,14 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
                     </h4>
                     <ul style={{ margin: 0, paddingLeft: "20px", maxHeight: "150px", overflowY: "auto" }}>
                       {validationWarnings.map((warning, idx) => (
-                        <li key={idx} style={{ 
-                          color: warning.type === "alert" ? "#856404" : "#0c5460", 
+                        <li key={idx} style={{
+                          color: warning.type === "alert" ? "#856404" : "#0c5460",
                           fontSize: "14px",
                           marginBottom: "5px"
                         }}>
-                          <strong>Month {warning.month}: {warning.metric}</strong> - 
-                          {warning.note ? ` ${warning.note}` : 
-                           ` Entered as ${warning.entered} days, but based on sales/COGS should be ~${warning.theoretical} days (variance: ${warning.variance} days)`}
+                          <strong>Month {warning.month}: {warning.metric}</strong> -
+                          {warning.note ? ` ${warning.note}` :
+                            ` Entered as ${warning.entered} days, but based on sales/COGS should be ~${warning.theoretical} days (variance: ${warning.variance} days)`}
                         </li>
                       ))}
                     </ul>
@@ -3535,8 +3958,8 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
               <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
                 <span style={{ fontSize: "16px" }}>💡</span>
                 <div>
-                  <strong>Note:</strong> Days metrics should reflect actual payment patterns, which may vary from theoretical calculations. 
-                  Common reasons for variance include: seasonal patterns, specific client payment terms, one-off payments, payment disputes, 
+                  <strong>Note:</strong> Days metrics should reflect actual payment patterns, which may vary from theoretical calculations.
+                  Common reasons for variance include: seasonal patterns, specific client payment terms, one-off payments, payment disputes,
                   early payment discounts, and cash flow management decisions.
                 </div>
               </div>
@@ -3568,10 +3991,10 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
             {/* Input Sections */}
             {renderHealthMonthlyInputs("receivables", "Receivables (R)")}
             {renderHealthMonthlyInputs("receivablesDays", "Receivables Days", true, calculatedTheoreticalValues.receivablesDays)}
-            
+
             {renderHealthMonthlyInputs("payables", "Payables (R)")}
             {renderHealthMonthlyInputs("payablesDays", "Payables Days", true, calculatedTheoreticalValues.payablesDays)}
-            
+
             {renderHealthMonthlyInputs("inventory", "Inventory (R)")}
             {renderHealthMonthlyInputs("inventoryDays", "Inventory Days", true, calculatedTheoreticalValues.inventoryDays)}
 
@@ -3603,7 +4026,7 @@ Total Liabilities and Capital,${totalLiabilitiesAndCapital}`
                 <span>🔍</span>
                 Validate Data Consistency
               </button>
-              
+
               <span style={{ fontSize: "12px", color: "#72542b", fontStyle: "italic" }}>
                 Theoretical values shown are based on: (Amount ÷ Sales/COGS) × 30 days
               </span>
@@ -3998,6 +4421,7 @@ const FinancialPerformance = () => {
             financialYearStart={financialYearStart}
             balanceSheetData={balanceSheetData}
             currentMonth={currentMonth}
+            isInvestorView={isInvestorView}
           />
 
           <BalanceSheet
