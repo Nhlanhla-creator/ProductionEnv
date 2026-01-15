@@ -1855,7 +1855,7 @@ const CashflowTrends = ({
                 whiteSpace: "nowrap", // Prevent button text wrapping
               }}
             >
-              Add Cashflow Data
+              Add Data
             </button>
           )}
         </div>

@@ -3,14 +3,11 @@ import { useState, useMemo, useEffect } from "react"
 import {
   Search,
   Download,
-  Eye,
   Check,
   Package,
-  Settings,
   Target,
   Award,
   Users,
-  Shield,
   ShoppingCart,
   Filter,
   Calendar,
@@ -629,10 +626,10 @@ const MyToolsPage = () => {
             description: getToolDescription(data),
             features: getToolFeatures(data),
             deliverables: data.deliverables || [],
-            // NEW: Add specifications
             specifications: data.customerSpecifications || null,
             specificationFiles: data.specificationFiles || [],
             category: data.category || getCategoryFromType(data.type),
+            subcategory: data.subcategory || null,
             amount: data.totalAmount || 0,
             transactionRef: data.transactionRef,
             deliveryStatus: data.deliveryStatus || "processing",
@@ -653,25 +650,25 @@ const MyToolsPage = () => {
 
   const getToolIcon = (category) => {
     const iconMap = {
-      compliance: <Shield className="w-8 h-8" />,
       legitimacy: <Award className="w-8 h-8" />,
-      fundability: <Target className="w-8 h-8" />,
+      capital_appeal: <Target className="w-8 h-8" />,
+      fundability: <Target className="w-8 h-8" />, // Keep for backwards compatibility
       governance: <Users className="w-8 h-8" />,
       templates: <FileText className="w-8 h-8" />,
-      bundles: <Package className="w-8 h-8" />,
       growth_tool: <Zap className="w-8 h-8" />,
     }
     return iconMap[category?.toLowerCase()] || <Package className="w-8 h-8" />
   }
 
   const getToolDescription = (data) => {
+    const subcategoryInfo = data.subcategory ? ` - ${data.subcategory}` : ""
     if (data.type === "template") {
-      return `${data.packageName} - Professional template ready for immediate use with comprehensive documentation and implementation guides.`
+      return `${data.packageName}${subcategoryInfo} - Professional template ready for immediate use with comprehensive documentation and implementation guides.`
     }
     if (data.type === "bundle") {
       return `${data.packageName} - Complete bundle package with multiple resources, templates, and tools for comprehensive business growth.`
     }
-    return `${data.packageName} - ${data.tier} tier package with comprehensive tools, resources, and expert guidance for business development.`
+    return `${data.packageName}${subcategoryInfo} - ${data.tier} tier package with comprehensive tools, resources, and expert guidance for business development.`
   }
 
   const getToolFeatures = (data) => {
@@ -681,15 +678,6 @@ const MyToolsPage = () => {
       "Email support included",
       "Updates and revisions as needed",
     ]
-    if (data.category === "compliance" || data.packageName?.toLowerCase().includes("compliance")) {
-      return [
-        "Policy templates and documentation",
-        "Compliance checklists and guides",
-        "Legal framework alignment",
-        "Implementation roadmap",
-        ...baseFeatures,
-      ]
-    }
     if (data.category === "legitimacy" || data.packageName?.toLowerCase().includes("legitimacy")) {
       return [
         "Brand identity and design assets",
@@ -699,7 +687,12 @@ const MyToolsPage = () => {
         ...baseFeatures,
       ]
     }
-    if (data.category === "fundability" || data.packageName?.toLowerCase().includes("fundability")) {
+    if (
+      data.category === "capital_appeal" ||
+      data.category === "fundability" ||
+      data.packageName?.toLowerCase().includes("fundability") ||
+      data.packageName?.toLowerCase().includes("capital appeal")
+    ) {
       return [
         "Business plan templates",
         "Financial modeling tools",
@@ -731,22 +724,24 @@ const MyToolsPage = () => {
 
   const filterOptions = [
     { id: "all", label: "All Tools", count: purchasedTools.length },
-    { id: "compliance", label: "Compliance", count: purchasedTools.filter((t) => t.category === "compliance").length },
     { id: "legitimacy", label: "Legitimacy", count: purchasedTools.filter((t) => t.category === "legitimacy").length },
     {
-      id: "fundability",
-      label: "Fundability",
-      count: purchasedTools.filter((t) => t.category === "fundability").length,
+      id: "capital_appeal",
+      label: "Capital Appeal",
+      count: purchasedTools.filter((t) => t.category === "capital_appeal" || t.category === "fundability").length,
     },
     { id: "governance", label: "Governance", count: purchasedTools.filter((t) => t.category === "governance").length },
     { id: "templates", label: "Templates", count: purchasedTools.filter((t) => t.category === "templates").length },
-    { id: "bundles", label: "Bundles", count: purchasedTools.filter((t) => t.category === "bundles").length },
   ]
 
   const filteredTools = useMemo(() => {
     let filtered = purchasedTools
     if (activeFilter !== "all") {
-      filtered = filtered.filter((tool) => tool.category === activeFilter)
+      if (activeFilter === "capital_appeal") {
+        filtered = filtered.filter((tool) => tool.category === "capital_appeal" || tool.category === "fundability")
+      } else {
+        filtered = filtered.filter((tool) => tool.category === activeFilter)
+      }
     }
     if (searchQuery) {
       filtered = filtered.filter(
@@ -759,7 +754,7 @@ const MyToolsPage = () => {
   }, [purchasedTools, activeFilter, searchQuery])
 
   const handleDownload = (url, filename) => {
-    window.open(url, '_blank')
+    window.open(url, "_blank")
   }
 
   const handleShopMore = () => {
@@ -784,52 +779,14 @@ const MyToolsPage = () => {
     }
   }
 
-  if (isLoading) {
-    return (
-      <div style={styles.container}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            minHeight: "300px",
-            flexDirection: "column",
-            gap: "1.25rem",
-          }}
-        >
-          <div
-            style={{
-              width: "70px",
-              height: "70px",
-              border: `4px solid ${colors.lightTan}`,
-              borderTop: `4px solid ${colors.accentGold}`,
-              borderRadius: "50%",
-              animation: "spin 1s linear infinite",
-            }}
-          ></div>
-          <p style={{ color: colors.mediumBrown, fontSize: "1.125rem", fontWeight: "600" }}>Loading your tools...</p>
-          <style jsx>{`
-            @keyframes spin {
-              0% {
-                transform: rotate(0deg);
-              }
-              100% {
-                transform: rotate(360deg);
-              }
-            }
-          `}</style>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div style={styles.container}>
       {/* Beta Notice */}
       <div style={styles.betaNotice}>
         <CheckCircle className="w-6 h-6" style={{ color: "#065F46" }} />
         <span>
-          <strong>✅ Files Delivered:</strong> Download your growth tools directly from this page once they've been processed and delivered by our team.
+          <strong>✅ Files Delivered:</strong> Download your growth tools directly from this page once they've been
+          processed and delivered by our team.
         </span>
       </div>
 
@@ -969,14 +926,13 @@ const MyToolsPage = () => {
               >
                 <div style={styles.toolCardHeader}>
                   <div style={styles.toolIconContainer}>{tool.icon}</div>
-                  <div style={styles.toolStatus}>
-                    {getStatusBadge(tool.deliveryStatus)}
-                  </div>
+                  <div style={styles.toolStatus}>{getStatusBadge(tool.deliveryStatus)}</div>
                 </div>
                 <div style={styles.toolCardBody}>
                   <h3 style={styles.toolTitle}>{tool.title}</h3>
                   <p style={styles.toolPackage}>
                     {tool.package} • {tool.tier}
+                    {tool.subcategory && ` • ${tool.subcategory}`}
                   </p>
                   <p style={styles.toolDescription}>{tool.description}</p>
                   <div style={styles.toolFeatures}>
@@ -995,26 +951,34 @@ const MyToolsPage = () => {
                       )}
                     </ul>
                   </div>
-                  
-                  {/* NEW: Show Customer Specifications */}
+
+                  {/* Show Customer Specifications */}
                   {(tool.specifications || (tool.specificationFiles && tool.specificationFiles.length > 0)) && (
                     <div style={styles.toolSpecifications}>
                       <h4 style={styles.specsTitle}>
                         <MessageSquare size={16} />
                         Your Specifications
                       </h4>
-                      {tool.specifications && (
-                        <div style={styles.specsText}>{tool.specifications}</div>
-                      )}
+                      {tool.specifications && <div style={styles.specsText}>{tool.specifications}</div>}
                       {tool.specificationFiles && tool.specificationFiles.length > 0 && (
                         <div style={styles.specsFiles}>
-                          <div style={{ fontSize: "0.8rem", fontWeight: "600", color: colors.darkBrown, marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                          <div
+                            style={{
+                              fontSize: "0.8rem",
+                              fontWeight: "600",
+                              color: colors.darkBrown,
+                              marginBottom: "0.5rem",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.3rem",
+                            }}
+                          >
                             <Paperclip size={14} />
                             Reference Files ({tool.specificationFiles.length})
                           </div>
                           {tool.specificationFiles.map((file, idx) => (
-                            <div 
-                              key={idx} 
+                            <div
+                              key={idx}
                               style={styles.specFileItem}
                               onClick={() => handleDownload(file.url, file.name)}
                               onMouseEnter={(e) => {
@@ -1033,15 +997,15 @@ const MyToolsPage = () => {
                       )}
                     </div>
                   )}
-                  
+
                   {/* Show Deliverables if Delivered */}
                   {tool.deliveryStatus === "delivered" && tool.deliverables && tool.deliverables.length > 0 ? (
                     <div style={styles.toolDeliverables}>
                       <h4 style={styles.deliverablesTitle}>📥 Your Files (Ready to Download):</h4>
                       <div style={styles.deliverablesList}>
                         {tool.deliverables.map((deliverable, index) => (
-                          <div 
-                            key={index} 
+                          <div
+                            key={index}
                             style={styles.deliverableItem}
                             onClick={() => handleDownload(deliverable.url, deliverable.name)}
                             onMouseEnter={(e) => {
@@ -1056,9 +1020,7 @@ const MyToolsPage = () => {
                             <Download style={styles.deliverableIcon} />
                             <div style={styles.deliverableInfo}>
                               <span style={styles.deliverableName}>{deliverable.name}</span>
-                              <span style={styles.deliverableMeta}>
-                                {deliverable.size} • Click to download
-                              </span>
+                              <span style={styles.deliverableMeta}>{deliverable.size} • Click to download</span>
                             </div>
                             <ExternalLink size={16} color={colors.accentGold} />
                           </div>
@@ -1068,7 +1030,8 @@ const MyToolsPage = () => {
                   ) : tool.deliveryStatus === "processing" ? (
                     <div style={styles.noFilesMessage}>
                       <Clock size={16} style={{ display: "inline", marginRight: "0.5rem" }} />
-                      <strong>Files are being prepared...</strong> You'll receive an email when they're ready to download.
+                      <strong>Files are being prepared...</strong> You'll receive an email when they're ready to
+                      download.
                     </div>
                   ) : null}
                 </div>
@@ -1085,7 +1048,14 @@ const MyToolsPage = () => {
                     )}
                   </div>
                   {tool.deliveryStatus === "delivered" && tool.deliveredAt && (
-                    <div style={{ fontSize: "0.8rem", color: colors.mediumBrown, marginTop: "0.5rem", textAlign: "center" }}>
+                    <div
+                      style={{
+                        fontSize: "0.8rem",
+                        color: colors.mediumBrown,
+                        marginTop: "0.5rem",
+                        textAlign: "center",
+                      }}
+                    >
                       ✅ Delivered on {new Date(tool.deliveredAt).toLocaleDateString()}
                     </div>
                   )}
@@ -1108,7 +1078,7 @@ const MyToolsPage = () => {
               </div>
               <div style={styles.statItem}>
                 <div style={styles.statNumber}>
-                  {purchasedTools.filter(t => t.deliveryStatus === "delivered").length}
+                  {purchasedTools.filter((t) => t.deliveryStatus === "delivered").length}
                 </div>
                 <div style={styles.statLabel}>Tools Delivered</div>
               </div>
