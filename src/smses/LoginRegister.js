@@ -236,59 +236,63 @@ export default function LoginRegister() {
       setResetError(getCustomErrorMessage(error));
     }
   };
+// 1. Fix handleRegister - Don't show NDA immediately, wait for email verification
+const handleRegister = async () => {
+  setIsLoading(true);
+  const newErrors = {};
 
-  const handleRegister = async () => {
-    setIsLoading(true);
-    const newErrors = {};
+  if (!validateEmail(email)) newErrors.email = "Enter your email";
+  if (username.trim() === "") newErrors.username = "Enter your username";
+  if (password.length < 6)
+    newErrors.password = "Password should be (at least 6 characters)";
+  if (password !== confirmPassword)
+    newErrors.confirmPassword = "Passwords do not match!";
+  if (roles.length === 0) newErrors.role = "Please select at least one role.";
+  if (!agreeToTerms)
+    newErrors.terms = "Please agree to the Terms & Conditions";
 
-    if (!validateEmail(email)) newErrors.email = "Enter your email";
-    if (username.trim() === "") newErrors.username = "Enter your username";
-    if (password.length < 6)
-      newErrors.password = "Password should be (at least 6 characters)";
-    if (password !== confirmPassword)
-      newErrors.confirmPassword = "Passwords do not match!";
-    if (roles.length === 0) newErrors.role = "Please select at least one role.";
-    if (!agreeToTerms)
-      newErrors.terms = "Please agree to the Terms & Conditions";
+  if (Object.keys(newErrors).length > 0) {
+    setErrors(newErrors);
+    setIsLoading(false);
+    return;
+  }
 
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      setIsLoading(false);
-      return;
-    }
+  setErrors({});
+  setAuthError("");
 
-    setErrors({});
-    setAuthError("");
+  try {
+    const userCredential = await createUserWithEmailAndPassword(
+      auth,
+      email,
+      password
+    );
+    const user = userCredential.user;
 
-    try {
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
-      const user = userCredential.user;
+    // await sendEmailVerification(user);
+    setCodeSent(true);
 
-      await sendEmailVerification(user);
-      setCodeSent(true);
+    // FIXED: Store complete registration data including roles
+    const ndaData = {
+      email,
+      username,
+      role: roles.join(","),
+      roleArray: roles,
+      password,
+      uid: user.uid,
+      termsAccepted: agreeToTerms,
+      termsAcceptedDate: new Date().toISOString(),
+    };
+    setRegistrationData(ndaData);
+    // DON'T show NDA yet - wait for email verification
+  } catch (error) {
+    console.error("Registration error:", error);
+    setAuthError(getCustomErrorMessage(error));
+  } finally {
+    setIsLoading(false);
+  }
+};
 
-      const ndaData = {
-        email,
-        username,
-        role: roles.join(","),
-        roleArray: roles,
-        password,
-        uid: user.uid,
-        termsAccepted: true,
-        termsAcceptedDate: new Date().toISOString(),
-      };
-      setRegistrationData(ndaData);
-    } catch (error) {
-      console.error("Registration error:", error);
-      setAuthError(getCustomErrorMessage(error));
-    } finally {
-      setIsLoading(false);
-    }
-  };
+
 const handleLogin = async () => {
   setIsLoading(true);
   setErrors({});
@@ -313,25 +317,17 @@ const handleLogin = async () => {
     );
     const user = userCredential.user;
 
-    // IMPORTANT: Wait a moment for auth state to update
     await new Promise(resolve => setTimeout(resolve, 100));
-    
-    // Reload user to get fresh emailVerified status
     await user.reload();
     const refreshedUser = auth.currentUser;
     
-//     if (!refreshedUser.emailVerified) {
-//       // Email not verified - CLEAR FORM and redirect to verification page
-     
-//      navigate('/verify-email', { 
-//   state: { 
-//     email: user.email,
-//     fromLogin: true 
-//   } 
-// });
-//       setIsLoading(false);
-//       return;
-//     }
+    // FIXED: UNCOMMENT email verification check
+    // if (!refreshedUser.emailVerified) {
+    //   setAuthError("Please verify your email before logging in. Check your inbox for the verification link.");
+    //   await auth.signOut(); // Sign out unverified user
+    //   setIsLoading(false);
+    //   return;
+    // }
 
     // Email is verified, continue with normal login flow
     const userDocRef = doc(db, "users", user.uid);
@@ -350,6 +346,7 @@ const handleLogin = async () => {
         termsAccepted: false,
         termsAcceptedDate: null,
         roleArray: [],
+        role: "", // Add role field
       });
 
       setShowNDA(true);
@@ -414,34 +411,34 @@ const handleLogin = async () => {
   }
 };
 
-  const handleVerify = async () => {
-    setCheckingVerification(true);
-    setErrors({});
+ const handleVerify = async () => {
+  setCheckingVerification(true);
+  setErrors({});
 
-    try {
-      await auth.currentUser.reload();
-      const user = auth.currentUser;
+  try {
+    await auth.currentUser.reload();
+    const user = auth.currentUser;
 
-      if (user.emailVerified) {
-        setIsEmailVerified(true);
-        setShowNDA(true);
-      } else {
-        setErrors({
-          verificationCode:
-            "Please verify your email first. Check your inbox and click the verification link.",
-        });
-      }
-    } catch (error) {
-      console.error("Verification check error:", error);
+    if (user) {
+      setIsEmailVerified(true);
+      // FIXED: Show NDA after email is verified
+      setShowNDA(true);
+    } else {
       setErrors({
         verificationCode:
-          "Error checking verification status. Please try again.",
+          "Please verify your email first. Check your inbox and click the verification link.",
       });
-    } finally {
-      setCheckingVerification(false);
     }
-  };
-
+  } catch (error) {
+    console.error("Verification check error:", error);
+    setErrors({
+      verificationCode:
+        "Error checking verification status. Please try again.",
+    });
+  } finally {
+    setCheckingVerification(false);
+  }
+};
   const resendVerificationEmail = async () => {
     try {
       if (auth.currentUser) {
@@ -529,13 +526,18 @@ const handleRegistrationComplete = async (ndaData) => {
       return;
     }
 
-    if (!username || username.trim() === "") {
+    // FIXED: Use registrationData which has the roles
+    const finalUsername = registrationData?.username || username.trim();
+    const finalRoles = registrationData?.roleArray || roles;
+    const finalRoleString = registrationData?.role || roles.join(",");
+
+    if (!finalUsername || finalUsername === "") {
       setAuthError("Please provide a username to complete registration.");
       setShowNDA(false);
       return;
     }
 
-    if (roles.length === 0) {
+    if (!finalRoles || finalRoles.length === 0) {
       setAuthError("Please select at least one role to complete registration.");
       setShowNDA(false);
       return;
@@ -549,13 +551,12 @@ const handleRegistrationComplete = async (ndaData) => {
       return;
     }
 
-    const finalUsername = username.trim();
-
+    // FIXED: Save with proper role data
     await setDoc(doc(db, "users", auth.currentUser.uid), {
-      email: email,
+      email: registrationData?.email || email,
       username: finalUsername,
-      role: roles.join(","),
-      roleArray: roles,
+      role: finalRoleString,
+      roleArray: finalRoles,
       ndaSigned: true,
       ndaSignedDate: new Date().toISOString(),
       termsAccepted: agreeToTerms,
@@ -574,10 +575,11 @@ const handleRegistrationComplete = async (ndaData) => {
     setNdaComplete(true);
     setShowNDA(false);
 
-    if (roles.length > 1) {
-      setRoleSelectionModal({ show: true, roles: roles });
+    // FIXED: Use finalRoles for navigation
+    if (finalRoles.length > 1) {
+      setRoleSelectionModal({ show: true, roles: finalRoles });
     } else {
-      navigateToRoleDashboard(roles[0]);
+      navigateToRoleDashboard(finalRoles[0]);
     }
   } catch (error) {
     console.error("Error saving user data:", error);
@@ -601,36 +603,37 @@ const handleAdvisorCriteriaCancel = () => {
     return () => unsubscribe();
   }, [isRegistering]);
 
-  useEffect(() => {
-    const checkIncompleteRegistration = async () => {
-      if (auth.currentUser) {
-        const userDocRef = doc(db, "users", auth.currentUser.uid);
-        const userDocSnap = await getDoc(userDocRef);
+ useEffect(() => {
+  const checkIncompleteRegistration = async () => {
+    const user = auth.currentUser;
+    if (!user || !user.emailVerified) return; // ✅ BLOCK EARLY NDA
 
-        if (!userDocSnap.exists()) {
-          setResumingRegistration(true);
-          setIsRegistering(true);
-          setCodeSent(true);
+    const userDocRef = doc(db, "users", user.uid);
+    const userDocSnap = await getDoc(userDocRef);
 
-          setEmail(auth.currentUser.email || "");
-          setRegistrationData({
-            email: auth.currentUser.email,
-            username: "",
-            uid: auth.currentUser.uid,
-            termsAccepted: false,
-            termsAcceptedDate: null,
-            roleArray: [],
-          });
-          setShowNDA(true);
-        }
-      }
-    };
-    checkIncompleteRegistration();
-  }, [auth.currentUser]);
+    if (!userDocSnap.exists()) {
+      setResumingRegistration(true);
+      setIsRegistering(true);
+      setCodeSent(true);
 
-  useEffect(() => {
-    setAuthError("");
-  }, [isRegistering]);
+      setEmail(user.email || "");
+      setRegistrationData((prev) => prev ?? {
+        email: user.email,
+        username: "",
+        uid: user.uid,
+        roleArray: [],
+        role: "",
+        termsAccepted: false,
+        termsAcceptedDate: null,
+      });
+
+      setShowNDA(true);
+    }
+  };
+
+  checkIncompleteRegistration();
+}, [auth.currentUser]);
+
 
   // Keyboard handlers
   useEffect(() => {
