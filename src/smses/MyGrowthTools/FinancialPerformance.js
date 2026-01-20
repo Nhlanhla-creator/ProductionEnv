@@ -21,18 +21,133 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
+// Helper function to get months array based on year
+const getMonthsForYear = (year, viewMode = "month") => {
+  if (viewMode === "year") return [`FY ${year}`]
+  if (viewMode === "quarter") return ["Q1", "Q2", "Q3", "Q4"]
+  
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  return months
+}
+
+// Helper component for trend icon with proper positioning
+const TrendChartIcon = ({ onClick, style = {} }) => (
+  <div
+    onClick={onClick}
+    style={{
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: "24px",
+      height: "24px",
+      ...style
+    }}
+  >
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#5d4037"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+    </svg>
+  </div>
+)
+
+// Key Question Component with Show More functionality
+const KeyQuestionBox = ({ question, signals, decisions, section }) => {
+  const [showMore, setShowMore] = useState(false)
+  
+  // Get first sentence
+  const getFirstSentence = (text) => {
+    const match = text.match(/^[^.!?]+[.!?]/)
+    return match ? match[0] : text.split('.')[0] + '.'
+  }
+  
+  return (
+    <div
+      style={{
+        backgroundColor: "#fff9c4",
+        padding: "15px 20px",
+        borderRadius: "8px",
+        marginBottom: "20px",
+        border: "1px solid #f9a825",
+      }}
+    >
+      <div style={{ marginBottom: "8px" }}>
+        <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Question:</strong>
+        <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
+          {showMore ? question : getFirstSentence(question)}
+        </span>
+        {!showMore && question.length > getFirstSentence(question).length && (
+          <button
+            onClick={() => setShowMore(true)}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#5d4037",
+              fontWeight: "600",
+              cursor: "pointer",
+              marginLeft: "5px",
+              textDecoration: "underline",
+            }}
+          >
+            Show more
+          </button>
+        )}
+      </div>
+      
+      {showMore && (
+        <>
+          <div style={{ marginBottom: "8px" }}>
+            <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Signals:</strong>
+            <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>{signals}</span>
+          </div>
+          <div>
+            <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Decisions:</strong>
+            <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>{decisions}</span>
+          </div>
+          <button
+            onClick={() => setShowMore(false)}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#5d4037",
+              fontWeight: "600",
+              cursor: "pointer",
+              marginTop: "10px",
+              textDecoration: "underline",
+            }}
+          >
+            Show less
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
+// Capital Structure Component
 const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmbedded }) => {
   const [activeSubTab, setActiveSubTab] = useState("balance-sheet")
   const [showModal, setShowModal] = useState(false)
   const [selectedMonth, setSelectedMonth] = useState("Jan")
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [loading, setLoading] = useState(false)
   const [showTrendModal, setShowTrendModal] = useState(false)
   const [selectedTrendItem, setSelectedTrendItem] = useState(null)
   const [expandedNotes, setExpandedNotes] = useState({})
   const [kpiNotes, setKpiNotes] = useState({})
   const [kpiAnalysis, setKpiAnalysis] = useState({})
-
-  // Balance Sheet Data Structure as per screenshot
+  const [navData, setNavData] = useState(Array(12).fill(""))
+  const [financialYear, setFinancialYear] = useState("FY")
+  
+  // Balance Sheet Data Structure
   const [balanceSheetData, setBalanceSheetData] = useState({
     assets: {
       bank: {
@@ -108,7 +223,8 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
     bookValuePerShare: Array(12).fill(""),
   })
 
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  const months = getMonthsForYear(selectedYear, "month")
+  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
 
   const subTabs = [
     { id: "balance-sheet", label: "Balance Sheet" },
@@ -136,6 +252,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
         if (data.equityData) setEquityData(data.equityData)
         if (data.kpiNotes) setKpiNotes(data.kpiNotes)
         if (data.kpiAnalysis) setKpiAnalysis(data.kpiAnalysis)
+        if (data.navData) setNavData(data.navData)
       }
     } catch (error) {
       console.error("Error loading capital structure data:", error)
@@ -157,6 +274,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
         solvencyData,
         leverageData,
         equityData,
+        navData,
         kpiNotes,
         kpiAnalysis,
         lastUpdated: new Date().toISOString(),
@@ -173,17 +291,39 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
 
   const getMonthIndex = (month) => months.indexOf(month)
 
-  const getValue = (data, monthIndex) => {
-    const val = data[monthIndex]
-    return val === "" ? "0" : val
-  }
-
   const calculateTotal = (items, monthIndex) => {
     return Object.values(items).reduce((sum, arr) => {
       const val = Number.parseFloat(arr[monthIndex]) || 0
       return sum + val
     }, 0)
   }
+
+  const monthIndex = getMonthIndex(selectedMonth)
+
+  // Calculate totals
+  const totalBank =
+    (Number.parseFloat(balanceSheetData.assets.bank.callAccounts[monthIndex]) || 0) +
+    (Number.parseFloat(balanceSheetData.assets.bank.currentAccount[monthIndex]) || 0)
+
+  const totalCurrentAssets = calculateTotal(balanceSheetData.assets.currentAssets, monthIndex)
+  const totalFixedAssets = calculateTotal(balanceSheetData.assets.fixedAssets, monthIndex)
+  const totalNonCurrentAssets = calculateTotal(balanceSheetData.assets.nonCurrentAssets, monthIndex)
+  const totalAssets = totalBank + totalCurrentAssets + totalFixedAssets + totalNonCurrentAssets
+
+  const totalCurrentLiabilities = calculateTotal(balanceSheetData.liabilities.currentLiabilities, monthIndex)
+  const totalNonCurrentLiabilities = calculateTotal(balanceSheetData.liabilities.nonCurrentLiabilities, monthIndex)
+  const totalLiabilities = totalCurrentLiabilities + totalNonCurrentLiabilities
+
+  const totalEquity = calculateTotal(balanceSheetData.equity, monthIndex)
+  const netAssets = totalAssets - totalLiabilities
+  const totalLiabilitiesAndCapital = totalLiabilities + totalEquity
+
+  // Update NAV data
+  useEffect(() => {
+    const newNavData = [...navData]
+    newNavData[monthIndex] = netAssets.toString()
+    setNavData(newNavData)
+  }, [netAssets, monthIndex])
 
   const toggleNotes = (kpiKey) => {
     setExpandedNotes((prev) => ({ ...prev, [kpiKey]: !prev[kpiKey] }))
@@ -202,8 +342,6 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
     setShowTrendModal(true)
   }
 
-  const fileInputRef = { current: null }
-
   const handleCSVUpload = (event) => {
     const file = event.target.files[0]
     if (!file) return
@@ -215,7 +353,6 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
         const lines = text.split("\n")
         const headers = lines[0].split(",").map((h) => h.trim())
 
-        // Parse CSV data and update balance sheet
         const newBalanceSheetData = { ...balanceSheetData }
 
         for (let i = 1; i < lines.length; i++) {
@@ -246,7 +383,6 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
               newBalanceSheetData.assets.currentAssets.tradeReceivables = monthValues
             }
           }
-          // Add more mappings as needed
         }
 
         setBalanceSheetData(newBalanceSheetData)
@@ -392,49 +528,6 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
     link.click()
     document.body.removeChild(link)
   }
-
-  // Chart icon component
-  const TrendChartIcon = ({ onClick }) => (
-    <svg
-      onClick={onClick}
-      style={{ cursor: "pointer", marginLeft: "8px" }}
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="#5d4037"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-    </svg>
-  )
-
-  if (activeSection !== "capital-structure") return null
-
-  const monthIndex = getMonthIndex(selectedMonth)
-
-  // Calculate totals
-  const totalBank =
-    (Number.parseFloat(balanceSheetData.assets.bank.callAccounts[monthIndex]) || 0) +
-    (Number.parseFloat(balanceSheetData.assets.bank.currentAccount[monthIndex]) || 0)
-
-  const totalCurrentAssets = calculateTotal(balanceSheetData.assets.currentAssets, monthIndex)
-  const totalFixedAssets = calculateTotal(balanceSheetData.assets.fixedAssets, monthIndex)
-  const totalNonCurrentAssets = calculateTotal(balanceSheetData.assets.nonCurrentAssets, monthIndex)
-  const totalAssets = totalBank + totalCurrentAssets + totalFixedAssets + totalNonCurrentAssets
-
-  const totalCurrentLiabilities = calculateTotal(balanceSheetData.liabilities.currentLiabilities, monthIndex)
-  const totalNonCurrentLiabilities = calculateTotal(balanceSheetData.liabilities.nonCurrentLiabilities, monthIndex)
-  const totalLiabilities = totalCurrentLiabilities + totalNonCurrentLiabilities
-
-  const totalEquity = calculateTotal(balanceSheetData.equity, monthIndex)
-  const netAssets = totalAssets - totalLiabilities
-  const totalLiabilitiesAndCapital = totalLiabilities + totalEquity
-
-  // NAV calculation
-  const nav = totalAssets - totalLiabilities
 
   const renderKPICard = (title, data, kpiKey, unit = "ZAR") => {
     const currentValue = Number.parseFloat(data[monthIndex]) || 0
@@ -593,38 +686,14 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
     )
   }
 
-  // Added Key Question box under Balance Sheet sub-tab
   const renderBalanceSheet = () => (
     <div>
-      <div
-        style={{
-          backgroundColor: "#fff9c4",
-          padding: "15px 20px",
-          borderRadius: "8px",
-          marginBottom: "20px",
-          border: "1px solid #f9a825",
-        }}
-      >
-        <div style={{ marginBottom: "8px" }}>
-          <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Question:</strong>
-          <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
-            Is the business financially solvent and appropriately structured for its current stage? Is the business
-            structurally investable by institutional capital?
-          </span>
-        </div>
-        <div style={{ marginBottom: "8px" }}>
-          <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Signals:</strong>
-          <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
-            Leverage, balance sheet strength
-          </span>
-        </div>
-        <div>
-          <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Decisions:</strong>
-          <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
-            Raise equity vs debt, restructure balance sheet
-          </span>
-        </div>
-      </div>
+      <KeyQuestionBox
+        question="Is the business financially solvent and appropriately structured for its current stage? Is the business structurally investable by institutional capital?"
+        signals="Leverage, balance sheet strength"
+        decisions="Raise equity vs debt, restructure balance sheet"
+        section="balance-sheet"
+      />
 
       {/* Balance Sheet Controls */}
       <div
@@ -638,45 +707,57 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
         }}
       >
         <div style={{ display: "flex", gap: "10px" }}>
-          <button
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#5d4037",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontWeight: "600",
-              fontSize: "13px",
-            }}
-          >
-            BS Snapshot
-          </button>
+          {/* BS Snapshot button removed as requested */}
         </div>
 
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-          <span style={{ color: "#5d4037", fontSize: "14px" }}>Select Month:</span>
-          <select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            style={{
-              padding: "8px 12px",
-              borderRadius: "4px",
-              border: "1px solid #e8ddd4",
-              fontSize: "14px",
-              color: "#5d4037",
-            }}
-          >
-            {months.map((month) => (
-              <option key={month} value={month}>
-                {month}
-              </option>
-            ))}
-          </select>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+            <span style={{ color: "#5d4037", fontSize: "14px", whiteSpace: "nowrap" }}>Select Year:</span>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
+              style={{
+                padding: "8px 12px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+                fontSize: "14px",
+                color: "#5d4037",
+                minWidth: "100px",
+              }}
+            >
+              {years.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          </div>
+          
+          <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+            <span style={{ color: "#5d4037", fontSize: "14px", whiteSpace: "nowrap" }}>Select Month:</span>
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              style={{
+                padding: "8px 12px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+                fontSize: "14px",
+                color: "#5d4037",
+                minWidth: "100px",
+              }}
+            >
+              {months.map((month) => (
+                <option key={month} value={month}>
+                  {month}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {!isInvestorView && (
-          <div style={{ display: "flex", gap: "10px" }}>
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
             <button
               onClick={() => setShowModal(true)}
               style={{
@@ -688,9 +769,10 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                 cursor: "pointer",
                 fontWeight: "600",
                 fontSize: "13px",
+                whiteSpace: "nowrap",
               }}
             >
-              Add Balance Sheet Details
+              Add Data
             </button>
             <input
               type="file"
@@ -710,6 +792,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                 cursor: "pointer",
                 fontWeight: "600",
                 fontSize: "13px",
+                whiteSpace: "nowrap",
               }}
             >
               Upload CSV
@@ -725,6 +808,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                 cursor: "pointer",
                 fontWeight: "600",
                 fontSize: "13px",
+                whiteSpace: "nowrap",
               }}
             >
               Download CSV
@@ -1092,7 +1176,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4" }}></td>
               </tr>
 
-              {/* Fixed Assets */}
+              {/* Fixed Assets - Properly placed under their category */}
               <tr>
                 <td
                   rowSpan={7}
@@ -2293,42 +2377,40 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
 
       {/* NAV Summary Card */}
       <div style={{ marginTop: "30px" }}>
-        {renderKPICard("NAV (Net Asset Value)", Array(12).fill(nav.toString()), "nav")}
+        {renderKPICard("NAV (Net Asset Value)", navData, "nav")}
       </div>
     </div>
   )
 
   const renderSolvency = () => (
     <div>
-      <div
-        style={{
-          backgroundColor: "#fff9c4",
-          padding: "15px 20px",
-          borderRadius: "8px",
-          marginBottom: "20px",
-          border: "1px solid #f9a825",
-        }}
-      >
-        <div style={{ marginBottom: "8px" }}>
-          <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Question:</strong>
-          <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
-            Is the business financially solvent and appropriately structured for its current stage? Is the business
-            structurally investable by institutional capital?
-          </span>
-        </div>
-        <div style={{ marginBottom: "8px" }}>
-          <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Signals:</strong>
-          <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
-            Leverage, balance sheet strength
-          </span>
-        </div>
-        <div>
-          <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Decisions:</strong>
-          <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
-            Raise equity vs debt, restructure balance sheet
-          </span>
-        </div>
+      <KeyQuestionBox
+        question="Is the business financially solvent and appropriately structured for its current stage? Is the business structurally investable by institutional capital?"
+        signals="Leverage, balance sheet strength"
+        decisions="Raise equity vs debt, restructure balance sheet"
+        section="solvency"
+      />
+      
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
+        {!isInvestorView && (
+          <button
+            onClick={() => {}}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#5d4037",
+              color: "#fdfcfb",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "13px",
+            }}
+          >
+            Add KPI
+          </button>
+        )}
       </div>
+      
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: "20px" }}>
         {renderKPICard("Debt to Equity Ratio", solvencyData.debtToEquity, "debtToEquity", "ratio")}
         {renderKPICard("Interest Coverage Ratio", solvencyData.interestCoverage, "interestCoverage", "ratio")}
@@ -2339,35 +2421,33 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
 
   const renderLeverage = () => (
     <div>
-      <div
-        style={{
-          backgroundColor: "#fff9c4",
-          padding: "15px 20px",
-          borderRadius: "8px",
-          marginBottom: "20px",
-          border: "1px solid #f9a825",
-        }}
-      >
-        <div style={{ marginBottom: "8px" }}>
-          <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Question:</strong>
-          <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
-            Is the business financially solvent and appropriately structured for its current stage? Is the business
-            structurally investable by institutional capital?
-          </span>
-        </div>
-        <div style={{ marginBottom: "8px" }}>
-          <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Signals:</strong>
-          <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
-            Leverage, balance sheet strength
-          </span>
-        </div>
-        <div>
-          <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Decisions:</strong>
-          <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
-            Raise equity vs debt, restructure balance sheet
-          </span>
-        </div>
+      <KeyQuestionBox
+        question="Is the business financially solvent and appropriately structured for its current stage? Is the business structurally investable by institutional capital?"
+        signals="Leverage, balance sheet strength"
+        decisions="Raise equity vs debt, restructure balance sheet"
+        section="leverage"
+      />
+      
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
+        {!isInvestorView && (
+          <button
+            onClick={() => {}}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#5d4037",
+              color: "#fdfcfb",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "13px",
+            }}
+          >
+            Add KPI
+          </button>
+        )}
       </div>
+      
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: "20px" }}>
         {renderKPICard("Total Debt Ratio", leverageData.totalDebtRatio, "totalDebtRatio", "ratio")}
         {renderKPICard("Long-Term Debt Ratio", leverageData.longTermDebtRatio, "longTermDebtRatio", "ratio")}
@@ -2378,35 +2458,33 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
 
   const renderEquityTab = () => (
     <div>
-      <div
-        style={{
-          backgroundColor: "#fff9c4",
-          padding: "15px 20px",
-          borderRadius: "8px",
-          marginBottom: "20px",
-          border: "1px solid #f9a825",
-        }}
-      >
-        <div style={{ marginBottom: "8px" }}>
-          <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Question:</strong>
-          <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
-            Is the business financially solvent and appropriately structured for its current stage? Is the business
-            structurally investable by institutional capital?
-          </span>
-        </div>
-        <div style={{ marginBottom: "8px" }}>
-          <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Signals:</strong>
-          <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
-            Leverage, balance sheet strength
-          </span>
-        </div>
-        <div>
-          <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Decisions:</strong>
-          <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
-            Raise equity vs debt, restructure balance sheet
-          </span>
-        </div>
+      <KeyQuestionBox
+        question="Is the business financially solvent and appropriately structured for its current stage? Is the business structurally investable by institutional capital?"
+        signals="Leverage, balance sheet strength"
+        decisions="Raise equity vs debt, restructure balance sheet"
+        section="equity"
+      />
+      
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
+        {!isInvestorView && (
+          <button
+            onClick={() => {}}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#5d4037",
+              color: "#fdfcfb",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "13px",
+            }}
+          >
+            Add KPI
+          </button>
+        )}
       </div>
+      
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: "20px" }}>
         {renderKPICard("Return on Equity (ROE)", equityData.returnOnEquity, "returnOnEquity", "%")}
         {renderKPICard("Equity Ratio", equityData.equityRatio, "equityRatio", "%")}
@@ -2414,6 +2492,8 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
       </div>
     </div>
   )
+
+  if (activeSection !== "capital-structure") return null
 
   return (
     <div style={{ paddingTop: "20px" }}>
@@ -2555,7 +2635,90 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
               width: "95%",
             }}
           >
-            <h3 style={{ color: "#5d4037", marginBottom: "20px" }}>Add Balance Sheet Data</h3>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <h3 style={{ color: "#5d4037" }}>Add Balance Sheet Data</h3>
+              <button
+                onClick={() => setShowModal(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "24px",
+                  color: "#5d4037",
+                  cursor: "pointer",
+                  padding: "0",
+                  lineHeight: "1",
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ display: "flex", gap: "20px", marginBottom: "20px", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+                <span style={{ color: "#5d4037", fontSize: "14px" }}>Select Year:</span>
+                <select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "4px",
+                    border: "1px solid #e8ddd4",
+                    fontSize: "14px",
+                    color: "#5d4037",
+                    minWidth: "100px",
+                  }}
+                >
+                  {years.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+                <span style={{ color: "#5d4037", fontSize: "14px" }}>Select Month:</span>
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "4px",
+                    border: "1px solid #e8ddd4",
+                    fontSize: "14px",
+                    color: "#5d4037",
+                    minWidth: "100px",
+                  }}
+                >
+                  {months.map((month) => (
+                    <option key={month} value={month}>
+                      {month}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+                <span style={{ color: "#5d4037", fontSize: "14px" }}>Financial Year:</span>
+                <select
+                  value={financialYear}
+                  onChange={(e) => setFinancialYear(e.target.value)}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "4px",
+                    border: "1px solid #e8ddd4",
+                    fontSize: "14px",
+                    color: "#5d4037",
+                    minWidth: "100px",
+                  }}
+                >
+                  <option value="FY-2">FY-2</option>
+                  <option value="FY-1">FY-1</option>
+                  <option value="FY">FY</option>
+                  <option value="FY+1">FY+1</option>
+                </select>
+              </div>
+            </div>
 
             <p style={{ color: "#8d6e63", marginBottom: "20px", fontSize: "14px" }}>
               Enter values for each month. Use the sub-sections below to input your balance sheet data.
@@ -2733,6 +2896,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
   )
 }
 
+// Performance Engine Component
 const PerformanceEngine = ({
   activeSection,
   viewMode,
@@ -2793,6 +2957,7 @@ const PerformanceEngine = ({
     dataType: "currency",
   })
   const [customKPIs, setCustomKPIs] = useState({})
+  const [selectedViewMode, setSelectedViewMode] = useState("month")
 
   useEffect(() => {
     if (user) {
@@ -2943,9 +3108,9 @@ const PerformanceEngine = ({
     const startMonthIndex = months.indexOf(selectedFinancialYearStart)
     const orderedMonths = [...months.slice(startMonthIndex), ...months.slice(0, startMonthIndex)]
 
-    if (viewMode === "month") {
+    if (selectedViewMode === "month") {
       return orderedMonths
-    } else if (viewMode === "quarter") {
+    } else if (selectedViewMode === "quarter") {
       return ["Q1", "Q2", "Q3", "Q4"]
     } else {
       return [selectedYear.toString()]
@@ -2953,9 +3118,9 @@ const PerformanceEngine = ({
   }
 
   const aggregateDataForView = (data) => {
-    if (viewMode === "month") {
+    if (selectedViewMode === "month") {
       return data
-    } else if (viewMode === "quarter") {
+    } else if (selectedViewMode === "quarter") {
       const quarters = []
       for (let i = 0; i < 4; i++) {
         const sum = data.slice(i * 3, i * 3 + 3).reduce((acc, val) => acc + val, 0)
@@ -3014,13 +3179,6 @@ const PerformanceEngine = ({
     } finally {
       setLoading(false)
     }
-  }
-
-  const toggleChartVisibility = (chartName) => {
-    setVisibleCharts((prev) => ({
-      ...prev,
-      [chartName]: !prev[chartName],
-    }))
   }
 
   const toggleNotes = (chartName) => {
@@ -3337,8 +3495,8 @@ const PerformanceEngine = ({
     { key: "sales", title: "Revenue", visible: visibleCharts.sales },
     { key: "cogs", title: "COGS", visible: visibleCharts.cogs },
     { key: "opex", title: "Opex", visible: visibleCharts.opex },
-    { key: "grossProfit", title: "GP & GP Margin", visible: visibleCharts.grossProfit },
-    { key: "netProfit", title: "NP & NP Margins", visible: visibleCharts.netProfit },
+    { key: "grossProfit", title: "GP & GP %", visible: visibleCharts.grossProfit },
+    { key: "netProfit", title: "NP & NP %", visible: visibleCharts.netProfit },
   ]
 
   const marginChartConfigs = [
@@ -3348,34 +3506,12 @@ const PerformanceEngine = ({
 
   return (
     <div style={{ paddingTop: "20px" }}>
-      <div
-        style={{
-          backgroundColor: "#fff9c4",
-          padding: "15px 20px",
-          borderRadius: "8px",
-          marginBottom: "20px",
-          border: "1px solid #f9a825",
-        }}
-      >
-        <div style={{ marginBottom: "8px" }}>
-          <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Question:</strong>
-          <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
-            Is the business economically working?
-          </span>
-        </div>
-        <div style={{ marginBottom: "8px" }}>
-          <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Signals:</strong>
-          <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
-            Margin trends, profitability direction
-          </span>
-        </div>
-        <div>
-          <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Decisions:</strong>
-          <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
-            Fix pricing, cost control, growth pacing
-          </span>
-        </div>
-      </div>
+      <KeyQuestionBox
+        question="Is the business economically working?"
+        signals="Margin trends, profitability direction"
+        decisions="Fix pricing, cost control, growth pacing"
+        section="performance-engine"
+      />
 
       <div
         style={{
@@ -3384,28 +3520,64 @@ const PerformanceEngine = ({
           alignItems: "center",
           marginBottom: "20px",
           flexWrap: "wrap",
+          gap: "15px",
         }}
       >
         <h2 style={{ color: "#5d4037", fontSize: "24px", fontWeight: "700" }}>Performance Engine</h2>
 
-        {!isInvestorView && (
-          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
             <button
-              onClick={() => setShowVariance(!showVariance)}
+              onClick={() => setSelectedViewMode("month")}
               style={{
-                padding: "10px 20px",
-                backgroundColor: showVariance ? "#5d4037" : "#e8ddd4",
-                color: showVariance ? "#fdfcfb" : "#5d4037",
+                padding: "8px 16px",
+                backgroundColor: selectedViewMode === "month" ? "#5d4037" : "#e8ddd4",
+                color: selectedViewMode === "month" ? "#fdfcfb" : "#5d4037",
                 border: "none",
-                borderRadius: "6px",
+                borderRadius: "4px",
                 cursor: "pointer",
-                fontWeight: "600",
+                fontWeight: "500",
                 fontSize: "14px",
                 transition: "all 0.3s ease",
               }}
             >
-              {showVariance ? "Show Actual/Budget" : "Show Variance"}
+              Monthly
             </button>
+            <button
+              onClick={() => setSelectedViewMode("quarter")}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: selectedViewMode === "quarter" ? "#5d4037" : "#e8ddd4",
+                color: selectedViewMode === "quarter" ? "#fdfcfb" : "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "14px",
+                transition: "all 0.3s ease",
+              }}
+            >
+              Quarterly
+            </button>
+            <button
+              onClick={() => setSelectedViewMode("year")}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: selectedViewMode === "year" ? "#5d4037" : "#e8ddd4",
+                color: selectedViewMode === "year" ? "#fdfcfb" : "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "14px",
+                transition: "all 0.3s ease",
+              }}
+            >
+              Yearly
+            </button>
+          </div>
+          
+          {!isInvestorView && (
             <button
               onClick={handleAddDetails}
               style={{
@@ -3420,8 +3592,32 @@ const PerformanceEngine = ({
                 transition: "all 0.3s ease",
               }}
             >
-              Add Details
+              Add Data
             </button>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+        <button
+          onClick={() => setShowVariance(!showVariance)}
+          style={{
+            padding: "10px 20px",
+            backgroundColor: showVariance ? "#5d4037" : "#e8ddd4",
+            color: showVariance ? "#fdfcfb" : "#5d4037",
+            border: "none",
+            borderRadius: "6px",
+            cursor: "pointer",
+            fontWeight: "600",
+            fontSize: "14px",
+            transition: "all 0.3s ease",
+          }}
+        >
+          {showVariance ? "Show Actual/Budget" : "Show Variance"}
+        </button>
+        
+        {!isInvestorView && (
+          <div style={{ display: "flex", gap: "10px" }}>
             <button
               onClick={handleAddKPI}
               style={{
@@ -3436,7 +3632,7 @@ const PerformanceEngine = ({
                 transition: "all 0.3s ease",
               }}
             >
-              Add Custom KPI
+              Add KPI
             </button>
           </div>
         )}
@@ -3466,7 +3662,7 @@ const PerformanceEngine = ({
               <Bar data={createChartData(config.key)} options={chartOptions(config.title)} />
 
               {!isInvestorView && (
-                <div style={{ marginTop: "15px" }}>
+                <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
                   <button
                     onClick={() => toggleNotes(config.key)}
                     style={{
@@ -3478,27 +3674,25 @@ const PerformanceEngine = ({
                       cursor: "pointer",
                       fontWeight: "600",
                       fontSize: "12px",
-                      marginBottom: "10px",
                     }}
                   >
-                    {expandedNotes[config.key] ? "Hide Notes" : "Add Notes"}
+                    Add Notes
                   </button>
-
-                  {expandedNotes[config.key] && (
-                    <textarea
-                      value={chartNotes[config.key] || ""}
-                      onChange={(e) => updateChartNote(config.key, e.target.value)}
-                      placeholder="Add analysis notes..."
-                      style={{
-                        width: "100%",
-                        padding: "10px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                        minHeight: "80px",
-                        fontSize: "13px",
-                      }}
-                    />
-                  )}
+                  <button
+                    onClick={() => toggleNotes(`${config.key}_analysis`)}
+                    style={{
+                      padding: "8px 16px",
+                      backgroundColor: "#e8ddd4",
+                      color: "#5d4037",
+                      border: "none",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                      fontWeight: "600",
+                      fontSize: "12px",
+                    }}
+                  >
+                    Add Analysis
+                  </button>
                 </div>
               )}
             </div>
@@ -3533,7 +3727,7 @@ const PerformanceEngine = ({
               />
 
               {!isInvestorView && (
-                <div style={{ marginTop: "15px" }}>
+                <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
                   <button
                     onClick={() => toggleNotes(config.key)}
                     style={{
@@ -3545,27 +3739,25 @@ const PerformanceEngine = ({
                       cursor: "pointer",
                       fontWeight: "600",
                       fontSize: "12px",
-                      marginBottom: "10px",
                     }}
                   >
-                    {expandedNotes[config.key] ? "Hide Notes" : "Add Notes"}
+                    Add Notes
                   </button>
-
-                  {expandedNotes[config.key] && (
-                    <textarea
-                      value={chartNotes[config.key] || ""}
-                      onChange={(e) => updateChartNote(config.key, e.target.value)}
-                      placeholder="Add analysis notes..."
-                      style={{
-                        width: "100%",
-                        padding: "10px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                        minHeight: "80px",
-                        fontSize: "13px",
-                      }}
-                    />
-                  )}
+                  <button
+                    onClick={() => toggleNotes(`${config.key}_analysis`)}
+                    style={{
+                      padding: "8px 16px",
+                      backgroundColor: "#e8ddd4",
+                      color: "#5d4037",
+                      border: "none",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                      fontWeight: "600",
+                      fontSize: "12px",
+                    }}
+                  >
+                    Add Analysis
+                  </button>
                 </div>
               )}
             </div>
@@ -3591,6 +3783,41 @@ const PerformanceEngine = ({
                   <Line data={createCustomKPIChartData(kpi)} options={customKPIOptions(kpi.name, kpi.dataType)} />
                 ) : (
                   <Bar data={createCustomKPIChartData(kpi)} options={customKPIOptions(kpi.name, kpi.dataType)} />
+                )}
+                
+                {!isInvestorView && (
+                  <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
+                    <button
+                      onClick={() => toggleNotes(kpi.chartName)}
+                      style={{
+                        padding: "8px 16px",
+                        backgroundColor: "#e8ddd4",
+                        color: "#5d4037",
+                        border: "none",
+                        borderRadius: "4px",
+                        cursor: "pointer",
+                        fontWeight: "600",
+                        fontSize: "12px",
+                      }}
+                    >
+                      Add Notes
+                    </button>
+                    <button
+                      onClick={() => toggleNotes(`${kpi.chartName}_analysis`)}
+                      style={{
+                        padding: "8px 16px",
+                        backgroundColor: "#e8ddd4",
+                        color: "#5d4037",
+                        border: "none",
+                        borderRadius: "4px",
+                        cursor: "pointer",
+                        fontWeight: "600",
+                        fontSize: "12px",
+                      }}
+                    >
+                      View Analysis
+                    </button>
+                  </div>
                 )}
               </div>
             ))}
@@ -3778,7 +4005,7 @@ const PerformanceEngine = ({
               width: "90%",
             }}
           >
-            <h3 style={{ color: "#5d4037", marginBottom: "20px" }}>Add Custom KPI</h3>
+            <h3 style={{ color: "#5d4037", marginBottom: "20px" }}>Add KPI</h3>
 
             <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
               KPI Name:
@@ -3871,6 +4098,7 @@ const PerformanceEngine = ({
   )
 }
 
+// Cost Agility Component
 const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInvestorView }) => {
   const [showModal, setShowModal] = useState(false)
   const [costDetails, setCostDetails] = useState({
@@ -3882,10 +4110,23 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
   })
   const [firebaseChartData, setFirebaseChartData] = useState({})
   const [loading, setLoading] = useState(false)
+  const [selectedMonth, setSelectedMonth] = useState("Jan")
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [selectedViewMode, setSelectedViewMode] = useState("month")
+  const [expandedNotes, setExpandedNotes] = useState({})
+  const [chartNotes, setChartNotes] = useState({})
+  const [showAddKPIModal, setShowAddKPIModal] = useState(false)
+  const [newKPI, setNewKPI] = useState({
+    name: "",
+    type: "bar",
+    dataType: "currency",
+  })
+  const [customKPIs, setCustomKPIs] = useState({})
 
   useEffect(() => {
     if (user) {
       loadCostDataFromFirebase()
+      loadCustomKPIs()
     }
   }, [user])
 
@@ -3911,6 +4152,30 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
       console.error("Error loading cost data from Firebase:", error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadCustomKPIs = async () => {
+    if (!user) return
+
+    try {
+      const kpiQuery = query(
+        collection(db, "financialData"),
+        where("userId", "==", user.uid),
+        where("isCustomKPI", "==", true),
+        where("section", "==", "cost-agility"),
+      )
+      const querySnapshot = await getDocs(kpiQuery)
+
+      const kpis = {}
+      querySnapshot.forEach((doc) => {
+        const data = doc.data()
+        kpis[data.chartName] = data
+      })
+
+      setCustomKPIs(kpis)
+    } catch (error) {
+      console.error("Error loading custom KPIs:", error)
     }
   }
 
@@ -3940,7 +4205,29 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
   if (activeSection !== "cost-agility") return null
 
   const generateLabels = () => {
-    return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    if (selectedViewMode === "month") {
+      return months
+    } else if (selectedViewMode === "quarter") {
+      return ["Q1", "Q2", "Q3", "Q4"]
+    } else {
+      return [selectedYear.toString()]
+    }
+  }
+
+  const aggregateDataForView = (data) => {
+    if (selectedViewMode === "month") {
+      return data
+    } else if (selectedViewMode === "quarter") {
+      const quarters = []
+      for (let i = 0; i < 4; i++) {
+        const sum = data.slice(i * 3, i * 3 + 3).reduce((acc, val) => acc + val, 0)
+        quarters.push(sum)
+      }
+      return quarters
+    } else {
+      return [data.reduce((acc, val) => acc + val, 0)]
+    }
   }
 
   const labels = generateLabels()
@@ -3979,15 +4266,35 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
 
   const createChartData = (dataKey) => {
     const data = firebaseChartData[dataKey] || { actual: [] }
+    const actualData = aggregateDataForView(data.actual)
     return {
       labels,
       datasets: [
         {
           label: "Actual",
-          data: data.actual,
+          data: actualData,
           backgroundColor: "rgba(93, 64, 55, 0.6)",
           borderColor: "rgb(93, 64, 55)",
           borderWidth: 2,
+        },
+      ],
+    }
+  }
+
+  const createCustomKPIChartData = (kpiData) => {
+    const actualData = aggregateDataForView(kpiData.actual || [])
+    return {
+      labels,
+      datasets: [
+        {
+          type: kpiData.type === "line" ? "line" : "bar",
+          label: "Actual",
+          data: actualData,
+          backgroundColor: kpiData.type === "line" ? "rgba(93, 64, 55, 0.1)" : "rgba(93, 64, 55, 0.6)",
+          borderColor: "rgb(93, 64, 55)",
+          borderWidth: 2,
+          fill: kpiData.type === "line",
+          tension: 0.1,
         },
       ],
     }
@@ -4014,6 +4321,56 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
       },
     },
   })
+
+  const customKPIOptions = (title, dataType = "currency") => ({
+    responsive: true,
+    plugins: {
+      legend: {
+        display: false,
+      },
+      title: {
+        display: true,
+        text: title,
+        color: "#5d4037",
+        font: {
+          size: 16,
+        },
+      },
+      tooltip: {
+        callbacks: {
+          label: (context) => {
+            const value = context.raw
+            if (dataType === "percentage") {
+              return `${context.dataset.label}: ${value.toFixed(2)}%`
+            } else if (dataType === "currency") {
+              return `${context.dataset.label}: R${value.toFixed(2)}m`
+            } else {
+              return `${context.dataset.label}: ${value.toFixed(2)}`
+            }
+          },
+        },
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+      },
+    },
+  })
+
+  const toggleNotes = (chartName) => {
+    setExpandedNotes((prev) => ({
+      ...prev,
+      [chartName]: !prev[chartName],
+    }))
+  }
+
+  const updateChartNote = (chartName, note) => {
+    setChartNotes((prev) => ({
+      ...prev,
+      [chartName]: note,
+    }))
+  }
 
   const renderMonthlyInputs = (category, label) => {
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -4063,60 +4420,198 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
     )
   }
 
+  const handleAddKPI = async () => {
+    if (!user || !newKPI.name.trim()) {
+      alert("Please enter a name for the new KPI")
+      return
+    }
+
+    try {
+      const chartName = newKPI.name.toLowerCase().replace(/\s+/g, "_")
+      const kpiData = {
+        userId: user.uid,
+        chartName: chartName,
+        name: newKPI.name,
+        type: newKPI.type,
+        dataType: newKPI.dataType,
+        actual: Array(12).fill(0),
+        isCustomKPI: true,
+        section: "cost-agility",
+        lastUpdated: new Date().toISOString(),
+      }
+
+      await setDoc(doc(db, "financialData", `${user.uid}_${chartName}`), kpiData)
+      console.log("New KPI saved to Firebase")
+
+      setCustomKPIs((prev) => ({
+        ...prev,
+        [chartName]: kpiData,
+      }))
+
+      setNewKPI({
+        name: "",
+        type: "bar",
+        dataType: "currency",
+      })
+      setShowAddKPIModal(false)
+    } catch (error) {
+      console.error("Error saving KPI:", error)
+      alert("Error saving KPI. Please try again.")
+    }
+  }
+
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
+
   return (
     <div style={{ paddingTop: "20px" }}>
-      {/* Tab Description */}
-      <div
-        style={{
-          backgroundColor: "#fff9c4",
-          padding: "15px 20px",
-          borderRadius: "8px",
-          marginBottom: "20px",
-          border: "1px solid #f9a825",
-        }}
-      >
-        <div style={{ marginBottom: "8px" }}>
-          <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Question:</strong>
-          <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
-            Can costs flex under pressure? If revenue Drops?
-          </span>
-        </div>
-        <div style={{ marginBottom: "8px" }}>
-          <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Signals:</strong>
-          <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>Fixed vs variable rigidity</span>
-        </div>
-        <div>
-          <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Decisions:</strong>
-          <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
-            Restructure costs, delay scaling, Renegotiate contracts, Adjust capital strategy
-          </span>
-        </div>
-      </div>
+      <KeyQuestionBox
+        question="Can costs flex under pressure? If revenue Drops?"
+        signals="Fixed vs variable rigidity"
+        decisions="Restructure costs, delay scaling, Renegotiate contracts, Adjust capital strategy"
+        section="cost-agility"
+      />
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "15px" }}>
         <h2 style={{ color: "#5d4037", fontSize: "24px", fontWeight: "700" }}>Cost Agility</h2>
 
-        {!isInvestorView && (
-          <button
-            onClick={() => setShowModal(true)}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: "#5d4037",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontWeight: "600",
-              fontSize: "14px",
-            }}
-          >
-            Add Details
-          </button>
-        )}
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+              <span style={{ color: "#5d4037", fontSize: "14px" }}>Year:</span>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  minWidth: "100px",
+                }}
+              >
+                {years.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+              <span style={{ color: "#5d4037", fontSize: "14px" }}>Month:</span>
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  minWidth: "100px",
+                }}
+              >
+                {months.map((month) => (
+                  <option key={month} value={month}>
+                    {month}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <button
+              onClick={() => setSelectedViewMode("month")}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: selectedViewMode === "month" ? "#5d4037" : "#e8ddd4",
+                color: selectedViewMode === "month" ? "#fdfcfb" : "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "14px",
+                transition: "all 0.3s ease",
+              }}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setSelectedViewMode("quarter")}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: selectedViewMode === "quarter" ? "#5d4037" : "#e8ddd4",
+                color: selectedViewMode === "quarter" ? "#fdfcfb" : "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "14px",
+                transition: "all 0.3s ease",
+              }}
+            >
+              Quarterly
+            </button>
+            <button
+              onClick={() => setSelectedViewMode("year")}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: selectedViewMode === "year" ? "#5d4037" : "#e8ddd4",
+                color: selectedViewMode === "year" ? "#fdfcfb" : "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "14px",
+                transition: "all 0.3s ease",
+              }}
+            >
+              Yearly
+            </button>
+          </div>
+          
+          {!isInvestorView && (
+            <>
+              <button
+                onClick={() => setShowModal(true)}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                }}
+              >
+                Add Data
+              </button>
+              <button
+                onClick={() => setShowAddKPIModal(true)}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                }}
+              >
+                Add KPI
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Chart Grid - 3 per row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: "20px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: "20px", marginBottom: "30px" }}>
         <div
           style={{
             backgroundColor: "#fdfcfb",
@@ -4126,6 +4621,41 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
           }}
         >
           <Bar data={createChartData("fixedCosts")} options={chartOptions("Fixed/Variable Ratio")} />
+          
+          {!isInvestorView && (
+            <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
+              <button
+                onClick={() => toggleNotes("fixedCosts")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "12px",
+                }}
+              >
+                Add Notes
+              </button>
+              <button
+                onClick={() => toggleNotes("fixedCosts_analysis")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "12px",
+                }}
+              >
+                View Analysis
+              </button>
+            </div>
+          )}
         </div>
 
         <div
@@ -4137,6 +4667,41 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
           }}
         >
           <Bar data={createChartData("discretionaryCosts")} options={chartOptions("% Discretionary Costs")} />
+          
+          {!isInvestorView && (
+            <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
+              <button
+                onClick={() => toggleNotes("discretionaryCosts")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "12px",
+                }}
+              >
+                Add Notes
+              </button>
+              <button
+                onClick={() => toggleNotes("discretionaryCosts_analysis")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "12px",
+                }}
+              >
+                View Analysis
+              </button>
+            </div>
+          )}
         </div>
 
         <div
@@ -4151,8 +4716,104 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
             data={createChartData("lockInDuration")}
             options={chartOptions("Fixed Costs Lock-in Duration (months)")}
           />
+          
+          {!isInvestorView && (
+            <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
+              <button
+                onClick={() => toggleNotes("lockInDuration")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "12px",
+                }}
+              >
+                Add Notes
+              </button>
+              <button
+                onClick={() => toggleNotes("lockInDuration_analysis")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "12px",
+                }}
+              >
+                View Analysis
+              </button>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Custom KPIs */}
+      {Object.keys(customKPIs).length > 0 && (
+        <>
+          <h3 style={{ color: "#5d4037", fontSize: "20px", fontWeight: "600", marginBottom: "15px" }}>Custom KPIs</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: "20px" }}>
+            {Object.values(customKPIs).map((kpi) => (
+              <div
+                key={kpi.chartName}
+                style={{
+                  backgroundColor: "#fdfcfb",
+                  padding: "20px",
+                  borderRadius: "8px",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                }}
+              >
+                {kpi.type === "line" ? (
+                  <Line data={createCustomKPIChartData(kpi)} options={customKPIOptions(kpi.name, kpi.dataType)} />
+                ) : (
+                  <Bar data={createCustomKPIChartData(kpi)} options={customKPIOptions(kpi.name, kpi.dataType)} />
+                )}
+                
+                {!isInvestorView && (
+                  <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
+                    <button
+                      onClick={() => toggleNotes(kpi.chartName)}
+                      style={{
+                        padding: "8px 16px",
+                        backgroundColor: "#e8ddd4",
+                        color: "#5d4037",
+                        border: "none",
+                        borderRadius: "4px",
+                        cursor: "pointer",
+                        fontWeight: "600",
+                        fontSize: "12px",
+                      }}
+                    >
+                      Add Notes
+                    </button>
+                    <button
+                      onClick={() => toggleNotes(`${kpi.chartName}_analysis`)}
+                      style={{
+                        padding: "8px 16px",
+                        backgroundColor: "#e8ddd4",
+                        color: "#5d4037",
+                        border: "none",
+                        borderRadius: "4px",
+                        cursor: "pointer",
+                        fontWeight: "600",
+                        fontSize: "12px",
+                      }}
+                    >
+                      View Analysis
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* Add Details Modal */}
       {showModal && (
@@ -4238,10 +4899,126 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
           </div>
         </div>
       )}
+
+      {/* Add KPI Modal */}
+      {showAddKPIModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "#fdfcfb",
+              padding: "30px",
+              borderRadius: "8px",
+              maxWidth: "500px",
+              width: "90%",
+            }}
+          >
+            <h3 style={{ color: "#5d4037", marginBottom: "20px" }}>Add KPI</h3>
+
+            <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+              KPI Name:
+            </label>
+            <input
+              type="text"
+              value={newKPI.name}
+              onChange={(e) => setNewKPI({ ...newKPI, name: e.target.value })}
+              placeholder="e.g., Customer Acquisition Cost"
+              style={{
+                width: "100%",
+                padding: "10px",
+                marginBottom: "20px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+              }}
+            />
+
+            <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+              Chart Type:
+            </label>
+            <select
+              value={newKPI.type}
+              onChange={(e) => setNewKPI({ ...newKPI, type: e.target.value })}
+              style={{
+                width: "100%",
+                padding: "10px",
+                marginBottom: "20px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+              }}
+            >
+              <option value="bar">Bar Chart</option>
+              <option value="line">Line Chart</option>
+            </select>
+
+            <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+              Data Type:
+            </label>
+            <select
+              value={newKPI.dataType}
+              onChange={(e) => setNewKPI({ ...newKPI, dataType: e.target.value })}
+              style={{
+                width: "100%",
+                padding: "10px",
+                marginBottom: "20px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+              }}
+            >
+              <option value="currency">Currency (R m)</option>
+              <option value="percentage">Percentage (%)</option>
+              <option value="number">Number</option>
+            </select>
+
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setShowAddKPIModal(false)}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddKPI}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                }}
+              >
+                Save KPI
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
+// Liquidity Survival Component
 const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, isInvestorView }) => {
   const [showModal, setShowModal] = useState(false)
   const [liquidityDetails, setLiquidityDetails] = useState({
@@ -4254,10 +5031,23 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
   })
   const [firebaseChartData, setFirebaseChartData] = useState({})
   const [loading, setLoading] = useState(false)
+  const [selectedMonth, setSelectedMonth] = useState("Jan")
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [selectedViewMode, setSelectedViewMode] = useState("month")
+  const [expandedNotes, setExpandedNotes] = useState({})
+  const [chartNotes, setChartNotes] = useState({})
+  const [showAddKPIModal, setShowAddKPIModal] = useState(false)
+  const [newKPI, setNewKPI] = useState({
+    name: "",
+    type: "bar",
+    dataType: "currency",
+  })
+  const [customKPIs, setCustomKPIs] = useState({})
 
   useEffect(() => {
     if (user) {
       loadLiquidityDataFromFirebase()
+      loadCustomKPIs()
     }
   }, [user])
 
@@ -4284,6 +5074,30 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
       console.error("Error loading liquidity data from Firebase:", error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadCustomKPIs = async () => {
+    if (!user) return
+
+    try {
+      const kpiQuery = query(
+        collection(db, "financialData"),
+        where("userId", "==", user.uid),
+        where("isCustomKPI", "==", true),
+        where("section", "==", "liquidity-survival"),
+      )
+      const querySnapshot = await getDocs(kpiQuery)
+
+      const kpis = {}
+      querySnapshot.forEach((doc) => {
+        const data = doc.data()
+        kpis[data.chartName] = data
+      })
+
+      setCustomKPIs(kpis)
+    } catch (error) {
+      console.error("Error loading custom KPIs:", error)
     }
   }
 
@@ -4314,7 +5128,29 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
   if (activeSection !== "liquidity-survival") return null
 
   const generateLabels = () => {
-    return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    if (selectedViewMode === "month") {
+      return months
+    } else if (selectedViewMode === "quarter") {
+      return ["Q1", "Q2", "Q3", "Q4"]
+    } else {
+      return [selectedYear.toString()]
+    }
+  }
+
+  const aggregateDataForView = (data) => {
+    if (selectedViewMode === "month") {
+      return data
+    } else if (selectedViewMode === "quarter") {
+      const quarters = []
+      for (let i = 0; i < 4; i++) {
+        const sum = data.slice(i * 3, i * 3 + 3).reduce((acc, val) => acc + val, 0)
+        quarters.push(sum)
+      }
+      return quarters
+    } else {
+      return [data.reduce((acc, val) => acc + val, 0)]
+    }
   }
 
   const labels = generateLabels()
@@ -4354,15 +5190,35 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
 
   const createChartData = (dataKey) => {
     const data = firebaseChartData[dataKey] || { actual: [] }
+    const actualData = aggregateDataForView(data.actual)
     return {
       labels,
       datasets: [
         {
           label: "Actual",
-          data: data.actual,
+          data: actualData,
           backgroundColor: "rgba(93, 64, 55, 0.6)",
           borderColor: "rgb(93, 64, 55)",
           borderWidth: 2,
+        },
+      ],
+    }
+  }
+
+  const createCustomKPIChartData = (kpiData) => {
+    const actualData = aggregateDataForView(kpiData.actual || [])
+    return {
+      labels,
+      datasets: [
+        {
+          type: kpiData.type === "line" ? "line" : "bar",
+          label: "Actual",
+          data: actualData,
+          backgroundColor: kpiData.type === "line" ? "rgba(93, 64, 55, 0.1)" : "rgba(93, 64, 55, 0.6)",
+          borderColor: "rgb(93, 64, 55)",
+          borderWidth: 2,
+          fill: kpiData.type === "line",
+          tension: 0.1,
         },
       ],
     }
@@ -4389,6 +5245,56 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
       },
     },
   })
+
+  const customKPIOptions = (title, dataType = "currency") => ({
+    responsive: true,
+    plugins: {
+      legend: {
+        display: false,
+      },
+      title: {
+        display: true,
+        text: title,
+        color: "#5d4037",
+        font: {
+          size: 16,
+        },
+      },
+      tooltip: {
+        callbacks: {
+          label: (context) => {
+            const value = context.raw
+            if (dataType === "percentage") {
+              return `${context.dataset.label}: ${value.toFixed(2)}%`
+            } else if (dataType === "currency") {
+              return `${context.dataset.label}: R${value.toFixed(2)}m`
+            } else {
+              return `${context.dataset.label}: ${value.toFixed(2)}`
+            }
+          },
+        },
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+      },
+    },
+  })
+
+  const toggleNotes = (chartName) => {
+    setExpandedNotes((prev) => ({
+      ...prev,
+      [chartName]: !prev[chartName],
+    }))
+  }
+
+  const updateChartNote = (chartName, note) => {
+    setChartNotes((prev) => ({
+      ...prev,
+      [chartName]: note,
+    }))
+  }
 
   const renderMonthlyInputs = (category, label) => {
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -4438,60 +5344,198 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
     )
   }
 
+  const handleAddKPI = async () => {
+    if (!user || !newKPI.name.trim()) {
+      alert("Please enter a name for the new KPI")
+      return
+    }
+
+    try {
+      const chartName = newKPI.name.toLowerCase().replace(/\s+/g, "_")
+      const kpiData = {
+        userId: user.uid,
+        chartName: chartName,
+        name: newKPI.name,
+        type: newKPI.type,
+        dataType: newKPI.dataType,
+        actual: Array(12).fill(0),
+        isCustomKPI: true,
+        section: "liquidity-survival",
+        lastUpdated: new Date().toISOString(),
+      }
+
+      await setDoc(doc(db, "financialData", `${user.uid}_${chartName}`), kpiData)
+      console.log("New KPI saved to Firebase")
+
+      setCustomKPIs((prev) => ({
+        ...prev,
+        [chartName]: kpiData,
+      }))
+
+      setNewKPI({
+        name: "",
+        type: "bar",
+        dataType: "currency",
+      })
+      setShowAddKPIModal(false)
+    } catch (error) {
+      console.error("Error saving KPI:", error)
+      alert("Error saving KPI. Please try again.")
+    }
+  }
+
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
+
   return (
     <div style={{ paddingTop: "20px" }}>
-      {/* Tab Description */}
-      <div
-        style={{
-          backgroundColor: "#fff9c4",
-          padding: "15px 20px",
-          borderRadius: "8px",
-          marginBottom: "20px",
-          border: "1px solid #f9a825",
-        }}
-      >
-        <div style={{ marginBottom: "8px" }}>
-          <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Question:</strong>
-          <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
-            Will the business survive a shock?
-          </span>
-        </div>
-        <div style={{ marginBottom: "8px" }}>
-          <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Signals:</strong>
-          <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>Cash runway, burn risk</span>
-        </div>
-        <div>
-          <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Decisions:</strong>
-          <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
-            Cut burn, raise capital, slow growth
-          </span>
-        </div>
-      </div>
+      <KeyQuestionBox
+        question="Will the business survive a shock?"
+        signals="Cash runway, burn risk"
+        decisions="Cut burn, raise capital, slow growth"
+        section="liquidity-survival"
+      />
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "15px" }}>
         <h2 style={{ color: "#5d4037", fontSize: "24px", fontWeight: "700" }}>Liquidity & Survival</h2>
 
-        {!isInvestorView && (
-          <button
-            onClick={() => setShowModal(true)}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: "#5d4037",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontWeight: "600",
-              fontSize: "14px",
-            }}
-          >
-            Add Details
-          </button>
-        )}
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+              <span style={{ color: "#5d4037", fontSize: "14px" }}>Year:</span>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  minWidth: "100px",
+                }}
+              >
+                {years.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+              <span style={{ color: "#5d4037", fontSize: "14px" }}>Month:</span>
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  minWidth: "100px",
+                }}
+              >
+                {months.map((month) => (
+                  <option key={month} value={month}>
+                    {month}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <button
+              onClick={() => setSelectedViewMode("month")}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: selectedViewMode === "month" ? "#5d4037" : "#e8ddd4",
+                color: selectedViewMode === "month" ? "#fdfcfb" : "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "14px",
+                transition: "all 0.3s ease",
+              }}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setSelectedViewMode("quarter")}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: selectedViewMode === "quarter" ? "#5d4037" : "#e8ddd4",
+                color: selectedViewMode === "quarter" ? "#fdfcfb" : "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "14px",
+                transition: "all 0.3s ease",
+              }}
+            >
+              Quarterly
+            </button>
+            <button
+              onClick={() => setSelectedViewMode("year")}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: selectedViewMode === "year" ? "#5d4037" : "#e8ddd4",
+                color: selectedViewMode === "year" ? "#fdfcfb" : "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "14px",
+                transition: "all 0.3s ease",
+              }}
+            >
+              Yearly
+            </button>
+          </div>
+          
+          {!isInvestorView && (
+            <>
+              <button
+                onClick={() => setShowModal(true)}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                }}
+              >
+                Add Data
+              </button>
+              <button
+                onClick={() => setShowAddKPIModal(true)}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                }}
+              >
+                Add KPI
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Chart Grid - 3 per row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: "20px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: "20px", marginBottom: "30px" }}>
         <div
           style={{
             backgroundColor: "#fdfcfb",
@@ -4501,6 +5545,41 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
           }}
         >
           <Bar data={createChartData("currentRatio")} options={chartOptions("Current Ratio")} />
+          
+          {!isInvestorView && (
+            <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
+              <button
+                onClick={() => toggleNotes("currentRatio")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "12px",
+                }}
+              >
+                Add Notes
+              </button>
+              <button
+                onClick={() => toggleNotes("currentRatio_analysis")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "12px",
+                }}
+              >
+                View Analysis
+              </button>
+            </div>
+          )}
         </div>
 
         <div
@@ -4512,6 +5591,41 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
           }}
         >
           <Bar data={createChartData("burnRate")} options={chartOptions("Burn Rate")} />
+          
+          {!isInvestorView && (
+            <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
+              <button
+                onClick={() => toggleNotes("burnRate")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "12px",
+                }}
+              >
+                Add Notes
+              </button>
+              <button
+                onClick={() => toggleNotes("burnRate_analysis")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "12px",
+                }}
+              >
+                View Analysis
+              </button>
+            </div>
+          )}
         </div>
 
         <div
@@ -4523,6 +5637,41 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
           }}
         >
           <Bar data={createChartData("cashCover")} options={chartOptions("Cash Cover")} />
+          
+          {!isInvestorView && (
+            <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
+              <button
+                onClick={() => toggleNotes("cashCover")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "12px",
+                }}
+              >
+                Add Notes
+              </button>
+              <button
+                onClick={() => toggleNotes("cashCover_analysis")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "12px",
+                }}
+              >
+                View Analysis
+              </button>
+            </div>
+          )}
         </div>
 
         <div
@@ -4534,6 +5683,41 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
           }}
         >
           <Line data={createChartData("cashflow")} options={chartOptions("Free Cashflow")} />
+          
+          {!isInvestorView && (
+            <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
+              <button
+                onClick={() => toggleNotes("cashflow")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "12px",
+                }}
+              >
+                Add Notes
+              </button>
+              <button
+                onClick={() => toggleNotes("cashflow_analysis")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "12px",
+                }}
+              >
+                View Analysis
+              </button>
+            </div>
+          )}
         </div>
 
         <div
@@ -4545,8 +5729,104 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
           }}
         >
           <Bar data={createChartData("loanRepayments")} options={chartOptions("Loan Repayments")} />
+          
+          {!isInvestorView && (
+            <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
+              <button
+                onClick={() => toggleNotes("loanRepayments")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "12px",
+                }}
+              >
+                Add Notes
+              </button>
+              <button
+                onClick={() => toggleNotes("loanRepayments_analysis")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "12px",
+                }}
+              >
+                View Analysis
+              </button>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Custom KPIs */}
+      {Object.keys(customKPIs).length > 0 && (
+        <>
+          <h3 style={{ color: "#5d4037", fontSize: "20px", fontWeight: "600", marginBottom: "15px" }}>Custom KPIs</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: "20px" }}>
+            {Object.values(customKPIs).map((kpi) => (
+              <div
+                key={kpi.chartName}
+                style={{
+                  backgroundColor: "#fdfcfb",
+                  padding: "20px",
+                  borderRadius: "8px",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                }}
+              >
+                {kpi.type === "line" ? (
+                  <Line data={createCustomKPIChartData(kpi)} options={customKPIOptions(kpi.name, kpi.dataType)} />
+                ) : (
+                  <Bar data={createCustomKPIChartData(kpi)} options={customKPIOptions(kpi.name, kpi.dataType)} />
+                )}
+                
+                {!isInvestorView && (
+                  <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
+                    <button
+                      onClick={() => toggleNotes(kpi.chartName)}
+                      style={{
+                        padding: "8px 16px",
+                        backgroundColor: "#e8ddd4",
+                        color: "#5d4037",
+                        border: "none",
+                        borderRadius: "4px",
+                        cursor: "pointer",
+                        fontWeight: "600",
+                        fontSize: "12px",
+                      }}
+                    >
+                      Add Notes
+                    </button>
+                    <button
+                      onClick={() => toggleNotes(`${kpi.chartName}_analysis`)}
+                      style={{
+                        padding: "8px 16px",
+                        backgroundColor: "#e8ddd4",
+                        color: "#5d4037",
+                        border: "none",
+                        borderRadius: "4px",
+                        cursor: "pointer",
+                        fontWeight: "600",
+                        fontSize: "12px",
+                      }}
+                    >
+                      View Analysis
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* Add Details Modal */}
       {showModal && (
@@ -4633,13 +5913,128 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
           </div>
         </div>
       )}
+
+      {/* Add KPI Modal */}
+      {showAddKPIModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "#fdfcfb",
+              padding: "30px",
+              borderRadius: "8px",
+              maxWidth: "500px",
+              width: "90%",
+            }}
+          >
+            <h3 style={{ color: "#5d4037", marginBottom: "20px" }}>Add KPI</h3>
+
+            <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+              KPI Name:
+            </label>
+            <input
+              type="text"
+              value={newKPI.name}
+              onChange={(e) => setNewKPI({ ...newKPI, name: e.target.value })}
+              placeholder="e.g., Customer Acquisition Cost"
+              style={{
+                width: "100%",
+                padding: "10px",
+                marginBottom: "20px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+              }}
+            />
+
+            <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+              Chart Type:
+            </label>
+            <select
+              value={newKPI.type}
+              onChange={(e) => setNewKPI({ ...newKPI, type: e.target.value })}
+              style={{
+                width: "100%",
+                padding: "10px",
+                marginBottom: "20px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+              }}
+            >
+              <option value="bar">Bar Chart</option>
+              <option value="line">Line Chart</option>
+            </select>
+
+            <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+              Data Type:
+            </label>
+            <select
+              value={newKPI.dataType}
+              onChange={(e) => setNewKPI({ ...newKPI, dataType: e.target.value })}
+              style={{
+                width: "100%",
+                padding: "10px",
+                marginBottom: "20px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+              }}
+            >
+              <option value="currency">Currency (R m)</option>
+              <option value="percentage">Percentage (%)</option>
+              <option value="number">Number</option>
+            </select>
+
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setShowAddKPIModal(false)}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddKPI}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                }}
+              >
+                Save KPI
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
+// Main Financial Performance Component
 const FinancialPerformance = () => {
   const [activeSection, setActiveSection] = useState("capital-structure")
-  const [viewMode, setViewMode] = useState("month")
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [financialYearStart, setFinancialYearStart] = useState("Jan")
   const [chartData, setChartData] = useState({})
@@ -4777,7 +6172,7 @@ const FinancialPerformance = () => {
   }
 
   const handleViewModeToggle = (newViewMode) => {
-    setViewMode(newViewMode)
+    // This is handled within each component now
   }
 
   return (
@@ -4958,81 +6353,10 @@ const FinancialPerformance = () => {
           ))}
         </div>
 
-        {/* View mode buttons - show for Performance Engine only */}
-        {activeSection === "performance-engine" && (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "20px",
-              flexWrap: "wrap",
-              gap: "15px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                gap: "15px",
-                alignItems: "center",
-              }}
-            >
-              <button
-                onClick={() => handleViewModeToggle("month")}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: viewMode === "month" ? "#5d4037" : "#e8ddd4",
-                  color: viewMode === "month" ? "#fdfcfb" : "#5d4037",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                  fontSize: "14px",
-                  transition: "all 0.3s ease",
-                }}
-              >
-                Monthly View
-              </button>
-              <button
-                onClick={() => handleViewModeToggle("quarter")}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: viewMode === "quarter" ? "#5d4037" : "#e8ddd4",
-                  color: viewMode === "quarter" ? "#fdfcfb" : "#5d4037",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                  fontSize: "14px",
-                  transition: "all 0.3s ease",
-                }}
-              >
-                Quarterly View
-              </button>
-              <button
-                onClick={() => handleViewModeToggle("year")}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: viewMode === "year" ? "#5d4037" : "#e8ddd4",
-                  color: viewMode === "year" ? "#fdfcfb" : "#5d4037",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                  fontSize: "14px",
-                  transition: "all 0.3s ease",
-                }}
-              >
-                Yearly View
-              </button>
-            </div>
-          </div>
-        )}
-
         {activeSection === "capital-structure" && (
           <CapitalStructure
             activeSection={activeSection}
-            viewMode={viewMode}
+            viewMode="month"
             user={user}
             isInvestorView={isInvestorView}
             isEmbedded={true}
@@ -5041,7 +6365,7 @@ const FinancialPerformance = () => {
 
         <PerformanceEngine
           activeSection={activeSection}
-          viewMode={viewMode}
+          viewMode="month"
           financialYearStart={financialYearStart}
           pnlData={pnlData}
           user={user}
@@ -5051,7 +6375,7 @@ const FinancialPerformance = () => {
 
         <CostAgility
           activeSection={activeSection}
-          viewMode={viewMode}
+          viewMode="month"
           user={user}
           onUpdateChartData={handleUpdateChartData}
           isInvestorView={isInvestorView}
@@ -5059,7 +6383,7 @@ const FinancialPerformance = () => {
 
         <LiquiditySurvival
           activeSection={activeSection}
-          viewMode={viewMode}
+          viewMode="month"
           user={user}
           onUpdateChartData={handleUpdateChartData}
           isInvestorView={isInvestorView}
