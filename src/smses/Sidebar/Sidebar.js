@@ -1,4 +1,4 @@
-// File: components/SMESidebar/SMESidebar.jsx
+// File: src/smses/Sidebar/Sidebar.jsx (or wherever your SMESidebar is located)
 import { useState, useEffect } from "react"
 import Sidebar from "../../components/profile/sidebar/Sidebar"
 import { useUserProfile } from "../../hooks/useUserProfile"

@@ -245,6 +245,8 @@ import OpportunityMatchesPage from "./smses/MyOpportunityMatches/opportunity-mat
 // Growth Tools Components
 import ShopToolsPage from "./smses/MyGrowthTools/shop"
 import MyToolsPage from "./smses/MyGrowthTools/my-tools"
+import GrowthSuiteLanding from "./smses/MyGrowthTools/Growthsuitelanding"
+import OverallCompanyHealth from "./smses/MyGrowthTools/OverallCompanyHealth"
 import Strategy from "./smses/MyGrowthTools/Strategy"
 import FinancialPerformance from "./smses/MyGrowthTools/FinancialPerformance"
 import CapitalStructure from "./smses/MyGrowthTools/CapitalStructure"
@@ -743,14 +745,6 @@ function App() {
         <Route path="/InsightsInvestor" element={<InsightsInvestor />} />
         <Route path="/FAQPageInvestor" element={<FAQPageInvestor />} />
         <Route path="/HeaderInvestor" element={<HeaderInvestor />} />
-        <Route path="/Strategy" element={<Strategy />} />
-        <Route path="/FinancialPerformance" element={<FinancialPerformance />} />
-        <Route path="/CapitalStructure" element={<CapitalStructure />} />
-        <Route path="/OperationalStrength" element={<OperationalStrength />} />
-        <Route path="/SocialImpact" element={<SocialImpact />} />
-        <Route path="/People" element={<People />} />
-        <Route path="/MarketingSales" element={<MarketingSales />} />
-        <Route path="/RiskManagement" element={<RiskManagement />} />
         <Route path="/BIGscoreAdvisor" element={<BIGscoreAdvisor />} />
         <Route path="/HowWorksAdvisors" element={<HowWorksAdvisors />} />
         <Route path="/InsightsAdvisor" element={<InsightsAdvisor />} />
@@ -811,7 +805,7 @@ function App() {
         <Route path="/profile" element={withProtection(Profile, {}, renderSMERoute)} />
         <Route path="/find-matches" element={withProtection(FindMatches, {}, renderSMERoute)} />
         <Route path="/my-documents" element={withProtection(MyDocuments, {}, renderSMERoute)} />
-        <Route path="/growth" element={withProtection(GrowthEnabler, {}, renderSMERoute)} />
+        <Route path="/growth" element={withProtection(GrowthSuiteLanding, {}, renderSMERoute)} />
         <Route path="/messages" element={withProtection(Messages, {}, renderSMERoute)} />
         <Route path="/calendar" element={withProtection(Calendar, {}, renderSMERoute)} />
         <Route path="/settings" element={withProtection(Settings, {}, renderSMERoute)} />
@@ -819,6 +813,16 @@ function App() {
         <Route path="/billing/subscriptions" element={withProtection(MySubscriptions, {}, renderSMERoute)} />
         <Route path="/billing/info" element={withProtection(BillingInfo, {}, renderSMERoute)} />
         <Route path="/billing/growth-tools-orders" element={withProtection(BillingInformationSMSE, {}, renderSMERoute)} />
+        
+        {/* Growth Suite Routes - NEW */}
+        <Route path="/growth-suite-landing" element={withProtection(GrowthSuiteLanding, {}, renderSMERoute)} />
+        <Route path="/overall-company-health" element={withProtection(OverallCompanyHealth, {}, renderSMERoute)} />
+        <Route path="/Strategy" element={withProtection(Strategy, {}, renderSMERoute)} />
+        <Route path="/FinancialPerformance" element={withProtection(FinancialPerformance, {}, renderSMERoute)} />
+        <Route path="/OperationalStrength" element={withProtection(OperationalStrength, {}, renderSMERoute)} />
+        <Route path="/People" element={withProtection(People, {}, renderSMERoute)} />
+        <Route path="/SocialImpact" element={withProtection(SocialImpact, {}, renderSMERoute)} />
+        <Route path="/MarketingSales" element={withProtection(MarketingSales, {}, renderSMERoute)} />
         
         {/* Growth Tools Sub-Routes */}
         <Route path="/growth/my-tools" element={withProtection(MyToolsPage, {}, renderSMERoute)} />
