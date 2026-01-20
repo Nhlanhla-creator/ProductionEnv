@@ -24,6 +24,7 @@ import {
   Activity,
   Globe,
   PenTool,
+  Heart,
 } from "lucide-react";
 
 export const advisorMenuItems = [
@@ -459,6 +460,12 @@ export const smeMenuItems = [
     route: "/growth",
     hasSubmenu: true,
     subItems: [
+      {
+        id: "overall-health",
+        label: "Overall Company Health",
+        icon: <Heart size={16} />,
+        route: "/overall-company-health",
+      },
       {
         id: "strategy-execution",
         label: "Strategy & Execution",
