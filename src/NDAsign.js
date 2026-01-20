@@ -906,4 +906,5 @@ const NDASignupPopup = ({ onRegistrationComplete, registrationData }) => {
   );
 };
 
+
 export default NDASignupPopup;
