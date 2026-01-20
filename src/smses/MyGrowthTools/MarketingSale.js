@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Bar, Pie, Line, Scatter } from "react-chartjs-2"
-import { doc, getDoc, setDoc, collection, query, where, getDocs } from "firebase/firestore"
+import { Bar, Pie, Line } from "react-chartjs-2"
+import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, deleteDoc } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
 import { onAuthStateChanged } from "firebase/auth"
 import Sidebar from "smses/Sidebar/Sidebar"
@@ -20,256 +20,336 @@ import {
   Legend,
 } from "chart.js"
 
+// Icons for actions
+import { FaTrashAlt, FaEdit, FaPlus, FaChevronDown, FaChevronUp, FaStickyNote, FaChartBar } from "react-icons/fa"
+
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, PointElement, LineElement, Title, Tooltip, Legend)
 
-// Helper function to get financial year months
-const getFinancialYearMonths = (financialYearStartMonth) => {
-  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-  const startMonthIndex = financialYearStartMonth - 1 // Convert to 0-indexed
-  const months = []
-  
-  for (let i = 0; i < 12; i++) {
-    const monthIndex = (startMonthIndex + i) % 12
-    months.push(monthNames[monthIndex])
-  }
-  
-  return months
+const PIPELINE_SECTIONS = {
+  "pipeline-visibility": {
+    name: "Pipeline Visibility",
+    notes: {
+      keyQuestion: "Do we have enough quality demand, at the right risk, to hit revenue?",
+      keySignals: "Forecast clarity",
+      keyDecisions: "Formalise sales",
+    },
+    kpis: [
+      "New Leads (#)",
+      "Funnel conversion rates (Visitor → Lead → MQL → SQL → Opportunity → Customer)",
+      "Sales velocity (Average days to close)",
+      "Total pipeline value (ZAR) & Risk Adjusted Pipeline value (= Total Pipeline value * probability)",
+      "Pipeline coverage ratio = Pipeline Value ÷ Target(budget) Revenue",
+      "Lead volume trends",
+    ],
+  },
+  "pipeline-sufficiency": {
+    name: "Pipeline Sufficiency",
+    notes: {
+      keyQuestion: "Is pipeline big enough?",
+      keySignals: "Coverage risk",
+      keyDecisions: "Adjust targets",
+    },
+    kpis: [
+      "Total pipeline value (ZAR) & Risk Adjusted Pipeline value (= Total Pipeline value * probability)",
+      "Pipeline coverage ratio = Pipeline Value ÷ Target(budget) Revenue",
+      "Lead volume trends",
+      "Conversion rates",
+      "Pipeline coverage (not a trend chart, just a single number)",
+    ],
+  },
+  "pipeline-quality": {
+    name: "Pipeline Quality",
+    notes: {
+      keyQuestion: "How real is this pipeline? Will it convert?",
+      keySignals: "Credibility",
+      keyDecisions: "Improve sales discipline",
+    },
+    kpis: [
+      "Cost per lead (by channel)",
+      "CAC vs LTV trend",
+      "SQL → Opportunity conversion",
+      "Opportunity → Customer conversion",
+      "Repeat customers vs churn (excellent inclusion)",
+    ],
+  },
+  "revenue-concentration": {
+    name: "Revenue Concentration",
+    notes: {
+      keyQuestion: "Where does revenue actually come from? Are we over-dependent?",
+      keySignals: "Client/channel risk",
+      keyDecisions: "Diversify clients",
+    },
+    kpis: [
+      "Revenue by channel (bubble chart) or by customer segment",
+      "Revenue per channel vs spend",
+      "Top 3 channels as % of revenue",
+    ],
+  },
+  "demand-sustainability": {
+    name: "Demand Sustainability",
+    notes: {
+      keyQuestion: "Is demand repeatable? Will demand persist without constant spend",
+      keySignals: "Founder or single client reliance",
+      keyDecisions: "Build Demand Engine",
+    },
+    kpis: [
+      "Referral rate trend",
+      "Repeat customer & churn rate",
+      "Cost per Lead by campaign (change to campaign cost contribution), Campaign ROI Analysis",
+      "Declining CAC with rising LTV (this is key)",
+    ],
+  },
+  "pipeline-table": {
+    name: "Pipeline Table",
+    notes: {
+      keyQuestion: "",
+      keySignals: "",
+      keyDecisions: "",
+    },
+    kpis: [
+      "Client / Deal",
+      "Segment",
+      "Stage",
+      "Probability %",
+      "Expected Close",
+      "Deal Value (ZAR)",
+      "Risk Adjusted Pipeline value (ZAR)",
+      "Source",
+      "Owner",
+    ],
+  },
 }
 
-// Download functionality
-const downloadData = (data, filename, selectedSections) => {
-  const filteredData = {}
-  selectedSections.forEach((section) => {
-    if (data[section]) {
-      filteredData[section] = data[section]
-    }
-  })
-
-  const dataStr = JSON.stringify(filteredData, null, 2)
-  const dataUri = "data:application/json;charset=utf-8," + encodeURIComponent(dataStr)
-
-  const exportFileDefaultName = `${filename}_${new Date().toISOString().split("T")[0]}.json`
-
-  const linkElement = document.createElement("a")
-  linkElement.setAttribute("href", dataUri)
-  linkElement.setAttribute("download", exportFileDefaultName)
-  linkElement.click()
-}
-
-// Download Modal Component
-const DownloadModal = ({ isOpen, onClose, onDownload, availableSections, sectionTitle }) => {
-  const [selectedSections, setSelectedSections] = useState([])
-
-  const toggleSection = (section) => {
-    setSelectedSections((prev) => (prev.includes(section) ? prev.filter((s) => s !== section) : [...prev, section]))
-  }
-
-  const handleDownload = () => {
-    if (selectedSections.length > 0) {
-      onDownload(selectedSections)
-      onClose()
-      setSelectedSections([])
-    }
-  }
-
-  if (!isOpen) return null
-
+// NotesSection Component with See More functionality
+const NotesSection = ({ sectionKey, isExpanded, onToggle }) => {
+  const notes = PIPELINE_SECTIONS[sectionKey].notes
+  
   return (
     <div
       style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: "rgba(0,0,0,0.5)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
+        backgroundColor: "#f5f0eb",
+        padding: "15px",
+        borderRadius: "6px",
+        marginBottom: "20px",
+        border: "2px solid #7d5a50",
       }}
     >
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "8px",
-          maxWidth: "400px",
-          width: "90%",
-        }}
-      >
-        <h3 style={{ color: "#5d4037", marginTop: 0 }}>Download {sectionTitle} Data</h3>
-        <p style={{ color: "#72542b" }}>Select which sections to include in your download:</p>
-
-        <div style={{ marginBottom: "20px" }}>
-          {availableSections.map((section) => (
-            <label
-              key={section.id}
-              style={{
-                display: "block",
-                marginBottom: "10px",
-                color: "#5d4037",
-                cursor: "pointer",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={selectedSections.includes(section.id)}
-                onChange={() => toggleSection(section.id)}
-                style={{ marginRight: "8px" }}
-              />
-              {section.label}
-            </label>
-          ))}
-        </div>
-
-        <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
-          <button
-            onClick={onClose}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#e8ddd4",
-              color: "#5d4037",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleDownload}
-            disabled={selectedSections.length === 0}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: selectedSections.length > 0 ? "#5d4037" : "#ccc",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "4px",
-              cursor: selectedSections.length > 0 ? "pointer" : "not-allowed",
-            }}
-          >
-            Download
-          </button>
-        </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", flex: 1 }}>Section Notes</h4>
+        <button
+          onClick={onToggle}
+          style={{
+            background: "none",
+            border: "none",
+            color: "#5d4037",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: "5px",
+            fontSize: "14px",
+          }}
+        >
+          {isExpanded ? <FaChevronUp /> : <FaChevronDown />}
+          {isExpanded ? "See Less" : "See More"}
+        </button>
       </div>
+      
+      {!isExpanded ? (
+        <div style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6" }}>
+          <p style={{ margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <strong>Key Question:</strong> {notes.keyQuestion}
+          </p>
+        </div>
+      ) : (
+        <div style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6" }}>
+          <p style={{ marginBottom: "8px" }}>
+            <strong>Key Question:</strong> {notes.keyQuestion}
+          </p>
+          <p style={{ marginBottom: "8px" }}>
+            <strong>Key Signals:</strong> {notes.keySignals}
+          </p>
+          <p style={{ marginBottom: "0" }}>
+            <strong>Key Decisions:</strong> {notes.keyDecisions}
+          </p>
+        </div>
+      )}
     </div>
   )
 }
 
-// NewLeads Component - HAS MONTHLY X-AXIS
-const NewLeads = ({ activeSection, currentUser, isInvestorView, financialYearStartMonth }) => {
-  const [leadData, setLeadData] = useState(Array(12).fill(0))
-  const [qualifiedData, setQualifiedData] = useState(Array(12).fill(0))
+// ChartActions Component for Add Notes and View Analysis buttons
+const ChartActions = ({ onAddNotes, onViewAnalysis }) => {
+  return (
+    <div style={{ display: "flex", gap: "10px", marginTop: "15px", justifyContent: "flex-end" }}>
+      <button
+        onClick={onAddNotes}
+        style={{
+          padding: "8px 16px",
+          backgroundColor: "#7d5a50",
+          color: "#fdfcfb",
+          border: "none",
+          borderRadius: "4px",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          gap: "5px",
+          fontSize: "14px",
+        }}
+      >
+        <FaStickyNote /> Add Notes
+      </button>
+      <button
+        onClick={onViewAnalysis}
+        style={{
+          padding: "8px 16px",
+          backgroundColor: "#5d4037",
+          color: "#fdfcfb",
+          border: "none",
+          borderRadius: "4px",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          gap: "5px",
+          fontSize: "14px",
+        }}
+      >
+        <FaChartBar /> View Analysis
+      </button>
+    </div>
+  )
+}
+
+// Pipeline Visibility Component
+const PipelineVisibility = ({ activeSection, currentUser, isInvestorView }) => {
+  const [newLeadsCount, setNewLeadsCount] = useState(0)
+  const [funnelData, setFunnelData] = useState({
+    visitors: 0,
+    leads: 0,
+    mql: 0,
+    sql: 0,
+    opportunity: 0,
+    customer: 0,
+  })
+  const [salesVelocity, setSalesVelocity] = useState(0)
+  const [pipelineValue, setPipelineValue] = useState(0)
+  const [pipelineValueRisk, setPipelineValueRisk] = useState(0)
+  const [targetRevenue, setTargetRevenue] = useState(0)
+  const [leadVolumeData, setLeadVolumeData] = useState(Array(12).fill(0))
   const [showEditForm, setShowEditForm] = useState(false)
-  const [showDownloadModal, setShowDownloadModal] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-  const [financialYearMonths, setFinancialYearMonths] = useState([])
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [notesExpanded, setNotesExpanded] = useState(false)
+
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
   useEffect(() => {
-    if (financialYearStartMonth) {
-      const months = getFinancialYearMonths(financialYearStartMonth)
-      setFinancialYearMonths(months)
+    if (currentUser && activeSection === "pipeline-visibility") {
+      loadData()
     }
-  }, [financialYearStartMonth])
+  }, [currentUser, activeSection, selectedYear])
 
-  const saveLeadsData = async () => {
-    if (!currentUser) {
-      alert("Please log in to save data.")
-      return
-    }
-    try {
-      await setDoc(doc(db, "new-leads", currentUser.uid), { 
-        leadData, 
-        qualifiedData,
-        lastUpdated: new Date().toISOString()
-      })
-      setShowEditForm(false)
-      alert("Leads data saved successfully!")
-    } catch (error) {
-      console.error("Error saving leads data:", error)
-      alert("Error saving data")
-    }
-  }
-
-  const loadLeadsData = async () => {
+  const loadData = async () => {
     if (!currentUser) return
     try {
       setIsLoading(true)
-      const docRef = doc(db, "new-leads", currentUser.uid)
+      const docRef = doc(db, "pipeline-visibility", `${currentUser.uid}_${selectedYear}`)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         const data = docSnap.data()
-        setLeadData(data.leadData || Array(12).fill(0))
-        setQualifiedData(data.qualifiedData || Array(12).fill(0))
+        setNewLeadsCount(data.newLeadsCount || 0)
+        setFunnelData(data.funnelData || { visitors: 0, leads: 0, mql: 0, sql: 0, opportunity: 0, customer: 0 })
+        setSalesVelocity(data.salesVelocity || 0)
+        setPipelineValue(data.pipelineValue || 0)
+        setPipelineValueRisk(data.pipelineValueRisk || 0)
+        setTargetRevenue(data.targetRevenue || 0)
+        setLeadVolumeData(data.leadVolumeData || Array(12).fill(0))
       } else {
-        // Initialize with empty data if no document exists
         await setDoc(docRef, {
-          leadData: Array(12).fill(0),
-          qualifiedData: Array(12).fill(0),
-          lastUpdated: new Date().toISOString()
+          newLeadsCount: 0,
+          funnelData: { visitors: 0, leads: 0, mql: 0, sql: 0, opportunity: 0, customer: 0 },
+          salesVelocity: 0,
+          pipelineValue: 0,
+          pipelineValueRisk: 0,
+          targetRevenue: 0,
+          leadVolumeData: Array(12).fill(0),
+          lastUpdated: new Date().toISOString(),
         })
       }
     } catch (error) {
-      console.error("Error loading leads data:", error)
+      console.error("Error loading pipeline visibility data:", error)
     } finally {
       setIsLoading(false)
     }
   }
 
-  useEffect(() => {
-    if (currentUser) {
-      loadLeadsData()
+  const saveData = async () => {
+    if (!currentUser || isInvestorView) {
+      alert("You cannot save data in this mode.")
+      return
     }
-  }, [currentUser])
-
-  const updateLeadValue = (index, value) => {
-    const newData = [...leadData]
-    newData[index] = Number.parseFloat(value) || 0
-    setLeadData(newData)
-  }
-
-  const updateQualifiedValue = (index, value) => {
-    const newData = [...qualifiedData]
-    newData[index] = Number.parseFloat(value) || 0
-    setQualifiedData(newData)
-  }
-
-  const handleDownload = (selectedSections) => {
-    const data = {
-      "new-leads": leadData,
-      "qualified-leads": qualifiedData,
-      summary: {
-        totalNewLeads: leadData.reduce((sum, val) => sum + val, 0),
-        totalQualifiedLeads: qualifiedData.reduce((sum, val) => sum + val, 0),
-        conversionRate:
-          leadData.reduce((sum, val) => sum + val, 0) > 0
-            ? (
-                (qualifiedData.reduce((sum, val) => sum + val, 0) / leadData.reduce((sum, val) => sum + val, 0)) *
-                100
-              ).toFixed(2)
-            : 0,
-      },
+    try {
+      await setDoc(doc(db, "pipeline-visibility", `${currentUser.uid}_${selectedYear}`), {
+        newLeadsCount,
+        funnelData,
+        salesVelocity,
+        pipelineValue,
+        pipelineValueRisk,
+        targetRevenue,
+        leadVolumeData,
+        lastUpdated: new Date().toISOString(),
+      })
+      setShowEditForm(false)
+      alert("Pipeline visibility data saved successfully!")
+    } catch (error) {
+      console.error("Error saving data:", error)
+      alert("Error saving data")
     }
-    downloadData(data, "new_leads", selectedSections)
   }
 
-  if (activeSection !== "new-leads") return null
+  const handleAddNotes = () => {
+    alert("Add Notes functionality for Funnel Conversion Rates")
+  }
+
+  const handleViewAnalysis = () => {
+    alert("View Analysis functionality for Funnel Conversion Rates")
+  }
+
+  const handleLeadVolumeAddNotes = () => {
+    alert("Add Notes functionality for Lead Volume Trends")
+  }
+
+  const handleLeadVolumeViewAnalysis = () => {
+    alert("View Analysis functionality for Lead Volume Trends")
+  }
+
+  if (activeSection !== "pipeline-visibility") return null
 
   if (isLoading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '200px',
-        backgroundColor: '#fdfcfb',
-        borderRadius: '8px'
-      }}>
-        <div>Loading leads data...</div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "200px",
+          backgroundColor: "#fdfcfb",
+          borderRadius: "8px",
+        }}
+      >
+        <div>Loading data...</div>
       </div>
     )
+  }
+
+  const coverageRatio = targetRevenue > 0 ? ((pipelineValue / targetRevenue) * 100).toFixed(2) : 0
+  const conversionRates = {
+    visitorToLead: funnelData.visitors > 0 ? ((funnelData.leads / funnelData.visitors) * 100).toFixed(2) : 0,
+    leadToMQL: funnelData.leads > 0 ? ((funnelData.mql / funnelData.leads) * 100).toFixed(2) : 0,
+    mqlToSQL: funnelData.mql > 0 ? ((funnelData.sql / funnelData.mql) * 100).toFixed(2) : 0,
+    sqlToOpportunity: funnelData.sql > 0 ? ((funnelData.opportunity / funnelData.sql) * 100).toFixed(2) : 0,
+    opportunityToCustomer:
+      funnelData.opportunity > 0 ? ((funnelData.customer / funnelData.opportunity) * 100).toFixed(2) : 0,
   }
 
   return (
@@ -282,44 +362,66 @@ const NewLeads = ({ activeSection, currentUser, isInvestorView, financialYearSta
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
     >
+      <NotesSection 
+        sectionKey="pipeline-visibility" 
+        isExpanded={notesExpanded}
+        onToggle={() => setNotesExpanded(!notesExpanded)}
+      />
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <div>
-          <h2 style={{ color: "#5d4037", marginTop: 0 }}>New Leads & Qualified Leads</h2>
-          {financialYearStartMonth && (
-            <p style={{ color: "#7d5a50", fontSize: "14px", margin: "5px 0 0 0" }}>
-              Financial Year starts in {financialYearMonths[0]}
-            </p>
-          )}
-        </div>
-        <div style={{ display: "flex", gap: "10px" }}>
-          {!isInvestorView && (
-            <button
-              onClick={() => setShowEditForm(!showEditForm)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              {showEditForm ? "Cancel" : "Edit Data"}
-            </button>
-          )}
-          <button
-            onClick={() => setShowDownloadModal(true)}
+        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Pipeline Visibility</h2>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
             style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
+              padding: "8px 12px",
+              border: "1px solid #d4c4b0",
               borderRadius: "4px",
-              cursor: "pointer",
+              backgroundColor: "#fdfcfb",
+              color: "#5d4037",
             }}
           >
-            Download
-          </button>
+            {[2023, 2024, 2025, 2026].map(year => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
+          {!isInvestorView && (
+            <>
+              <button
+                onClick={() => setShowEditForm(!showEditForm)}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <FaPlus /> Add Data
+              </button>
+              <button
+                onClick={() => alert("Add KPI functionality")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#7d5a50",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <FaPlus /> Add KPI
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -332,49 +434,202 @@ const NewLeads = ({ activeSection, currentUser, isInvestorView, financialYearSta
             marginBottom: "20px",
           }}
         >
-          <h3 style={{ color: "#72542b", marginTop: 0 }}>Edit Leads Data</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+          <h3 style={{ color: "#72542b", marginTop: 0 }}>Add Pipeline Visibility Data</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "20px" }}>
             <div>
-              <h4 style={{ color: "#72542b" }}>New Leads</h4>
-              {financialYearMonths.map((month, index) => (
-                <div key={month} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                  <span style={{ minWidth: "40px", color: "#72542b" }}>{month}:</span>
-                  <input
-                    type="number"
-                    value={leadData[index]}
-                    onChange={(e) => updateLeadValue(index, e.target.value)}
-                    style={{
-                      padding: "6px",
-                      border: "1px solid #d4c4b0",
-                      borderRadius: "4px",
-                      width: "80px",
-                    }}
-                  />
-                </div>
-              ))}
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>New Leads (#)</label>
+              <input
+                type="number"
+                value={newLeadsCount}
+                onChange={(e) => setNewLeadsCount(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
             </div>
             <div>
-              <h4 style={{ color: "#72542b" }}>Qualified Leads</h4>
-              {financialYearMonths.map((month, index) => (
-                <div key={month} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                  <span style={{ minWidth: "40px", color: "#72542b" }}>{month}:</span>
-                  <input
-                    type="number"
-                    value={qualifiedData[index]}
-                    onChange={(e) => updateQualifiedValue(index, e.target.value)}
-                    style={{
-                      padding: "6px",
-                      border: "1px solid #d4c4b0",
-                      borderRadius: "4px",
-                      width: "80px",
-                    }}
-                  />
-                </div>
-              ))}
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Sales Velocity (days)</label>
+              <input
+                type="number"
+                value={salesVelocity}
+                onChange={(e) => setSalesVelocity(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
             </div>
           </div>
+
+          <h4 style={{ color: "#72542b" }}>Funnel Conversion Data</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px", marginBottom: "20px" }}>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Visitors</label>
+              <input
+                type="number"
+                value={funnelData.visitors}
+                onChange={(e) => setFunnelData({ ...funnelData, visitors: Number(e.target.value) })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Leads</label>
+              <input
+                type="number"
+                value={funnelData.leads}
+                onChange={(e) => setFunnelData({ ...funnelData, leads: Number(e.target.value) })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>MQL</label>
+              <input
+                type="number"
+                value={funnelData.mql}
+                onChange={(e) => setFunnelData({ ...funnelData, mql: Number(e.target.value) })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>SQL</label>
+              <input
+                type="number"
+                value={funnelData.sql}
+                onChange={(e) => setFunnelData({ ...funnelData, sql: Number(e.target.value) })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Opportunity</label>
+              <input
+                type="number"
+                value={funnelData.opportunity}
+                onChange={(e) => setFunnelData({ ...funnelData, opportunity: Number(e.target.value) })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Customer</label>
+              <input
+                type="number"
+                value={funnelData.customer}
+                onChange={(e) => setFunnelData({ ...funnelData, customer: Number(e.target.value) })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+          </div>
+
+          <h4 style={{ color: "#72542b" }}>Pipeline Value</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px", marginBottom: "20px" }}>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>
+                Total Pipeline Value (ZAR)
+              </label>
+              <input
+                type="number"
+                value={pipelineValue}
+                onChange={(e) => setPipelineValue(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>
+                Risk Adjusted Pipeline Value (ZAR)
+              </label>
+              <input
+                type="number"
+                value={pipelineValueRisk}
+                onChange={(e) => setPipelineValueRisk(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Target Revenue (ZAR)</label>
+              <input
+                type="number"
+                value={targetRevenue}
+                onChange={(e) => setTargetRevenue(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+          </div>
+
+          <h4 style={{ color: "#72542b" }}>Lead Volume Trends (Monthly)</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: "20px" }}>
+            {monthNames.map((month, index) => (
+              <div key={month}>
+                <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>{month}</label>
+                <input
+                  type="number"
+                  value={leadVolumeData[index]}
+                  onChange={(e) => {
+                    const newData = [...leadVolumeData]
+                    newData[index] = Number(e.target.value)
+                    setLeadVolumeData(newData)
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "6px",
+                    border: "1px solid #d4c4b0",
+                    borderRadius: "4px",
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+
           <button
-            onClick={saveLeadsData}
+            onClick={saveData}
             style={{
               padding: "8px 16px",
               backgroundColor: "#16a34a",
@@ -390,169 +645,248 @@ const NewLeads = ({ activeSection, currentUser, isInvestorView, financialYearSta
         </div>
       )}
 
-      <div style={{ height: "400px" }}>
-        <Bar
-          data={{
-            labels: financialYearMonths,
-            datasets: [
-              {
-                label: "New Leads",
-                data: leadData,
-                backgroundColor: "#9c7c5f",
-                borderColor: "#5d4037",
-                borderWidth: 1,
-              },
-              {
-                label: "Qualified Leads",
-                data: qualifiedData,
-                backgroundColor: "#e8ddd4",
-                borderColor: "#d4c4b0",
-                borderWidth: 1,
-              },
-            ],
+      {/* KPIs Display */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "15px", marginBottom: "30px" }}>
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
           }}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                position: "top",
-              },
-            },
-            scales: {
-              y: {
-                beginAtZero: true,
-                title: {
-                  display: true,
-                  text: "Number of Leads",
+        >
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px" }}>New Leads</div>
+          <div style={{ fontSize: "24px", color: "#5d4037", fontWeight: "bold" }}>{newLeadsCount}</div>
+        </div>
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px" }}>Sales Velocity (days)</div>
+          <div style={{ fontSize: "24px", color: "#5d4037", fontWeight: "bold" }}>{salesVelocity}</div>
+        </div>
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px" }}>Pipeline Coverage Ratio</div>
+          <div style={{ fontSize: "24px", color: "#5d4037", fontWeight: "bold" }}>{coverageRatio}%</div>
+        </div>
+      </div>
+
+      {/* Funnel Conversion Rates Chart */}
+      <div style={{ marginBottom: "30px" }}>
+        <h3 style={{ color: "#5d4037" }}>Funnel Conversion Rates</h3>
+        <div style={{ height: "300px" }}>
+          <Bar
+            data={{
+              labels: ["Visitor → Lead", "Lead → MQL", "MQL → SQL", "SQL → Opportunity", "Opportunity → Customer"],
+              datasets: [
+                {
+                  label: "Conversion Rate (%)",
+                  data: [
+                    conversionRates.visitorToLead,
+                    conversionRates.leadToMQL,
+                    conversionRates.mqlToSQL,
+                    conversionRates.sqlToOpportunity,
+                    conversionRates.opportunityToCustomer,
+                  ],
+                  backgroundColor: "#9c7c5f",
+                  borderColor: "#5d4037",
+                  borderWidth: 1,
+                },
+              ],
+            }}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  position: "top",
                 },
               },
-              x: {
-                title: {
-                  display: false,
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  max: 100,
+                  title: {
+                    display: true,
+                    text: "Conversion Rate (%)",
+                  },
                 },
               },
-            },
-          }}
+            }}
+          />
+        </div>
+        <ChartActions 
+          onAddNotes={handleAddNotes}
+          onViewAnalysis={handleViewAnalysis}
         />
       </div>
 
-      <DownloadModal
-        isOpen={showDownloadModal}
-        onClose={() => setShowDownloadModal(false)}
-        onDownload={handleDownload}
-        availableSections={[
-          { id: "new-leads", label: "New Leads Data" },
-          { id: "qualified-leads", label: "Qualified Leads Data" },
-          { id: "summary", label: "Summary Statistics" },
-        ]}
-        sectionTitle="New Leads"
-      />
+      {/* Lead Volume Trends Chart */}
+      <div>
+        <h3 style={{ color: "#5d4037" }}>Lead Volume Trends</h3>
+        <div style={{ height: "300px" }}>
+          <Line
+            data={{
+              labels: monthNames,
+              datasets: [
+                {
+                  label: "Lead Volume",
+                  data: leadVolumeData,
+                  borderColor: "#9c7c5f",
+                  backgroundColor: "rgba(156, 124, 95, 0.1)",
+                  borderWidth: 2,
+                  tension: 0.3,
+                },
+              ],
+            }}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  position: "top",
+                },
+              },
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  title: {
+                    display: true,
+                    text: "Number of Leads",
+                  },
+                },
+              },
+            }}
+          />
+        </div>
+        <ChartActions 
+          onAddNotes={handleLeadVolumeAddNotes}
+          onViewAnalysis={handleLeadVolumeViewAnalysis}
+        />
+      </div>
     </div>
   )
 }
 
-// LeadSourceAnalysis Component - NO MONTHLY X-AXIS (Pie Chart)
-const LeadSourceAnalysis = ({ activeSection, currentUser, isInvestorView }) => {
-  const [sources, setSources] = useState([])
+// Pipeline Sufficiency Component
+const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView }) => {
+  const [pipelineValue, setPipelineValue] = useState(0)
+  const [riskAdjustedValue, setRiskAdjustedValue] = useState(0)
+  const [targetRevenue, setTargetRevenue] = useState(0)
+  const [leadVolumeData, setLeadVolumeData] = useState(Array(12).fill(0))
+  const [conversionRates, setConversionRates] = useState(Array(12).fill(0))
   const [showEditForm, setShowEditForm] = useState(false)
-  const [showDownloadModal, setShowDownloadModal] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [notesExpanded, setNotesExpanded] = useState(false)
 
-  const saveSourceData = async () => {
-    if (!currentUser) {
-      alert("Please log in to save data.")
-      return
-    }
-    try {
-      await setDoc(doc(db, "lead-source", currentUser.uid), { 
-        sources,
-        lastUpdated: new Date().toISOString()
-      })
-      setShowEditForm(false)
-      alert("Lead source data saved successfully!")
-    } catch (error) {
-      console.error("Error saving lead source data:", error)
-      alert("Error saving data")
-    }
-  }
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-  const loadSourceData = async () => {
+  useEffect(() => {
+    if (currentUser && activeSection === "pipeline-sufficiency") {
+      loadData()
+    }
+  }, [currentUser, activeSection, selectedYear])
+
+  const loadData = async () => {
     if (!currentUser) return
     try {
       setIsLoading(true)
-      const docRef = doc(db, "lead-source", currentUser.uid)
+      const docRef = doc(db, "pipeline-sufficiency", `${currentUser.uid}_${selectedYear}`)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
-        setSources(docSnap.data().sources || [])
+        const data = docSnap.data()
+        setPipelineValue(data.pipelineValue || 0)
+        setRiskAdjustedValue(data.riskAdjustedValue || 0)
+        setTargetRevenue(data.targetRevenue || 0)
+        setLeadVolumeData(data.leadVolumeData || Array(12).fill(0))
+        setConversionRates(data.conversionRates || Array(12).fill(0))
       } else {
-        // Initialize with empty data if no document exists
         await setDoc(docRef, {
-          sources: [],
-          lastUpdated: new Date().toISOString()
+          pipelineValue: 0,
+          riskAdjustedValue: 0,
+          targetRevenue: 0,
+          leadVolumeData: Array(12).fill(0),
+          conversionRates: Array(12).fill(0),
+          lastUpdated: new Date().toISOString(),
         })
       }
     } catch (error) {
-      console.error("Error loading lead source data:", error)
+      console.error("Error loading pipeline sufficiency data:", error)
     } finally {
       setIsLoading(false)
     }
   }
 
-  useEffect(() => {
-    if (currentUser) {
-      loadSourceData()
+  const saveData = async () => {
+    if (!currentUser || isInvestorView) {
+      alert("You cannot save data in this mode.")
+      return
     }
-  }, [currentUser])
-
-  const updateSource = (index, field, value) => {
-    const newSources = [...sources]
-    newSources[index][field] = field === "name" ? value : Number.parseFloat(value) || 0
-    setSources(newSources)
-  }
-
-  const addSource = () => {
-    setSources([...sources, { name: "New Source", percentage: 0 }])
-  }
-
-  const removeSource = (index) => {
-    const newSources = sources.filter((_, i) => i !== index)
-    setSources(newSources)
-  }
-
-  const handleDownload = (selectedSections) => {
-    const data = {
-      sources: sources,
-      summary: {
-        totalSources: sources.length,
-        topSource:
-          sources.length > 0
-            ? sources.reduce((prev, current) => (prev.percentage > current.percentage ? prev : current))
-            : null,
-      },
+    try {
+      await setDoc(doc(db, "pipeline-sufficiency", `${currentUser.uid}_${selectedYear}`), {
+        pipelineValue,
+        riskAdjustedValue,
+        targetRevenue,
+        leadVolumeData,
+        conversionRates,
+        lastUpdated: new Date().toISOString(),
+      })
+      setShowEditForm(false)
+      alert("Pipeline sufficiency data saved successfully!")
+    } catch (error) {
+      console.error("Error saving data:", error)
+      alert("Error saving data")
     }
-    downloadData(data, "lead_sources", selectedSections)
   }
 
-  if (activeSection !== "lead-source-analysis") return null
+  const handleLeadVolumeAddNotes = () => {
+    alert("Add Notes functionality for Lead Volume Trends")
+  }
+
+  const handleLeadVolumeViewAnalysis = () => {
+    alert("View Analysis functionality for Lead Volume Trends")
+  }
+
+  const handleConversionAddNotes = () => {
+    alert("Add Notes functionality for Conversion Rates")
+  }
+
+  const handleConversionViewAnalysis = () => {
+    alert("View Analysis functionality for Conversion Rates")
+  }
+
+  if (activeSection !== "pipeline-sufficiency") return null
 
   if (isLoading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '200px',
-        backgroundColor: '#fdfcfb',
-        borderRadius: '8px'
-      }}>
-        <div>Loading lead source data...</div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "200px",
+          backgroundColor: "#fdfcfb",
+          borderRadius: "8px",
+        }}
+      >
+        <div>Loading data...</div>
       </div>
     )
   }
 
-  const sourceNames = sources.map((s) => s.name)
-  const sourceData = sources.map((s) => s.percentage)
+  const coverageRatio = targetRevenue > 0 ? ((pipelineValue / targetRevenue) * 100).toFixed(2) : 0
 
   return (
     <div
@@ -564,37 +898,66 @@ const LeadSourceAnalysis = ({ activeSection, currentUser, isInvestorView }) => {
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
     >
+      <NotesSection 
+        sectionKey="pipeline-sufficiency" 
+        isExpanded={notesExpanded}
+        onToggle={() => setNotesExpanded(!notesExpanded)}
+      />
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Lead Source Analysis</h2>
-        <div style={{ display: "flex", gap: "10px" }}>
-          {!isInvestorView && (
-            <button
-              onClick={() => setShowEditForm(!showEditForm)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              {showEditForm ? "Cancel" : "Edit Data"}
-            </button>
-          )}
-          <button
-            onClick={() => setShowDownloadModal(true)}
+        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Pipeline Sufficiency</h2>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
             style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
+              padding: "8px 12px",
+              border: "1px solid #d4c4b0",
               borderRadius: "4px",
-              cursor: "pointer",
+              backgroundColor: "#fdfcfb",
+              color: "#5d4037",
             }}
           >
-            Download
-          </button>
+            {[2023, 2024, 2025, 2026].map(year => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
+          {!isInvestorView && (
+            <>
+              <button
+                onClick={() => setShowEditForm(!showEditForm)}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <FaPlus /> Add Data
+              </button>
+              <button
+                onClick={() => alert("Add KPI functionality")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#7d5a50",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <FaPlus /> Add KPI
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -607,8 +970,479 @@ const LeadSourceAnalysis = ({ activeSection, currentUser, isInvestorView }) => {
             marginBottom: "20px",
           }}
         >
-          <h3 style={{ color: "#72542b", marginTop: 0 }}>Edit Lead Source Data</h3>
-          {sources.map((source, index) => (
+          <h3 style={{ color: "#72542b", marginTop: 0 }}>Add Pipeline Sufficiency Data</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px", marginBottom: "20px" }}>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>
+                Total Pipeline Value (ZAR)
+              </label>
+              <input
+                type="number"
+                value={pipelineValue}
+                onChange={(e) => setPipelineValue(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>
+                Risk Adjusted Value (ZAR)
+              </label>
+              <input
+                type="number"
+                value={riskAdjustedValue}
+                onChange={(e) => setRiskAdjustedValue(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Target Revenue (ZAR)</label>
+              <input
+                type="number"
+                value={targetRevenue}
+                onChange={(e) => setTargetRevenue(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+          </div>
+
+          <h4 style={{ color: "#72542b" }}>Lead Volume Trends (Monthly)</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: "20px" }}>
+            {monthNames.map((month, index) => (
+              <div key={month}>
+                <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>{month}</label>
+                <input
+                  type="number"
+                  value={leadVolumeData[index]}
+                  onChange={(e) => {
+                    const newData = [...leadVolumeData]
+                    newData[index] = Number(e.target.value)
+                    setLeadVolumeData(newData)
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "6px",
+                    border: "1px solid #d4c4b0",
+                    borderRadius: "4px",
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+
+          <h4 style={{ color: "#72542b" }}>Conversion Rates (Monthly %)</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: "20px" }}>
+            {monthNames.map((month, index) => (
+              <div key={month}>
+                <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>{month}</label>
+                <input
+                  type="number"
+                  value={conversionRates[index]}
+                  onChange={(e) => {
+                    const newData = [...conversionRates]
+                    newData[index] = Number(e.target.value)
+                    setConversionRates(newData)
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "6px",
+                    border: "1px solid #d4c4b0",
+                    borderRadius: "4px",
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={saveData}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#16a34a",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              marginTop: "15px",
+            }}
+          >
+            Save Data
+          </button>
+        </div>
+      )}
+
+      {/* KPIs Display */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "15px", marginBottom: "30px" }}>
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px" }}>Total Pipeline Value</div>
+          <div style={{ fontSize: "24px", color: "#5d4037", fontWeight: "bold" }}>
+            R {pipelineValue.toLocaleString()}
+          </div>
+        </div>
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px" }}>Risk Adjusted Value</div>
+          <div style={{ fontSize: "24px", color: "#5d4037", fontWeight: "bold" }}>
+            R {riskAdjustedValue.toLocaleString()}
+          </div>
+        </div>
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px" }}>Pipeline Coverage</div>
+          <div style={{ fontSize: "24px", color: "#5d4037", fontWeight: "bold" }}>{coverageRatio}%</div>
+        </div>
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px" }}>Target Revenue</div>
+          <div style={{ fontSize: "24px", color: "#5d4037", fontWeight: "bold" }}>
+            R {targetRevenue.toLocaleString()}
+          </div>
+        </div>
+      </div>
+
+      {/* Lead Volume Trends Chart */}
+      <div style={{ marginBottom: "30px" }}>
+        <h3 style={{ color: "#5d4037" }}>Lead Volume Trends</h3>
+        <div style={{ height: "300px" }}>
+          <Line
+            data={{
+              labels: monthNames,
+              datasets: [
+                {
+                  label: "Lead Volume",
+                  data: leadVolumeData,
+                  borderColor: "#9c7c5f",
+                  backgroundColor: "rgba(156, 124, 95, 0.1)",
+                  borderWidth: 2,
+                  tension: 0.3,
+                },
+              ],
+            }}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  position: "top",
+                },
+              },
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  title: {
+                    display: true,
+                    text: "Number of Leads",
+                  },
+                },
+              },
+            }}
+          />
+        </div>
+        <ChartActions 
+          onAddNotes={handleLeadVolumeAddNotes}
+          onViewAnalysis={handleLeadVolumeViewAnalysis}
+        />
+      </div>
+
+      {/* Conversion Rates Chart */}
+      <div>
+        <h3 style={{ color: "#5d4037" }}>Conversion Rates Trend</h3>
+        <div style={{ height: "300px" }}>
+          <Line
+            data={{
+              labels: monthNames,
+              datasets: [
+                {
+                  label: "Conversion Rate (%)",
+                  data: conversionRates,
+                  borderColor: "#7d5a50",
+                  backgroundColor: "rgba(125, 90, 80, 0.1)",
+                  borderWidth: 2,
+                  tension: 0.3,
+                },
+              ],
+            }}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  position: "top",
+                },
+              },
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  max: 100,
+                  title: {
+                    display: true,
+                    text: "Conversion Rate (%)",
+                  },
+                },
+              },
+            }}
+          />
+        </div>
+        <ChartActions 
+          onAddNotes={handleConversionAddNotes}
+          onViewAnalysis={handleConversionViewAnalysis}
+        />
+      </div>
+    </div>
+  )
+}
+
+// Pipeline Quality Component
+const PipelineQuality = ({ activeSection, currentUser, isInvestorView }) => {
+  const [costPerLeadChannels, setCostPerLeadChannels] = useState([])
+  const [cacVsLtvData, setCacVsLtvData] = useState(Array(12).fill({ cac: 0, ltv: 0 }))
+  const [sqlToOpportunity, setSqlToOpportunity] = useState(0)
+  const [opportunityToCustomer, setOpportunityToCustomer] = useState(0)
+  const [repeatCustomers, setRepeatCustomers] = useState(0)
+  const [churnRate, setChurnRate] = useState(0)
+  const [showEditForm, setShowEditForm] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [notesExpanded, setNotesExpanded] = useState(false)
+
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+  useEffect(() => {
+    if (currentUser && activeSection === "pipeline-quality") {
+      loadData()
+    }
+  }, [currentUser, activeSection, selectedYear])
+
+  const loadData = async () => {
+    if (!currentUser) return
+    try {
+      setIsLoading(true)
+      const docRef = doc(db, "pipeline-quality", `${currentUser.uid}_${selectedYear}`)
+      const docSnap = await getDoc(docRef)
+      if (docSnap.exists()) {
+        const data = docSnap.data()
+        setCostPerLeadChannels(data.costPerLeadChannels || [])
+        setCacVsLtvData(data.cacVsLtvData || Array(12).fill({ cac: 0, ltv: 0 }))
+        setSqlToOpportunity(data.sqlToOpportunity || 0)
+        setOpportunityToCustomer(data.opportunityToCustomer || 0)
+        setRepeatCustomers(data.repeatCustomers || 0)
+        setChurnRate(data.churnRate || 0)
+      } else {
+        await setDoc(docRef, {
+          costPerLeadChannels: [],
+          cacVsLtvData: Array(12).fill({ cac: 0, ltv: 0 }),
+          sqlToOpportunity: 0,
+          opportunityToCustomer: 0,
+          repeatCustomers: 0,
+          churnRate: 0,
+          lastUpdated: new Date().toISOString(),
+        })
+      }
+    } catch (error) {
+      console.error("Error loading pipeline quality data:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const saveData = async () => {
+    if (!currentUser || isInvestorView) {
+      alert("You cannot save data in this mode.")
+      return
+    }
+    try {
+      await setDoc(doc(db, "pipeline-quality", `${currentUser.uid}_${selectedYear}`), {
+        costPerLeadChannels,
+        cacVsLtvData,
+        sqlToOpportunity,
+        opportunityToCustomer,
+        repeatCustomers,
+        churnRate,
+        lastUpdated: new Date().toISOString(),
+      })
+      setShowEditForm(false)
+      alert("Pipeline quality data saved successfully!")
+    } catch (error) {
+      console.error("Error saving data:", error)
+      alert("Error saving data")
+    }
+  }
+
+  const addChannel = () => {
+    setCostPerLeadChannels([...costPerLeadChannels, { name: "New Channel", cost: 0 }])
+  }
+
+  const removeChannel = (index) => {
+    const newChannels = costPerLeadChannels.filter((_, i) => i !== index)
+    setCostPerLeadChannels(newChannels)
+  }
+
+  const updateChannel = (index, field, value) => {
+    const newChannels = [...costPerLeadChannels]
+    newChannels[index][field] = field === "name" ? value : Number(value)
+    setCostPerLeadChannels(newChannels)
+  }
+
+  const handleCostPerLeadAddNotes = () => {
+    alert("Add Notes functionality for Cost Per Lead by Channel")
+  }
+
+  const handleCostPerLeadViewAnalysis = () => {
+    alert("View Analysis functionality for Cost Per Lead by Channel")
+  }
+
+  const handleCacLtvAddNotes = () => {
+    alert("Add Notes functionality for CAC vs LTV Trend")
+  }
+
+  const handleCacLtvViewAnalysis = () => {
+    alert("View Analysis functionality for CAC vs LTV Trend")
+  }
+
+  if (activeSection !== "pipeline-quality") return null
+
+  if (isLoading) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "200px",
+          backgroundColor: "#fdfcfb",
+          borderRadius: "8px",
+        }}
+      >
+        <div>Loading data...</div>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      style={{
+        backgroundColor: "#fdfcfb",
+        padding: "20px",
+        margin: "20px 0",
+        borderRadius: "8px",
+        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+      }}
+    >
+      <NotesSection 
+        sectionKey="pipeline-quality" 
+        isExpanded={notesExpanded}
+        onToggle={() => setNotesExpanded(!notesExpanded)}
+      />
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Pipeline Quality</h2>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+            style={{
+              padding: "8px 12px",
+              border: "1px solid #d4c4b0",
+              borderRadius: "4px",
+              backgroundColor: "#fdfcfb",
+              color: "#5d4037",
+            }}
+          >
+            {[2023, 2024, 2025, 2026].map(year => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
+          {!isInvestorView && (
+            <>
+              <button
+                onClick={() => setShowEditForm(!showEditForm)}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <FaPlus /> Add Data
+              </button>
+              <button
+                onClick={() => alert("Add KPI functionality")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#7d5a50",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <FaPlus /> Add KPI
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {!isInvestorView && showEditForm && (
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "6px",
+            marginBottom: "20px",
+          }}
+        >
+          <h3 style={{ color: "#72542b", marginTop: 0 }}>Add Pipeline Quality Data</h3>
+
+          <h4 style={{ color: "#72542b" }}>Cost Per Lead by Channel</h4>
+          {costPerLeadChannels.map((channel, index) => (
             <div
               key={index}
               style={{
@@ -624,28 +1458,28 @@ const LeadSourceAnalysis = ({ activeSection, currentUser, isInvestorView }) => {
             >
               <input
                 type="text"
-                value={source.name}
-                onChange={(e) => updateSource(index, "name", e.target.value)}
+                value={channel.name}
+                onChange={(e) => updateChannel(index, "name", e.target.value)}
                 style={{
                   padding: "8px",
                   border: "1px solid #d4c4b0",
                   borderRadius: "4px",
                 }}
-                placeholder="Source Name"
+                placeholder="Channel Name"
               />
               <input
                 type="number"
-                value={source.percentage}
-                onChange={(e) => updateSource(index, "percentage", e.target.value)}
+                value={channel.cost}
+                onChange={(e) => updateChannel(index, "cost", e.target.value)}
                 style={{
                   padding: "8px",
                   border: "1px solid #d4c4b0",
                   borderRadius: "4px",
                 }}
-                placeholder="Percentage"
+                placeholder="Cost (ZAR)"
               />
               <button
-                onClick={() => removeSource(index)}
+                onClick={() => removeChannel(index)}
                 style={{
                   padding: "8px",
                   backgroundColor: "#dc2626",
@@ -655,71 +1489,614 @@ const LeadSourceAnalysis = ({ activeSection, currentUser, isInvestorView }) => {
                   cursor: "pointer",
                 }}
               >
-                Remove
+                <FaTrashAlt />
               </button>
             </div>
           ))}
-          <div style={{ marginTop: "15px" }}>
+          <button
+            onClick={addChannel}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#5d4037",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              marginBottom: "20px",
+              display: "flex",
+              alignItems: "center",
+              gap: "5px",
+            }}
+          >
+            <FaPlus /> Add Channel
+          </button>
+
+          <h4 style={{ color: "#72542b" }}>CAC vs LTV (Monthly)</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px", marginBottom: "20px" }}>
+            {monthNames.map((month, index) => (
+              <div key={month} style={{ backgroundColor: "#fdfcfb", padding: "10px", borderRadius: "4px" }}>
+                <label style={{ display: "block", color: "#72542b", marginBottom: "5px", fontWeight: "bold" }}>
+                  {month}
+                </label>
+                <div style={{ display: "flex", gap: "5px" }}>
+                  <input
+                    type="number"
+                    value={cacVsLtvData[index]?.cac || 0}
+                    onChange={(e) => {
+                      const newData = [...cacVsLtvData]
+                      newData[index] = { ...newData[index], cac: Number(e.target.value) }
+                      setCacVsLtvData(newData)
+                    }}
+                    style={{
+                      width: "50%",
+                      padding: "6px",
+                      border: "1px solid #d4c4b0",
+                      borderRadius: "4px",
+                    }}
+                    placeholder="CAC"
+                  />
+                  <input
+                    type="number"
+                    value={cacVsLtvData[index]?.ltv || 0}
+                    onChange={(e) => {
+                      const newData = [...cacVsLtvData]
+                      newData[index] = { ...newData[index], ltv: Number(e.target.value) }
+                      setCacVsLtvData(newData)
+                    }}
+                    style={{
+                      width: "50%",
+                      padding: "6px",
+                      border: "1px solid #d4c4b0",
+                      borderRadius: "4px",
+                    }}
+                    placeholder="LTV"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <h4 style={{ color: "#72542b" }}>Conversion Metrics</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "15px", marginBottom: "20px" }}>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>
+                SQL → Opportunity Conversion (%)
+              </label>
+              <input
+                type="number"
+                value={sqlToOpportunity}
+                onChange={(e) => setSqlToOpportunity(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>
+                Opportunity → Customer Conversion (%)
+              </label>
+              <input
+                type="number"
+                value={opportunityToCustomer}
+                onChange={(e) => setOpportunityToCustomer(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+          </div>
+
+          <h4 style={{ color: "#72542b" }}>Customer Metrics</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "15px", marginBottom: "20px" }}>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Repeat Customers (%)</label>
+              <input
+                type="number"
+                value={repeatCustomers}
+                onChange={(e) => setRepeatCustomers(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Churn Rate (%)</label>
+              <input
+                type="number"
+                value={churnRate}
+                onChange={(e) => setChurnRate(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+          </div>
+
+          <button
+            onClick={saveData}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#16a34a",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              marginTop: "15px",
+            }}
+          >
+            Save Data
+          </button>
+        </div>
+      )}
+
+      {/* KPIs Display */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "15px", marginBottom: "30px" }}>
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px" }}>SQL → Opportunity</div>
+          <div style={{ fontSize: "24px", color: "#5d4037", fontWeight: "bold" }}>{sqlToOpportunity}%</div>
+        </div>
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px" }}>Opportunity → Customer</div>
+          <div style={{ fontSize: "24px", color: "#5d4037", fontWeight: "bold" }}>{opportunityToCustomer}%</div>
+        </div>
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px" }}>Repeat Customers</div>
+          <div style={{ fontSize: "24px", color: "#5d4037", fontWeight: "bold" }}>{repeatCustomers}%</div>
+        </div>
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px" }}>Churn Rate</div>
+          <div style={{ fontSize: "24px", color: "#5d4037", fontWeight: "bold" }}>{churnRate}%</div>
+        </div>
+      </div>
+
+      {/* Cost Per Lead by Channel Chart */}
+      {costPerLeadChannels.length > 0 && (
+        <div style={{ marginBottom: "30px" }}>
+          <h3 style={{ color: "#5d4037" }}>Cost Per Lead by Channel</h3>
+          <div style={{ height: "300px" }}>
+            <Bar
+              data={{
+                labels: costPerLeadChannels.map((c) => c.name),
+                datasets: [
+                  {
+                    label: "Cost (ZAR)",
+                    data: costPerLeadChannels.map((c) => c.cost),
+                    backgroundColor: "#9c7c5f",
+                    borderColor: "#5d4037",
+                    borderWidth: 1,
+                  },
+                ],
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: "top",
+                  },
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    title: {
+                      display: true,
+                      text: "Cost (ZAR)",
+                    },
+                  },
+                },
+              }}
+            />
+          </div>
+          <ChartActions 
+            onAddNotes={handleCostPerLeadAddNotes}
+            onViewAnalysis={handleCostPerLeadViewAnalysis}
+          />
+        </div>
+      )}
+
+      {/* CAC vs LTV Trend Chart */}
+      <div>
+        <h3 style={{ color: "#5d4037" }}>CAC vs LTV Trend</h3>
+        <div style={{ height: "300px" }}>
+          <Line
+            data={{
+              labels: monthNames,
+              datasets: [
+                {
+                  label: "CAC (ZAR)",
+                  data: cacVsLtvData.map((d) => d.cac),
+                  borderColor: "#dc2626",
+                  backgroundColor: "rgba(220, 38, 38, 0.1)",
+                  borderWidth: 2,
+                  tension: 0.3,
+                },
+                {
+                  label: "LTV (ZAR)",
+                  data: cacVsLtvData.map((d) => d.ltv),
+                  borderColor: "#16a34a",
+                  backgroundColor: "rgba(22, 163, 74, 0.1)",
+                  borderWidth: 2,
+                  tension: 0.3,
+                },
+              ],
+            }}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  position: "top",
+                },
+              },
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  title: {
+                    display: true,
+                    text: "Value (ZAR)",
+                  },
+                },
+              },
+            }}
+          />
+        </div>
+        <ChartActions 
+          onAddNotes={handleCacLtvAddNotes}
+          onViewAnalysis={handleCacLtvViewAnalysis}
+        />
+      </div>
+    </div>
+  )
+}
+
+// Revenue Concentration Component
+const RevenueConcentration = ({ activeSection, currentUser, isInvestorView }) => {
+  const [revenueChannels, setRevenueChannels] = useState([])
+  const [showEditForm, setShowEditForm] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [notesExpanded, setNotesExpanded] = useState(false)
+
+  useEffect(() => {
+    if (currentUser && activeSection === "revenue-concentration") {
+      loadData()
+    }
+  }, [currentUser, activeSection])
+
+  const loadData = async () => {
+    if (!currentUser) return
+    try {
+      setIsLoading(true)
+      const docRef = doc(db, "revenue-concentration", currentUser.uid)
+      const docSnap = await getDoc(docRef)
+      if (docSnap.exists()) {
+        const data = docSnap.data()
+        setRevenueChannels(data.revenueChannels || [])
+      } else {
+        await setDoc(docRef, {
+          revenueChannels: [],
+          lastUpdated: new Date().toISOString(),
+        })
+      }
+    } catch (error) {
+      console.error("Error loading revenue concentration data:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const saveData = async () => {
+    if (!currentUser || isInvestorView) {
+      alert("You cannot save data in this mode.")
+      return
+    }
+    try {
+      await setDoc(doc(db, "revenue-concentration", currentUser.uid), {
+        revenueChannels,
+        lastUpdated: new Date().toISOString(),
+      })
+      setShowEditForm(false)
+      alert("Revenue concentration data saved successfully!")
+    } catch (error) {
+      console.error("Error saving data:", error)
+      alert("Error saving data")
+    }
+  }
+
+  const addChannel = () => {
+    setRevenueChannels([...revenueChannels, { name: "New Channel", revenue: 0, spend: 0 }])
+  }
+
+  const removeChannel = (index) => {
+    const newChannels = revenueChannels.filter((_, i) => i !== index)
+    setRevenueChannels(newChannels)
+  }
+
+  const updateChannel = (index, field, value) => {
+    const newChannels = [...revenueChannels]
+    newChannels[index][field] = field === "name" ? value : Number(value)
+    setRevenueChannels(newChannels)
+  }
+
+  const handleRevenueByChannelAddNotes = () => {
+    alert("Add Notes functionality for Revenue by Channel")
+  }
+
+  const handleRevenueByChannelViewAnalysis = () => {
+    alert("View Analysis functionality for Revenue by Channel")
+  }
+
+  const handleRevenueVsSpendAddNotes = () => {
+    alert("Add Notes functionality for Revenue per Channel vs Spend")
+  }
+
+  const handleRevenueVsSpendViewAnalysis = () => {
+    alert("View Analysis functionality for Revenue per Channel vs Spend")
+  }
+
+  if (activeSection !== "revenue-concentration") return null
+
+  if (isLoading) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "200px",
+          backgroundColor: "#fdfcfb",
+          borderRadius: "8px",
+        }}
+      >
+        <div>Loading data...</div>
+      </div>
+    )
+  }
+
+  const totalRevenue = revenueChannels.reduce((sum, channel) => sum + channel.revenue, 0)
+  const top3Channels = [...revenueChannels].sort((a, b) => b.revenue - a.revenue).slice(0, 3)
+  const top3Percentage =
+    totalRevenue > 0 ? ((top3Channels.reduce((sum, c) => sum + c.revenue, 0) / totalRevenue) * 100).toFixed(2) : 0
+
+  return (
+    <div
+      style={{
+        backgroundColor: "#fdfcfb",
+        padding: "20px",
+        margin: "20px 0",
+        borderRadius: "8px",
+        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+      }}
+    >
+      <NotesSection 
+        sectionKey="revenue-concentration" 
+        isExpanded={notesExpanded}
+        onToggle={() => setNotesExpanded(!notesExpanded)}
+      />
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Revenue Concentration</h2>
+        <div style={{ display: "flex", gap: "10px" }}>
+          {!isInvestorView && (
             <button
-              onClick={addSource}
+              onClick={() => setShowEditForm(!showEditForm)}
               style={{
                 padding: "8px 16px",
-                backgroundColor: "#72542b",
+                backgroundColor: "#5d4037",
                 color: "#fdfcfb",
                 border: "none",
                 borderRadius: "4px",
                 cursor: "pointer",
-                marginRight: "10px",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
               }}
             >
-              Add Source
+              <FaPlus /> Add Data
             </button>
-            <button
-              onClick={saveSourceData}
+          )}
+        </div>
+      </div>
+
+      {!isInvestorView && showEditForm && (
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "6px",
+            marginBottom: "20px",
+          }}
+        >
+          <h3 style={{ color: "#72542b", marginTop: 0 }}>Add Revenue Concentration Data</h3>
+          <h4 style={{ color: "#72542b" }}>Revenue by Channel</h4>
+          {revenueChannels.map((channel, index) => (
+            <div
+              key={index}
               style={{
-                padding: "8px 16px",
-                backgroundColor: "#16a34a",
-                color: "white",
-                border: "none",
+                display: "grid",
+                gridTemplateColumns: "2fr 1fr 1fr auto",
+                gap: "10px",
+                alignItems: "center",
+                marginBottom: "10px",
+                padding: "10px",
+                backgroundColor: "#fdfcfb",
                 borderRadius: "4px",
-                cursor: "pointer",
               }}
             >
-              Save Data
-            </button>
-          </div>
+              <input
+                type="text"
+                value={channel.name}
+                onChange={(e) => updateChannel(index, "name", e.target.value)}
+                style={{
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+                placeholder="Channel Name"
+              />
+              <input
+                type="number"
+                value={channel.revenue}
+                onChange={(e) => updateChannel(index, "revenue", e.target.value)}
+                style={{
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+                placeholder="Revenue (ZAR)"
+              />
+              <input
+                type="number"
+                value={channel.spend}
+                onChange={(e) => updateChannel(index, "spend", e.target.value)}
+                style={{
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+                placeholder="Spend (ZAR)"
+              />
+              <button
+                onClick={() => removeChannel(index)}
+                style={{
+                  padding: "8px",
+                  backgroundColor: "#dc2626",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                }}
+              >
+                <FaTrashAlt />
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={addChannel}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#5d4037",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              marginBottom: "20px",
+              display: "flex",
+              alignItems: "center",
+              gap: "5px",
+            }}
+          >
+            <FaPlus /> Add Channel
+          </button>
+
+          <button
+            onClick={saveData}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#16a34a",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              marginTop: "15px",
+            }}
+          >
+            Save Data
+          </button>
         </div>
       )}
 
-      {sources.length === 0 ? (
+      {/* KPIs Display */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "15px", marginBottom: "30px" }}>
         <div
           style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
             textAlign: "center",
-            padding: "40px",
-            color: "#72542b",
           }}
         >
-          <p>No lead source data available. {!isInvestorView && 'Click "Edit Data" to add your first source.'}</p>
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px" }}>Total Revenue</div>
+          <div style={{ fontSize: "24px", color: "#5d4037", fontWeight: "bold" }}>
+            R {totalRevenue.toLocaleString()}
+          </div>
         </div>
-      ) : (
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "20px",
-            alignItems: "center",
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
           }}
         >
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px" }}>Top 3 Channels % of Revenue</div>
+          <div style={{ fontSize: "24px", color: "#5d4037", fontWeight: "bold" }}>{top3Percentage}%</div>
+        </div>
+      </div>
+
+      {/* Revenue by Channel Chart */}
+      {revenueChannels.length > 0 && (
+        <div style={{ marginBottom: "30px" }}>
+          <h3 style={{ color: "#5d4037" }}>Revenue by Channel</h3>
           <div style={{ height: "300px" }}>
             <Pie
               data={{
-                labels: sourceNames,
+                labels: revenueChannels.map((c) => c.name),
                 datasets: [
                   {
-                    data: sourceData,
-                    backgroundColor: ["#9c7c5f", "#e8ddd4", "#d4c4b0", "#b8a38d", "#a58f7a", "#8a7865"],
-                    borderColor: "#5d4037",
-                    borderWidth: 1,
+                    label: "Revenue (ZAR)",
+                    data: revenueChannels.map((c) => c.revenue),
+                    backgroundColor: [
+                      "#9c7c5f",
+                      "#7d5a50",
+                      "#e8ddd4",
+                      "#d4c4b0",
+                      "#5d4037",
+                      "#f7f3f0",
+                      "#72542b",
+                      "#4a352f",
+                    ],
+                    borderColor: "#fdfcfb",
+                    borderWidth: 2,
                   },
                 ],
               }}
@@ -734,119 +2111,142 @@ const LeadSourceAnalysis = ({ activeSection, currentUser, isInvestorView }) => {
               }}
             />
           </div>
-          <div>
-            <div
-              style={{
-                backgroundColor: "#f7f3f0",
-                padding: "20px",
-                borderRadius: "6px",
-              }}
-            >
-              <h3 style={{ color: "#72542b" }}>Top Performing Sources</h3>
-              <ol
-                style={{
-                  listStyle: "none",
-                  padding: 0,
-                  color: "#5d4037",
-                }}
-              >
-                {sources
-                  .sort((a, b) => b.percentage - a.percentage)
-                  .slice(0, 3)
-                  .map((source, index) => (
-                    <li key={index} style={{ marginBottom: "10px", display: "flex", justifyContent: "space-between" }}>
-                      <span>
-                        {index + 1}. {source.name}
-                      </span>
-                      <span style={{ fontWeight: "bold" }}>{source.percentage}%</span>
-                    </li>
-                  ))}
-              </ol>
-            </div>
-          </div>
+          <ChartActions 
+            onAddNotes={handleRevenueByChannelAddNotes}
+            onViewAnalysis={handleRevenueByChannelViewAnalysis}
+          />
         </div>
       )}
 
-      <DownloadModal
-        isOpen={showDownloadModal}
-        onClose={() => setShowDownloadModal(false)}
-        onDownload={handleDownload}
-        availableSections={[
-          { id: "sources", label: "Lead Sources Data" },
-          { id: "summary", label: "Summary Statistics" },
-        ]}
-        sectionTitle="Lead Source Analysis"
-      />
+      {/* Revenue vs Spend Chart */}
+      {revenueChannels.length > 0 && (
+        <div>
+          <h3 style={{ color: "#5d4037" }}>Revenue per Channel vs Spend</h3>
+          <div style={{ height: "300px" }}>
+            <Bar
+              data={{
+                labels: revenueChannels.map((c) => c.name),
+                datasets: [
+                  {
+                    label: "Revenue (ZAR)",
+                    data: revenueChannels.map((c) => c.revenue),
+                    backgroundColor: "#16a34a",
+                    borderColor: "#15803d",
+                    borderWidth: 1,
+                  },
+                  {
+                    label: "Spend (ZAR)",
+                    data: revenueChannels.map((c) => c.spend),
+                    backgroundColor: "#dc2626",
+                    borderColor: "#b91c1c",
+                    borderWidth: 1,
+                  },
+                ],
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: "top",
+                  },
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    title: {
+                      display: true,
+                      text: "Amount (ZAR)",
+                    },
+                  },
+                },
+              }}
+            />
+          </div>
+          <ChartActions 
+            onAddNotes={handleRevenueVsSpendAddNotes}
+            onViewAnalysis={handleRevenueVsSpendViewAnalysis}
+          />
+        </div>
+      )}
     </div>
   )
 }
 
-// CostPerLead Component - NO MONTHLY X-AXIS (Bar chart with campaign names)
-const CostPerLead = ({ activeSection, currentUser, isInvestorView }) => {
+// Demand Sustainability Component
+const DemandSustainability = ({ activeSection, currentUser, isInvestorView }) => {
+  const [referralRateData, setReferralRateData] = useState(Array(12).fill(0))
+  const [repeatCustomerRate, setRepeatCustomerRate] = useState(0)
+  const [churnRate, setChurnRate] = useState(0)
   const [campaigns, setCampaigns] = useState([])
-  const [industryAvg, setIndustryAvg] = useState(0)
+  const [cacLtvData, setCacLtvData] = useState(Array(12).fill({ cac: 0, ltv: 0 }))
   const [showEditForm, setShowEditForm] = useState(false)
-  const [showDownloadModal, setShowDownloadModal] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [notesExpanded, setNotesExpanded] = useState(false)
 
-  const saveCostPerLeadData = async () => {
-    if (!currentUser) {
-      alert("Please log in to save data.")
-      return
-    }
-    try {
-      await setDoc(doc(db, "cost-per-lead", currentUser.uid), { 
-        campaigns, 
-        industryAvg,
-        lastUpdated: new Date().toISOString()
-      })
-      setShowEditForm(false)
-      alert("Cost per lead data saved successfully!")
-    } catch (error) {
-      console.error("Error saving cost per lead data:", error)
-      alert("Error saving data")
-    }
-  }
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-  const loadCostPerLeadData = async () => {
+  useEffect(() => {
+    if (currentUser && activeSection === "demand-sustainability") {
+      loadData()
+    }
+  }, [currentUser, activeSection, selectedYear])
+
+  const loadData = async () => {
     if (!currentUser) return
     try {
       setIsLoading(true)
-      const docRef = doc(db, "cost-per-lead", currentUser.uid)
+      const docRef = doc(db, "demand-sustainability", `${currentUser.uid}_${selectedYear}`)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         const data = docSnap.data()
+        setReferralRateData(data.referralRateData || Array(12).fill(0))
+        setRepeatCustomerRate(data.repeatCustomerRate || 0)
+        setChurnRate(data.churnRate || 0)
         setCampaigns(data.campaigns || [])
-        setIndustryAvg(data.industryAvg || 0)
+        setCacLtvData(data.cacLtvData || Array(12).fill({ cac: 0, ltv: 0 }))
       } else {
-        // Initialize with empty data if no document exists
         await setDoc(docRef, {
+          referralRateData: Array(12).fill(0),
+          repeatCustomerRate: 0,
+          churnRate: 0,
           campaigns: [],
-          industryAvg: 0,
-          lastUpdated: new Date().toISOString()
+          cacLtvData: Array(12).fill({ cac: 0, ltv: 0 }),
+          lastUpdated: new Date().toISOString(),
         })
       }
     } catch (error) {
-      console.error("Error loading cost per lead data:", error)
+      console.error("Error loading demand sustainability data:", error)
     } finally {
       setIsLoading(false)
     }
   }
 
-  useEffect(() => {
-    if (currentUser) {
-      loadCostPerLeadData()
+  const saveData = async () => {
+    if (!currentUser || isInvestorView) {
+      alert("You cannot save data in this mode.")
+      return
     }
-  }, [currentUser])
-
-  const updateCampaign = (index, field, value) => {
-    const newCampaigns = [...campaigns]
-    newCampaigns[index][field] = field === "name" ? value : Number.parseFloat(value) || 0
-    setCampaigns(newCampaigns)
+    try {
+      await setDoc(doc(db, "demand-sustainability", `${currentUser.uid}_${selectedYear}`), {
+        referralRateData,
+        repeatCustomerRate,
+        churnRate,
+        campaigns,
+        cacLtvData,
+        lastUpdated: new Date().toISOString(),
+      })
+      setShowEditForm(false)
+      alert("Demand sustainability data saved successfully!")
+    } catch (error) {
+      console.error("Error saving data:", error)
+      alert("Error saving data")
+    }
   }
 
   const addCampaign = () => {
-    setCampaigns([...campaigns, { name: "New Campaign", cost: 0 }])
+    setCampaigns([...campaigns, { name: "New Campaign", cost: 0, roi: 0 }])
   }
 
   const removeCampaign = (index) => {
@@ -854,42 +2254,54 @@ const CostPerLead = ({ activeSection, currentUser, isInvestorView }) => {
     setCampaigns(newCampaigns)
   }
 
-  const handleDownload = (selectedSections) => {
-    const data = {
-      campaigns: campaigns,
-      "industry-average": industryAvg,
-      summary: {
-        totalCampaigns: campaigns.length,
-        averageCost:
-          campaigns.length > 0 ? (campaigns.reduce((sum, c) => sum + c.cost, 0) / campaigns.length).toFixed(2) : 0,
-        bestPerforming:
-          campaigns.length > 0
-            ? campaigns.reduce((prev, current) => (prev.cost < current.cost ? prev : current))
-            : null,
-      },
-    }
-    downloadData(data, "cost_per_lead", selectedSections)
+  const updateCampaign = (index, field, value) => {
+    const newCampaigns = [...campaigns]
+    newCampaigns[index][field] = field === "name" ? value : Number(value)
+    setCampaigns(newCampaigns)
   }
 
-  if (activeSection !== "cost-per-lead") return null
+  const handleReferralRateAddNotes = () => {
+    alert("Add Notes functionality for Referral Rate Trend")
+  }
+
+  const handleReferralRateViewAnalysis = () => {
+    alert("View Analysis functionality for Referral Rate Trend")
+  }
+
+  const handleCampaignAddNotes = () => {
+    alert("Add Notes functionality for Campaign Cost & ROI Analysis")
+  }
+
+  const handleCampaignViewAnalysis = () => {
+    alert("View Analysis functionality for Campaign Cost & ROI Analysis")
+  }
+
+  const handleCacLtvAddNotes = () => {
+    alert("Add Notes functionality for Declining CAC with Rising LTV")
+  }
+
+  const handleCacLtvViewAnalysis = () => {
+    alert("View Analysis functionality for Declining CAC with Rising LTV")
+  }
+
+  if (activeSection !== "demand-sustainability") return null
 
   if (isLoading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '200px',
-        backgroundColor: '#fdfcfb',
-        borderRadius: '8px'
-      }}>
-        <div>Loading cost per lead data...</div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "200px",
+          backgroundColor: "#fdfcfb",
+          borderRadius: "8px",
+        }}
+      >
+        <div>Loading data...</div>
       </div>
     )
   }
-
-  const campaignNames = campaigns.map((c) => c.name)
-  const costData = campaigns.map((c) => c.cost)
 
   return (
     <div
@@ -901,37 +2313,66 @@ const CostPerLead = ({ activeSection, currentUser, isInvestorView }) => {
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
     >
+      <NotesSection 
+        sectionKey="demand-sustainability" 
+        isExpanded={notesExpanded}
+        onToggle={() => setNotesExpanded(!notesExpanded)}
+      />
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Cost Per Lead by Campaign</h2>
-        <div style={{ display: "flex", gap: "10px" }}>
-          {!isInvestorView && (
-            <button
-              onClick={() => setShowEditForm(!showEditForm)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              {showEditForm ? "Cancel" : "Edit Data"}
-            </button>
-          )}
-          <button
-            onClick={() => setShowDownloadModal(true)}
+        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Demand Sustainability</h2>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
             style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
+              padding: "8px 12px",
+              border: "1px solid #d4c4b0",
               borderRadius: "4px",
-              cursor: "pointer",
+              backgroundColor: "#fdfcfb",
+              color: "#5d4037",
             }}
           >
-            Download
-          </button>
+            {[2023, 2024, 2025, 2026].map(year => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
+          {!isInvestorView && (
+            <>
+              <button
+                onClick={() => setShowEditForm(!showEditForm)}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <FaPlus /> Add Data
+              </button>
+              <button
+                onClick={() => alert("Add KPI functionality")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#7d5a50",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <FaPlus /> Add KPI
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -944,28 +2385,73 @@ const CostPerLead = ({ activeSection, currentUser, isInvestorView }) => {
             marginBottom: "20px",
           }}
         >
-          <h3 style={{ color: "#72542b", marginTop: 0 }}>Edit Cost Per Lead Data</h3>
-          <div style={{ marginBottom: "20px" }}>
-            <label style={{ color: "#72542b", display: "block", marginBottom: "5px" }}>Industry Average:</label>
-            <input
-              type="number"
-              value={industryAvg}
-              onChange={(e) => setIndustryAvg(Number.parseFloat(e.target.value) || 0)}
-              style={{
-                padding: "8px",
-                border: "1px solid #d4c4b0",
-                borderRadius: "4px",
-                width: "120px",
-              }}
-              placeholder="Industry Avg"
-            />
+          <h3 style={{ color: "#72542b", marginTop: 0 }}>Add Demand Sustainability Data</h3>
+
+          <h4 style={{ color: "#72542b" }}>Referral Rate Trend (Monthly %)</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: "20px" }}>
+            {monthNames.map((month, index) => (
+              <div key={month}>
+                <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>{month}</label>
+                <input
+                  type="number"
+                  value={referralRateData[index]}
+                  onChange={(e) => {
+                    const newData = [...referralRateData]
+                    newData[index] = Number(e.target.value)
+                    setReferralRateData(newData)
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "6px",
+                    border: "1px solid #d4c4b0",
+                    borderRadius: "4px",
+                  }}
+                />
+              </div>
+            ))}
           </div>
+
+          <h4 style={{ color: "#72542b" }}>Customer Metrics</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "15px", marginBottom: "20px" }}>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>
+                Repeat Customer Rate (%)
+              </label>
+              <input
+                type="number"
+                value={repeatCustomerRate}
+                onChange={(e) => setRepeatCustomerRate(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Churn Rate (%)</label>
+              <input
+                type="number"
+                value={churnRate}
+                onChange={(e) => setChurnRate(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+          </div>
+
+          <h4 style={{ color: "#72542b" }}>Campaign Cost & ROI</h4>
           {campaigns.map((campaign, index) => (
             <div
               key={index}
               style={{
                 display: "grid",
-                gridTemplateColumns: "2fr 1fr auto",
+                gridTemplateColumns: "2fr 1fr 1fr auto",
                 gap: "10px",
                 alignItems: "center",
                 marginBottom: "10px",
@@ -996,6 +2482,17 @@ const CostPerLead = ({ activeSection, currentUser, isInvestorView }) => {
                 }}
                 placeholder="Cost (ZAR)"
               />
+              <input
+                type="number"
+                value={campaign.roi}
+                onChange={(e) => updateCampaign(index, "roi", e.target.value)}
+                style={{
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+                placeholder="ROI (%)"
+              />
               <button
                 onClick={() => removeCampaign(index)}
                 style={{
@@ -1007,339 +2504,75 @@ const CostPerLead = ({ activeSection, currentUser, isInvestorView }) => {
                   cursor: "pointer",
                 }}
               >
-                Remove
+                <FaTrashAlt />
               </button>
             </div>
           ))}
-          <div style={{ marginTop: "15px" }}>
-            <button
-              onClick={addCampaign}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#72542b",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                marginRight: "10px",
-              }}
-            >
-              Add Campaign
-            </button>
-            <button
-              onClick={saveCostPerLeadData}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#16a34a",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Save Data
-            </button>
-          </div>
-        </div>
-      )}
-
-      {campaigns.length === 0 ? (
-        <div
-          style={{
-            textAlign: "center",
-            padding: "40px",
-            color: "#72542b",
-          }}
-        >
-          <p>No campaign data available. {!isInvestorView && 'Click "Edit Data" to add your first campaign.'}</p>
-        </div>
-      ) : (
-        <div style={{ height: "400px" }}>
-          <Bar
-            data={{
-              labels: campaignNames,
-              datasets: [
-                {
-                  label: "Cost Per Lead (ZAR)",
-                  data: costData,
-                  backgroundColor: "#9c7c5f",
-                  borderColor: "#5d4037",
-                  borderWidth: 1,
-                },
-                {
-                  label: "Industry Average",
-                  data: Array(campaigns.length).fill(industryAvg),
-                  borderColor: "#F44336",
-                  borderWidth: 2,
-                  borderDash: [5, 5],
-                  backgroundColor: "transparent",
-                  type: "line",
-                  pointRadius: 0,
-                },
-              ],
-            }}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: {
-                  position: "top",
-                },
-              },
-              scales: {
-                y: {
-                  beginAtZero: true,
-                  title: {
-                    display: true,
-                    text: "Cost (ZAR)",
-                  },
-                },
-                x: {
-                  title: {
-                    display: false,
-                  },
-                },
-              },
-            }}
-          />
-        </div>
-      )}
-
-      <DownloadModal
-        isOpen={showDownloadModal}
-        onClose={() => setShowDownloadModal(false)}
-        onDownload={handleDownload}
-        availableSections={[
-          { id: "campaigns", label: "Campaign Data" },
-          { id: "industry-average", label: "Industry Average" },
-          { id: "summary", label: "Summary Statistics" },
-        ]}
-        sectionTitle="Cost Per Lead"
-      />
-    </div>
-  )
-}
-
-// CustomerAcquisitionCost Component - HAS MONTHLY X-AXIS (Line chart)
-const CustomerAcquisitionCost = ({ activeSection, currentUser, isInvestorView, financialYearStartMonth }) => {
-  const [cacData, setCacData] = useState(Array(12).fill(0))
-  const [ltvData, setLtvData] = useState(Array(12).fill(0))
-  const [showEditForm, setShowEditForm] = useState(false)
-  const [showDownloadModal, setShowDownloadModal] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-  const [financialYearMonths, setFinancialYearMonths] = useState([])
-
-  useEffect(() => {
-    if (financialYearStartMonth) {
-      const months = getFinancialYearMonths(financialYearStartMonth)
-      setFinancialYearMonths(months)
-    }
-  }, [financialYearStartMonth])
-
-  const saveCacData = async () => {
-    if (!currentUser) {
-      alert("Please log in to save data.")
-      return
-    }
-    try {
-      await setDoc(doc(db, "customer-acquisition-cost", currentUser.uid), { 
-        cacData, 
-        ltvData,
-        lastUpdated: new Date().toISOString()
-      })
-      setShowEditForm(false)
-      alert("CAC data saved successfully!")
-    } catch (error) {
-      console.error("Error saving CAC data:", error)
-      alert("Error saving data")
-    }
-  }
-
-  const loadCacData = async () => {
-    if (!currentUser) return
-    try {
-      setIsLoading(true)
-      const docRef = doc(db, "customer-acquisition-cost", currentUser.uid)
-      const docSnap = await getDoc(docRef)
-      if (docSnap.exists()) {
-        const data = docSnap.data()
-        setCacData(data.cacData || Array(12).fill(0))
-        setLtvData(data.ltvData || Array(12).fill(0))
-      } else {
-        // Initialize with empty data if no document exists
-        await setDoc(docRef, {
-          cacData: Array(12).fill(0),
-          ltvData: Array(12).fill(0),
-          lastUpdated: new Date().toISOString()
-        })
-      }
-    } catch (error) {
-      console.error("Error loading CAC data:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (currentUser) {
-      loadCacData()
-    }
-  }, [currentUser])
-
-  const updateCacValue = (index, value) => {
-    const newData = [...cacData]
-    newData[index] = Number.parseFloat(value) || 0
-    setCacData(newData)
-  }
-
-  const updateLtvValue = (index, value) => {
-    const newData = [...ltvData]
-    newData[index] = Number.parseFloat(value) || 0
-    setLtvData(newData)
-  }
-
-  const handleDownload = (selectedSections) => {
-    const currentCac = cacData[cacData.length - 1] || 0
-    const currentLtv = ltvData[ltvData.length - 1] || 0
-    const ratio = currentCac > 0 ? (currentLtv / currentCac).toFixed(1) : 0
-
-    const data = {
-      "cac-data": cacData,
-      "ltv-data": ltvData,
-      summary: {
-        currentCAC: currentCac,
-        currentLTV: currentLtv,
-        ratio: ratio,
-        months: financialYearMonths,
-      },
-    }
-    downloadData(data, "customer_acquisition_cost", selectedSections)
-  }
-
-  if (activeSection !== "customer-acquisition-cost") return null
-
-  if (isLoading) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '200px',
-        backgroundColor: '#fdfcfb',
-        borderRadius: '8px'
-      }}>
-        <div>Loading CAC data...</div>
-      </div>
-    )
-  }
-
-  const currentCac = cacData[cacData.length - 1] || 0
-  const currentLtv = ltvData[ltvData.length - 1] || 0
-  const ratio = currentCac > 0 ? (currentLtv / currentCac).toFixed(1) : 0
-
-  return (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "20px",
-        margin: "20px 0",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <div>
-          <h2 style={{ color: "#5d4037", marginTop: 0 }}>Customer Acquisition Cost (CAC) vs LTV</h2>
-          {financialYearStartMonth && (
-            <p style={{ color: "#7d5a50", fontSize: "14px", margin: "5px 0 0 0" }}>
-              Financial Year starts in {financialYearMonths[0]}
-            </p>
-          )}
-        </div>
-        <div style={{ display: "flex", gap: "10px" }}>
-          {!isInvestorView && (
-            <button
-              onClick={() => setShowEditForm(!showEditForm)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              {showEditForm ? "Cancel" : "Edit Data"}
-            </button>
-          )}
           <button
-            onClick={() => setShowDownloadModal(true)}
+            onClick={addCampaign}
             style={{
               padding: "8px 16px",
-              backgroundColor: "#16a34a",
+              backgroundColor: "#5d4037",
               color: "white",
               border: "none",
               borderRadius: "4px",
               cursor: "pointer",
+              marginBottom: "20px",
+              display: "flex",
+              alignItems: "center",
+              gap: "5px",
             }}
           >
-            Download
+            <FaPlus /> Add Campaign
           </button>
-        </div>
-      </div>
 
-      {!isInvestorView && showEditForm && (
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#72542b", marginTop: 0 }}>Edit CAC & LTV Data</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-            <div>
-              <h4 style={{ color: "#72542b" }}>CAC (ZAR)</h4>
-              {financialYearMonths.map((month, index) => (
-                <div key={month} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                  <span style={{ minWidth: "60px", color: "#72542b" }}>{month}:</span>
+          <h4 style={{ color: "#72542b" }}>CAC vs LTV (Monthly)</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px", marginBottom: "20px" }}>
+            {monthNames.map((month, index) => (
+              <div key={month} style={{ backgroundColor: "#fdfcfb", padding: "10px", borderRadius: "4px" }}>
+                <label style={{ display: "block", color: "#72542b", marginBottom: "5px", fontWeight: "bold" }}>
+                  {month}
+                </label>
+                <div style={{ display: "flex", gap: "5px" }}>
                   <input
                     type="number"
-                    value={cacData[index]}
-                    onChange={(e) => updateCacValue(index, e.target.value)}
+                    value={cacLtvData[index]?.cac || 0}
+                    onChange={(e) => {
+                      const newData = [...cacLtvData]
+                      newData[index] = { ...newData[index], cac: Number(e.target.value) }
+                      setCacLtvData(newData)
+                    }}
                     style={{
+                      width: "50%",
                       padding: "6px",
                       border: "1px solid #d4c4b0",
                       borderRadius: "4px",
-                      width: "100px",
                     }}
+                    placeholder="CAC"
                   />
-                </div>
-              ))}
-            </div>
-            <div>
-              <h4 style={{ color: "#72542b" }}>LTV (ZAR)</h4>
-              {financialYearMonths.map((month, index) => (
-                <div key={month} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                  <span style={{ minWidth: "60px", color: "#72542b" }}>{month}:</span>
                   <input
                     type="number"
-                    value={ltvData[index]}
-                    onChange={(e) => updateLtvValue(index, e.target.value)}
+                    value={cacLtvData[index]?.ltv || 0}
+                    onChange={(e) => {
+                      const newData = [...cacLtvData]
+                      newData[index] = { ...newData[index], ltv: Number(e.target.value) }
+                      setCacLtvData(newData)
+                    }}
                     style={{
+                      width: "50%",
                       padding: "6px",
                       border: "1px solid #d4c4b0",
                       borderRadius: "4px",
-                      width: "100px",
                     }}
+                    placeholder="LTV"
                   />
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
+
           <button
-            onClick={saveCacData}
+            onClick={saveData}
             style={{
               padding: "8px 16px",
               backgroundColor: "#16a34a",
@@ -1355,1061 +2588,47 @@ const CustomerAcquisitionCost = ({ activeSection, currentUser, isInvestorView, f
         </div>
       )}
 
-      <div style={{ height: "400px" }}>
-        <Line
-          data={{
-            labels: financialYearMonths,
-            datasets: [
-              {
-                label: "CAC (ZAR)",
-                data: cacData,
-                borderColor: "#9c7c5f",
-                backgroundColor: "rgba(156, 124, 95, 0.1)",
-                borderWidth: 2,
-                tension: 0.1,
-                fill: true,
-              },
-              {
-                label: "LTV (ZAR)",
-                data: ltvData,
-                borderColor: "#4CAF50",
-                backgroundColor: "rgba(76, 175, 80, 0.1)",
-                borderWidth: 2,
-                tension: 0.1,
-                fill: true,
-              },
-            ],
-          }}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                position: "top",
-              },
-            },
-            scales: {
-              y: {
-                beginAtZero: true,
-                title: {
-                  display: true,
-                  text: "Amount (ZAR)",
-                },
-              },
-              x: {
-                title: {
-                  display: false,
-                },
-              },
-            },
-          }}
-        />
-      </div>
-      <div
-        style={{
-          backgroundColor: "#f7f3f0",
-          padding: "15px",
-          borderRadius: "6px",
-          marginTop: "20px",
-        }}
-      >
-        <h3 style={{ color: "#72542b", marginTop: 0 }}>CAC:LTV Ratio</h3>
-        <p style={{ color: "#5d4037" }}>
-          Current ratio: <strong>1:{ratio}</strong> (Healthy benchmark is 1:3 or better)
-        </p>
-      </div>
-
-      <DownloadModal
-        isOpen={showDownloadModal}
-        onClose={() => setShowDownloadModal(false)}
-        onDownload={handleDownload}
-        availableSections={[
-          { id: "cac-data", label: "CAC Data" },
-          { id: "ltv-data", label: "LTV Data" },
-          { id: "summary", label: "Summary & Ratios" },
-        ]}
-        sectionTitle="Customer Acquisition Cost"
-      />
-    </div>
-  )
-}
-
-// CampaignROI Component - NO MONTHLY X-AXIS (Scatter chart)
-const CampaignROI = ({ activeSection, currentUser, isInvestorView }) => {
-  const [campaigns, setCampaigns] = useState([])
-  const [showEditForm, setShowEditForm] = useState(false)
-  const [showDownloadModal, setShowDownloadModal] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-
-  const saveCampaignROIData = async () => {
-    if (!currentUser) {
-      alert("Please log in to save data.")
-      return
-    }
-    try {
-      await setDoc(doc(db, "campaign-roi", currentUser.uid), { 
-        campaigns,
-        lastUpdated: new Date().toISOString()
-      })
-      setShowEditForm(false)
-      alert("Campaign ROI data saved successfully!")
-    } catch (error) {
-      console.error("Error saving campaign ROI data:", error)
-      alert("Error saving data")
-    }
-  }
-
-  const loadCampaignROIData = async () => {
-    if (!currentUser) return
-    try {
-      setIsLoading(true)
-      const docRef = doc(db, "campaign-roi", currentUser.uid)
-      const docSnap = await getDoc(docRef)
-      if (docSnap.exists()) {
-        setCampaigns(docSnap.data().campaigns || [])
-      } else {
-        // Initialize with empty data if no document exists
-        await setDoc(docRef, {
-          campaigns: [],
-          lastUpdated: new Date().toISOString()
-        })
-      }
-    } catch (error) {
-      console.error("Error loading campaign ROI data:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (currentUser) {
-      loadCampaignROIData()
-    }
-  }, [currentUser])
-
-  const updateCampaign = (index, field, value) => {
-    const newCampaigns = [...campaigns]
-    newCampaigns[index][field] = field === "name" ? value : Number.parseFloat(value) || 0
-    setCampaigns(newCampaigns)
-  }
-
-  const addCampaign = () => {
-    setCampaigns([...campaigns, { name: "New Campaign", spend: 0, revenue: 0 }])
-  }
-
-  const removeCampaign = (index) => {
-    const newCampaigns = campaigns.filter((_, i) => i !== index)
-    setCampaigns(newCampaigns)
-  }
-
-  const handleDownload = (selectedSections) => {
-    const data = {
-      campaigns: campaigns,
-      summary: {
-        totalCampaigns: campaigns.length,
-        totalSpend: campaigns.reduce((sum, c) => sum + c.spend, 0),
-        totalRevenue: campaigns.reduce((sum, c) => sum + c.revenue, 0),
-        averageROI:
-          campaigns.length > 0
-            ? (
-                campaigns.reduce((sum, c) => sum + (c.spend > 0 ? ((c.revenue - c.spend) / c.spend) * 100 : 0), 0) /
-                campaigns.length
-              ).toFixed(2)
-            : 0,
-      },
-    }
-    downloadData(data, "campaign_roi", selectedSections)
-  }
-
-  if (activeSection !== "campaign-roi") return null
-
-  if (isLoading) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '200px',
-        backgroundColor: '#fdfcfb',
-        borderRadius: '8px'
-      }}>
-        <div>Loading campaign ROI data...</div>
-      </div>
-    )
-  }
-
-  return (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "20px",
-        margin: "20px 0",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Campaign ROI Analysis</h2>
-        <div style={{ display: "flex", gap: "10px" }}>
-          {!isInvestorView && (
-            <button
-              onClick={() => setShowEditForm(!showEditForm)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              {showEditForm ? "Cancel" : "Edit Data"}
-            </button>
-          )}
-          <button
-            onClick={() => setShowDownloadModal(true)}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            Download
-          </button>
-        </div>
-      </div>
-
-      {!isInvestorView && showEditForm && (
+      {/* KPIs Display */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "15px", marginBottom: "30px" }}>
         <div
           style={{
             backgroundColor: "#f7f3f0",
-            padding: "20px",
+            padding: "15px",
             borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#72542b", marginTop: 0 }}>Edit Campaign ROI Data</h3>
-          {campaigns.map((campaign, index) => (
-            <div
-              key={index}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "2fr 1fr 1fr auto",
-                gap: "10px",
-                alignItems: "center",
-                marginBottom: "10px",
-                padding: "10px",
-                backgroundColor: "#fdfcfb",
-                borderRadius: "4px",
-              }}
-            >
-              <input
-                type="text"
-                value={campaign.name}
-                onChange={(e) => updateCampaign(index, "name", e.target.value)}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-                placeholder="Campaign Name"
-              />
-              <input
-                type="number"
-                value={campaign.spend}
-                onChange={(e) => updateCampaign(index, "spend", e.target.value)}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-                placeholder="Spend (ZAR)"
-              />
-              <input
-                type="number"
-                value={campaign.revenue}
-                onChange={(e) => updateCampaign(index, "revenue", e.target.value)}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-                placeholder="Revenue (ZAR)"
-              />
-              <button
-                onClick={() => removeCampaign(index)}
-                style={{
-                  padding: "8px",
-                  backgroundColor: "#dc2626",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                }}
-              >
-                Remove
-              </button>
-            </div>
-          ))}
-          <div style={{ marginTop: "15px" }}>
-            <button
-              onClick={addCampaign}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#72542b",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                marginRight: "10px",
-              }}
-            >
-              Add Campaign
-            </button>
-            <button
-              onClick={saveCampaignROIData}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#16a34a",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Save Data
-            </button>
-          </div>
-        </div>
-      )}
-
-      {campaigns.length === 0 ? (
-        <div
-          style={{
             textAlign: "center",
-            padding: "40px",
-            color: "#72542b",
           }}
         >
-          <p>No campaign data available. {!isInvestorView && 'Click "Edit Data" to add your first campaign.'}</p>
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px" }}>Repeat Customer Rate</div>
+          <div style={{ fontSize: "24px", color: "#5d4037", fontWeight: "bold" }}>{repeatCustomerRate}%</div>
         </div>
-      ) : (
-        <>
-          <div style={{ height: "400px" }}>
-            <Scatter
-              data={{
-                datasets: campaigns.map((campaign) => ({
-                  label: campaign.name,
-                  data: [
-                    {
-                      x: campaign.spend / 1000,
-                      y: campaign.revenue / 1000,
-                    },
-                  ],
-                  backgroundColor:
-                    campaign.spend > 0 && campaign.revenue / campaign.spend >= 3
-                      ? "#4CAF50"
-                      : campaign.spend > 0 && campaign.revenue / campaign.spend >= 2
-                        ? "#FFC107"
-                        : "#F44336",
-                  radius: 15,
-                })),
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: "top",
-                  },
-                  tooltip: {
-                    callbacks: {
-                      label: (context) => {
-                        const campaign = campaigns.find((c) => c.name === context.dataset.label)
-                        const roi =
-                          campaign.spend > 0
-                            ? (((campaign.revenue - campaign.spend) / campaign.spend) * 100).toFixed(0)
-                            : 0
-                        return [
-                          `Campaign: ${campaign.name}`,
-                          `Spend: ZAR ${(campaign.spend / 1000).toFixed(0)}k`,
-                          `Revenue: ZAR ${(campaign.revenue / 1000).toFixed(0)}k`,
-                          `ROI: ${roi}%`,
-                        ]
-                      },
-                    },
-                  },
-                },
-                scales: {
-                  x: {
-                    title: {
-                      display: true,
-                      text: "Spend (ZAR thousands)",
-                    },
-                    beginAtZero: true,
-                  },
-                  y: {
-                    title: {
-                      display: true,
-                      text: "Revenue (ZAR thousands)",
-                    },
-                    beginAtZero: true,
-                  },
-                },
-              }}
-            />
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-              gap: "15px",
-              marginTop: "20px",
-            }}
-          >
-            {campaigns.map((campaign, index) => {
-              const roi =
-                campaign.spend > 0 ? (((campaign.revenue - campaign.spend) / campaign.spend) * 100).toFixed(0) : 0
-              return (
-                <div
-                  key={index}
-                  style={{
-                    backgroundColor: "#f7f3f0",
-                    padding: "15px",
-                    borderRadius: "6px",
-                  }}
-                >
-                  <h3 style={{ color: "#72542b", marginTop: 0 }}>{campaign.name}</h3>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      marginBottom: "8px",
-                    }}
-                  >
-                    <span>Spend:</span>
-                    <span style={{ fontWeight: "bold" }}>ZAR {campaign.spend.toLocaleString()}</span>
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      marginBottom: "8px",
-                    }}
-                  >
-                    <span>Revenue:</span>
-                    <span style={{ fontWeight: "bold" }}>ZAR {campaign.revenue.toLocaleString()}</span>
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      marginBottom: "8px",
-                    }}
-                  >
-                    <span>ROI:</span>
-                    <span
-                      style={{
-                        fontWeight: "bold",
-                        color: roi >= 200 ? "#4CAF50" : roi >= 100 ? "#FFC107" : "#F44336",
-                      }}
-                    >
-                      {roi}%
-                    </span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </>
-      )}
-
-      <DownloadModal
-        isOpen={showDownloadModal}
-        onClose={() => setShowDownloadModal(false)}
-        onDownload={handleDownload}
-        availableSections={[
-          { id: "campaigns", label: "Campaign Data" },
-          { id: "summary", label: "Summary Statistics" },
-        ]}
-        sectionTitle="Campaign ROI"
-      />
-    </div>
-  )
-}
-
-// ConversionRate Component - NO MONTHLY X-AXIS (Progress bars)
-const ConversionRate = ({ activeSection, currentUser, isInvestorView }) => {
-  const [stages, setStages] = useState([])
-  const [showEditForm, setShowEditForm] = useState(false)
-  const [showDownloadModal, setShowDownloadModal] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-
-  const saveConversionData = async () => {
-    if (!currentUser) {
-      alert("Please log in to save data.")
-      return
-    }
-    try {
-      await setDoc(doc(db, "conversion-rate", currentUser.uid), { 
-        stages,
-        lastUpdated: new Date().toISOString()
-      })
-      setShowEditForm(false)
-      alert("Conversion rate data saved successfully!")
-    } catch (error) {
-      console.error("Error saving conversion rate data:", error)
-      alert("Error saving data")
-    }
-  }
-
-  const loadConversionData = async () => {
-    if (!currentUser) return
-    try {
-      setIsLoading(true)
-      const docRef = doc(db, "conversion-rate", currentUser.uid)
-      const docSnap = await getDoc(docRef)
-      if (docSnap.exists()) {
-        setStages(docSnap.data().stages || [])
-      } else {
-        // Initialize with empty data if no document exists
-        await setDoc(docRef, {
-          stages: [],
-          lastUpdated: new Date().toISOString()
-        })
-      }
-    } catch (error) {
-      console.error("Error loading conversion rate data:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (currentUser) {
-      loadConversionData()
-    }
-  }, [currentUser])
-
-  const updateStage = (index, field, value) => {
-    const newStages = [...stages]
-    newStages[index][field] = field === "name" ? value : Number.parseFloat(value) || 0
-    setStages(newStages)
-  }
-
-  const addStage = () => {
-    setStages([...stages, { name: "New Stage", rate: 0 }])
-  }
-
-  const removeStage = (index) => {
-    const newStages = stages.filter((_, i) => i !== index)
-    setStages(newStages)
-  }
-
-  const handleDownload = (selectedSections) => {
-    const data = {
-      stages: stages,
-      summary: {
-        totalStages: stages.length,
-        averageConversion:
-          stages.length > 0 ? (stages.reduce((sum, s) => sum + s.rate, 0) / stages.length).toFixed(2) : 0,
-        bestPerforming:
-          stages.length > 0 ? stages.reduce((prev, current) => (prev.rate > current.rate ? prev : current)) : null,
-      },
-    }
-    downloadData(data, "conversion_rates", selectedSections)
-  }
-
-  if (activeSection !== "conversion-rate") return null
-
-  if (isLoading) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '200px',
-        backgroundColor: '#fdfcfb',
-        borderRadius: '8px'
-      }}>
-        <div>Loading conversion rate data...</div>
-      </div>
-    )
-  }
-
-  return (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "20px",
-        margin: "20px 0",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Conversion Rates</h2>
-        <div style={{ display: "flex", gap: "10px" }}>
-          {!isInvestorView && (
-            <button
-              onClick={() => setShowEditForm(!showEditForm)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              {showEditForm ? "Cancel" : "Edit Data"}
-            </button>
-          )}
-          <button
-            onClick={() => setShowDownloadModal(true)}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            Download
-          </button>
-        </div>
-      </div>
-
-      {!isInvestorView && showEditForm && (
         <div
           style={{
             backgroundColor: "#f7f3f0",
-            padding: "20px",
+            padding: "15px",
             borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#72542b", marginTop: 0 }}>Edit Conversion Rate Data</h3>
-          {stages.map((stage, index) => (
-            <div
-              key={index}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "2fr 1fr auto",
-                gap: "10px",
-                alignItems: "center",
-                marginBottom: "10px",
-                padding: "10px",
-                backgroundColor: "#fdfcfb",
-                borderRadius: "4px",
-              }}
-            >
-              <input
-                type="text"
-                value={stage.name}
-                onChange={(e) => updateStage(index, "name", e.target.value)}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-                placeholder="Stage Name"
-              />
-              <input
-                type="number"
-                value={stage.rate}
-                onChange={(e) => updateStage(index, "rate", e.target.value)}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-                placeholder="Rate %"
-              />
-              <button
-                onClick={() => removeStage(index)}
-                style={{
-                  padding: "8px",
-                  backgroundColor: "#dc2626",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                }}
-              >
-                Remove
-              </button>
-            </div>
-          ))}
-          <div style={{ marginTop: "15px" }}>
-            <button
-              onClick={addStage}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#72542b",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                marginRight: "10px",
-              }}
-            >
-              Add Stage
-            </button>
-            <button
-              onClick={saveConversionData}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#16a34a",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Save Data
-            </button>
-          </div>
-        </div>
-      )}
-
-      {stages.length === 0 ? (
-        <div
-          style={{
             textAlign: "center",
-            padding: "40px",
-            color: "#72542b",
           }}
         >
-          <p>No conversion stage data available. {!isInvestorView && 'Click "Edit Data" to add your first stage.'}</p>
-        </div>
-      ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-            gap: "20px",
-          }}
-        >
-          {stages.map((stage, index) => (
-            <div
-              key={index}
-              style={{
-                backgroundColor: "#f7f3f0",
-                padding: "20px",
-                borderRadius: "6px",
-              }}
-            >
-              <h3 style={{ color: "#72542b", marginTop: 0 }}>{stage.name}</h3>
-              <div
-                style={{
-                  width: "100%",
-                  height: "20px",
-                  backgroundColor: "#e8ddd4",
-                  borderRadius: "10px",
-                  margin: "15px 0",
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    width: `${stage.rate}%`,
-                    height: "100%",
-                    backgroundColor: "#9c7c5f",
-                    borderRadius: "10px",
-                  }}
-                ></div>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  color: "#5d4037",
-                }}
-              >
-                <span>Current:</span>
-                <span style={{ fontWeight: "bold" }}>{stage.rate}%</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <DownloadModal
-        isOpen={showDownloadModal}
-        onClose={() => setShowDownloadModal(false)}
-        onDownload={handleDownload}
-        availableSections={[
-          { id: "stages", label: "Conversion Stages" },
-          { id: "summary", label: "Summary Statistics" },
-        ]}
-        sectionTitle="Conversion Rates"
-      />
-    </div>
-  )
-}
-
-// RetentionLTV Component - NO MONTHLY X-AXIS (Has years, not months)
-const RetentionLTV = ({ activeSection, currentUser, isInvestorView }) => {
-  const [retentionRates, setRetentionRates] = useState([0, 0, 0, 0, 0, 0])
-  const [ltvValues, setLtvValues] = useState([0, 0, 0, 0, 0, 0])
-  const [churnRate, setChurnRate] = useState(0)
-  const [showEditForm, setShowEditForm] = useState(false)
-  const [showDownloadModal, setShowDownloadModal] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-  const cohorts = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
-
-  const saveRetentionLTVData = async () => {
-    if (!currentUser) {
-      alert("Please log in to save data.")
-      return
-    }
-    try {
-      await setDoc(doc(db, "retention-ltv", currentUser.uid), { 
-        retentionRates, 
-        ltvValues, 
-        churnRate,
-        lastUpdated: new Date().toISOString()
-      })
-      setShowEditForm(false)
-      alert("Retention & LTV data saved successfully!")
-    } catch (error) {
-      console.error("Error saving retention & LTV data:", error)
-      alert("Error saving data")
-    }
-  }
-
-  const loadRetentionLTVData = async () => {
-    if (!currentUser) return
-    try {
-      setIsLoading(true)
-      const docRef = doc(db, "retention-ltv", currentUser.uid)
-      const docSnap = await getDoc(docRef)
-      if (docSnap.exists()) {
-        const data = docSnap.data()
-        setRetentionRates(data.retentionRates || [0, 0, 0, 0, 0, 0])
-        setLtvValues(data.ltvValues || [0, 0, 0, 0, 0, 0])
-        setChurnRate(data.churnRate || 0)
-      } else {
-        // Initialize with empty data if no document exists
-        await setDoc(docRef, {
-          retentionRates: [0, 0, 0, 0, 0, 0],
-          ltvValues: [0, 0, 0, 0, 0, 0],
-          churnRate: 0,
-          lastUpdated: new Date().toISOString()
-        })
-      }
-    } catch (error) {
-      console.error("Error loading retention & LTV data:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (currentUser) {
-      loadRetentionLTVData()
-    }
-  }, [currentUser])
-
-  const updateRetentionValue = (index, value) => {
-    const newData = [...retentionRates]
-    newData[index] = Number.parseFloat(value) || 0
-    setRetentionRates(newData)
-  }
-
-  const updateLtvValue = (index, value) => {
-    const newData = [...ltvValues]
-    newData[index] = Number.parseFloat(value) || 0
-    setLtvValues(newData)
-  }
-
-  const handleDownload = (selectedSections) => {
-    const data = {
-      "retention-rates": retentionRates,
-      "ltv-values": ltvValues,
-      "churn-rate": churnRate,
-      summary: {
-        averageRetention:
-          retentionRates.length > 0
-            ? (retentionRates.reduce((sum, val) => sum + val, 0) / retentionRates.length).toFixed(2)
-            : 0,
-        averageLTV:
-          ltvValues.length > 0 ? (ltvValues.reduce((sum, val) => sum + val, 0) / ltvValues.length).toFixed(2) : 0,
-        churnRate: churnRate,
-        cohorts: cohorts,
-      },
-    }
-    downloadData(data, "retention_ltv", selectedSections)
-  }
-
-  if (activeSection !== "retention-ltv") return null
-
-  if (isLoading) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '200px',
-        backgroundColor: '#fdfcfb',
-        borderRadius: '8px'
-      }}>
-        <div>Loading retention & LTV data...</div>
-      </div>
-    )
-  }
-
-  return (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "20px",
-        margin: "20px 0",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Retention & Lifetime Value (LTV)</h2>
-        <div style={{ display: "flex", gap: "10px" }}>
-          {!isInvestorView && (
-            <button
-              onClick={() => setShowEditForm(!showEditForm)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              {showEditForm ? "Cancel" : "Edit Data"}
-            </button>
-          )}
-          <button
-            onClick={() => setShowDownloadModal(true)}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            Download
-          </button>
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px" }}>Churn Rate</div>
+          <div style={{ fontSize: "24px", color: "#5d4037", fontWeight: "bold" }}>{churnRate}%</div>
         </div>
       </div>
 
-      {!isInvestorView && showEditForm && (
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#72542b", marginTop: 0 }}>Edit Retention & LTV Data</h3>
-          <div style={{ marginBottom: "20px" }}>
-            <label style={{ color: "#72542b", display: "block", marginBottom: "5px" }}>Churn Rate (%):</label>
-            <input
-              type="number"
-              value={churnRate}
-              onChange={(e) => setChurnRate(Number.parseFloat(e.target.value) || 0)}
-              style={{
-                padding: "8px",
-                border: "1px solid #d4c4b0",
-                borderRadius: "4px",
-                width: "120px",
-              }}
-              placeholder="Churn Rate"
-            />
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-            <div>
-              <h4 style={{ color: "#72542b" }}>Retention Rate (%)</h4>
-              {cohorts.map((cohort, index) => (
-                <div key={cohort} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                  <span style={{ minWidth: "40px", color: "#72542b" }}>{cohort}:</span>
-                  <input
-                    type="number"
-                    value={retentionRates[index]}
-                    onChange={(e) => updateRetentionValue(index, e.target.value)}
-                    style={{
-                      padding: "6px",
-                      border: "1px solid #d4c4b0",
-                      borderRadius: "4px",
-                      width: "80px",
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-            <div>
-              <h4 style={{ color: "#72542b" }}>LTV (ZAR)</h4>
-              {cohorts.map((cohort, index) => (
-                <div key={cohort} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                  <span style={{ minWidth: "40px", color: "#72542b" }}>{cohort}:</span>
-                  <input
-                    type="number"
-                    value={ltvValues[index]}
-                    onChange={(e) => updateLtvValue(index, e.target.value)}
-                    style={{
-                      padding: "6px",
-                      border: "1px solid #d4c4b0",
-                      borderRadius: "4px",
-                      width: "80px",
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-          <button
-            onClick={saveRetentionLTVData}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              marginTop: "15px",
-            }}
-          >
-            Save Data
-          </button>
-        </div>
-      )}
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "20px",
-        }}
-      >
+      {/* Referral Rate Trend Chart */}
+      <div style={{ marginBottom: "30px" }}>
+        <h3 style={{ color: "#5d4037" }}>Referral Rate Trend</h3>
         <div style={{ height: "300px" }}>
           <Line
             data={{
-              labels: cohorts,
+              labels: monthNames,
               datasets: [
                 {
-                  label: "Retention Rate (%)",
-                  data: retentionRates,
+                  label: "Referral Rate (%)",
+                  data: referralRateData,
                   borderColor: "#9c7c5f",
                   backgroundColor: "rgba(156, 124, 95, 0.1)",
                   borderWidth: 2,
-                  tension: 0.1,
-                  fill: true,
+                  tension: 0.3,
                 },
               ],
             }}
@@ -2427,29 +2646,77 @@ const RetentionLTV = ({ activeSection, currentUser, isInvestorView }) => {
                   max: 100,
                   title: {
                     display: true,
-                    text: "Retention Rate (%)",
-                  },
-                },
-                x: {
-                  title: {
-                    display: false,
+                    text: "Referral Rate (%)",
                   },
                 },
               },
             }}
           />
         </div>
+        <ChartActions 
+          onAddNotes={handleReferralRateAddNotes}
+          onViewAnalysis={handleReferralRateViewAnalysis}
+        />
+      </div>
+
+      {/* Campaign ROI Chart */}
+      {campaigns.length > 0 && (
+        <div style={{ marginBottom: "30px" }}>
+          <h3 style={{ color: "#5d4037" }}>Campaign Cost & ROI Analysis</h3>
+          <div style={{ height: "300px" }}>
+            <Bar
+              data={{
+                labels: campaigns.map((c) => c.name),
+                datasets: [
+                  {
+                    label: "Cost (ZAR)",
+                    data: campaigns.map((c) => c.cost),
+                    backgroundColor: "#dc2626",
+                    borderColor: "#b91c1c",
+                    borderWidth: 1,
+                  },
+                  {
+                    label: "ROI (%)",
+                    data: campaigns.map((c) => c.roi),
+                    backgroundColor: "#16a34a",
+                    borderColor: "#15803d",
+                    borderWidth: 1,
+                    yAxisID: "y1",
+                  },
+                ],
+              }}
+            />
+          </div>
+          <ChartActions 
+            onAddNotes={handleCampaignAddNotes}
+            onViewAnalysis={handleCampaignViewAnalysis}
+          />
+        </div>
+      )}
+
+      {/* CAC vs LTV Trend Chart */}
+      <div>
+        <h3 style={{ color: "#5d4037" }}>Declining CAC with Rising LTV</h3>
         <div style={{ height: "300px" }}>
-          <Bar
+          <Line
             data={{
-              labels: cohorts,
+              labels: monthNames,
               datasets: [
                 {
+                  label: "CAC (ZAR)",
+                  data: cacLtvData.map((d) => d.cac),
+                  borderColor: "#dc2626",
+                  backgroundColor: "rgba(220, 38, 38, 0.1)",
+                  borderWidth: 2,
+                  tension: 0.3,
+                },
+                {
                   label: "LTV (ZAR)",
-                  data: ltvValues,
-                  backgroundColor: "#e8ddd4",
-                  borderColor: "#d4c4b0",
-                  borderWidth: 1,
+                  data: cacLtvData.map((d) => d.ltv),
+                  borderColor: "#16a34a",
+                  backgroundColor: "rgba(22, 163, 74, 0.1)",
+                  borderWidth: 2,
+                  tension: 0.3,
                 },
               ],
             }}
@@ -2458,7 +2725,7 @@ const RetentionLTV = ({ activeSection, currentUser, isInvestorView }) => {
               maintainAspectRatio: false,
               plugins: {
                 legend: {
-                  display: false,
+                  position: "top",
                 },
               },
               scales: {
@@ -2466,156 +2733,163 @@ const RetentionLTV = ({ activeSection, currentUser, isInvestorView }) => {
                   beginAtZero: true,
                   title: {
                     display: true,
-                    text: "LTV (ZAR)",
-                  },
-                },
-                x: {
-                  title: {
-                    display: false,
+                    text: "Value (ZAR)",
                   },
                 },
               },
             }}
           />
         </div>
+        <ChartActions 
+          onAddNotes={handleCacLtvAddNotes}
+          onViewAnalysis={handleCacLtvViewAnalysis}
+        />
       </div>
-      <div
-        style={{
-          backgroundColor: "#f7f3f0",
-          padding: "15px",
-          borderRadius: "6px",
-          marginTop: "20px",
-        }}
-      >
-        <h3 style={{ color: "#72542b", marginTop: 0 }}>Churn Analysis</h3>
-        <p style={{ color: "#5d4037" }}>
-          Current churn rate: <strong>{churnRate}%</strong> (Industry average: 12%)
-        </p>
-      </div>
-
-      <DownloadModal
-        isOpen={showDownloadModal}
-        onClose={() => setShowDownloadModal(false)}
-        onDownload={handleDownload}
-        availableSections={[
-          { id: "retention-rates", label: "Retention Rates" },
-          { id: "ltv-values", label: "LTV Values" },
-          { id: "churn-rate", label: "Churn Rate" },
-          { id: "summary", label: "Summary Statistics" },
-        ]}
-        sectionTitle="Retention & LTV"
-      />
     </div>
   )
 }
 
-// SalesVelocity Component - HAS MONTHLY X-AXIS (Line chart)
-const SalesVelocity = ({ activeSection, currentUser, isInvestorView, financialYearStartMonth }) => {
-  const [velocityData, setVelocityData] = useState(Array(12).fill(0))
-  const [showEditForm, setShowEditForm] = useState(false)
-  const [showDownloadModal, setShowDownloadModal] = useState(false)
+// Pipeline Table Component
+const PipelineTable = ({ activeSection, currentUser, isInvestorView }) => {
+  const [deals, setDeals] = useState([])
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [confirmDialog, setConfirmDialog] = useState({ show: false, dealId: null })
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+
+  const [newDeal, setNewDeal] = useState({
+    clientName: "",
+    segment: "",
+    stage: "",
+    probability: 0,
+    expectedClose: "",
+    dealValue: 0,
+    source: "",
+    owner: "",
+  })
   const [isLoading, setIsLoading] = useState(true)
-  const [financialYearMonths, setFinancialYearMonths] = useState([])
 
   useEffect(() => {
-    if (financialYearStartMonth) {
-      const months = getFinancialYearMonths(financialYearStartMonth)
-      setFinancialYearMonths(months)
+    if (currentUser && activeSection === "pipeline-table") {
+      loadDeals()
     }
-  }, [financialYearStartMonth])
+  }, [currentUser, activeSection, selectedYear])
 
-  const saveSalesVelocityData = async () => {
-    if (!currentUser) {
-      alert("Please log in to save data.")
-      return
-    }
-    try {
-      await setDoc(doc(db, "sales-velocity", currentUser.uid), { 
-        velocityData,
-        lastUpdated: new Date().toISOString()
-      })
-      setShowEditForm(false)
-      alert("Sales velocity data saved successfully!")
-    } catch (error) {
-      console.error("Error saving sales velocity data:", error)
-      alert("Error saving data")
-    }
-  }
-
-  const loadSalesVelocityData = async () => {
+  const loadDeals = async () => {
     if (!currentUser) return
     try {
       setIsLoading(true)
-      const docRef = doc(db, "sales-velocity", currentUser.uid)
-      const docSnap = await getDoc(docRef)
-      if (docSnap.exists()) {
-        setVelocityData(docSnap.data().velocityData || Array(12).fill(0))
-      } else {
-        // Initialize with empty data if no document exists
-        await setDoc(docRef, {
-          velocityData: Array(12).fill(0),
-          lastUpdated: new Date().toISOString()
-        })
-      }
+      const q = query(
+        collection(db, "pipeline-deals"), 
+        where("userId", "==", currentUser.uid),
+        where("year", "==", selectedYear)
+      )
+      const querySnapshot = await getDocs(q)
+      const dealsData = []
+      querySnapshot.forEach((doc) => {
+        dealsData.push({ id: doc.id, ...doc.data() })
+      })
+      setDeals(dealsData)
     } catch (error) {
-      console.error("Error loading sales velocity data:", error)
+      console.error("Error loading deals:", error)
     } finally {
       setIsLoading(false)
     }
   }
 
-  useEffect(() => {
-    if (currentUser) {
-      loadSalesVelocityData()
+  const addDeal = async () => {
+    if (!currentUser || isInvestorView) {
+      alert("You cannot add deals in this mode.")
+      return
     }
-  }, [currentUser])
-
-  const updateVelocityValue = (index, value) => {
-    const newData = [...velocityData]
-    newData[index] = Number.parseFloat(value) || 0
-    setVelocityData(newData)
+    try {
+      const riskAdjustedValue = (newDeal.dealValue * newDeal.probability) / 100
+      await addDoc(collection(db, "pipeline-deals"), {
+        clientName: newDeal.clientName,
+        segment: newDeal.segment,
+        stage: newDeal.stage,
+        probability: newDeal.probability,
+        expectedClose: newDeal.expectedClose,
+        dealValue: newDeal.dealValue,
+        riskAdjustedValue,
+        source: newDeal.source,
+        owner: newDeal.owner,
+        userId: currentUser.uid,
+        year: selectedYear,
+        createdAt: new Date().toISOString(),
+      })
+      setNewDeal({
+        clientName: "",
+        segment: "",
+        stage: "",
+        probability: 0,
+        expectedClose: "",
+        dealValue: 0,
+        source: "",
+        owner: "",
+      })
+      setShowAddForm(false)
+      loadDeals()
+      alert("Deal added successfully!")
+    } catch (error) {
+      console.error("Error adding deal:", error)
+      alert("Error adding deal")
+    }
   }
 
-  const handleDownload = (selectedSections) => {
-    const currentVelocity = velocityData[velocityData.length - 1] || 0
-    const firstVelocity = velocityData[0] || 0
-    const improvement = firstVelocity > 0 ? firstVelocity - currentVelocity : 0
-
-    const data = {
-      "velocity-data": velocityData,
-      summary: {
-        currentVelocity: currentVelocity,
-        improvement: improvement,
-        averageVelocity:
-          velocityData.length > 0
-            ? (velocityData.reduce((sum, val) => sum + val, 0) / velocityData.length).toFixed(2)
-            : 0,
-        months: financialYearMonths,
-      },
+  const deleteDeal = async (dealId) => {
+    if (!currentUser || isInvestorView) {
+      alert("You cannot delete deals in this mode.")
+      return
     }
-    downloadData(data, "sales_velocity", selectedSections)
+    setConfirmDialog({ show: true, dealId })
   }
 
-  if (activeSection !== "sales-velocity") return null
+  const handleConfirmDelete = async () => {
+    try {
+      await deleteDoc(doc(db, "pipeline-deals", confirmDialog.dealId))
+      loadDeals()
+      alert("Deal deleted successfully!")
+    } catch (error) {
+      console.error("Error deleting deal:", error)
+      alert("Error deleting deal")
+    } finally {
+      setConfirmDialog({ show: false, dealId: null })
+    }
+  }
+
+  const handleCancelDelete = () => {
+    setConfirmDialog({ show: false, dealId: null })
+  }
+
+  const handleStageDistributionAddNotes = () => {
+    alert("Add Notes functionality for Pipeline Stage Distribution")
+  }
+
+  const handleStageDistributionViewAnalysis = () => {
+    alert("View Analysis functionality for Pipeline Stage Distribution")
+  }
+
+  if (activeSection !== "pipeline-table") return null
 
   if (isLoading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '200px',
-        backgroundColor: '#fdfcfb',
-        borderRadius: '8px'
-      }}>
-        <div>Loading sales velocity data...</div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "200px",
+          backgroundColor: "#fdfcfb",
+          borderRadius: "8px",
+        }}
+      >
+        <div>Loading deals...</div>
       </div>
     )
   }
 
-  const currentVelocity = velocityData[velocityData.length - 1] || 0
-  const firstVelocity = velocityData[0] || 0
-  const improvement = firstVelocity > 0 ? firstVelocity - currentVelocity : 0
+  const totalPipelineValue = deals.reduce((sum, deal) => sum + deal.dealValue, 0)
+  const totalRiskAdjustedValue = deals.reduce((sum, deal) => sum + deal.riskAdjustedValue, 0)
 
   return (
     <div
@@ -2627,48 +2901,167 @@ const SalesVelocity = ({ activeSection, currentUser, isInvestorView, financialYe
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <div>
-          <h2 style={{ color: "#5d4037", marginTop: 0 }}>Sales Velocity (Days to Close)</h2>
-          {financialYearStartMonth && (
-            <p style={{ color: "#7d5a50", fontSize: "14px", margin: "5px 0 0 0" }}>
-              Financial Year starts in {financialYearMonths[0]}
-            </p>
-          )}
-        </div>
-        <div style={{ display: "flex", gap: "10px" }}>
-          {!isInvestorView && (
-            <button
-              onClick={() => setShowEditForm(!showEditForm)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              {showEditForm ? "Cancel" : "Edit Data"}
-            </button>
-          )}
-          <button
-            onClick={() => setShowDownloadModal(true)}
+      {confirmDialog.show && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
             style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
+              backgroundColor: "#fdfcfb",
+              padding: "30px",
+              borderRadius: "8px",
+              maxWidth: "400px",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
             }}
           >
-            Download
-          </button>
+            <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px" }}>Confirm Deletion</h3>
+            <p style={{ color: "#72542b", marginBottom: "25px" }}>
+              Are you sure you want to delete this deal? This action cannot be undone.
+            </p>
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button
+                onClick={handleCancelDelete}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#d4c4b0",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#dc2626",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* REMOVED: Section Notes completely removed from Pipeline Table */}
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Pipeline Table</h2>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+            style={{
+              padding: "8px 12px",
+              border: "1px solid #d4c4b0",
+              borderRadius: "4px",
+              backgroundColor: "#fdfcfb",
+              color: "#5d4037",
+            }}
+          >
+            {[2023, 2024, 2025, 2026].map(year => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
+          {!isInvestorView && (
+            <>
+              <button
+                onClick={() => setShowAddForm(!showAddForm)}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <FaPlus /> Add Data
+              </button>
+              <button
+                onClick={() => alert("Add KPI functionality")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#7d5a50",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <FaPlus /> Add KPI
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      {!isInvestorView && showEditForm && (
+      {/* Summary */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "15px", marginBottom: "20px" }}>
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px" }}>Total Deals</div>
+          <div style={{ fontSize: "24px", color: "#5d4037", fontWeight: "bold" }}>{deals.length}</div>
+        </div>
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px" }}>Total Pipeline Value</div>
+          <div style={{ fontSize: "24px", color: "#5d4037", fontWeight: "bold" }}>
+            R {totalPipelineValue.toLocaleString()}
+          </div>
+        </div>
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px" }}>Risk Adjusted Value</div>
+          <div style={{ fontSize: "24px", color: "#5d4037", fontWeight: "bold" }}>
+            R {totalRiskAdjustedValue.toLocaleString()}
+          </div>
+        </div>
+      </div>
+
+      {!isInvestorView && showAddForm && (
         <div
           style={{
             backgroundColor: "#f7f3f0",
@@ -2677,27 +3070,131 @@ const SalesVelocity = ({ activeSection, currentUser, isInvestorView, financialYe
             marginBottom: "20px",
           }}
         >
-          <h3 style={{ color: "#72542b", marginTop: 0 }}>Edit Sales Velocity Data</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "15px" }}>
-            {financialYearMonths.map((month, index) => (
-              <div key={month} style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
-                <label style={{ color: "#72542b", fontSize: "14px" }}>{month}:</label>
-                <input
-                  type="number"
-                  value={velocityData[index]}
-                  onChange={(e) => updateVelocityValue(index, e.target.value)}
-                  style={{
-                    padding: "6px",
-                    border: "1px solid #d4c4b0",
-                    borderRadius: "4px",
-                  }}
-                  placeholder="Days"
-                />
-              </div>
-            ))}
+          <h3 style={{ color: "#72542b", marginTop: 0 }}>Add New Deal</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Client / Deal</label>
+              <input
+                type="text"
+                value={newDeal.clientName}
+                onChange={(e) => setNewDeal({ ...newDeal, clientName: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Segment</label>
+              <input
+                type="text"
+                value={newDeal.segment}
+                onChange={(e) => setNewDeal({ ...newDeal, segment: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Stage</label>
+              <select
+                value={newDeal.stage}
+                onChange={(e) => setNewDeal({ ...newDeal, stage: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              >
+                <option value="">Select Stage</option>
+                <option value="Proposal">Proposal</option>
+                <option value="Negotiation">Negotiation</option>
+                <option value="Qualification">Qualification</option>
+                <option value="Closed Won">Closed Won</option>
+                <option value="Closed Lost">Closed Lost</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Probability %</label>
+              <input
+                type="number"
+                value={newDeal.probability}
+                onChange={(e) => setNewDeal({ ...newDeal, probability: Number(e.target.value) })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+                min="0"
+                max="100"
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Expected Close</label>
+              <input
+                type="date"
+                value={newDeal.expectedClose}
+                onChange={(e) => setNewDeal({ ...newDeal, expectedClose: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Deal Value (ZAR)</label>
+              <input
+                type="number"
+                value={newDeal.dealValue}
+                onChange={(e) => setNewDeal({ ...newDeal, dealValue: Number(e.target.value) })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Source</label>
+              <input
+                type="text"
+                value={newDeal.source}
+                onChange={(e) => setNewDeal({ ...newDeal, source: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Owner</label>
+              <input
+                type="text"
+                value={newDeal.owner}
+                onChange={(e) => setNewDeal({ ...newDeal, owner: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
           </div>
           <button
-            onClick={saveSalesVelocityData}
+            onClick={addDeal}
             style={{
               padding: "8px 16px",
               backgroundColor: "#16a34a",
@@ -2708,632 +3205,167 @@ const SalesVelocity = ({ activeSection, currentUser, isInvestorView, financialYe
               marginTop: "15px",
             }}
           >
-            Save Data
+            Add Deal
           </button>
         </div>
       )}
 
-      <div style={{ height: "400px" }}>
-        <Line
-          data={{
-            labels: financialYearMonths,
-            datasets: [
-              {
-                label: "Average Days to Close",
-                data: velocityData,
-                borderColor: "#9c7c5f",
-                backgroundColor: "rgba(156, 124, 95, 0.1)",
-                borderWidth: 2,
-                tension: 0.1,
-                fill: true,
-              },
-            ],
-          }}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                position: "top",
-              },
-            },
-            scales: {
-              y: {
-                beginAtZero: true,
-                title: {
-                  display: true,
-                  text: "Days",
-                },
-              },
-              x: {
-                title: {
-                  display: false,
-                },
-              },
-            },
-          }}
-        />
-      </div>
-      <div
-        style={{
-          backgroundColor: "#f7f3f0",
-          padding: "15px",
-          borderRadius: "6px",
-          marginTop: "20px",
-        }}
-      >
-        <div
+      {/* Deals Table */}
+      <div style={{ overflowX: "auto" }}>
+        <table
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-            gap: "15px",
+            width: "100%",
+            borderCollapse: "collapse",
+            backgroundColor: "#f7f3f0",
+            borderRadius: "6px",
+            overflow: "hidden",
           }}
         >
-          <div>
-            <h3 style={{ color: "#72542b", marginTop: 0 }}>Current Velocity</h3>
-            <p
-              style={{
-                color: "#5d4037",
-                fontSize: "24px",
-                fontWeight: "bold",
-                margin: "5px 0",
-              }}
-            >
-              {currentVelocity} days
-            </p>
-          </div>
-          <div>
-            <h3 style={{ color: "#72542b", marginTop: 0 }}>Improvement</h3>
-            <p
-              style={{
-                color: improvement > 0 ? "#4CAF50" : "#5d4037",
-                fontSize: "24px",
-                fontWeight: "bold",
-                margin: "5px 0",
-              }}
-            >
-              {improvement > 0 ? "↓" : ""} {Math.abs(improvement)} days
-            </p>
-          </div>
-          <div>
-            <h3 style={{ color: "#72542b", marginTop: 0 }}>Industry Avg</h3>
-            <p
-              style={{
-                color: "#5d4037",
-                fontSize: "24px",
-                fontWeight: "bold",
-                margin: "5px 0",
-              }}
-            >
-              45 days
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <DownloadModal
-        isOpen={showDownloadModal}
-        onClose={() => setShowDownloadModal(false)}
-        onDownload={handleDownload}
-        availableSections={[
-          { id: "velocity-data", label: "Sales Velocity Data" },
-          { id: "summary", label: "Summary Statistics" },
-        ]}
-        sectionTitle="Sales Velocity"
-      />
-    </div>
-  )
-}
-
-// RepeatCustomers Component - NO MONTHLY X-AXIS (Has years, not months)
-const RepeatCustomers = ({ activeSection, currentUser, isInvestorView }) => {
-  const [repeatData, setRepeatData] = useState([0, 0, 0, 0, 0])
-  const [churnData, setChurnData] = useState([0, 0, 0, 0, 0])
-  const [loyaltyImpact, setLoyaltyImpact] = useState(0)
-  const [showEditForm, setShowEditForm] = useState(false)
-  const [showDownloadModal, setShowDownloadModal] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-  const years = ["2019", "2020", "2021", "2022", "2023"]
-
-  const saveRepeatCustomersData = async () => {
-    if (!currentUser) {
-      alert("Please log in to save data.")
-      return
-    }
-    try {
-      await setDoc(doc(db, "repeat-customers", currentUser.uid), { 
-        repeatData, 
-        churnData, 
-        loyaltyImpact,
-        lastUpdated: new Date().toISOString()
-      })
-      setShowEditForm(false)
-      alert("Repeat customers data saved successfully!")
-    } catch (error) {
-      console.error("Error saving repeat customers data:", error)
-      alert("Error saving data")
-    }
-  }
-
-  const loadRepeatCustomersData = async () => {
-    if (!currentUser) return
-    try {
-      setIsLoading(true)
-      const docRef = doc(db, "repeat-customers", currentUser.uid)
-      const docSnap = await getDoc(docRef)
-      if (docSnap.exists()) {
-        const data = docSnap.data()
-        setRepeatData(data.repeatData || [0, 0, 0, 0, 0])
-        setChurnData(data.churnData || [0, 0, 0, 0, 0])
-        setLoyaltyImpact(data.loyaltyImpact || 0)
-      } else {
-        // Initialize with empty data if no document exists
-        await setDoc(docRef, {
-          repeatData: [0, 0, 0, 0, 0],
-          churnData: [0, 0, 0, 0, 0],
-          loyaltyImpact: 0,
-          lastUpdated: new Date().toISOString()
-        })
-      }
-    } catch (error) {
-      console.error("Error loading repeat customers data:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (currentUser) {
-      loadRepeatCustomersData()
-    }
-  }, [currentUser])
-
-  const updateRepeatValue = (index, value) => {
-    const newData = [...repeatData]
-    newData[index] = Number.parseFloat(value) || 0
-    setRepeatData(newData)
-  }
-
-  const updateChurnValue = (index, value) => {
-    const newData = [...churnData]
-    newData[index] = Number.parseFloat(value) || 0
-    setChurnData(newData)
-  }
-
-  const handleDownload = (selectedSections) => {
-    const currentRepeatRate = repeatData[repeatData.length - 1] || 0
-    const currentChurnRate = churnData[churnData.length - 1] || 0
-
-    const data = {
-      "repeat-data": repeatData,
-      "churn-data": churnData,
-      "loyalty-impact": loyaltyImpact,
-      summary: {
-        currentRepeatRate: currentRepeatRate,
-        currentChurnRate: currentChurnRate,
-        loyaltyImpact: loyaltyImpact,
-        years: years,
-      },
-    }
-    downloadData(data, "repeat_customers", selectedSections)
-  }
-
-  if (activeSection !== "repeat-customers") return null
-
-  if (isLoading) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '200px',
-        backgroundColor: '#fdfcfb',
-        borderRadius: '8px'
-      }}>
-        <div>Loading repeat customers data...</div>
-      </div>
-    )
-  }
-
-  const currentRepeatRate = repeatData[repeatData.length - 1] || 0
-  const currentChurnRate = churnData[churnData.length - 1] || 0
-
-  return (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "20px",
-        margin: "20px 0",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Repeat Customers & Churn Rate</h2>
-        <div style={{ display: "flex", gap: "10px" }}>
-          {!isInvestorView && (
-            <button
-              onClick={() => setShowEditForm(!showEditForm)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              {showEditForm ? "Cancel" : "Edit Data"}
-            </button>
-          )}
-          <button
-            onClick={() => setShowDownloadModal(true)}
+          <thead>
+            <tr style={{ backgroundColor: "#5d4037", color: "#fdfcfb" }}>
+              <th style={{ padding: "12px", textAlign: "left", fontSize: "14px" }}>Client / Deal</th>
+              <th style={{ padding: "12px", textAlign: "left", fontSize: "14px" }}>Segment</th>
+              <th style={{ padding: "12px", textAlign: "left", fontSize: "14px" }}>Stage</th>
+              <th style={{ padding: "12px", textAlign: "left", fontSize: "14px" }}>Probability %</th>
+              <th style={{ padding: "12px", textAlign: "left", fontSize: "14px" }}>Expected Close</th>
+              <th style={{ padding: "12px", textAlign: "right", fontSize: "14px" }}>Deal Value (ZAR)</th>
+              <th style={{ padding: "12px", textAlign: "right", fontSize: "14px" }}>Risk Adjusted (ZAR)</th>
+              <th style={{ padding: "12px", textAlign: "left", fontSize: "14px" }}>Source</th>
+              <th style={{ padding: "12px", textAlign: "left", fontSize: "14px" }}>Owner</th>
+              {!isInvestorView && <th style={{ padding: "12px", textAlign: "center", fontSize: "14px" }}>Actions</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {deals.map((deal, index) => (
+              <tr
+                key={deal.id}
+                style={{
+                  borderBottom: "1px solid #e8ddd4",
+                  backgroundColor: index % 2 === 0 ? "#fdfcfb" : "#f7f3f0",
+                }}
+              >
+                <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>{deal.clientName}</td>
+                <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>{deal.segment}</td>
+                <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>{deal.stage}</td>
+                <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>{deal.probability}%</td>
+                <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>{deal.expectedClose}</td>
+                <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
+                  R {deal.dealValue.toLocaleString()}
+                </td>
+                <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
+                  R {deal.riskAdjustedValue.toLocaleString()}
+                </td>
+                <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>{deal.source}</td>
+                <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>{deal.owner}</td>
+                {!isInvestorView && (
+                  <td style={{ padding: "12px", textAlign: "center" }}>
+                    <div style={{ display: "flex", gap: "5px", justifyContent: "center" }}>
+                      <button
+                        onClick={() => deleteDeal(deal.id)}
+                        style={{
+                          padding: "6px",
+                          backgroundColor: "#dc2626",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                        title="Delete"
+                      >
+                        <FaTrashAlt size={14} />
+                      </button>
+                    </div>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {deals.length === 0 && (
+          <div
             style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
+              textAlign: "center",
+              padding: "40px",
+              color: "#72542b",
+              backgroundColor: "#f7f3f0",
+              borderRadius: "6px",
+              marginTop: "10px",
             }}
           >
-            Download
-          </button>
-        </div>
+            No deals in pipeline. Click "Add Data" to get started.
+          </div>
+        )}
       </div>
 
-      {!isInvestorView && showEditForm && (
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#72542b", marginTop: 0 }}>Edit Repeat Customers Data</h3>
-          <div style={{ marginBottom: "20px" }}>
-            <label style={{ color: "#72542b", display: "block", marginBottom: "5px" }}>
-              Loyalty Program Impact (%):
-            </label>
-            <input
-              type="number"
-              value={loyaltyImpact}
-              onChange={(e) => setLoyaltyImpact(Number.parseFloat(e.target.value) || 0)}
-              style={{
-                padding: "8px",
-                border: "1px solid #d4c4b0",
-                borderRadius: "4px",
-                width: "120px",
+      {/* Stage Distribution Chart */}
+      {deals.length > 0 && (
+        <div style={{ marginTop: "30px" }}>
+          <h3 style={{ color: "#5d4037" }}>Pipeline Stage Distribution</h3>
+          <div style={{ height: "300px" }}>
+            <Pie
+              data={{
+                labels: ["Proposal", "Negotiation", "Qualification", "Closed Won", "Closed Lost"],
+                datasets: [
+                  {
+                    label: "Deals by Stage",
+                    data: [
+                      deals.filter((d) => d.stage === "Proposal").length,
+                      deals.filter((d) => d.stage === "Negotiation").length,
+                      deals.filter((d) => d.stage === "Qualification").length,
+                      deals.filter((d) => d.stage === "Closed Won").length,
+                      deals.filter((d) => d.stage === "Closed Lost").length,
+                    ],
+                    backgroundColor: ["#9c7c5f", "#7d5a50", "#e8ddd4", "#16a34a", "#dc2626"],
+                    borderColor: "#fdfcfb",
+                    borderWidth: 2,
+                  },
+                ],
               }}
-              placeholder="Impact %"
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: "right",
+                  },
+                },
+              }}
             />
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-            <div>
-              <h4 style={{ color: "#72542b" }}>Repeat Customers (%)</h4>
-              {years.map((year, index) => (
-                <div key={year} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                  <span style={{ minWidth: "50px", color: "#72542b" }}>{year}:</span>
-                  <input
-                    type="number"
-                    value={repeatData[index]}
-                    onChange={(e) => updateRepeatValue(index, e.target.value)}
-                    style={{
-                      padding: "6px",
-                      border: "1px solid #d4c4b0",
-                      borderRadius: "4px",
-                      width: "80px",
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-            <div>
-              <h4 style={{ color: "#72542b" }}>Churn Rate (%)</h4>
-              {years.map((year, index) => (
-                <div key={year} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                  <span style={{ minWidth: "50px", color: "#72542b" }}>{year}:</span>
-                  <input
-                    type="number"
-                    value={churnData[index]}
-                    onChange={(e) => updateChurnValue(index, e.target.value)}
-                    style={{
-                      padding: "6px",
-                      border: "1px solid #d4c4b0",
-                      borderRadius: "4px",
-                      width: "80px",
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-          <button
-            onClick={saveRepeatCustomersData}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              marginTop: "15px",
-            }}
-          >
-            Save Data
-          </button>
+          <ChartActions 
+            onAddNotes={handleStageDistributionAddNotes}
+            onViewAnalysis={handleStageDistributionViewAnalysis}
+          />
         </div>
       )}
-
-      <div style={{ height: "400px" }}>
-        <Bar
-          data={{
-            labels: years,
-            datasets: [
-              {
-                label: "% Repeat Customers",
-                data: repeatData,
-                backgroundColor: "#9c7c5f",
-                borderColor: "#5d4037",
-                borderWidth: 1,
-              },
-              {
-                label: "% Churn Rate",
-                data: churnData,
-                backgroundColor: "#F44336",
-                borderColor: "#D32F2F",
-                borderWidth: 1,
-              },
-            ],
-          }}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                position: "top",
-              },
-            },
-            scales: {
-              y: {
-                beginAtZero: true,
-                title: {
-                  display: true,
-                  text: "Percentage (%)",
-                },
-              },
-              x: {
-                title: {
-                  display: false,
-                },
-              },
-            },
-          }}
-        />
-      </div>
-      <div
-        style={{
-          backgroundColor: "#f7f3f0",
-          padding: "15px",
-          borderRadius: "6px",
-          marginTop: "20px",
-        }}
-      >
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-            gap: "15px",
-          }}
-        >
-          <div>
-            <h3 style={{ color: "#72542b", marginTop: 0 }}>Current Repeat Rate</h3>
-            <p
-              style={{
-                color: "#5d4037",
-                fontSize: "24px",
-                fontWeight: "bold",
-                margin: "5px 0",
-              }}
-            >
-              {currentRepeatRate}%
-            </p>
-          </div>
-          <div>
-            <h3 style={{ color: "#72542b", marginTop: 0 }}>Current Churn Rate</h3>
-            <p
-              style={{
-                color: "#F44336",
-                fontSize: "24px",
-                fontWeight: "bold",
-                margin: "5px 0",
-              }}
-            >
-              {currentChurnRate}%
-            </p>
-          </div>
-          <div>
-            <h3 style={{ color: "#72542b", marginTop: 0 }}>Loyalty Program Impact</h3>
-            <p
-              style={{
-                color: "#4CAF50",
-                fontSize: "24px",
-                fontWeight: "bold",
-                margin: "5px 0",
-              }}
-            >
-              +{loyaltyImpact}%
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <DownloadModal
-        isOpen={showDownloadModal}
-        onClose={() => setShowDownloadModal(false)}
-        onDownload={handleDownload}
-        availableSections={[
-          { id: "repeat-data", label: "Repeat Customer Data" },
-          { id: "churn-data", label: "Churn Rate Data" },
-          { id: "loyalty-impact", label: "Loyalty Program Impact" },
-          { id: "summary", label: "Summary Statistics" },
-        ]}
-        sectionTitle="Repeat Customers"
-      />
     </div>
   )
 }
 
-// Main MarketingSales Component
-const MarketingSales = () => {
-  const [activeSection, setActiveSection] = useState("new-leads")
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
-
-  const [isInvestorView, setIsInvestorView] = useState(false)
-  const [viewingSMEId, setViewingSMEId] = useState(null)
-  const [viewingSMEName, setViewingSMEName] = useState("")
+// Main Component
+export default function MarketingSales() {
+  const [activeSection, setActiveSection] = useState("pipeline-visibility")
   const [currentUser, setCurrentUser] = useState(null)
-  const [financialYearStartMonth, setFinancialYearStartMonth] = useState(1) // Default to January (1)
-  const [loadingFinancialYear, setLoadingFinancialYear] = useState(true)
-
-  // Fetch financial year start month from user profile
-  useEffect(() => {
-    const fetchFinancialYearStart = async (userId) => {
-      try {
-        setLoadingFinancialYear(true)
-        
-        // Get from universalProfiles collection - query for the logged in user's profile
-        const profilesQuery = query(
-          collection(db, "universalProfiles"),
-          where("userId", "==", userId)
-        )
-        
-        const querySnapshot = await getDocs(profilesQuery)
-        
-        if (!querySnapshot.empty) {
-          // Get the first matching document
-          const profileDoc = querySnapshot.docs[0]
-          const profileData = profileDoc.data()
-          
-          console.log("Profile data found:", profileData)
-          
-          if (profileData.entityOverview?.financialYearEnd) {
-            // financialYearEnd is in format "2025-02" where 02 is February
-            // The month number is the financial year start month
-            const financialYearEndStr = profileData.entityOverview.financialYearEnd
-            console.log("Financial Year End string:", financialYearEndStr)
-
-            // Split by "-" and get the month part
-            const parts = financialYearEndStr.split("-")
-            if (parts.length === 2) {
-              const month = parseInt(parts[1])
-              console.log("Parsed month:", month)
-              
-              if (!isNaN(month) && month >= 1 && month <= 12) {
-                setFinancialYearStartMonth(month)
-                console.log("Financial year start month set to:", month)
-              } else {
-                console.log("Invalid month parsed:", month)
-                setFinancialYearStartMonth(1) // Default to January
-              }
-            
-            } else {
-              console.log("Invalid financialYearEnd format:", financialYearEndStr)
-              setFinancialYearStartMonth(1) // Default to January
-            }
-          } else {
-            console.log("No financialYearEnd found in entityOverview")
-            setFinancialYearStartMonth(1) // Default to January
-          }
-        } else {
-          console.log("No universalProfiles document found for user:", userId)
-          
-          // Fallback: Try to get from user document
-          try {
-            const userDoc = await getDoc(doc(db, "universalProfiles", userId))
-            if (userDoc.exists()) {
-              const userData = userDoc.data()
-              console.log("User data found:", userData)
-              
-              if (userData.entityOverview?.financialYearEnd) {
-                const financialYearEndStr = userData.entityOverview.financialYearEnd
-                console.log("Financial Year End from user doc:", financialYearEndStr)
-                
-                const parts = financialYearEndStr.split("-")
-                if (parts.length === 2) {
-                  const month = parseInt(parts[1])
-                  if (!isNaN(month) && month >= 1 && month <= 12) {
-                    setFinancialYearStartMonth(month)
-                    console.log("Financial year start month set to:", month)
-                  }
-                }
-              }
-            }
-          } catch (fallbackError) {
-            console.error("Error in fallback fetch:", fallbackError)
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching financial year start:", error)
-        setFinancialYearStartMonth(1) // Default to January
-      } finally {
-        setLoadingFinancialYear(false)
-      }
-    }
-
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        if (isInvestorView && viewingSMEId) {
-          // If in investor view, fetch the SME's financial year
-          await fetchFinancialYearStart(viewingSMEId)
-        } else {
-          // If not in investor view, fetch the logged in user's financial year
-          await fetchFinancialYearStart(user.uid)
-        }
-      } else {
-        setLoadingFinancialYear(false)
-      }
-    })
-
-    return () => unsubscribe()
-  }, [isInvestorView, viewingSMEId])
-
-  useEffect(() => {
-    const investorViewMode = sessionStorage.getItem("investorViewMode")
-    const smeId = sessionStorage.getItem("viewingSMEId")
-    const smeName = sessionStorage.getItem("viewingSMEName")
-
-    if (investorViewMode === "true" && smeId) {
-      setIsInvestorView(true)
-      setViewingSMEId(smeId)
-      setViewingSMEName(smeName || "SME")
-      console.log("Investor view mode activated for SME:", smeId)
-    }
-  }, [])
+  const [isInvestorView, setIsInvestorView] = useState(false)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (isInvestorView && viewingSMEId) {
-        setCurrentUser({ uid: viewingSMEId })
-      } else {
-        setCurrentUser(user)
-      }
+      setCurrentUser(user)
     })
-
     return () => unsubscribe()
-  }, [isInvestorView, viewingSMEId])
-
-  const handleExitInvestorView = () => {
-    sessionStorage.removeItem("viewingSMEId")
-    sessionStorage.removeItem("viewingSMEName")
-    sessionStorage.removeItem("investorViewMode")
-    window.location.href = "/my-cohorts"
-  }
+  }, [])
 
   useEffect(() => {
     const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
+      const sidebar = document.querySelector("[data-sidebar]")
+      if (sidebar) {
+        const isCollapsed = sidebar.classList.contains("collapsed")
+        setIsSidebarCollapsed(isCollapsed)
+      }
     }
 
     checkSidebarState()
@@ -3358,15 +3390,12 @@ const MarketingSales = () => {
   })
 
   const sectionButtons = [
-    { id: "new-leads", label: "New Leads" },
-    { id: "lead-source-analysis", label: "Lead Source" },
-    { id: "cost-per-lead", label: "Cost/Lead" },
-    { id: "customer-acquisition-cost", label: "CAC" },
-    { id: "campaign-roi", label: "Campaign ROI" },
-    { id: "conversion-rate", label: "Conversion" },
-    { id: "retention-ltv", label: "Retention/LTV" },
-    { id: "sales-velocity", label: "Sales Velocity" },
-    { id: "repeat-customers", label: "Repeat/Churn" },
+    { id: "pipeline-visibility", label: "Pipeline Visibility" },
+    { id: "pipeline-sufficiency", label: "Pipeline Sufficiency" },
+    { id: "pipeline-quality", label: "Pipeline Quality" },
+    { id: "revenue-concentration", label: "Revenue Concentration" },
+    { id: "demand-sustainability", label: "Demand Sustainability" },
+    { id: "pipeline-table", label: "Pipeline Table" },
   ]
 
   return (
@@ -3379,24 +3408,19 @@ const MarketingSales = () => {
         {isInvestorView && (
           <div
             style={{
-              backgroundColor: "#e8f5e9",
-              padding: "16px 20px",
-              margin: "50px 0 20px 0",
-              borderRadius: "8px",
-              border: "2px solid #4caf50",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
+              backgroundColor: "#fff3cd",
+              border: "1px solid #ffeaa7",
+              padding: "15px",
+              borderRadius: "6px",
+              marginBottom: "20px",
+              textAlign: "center",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <span style={{ fontSize: "20px" }}>👁️</span>
-              <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
-                Investor View: Viewing {viewingSMEName}'s Marketing & Sales
-              </span>
-            </div>
+            <p style={{ color: "#856404", margin: "0 0 10px 0" }}>
+              You are viewing this dashboard in read-only investor mode.
+            </p>
             <button
-              onClick={handleExitInvestorView}
+              onClick={() => setIsInvestorView(false)}
               style={{
                 padding: "8px 16px",
                 backgroundColor: "#4caf50",
@@ -3421,11 +3445,24 @@ const MarketingSales = () => {
         )}
 
         <div style={{ padding: "20px" }}>
+          <h1 style={{ color: "#5d4037", marginBottom: "10px" }}>
+            Marketing & Pipeline Performance 
+          </h1>
+          <div style={{ marginBottom: "20px" }}>
+            <p style={{ color: "#72542b", fontSize: "16px", marginBottom: "5px" }}>
+              <strong>What this dashboard DOES:</strong> Assesses pipeline visibility, quality, concentration, and
+              demand risk
+            </p>
+            <p style={{ color: "#72542b", fontSize: "16px" }}>
+              <strong>What this dashboard does not do:</strong> Run campaigns, manage CRM, track social media
+            </p>
+          </div>
+
           <div
             style={{
               display: "flex",
               gap: "10px",
-              margin: "50px 0 20px 0",
+              margin: "20px 0",
               padding: "15px",
               backgroundColor: "#fdfcfb",
               borderRadius: "8px",
@@ -3448,7 +3485,7 @@ const MarketingSales = () => {
                   fontWeight: "600",
                   fontSize: "14px",
                   transition: "all 0.3s ease",
-                  minWidth: "100px",
+                  minWidth: "150px",
                   textAlign: "center",
                   flexShrink: 0,
                 }}
@@ -3458,58 +3495,26 @@ const MarketingSales = () => {
             ))}
           </div>
 
-          <NewLeads 
-            activeSection={activeSection} 
-            currentUser={currentUser} 
-            isInvestorView={isInvestorView} 
-            financialYearStartMonth={financialYearStartMonth}
+          <PipelineVisibility activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
+          <PipelineSufficiency
+            activeSection={activeSection}
+            currentUser={currentUser}
+            isInvestorView={isInvestorView}
           />
-          <LeadSourceAnalysis 
-            activeSection={activeSection} 
-            currentUser={currentUser} 
-            isInvestorView={isInvestorView} 
+          <PipelineQuality activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
+          <RevenueConcentration
+            activeSection={activeSection}
+            currentUser={currentUser}
+            isInvestorView={isInvestorView}
           />
-          <CostPerLead 
-            activeSection={activeSection} 
-            currentUser={currentUser} 
-            isInvestorView={isInvestorView} 
+          <DemandSustainability
+            activeSection={activeSection}
+            currentUser={currentUser}
+            isInvestorView={isInvestorView}
           />
-          <CustomerAcquisitionCost 
-            activeSection={activeSection} 
-            currentUser={currentUser} 
-            isInvestorView={isInvestorView} 
-            financialYearStartMonth={financialYearStartMonth}
-          />
-          <CampaignROI 
-            activeSection={activeSection} 
-            currentUser={currentUser} 
-            isInvestorView={isInvestorView} 
-          />
-          <ConversionRate 
-            activeSection={activeSection} 
-            currentUser={currentUser} 
-            isInvestorView={isInvestorView} 
-          />
-          <RetentionLTV 
-            activeSection={activeSection} 
-            currentUser={currentUser} 
-            isInvestorView={isInvestorView} 
-          />
-          <SalesVelocity 
-            activeSection={activeSection} 
-            currentUser={currentUser} 
-            isInvestorView={isInvestorView} 
-            financialYearStartMonth={financialYearStartMonth}
-          />
-          <RepeatCustomers 
-            activeSection={activeSection} 
-            currentUser={currentUser} 
-            isInvestorView={isInvestorView} 
-          />
+          <PipelineTable activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
         </div>
       </div>
     </div>
   )
 }
-
-export default MarketingSales
