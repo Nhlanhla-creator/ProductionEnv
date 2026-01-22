@@ -1078,4 +1078,5 @@ export default function LoginRegister() {
       )}
     </div>
   );
+  
 }
