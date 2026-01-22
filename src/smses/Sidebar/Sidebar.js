@@ -16,6 +16,7 @@ function SMESidebar() {
     "Company"
   )
 
+  
   // Check for investor view mode
   useEffect(() => {
     const investorViewMode = sessionStorage.getItem("investorViewMode")
