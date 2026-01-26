@@ -1,12 +1,12 @@
 import ReusableBillingHistory from "../../components/Subscriptions/BillingHistory";
 
-const BillingHistorySMSE = () => {
+const BillingHistoryInvestor = () => {
   return (
     <ReusableBillingHistory 
-      userType="sme"
+      userType="investor"
       showSidebarSpacing={true}
     />
   )
 }
 
-export default BillingHistorySMSE;
+export default BillingHistoryInvestor;
