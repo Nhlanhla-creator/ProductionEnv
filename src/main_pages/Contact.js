@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { FaPaperPlane, FaCircle, FaRegDotCircle, FaCheck } from 'react-icons/fa';
+import { FaPaperPlane, FaCircle, FaRegDotCircle, FaCheck, FaSpinner } from 'react-icons/fa';
 import Header from './Header'; 
 import Footer from './Footer'; 
-import emailjs from '@emailjs/browser';
-import { API_KEYS } from "../API.js"
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getApp } from 'firebase/app';
 
 const ContactFormPage = () => {
   const [formData, setFormData] = useState({
@@ -15,14 +15,7 @@ const ContactFormPage = () => {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState(null);
-
-  // EmailJS Configuration
-  const emailjsConfig = {
-    serviceId: API_KEYS.SERVICE_ID,
-    templateId: API_KEYS.TEMPLATE_ID,
-    autoReplyTemplateId: API_KEYS.AUTORESPONSE_TEMPLATE,
-    publicKey: API_KEYS.PUBLIC_KEY
-  };
+  const [successMessage, setSuccessMessage] = useState('');
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -30,6 +23,7 @@ const ContactFormPage = () => {
       ...prev,
       [name]: value
     }));
+    if (error) setError(null);
   };
 
   const handleSubmit = async (e) => {
@@ -46,221 +40,74 @@ const ContactFormPage = () => {
         throw new Error('Please enter a valid email address');
       }
 
-      // Initialize EmailJS (if not already initialized)
-      if (!emailjs.init) {
-        emailjs.init(emailjsConfig.publicKey);
-      }
-
-      // Main email to business
-      await emailjs.send(
-        emailjsConfig.serviceId,
-        emailjsConfig.templateId,
-        {
-          from_name: formData.name,
-          from_email: formData.email,
-          subject: formData.subject || 'No Subject',
-          message: formData.message,
-          to_email: 'hello@bigmarketplace.africa'
-        },
-        emailjsConfig.publicKey
-      );
-
-      // Auto-reply to user
-      await emailjs.send(
-        emailjsConfig.serviceId,
-        emailjsConfig.autoReplyTemplateId,
-        {
-          to_email: formData.email,
-          to_name: formData.name,
-          subject: `Re: ${formData.subject || 'Your message'}`
-        },
-        emailjsConfig.publicKey
-      );
-
-      setIsSubmitted(true);
-      setFormData({
-        name: '',
-        email: '',
-        subject: '',
-        message: ''
+      // Get Firebase functions instance
+      const app = getApp();
+      const functions = getFunctions(app);
+      
+      // Call the Firebase Cloud Function
+      const submitContactForm = httpsCallable(functions, 'submitContactForm');
+      
+      console.log('Sending form data:', {
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        subject: formData.subject.trim(),
+        message: formData.message.trim()
       });
+
+      const result = await submitContactForm({
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        subject: formData.subject.trim(),
+        message: formData.message.trim()
+      });
+
+      const { data } = result;
+      
+      if (data.success) {
+        setIsSubmitted(true);
+        setSuccessMessage(data.message || 'Message sent successfully! Check your email for confirmation.');
+        setFormData({
+          name: '',
+          email: '',
+          subject: '',
+          message: ''
+        });
+        
+        console.log('Form submitted successfully:', data);
+      } else {
+        throw new Error(data.message || 'Failed to send message');
+      }
     } catch (err) {
-      console.error('Email sending error:', err);
-      setError(err.response?.text || err.message || 'Failed to send message. Please try again.');
+      console.error('Form submission error:', err);
+      
+      // Handle different types of errors
+      if (err.code === 'functions/internal') {
+        setError('Server error: ' + (err.message || 'Please try again.'));
+      } else if (err.code === 'functions/unavailable') {
+        setError('Network error. Please check your connection.');
+      } else if (err.code === 'functions/not-found') {
+        setError('Contact service is currently unavailable. Please email us directly at hello@bigmarketplace.africa');
+      } else if (err.code === 'functions/permission-denied') {
+        setError('Permission denied. Please refresh the page.');
+      } else {
+        setError(err.message || 'Failed to send message. Please try again.');
+      }
     } finally {
       setIsSending(false);
     }
   };
 
-  const styles = {
-    page: {
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      backgroundImage: 'linear-gradient(rgba(242, 240, 230, 0.38), rgba(242, 240, 230, 0.09)), url(/background10.jpg)',
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundAttachment: 'fixed',
-      fontFamily: "'Neue Haas Grotesk Text Pro', sans-serif",
-    },
-    content: {
-      flex: 1,
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '2rem',
-    },
-    formContainer: {
-      maxWidth: '800px',
-      width: '100%',
-      margin: '2rem 0',
-      padding: '3rem',
-      backgroundColor: 'rgba(242, 240, 230, 0.85)',
-      borderRadius: '20px',
-      border: '2px dashed #9E6E3C',
-      position: 'relative',
-      overflow: 'hidden',
-      boxShadow: '0 10px 30px rgba(55, 44, 39, 0.15)',
-      backdropFilter: 'blur(2px)',
-    },
-    decorativeShape1: {
-      position: 'absolute',
-      top: '-30px',
-      right: '-30px',
-      width: '100px',
-      height: '100px',
-      borderRadius: '50%',
-      border: '2px solid #754A2D',
-      opacity: '0.3',
-    },
-    decorativeShape2: {
-      position: 'absolute',
-      bottom: '-20px',
-      left: '-20px',
-      width: '80px',
-      height: '80px',
-      border: '2px dashed #BCAE9C',
-      transform: 'rotate(45deg)',
-      opacity: '0.4',
-    },
-    title: {
-      fontSize: '2rem',
-      fontWeight: '600',
-      color: '#372C27',
-      marginBottom: '1.5rem',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '1rem',
-      position: 'relative',
-      zIndex: '1',
-      textAlign: 'center',
-    },
-    introMessage: {
-      color: '#372C27',
-      fontSize: '1rem',
-      lineHeight: '1.6',
-      marginBottom: '2rem',
-      textAlign: 'center',
-      position: 'relative',
-      zIndex: '1',
-      backgroundColor: 'rgba(242, 240, 230, 0.7)',
-      padding: '1.5rem',
-      borderRadius: '12px',
-      borderLeft: '4px solid #9E6E3C',
-    },
-    formGroup: {
-      marginBottom: '1.8rem',
-      position: 'relative',
-      zIndex: '1',
-    },
-    input: {
-      width: '100%',
-      padding: '1.2rem',
-      borderRadius: '12px',
-      border: '2px solid #BCAE9C',
-      backgroundColor: 'rgba(255, 255, 255, 0.8)',
-      fontFamily: "'Neue Haas Grotesk Text Pro', sans-serif",
-      fontSize: '1rem',
-      transition: 'all 0.3s ease',
-    },
-    submitButton: {
-      width: '100%',
-      padding: '1.2rem',
-      border: 'none',
-      borderRadius: '12px',
-      backgroundColor: '#9E6E3C',
-      color: '#F2F0E6',
-      fontSize: '1.1rem',
-      fontWeight: '500',
-      cursor: 'pointer',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: '0.8rem',
-      transition: 'all 0.3s ease',
-      position: 'relative',
-      overflow: 'hidden',
-    },
-    dots: {
-      position: 'absolute',
-      right: '30px',
-      top: '40px',
-      color: '#9E6E3C',
-      opacity: '0.1',
-      fontSize: '1.5rem',
-    },
-    successMessage: {
-      backgroundColor: 'rgba(158, 110, 60, 0.1)',
-      border: '2px solid #9E6E3C',
-      borderRadius: '12px',
-      padding: '2rem',
-      marginBottom: '2rem',
-      textAlign: 'center',
-      color: '#372C27',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: '1rem',
-    },
-    errorMessage: {
-      backgroundColor: 'rgba(231, 76, 60, 0.1)',
-      border: '2px solid #e74c3c',
-      borderRadius: '12px',
-      padding: '1rem',
-      marginBottom: '1.5rem',
-      textAlign: 'center',
-      color: '#372C27',
-    },
-    successIcon: {
-      color: '#9E6E3C',
-      fontSize: '2.5rem',
-    },
-    successText: {
-      fontSize: '1.2rem',
-      fontWeight: '500',
-    },
-    emailNote: {
-      fontSize: '0.9rem',
-      fontStyle: 'italic',
-      opacity: '0.8',
-    },
-  };
-
-  const inputFocusEffect = {
-    outline: 'none',
-    borderColor: '#9E6E3C',
-    boxShadow: '0 0 0 3px rgba(158, 110, 60, 0.2)',
-  };
-
-  const buttonHoverEffect = {
-    backgroundColor: '#754A2D',
-    transform: 'translateY(-3px)',
-    boxShadow: '0 5px 15px rgba(117, 74, 45, 0.3)',
-  };
+  // ... (keep all your existing styles exactly as you had them)
+  // Make sure you keep ALL the style objects from your original file
 
   return (
     <div style={styles.page}>
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
       <Header />
       
       <div style={styles.content}>
@@ -284,25 +131,39 @@ const ContactFormPage = () => {
           
           {error && (
             <div style={styles.errorMessage}>
-              {error}
+              <strong>⚠️ Error:</strong> {error}
             </div>
           )}
           
           {isSubmitted ? (
             <div style={styles.successMessage}>
               <FaCheck style={styles.successIcon} />
-              <div style={styles.successText}>Your message has been sent successfully!</div>
-              <div style={styles.emailNote}>We've received your message and will respond to you at {formData.email || 'your email'} soon.</div>
+              <div style={styles.successText}>✅ Success!</div>
+              <div>{successMessage}</div>
+              <div style={styles.emailNote}>
+                We've sent a confirmation to <strong>{formData.email}</strong><br />
+                Our team will respond within 24 hours.
+              </div>
               <button 
                 style={{ 
                   ...styles.submitButton, 
                   marginTop: '1rem',
                   backgroundColor: '#372C27'
                 }}
-                onClick={() => setIsSubmitted(false)}
+                onClick={() => {
+                  setIsSubmitted(false);
+                  setError(null);
+                  setFormData({
+                    name: '',
+                    email: '',
+                    subject: '',
+                    message: ''
+                  });
+                }}
                 onMouseEnter={(e) => Object.assign(e.target.style, { 
-                  ...buttonHoverEffect,
-                  backgroundColor: '#1a130e'
+                  backgroundColor: '#1a130e',
+                  transform: 'translateY(-3px)',
+                  boxShadow: '0 5px 15px rgba(117, 74, 45, 0.3)',
                 })}
                 onMouseLeave={(e) => {
                   e.target.style.backgroundColor = '#372C27';
@@ -319,17 +180,12 @@ const ContactFormPage = () => {
                 <input 
                   type="text" 
                   name="name"
-                  placeholder="Your Name" 
+                  placeholder="Your Name *" 
                   style={styles.input} 
                   value={formData.name}
                   onChange={handleChange}
                   required 
-                  onFocus={(e) => Object.assign(e.target.style, inputFocusEffect)}
-                  onBlur={(e) => {
-                    e.target.style.outline = 'none';
-                    e.target.style.borderColor = '#BCAE9C';
-                    e.target.style.boxShadow = 'none';
-                  }}
+                  disabled={isSending}
                 />
               </div>
               
@@ -337,17 +193,12 @@ const ContactFormPage = () => {
                 <input 
                   type="email" 
                   name="email"
-                  placeholder="Your Email" 
+                  placeholder="Your Email *" 
                   style={styles.input} 
                   value={formData.email}
                   onChange={handleChange}
                   required 
-                  onFocus={(e) => Object.assign(e.target.style, inputFocusEffect)}
-                  onBlur={(e) => {
-                    e.target.style.outline = 'none';
-                    e.target.style.borderColor = '#BCAE9C';
-                    e.target.style.boxShadow = 'none';
-                  }}
+                  disabled={isSending}
                 />
               </div>
               
@@ -355,54 +206,59 @@ const ContactFormPage = () => {
                 <input 
                   type="text" 
                   name="subject"
-                  placeholder="Subject" 
+                  placeholder="Subject (Optional)" 
                   style={styles.input}
                   value={formData.subject}
                   onChange={handleChange}
-                  onFocus={(e) => Object.assign(e.target.style, inputFocusEffect)}
-                  onBlur={(e) => {
-                    e.target.style.outline = 'none';
-                    e.target.style.borderColor = '#BCAE9C';
-                    e.target.style.boxShadow = 'none';
-                  }}
+                  disabled={isSending}
                 />
               </div>
               
               <div style={styles.formGroup}>
                 <textarea 
                   name="message"
-                  placeholder="Your Message..." 
+                  placeholder="Your Message *" 
                   rows="6" 
                   style={{...styles.input, minHeight: '180px'}} 
                   value={formData.message}
                   onChange={handleChange}
                   required
-                  onFocus={(e) => Object.assign(e.target.style, inputFocusEffect)}
-                  onBlur={(e) => {
-                    e.target.style.outline = 'none';
-                    e.target.style.borderColor = '#BCAE9C';
-                    e.target.style.boxShadow = 'none';
-                  }}
+                  disabled={isSending}
                 ></textarea>
               </div>
               
               <button 
                 type="submit" 
-                style={styles.submitButton}
+                style={isSending ? { ...styles.submitButton, backgroundColor: '#BCAE9C', cursor: 'not-allowed' } : styles.submitButton}
                 disabled={isSending}
-                onMouseEnter={(e) => !isSending && Object.assign(e.target.style, buttonHoverEffect)}
+                onMouseEnter={(e) => !isSending && Object.assign(e.target.style, { 
+                  backgroundColor: '#754A2D',
+                  transform: 'translateY(-3px)',
+                  boxShadow: '0 5px 15px rgba(117, 74, 45, 0.3)',
+                })}
                 onMouseLeave={(e) => {
-                  e.target.style.backgroundColor = '#9E6E3C';
-                  e.target.style.transform = 'translateY(0)';
-                  e.target.style.boxShadow = 'none';
+                  if (!isSending) {
+                    e.target.style.backgroundColor = '#9E6E3C';
+                    e.target.style.transform = 'translateY(0)';
+                    e.target.style.boxShadow = 'none';
+                  }
                 }}
               >
-                {isSending ? 'Sending...' : (
+                {isSending ? (
+                  <>
+                    <FaSpinner style={{ animation: 'spin 1s linear infinite' }} /> Sending...
+                  </>
+                ) : (
                   <>
                     <FaPaperPlane /> Send Message
                   </>
                 )}
               </button>
+              
+              <div style={{ textAlign: 'center', marginTop: '1rem', color: '#666', fontSize: '0.9rem' }}>
+                <p>* Required fields</p>
+                <p>We'll send a confirmation to your email and respond within 24 hours</p>
+              </div>
             </form>
           )}
         </div>
@@ -411,6 +267,166 @@ const ContactFormPage = () => {
       <Footer />
     </div>
   );
+};
+
+// Make sure you include ALL your style objects here
+const styles = {
+  page: {
+    minHeight: '100vh',
+    display: 'flex',
+    flexDirection: 'column',
+    backgroundImage: 'linear-gradient(rgba(242, 240, 230, 0.38), rgba(242, 240, 230, 0.09)), url(/background10.jpg)',
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundAttachment: 'fixed',
+    fontFamily: "'Neue Haas Grotesk Text Pro', sans-serif",
+  },
+  content: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '2rem',
+  },
+  formContainer: {
+    maxWidth: '800px',
+    width: '100%',
+    margin: '2rem 0',
+    padding: '3rem',
+    backgroundColor: 'rgba(242, 240, 230, 0.85)',
+    borderRadius: '20px',
+    border: '2px dashed #9E6E3C',
+    position: 'relative',
+    overflow: 'hidden',
+    boxShadow: '0 10px 30px rgba(55, 44, 39, 0.15)',
+    backdropFilter: 'blur(2px)',
+  },
+  decorativeShape1: {
+    position: 'absolute',
+    top: '-30px',
+    right: '-30px',
+    width: '100px',
+    height: '100px',
+    borderRadius: '50%',
+    border: '2px solid #754A2D',
+    opacity: '0.3',
+  },
+  decorativeShape2: {
+    position: 'absolute',
+    bottom: '-20px',
+    left: '-20px',
+    width: '80px',
+    height: '80px',
+    border: '2px dashed #BCAE9C',
+    transform: 'rotate(45deg)',
+    opacity: '0.4',
+  },
+  title: {
+    fontSize: '2rem',
+    fontWeight: '600',
+    color: '#372C27',
+    marginBottom: '1.5rem',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '1rem',
+    position: 'relative',
+    zIndex: '1',
+    textAlign: 'center',
+  },
+  introMessage: {
+    color: '#372C27',
+    fontSize: '1rem',
+    lineHeight: '1.6',
+    marginBottom: '2rem',
+    textAlign: 'center',
+    position: 'relative',
+    zIndex: '1',
+    backgroundColor: 'rgba(242, 240, 230, 0.7)',
+    padding: '1.5rem',
+    borderRadius: '12px',
+    borderLeft: '4px solid #9E6E3C',
+  },
+  formGroup: {
+    marginBottom: '1.8rem',
+    position: 'relative',
+    zIndex: '1',
+  },
+  input: {
+    width: '100%',
+    padding: '1.2rem',
+    borderRadius: '12px',
+    border: '2px solid #BCAE9C',
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    fontFamily: "'Neue Haas Grotesk Text Pro', sans-serif",
+    fontSize: '1rem',
+    transition: 'all 0.3s ease',
+  },
+  submitButton: {
+    width: '100%',
+    padding: '1.2rem',
+    border: 'none',
+    borderRadius: '12px',
+    backgroundColor: '#9E6E3C',
+    color: '#F2F0E6',
+    fontSize: '1.1rem',
+    fontWeight: '500',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '0.8rem',
+    transition: 'all 0.3s ease',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  dots: {
+    position: 'absolute',
+    right: '30px',
+    top: '40px',
+    color: '#9E6E3C',
+    opacity: '0.1',
+    fontSize: '1.5rem',
+  },
+  successMessage: {
+    backgroundColor: 'rgba(158, 110, 60, 0.1)',
+    border: '2px solid #9E6E3C',
+    borderRadius: '12px',
+    padding: '2rem',
+    marginBottom: '2rem',
+    textAlign: 'center',
+    color: '#372C27',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '1rem',
+  },
+  errorMessage: {
+    backgroundColor: 'rgba(231, 76, 60, 0.1)',
+    border: '2px solid #e74c3c',
+    borderRadius: '12px',
+    padding: '1.5rem',
+    marginBottom: '1.5rem',
+    textAlign: 'center',
+    color: '#c0392b',
+    fontSize: '0.95rem',
+    lineHeight: '1.5',
+  },
+  successIcon: {
+    color: '#9E6E3C',
+    fontSize: '2.5rem',
+  },
+  successText: {
+    fontSize: '1.2rem',
+    fontWeight: '500',
+  },
+  emailNote: {
+    fontSize: '0.9rem',
+    fontStyle: 'italic',
+    opacity: '0.8',
+    marginTop: '1rem',
+    textAlign: 'center',
+  },
 };
 
 export default ContactFormPage;
