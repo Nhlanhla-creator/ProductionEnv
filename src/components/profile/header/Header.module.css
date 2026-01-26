@@ -736,6 +736,12 @@
   gap: 12px;
 }
 
+.messageItem .noMessages {
+  text-align: center;
+  margin: 0 auto;
+  color: #AAA199;
+}
+
 .messageItem:hover {
   background-color: #F8F7F3;
 }

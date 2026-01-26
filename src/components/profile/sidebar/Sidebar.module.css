@@ -208,13 +208,13 @@
   border-radius: 14px;
   transition: var(--sidebar-transition);
   cursor: pointer;
-  margin: 2px 0;
 }
 
 .menuItemWrapper {
   display: flex;
   align-items: center;
-  padding: 14px 16px;
+  justify-content: center;
+  padding: 14px;
   border-radius: 14px;
   transition: var(--sidebar-transition);
   user-select: none;
@@ -222,14 +222,12 @@
 
 .menuItem:hover .menuItemWrapper {
   background: var(--sidebar-hover);
-  transform: translateX(2px);
 }
 
 .menuItem.active .menuItemWrapper {
   background: linear-gradient(135deg, var(--sidebar-active) 0%, rgba(184, 159, 141, 0.8) 100%);
   color: var(--sidebar-text);
   box-shadow: var(--shadow-sm);
-  transform: translateX(4px);
 }
 
 
@@ -249,7 +247,7 @@
 .sidebar.collapsed .menuIconContainer {
   margin-right: 0;
   width: 32px;
-  height: 32px;
+  height: 28px;
   background: transparent;
 }
 
@@ -270,7 +268,6 @@
 
 .sidebar.collapsed .menuItem:hover .menuIconContainer {
   background: transparent;
-  transform: scale(1.1);
 }
 
 .menuLabel {
@@ -315,7 +312,7 @@
 
 
 .submenu {
-  padding: 8px 0 12px 52px;
+  padding: 8px 10px;
   margin: 0;
   border-left: 2px solid rgba(158, 110, 60, 0.2);
   margin-left: 28px;
@@ -342,14 +339,14 @@
 .submenuItem:hover {
   background: var(--sidebar-hover);
   color: var(--sidebar-text);
-  transform: translateX(4px);
+  /* transform: translateX(4px); */
 }
 
 .submenuItem.active {
   background: var(--sidebar-active-hover);
   color: var(--sidebar-text);
   box-shadow: var(--shadow-sm);
-  transform: translateX(6px);
+  /* transform: translateX(6px); */
 }
 
 .submenuIcon {

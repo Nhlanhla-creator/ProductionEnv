@@ -51,7 +51,20 @@ function Sidebar({
     } else {
       document.body.classList.remove("sidebar-collapsed")
     }
+
+    // Dispatch a global event so other components can respond immediately
+    try {
+      window.dispatchEvent(new Event('sidebarToggle'))
+    } catch (e) {
+      // fallback: set a timestamp in localStorage to trigger storage events across tabs
+      localStorage.setItem('sidebarToggleAt', Date.now().toString())
+    }
   }, [isCollapsed, storageKey])
+
+  // Route-driven expansion logic is implemented inline in the
+  // effect below (and merges with user toggles). The previous
+  // `getExpandedMenusBasedOnRoute` helper was unused and removed to
+  // avoid dead code and reduce confusion.
 
   // Update expanded menus when the route changes.
   // Merge route-driven expansions with the existing state so
@@ -78,21 +91,42 @@ function Sidebar({
     })
   }, [location.pathname, memoizedMenuItems])
 
-  // PERFECT FIX: Only "growth-tools" (My Growth Suite) navigates when clicked
-  // All other items work exactly as before (only toggle submenu)
+  // Alternative: Simpler approach that only runs when pathname changes
+  // Uncomment this and remove the above useEffect if you prefer
+  /*
+  useEffect(() => {
+    const currentPath = location.pathname
+    const newExpandedMenus = { ...expandedMenus }
+    
+    // Only expand menus based on current route
+    memoizedMenuItems.forEach((item) => {
+      if (item.hasSubmenu && item.subItems) {
+        const shouldExpand = item.subItems.some(
+          (subItem) => 
+            currentPath === subItem.route || 
+            (subItem.route && currentPath.startsWith(subItem.route + "/"))
+        )
+        if (shouldExpand) {
+          newExpandedMenus[item.id] = true
+        }
+      }
+    })
+    
+    // Check if there are actual changes before updating state
+    const hasChanges = JSON.stringify(newExpandedMenus) !== JSON.stringify(expandedMenus)
+    if (hasChanges) {
+      setExpandedMenus(newExpandedMenus)
+    }
+  }, [location.pathname, memoizedMenuItems])
+  */
+
   const handleItemClick = useCallback((item) => {
     if (item.hasSubmenu) {
-      // Toggle submenu expansion (for ALL items with submenu)
       setExpandedMenus((prev) => ({
         ...prev,
         [item.id]: !prev[item.id],
       }))
-      // ONLY navigate for "growth-tools" (My Growth Suite)
-      if (item.id === 'growth-tools' && item.route) {
-        navigate(item.route)
-      }
     } else if (item.route) {
-      // Regular items without submenu navigate normally
       navigate(item.route)
       // Close sidebar on mobile after navigation
       if (window.innerWidth <= 768) {
@@ -151,7 +185,7 @@ function Sidebar({
         onClick={() => handleItemClick(item)}
       >
         <div className={styles.menuItemWrapper}>
-          <div className={styles.menuIconContainer} style={{color: isMenuItemActive(item) && 'white'}}>{item.icon}</div>
+          <div className={styles.menuIconContainer} style={{color: isMenuItemActive && 'white'}}>{item.icon}</div>
           {!isCollapsed && (
             <>
               <span className={styles.menuLabel}>{item.label}</span>

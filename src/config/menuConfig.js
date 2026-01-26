@@ -24,7 +24,6 @@ import {
   Activity,
   Globe,
   PenTool,
-  Heart,
 } from "lucide-react";
 
 export const advisorMenuItems = [
@@ -96,18 +95,6 @@ export const catalystMenuItems = [
     label: "BIG Insights",
     icon: <Lightbulb size={18} />,
     route: "/support-insights",
-  },
-  {
-    id: "cohorts",
-    label: "My Cohorts",
-    icon: <Users size={18} />,
-    route: "/catalyst/cohorts",
-  },
-  {
-    id: "investments",
-    label: "My Investments",
-    icon: <PieChart size={18} />,
-    route: "/catalyst/investments",
   },
   {
     id: "matches",
@@ -291,7 +278,7 @@ export const investorMenuItems = [
         id: "billing-info",
         label: "Billing Information",
         icon: <DollarSign size={16} />,
-        route: "/investor/billing/myinfo",
+        route: "/investor/billing/info",
       },
       {
         id: "subscriptions",
@@ -303,7 +290,7 @@ export const investorMenuItems = [
         id: "transactions",
         label: "Billing History",
         icon: <Package size={16} />,
-        route: "/investor/billing/info",
+        route: "/investor/billing/history",
       },
     ],
   },
@@ -460,12 +447,6 @@ export const smeMenuItems = [
     route: "/growth",
     hasSubmenu: true,
     subItems: [
-      {
-        id: "overall-health",
-        label: "Overall Company Health",
-        icon: <Heart size={16} />,
-        route: "/overall-company-health",
-      },
       {
         id: "strategy-execution",
         label: "Strategy & Execution",
