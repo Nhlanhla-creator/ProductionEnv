@@ -23,9 +23,15 @@ import {
   Download,
   Shield,
   QrCode,
-  Globe,
   Handshake,
   UserPlus,
+  ShieldCheck,
+  Boxes,
+  Cpu,
+  Truck,
+  Bug,
+  FlaskConical,
+  BarChart3,
 } from "lucide-react"
 import styles from "./admin-sidebar.module.css"
 import { auth } from "../../firebaseConfig"
@@ -35,6 +41,16 @@ import { onAuthStateChanged } from "firebase/auth"
 import { doc } from "firebase/firestore"
 
 function AdminSidebar() {
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try {
+      if (typeof document !== "undefined" && document.body) {
+        return document.body.classList.contains("sidebar-collapsed")
+      }
+      return localStorage.getItem("sidebarOpen") === "false"
+    } catch (e) {
+      return false
+    }
+  })
   const navigate = useNavigate()
   const [user, setUser] = useState(null)
   const location = useLocation()
@@ -136,19 +152,87 @@ function AdminSidebar() {
   }, [location.pathname])
 
   const menuItems = [
+   {
+  id: "notion",
+  label: "Notion",
+  icon: <FileText size={18} />,
+  hasSubmenu: true,
+  subItems: [
+    {
+      id: "admin-governance",
+      label: "Admin Governance",
+      icon: <ShieldCheck size={16} />,
+      route: "/admin/notion/admin-governance"
+    },
+    {
+      id: "growth",
+      label: "Growth",
+      icon: <TrendingUp size={16} />,
+      route: "/admin/notion/growth"
+    },
+    {
+      id: "partners-ecosystem",
+      label: "Partners Ecosystem",
+      icon: <Handshake size={16} />,
+      route: "/admin/notion/partners-ecosystem"
+    },
+    {
+      id: "product-platform",
+      label: "Product Platform",
+      icon: <Boxes size={16} />,
+      route: "/admin/notion/product-platform"
+    },
+    {
+      id: "tech-architecture",
+      label: "Tech Architecture",
+      icon: <Cpu size={16} />,
+      route: "/admin/notion/tech-architecture"
+    },
+    {
+      id: "delivery",
+      label: "Delivery",
+      icon: <Truck size={16} />,
+      route: "/admin/notion/delivery"
+    },
+    {
+      id: "qa-testing",
+      label: "QA & Testing",
+      icon: <Bug size={16} />,
+      route: "/admin/notion/qa-testing"
+    },
+    {
+      id: "operations-internal",
+      label: "Operations Internal",
+      icon: <Settings size={16} />,
+      route: "/admin/notion/operations-internal"
+    },
+    {
+      id: "users-marketplace",
+      label: "Users Marketplace",
+      icon: <Users size={16} />,
+      route: "/admin/notion/users-marketplace"
+    },
+    {
+      id: "pilots-case-studies",
+      label: "Pilots & Case Studies",
+      icon: <FlaskConical size={16} />,
+      route: "/admin/notion/pilots-case-studies"
+    },
+    {
+      id: "reporting-analytics",
+      label: "Reporting & Analytics",
+      icon: <BarChart3 size={16} />,
+      route: "/admin/notion/reporting-analytics"
+    }
+  ]
+},
     { 
       id: "dashboard", 
       label: "Dashboard", 
       icon: <LayoutDashboard size={18} />, 
       route: "/admin/dashboard" 
     },
-     { 
-      id: "ecosystem", 
-      label: "Ecosystem", 
-      icon: <Globe size={18} />, 
-      hasSubmenu: true,
-      subItems: [
-        {
+    {
       id: "smes",
       label: "All SMEs",
       icon: <Building2 size={18} />,
@@ -184,9 +268,6 @@ function AdminSidebar() {
       icon: <Handshake size={18} />,
       route: "/admin/sponsors",
     },
-      ]
-    },
-   
     {
       id: "qr-codes",
       label: "QR Codes",
