@@ -3,7 +3,11 @@ import { useState } from "react"
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom"
 import "./App.css"
 import HomeHeader from "./main_pages/SMEs/HomeHeader"
-// Admin Components - UPDATED
+import { useAuth } from "./context/useAuth" // Import the auth hook
+import ProtectedRoute from "./context/ProtectedRoute" // Import the ProtectedRoute component
+import EmailVerification from "./EmailVerification"
+
+// Admin Components
 import AdminSidebar from "./admin/layout/AdminSidebar"
 import AdminHeader from "./admin/layout/AdminHeader"
 import AdminDashboard from "./admin/pages/AdminDashboard"
@@ -11,12 +15,29 @@ import AllSMEs from "./admin/pages/AllSMEs"
 import AllInvestors from "./admin/pages/AllInvestors"
 import AllCatalysts from "./admin/pages/AllCatalysts"
 import AllAdvisors from "./admin/pages/AllAdvisors"
-import AllInterns from "./admin/pages/AllInterns" // NEW
-import AllSponsors from "./admin/pages/AllSponsors" // NEW
-import Subscriptions from "./admin/pages/Subscriptions" // NEW
-import QRCodes from "./admin/pages/QRCodes" // NEW
 import DocumentManagement from "./admin/pages/growth-tools-purchased"
 import AdminSettings from "./admin/pages/AdminSettings"
+
+import AllInterns from "./admin/pages/AllInterns"
+import AllSponsors from "./admin/pages/AllSponsors"
+import Subscriptions from "./admin/pages/Subscriptions"
+import QRCodes from "./admin/pages/QRCodes"
+import CardLandingPage from "./admin/pages/CardLandingPage"
+import Delivery from "./admin/pages/Delivery";
+import AdminGovernance from "./admin/pages/AdminGovernance";
+import Growth from "./admin/pages/Growth";
+import PartnersEcosystem from "./admin/pages/PartnersEcosystem";
+import ProductPlatform from "./admin/pages/ProductPlatform";
+import TechArchitecture from "./admin/pages/TechArchitecture";
+import QATesting from "./admin/pages/qatesting";
+import OperationsInternal from "./admin/pages/OperationsInternal"
+import UsersMarketplace from "./admin/pages/UsersMarketplace"
+import PilotsCaseStudies from "./admin/pages/PilotsCaseStudies"
+import ReportingAnalytics from "./admin/pages/ReportingAnalytics"
+import Archive from "./admin/pages/Archive"
+
+
+
 // Admin Settings Subcategory Components
 import AdminUsers from "./admin/pages/AdminUserManagement"
 import ApprovalWorkflows from "./admin/pages/ApprovalWorkflows"
@@ -26,6 +47,7 @@ import SystemConfig from "./admin/pages/SystemConfigurations"
 import BackupExport from "./admin/pages/BackupExportData"
 import InvestorSettings from "./Investor/Settings/Setttings"
 import CatalystSettings from "./catalyst/CatalystSettings/supportSettings"
+
 // Billing and Payment Components
 import MySubscriptions from "./smses/BillingInformation/my-subscriptions"
 import BillingInfo from "./smses/BillingInformation/billing-info"
@@ -40,13 +62,14 @@ import CatalystDocuments from "./catalyst/CatalystDocuments/support-documents"
 import Sidebar from "./smses/Sidebar/Sidebar"
 import InvestorSidebar from "./Investor/Sidebar/InvestorSidebar"
 import SupportProgramSidebar from "./catalyst/CatalystSidebar/AcceleratorSidebar"
-import DashboardHeader from "./smses/DashboardHeader/DashboardHeader"
+import SMSEHeader from "./smses/DashboardHeader/SMSEHeader"
 import InvestorHeader from "./Investor/Header/InvestorHeader"
-import SupportProgramHeader from "./catalyst/CatalystProgramHeader/SupportHeader"
-// FIXED: Import AdvisorHeader - create this component if it doesn't exist
+import SupportProgramHeader from "./catalyst/CatalystProgramHeader/CatalystHeader"
 import AdvisorHeader from "./advisors/AdvisorHeader/advisorHeader"
 import Documents from "./Investor/Documents"
 import BetaSignupForm from "./BetaForm"
+
+// Intern Components
 // Intern Components - NEW
 import InternSidebar from "./Interns/sidebar/sidebar"
 import InternDashboard from "./Interns/InternDashboard/intern-dashboard"
@@ -105,6 +128,7 @@ import SelectionCriteria from "./advisors/AdvisorProfile/SelectionCriteria"
 import ProfessionalCredentials from "./advisors/AdvisorProfile/ProfessionalCredentialss"
 import RequiredDocuments from "./advisors/AdvisorProfile/RequiredDocuments"
 import DeclarationConsent from "./advisors/AdvisorProfile/Consent"
+
 // Public Pages
 import LandingPage from "./main_pages/LandingPage"
 import AboutPage from "./main_pages/About"
@@ -130,7 +154,6 @@ import BIGScoreInvestor from "./main_pages/Investors/BIGScore"
 import HomePageInvestor from "./main_pages/Investors/HomePage"
 import ContactFormInvestor from "./main_pages/Investors/Contact"
 import InsightsInvestor from "./main_pages/Investors/Insights"
-import HowItWorksInvestor from "./main_pages/Investors/HowItWorks"
 import FAQPageInvestor from "./main_pages/Investors/FAQInvestors"
 import HeaderInvestor from "./main_pages/Investors/HeaderInvestors"
 import FAQsAdvisor from "main_pages/Advisors/FAQsAdvisor"
@@ -163,11 +186,13 @@ import HeaderProgram from "main_pages/ProgramSponsor/HeaderProgram"
 import BookSession from "main_pages/BookSession"
 import HomePageAdvisor from "main_pages/Advisors/HomePageAdvisor"
 import CharmSchool from "main_pages/CSI"
+
 // Auth Components
 import AuthForm from "./smses/LoginRegister"
 import LoginRegister from "./smses/LoginRegister"
-import RetrieveAccount from "smses/RetrieveAccount"
+import RetrieveAccount from "./smses/RetrieveAccount"
 import { Dashboard as InvestorDashboard } from "./Investor/InvestorDashboard/InvestorDashboard"
+
 // Protected Pages
 import { Dashboard } from "./smses/SMSEDashboard/Dashboard"
 import Profile from "./smses/UniversalProfile/UniversalProfile"
@@ -177,6 +202,7 @@ import GrowthEnabler from "./smses/MyGrowthTools/shop"
 import Messages from "./smses/Messages/Messages"
 import Calendar from "./smses/MyCalender/Calendar"
 import Settings from "./smses/Settings/Settings"
+
 // SME Universal Profile Components
 import SMEProfileTracker from "./smses/UniversalProfile/profile-tracker"
 import SMEInstructions from "./smses/UniversalProfile/instructions"
@@ -189,6 +215,7 @@ import SMEHowDidYouHear from "./smses/UniversalProfile/how-did-you-hear"
 import SMEDeclarationConsent from "./smses/UniversalProfile/declaration-consent"
 import RegistrationSummary from "./smses/UniversalProfile/registration-summary"
 import ProfileSummary from "./smses/Documents"
+
 // Investor Universal Profile Components
 import InvestorUniversalProfile from "./Investor/InvestorUniversalProfile/InvestorUniversalProfile"
 import InvestorProfileTracker from "./Investor/InvestorUniversalProfile/ProfileTracker"
@@ -202,8 +229,8 @@ import InvestorHowDidYouHear from "./Investor/InvestorUniversalProfile/Applicati
 import InvestorDeclarationConsent from "./Investor/InvestorUniversalProfile/DeclarationConsent"
 import InvestorCalendar from "./Investor/Calender/InvestorCalendar"
 import MyInvestments from "Investor/MyInvestment/MyInvestments"
+
 // Accelerator Programs Universal Profile Components
-// CORRECTED IMPORTS for Catalyst Profile components
 import CatalystUniversalProfile from "./catalyst/CatalystUniversalProfile/catalyst-universal-profile"
 import CatalystInstructions from "./catalyst/CatalystUniversalProfile/catalyst-instructions"
 import CatalystEntityOverview from "./catalyst/CatalystUniversalProfile/catalyst-entity-overview"
@@ -212,10 +239,14 @@ import CatalystContactDetails from "./catalyst/CatalystUniversalProfile/catalyst
 import CatalystApplicationBrief from "./catalyst/CatalystUniversalProfile/catalyst-application-brief"
 import CatalystMatchingPreference from "./catalyst/CatalystUniversalProfile/catalyst-matching-preference"
 import CatalystDeclarationConsent from "./catalyst/CatalystUniversalProfile/catalyst-declaration-consent"
+import CatalystCohorts from "./catalyst/MyCohorts/MyCohorts"
+import CatalystInvestments from "./catalyst/MyInvestment/MyInvestments"
+
 // Application Components
 import FundingApplication from "./smses/FundingApplication/FundingApplication"
 import ProductApplication from "./smses/ProductApplication/ProductApplication"
 import AdvisoryApplication from "./smses/AdvisorApplication/AdvisorApplication"
+
 // Matches Components
 import CustomerMatchesPage from "./smses/MyCustomerMatches/customer-matches"
 import FundingMatchesPage from "./smses/MyFunderMatches/funders-matches"
@@ -223,17 +254,19 @@ import SupplierMatchesPage from "./smses/MySupplierMatches/supplier-matches"
 import SupportProgramMatchesPage from "./smses/MyAccelatorMatches/accelearator-matches"
 import MatchesPage from "./Investor/MyMatches/investor-matches"
 import SMSEAdvisorMatchesPage from "./smses/MyAdvisorMatches/advisor-matches"
+import OpportunityMatchesPage from "./smses/MyOpportunityMatches/opportunity-matches"
+
 // Growth Tools Components
 import ShopToolsPage from "./smses/MyGrowthTools/shop"
 import MyToolsPage from "./smses/MyGrowthTools/my-tools"
-import Strategy from "smses/MyGrowthTools/Strategy"
-import FinancialPerformance from "smses/MyGrowthTools/FinancialPerformance"
-import CapitalStructure from "smses/MyGrowthTools/CapitalStructure"
-import OperationalStrength from "smses/MyGrowthTools/OperationalStrength"
-import People from "smses/MyGrowthTools/People"
-import SocialImpact from "smses/MyGrowthTools/SocialImpact"
-import MarketingSales from "smses/MyGrowthTools/MarketingSale"
-import RiskManagement from "smses/MyGrowthTools/RiskManagement"
+import Strategy from "./smses/MyGrowthTools/Strategy"
+import FinancialPerformance from "./smses/MyGrowthTools/FinancialPerformance"
+import CapitalStructure from "./smses/MyGrowthTools/CapitalStructure"
+import OperationalStrength from "./smses/MyGrowthTools/OperationalStrength"
+import People from "./smses/MyGrowthTools/People"
+import SocialImpact from "./smses/MyGrowthTools/SocialImpact"
+import MarketingSales from "./smses/MyGrowthTools/MarketingSale"
+import RiskManagement from "./smses/MyGrowthTools/RiskManagement"
 
 // Advisor Components
 import AdvisorSettings from "./advisors/AdvisorSettings/advisor-settings"
@@ -242,18 +275,19 @@ import AdvisorDashboardPage from "./advisors/AdvisorMatches/advisor-dashboard-pa
 import SupportMatchesPage from "./catalyst/CatalystMatches/support-dashboard-page"
 import AdvisorMessages from "./advisors/AdvisorMessages/Messages"
 
-// NEW: Program Sponsor Billing Components
+// Program Sponsor Billing Components
 import ProgramSponsorBillingHistory from "./program_sponsor/BillingPayments/billing-history-program-sponsor"
 import ProgramSponsorBillingInfo from "./program_sponsor/BillingPayments/billing-info-program-sponsor"
 import ProgramSponsorSubscription from "./program_sponsor/BillingPayments/program-sponsor-subscription"
 
-//insights components - FIXED IMPORTS
+// Insights Components
 import BigInsights from "./smses/BigInsights/BigInsights"
 import { AdvisorInsights } from "./advisors/AdvisorInsights/AdvisorInsights"
 import { Insights as InternInsights } from "./Interns/InternInsights/internInsights"
 import { AcceleratorInsights as CatalystInsights } from "./catalyst/CatalystInsights/catalystInsights"
-import {InvestorInsights}  from "./Investor/InvestorInsights/investorInsights"
-import MyCohorts from "Investor/MyCohorts/MyCohorts"
+import { InvestorInsights } from "./Investor/InvestorInsights/investorInsights"
+import MyCohorts from "./Investor/MyCohorts/MyCohorts"
+
 // Initial Data States
 const initialFormData = {
   entityOverview: {},
@@ -299,7 +333,7 @@ const initialFormData = {
     requiredDocuments: {},
     declarationConsent: {},
   },
-  // NEW: Intern Profile Data
+  // Intern Profile Data
   internProfile: {
     personalOverview: {},
     academicOverview: {},
@@ -309,21 +343,21 @@ const initialFormData = {
     requiredDocuments: {},
     declarationConsent: {},
   },
-  // NEW: Program Sponsor Profile Data
+  // Program Sponsor Profile Data
   programSponsorProfile: {
     entityOverview: {},
     contactDetails: {},
     programDetails: {},
     declarationConsent: {},
   },
-  // Catalyst Profile Data (matching the new component names)
+  // Catalyst Profile Data
   catalystProfile: {
     instructions: {},
     entityOverview: {},
     contactDetails: {},
-    programmeDetails: {}, // Renamed from programDetails to match catalyst-programme-details.tsx
-    applicationBrief: {}, // Renamed from productsServices to match catalyst-application-brief.tsx
-    generalMatchingPreference: {}, // Renamed from howDidYouHear to match catalyst-general-matching-preference.tsx
+    programmeDetails: {},
+    applicationBrief: {},
+    generalMatchingPreference: {},
     declarationConsent: {},
   },
 }
@@ -333,6 +367,7 @@ function App() {
   const [formData, setFormData] = useState(initialFormData)
   const [showSummary, setShowSummary] = useState(false)
   const companyName = "Acme Inc"
+  const { user, loading } = useAuth();
 
   const updateFormData = (section, data) => {
     setFormData((prev) => ({
@@ -354,7 +389,7 @@ function App() {
     }))
   }
 
-  // NEW: Update Intern Data
+  // Update Intern Data
   const updateInternData = (section, data) => {
     setFormData((prev) => ({
       ...prev,
@@ -365,7 +400,7 @@ function App() {
     }))
   }
 
-  // NEW: Update Program Sponsor Data
+  // Update Program Sponsor Data
   const updateProgramSponsorData = (section, data) => {
     setFormData((prev) => ({
       ...prev,
@@ -376,7 +411,7 @@ function App() {
     }))
   }
 
-  // NEW: Update Catalyst Data
+  // Update Catalyst Data
   const updateCatalystData = (section, data) => {
     setFormData((prev) => ({
       ...prev,
@@ -391,7 +426,23 @@ function App() {
     setShowSummary(true)
   }
 
-  // Admin Protected Layout - NEW
+  const withProtection = (Component, props = {}, layoutFn = renderSMERoute) => {
+    return (
+      <ProtectedRoute>
+        {layoutFn(Component, props)}
+      </ProtectedRoute>
+    );
+  };
+
+  const withAdminProtection = (Component, props = {}) => {
+    return (
+      <ProtectedRoute allowedRoles={['Admin', 'admin']}>
+        {renderAdminRoute(Component, props)}
+      </ProtectedRoute>
+    );
+  };
+
+  // Admin Protected Layout
   const AdminLayout = ({ children }) => {
     const location = useLocation()
     return (
@@ -412,7 +463,7 @@ function App() {
       <div className="app-layout">
         <Sidebar companyName={companyName} />
         <div className="main-content">
-          <DashboardHeader companyName={companyName} profileImage={profileImage} setProfileImage={setProfileImage} />
+          <SMSEHeader companyName={companyName} profileImage={profileImage} setProfileImage={setProfileImage} />
           <div className="page-content">{children}</div>
         </div>
         <RegistrationSummary data={formData} open={showSummary} onClose={() => setShowSummary(false)} />
@@ -448,14 +499,11 @@ function App() {
           />
           <div className="page-content">{children}</div>
         </div>
-        {/* If CatalystProfileSummary were a modal/overlay, it would be rendered here,
-            similar to RegistrationSummary in SMELayout.
-            However, it's designed as a step within SupportUniversalProfile. */}
       </div>
     )
   }
 
-  // FIXED: Advisor Protected Layout - Now uses AdvisorHeader instead of DashboardHeader
+  // Advisor Protected Layout
   const AdvisorLayout = ({ children }) => {
     const location = useLocation()
     return (
@@ -469,7 +517,7 @@ function App() {
     )
   }
 
-  // NEW: Intern Protected Layout
+  // Intern Protected Layout
   const InternLayout = ({ children }) => {
     const location = useLocation()
     return (
@@ -483,7 +531,7 @@ function App() {
     )
   }
 
-  // NEW: Program Sponsor Protected Layout
+  // Program Sponsor Protected Layout
   const ProgramSponsorLayout = ({ children }) => {
     const location = useLocation()
     return (
@@ -532,14 +580,12 @@ function App() {
     </AdvisorLayout>
   )
 
-  // NEW: Intern render function
   const renderInternRoute = (Component, props = {}) => (
     <InternLayout>
       <Component {...props} />
     </InternLayout>
   )
 
-  // NEW: Program Sponsor render function
   const renderProgramSponsorRoute = (Component, props = {}) => (
     <ProgramSponsorLayout>
       <Component {...props} />
@@ -578,16 +624,14 @@ function App() {
     </InvestorLayout>
   )
 
-  // CORRECTED: renderSupportProfileSection to use catalystProfile data and correct components
   const renderSupportProfileSection = (Component, section) => (
     <SupportProgramLayout>
       <h1 className="text-3xl font-bold text-brown-800 mb-8">My Universal Profile</h1>
-      {/* Using CatalystProfileTracker */}
       <div className="bg-white rounded-lg shadow-md p-6 mt-6">
-        {formData.catalystProfile[section] !== undefined ? ( // Accessing catalystProfile
+        {formData.catalystProfile[section] !== undefined ? (
           <Component
-            data={formData.catalystProfile[section]} // Accessing catalystProfile data
-            updateData={(data) => updateCatalystData(section, data)} // Using updateCatalystData
+            data={formData.catalystProfile[section]}
+            updateData={(data) => updateCatalystData(section, data)}
           />
         ) : (
           <p>Loading data...</p>
@@ -622,7 +666,6 @@ function App() {
     </AdvisorLayout>
   )
 
-  // NEW: Intern Profile Section Renderer
   const renderInternProfileSection = (Component, section) => (
     <InternLayout>
       <h1 className="text-3xl font-bold text-brown-800 mb-8">Intern Profile</h1>
@@ -651,7 +694,6 @@ function App() {
     </InternLayout>
   )
 
-  // NEW: Program Sponsor Profile Section Renderer
   const renderProgramSponsorProfileSection = (Component, section) => (
     <ProgramSponsorLayout>
       <h1 className="text-3xl font-bold text-brown-800 mb-8">Program Sponsor Profile</h1>
@@ -695,7 +737,7 @@ function App() {
         <Route path="/HowItWorksAdvisors" element={<HowItWorksAdvisors />} />
         <Route path="/HowItWorksInterns" element={<HowItWorksInterns />} />
         <Route path="/LoginRegister" element={<LoginRegister />} />
-         <Route path="/RetrieveAccount" element={<RetrieveAccount />} />
+        <Route path="/RetrieveAccount" element={<RetrieveAccount />} />
         <Route path="/AboutPage" element={<AboutPage />} />
         <Route path="/FAQPage" element={<FAQPage />} />
         <Route path="/HomePage" element={<HomePage />} />
@@ -710,10 +752,9 @@ function App() {
         <Route path="/HomePageInvestor" element={<HomePageInvestor />} />
         <Route path="/HomeContactFormPage" element={<HomeContactFormPage />} />
         <Route path="/BetaForm" element={<BetaSignupForm />} />
-        <Route path="/BIGScoreInvestor " element={<BIGScoreInvestor />} />
+        <Route path="/BIGScoreInvestor" element={<BIGScoreInvestor />} />
         <Route path="/ContactFormInvestor" element={<ContactFormInvestor />} />
         <Route path="/InsightsInvestor" element={<InsightsInvestor />} />
-        <Route path="/HowItWorksInvestor" element={<HowItWorksInvestor />} />
         <Route path="/FAQPageInvestor" element={<FAQPageInvestor />} />
         <Route path="/HeaderInvestor" element={<HeaderInvestor />} />
         <Route path="/Strategy" element={<Strategy />} />
@@ -729,9 +770,6 @@ function App() {
         <Route path="/InsightsAdvisor" element={<InsightsAdvisor />} />
         <Route path="/FAQsAdvisor" element={<FAQsAdvisor />} />
         <Route path="/ContactAdvisor" element={<ContactAdvisor />} />
-        <Route path="/InsightsAdvisor" element={<InsightsAdvisor />} />
-        <Route path="/HowWorksAdvisors" element={<HowWorksAdvisors />} />
-        <Route path="/BIGscoreAdvisor" element={<BIGscoreAdvisor />} />
         <Route path="/HeaderAdvisor" element={<HeaderAdvisor />} />
         <Route path="/HomePageInterns" element={<HomePageInterns />} />
         <Route path="/BIGscoreInterns" element={<BIGscoreInterns />} />
@@ -757,307 +795,228 @@ function App() {
         <Route path="/BookSession" element={<BookSession />} />
         <Route path="/HomePageAdvisor" element={<HomePageAdvisor />} />
         <Route path="/CharmSchool" element={<CharmSchool />} />
-        
-        {/* Admin Dashboard Routes - UPDATED */}
-        <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
-        <Route path="/admin/dashboard" element={renderAdminRoute(AdminDashboard)} />
-        <Route path="/admin/smes" element={renderAdminRoute(AllSMEs)} />
-        <Route path="/admin/investors" element={renderAdminRoute(AllInvestors)} />
-        <Route path="/admin/catalysts" element={renderAdminRoute(AllCatalysts)} />
-        <Route path="/admin/advisors" element={renderAdminRoute(AllAdvisors)} />
-        <Route path="/admin/interns" element={renderAdminRoute(AllInterns)} /> {/* NEW */}
-        <Route path="/admin/sponsors" element={renderAdminRoute(AllSponsors)} /> {/* NEW */}
-        <Route path="/admin/qr-codes" element={renderAdminRoute(QRCodes)} /> {/* NEW */}
-        <Route path="/admin/subscriptions" element={renderAdminRoute(Subscriptions)} /> {/* NEW */}
-        <Route path="/admin/documents" element={renderAdminRoute(DocumentManagement)} />
-        <Route path="/admin/settings" element={renderAdminRoute(AdminSettings)} />
+        <Route path="/verify-email" element={<EmailVerification />} />
+        <Route path="/card/:cardId" element={<CardLandingPage />} />
+
+        {/* Admin Notion Routes */}
+        <Route path="/admin/notion/delivery" element={withAdminProtection(Delivery)} />
+        <Route path="/admin/notion/governance" element={withAdminProtection(AdminGovernance)} />
+        <Route path="/admin/notion/growth" element={withAdminProtection(Growth)} />
+        <Route path="/admin/notion/partners-ecosystem" element={withAdminProtection(PartnersEcosystem)} />
+        <Route path="/admin/notion/product-platform" element={withAdminProtection(ProductPlatform)} />
+        <Route path="/admin/notion/tech-architecture" element={withAdminProtection(TechArchitecture)} />
+        <Route path="/admin/notion/qa-testing" element={withAdminProtection(QATesting)} />
+        <Route path="/admin/notion/operations-internal" element={withAdminProtection(OperationsInternal)} />
+        <Route path="/admin/notion/users-marketplace" element={withAdminProtection(UsersMarketplace)} />
+        <Route path="/admin/notion/pilots-case-studies" element={withAdminProtection(PilotsCaseStudies)} />
+        <Route path="/admin/notion/reporting-analytics" element={withAdminProtection(ReportingAnalytics)}/>
+        <Route path="/admin/notion/archive" element={withAdminProtection(Archive)} />
+
+
+       
+        {/* Admin Dashboard Routes */}
+        <Route path="/admin" element={<Navigate to="/Auth" replace />} />
+        <Route path="/admin/dashboard" element={withAdminProtection(AdminDashboard)} />
+        <Route path="/admin/smes" element={withAdminProtection(AllSMEs)} />
+        <Route path="/admin/investors" element={withAdminProtection(AllInvestors)} />
+        <Route path="/admin/catalysts" element={withAdminProtection(AllCatalysts)} />
+        <Route path="/admin/advisors" element={withAdminProtection(AllAdvisors)} />
+        <Route path="/admin/documents" element={withAdminProtection(DocumentManagement)} />
+        <Route path="/admin/settings" element={withAdminProtection(AdminSettings)} />
+        <Route path="/admin/interns" element={withAdminProtection(AllInterns)} />
+        <Route path="/admin/sponsors" element={withAdminProtection(AllSponsors)} />
+        <Route path="/admin/qr-codes" element={withAdminProtection(QRCodes)} />
+        <Route path="/admin/subscriptions" element={withAdminProtection(Subscriptions)} />
         
         {/* Admin Settings Subcategory Routes */}
-        <Route path="/admin/settings/admin-users" element={renderAdminRoute(AdminUsers)} />
-        <Route path="/admin/settings/approval-workflows" element={renderAdminRoute(ApprovalWorkflows)} />
-        <Route path="/admin/settings/payment-gateway" element={renderAdminRoute(PaymentGateway)} />
-        <Route path="/admin/settings/email-templates" element={renderAdminRoute(EmailTemplates)} />
-        <Route path="/admin/settings/system-config" element={renderAdminRoute(SystemConfig)} />
-        <Route path="/admin/settings/backup-export" element={renderAdminRoute(BackupExport)} />
-        
+        <Route path="/admin/settings/admin-users" element={withAdminProtection(AdminUsers)} />
+        <Route path="/admin/settings/approval-workflows" element={withAdminProtection(ApprovalWorkflows)} />
+        <Route path="/admin/settings/payment-gateway" element={withAdminProtection(PaymentGateway)} />
+        <Route path="/admin/settings/email-templates" element={withAdminProtection(EmailTemplates)} />
+        <Route path="/admin/settings/system-config" element={withAdminProtection(SystemConfig)} />
+        <Route path="/admin/settings/backup-export" element={withAdminProtection(BackupExport)} />
+
         {/* Protected SME Dashboard Routes */}
-        <Route path="/dashboard" element={renderSMERoute(Dashboard)} />
-        <Route path="/profile" element={renderSMERoute(Profile)} />
-        <Route path="/find-matches" element={renderSMERoute(FindMatches)} />
-        <Route path="/my-documents" element={renderSMERoute(MyDocuments)} />
-        <Route path="/growth" element={renderSMERoute(GrowthEnabler)} />
-        <Route path="/messages" element={renderSMERoute(Messages)} />
-        <Route path="/calendar" element={renderSMERoute(Calendar)} />
-        <Route path="/settings" element={renderSMERoute(Settings)} />
-        <Route path="/documents" element={renderSMERoute(ProfileSummary)} />
-        <Route path="/billing/subscriptions" element={renderSMERoute(MySubscriptions)} />
-        <Route path="/billing/info" element={renderSMERoute(BillingInfo)} />
-        <Route path="/billing/growth-tools-orders" element={renderSMERoute(BillingInformationSMSE)} />
-        {/* Investor Billing and Payments Routes */}
-        <Route path="/investor/billing/subscriptions" element={renderInvestorRoute(InvestorsSubscriptions)} />
-        <Route path="/investor/billing/info" element={renderInvestorRoute(BillingInfoInvestors)} />
-        <Route path="/investor/billing/myinfo" element={renderInvestorRoute(BillingInformation)} />
+        <Route path="/dashboard" element={withProtection(Dashboard, {}, renderSMERoute)} />
+        <Route path="/profile" element={withProtection(Profile, {}, renderSMERoute)} />
+        <Route path="/find-matches" element={withProtection(FindMatches, {}, renderSMERoute)} />
+        <Route path="/my-documents" element={withProtection(MyDocuments, {}, renderSMERoute)} />
+        <Route path="/growth" element={withProtection(GrowthEnabler, {}, renderSMERoute)} />
+        <Route path="/messages" element={withProtection(Messages, {}, renderSMERoute)} />
+        <Route path="/calendar" element={withProtection(Calendar, {}, renderSMERoute)} />
+        <Route path="/settings" element={withProtection(Settings, {}, renderSMERoute)} />
+        <Route path="/documents" element={withProtection(ProfileSummary, {}, renderSMERoute)} />
+        <Route path="/billing/subscriptions" element={withProtection(MySubscriptions, {}, renderSMERoute)} />
+        <Route path="/billing/info" element={withProtection(BillingInfo, {}, renderSMERoute)} />
+        <Route path="/billing/growth-tools-orders" element={withProtection(BillingInformationSMSE, {}, renderSMERoute)} />
+        
         {/* Growth Tools Sub-Routes */}
-        <Route path="/growth/my-tools" element={renderSMERoute(MyToolsPage)} />
-        <Route path="/growth/shop" element={renderSMERoute(ShopToolsPage)} />
+        <Route path="/growth/my-tools" element={withProtection(MyToolsPage, {}, renderSMERoute)} />
+        <Route path="/growth/shop" element={withProtection(ShopToolsPage, {}, renderSMERoute)} />
+
+        {/* Investor Billing and Payments Routes */}
+        <Route path="/investor/billing/subscriptions" element={withProtection(InvestorsSubscriptions, {}, renderInvestorRoute)} />
+        <Route path="/investor/billing/info" element={withProtection(BillingInfoInvestors, {}, renderInvestorRoute)} />
+        <Route path="/investor/billing/myinfo" element={withProtection(BillingInformation, {}, renderInvestorRoute)} />
+
         {/* Protected Investor Dashboard Routes */}
-        <Route path="/investor-documents" element={renderInvestorRoute(Documents)} />
-        <Route path="/investor-dashboard" element={renderInvestorRoute(InvestorDashboard)} />
-        <Route path="/investor-profile" element={renderInvestorRoute(InvestorUniversalProfile)} />
-        <Route path="/investor-opportunities" element={renderInvestorRoute(FindMatches)} />
+        <Route path="/investor-documents" element={withProtection(Documents, {}, renderInvestorRoute)} />
+        <Route path="/investor-dashboard" element={withProtection(InvestorDashboard, {}, renderInvestorRoute)} />
+        <Route path="/investor-profile" element={withProtection(InvestorUniversalProfile, {}, renderInvestorRoute)} />
+        <Route path="/investor-opportunities" element={withProtection(FindMatches, {}, renderInvestorRoute)} />
         <Route path="/investor-portfolio" element={<div>Coming Soon</div>} />
-        <Route path="/investor-messages" element={renderInvestorRoute(Messages)} />
-        <Route path="/investor-calendar" element={renderInvestorRoute(InvestorCalendar)} />
-        <Route path="/investor-settings" element={renderInvestorRoute(InvestorSettings)} />
-        {/* NEW: Protected Intern Dashboard Routes */}
-        <Route path="/intern-dashboard" element={renderInternRoute(InternDashboard)} />
-        <Route path="/intern-profile" element={renderInternRoute(InternUniversalProfile)} />
-        <Route path="/intern-matches" element={renderInternRoute(InternMatches)} />
-        <Route path="/intern-dealflow" element={renderInternRoute(InternDealflow)} />
-        <Route path="/intern-table" element={renderInternRoute(InternTable)} />
-        <Route path="/intern-messages" element={renderInternRoute(InternMessages)} />
-        <Route path="/intern-documents" element={renderInternRoute(InternDocuments)} />
-        <Route path="/intern-calendar" element={renderInternRoute(InternCalendar)} />
-        <Route path="/intern-settings" element={renderInternRoute(Settings)} />
-        {/* NEW: Protected Program Sponsor Dashboard Routes - FIXED */}
-        <Route path="/program-sponsor-dashboard" element={renderProgramSponsorRoute(ProgramSponsorDealflow)} />
-        <Route path="/program-sponsor-profile" element={renderProgramSponsorRoute(ProgramSponsorUniversalProfile)} />
-        <Route path="/program-sponsor-matches" element={renderProgramSponsorRoute(ProgramSponsorMatchesPage)} />
-        <Route path="/program-sponsor-insights" element={renderProgramSponsorRoute(ProgramSponsorInsights)} />
-        <Route path="/program-sponsor-table" element={renderProgramSponsorRoute(ProgramSponsorInternTable)} />
-        <Route path="/program-sponsor-documents" element={renderProgramSponsorRoute(ProgramSponsorDocuments)} />
-        <Route path="/program-sponsor-messages" element={renderProgramSponsorRoute(ProgramSponsorMessages)} />
-        <Route path="/program-sponsor-calendar" element={renderProgramSponsorRoute(ProgramSponsorCalendar)} />
-        <Route path="/program-sponsor-settings" element={renderProgramSponsorRoute(ProgramSponsorSettings)} />
-        {/* NEW: Program Sponsor Billing Routes */}
-        <Route path="/program-sponsor/billing/info" element={renderProgramSponsorRoute(ProgramSponsorBillingInfo)} />
-        <Route
-          path="/program-sponsor/billing/subscriptions"
-          element={renderProgramSponsorRoute(ProgramSponsorSubscription)}
-        />
-        <Route
-          path="/program-sponsor/billing/history"
-          element={renderProgramSponsorRoute(ProgramSponsorBillingHistory)}
-        />
+        <Route path="/investor-messages" element={withProtection(Messages, {}, renderInvestorRoute)} />
+        <Route path="/investor-calendar" element={withProtection(InvestorCalendar, {}, renderInvestorRoute)} />
+        <Route path="/investor-settings" element={withProtection(InvestorSettings, {}, renderInvestorRoute)} />
+        <Route path="/my-investments" element={withProtection(MyInvestments, {}, renderInvestorRoute)} />
+        <Route path="/my-cohorts" element={withProtection(MyCohorts, {}, renderInvestorRoute)} />
+
+        {/* Protected Intern Dashboard Routes */}
+        <Route path="/intern-dashboard" element={withProtection(InternDashboard, {}, renderInternRoute)} />
+        <Route path="/intern-profile" element={withProtection(InternUniversalProfile, {}, renderInternRoute)} />
+        <Route path="/intern-matches" element={withProtection(InternMatches, {}, renderInternRoute)} />
+        <Route path="/intern-dealflow" element={withProtection(InternDealflow, {}, renderInternRoute)} />
+        <Route path="/intern-table" element={withProtection(InternTable, {}, renderInternRoute)} />
+        <Route path="/intern-messages" element={withProtection(InternMessages, {}, renderInternRoute)} />
+        <Route path="/intern-documents" element={withProtection(InternDocuments, {}, renderInternRoute)} />
+        <Route path="/intern-calendar" element={withProtection(InternCalendar, {}, renderInternRoute)} />
+        <Route path="/intern-settings" element={withProtection(Settings, {}, renderInternRoute)} />
+
+        {/* Protected Program Sponsor Dashboard Routes */}
+        <Route path="/program-sponsor-dashboard" element={withProtection(ProgramSponsorDealflow, {}, renderProgramSponsorRoute)} />
+        <Route path="/program-sponsor-profile" element={withProtection(ProgramSponsorUniversalProfile, {}, renderProgramSponsorRoute)} />
+        <Route path="/program-sponsor-matches" element={withProtection(ProgramSponsorMatchesPage, {}, renderProgramSponsorRoute)} />
+        <Route path="/program-sponsor-insights" element={withProtection(ProgramSponsorInsights, {}, renderProgramSponsorRoute)} />
+        <Route path="/program-sponsor-table" element={withProtection(ProgramSponsorInternTable, {}, renderProgramSponsorRoute)} />
+        <Route path="/program-sponsor-documents" element={withProtection(ProgramSponsorDocuments, {}, renderProgramSponsorRoute)} />
+        <Route path="/program-sponsor-messages" element={withProtection(ProgramSponsorMessages, {}, renderProgramSponsorRoute)} />
+        <Route path="/program-sponsor-calendar" element={withProtection(ProgramSponsorCalendar, {}, renderProgramSponsorRoute)} />
+        <Route path="/program-sponsor-settings" element={withProtection(ProgramSponsorSettings, {}, renderProgramSponsorRoute)} />
+        
+        {/* Program Sponsor Billing Routes */}
+        <Route path="/program-sponsor/billing/info" element={withProtection(ProgramSponsorBillingInfo, {}, renderProgramSponsorRoute)} />
+        <Route path="/program-sponsor/billing/subscriptions" element={withProtection(ProgramSponsorSubscription, {}, renderProgramSponsorRoute)} />
+        <Route path="/program-sponsor/billing/history" element={withProtection(ProgramSponsorBillingHistory, {}, renderProgramSponsorRoute)} />
+
         {/* Protected Support Program Dashboard Routes */}
-        <Route path="/support-profile" element={renderSupportProgramRoute(CatalystUniversalProfile)} />{" "}
-        {/* Corrected component name */}
-        <Route path="/support-beneficiaries" element={renderSupportProgramRoute(FindMatches)} />
-        <Route path="/support-matches" element={renderSupportProgramRoute(SupportMatchesPage)} />
-        <Route path="/support-documents" element={renderSupportProgramRoute(CatalystDocuments)} />
-        <Route path="/support-messages" element={renderSupportProgramRoute(Messages)} />
-        <Route path="/support-calendar" element={renderSupportProgramRoute(Calendar)} />
-        <Route path="/support-analytics" element={renderSupportProgramRoute(GrowthEnabler)} />
-        <Route path="/support-settings" element={renderSupportProgramRoute(CatalystSettings)} />
+        <Route path="/support-profile" element={withProtection(CatalystUniversalProfile, {}, renderSupportProgramRoute)} />
+        <Route path="/support-beneficiaries" element={withProtection(FindMatches, {}, renderSupportProgramRoute)} />
+        <Route path="/support-matches" element={withProtection(SupportMatchesPage, {}, renderSupportProgramRoute)} />
+        <Route path="/support-documents" element={withProtection(CatalystDocuments, {}, renderSupportProgramRoute)} />
+        <Route path="/support-messages" element={withProtection(Messages, {}, renderSupportProgramRoute)} />
+        <Route path="/support-calendar" element={withProtection(Calendar, {}, renderSupportProgramRoute)} />
+        <Route path="/support-analytics" element={withProtection(GrowthEnabler, {}, renderSupportProgramRoute)} />
+        <Route path="/support-settings" element={withProtection(CatalystSettings, {}, renderSupportProgramRoute)} />
+        <Route path="/catalyst/cohorts" element={withProtection(CatalystCohorts, {}, renderSupportProgramRoute)} />
+        <Route path="/catalyst/investments" element={withProtection(CatalystInvestments, {}, renderSupportProgramRoute)} />
+
         {/* Protected Advisor Routes */}
-        <Route path="/advisor-dashboard" element={renderAdvisorRoute(AdvisorDashboardPage)} />
-        <Route path="/advisor-profile" element={renderAdvisorRoute(AdvisorProfile)} />
-        <Route path="/advisor-documents" element={renderAdvisorRoute(AdvisorDocuments)} />
-        <Route path="/advisor-messages" element={renderAdvisorRoute(AdvisorMessages)} />
-        <Route path="/advisor-calendar" element={renderAdvisorRoute(Calendar)} />
-        <Route path="/advisor-settings" element={renderAdvisorRoute(AdvisorSettings)} />
+        <Route path="/advisor-dashboard" element={withProtection(AdvisorDashboardPage, {}, renderAdvisorRoute)} />
+        <Route path="/advisor-profile" element={withProtection(AdvisorProfile, {}, renderAdvisorRoute)} />
+        <Route path="/advisor-documents" element={withProtection(AdvisorDocuments, {}, renderAdvisorRoute)} />
+        <Route path="/advisor-messages" element={withProtection(AdvisorMessages, {}, renderAdvisorRoute)} />
+        <Route path="/advisor-calendar" element={withProtection(Calendar, {}, renderAdvisorRoute)} />
+        <Route path="/advisor-settings" element={withProtection(AdvisorSettings, {}, renderAdvisorRoute)} />
+        
         {/* Advisor Billing Routes */}
-        <Route path="/advisor/billing/info" element={renderAdvisorRoute(BillingInfo)} />
-        <Route path="/advisor/billing/subscriptions" element={renderAdvisorRoute(MySubscriptions)} />
-        <Route path="/advisor/billing/history" element={renderAdvisorRoute(MyDocuments)} />
-        {/*MY NAVIGATIONS */}
-        <Route path="/my-investments" element={renderInvestorRoute(MyInvestments)} />
+        <Route path="/advisor/billing/info" element={withProtection(BillingInfo, {}, renderAdvisorRoute)} />
+        <Route path="/advisor/billing/subscriptions" element={withProtection(MySubscriptions, {}, renderAdvisorRoute)} />
+        <Route path="/advisor/billing/history" element={withProtection(MyDocuments, {}, renderAdvisorRoute)} />
+
         {/* Advisor Profile Sub-Routes */}
-        <Route
-          path="/advisor-profile/personal-professional-overview"
-          element={renderAdvisorProfileSection(PersonalProfessionalOverview, "personalProfessionalOverview")}
-        />
-        <Route
-          path="/advisor-profile/contact-details"
-          element={renderAdvisorProfileSection(ContactDetails, "contactDetails")}
-        />
-        <Route
-          path="/advisor-profile/selection-criteria"
-          element={renderAdvisorProfileSection(SelectionCriteria, "selectionCriteria")}
-        />
-        <Route
-          path="/advisor-profile/professional-credentials"
-          element={renderAdvisorProfileSection(ProfessionalCredentials, "professionalCredentials")}
-        />
-        <Route
-          path="/advisor-profile/required-documents"
-          element={renderAdvisorProfileSection(RequiredDocuments, "requiredDocuments")}
-        />
-        <Route
-          path="/advisor-profile/declaration-consent"
-          element={renderAdvisorProfileSection(DeclarationConsent, "declarationConsent")}
-        />
-        {/* NEW: Intern Profile Sub-Routes */}
+        <Route path="/advisor-profile/personal-professional-overview" element={renderAdvisorProfileSection(PersonalProfessionalOverview, "personalProfessionalOverview")} />
+        <Route path="/advisor-profile/contact-details" element={renderAdvisorProfileSection(ContactDetails, "contactDetails")} />
+        <Route path="/advisor-profile/selection-criteria" element={renderAdvisorProfileSection(SelectionCriteria, "selectionCriteria")} />
+        <Route path="/advisor-profile/professional-credentials" element={renderAdvisorProfileSection(ProfessionalCredentials, "professionalCredentials")} />
+        <Route path="/advisor-profile/required-documents" element={renderAdvisorProfileSection(RequiredDocuments, "requiredDocuments")} />
+        <Route path="/advisor-profile/declaration-consent" element={renderAdvisorProfileSection(DeclarationConsent, "declarationConsent")} />
+
+        {/* Intern Profile Sub-Routes */}
         <Route path="/intern-profile/instructions" element={renderInternProfileSection(Instructions, "instructions")} />
-        <Route
-          path="/intern-profile/personal-overview"
-          element={renderInternProfileSection(InternPersonalOverview, "personalOverview")}
-        />
-        <Route
-          path="/intern-profile/academic-overview"
-          element={renderInternProfileSection(InternAcademicOverview, "academicOverview")}
-        />
-        <Route
-          path="/intern-profile/experience-track-record"
-          element={renderInternProfileSection(InternExperienceTrack, "experienceTrackRecord")}
-        />
-        <Route
-          path="/intern-profile/skills-interests"
-          element={renderInternProfileSection(InternSkillsInterests, "skillsInterests")}
-        />
-        <Route
-          path="/intern-profile/program-affiliation"
-          element={renderInternProfileSection(InternProgramAffiliation, "programAffiliation")}
-        />
-        <Route
-          path="/intern-profile/required-documents"
-          element={renderInternProfileSection(InternRequiredDocuments, "requiredDocuments")}
-        />
-        <Route
-          path="/intern-profile/declaration-consent"
-          element={renderInternProfileSection(InternDeclarationConsent, "declarationConsent")}
-        />
-        {/* NEW: Program Sponsor Profile Sub-Routes */}
-        <Route
-          path="/program-sponsor-profile/instructions"
-          element={renderProgramSponsorProfileSection(ProgramSponsorInstructions, "instructions")}
-        />
-        <Route
-          path="/program-sponsor-profile/entity-overview"
-          element={renderProgramSponsorProfileSection(ProgramSponsorEntityOverview, "entityOverview")}
-        />
-        <Route
-          path="/program-sponsor-profile/contact-details"
-          element={renderProgramSponsorProfileSection(ProgramSponsorContactDetails, "contactDetails")}
-        />
-        <Route
-          path="/program-sponsor-profile/program-details"
-          element={renderProgramSponsorProfileSection(ProgramSponsorProgramDetails, "programDetails")}
-        />
-        <Route
-          path="/program-sponsor-profile/declaration-consent"
-          element={renderProgramSponsorProfileSection(ProgramSponsorDeclarationConsent, "declarationConsent")}
-        />
+        <Route path="/intern-profile/personal-overview" element={renderInternProfileSection(InternPersonalOverview, "personalOverview")} />
+        <Route path="/intern-profile/academic-overview" element={renderInternProfileSection(InternAcademicOverview, "academicOverview")} />
+        <Route path="/intern-profile/experience-track-record" element={renderInternProfileSection(InternExperienceTrack, "experienceTrackRecord")} />
+        <Route path="/intern-profile/skills-interests" element={renderInternProfileSection(InternSkillsInterests, "skillsInterests")} />
+        <Route path="/intern-profile/program-affiliation" element={renderInternProfileSection(InternProgramAffiliation, "programAffiliation")} />
+        <Route path="/intern-profile/required-documents" element={renderInternProfileSection(InternRequiredDocuments, "requiredDocuments")} />
+        <Route path="/intern-profile/declaration-consent" element={renderInternProfileSection(InternDeclarationConsent, "declarationConsent")} />
+
+        {/* Program Sponsor Profile Sub-Routes */}
+        <Route path="/program-sponsor-profile/instructions" element={renderProgramSponsorProfileSection(ProgramSponsorInstructions, "instructions")} />
+        <Route path="/program-sponsor-profile/entity-overview" element={renderProgramSponsorProfileSection(ProgramSponsorEntityOverview, "entityOverview")} />
+        <Route path="/program-sponsor-profile/contact-details" element={renderProgramSponsorProfileSection(ProgramSponsorContactDetails, "contactDetails")} />
+        <Route path="/program-sponsor-profile/program-details" element={renderProgramSponsorProfileSection(ProgramSponsorProgramDetails, "programDetails")} />
+        <Route path="/program-sponsor-profile/declaration-consent" element={renderProgramSponsorProfileSection(ProgramSponsorDeclarationConsent, "declarationConsent")} />
+
         {/* Application Routes */}
-        <Route path="/applications/funding" element={renderSMERoute(FundingApplication)} />
-        <Route path="/applications/funding/:section" element={renderSMERoute(FundingApplication)} />
-        <Route path="/applications/product" element={renderSMERoute(ProductApplication)} />
-        <Route path="/applications/product/:section" element={renderSMERoute(ProductApplication)} />
-        <Route path="/applications/advisory" element={renderSMERoute(AdvisoryApplication)} />
-        <Route path="/applications/advisory/:section" element={renderSMERoute(AdvisoryApplication)} />
-        {/* NEW: Intern Application Routes */}
-        <Route path="/applications/intern" element={renderSMERoute(InternApplication)} />
-        <Route path="/applications/intern/:section" element={renderSMERoute(InternApplication)} />
-        <Route path="/applications/intern/instructions" element={renderSMERoute(Instructions)} />
-        <Route path="/applications/intern/job-overview" element={renderSMERoute(InternJobOverview)} />
-        <Route path="/applications/intern/internship-request" element={renderSMERoute(InternInternshipRequest)} />
-        <Route path="/applications/intern/matching-agreement" element={renderSMERoute(InternMatchingAgreement)} />
+        <Route path="/applications/funding" element={withProtection(FundingApplication, {}, renderSMERoute)} />
+        <Route path="/applications/funding/:section" element={withProtection(FundingApplication, {}, renderSMERoute)} />
+        <Route path="/applications/product" element={withProtection(ProductApplication, {}, renderSMERoute)} />
+        <Route path="/applications/product/:section" element={withProtection(ProductApplication, {}, renderSMERoute)} />
+        <Route path="/applications/advisory" element={withProtection(AdvisoryApplication, {}, renderSMERoute)} />
+        <Route path="/applications/advisory/:section" element={withProtection(AdvisoryApplication, {}, renderSMERoute)} />
+        
+        {/* Intern Application Routes */}
+        <Route path="/applications/intern" element={withProtection(InternApplication, {}, renderSMERoute)} />
+        <Route path="/applications/intern/:section" element={withProtection(InternApplication, {}, renderSMERoute)} />
+        <Route path="/applications/intern/instructions" element={withProtection(Instructions, {}, renderSMERoute)} />
+        <Route path="/applications/intern/job-overview" element={withProtection(InternJobOverview, {}, renderSMERoute)} />
+        <Route path="/applications/intern/internship-request" element={withProtection(InternInternshipRequest, {}, renderSMERoute)} />
+        <Route path="/applications/intern/matching-agreement" element={withProtection(InternMatchingAgreement, {}, renderSMERoute)} />
+
         {/* SME Universal Profile Sub-Routes */}
         <Route path="/profile/instructions" element={renderSMEProfileSection(SMEInstructions, "instructions")} />
         <Route path="/profile/entity-overview" element={renderSMEProfileSection(SMEEntityOverview, "entityOverview")} />
-        <Route
-          path="/profile/ownership-management"
-          element={renderSMEProfileSection(SMEOwnershipManagement, "ownershipManagement")}
-        />
+        <Route path="/profile/ownership-management" element={renderSMEProfileSection(SMEOwnershipManagement, "ownershipManagement")} />
         <Route path="/profile/contact-details" element={renderSMEProfileSection(SMEContactDetails, "contactDetails")} />
-        <Route
-          path="/profile/legal-compliance"
-          element={renderSMEProfileSection(SMELegalCompliance, "legalCompliance")}
-        />
-        <Route
-          path="/profile/products-services"
-          element={renderSMEProfileSection(SMEProductsServices, "productsServices")}
-        />
+        <Route path="/profile/legal-compliance" element={renderSMEProfileSection(SMELegalCompliance, "legalCompliance")} />
+        <Route path="/profile/products-services" element={renderSMEProfileSection(SMEProductsServices, "productsServices")} />
         <Route path="/profile/how-did-you-hear" element={renderSMEProfileSection(SMEHowDidYouHear, "howDidYouHear")} />
-        <Route
-          path="/profile/declaration-consent"
-          element={renderSMEProfileSection(SMEDeclarationConsent, "declarationConsent")}
-        />
+        <Route path="/profile/declaration-consent" element={renderSMEProfileSection(SMEDeclarationConsent, "declarationConsent")} />
+
         {/* Investor Universal Profile Sub-Routes */}
-        <Route
-          path="/investor-profile/instructions"
-          element={renderInvestorProfileSection(InvestorInstructions, "instructions")}
-        />
-        <Route
-          path="/investor-profile/entity-overview"
-          element={renderInvestorProfileSection(InvestorEntityOverview, "entityOverview")}
-        />
-        <Route
-          path="/investor-profile/ownership-management"
-          element={renderInvestorProfileSection(InvestorOwnershipManagement, "ownershipManagement")}
-        />
-        <Route
-          path="/investor-profile/contact-details"
-          element={renderInvestorProfileSection(InvestorContactDetails, "contactDetails")}
-        />
-        <Route
-          path="/investor-profile/legal-compliance"
-          element={renderInvestorProfileSection(InvestorLegalCompliance, "legalCompliance")}
-        />
-        <Route
-          path="/investor-profile/products-services"
-          element={renderInvestorProfileSection(InvestorProductsServices, "productsServices")}
-        />
-        <Route
-          path="/investor-profile/how-did-you-hear"
-          element={renderInvestorProfileSection(InvestorHowDidYouHear, "howDidYouHear")}
-        />
-        <Route
-          path="/investor-profile/declaration-consent"
-          element={renderInvestorProfileSection(InvestorDeclarationConsent, "declarationConsent")}
-        />
-        {/* Support Program Universal Profile Sub-Routes - CORRECTED */}
-        <Route
-          path="/support-profile/instructions"
-          element={renderSupportProfileSection(CatalystInstructions, "instructions")}
-        />
-        <Route
-          path="/support-profile/entity-overview"
-          element={renderSupportProfileSection(CatalystEntityOverview, "entityOverview")}
-        />
-        <Route
-          path="/support-profile/contact-details"
-          element={renderSupportProfileSection(CatalystContactDetails, "contactDetails")}
-        />
-        <Route
-          path="/support-profile/program-details"
-          element={renderSupportProfileSection(CatalystProgramDetails, "programmeDetails")}
-        />
-        <Route
-          path="/support-profile/application-brief"
-          element={renderSupportProfileSection(CatalystApplicationBrief, "applicationBrief")}
-        />
-        <Route
-          path="/support-profile/matching-preference"
-          element={renderSupportProfileSection(CatalystMatchingPreference, "generalMatchingPreference")}
-        />
-        <Route
-          path="/support-profile/declaration-consent"
-          element={renderSupportProfileSection(CatalystDeclarationConsent, "declarationConsent")}
-        />
-        <Route
-          path="/support-profile/summary"
-          element={renderSupportProfileSection(CatalystUniversalProfile, "summary")} // This will render the main CatalystUniversalProfile which handles the summary step
-        />
+        <Route path="/investor-profile/instructions" element={renderInvestorProfileSection(InvestorInstructions, "instructions")} />
+        <Route path="/investor-profile/entity-overview" element={renderInvestorProfileSection(InvestorEntityOverview, "entityOverview")} />
+        <Route path="/investor-profile/ownership-management" element={renderInvestorProfileSection(InvestorOwnershipManagement, "ownershipManagement")} />
+        <Route path="/investor-profile/contact-details" element={renderInvestorProfileSection(InvestorContactDetails, "contactDetails")} />
+        <Route path="/investor-profile/legal-compliance" element={renderInvestorProfileSection(InvestorLegalCompliance, "legalCompliance")} />
+        <Route path="/investor-profile/products-services" element={renderInvestorProfileSection(InvestorProductsServices, "productsServices")} />
+        <Route path="/investor-profile/how-did-you-hear" element={renderInvestorProfileSection(InvestorHowDidYouHear, "howDidYouHear")} />
+        <Route path="/investor-profile/declaration-consent" element={renderInvestorProfileSection(InvestorDeclarationConsent, "declarationConsent")} />
+
+        {/* Support Program Universal Profile Sub-Routes */}
+        <Route path="/support-profile/instructions" element={renderSupportProfileSection(CatalystInstructions, "instructions")} />
+        <Route path="/support-profile/entity-overview" element={renderSupportProfileSection(CatalystEntityOverview, "entityOverview")} />
+        <Route path="/support-profile/contact-details" element={renderSupportProfileSection(CatalystContactDetails, "contactDetails")} />
+        <Route path="/support-profile/program-details" element={renderSupportProfileSection(CatalystProgramDetails, "programmeDetails")} />
+        <Route path="/support-profile/application-brief" element={renderSupportProfileSection(CatalystApplicationBrief, "applicationBrief")} />
+        <Route path="/support-profile/matching-preference" element={renderSupportProfileSection(CatalystMatchingPreference, "generalMatchingPreference")} />
+        <Route path="/support-profile/declaration-consent" element={renderSupportProfileSection(CatalystDeclarationConsent, "declarationConsent")} />
+        <Route path="/support-profile/summary" element={renderSupportProfileSection(CatalystUniversalProfile, "summary")} />
+
         {/* Matches Routes */}
-        <Route path="/customer-matches" element={renderSMERoute(CustomerMatchesPage)} />
-        <Route path="/funding-matches" element={renderSMERoute(FundingMatchesPage)} />
-        <Route path="/supplier-matches" element={renderSMERoute(SupplierMatchesPage)} />
-        <Route path="/support-program-matches" element={renderSMERoute(SupportProgramMatchesPage)} />
-        <Route path="/find-advisors" element={renderSMERoute(SMSEAdvisorMatchesPage)} />
-        <Route path="/investor-matches" element={renderInvestorRoute(MatchesPage)} />
-        {/* NEW: Intern Matches Routes */}
-        <Route path="/intern-matches-page" element={renderSMERoute(InternMatchesPage)} />
-        <Route path="/intern-dealflow-page" element={renderSMERoute(InternDealflowPage)} />
-        <Route path="/intern-insights-page" element={renderSMERoute(InternInsightsPage)} />
-        <Route path="/intern-table-page" element={renderSMERoute(InternTablePage)} />
-        {/* INSIGHTS - FIXED ROUTES */}
-        <Route path="/insights" element={renderSMERoute(BigInsights)} />
-        <Route path="/investor-insights" element={renderInvestorRoute(InvestorInsights)} />
-        <Route path="/advisor-insights" element={renderAdvisorRoute(AdvisorInsights)} />
-        <Route path="/intern-insights" element={renderInternRoute(InternInsights)} />
-        <Route path="/program-sponsor-insights" element={renderProgramSponsorRoute(ProgramSponsorInsights)} />
-        <Route path="/support-insights" element={renderSupportProgramRoute(CatalystInsights)} />
+        <Route path="/opportunity-matches" element={withProtection(OpportunityMatchesPage, {}, renderSMERoute)} />
+        <Route path="/customer-matches" element={withProtection(CustomerMatchesPage, {}, renderSMERoute)} />
+        <Route path="/funding-matches" element={withProtection(FundingMatchesPage, {}, renderSMERoute)} />
+        <Route path="/supplier-matches" element={withProtection(SupplierMatchesPage, {}, renderSMERoute)} />
+        <Route path="/support-program-matches" element={withProtection(SupportProgramMatchesPage, {}, renderSMERoute)} />
+        <Route path="/find-advisors" element={withProtection(SMSEAdvisorMatchesPage, {}, renderSMERoute)} />
+        <Route path="/investor-matches" element={withProtection(MatchesPage, {}, renderInvestorRoute)} />
+        
+        {/* Intern Matches Routes */}
+        <Route path="/intern-matches-page" element={withProtection(InternMatchesPage, {}, renderSMERoute)} />
+        <Route path="/intern-dealflow-page" element={withProtection(InternDealflowPage, {}, renderSMERoute)} />
+        <Route path="/intern-insights-page" element={withProtection(InternInsightsPage, {}, renderSMERoute)} />
+        <Route path="/intern-table-page" element={withProtection(InternTablePage, {}, renderSMERoute)} />
+
+        {/* Insights Routes */}
+        <Route path="/insights" element={withProtection(BigInsights, {}, renderSMERoute)} />
+        <Route path="/investor-insights" element={withProtection(InvestorInsights, {}, renderInvestorRoute)} />
+        <Route path="/advisor-insights" element={withProtection(AdvisorInsights, {}, renderAdvisorRoute)} />
+        <Route path="/intern-insights" element={withProtection(InternInsights, {}, renderInternRoute)} />
+        <Route path="/program-sponsor-insights" element={withProtection(ProgramSponsorInsights, {}, renderProgramSponsorRoute)} />
+        <Route path="/support-insights" element={withProtection(CatalystInsights, {}, renderSupportProgramRoute)} />
+
         {/* Redirects */}
         <Route path="/universal-profile" element={<Navigate to="/investor-profile" replace />} />
         <Route path="/investor-universal-profile" element={<Navigate to="/investor-profile/instructions" replace />} />
@@ -1066,22 +1025,13 @@ function App() {
         <Route path="/applications/product-application" element={<Navigate to="/applications/product" replace />} />
         <Route path="/applications/advisory-application" element={<Navigate to="/applications/advisory" replace />} />
         <Route path="/advisor" element={<Navigate to="/advisor-profile" replace />} />
-        <Route
-          path="/advisor-profile-main"
-          element={<Navigate to="/advisor-profile/personal-professional-overview" replace />}
-        />
+        <Route path="/advisor-profile-main" element={<Navigate to="/advisor-profile/personal-professional-overview" replace />} />
         <Route path="/advisor-matches" element={<Navigate to="/find-advisors" replace />} />
-        {/* NEW: Intern and Program Sponsor Redirects */}
         <Route path="/intern" element={<Navigate to="/intern-profile" replace />} />
         <Route path="/intern-profile-main" element={<Navigate to="/intern-profile/instructions" replace />} />
         <Route path="/program-sponsor" element={<Navigate to="/program-sponsor-profile" replace />} />
-        <Route
-          path="/program-sponsor-profile-main"
-          element={<Navigate to="/program-sponsor-profile/instructions" replace />}
-        />
+        <Route path="/program-sponsor-profile-main" element={<Navigate to="/program-sponsor-profile/instructions" replace />} />
         <Route path="/applications/intern-application" element={<Navigate to="/applications/intern" replace />} />
-
-        <Route path ="/my-cohorts" element={renderInvestorRoute(MyCohorts)} />
       </Routes>
     </Router>
   )
