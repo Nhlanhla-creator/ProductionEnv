@@ -1,5 +1,3 @@
-"use client"
-
 import { useState, useEffect } from "react"
 import { Bar, Line } from "react-chartjs-2"
 import Sidebar from "smses/Sidebar/Sidebar"
@@ -147,7 +145,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
   const [navData, setNavData] = useState(Array(12).fill(""))
   const [financialYear, setFinancialYear] = useState("FY")
   
-  // Balance Sheet Data Structure
+  // Balance Sheet Data Structure - FIXED with correct hierarchy
   const [balanceSheetData, setBalanceSheetData] = useState({
     assets: {
       bank: {
@@ -158,19 +156,21 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
         accountsReceivable: Array(12).fill(""),
         deposits: Array(12).fill(""),
         cash: Array(12).fill(""),
-        callAccounts: Array(12).fill(""),
-        loans: Array(12).fill(""),
+        callAccounts: Array(12).fill(""), // Added this missing property
         tradeReceivables: Array(12).fill(""),
       },
       fixedAssets: {
+        // These are all items under Fixed Assets category
         computerEquipment: Array(12).fill(""),
         lessDepreciationComputer: Array(12).fill(""),
         vehicles: Array(12).fill(""),
         lessDepreciationVehicles: Array(12).fill(""),
         otherPropertyPlantEquipment: Array(12).fill(""),
         lessDepreciationOther: Array(12).fill(""),
+        totalFixedAssets: Array(12).fill(""), // This is an item, not a category
       },
       nonCurrentAssets: {
+        // FIXED: Loans moved from currentAssets to nonCurrentAssets
         loans: Array(12).fill(""),
         loanAccount: Array(12).fill(""),
         intangibleAssets: Array(12).fill(""),
@@ -189,9 +189,11 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
         vatLiability: Array(12).fill(""),
       },
       nonCurrentLiabilities: {
+        // This is a category
         thirdPartyLoans: Array(12).fill(""),
         intercompanyLoans: Array(12).fill(""),
         directorsLoans: Array(12).fill(""),
+        totalNonCurrentLiabilities: Array(12).fill(""), // This is an item
       },
     },
     equity: {
@@ -201,26 +203,28 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
       retainedEarnings: Array(12).fill(""),
     },
   })
+// In the CapitalStructure component, update the initial state for KPI data:
 
-  // Solvency KPIs
+  // Solvency KPIs - Pull data from balance sheet (Nav moved here from balance sheet)
   const [solvencyData, setSolvencyData] = useState({
-    debtToEquity: Array(12).fill(""),
-    interestCoverage: Array(12).fill(""),
-    debtServiceCoverage: Array(12).fill(""),
+    debtToEquity: Array(12).fill("0"),
+    interestCoverage: Array(12).fill("0"),
+    debtServiceCoverage: Array(12).fill("0"),
+    nav: Array(12).fill("0"), // NAV moved to solvency tab
   })
 
-  // Leverage KPIs
+  // Leverage KPIs - Pull data from balance sheet
   const [leverageData, setLeverageData] = useState({
-    totalDebtRatio: Array(12).fill(""),
-    longTermDebtRatio: Array(12).fill(""),
-    equityMultiplier: Array(12).fill(""),
+    totalDebtRatio: Array(12).fill("0"),
+    longTermDebtRatio: Array(12).fill("0"),
+    equityMultiplier: Array(12).fill("0"),
   })
 
-  // Equity KPIs
+  // Equity KPIs - Pull data from balance sheet
   const [equityData, setEquityData] = useState({
-    returnOnEquity: Array(12).fill(""),
-    equityRatio: Array(12).fill(""),
-    bookValuePerShare: Array(12).fill(""),
+    returnOnEquity: Array(12).fill("0"),
+    equityRatio: Array(12).fill("0"),
+    bookValuePerShare: Array(12).fill("0"),
   })
 
   const months = getMonthsForYear(selectedYear, "month")
@@ -239,6 +243,67 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
     }
   }, [user])
 
+  useEffect(() => {
+    // Calculate KPIs from balance sheet data
+    calculateKPIsFromBalanceSheet()
+  }, [balanceSheetData, selectedMonth, selectedYear])
+
+    const calculateKPIsFromBalanceSheet = () => {
+    const monthIndex = getMonthIndex(selectedMonth)
+    
+    // Ensure monthIndex is valid
+    if (monthIndex < 0 || monthIndex >= 12) return
+    
+    // Get values from balance sheet with safe defaults
+    const totalEquity = calculateTotal(balanceSheetData.equity, monthIndex) || 0
+    const totalLiabilities = (calculateTotal(balanceSheetData.liabilities.currentLiabilities, monthIndex) || 0) + 
+                           (calculateTotal(balanceSheetData.liabilities.nonCurrentLiabilities, monthIndex) || 0)
+    const totalAssets = calculateTotalAssets(monthIndex) || 0
+    
+    // Calculate Debt to Equity Ratio
+    const debtToEquity = totalEquity !== 0 ? (totalLiabilities / totalEquity) : 0
+    
+    // Calculate Equity Ratio
+    const equityRatio = totalAssets !== 0 ? (totalEquity / totalAssets) : 0
+    
+    // Calculate Total Debt Ratio
+    const totalDebtRatio = totalAssets !== 0 ? (totalLiabilities / totalAssets) : 0
+    
+    // Calculate Net Assets (NAV)
+    const netAssets = totalAssets - totalLiabilities
+    
+    // Update KPI data - ensure arrays exist
+    const newSolvencyData = { ...solvencyData }
+    // Ensure arrays are initialized
+    if (!newSolvencyData.debtToEquity) newSolvencyData.debtToEquity = Array(12).fill("0")
+    if (!newSolvencyData.interestCoverage) newSolvencyData.interestCoverage = Array(12).fill("0")
+    if (!newSolvencyData.debtServiceCoverage) newSolvencyData.debtServiceCoverage = Array(12).fill("0")
+    if (!newSolvencyData.nav) newSolvencyData.nav = Array(12).fill("0")
+    
+    newSolvencyData.debtToEquity[monthIndex] = debtToEquity.toFixed(2)
+    newSolvencyData.nav[monthIndex] = netAssets.toFixed(2)
+    
+    const newLeverageData = { ...leverageData }
+    // Ensure arrays are initialized
+    if (!newLeverageData.totalDebtRatio) newLeverageData.totalDebtRatio = Array(12).fill("0")
+    if (!newLeverageData.longTermDebtRatio) newLeverageData.longTermDebtRatio = Array(12).fill("0")
+    if (!newLeverageData.equityMultiplier) newLeverageData.equityMultiplier = Array(12).fill("0")
+    
+    newLeverageData.totalDebtRatio[monthIndex] = totalDebtRatio.toFixed(2)
+    
+    const newEquityData = { ...equityData }
+    // Ensure arrays are initialized
+    if (!newEquityData.returnOnEquity) newEquityData.returnOnEquity = Array(12).fill("0")
+    if (!newEquityData.equityRatio) newEquityData.equityRatio = Array(12).fill("0")
+    if (!newEquityData.bookValuePerShare) newEquityData.bookValuePerShare = Array(12).fill("0")
+    
+    newEquityData.equityRatio[monthIndex] = (equityRatio * 100).toFixed(2) // Convert to percentage
+    
+    setSolvencyData(newSolvencyData)
+    setLeverageData(newLeverageData)
+    setEquityData(newEquityData)
+  }
+
   const loadCapitalStructureData = async () => {
     if (!user) return
     setLoading(true)
@@ -252,7 +317,6 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
         if (data.equityData) setEquityData(data.equityData)
         if (data.kpiNotes) setKpiNotes(data.kpiNotes)
         if (data.kpiAnalysis) setKpiAnalysis(data.kpiAnalysis)
-        if (data.navData) setNavData(data.navData)
       }
     } catch (error) {
       console.error("Error loading capital structure data:", error)
@@ -274,7 +338,6 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
         solvencyData,
         leverageData,
         equityData,
-        navData,
         kpiNotes,
         kpiAnalysis,
         lastUpdated: new Date().toISOString(),
@@ -292,37 +355,66 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
   const getMonthIndex = (month) => months.indexOf(month)
 
   const calculateTotal = (items, monthIndex) => {
+    if (!items || monthIndex < 0 || monthIndex >= 12) return 0
+    
     return Object.values(items).reduce((sum, arr) => {
+      if (!Array.isArray(arr) || arr.length <= monthIndex) return sum
       const val = Number.parseFloat(arr[monthIndex]) || 0
       return sum + val
     }, 0)
   }
 
+   const calculateTotalAssets = (monthIndex) => {
+    if (monthIndex < 0 || monthIndex >= 12) return 0
+    
+    const totalBank =
+      (Number.parseFloat(balanceSheetData?.assets?.bank?.callAccounts?.[monthIndex]) || 0) +
+      (Number.parseFloat(balanceSheetData?.assets?.bank?.currentAccount?.[monthIndex]) || 0)
+    
+    const totalCurrentAssets = calculateTotal(balanceSheetData?.assets?.currentAssets || {}, monthIndex)
+    const totalFixedAssets = calculateTotal(balanceSheetData?.assets?.fixedAssets || {}, monthIndex)
+    const totalNonCurrentAssets = calculateTotal(balanceSheetData?.assets?.nonCurrentAssets || {}, monthIndex)
+    
+    return totalBank + totalCurrentAssets + totalFixedAssets + totalNonCurrentAssets
+  }
+
   const monthIndex = getMonthIndex(selectedMonth)
 
-  // Calculate totals
+  // Calculate totals with optional chaining
   const totalBank =
-    (Number.parseFloat(balanceSheetData.assets.bank.callAccounts[monthIndex]) || 0) +
-    (Number.parseFloat(balanceSheetData.assets.bank.currentAccount[monthIndex]) || 0)
+    (Number.parseFloat(balanceSheetData?.assets?.bank?.callAccounts?.[monthIndex]) || 0) +
+    (Number.parseFloat(balanceSheetData?.assets?.bank?.currentAccount?.[monthIndex]) || 0)
 
-  const totalCurrentAssets = calculateTotal(balanceSheetData.assets.currentAssets, monthIndex)
-  const totalFixedAssets = calculateTotal(balanceSheetData.assets.fixedAssets, monthIndex)
-  const totalNonCurrentAssets = calculateTotal(balanceSheetData.assets.nonCurrentAssets, monthIndex)
+  const totalCurrentAssets = calculateTotal(balanceSheetData?.assets?.currentAssets || {}, monthIndex)
+  const totalFixedAssets = calculateTotal(balanceSheetData?.assets?.fixedAssets || {}, monthIndex)
+  const totalNonCurrentAssets = calculateTotal(balanceSheetData?.assets?.nonCurrentAssets || {}, monthIndex)
   const totalAssets = totalBank + totalCurrentAssets + totalFixedAssets + totalNonCurrentAssets
 
-  const totalCurrentLiabilities = calculateTotal(balanceSheetData.liabilities.currentLiabilities, monthIndex)
-  const totalNonCurrentLiabilities = calculateTotal(balanceSheetData.liabilities.nonCurrentLiabilities, monthIndex)
+  const totalCurrentLiabilities = calculateTotal(balanceSheetData?.liabilities?.currentLiabilities || {}, monthIndex)
+  const totalNonCurrentLiabilities = calculateTotal(balanceSheetData?.liabilities?.nonCurrentLiabilities || {}, monthIndex)
   const totalLiabilities = totalCurrentLiabilities + totalNonCurrentLiabilities
 
-  const totalEquity = calculateTotal(balanceSheetData.equity, monthIndex)
+  const totalEquity = calculateTotal(balanceSheetData?.equity || {}, monthIndex)
   const netAssets = totalAssets - totalLiabilities
   const totalLiabilitiesAndCapital = totalLiabilities + totalEquity
 
-  // Update NAV data
+  // Update NAV data in solvency KPI
+   // Update NAV data in solvency KPI
   useEffect(() => {
-    const newNavData = [...navData]
-    newNavData[monthIndex] = netAssets.toString()
-    setNavData(newNavData)
+    const monthIndex = getMonthIndex(selectedMonth)
+    if (monthIndex < 0 || monthIndex >= 12) return
+    
+    const newSolvencyData = { ...solvencyData }
+    if (!newSolvencyData.nav) newSolvencyData.nav = Array(12).fill("0")
+    
+    // Ensure netAssets is calculated properly
+    const totalAssets = calculateTotalAssets(monthIndex) || 0
+    const totalLiabilities = (calculateTotal(balanceSheetData?.liabilities?.currentLiabilities || {}, monthIndex) || 0) + 
+                           (calculateTotal(balanceSheetData?.liabilities?.nonCurrentLiabilities || {}, monthIndex) || 0)
+    const netAssets = totalAssets - totalLiabilities
+    
+    newSolvencyData.nav[monthIndex] = netAssets.toString()
+    setSolvencyData(newSolvencyData)
   }, [netAssets, monthIndex])
 
   const toggleNotes = (kpiKey) => {
@@ -335,6 +427,14 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
 
   const updateKpiAnalysis = (kpiKey, analysis) => {
     setKpiAnalysis((prev) => ({ ...prev, [kpiKey]: analysis }))
+  }
+
+  const handleAddNotes = (kpiKey) => {
+    setExpandedNotes((prev) => ({ ...prev, [kpiKey]: !prev[kpiKey] }))
+  }
+
+  const handleAIAnalysis = (kpiKey) => {
+    setExpandedNotes((prev) => ({ ...prev, [`${kpiKey}_analysis`]: !prev[`${kpiKey}_analysis`] }))
   }
 
   const openTrendModal = (itemName, data) => {
@@ -377,10 +477,18 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
               newBalanceSheetData.assets.currentAssets.deposits = monthValues
             } else if (item.includes("cash")) {
               newBalanceSheetData.assets.currentAssets.cash = monthValues
-            } else if (item.includes("loan")) {
-              newBalanceSheetData.assets.currentAssets.loans = monthValues
             } else if (item.includes("trade")) {
               newBalanceSheetData.assets.currentAssets.tradeReceivables = monthValues
+            } else if (item.includes("call")) {
+              newBalanceSheetData.assets.currentAssets.callAccounts = monthValues
+            }
+          } else if (category.includes("non-current assets")) {
+            if (item.includes("loan")) {
+              newBalanceSheetData.assets.nonCurrentAssets.loans = monthValues
+            } else if (item.includes("loan account")) {
+              newBalanceSheetData.assets.nonCurrentAssets.loanAccount = monthValues
+            } else if (item.includes("intangible")) {
+              newBalanceSheetData.assets.nonCurrentAssets.intangibleAssets = monthValues
             }
           }
         }
@@ -415,107 +523,111 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
     const rows = []
 
     // Assets - Bank
-    rows.push(["Bank", "Call Accounts", ...balanceSheetData.assets.bank.callAccounts])
-    rows.push(["Bank", "Current Account", ...balanceSheetData.assets.bank.currentAccount])
+    rows.push(["Bank", "Call Accounts", ...balanceSheetData?.assets?.bank?.callAccounts || Array(12).fill("")])
+    rows.push(["Bank", "Current Account", ...balanceSheetData?.assets?.bank?.currentAccount || Array(12).fill("")])
 
     // Assets - Current Assets
-    rows.push(["Current Assets", "Accounts Receivable", ...balanceSheetData.assets.currentAssets.accountsReceivable])
-    rows.push(["Current Assets", "Deposits", ...balanceSheetData.assets.currentAssets.deposits])
-    rows.push(["Current Assets", "Cash", ...balanceSheetData.assets.currentAssets.cash])
-    rows.push(["Current Assets", "Call Accounts", ...balanceSheetData.assets.currentAssets.callAccounts])
-    rows.push(["Current Assets", "Loans", ...balanceSheetData.assets.currentAssets.loans])
-    rows.push(["Current Assets", "Trade Receivables", ...balanceSheetData.assets.currentAssets.tradeReceivables])
+    rows.push(["Current Assets", "Accounts Receivable", ...balanceSheetData?.assets?.currentAssets?.accountsReceivable || Array(12).fill("")])
+    rows.push(["Current Assets", "Deposits", ...balanceSheetData?.assets?.currentAssets?.deposits || Array(12).fill("")])
+    rows.push(["Current Assets", "Cash", ...balanceSheetData?.assets?.currentAssets?.cash || Array(12).fill("")])
+    rows.push(["Current Assets", "Call Accounts", ...balanceSheetData?.assets?.currentAssets?.callAccounts || Array(12).fill("")])
+    rows.push(["Current Assets", "Trade Receivables", ...balanceSheetData?.assets?.currentAssets?.tradeReceivables || Array(12).fill("")])
 
-    // Assets - Fixed Assets
-    rows.push(["Fixed Assets", "Computer Equipment", ...balanceSheetData.assets.fixedAssets.computerEquipment])
+    // Assets - Fixed Assets (all as items under Fixed Assets category)
+    rows.push(["Fixed Assets", "Computer Equipment", ...balanceSheetData?.assets?.fixedAssets?.computerEquipment || Array(12).fill("")])
     rows.push([
       "Fixed Assets",
-      "Less Depreciation Computer",
-      ...balanceSheetData.assets.fixedAssets.lessDepreciationComputer,
+      "Less Depreciation on Computer Equipment",
+      ...balanceSheetData?.assets?.fixedAssets?.lessDepreciationComputer || Array(12).fill(""),
     ])
-    rows.push(["Fixed Assets", "Vehicles", ...balanceSheetData.assets.fixedAssets.vehicles])
+    rows.push(["Fixed Assets", "Vehicles", ...balanceSheetData?.assets?.fixedAssets?.vehicles || Array(12).fill("")])
     rows.push([
       "Fixed Assets",
-      "Less Depreciation Vehicles",
-      ...balanceSheetData.assets.fixedAssets.lessDepreciationVehicles,
+      "Less Depreciation on Vehicles",
+      ...balanceSheetData?.assets?.fixedAssets?.lessDepreciationVehicles || Array(12).fill(""),
     ])
     rows.push([
       "Fixed Assets",
-      "Other Property Plant Equipment",
-      ...balanceSheetData.assets.fixedAssets.otherPropertyPlantEquipment,
+      "Other Property, Plant & Equipment",
+      ...balanceSheetData?.assets?.fixedAssets?.otherPropertyPlantEquipment || Array(12).fill(""),
     ])
-    rows.push(["Fixed Assets", "Less Depreciation Other", ...balanceSheetData.assets.fixedAssets.lessDepreciationOther])
+    rows.push(["Fixed Assets", "Total Fixed Assets", ...balanceSheetData?.assets?.fixedAssets?.totalFixedAssets || Array(12).fill("")])
 
-    // Assets - Non-Current Assets
-    rows.push(["Non-Current Assets", "Loans", ...balanceSheetData.assets.nonCurrentAssets.loans])
-    rows.push(["Non-Current Assets", "Loan Account", ...balanceSheetData.assets.nonCurrentAssets.loanAccount])
-    rows.push(["Non-Current Assets", "Intangible Assets", ...balanceSheetData.assets.nonCurrentAssets.intangibleAssets])
+    // Assets - Non-Current Assets (FIXED: Loans, Loan Account, Intangible Assets moved here)
+    rows.push(["Non-Current Assets", "Loans", ...balanceSheetData?.assets?.nonCurrentAssets?.loans || Array(12).fill("")])
+    rows.push(["Non-Current Assets", "Loan Account", ...balanceSheetData?.assets?.nonCurrentAssets?.loanAccount || Array(12).fill("")])
+    rows.push(["Non-Current Assets", "Intangible Assets", ...balanceSheetData?.assets?.nonCurrentAssets?.intangibleAssets || Array(12).fill("")])
 
     // Liabilities - Current
     rows.push([
       "Current Liabilities",
       "Accounts Payable",
-      ...balanceSheetData.liabilities.currentLiabilities.accountsPayable,
+      ...balanceSheetData?.liabilities?.currentLiabilities?.accountsPayable || Array(12).fill(""),
     ])
     rows.push([
       "Current Liabilities",
       "Income Received In Advance",
-      ...balanceSheetData.liabilities.currentLiabilities.incomeReceivedInAdvance,
+      ...balanceSheetData?.liabilities?.currentLiabilities?.incomeReceivedInAdvance || Array(12).fill(""),
     ])
     rows.push([
       "Current Liabilities",
       "Provision Intercompany",
-      ...balanceSheetData.liabilities.currentLiabilities.provisionIntercompany,
+      ...balanceSheetData?.liabilities?.currentLiabilities?.provisionIntercompany || Array(12).fill(""),
     ])
     rows.push([
       "Current Liabilities",
       "Provision For Leave Pay",
-      ...balanceSheetData.liabilities.currentLiabilities.provisionForLeavePay,
+      ...balanceSheetData?.liabilities?.currentLiabilities?.provisionForLeavePay || Array(12).fill(""),
     ])
     rows.push([
       "Current Liabilities",
       "Salary Control Medical Fund",
-      ...balanceSheetData.liabilities.currentLiabilities.salaryControlMedicalFund,
+      ...balanceSheetData?.liabilities?.currentLiabilities?.salaryControlMedicalFund || Array(12).fill(""),
     ])
     rows.push([
       "Current Liabilities",
       "Salary Control PAYE",
-      ...balanceSheetData.liabilities.currentLiabilities.salaryControlPAYE,
+      ...balanceSheetData?.liabilities?.currentLiabilities?.salaryControlPAYE || Array(12).fill(""),
     ])
     rows.push([
       "Current Liabilities",
       "Salary Control Pension Fund",
-      ...balanceSheetData.liabilities.currentLiabilities.salaryControlPensionFund,
+      ...balanceSheetData?.liabilities?.currentLiabilities?.salaryControlPensionFund || Array(12).fill(""),
     ])
     rows.push([
       "Current Liabilities",
       "Salary Control Salaries",
-      ...balanceSheetData.liabilities.currentLiabilities.salaryControlSalaries,
+      ...balanceSheetData?.liabilities?.currentLiabilities?.salaryControlSalaries || Array(12).fill(""),
     ])
-    rows.push(["Current Liabilities", "VAT Liability", ...balanceSheetData.liabilities.currentLiabilities.vatLiability])
+    rows.push(["Current Liabilities", "VAT Liability", ...balanceSheetData?.liabilities?.currentLiabilities?.vatLiability || Array(12).fill("")])
 
-    // Liabilities - Non-Current
+    // Liabilities - Non-Current (FIXED: Third Party Loans, Intercompany Loans, Directors Loans, Total Non-Current Liabilities)
     rows.push([
       "Non-Current Liabilities",
-      "3rd Party Loans",
-      ...balanceSheetData.liabilities.nonCurrentLiabilities.thirdPartyLoans,
+      "Third Party Loans",
+      ...balanceSheetData?.liabilities?.nonCurrentLiabilities?.thirdPartyLoans || Array(12).fill(""),
     ])
     rows.push([
       "Non-Current Liabilities",
       "Intercompany Loans",
-      ...balanceSheetData.liabilities.nonCurrentLiabilities.intercompanyLoans,
+      ...balanceSheetData?.liabilities?.nonCurrentLiabilities?.intercompanyLoans || Array(12).fill(""),
     ])
     rows.push([
       "Non-Current Liabilities",
       "Directors Loans",
-      ...balanceSheetData.liabilities.nonCurrentLiabilities.directorsLoans,
+      ...balanceSheetData?.liabilities?.nonCurrentLiabilities?.directorsLoans || Array(12).fill(""),
+    ])
+    rows.push([
+      "Non-Current Liabilities",
+      "Total Non-Current Liabilities",
+      ...balanceSheetData?.liabilities?.nonCurrentLiabilities?.totalNonCurrentLiabilities || Array(12).fill(""),
     ])
 
     // Equity
-    rows.push(["Equity", "Current Year Earnings", ...balanceSheetData.equity.currentYearEarnings])
-    rows.push(["Equity", "Owner A Share", ...balanceSheetData.equity.ownerAShare])
-    rows.push(["Equity", "Capital", ...balanceSheetData.equity.capital])
-    rows.push(["Equity", "Retained Earnings", ...balanceSheetData.equity.retainedEarnings])
+    rows.push(["Equity", "Current Year Earnings", ...balanceSheetData?.equity?.currentYearEarnings || Array(12).fill("")])
+    rows.push(["Equity", "Owner A Share", ...balanceSheetData?.equity?.ownerAShare || Array(12).fill("")])
+    rows.push(["Equity", "Capital", ...balanceSheetData?.equity?.capital || Array(12).fill("")])
+    rows.push(["Equity", "Retained Earnings", ...balanceSheetData?.equity?.retainedEarnings || Array(12).fill("")])
 
     const csvContent = [headers, ...rows].map((row) => row.join(",")).join("\n")
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
@@ -530,6 +642,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
   }
 
   const renderKPICard = (title, data, kpiKey, unit = "ZAR") => {
+    const monthIndex = getMonthIndex(selectedMonth)
     const currentValue = Number.parseFloat(data[monthIndex]) || 0
     const chartData = {
       labels: months,
@@ -594,7 +707,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
           <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
             <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
               <button
-                onClick={() => toggleNotes(kpiKey)}
+                onClick={() => handleAddNotes(kpiKey)}
                 style={{
                   padding: "6px 12px",
                   backgroundColor: "#e8ddd4",
@@ -606,10 +719,10 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                   fontSize: "12px",
                 }}
               >
-                Notes
+                ADD notes
               </button>
               <button
-                onClick={() => toggleNotes(`${kpiKey}_analysis`)}
+                onClick={() => handleAIAnalysis(kpiKey)}
                 style={{
                   padding: "6px 12px",
                   backgroundColor: "#e8ddd4",
@@ -621,7 +734,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                   fontSize: "12px",
                 }}
               >
-                Analysis
+                AI analysis
               </button>
             </div>
 
@@ -878,11 +991,11 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                     fontSize: "13px",
                   }}
                 >
-                  {(Number.parseFloat(balanceSheetData.assets.bank.callAccounts[monthIndex]) || 0).toLocaleString()}
+                  {(Number.parseFloat(balanceSheetData?.assets?.bank?.callAccounts?.[monthIndex]) || 0).toLocaleString()}
                 </td>
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
                   <TrendChartIcon
-                    onClick={() => openTrendModal("Call Accounts", balanceSheetData.assets.bank.callAccounts)}
+                    onClick={() => openTrendModal("Call Accounts", balanceSheetData?.assets?.bank?.callAccounts || [])}
                   />
                 </td>
               </tr>
@@ -910,11 +1023,11 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                     fontSize: "13px",
                   }}
                 >
-                  {(Number.parseFloat(balanceSheetData.assets.bank.currentAccount[monthIndex]) || 0).toLocaleString()}
+                  {(Number.parseFloat(balanceSheetData?.assets?.bank?.currentAccount?.[monthIndex]) || 0).toLocaleString()}
                 </td>
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
                   <TrendChartIcon
-                    onClick={() => openTrendModal("Current Account", balanceSheetData.assets.bank.currentAccount)}
+                    onClick={() => openTrendModal("Current Account", balanceSheetData?.assets?.bank?.currentAccount || [])}
                   />
                 </td>
               </tr>
@@ -959,7 +1072,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
               {/* Current Assets */}
               <tr>
                 <td
-                  rowSpan={7}
+                  rowSpan={6}
                   style={{
                     padding: "8px",
                     borderBottom: "1px solid #e8ddd4",
@@ -995,13 +1108,13 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                   }}
                 >
                   {(
-                    Number.parseFloat(balanceSheetData.assets.currentAssets.accountsReceivable[monthIndex]) || 0
+                    Number.parseFloat(balanceSheetData?.assets?.currentAssets?.accountsReceivable?.[monthIndex]) || 0
                   ).toLocaleString()}
                 </td>
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
                   <TrendChartIcon
                     onClick={() =>
-                      openTrendModal("Accounts Receivable", balanceSheetData.assets.currentAssets.accountsReceivable)
+                      openTrendModal("Accounts Receivable", balanceSheetData?.assets?.currentAssets?.accountsReceivable || [])
                     }
                   />
                 </td>
@@ -1031,12 +1144,12 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                   }}
                 >
                   {(
-                    Number.parseFloat(balanceSheetData.assets.currentAssets.deposits[monthIndex]) || 0
+                    Number.parseFloat(balanceSheetData?.assets?.currentAssets?.deposits?.[monthIndex]) || 0
                   ).toLocaleString()}
                 </td>
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
                   <TrendChartIcon
-                    onClick={() => openTrendModal("Deposits", balanceSheetData.assets.currentAssets.deposits)}
+                    onClick={() => openTrendModal("Deposits", balanceSheetData?.assets?.currentAssets?.deposits || [])}
                   />
                 </td>
               </tr>
@@ -1064,15 +1177,15 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                     fontSize: "13px",
                   }}
                 >
-                  {(Number.parseFloat(balanceSheetData.assets.currentAssets.cash[monthIndex]) || 0).toLocaleString()}
+                  {(Number.parseFloat(balanceSheetData?.assets?.currentAssets?.cash?.[monthIndex]) || 0).toLocaleString()}
                 </td>
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
-                  <TrendChartIcon onClick={() => openTrendModal("Cash", balanceSheetData.assets.currentAssets.cash)} />
+                  <TrendChartIcon onClick={() => openTrendModal("Cash", balanceSheetData?.assets?.currentAssets?.cash || [])} />
                 </td>
               </tr>
               <tr>
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", color: "#5d4037", fontSize: "13px" }}>
-                  Loans
+                  Call Accounts
                 </td>
                 <td
                   style={{
@@ -1094,11 +1207,11 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                     fontSize: "13px",
                   }}
                 >
-                  {(Number.parseFloat(balanceSheetData.assets.currentAssets.loans[monthIndex]) || 0).toLocaleString()}
+                  {(Number.parseFloat(balanceSheetData?.assets?.currentAssets?.callAccounts?.[monthIndex]) || 0).toLocaleString()}
                 </td>
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
                   <TrendChartIcon
-                    onClick={() => openTrendModal("Loans", balanceSheetData.assets.currentAssets.loans)}
+                    onClick={() => openTrendModal("Call Accounts", balanceSheetData?.assets?.currentAssets?.callAccounts || [])}
                   />
                 </td>
               </tr>
@@ -1127,13 +1240,13 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                   }}
                 >
                   {(
-                    Number.parseFloat(balanceSheetData.assets.currentAssets.tradeReceivables[monthIndex]) || 0
+                    Number.parseFloat(balanceSheetData?.assets?.currentAssets?.tradeReceivables?.[monthIndex]) || 0
                   ).toLocaleString()}
                 </td>
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
                   <TrendChartIcon
                     onClick={() =>
-                      openTrendModal("Trade Receivables", balanceSheetData.assets.currentAssets.tradeReceivables)
+                      openTrendModal("Trade Receivables", balanceSheetData?.assets?.currentAssets?.tradeReceivables || [])
                     }
                   />
                 </td>
@@ -1176,7 +1289,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4" }}></td>
               </tr>
 
-              {/* Fixed Assets - Properly placed under their category */}
+              {/* Fixed Assets - Proper structure: Fixed Assets is a category, items underneath */}
               <tr>
                 <td
                   rowSpan={7}
@@ -1215,13 +1328,13 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                   }}
                 >
                   {(
-                    Number.parseFloat(balanceSheetData.assets.fixedAssets.computerEquipment[monthIndex]) || 0
+                    Number.parseFloat(balanceSheetData?.assets?.fixedAssets?.computerEquipment?.[monthIndex]) || 0
                   ).toLocaleString()}
                 </td>
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
                   <TrendChartIcon
                     onClick={() =>
-                      openTrendModal("Computer Equipment", balanceSheetData.assets.fixedAssets.computerEquipment)
+                      openTrendModal("Computer Equipment", balanceSheetData?.assets?.fixedAssets?.computerEquipment || [])
                     }
                   />
                 </td>
@@ -1251,15 +1364,15 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                   }}
                 >
                   {(
-                    Number.parseFloat(balanceSheetData.assets.fixedAssets.lessDepreciationComputer[monthIndex]) || 0
+                    Number.parseFloat(balanceSheetData?.assets?.fixedAssets?.lessDepreciationComputer?.[monthIndex]) || 0
                   ).toLocaleString()}
                 </td>
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
                   <TrendChartIcon
                     onClick={() =>
                       openTrendModal(
-                        "Less Depreciation Computer",
-                        balanceSheetData.assets.fixedAssets.lessDepreciationComputer,
+                        "Less Depreciation on Computer Equipment",
+                        balanceSheetData?.assets?.fixedAssets?.lessDepreciationComputer || [],
                       )
                     }
                   />
@@ -1289,11 +1402,11 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                     fontSize: "13px",
                   }}
                 >
-                  {(Number.parseFloat(balanceSheetData.assets.fixedAssets.vehicles[monthIndex]) || 0).toLocaleString()}
+                  {(Number.parseFloat(balanceSheetData?.assets?.fixedAssets?.vehicles?.[monthIndex]) || 0).toLocaleString()}
                 </td>
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
                   <TrendChartIcon
-                    onClick={() => openTrendModal("Vehicles", balanceSheetData.assets.fixedAssets.vehicles)}
+                    onClick={() => openTrendModal("Vehicles", balanceSheetData?.assets?.fixedAssets?.vehicles || [])}
                   />
                 </td>
               </tr>
@@ -1322,15 +1435,15 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                   }}
                 >
                   {(
-                    Number.parseFloat(balanceSheetData.assets.fixedAssets.lessDepreciationVehicles[monthIndex]) || 0
+                    Number.parseFloat(balanceSheetData?.assets?.fixedAssets?.lessDepreciationVehicles?.[monthIndex]) || 0
                   ).toLocaleString()}
                 </td>
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
                   <TrendChartIcon
                     onClick={() =>
                       openTrendModal(
-                        "Less Depreciation Vehicles",
-                        balanceSheetData.assets.fixedAssets.lessDepreciationVehicles,
+                        "Less Depreciation on Vehicles",
+                        balanceSheetData?.assets?.fixedAssets?.lessDepreciationVehicles || [],
                       )
                     }
                   />
@@ -1361,27 +1474,22 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                   }}
                 >
                   {(
-                    Number.parseFloat(balanceSheetData.assets.fixedAssets.otherPropertyPlantEquipment[monthIndex]) || 0
+                    Number.parseFloat(balanceSheetData?.assets?.fixedAssets?.otherPropertyPlantEquipment?.[monthIndex]) || 0
                   ).toLocaleString()}
                 </td>
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
                   <TrendChartIcon
                     onClick={() =>
-                      openTrendModal("Other PPE", balanceSheetData.assets.fixedAssets.otherPropertyPlantEquipment)
+                      openTrendModal(
+                        "Other Property, Plant & Equipment",
+                        balanceSheetData?.assets?.fixedAssets?.otherPropertyPlantEquipment || [],
+                      )
                     }
                   />
                 </td>
               </tr>
-              <tr style={{ backgroundColor: "#f5f0eb" }}>
-                <td
-                  style={{
-                    padding: "8px",
-                    borderBottom: "1px solid #e8ddd4",
-                    color: "#5d4037",
-                    fontSize: "13px",
-                    fontWeight: "600",
-                  }}
-                >
+              <tr>
+                <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", color: "#5d4037", fontSize: "13px" }}>
                   Total Fixed Assets
                 </td>
                 <td
@@ -1402,15 +1510,22 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                     textAlign: "right",
                     color: "#5d4037",
                     fontSize: "13px",
-                    fontWeight: "600",
                   }}
                 >
-                  {totalFixedAssets.toLocaleString()}
+                  {(
+                    Number.parseFloat(balanceSheetData?.assets?.fixedAssets?.totalFixedAssets?.[monthIndex]) || 0
+                  ).toLocaleString()}
                 </td>
-                <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4" }}></td>
+                <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
+                  <TrendChartIcon
+                    onClick={() =>
+                      openTrendModal("Total Fixed Assets", balanceSheetData?.assets?.fixedAssets?.totalFixedAssets || [])
+                    }
+                  />
+                </td>
               </tr>
 
-              {/* Non-Current Assets */}
+              {/* Non-Current Assets - FIXED: Loans, Loan Account, Intangible Assets moved here */}
               <tr>
                 <td
                   rowSpan={4}
@@ -1449,12 +1564,12 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                   }}
                 >
                   {(
-                    Number.parseFloat(balanceSheetData.assets.nonCurrentAssets.loans[monthIndex]) || 0
+                    Number.parseFloat(balanceSheetData?.assets?.nonCurrentAssets?.loans?.[monthIndex]) || 0
                   ).toLocaleString()}
                 </td>
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
                   <TrendChartIcon
-                    onClick={() => openTrendModal("Non-Current Loans", balanceSheetData.assets.nonCurrentAssets.loans)}
+                    onClick={() => openTrendModal("Non-Current Loans", balanceSheetData?.assets?.nonCurrentAssets?.loans || [])}
                   />
                 </td>
               </tr>
@@ -1483,12 +1598,12 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                   }}
                 >
                   {(
-                    Number.parseFloat(balanceSheetData.assets.nonCurrentAssets.loanAccount[monthIndex]) || 0
+                    Number.parseFloat(balanceSheetData?.assets?.nonCurrentAssets?.loanAccount?.[monthIndex]) || 0
                   ).toLocaleString()}
                 </td>
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
                   <TrendChartIcon
-                    onClick={() => openTrendModal("Loan Account", balanceSheetData.assets.nonCurrentAssets.loanAccount)}
+                    onClick={() => openTrendModal("Loan Account", balanceSheetData?.assets?.nonCurrentAssets?.loanAccount || [])}
                   />
                 </td>
               </tr>
@@ -1517,13 +1632,13 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                   }}
                 >
                   {(
-                    Number.parseFloat(balanceSheetData.assets.nonCurrentAssets.intangibleAssets[monthIndex]) || 0
+                    Number.parseFloat(balanceSheetData?.assets?.nonCurrentAssets?.intangibleAssets?.[monthIndex]) || 0
                   ).toLocaleString()}
                 </td>
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
                   <TrendChartIcon
                     onClick={() =>
-                      openTrendModal("Intangible Assets", balanceSheetData.assets.nonCurrentAssets.intangibleAssets)
+                      openTrendModal("Intangible Assets", balanceSheetData?.assets?.nonCurrentAssets?.intangibleAssets || [])
                     }
                   />
                 </td>
@@ -1645,7 +1760,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                   }}
                 >
                   {(
-                    Number.parseFloat(balanceSheetData.liabilities.currentLiabilities.accountsPayable[monthIndex]) || 0
+                    Number.parseFloat(balanceSheetData?.liabilities?.currentLiabilities?.accountsPayable?.[monthIndex]) || 0
                   ).toLocaleString()}
                 </td>
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
@@ -1653,7 +1768,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                     onClick={() =>
                       openTrendModal(
                         "Accounts Payable",
-                        balanceSheetData.liabilities.currentLiabilities.accountsPayable,
+                        balanceSheetData?.liabilities?.currentLiabilities?.accountsPayable || [],
                       )
                     }
                   />
@@ -1685,7 +1800,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                 >
                   {(
                     Number.parseFloat(
-                      balanceSheetData.liabilities.currentLiabilities.incomeReceivedInAdvance[monthIndex],
+                      balanceSheetData?.liabilities?.currentLiabilities?.incomeReceivedInAdvance?.[monthIndex],
                     ) || 0
                   ).toLocaleString()}
                 </td>
@@ -1694,7 +1809,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                     onClick={() =>
                       openTrendModal(
                         "Income Received In Advance",
-                        balanceSheetData.liabilities.currentLiabilities.incomeReceivedInAdvance,
+                        balanceSheetData?.liabilities?.currentLiabilities?.incomeReceivedInAdvance || [],
                       )
                     }
                   />
@@ -1726,7 +1841,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                 >
                   {(
                     Number.parseFloat(
-                      balanceSheetData.liabilities.currentLiabilities.provisionIntercompany[monthIndex],
+                      balanceSheetData?.liabilities?.currentLiabilities?.provisionIntercompany?.[monthIndex],
                     ) || 0
                   ).toLocaleString()}
                 </td>
@@ -1735,7 +1850,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                     onClick={() =>
                       openTrendModal(
                         "Provision Intercompany",
-                        balanceSheetData.liabilities.currentLiabilities.provisionIntercompany,
+                        balanceSheetData?.liabilities?.currentLiabilities?.provisionIntercompany || [],
                       )
                     }
                   />
@@ -1767,7 +1882,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                 >
                   {(
                     Number.parseFloat(
-                      balanceSheetData.liabilities.currentLiabilities.provisionForLeavePay[monthIndex],
+                      balanceSheetData?.liabilities?.currentLiabilities?.provisionForLeavePay?.[monthIndex],
                     ) || 0
                   ).toLocaleString()}
                 </td>
@@ -1776,7 +1891,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                     onClick={() =>
                       openTrendModal(
                         "Provision for Leave Pay",
-                        balanceSheetData.liabilities.currentLiabilities.provisionForLeavePay,
+                        balanceSheetData?.liabilities?.currentLiabilities?.provisionForLeavePay || [],
                       )
                     }
                   />
@@ -1808,7 +1923,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                 >
                   {(
                     Number.parseFloat(
-                      balanceSheetData.liabilities.currentLiabilities.salaryControlMedicalFund[monthIndex],
+                      balanceSheetData?.liabilities?.currentLiabilities?.salaryControlMedicalFund?.[monthIndex],
                     ) || 0
                   ).toLocaleString()}
                 </td>
@@ -1817,7 +1932,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                     onClick={() =>
                       openTrendModal(
                         "Salary Control Medical",
-                        balanceSheetData.liabilities.currentLiabilities.salaryControlMedicalFund,
+                        balanceSheetData?.liabilities?.currentLiabilities?.salaryControlMedicalFund || [],
                       )
                     }
                   />
@@ -1848,7 +1963,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                   }}
                 >
                   {(
-                    Number.parseFloat(balanceSheetData.liabilities.currentLiabilities.salaryControlPAYE[monthIndex]) ||
+                    Number.parseFloat(balanceSheetData?.liabilities?.currentLiabilities?.salaryControlPAYE?.[monthIndex]) ||
                     0
                   ).toLocaleString()}
                 </td>
@@ -1857,7 +1972,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                     onClick={() =>
                       openTrendModal(
                         "Salary Control PAYE",
-                        balanceSheetData.liabilities.currentLiabilities.salaryControlPAYE,
+                        balanceSheetData?.liabilities?.currentLiabilities?.salaryControlPAYE || [],
                       )
                     }
                   />
@@ -1889,7 +2004,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                 >
                   {(
                     Number.parseFloat(
-                      balanceSheetData.liabilities.currentLiabilities.salaryControlSalaries[monthIndex],
+                      balanceSheetData?.liabilities?.currentLiabilities?.salaryControlSalaries?.[monthIndex],
                     ) || 0
                   ).toLocaleString()}
                 </td>
@@ -1898,7 +2013,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                     onClick={() =>
                       openTrendModal(
                         "Salary Control Salaries",
-                        balanceSheetData.liabilities.currentLiabilities.salaryControlSalaries,
+                        balanceSheetData?.liabilities?.currentLiabilities?.salaryControlSalaries || [],
                       )
                     }
                   />
@@ -1929,13 +2044,13 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                   }}
                 >
                   {(
-                    Number.parseFloat(balanceSheetData.liabilities.currentLiabilities.vatLiability[monthIndex]) || 0
+                    Number.parseFloat(balanceSheetData?.liabilities?.currentLiabilities?.vatLiability?.[monthIndex]) || 0
                   ).toLocaleString()}
                 </td>
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
                   <TrendChartIcon
                     onClick={() =>
-                      openTrendModal("VAT Liability", balanceSheetData.liabilities.currentLiabilities.vatLiability)
+                      openTrendModal("VAT Liability", balanceSheetData?.liabilities?.currentLiabilities?.vatLiability || [])
                     }
                   />
                 </td>
@@ -1978,10 +2093,10 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4" }}></td>
               </tr>
 
-              {/* Non-Current Liabilities */}
+              {/* Non-Current Liabilities - Proper structure: Non-Current Liabilities is a category, items underneath */}
               <tr>
                 <td
-                  rowSpan={4}
+                  rowSpan={5}
                   style={{
                     padding: "8px",
                     borderBottom: "1px solid #e8ddd4",
@@ -1994,7 +2109,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                   Non-Current Liabilities
                 </td>
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", color: "#5d4037", fontSize: "13px" }}>
-                  3rd Party Loans
+                  Third Party Loans
                 </td>
                 <td
                   style={{
@@ -2017,16 +2132,17 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                   }}
                 >
                   {(
-                    Number.parseFloat(balanceSheetData.liabilities.nonCurrentLiabilities.thirdPartyLoans[monthIndex]) ||
-                    0
+                    Number.parseFloat(
+                      balanceSheetData?.liabilities?.nonCurrentLiabilities?.thirdPartyLoans?.[monthIndex],
+                    ) || 0
                   ).toLocaleString()}
                 </td>
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
                   <TrendChartIcon
                     onClick={() =>
                       openTrendModal(
-                        "3rd Party Loans",
-                        balanceSheetData.liabilities.nonCurrentLiabilities.thirdPartyLoans,
+                        "Third Party Loans",
+                        balanceSheetData?.liabilities?.nonCurrentLiabilities?.thirdPartyLoans || [],
                       )
                     }
                   />
@@ -2058,7 +2174,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                 >
                   {(
                     Number.parseFloat(
-                      balanceSheetData.liabilities.nonCurrentLiabilities.intercompanyLoans[monthIndex],
+                      balanceSheetData?.liabilities?.nonCurrentLiabilities?.intercompanyLoans?.[monthIndex],
                     ) || 0
                   ).toLocaleString()}
                 </td>
@@ -2067,7 +2183,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                     onClick={() =>
                       openTrendModal(
                         "Intercompany Loans",
-                        balanceSheetData.liabilities.nonCurrentLiabilities.intercompanyLoans,
+                        balanceSheetData?.liabilities?.nonCurrentLiabilities?.intercompanyLoans || [],
                       )
                     }
                   />
@@ -2098,7 +2214,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                   }}
                 >
                   {(
-                    Number.parseFloat(balanceSheetData.liabilities.nonCurrentLiabilities.directorsLoans[monthIndex]) ||
+                    Number.parseFloat(balanceSheetData?.liabilities?.nonCurrentLiabilities?.directorsLoans?.[monthIndex]) ||
                     0
                   ).toLocaleString()}
                 </td>
@@ -2107,7 +2223,48 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                     onClick={() =>
                       openTrendModal(
                         "Directors Loans",
-                        balanceSheetData.liabilities.nonCurrentLiabilities.directorsLoans,
+                        balanceSheetData?.liabilities?.nonCurrentLiabilities?.directorsLoans || [],
+                      )
+                    }
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", color: "#5d4037", fontSize: "13px" }}>
+                  Total Non-Current Liabilities
+                </td>
+                <td
+                  style={{
+                    padding: "8px",
+                    borderBottom: "1px solid #e8ddd4",
+                    textAlign: "right",
+                    color: "#5d4037",
+                    fontSize: "13px",
+                  }}
+                >
+                  ZAR
+                </td>
+                <td
+                  style={{
+                    padding: "8px",
+                    borderBottom: "1px solid #e8ddd4",
+                    textAlign: "right",
+                    color: "#5d4037",
+                    fontSize: "13px",
+                  }}
+                >
+                  {(
+                    Number.parseFloat(
+                      balanceSheetData?.liabilities?.nonCurrentLiabilities?.totalNonCurrentLiabilities?.[monthIndex],
+                    ) || 0
+                  ).toLocaleString()}
+                </td>
+                <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
+                  <TrendChartIcon
+                    onClick={() =>
+                      openTrendModal(
+                        "Total Non-Current Liabilities",
+                        balanceSheetData?.liabilities?.nonCurrentLiabilities?.totalNonCurrentLiabilities || [],
                       )
                     }
                   />
@@ -2123,7 +2280,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                     fontWeight: "600",
                   }}
                 >
-                  Total Non-Current Liabilities
+                  Total Non-Current Liabilities (calculated)
                 </td>
                 <td
                   style={{
@@ -2217,11 +2374,11 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                     fontSize: "13px",
                   }}
                 >
-                  {(Number.parseFloat(balanceSheetData.equity.currentYearEarnings[monthIndex]) || 0).toLocaleString()}
+                  {(Number.parseFloat(balanceSheetData?.equity?.currentYearEarnings?.[monthIndex]) || 0).toLocaleString()}
                 </td>
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
                   <TrendChartIcon
-                    onClick={() => openTrendModal("Current Year Earnings", balanceSheetData.equity.currentYearEarnings)}
+                    onClick={() => openTrendModal("Current Year Earnings", balanceSheetData?.equity?.currentYearEarnings || [])}
                   />
                 </td>
               </tr>
@@ -2249,11 +2406,11 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                     fontSize: "13px",
                   }}
                 >
-                  {(Number.parseFloat(balanceSheetData.equity.ownerAShare[monthIndex]) || 0).toLocaleString()}
+                  {(Number.parseFloat(balanceSheetData?.equity?.ownerAShare?.[monthIndex]) || 0).toLocaleString()}
                 </td>
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
                   <TrendChartIcon
-                    onClick={() => openTrendModal("Owner A Share", balanceSheetData.equity.ownerAShare)}
+                    onClick={() => openTrendModal("Owner A Share", balanceSheetData?.equity?.ownerAShare || [])}
                   />
                 </td>
               </tr>
@@ -2281,10 +2438,10 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                     fontSize: "13px",
                   }}
                 >
-                  {(Number.parseFloat(balanceSheetData.equity.capital[monthIndex]) || 0).toLocaleString()}
+                  {(Number.parseFloat(balanceSheetData?.equity?.capital?.[monthIndex]) || 0).toLocaleString()}
                 </td>
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
-                  <TrendChartIcon onClick={() => openTrendModal("Capital", balanceSheetData.equity.capital)} />
+                  <TrendChartIcon onClick={() => openTrendModal("Capital", balanceSheetData?.equity?.capital || [])} />
                 </td>
               </tr>
               <tr>
@@ -2311,11 +2468,11 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                     fontSize: "13px",
                   }}
                 >
-                  {(Number.parseFloat(balanceSheetData.equity.retainedEarnings[monthIndex]) || 0).toLocaleString()}
+                  {(Number.parseFloat(balanceSheetData?.equity?.retainedEarnings?.[monthIndex]) || 0).toLocaleString()}
                 </td>
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
                   <TrendChartIcon
-                    onClick={() => openTrendModal("Retained Earnings", balanceSheetData.equity.retainedEarnings)}
+                    onClick={() => openTrendModal("Retained Earnings", balanceSheetData?.equity?.retainedEarnings || [])}
                   />
                 </td>
               </tr>
@@ -2374,11 +2531,6 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
           </table>
         </div>
       </div>
-
-      {/* NAV Summary Card */}
-      <div style={{ marginTop: "30px" }}>
-        {renderKPICard("NAV (Net Asset Value)", navData, "nav")}
-      </div>
     </div>
   )
 
@@ -2411,10 +2563,12 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
         )}
       </div>
       
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: "20px" }}>
+      {/* 2 charts per row for Solvency */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px" }}>
         {renderKPICard("Debt to Equity Ratio", solvencyData.debtToEquity, "debtToEquity", "ratio")}
         {renderKPICard("Interest Coverage Ratio", solvencyData.interestCoverage, "interestCoverage", "ratio")}
         {renderKPICard("Debt Service Coverage Ratio", solvencyData.debtServiceCoverage, "debtServiceCoverage", "ratio")}
+        {renderKPICard("NAV (Net Asset Value)", solvencyData.nav, "nav", "ZAR")}
       </div>
     </div>
   )
@@ -2448,7 +2602,8 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
         )}
       </div>
       
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: "20px" }}>
+      {/* 2 charts per row for Leverage */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px" }}>
         {renderKPICard("Total Debt Ratio", leverageData.totalDebtRatio, "totalDebtRatio", "ratio")}
         {renderKPICard("Long-Term Debt Ratio", leverageData.longTermDebtRatio, "longTermDebtRatio", "ratio")}
         {renderKPICard("Equity Multiplier", leverageData.equityMultiplier, "equityMultiplier", "ratio")}
@@ -2485,7 +2640,8 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
         )}
       </div>
       
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: "20px" }}>
+      {/* 2 charts per row for Equity */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px" }}>
         {renderKPICard("Return on Equity (ROE)", equityData.returnOnEquity, "returnOnEquity", "%")}
         {renderKPICard("Equity Ratio", equityData.equityRatio, "equityRatio", "%")}
         {renderKPICard("Book Value Per Share", equityData.bookValuePerShare, "bookValuePerShare", "ZAR")}
@@ -2748,9 +2904,12 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                         </label>
                         <input
                           type="number"
-                          value={balanceSheetData.assets.bank[field][idx]}
+                          value={balanceSheetData?.assets?.bank?.[field]?.[idx] || ""}
                           onChange={(e) => {
                             const newData = { ...balanceSheetData }
+                            if (!newData.assets.bank[field]) {
+                              newData.assets.bank[field] = Array(12).fill("")
+                            }
                             newData.assets.bank[field][idx] = e.target.value
                             setBalanceSheetData(newData)
                           }}
@@ -2772,7 +2931,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
             {/* Current Assets Section */}
             <div style={{ marginBottom: "30px", padding: "15px", backgroundColor: "#f5f0eb", borderRadius: "8px" }}>
               <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Current Assets</h4>
-              {Object.keys(balanceSheetData.assets.currentAssets).map((field) => (
+              {Object.keys(balanceSheetData?.assets?.currentAssets || {}).map((field) => (
                 <div key={field} style={{ marginBottom: "15px" }}>
                   <label
                     style={{
@@ -2793,10 +2952,170 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                         </label>
                         <input
                           type="number"
-                          value={balanceSheetData.assets.currentAssets[field][idx]}
+                          value={balanceSheetData?.assets?.currentAssets?.[field]?.[idx] || ""}
                           onChange={(e) => {
                             const newData = { ...balanceSheetData }
+                            if (!newData.assets.currentAssets[field]) {
+                              newData.assets.currentAssets[field] = Array(12).fill("")
+                            }
                             newData.assets.currentAssets[field][idx] = e.target.value
+                            setBalanceSheetData(newData)
+                          }}
+                          style={{
+                            width: "100%",
+                            padding: "6px",
+                            borderRadius: "4px",
+                            border: "1px solid #e8ddd4",
+                            fontSize: "12px",
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Fixed Assets Section */}
+            <div style={{ marginBottom: "30px", padding: "15px", backgroundColor: "#f5f0eb", borderRadius: "8px" }}>
+              <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Fixed Assets</h4>
+              {Object.keys(balanceSheetData?.assets?.fixedAssets || {}).map((field) => (
+                <div key={field} style={{ marginBottom: "15px" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      color: "#5d4037",
+                      fontWeight: "600",
+                      marginBottom: "8px",
+                      fontSize: "13px",
+                    }}
+                  >
+                    {field === "computerEquipment" ? "Computer Equipment" :
+                     field === "lessDepreciationComputer" ? "Less Depreciation on Computer Equipment" :
+                     field === "vehicles" ? "Vehicles" :
+                     field === "lessDepreciationVehicles" ? "Less Depreciation on Vehicles" :
+                     field === "otherPropertyPlantEquipment" ? "Other Property, Plant & Equipment" :
+                     field === "totalFixedAssets" ? "Total Fixed Assets" :
+                     field.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase())}
+                  </label>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: "5px" }}>
+                    {months.map((month, idx) => (
+                      <div key={month}>
+                        <label style={{ fontSize: "10px", color: "#8d6e63", display: "block", marginBottom: "2px" }}>
+                          {month}
+                        </label>
+                        <input
+                          type="number"
+                          value={balanceSheetData?.assets?.fixedAssets?.[field]?.[idx] || ""}
+                          onChange={(e) => {
+                            const newData = { ...balanceSheetData }
+                            if (!newData.assets.fixedAssets[field]) {
+                              newData.assets.fixedAssets[field] = Array(12).fill("")
+                            }
+                            newData.assets.fixedAssets[field][idx] = e.target.value
+                            setBalanceSheetData(newData)
+                          }}
+                          style={{
+                            width: "100%",
+                            padding: "6px",
+                            borderRadius: "4px",
+                            border: "1px solid #e8ddd4",
+                            fontSize: "12px",
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Non-Current Assets Section */}
+            <div style={{ marginBottom: "30px", padding: "15px", backgroundColor: "#f5f0eb", borderRadius: "8px" }}>
+              <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Non-Current Assets</h4>
+              {Object.keys(balanceSheetData?.assets?.nonCurrentAssets || {}).map((field) => (
+                <div key={field} style={{ marginBottom: "15px" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      color: "#5d4037",
+                      fontWeight: "600",
+                      marginBottom: "8px",
+                      fontSize: "13px",
+                    }}
+                  >
+                    {field === "loans" ? "Loans" :
+                     field === "loanAccount" ? "Loan Account" :
+                     field === "intangibleAssets" ? "Intangible Assets" :
+                     field.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase())}
+                  </label>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: "5px" }}>
+                    {months.map((month, idx) => (
+                      <div key={month}>
+                        <label style={{ fontSize: "10px", color: "#8d6e63", display: "block", marginBottom: "2px" }}>
+                          {month}
+                        </label>
+                        <input
+                          type="number"
+                          value={balanceSheetData?.assets?.nonCurrentAssets?.[field]?.[idx] || ""}
+                          onChange={(e) => {
+                            const newData = { ...balanceSheetData }
+                            if (!newData.assets.nonCurrentAssets[field]) {
+                              newData.assets.nonCurrentAssets[field] = Array(12).fill("")
+                            }
+                            newData.assets.nonCurrentAssets[field][idx] = e.target.value
+                            setBalanceSheetData(newData)
+                          }}
+                          style={{
+                            width: "100%",
+                            padding: "6px",
+                            borderRadius: "4px",
+                            border: "1px solid #e8ddd4",
+                            fontSize: "12px",
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Non-Current Liabilities Section */}
+            <div style={{ marginBottom: "30px", padding: "15px", backgroundColor: "#f5f0eb", borderRadius: "8px" }}>
+              <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Non-Current Liabilities</h4>
+              {Object.keys(balanceSheetData?.liabilities?.nonCurrentLiabilities || {}).map((field) => (
+                <div key={field} style={{ marginBottom: "15px" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      color: "#5d4037",
+                      fontWeight: "600",
+                      marginBottom: "8px",
+                      fontSize: "13px",
+                    }}
+                  >
+                    {field === "thirdPartyLoans" ? "Third Party Loans" :
+                     field === "intercompanyLoans" ? "Intercompany Loans" :
+                     field === "directorsLoans" ? "Directors Loans" :
+                     field === "totalNonCurrentLiabilities" ? "Total Non-Current Liabilities" :
+                     field.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase())}
+                  </label>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: "5px" }}>
+                    {months.map((month, idx) => (
+                      <div key={month}>
+                        <label style={{ fontSize: "10px", color: "#8d6e63", display: "block", marginBottom: "2px" }}>
+                          {month}
+                        </label>
+                        <input
+                          type="number"
+                          value={balanceSheetData?.liabilities?.nonCurrentLiabilities?.[field]?.[idx] || ""}
+                          onChange={(e) => {
+                            const newData = { ...balanceSheetData }
+                            if (!newData.liabilities.nonCurrentLiabilities[field]) {
+                              newData.liabilities.nonCurrentLiabilities[field] = Array(12).fill("")
+                            }
+                            newData.liabilities.nonCurrentLiabilities[field][idx] = e.target.value
                             setBalanceSheetData(newData)
                           }}
                           style={{
@@ -2817,7 +3136,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
             {/* Equity Section */}
             <div style={{ marginBottom: "30px", padding: "15px", backgroundColor: "#f5f0eb", borderRadius: "8px" }}>
               <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Equity</h4>
-              {Object.keys(balanceSheetData.equity).map((field) => (
+              {Object.keys(balanceSheetData?.equity || {}).map((field) => (
                 <div key={field} style={{ marginBottom: "15px" }}>
                   <label
                     style={{
@@ -2838,9 +3157,12 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                         </label>
                         <input
                           type="number"
-                          value={balanceSheetData.equity[field][idx]}
+                          value={balanceSheetData?.equity?.[field]?.[idx] || ""}
                           onChange={(e) => {
                             const newData = { ...balanceSheetData }
+                            if (!newData.equity[field]) {
+                              newData.equity[field] = Array(12).fill("")
+                            }
                             newData.equity[field][idx] = e.target.value
                             setBalanceSheetData(newData)
                           }}
@@ -2945,6 +3267,16 @@ const PerformanceEngine = ({
     gpMargin: "",
     npMargin: "",
   })
+  const [chartAnalysis, setChartAnalysis] = useState({
+    sales: "",
+    cogs: "",
+    opex: "",
+    grossProfit: "",
+    netProfit: "",
+    ebitda: "",
+    gpMargin: "",
+    npMargin: "",
+  })
   const [firebaseChartData, setFirebaseChartData] = useState({})
   const [loading, setLoading] = useState(false)
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
@@ -2997,6 +3329,10 @@ const PerformanceEngine = ({
           setChartNotes(firebaseData.chartNotes)
         }
 
+        if (firebaseData.chartAnalysis) {
+          setChartAnalysis(firebaseData.chartAnalysis)
+        }
+
         if (firebaseData.financialYearStart) {
           setSelectedFinancialYearStart(firebaseData.financialYearStart)
         }
@@ -3025,6 +3361,7 @@ const PerformanceEngine = ({
         collection(db, "financialData"),
         where("userId", "==", user.uid),
         where("isCustomKPI", "==", true),
+        where("section", "==", "performance-engine"),
       )
       const querySnapshot = await getDocs(kpiQuery)
 
@@ -3163,6 +3500,7 @@ const PerformanceEngine = ({
         depreciationBudget: pnlDetails.depreciationBudget.map((val) => Number.parseFloat(val) || 0),
         notes: pnlDetails.notes,
         chartNotes: chartNotes,
+        chartAnalysis: chartAnalysis,
         financialYearStart: selectedFinancialYearStart,
         year: selectedYear,
         lastUpdated: new Date().toISOString(),
@@ -3181,10 +3519,17 @@ const PerformanceEngine = ({
     }
   }
 
-  const toggleNotes = (chartName) => {
+  const handleAddNotes = (chartName) => {
     setExpandedNotes((prev) => ({
       ...prev,
       [chartName]: !prev[chartName],
+    }))
+  }
+
+  const handleAIAnalysis = (chartName) => {
+    setExpandedNotes((prev) => ({
+      ...prev,
+      [`${chartName}_analysis`]: !prev[`${chartName}_analysis`],
     }))
   }
 
@@ -3192,6 +3537,13 @@ const PerformanceEngine = ({
     setChartNotes((prev) => ({
       ...prev,
       [chartName]: note,
+    }))
+  }
+
+  const updateChartAnalysis = (chartName, analysis) => {
+    setChartAnalysis((prev) => ({
+      ...prev,
+      [chartName]: analysis,
     }))
   }
 
@@ -3463,6 +3815,7 @@ const PerformanceEngine = ({
         actual: Array(12).fill(0),
         budget: Array(12).fill(0),
         isCustomKPI: true,
+        section: "performance-engine",
         lastUpdated: new Date().toISOString(),
       }
 
@@ -3638,11 +3991,11 @@ const PerformanceEngine = ({
         )}
       </div>
 
-      {/* Chart Grid - 3 per row */}
+      {/* Chart Grid - 2 per row */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))",
+          gridTemplateColumns: "repeat(2, 1fr)",
           gap: "20px",
           marginBottom: "30px",
         }}
@@ -3664,7 +4017,7 @@ const PerformanceEngine = ({
               {!isInvestorView && (
                 <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
                   <button
-                    onClick={() => toggleNotes(config.key)}
+                    onClick={() => handleAddNotes(config.key)}
                     style={{
                       padding: "8px 16px",
                       backgroundColor: "#e8ddd4",
@@ -3676,10 +4029,10 @@ const PerformanceEngine = ({
                       fontSize: "12px",
                     }}
                   >
-                    Add Notes
+                    ADD notes
                   </button>
                   <button
-                    onClick={() => toggleNotes(`${config.key}_analysis`)}
+                    onClick={() => handleAIAnalysis(config.key)}
                     style={{
                       padding: "8px 16px",
                       backgroundColor: "#e8ddd4",
@@ -3691,8 +4044,65 @@ const PerformanceEngine = ({
                       fontSize: "12px",
                     }}
                   >
-                    Add Analysis
+                    AI analysis
                   </button>
+                </div>
+              )}
+
+              {expandedNotes[config.key] && (
+                <div style={{ marginTop: "15px" }}>
+                  <label
+                    style={{
+                      fontSize: "12px",
+                      color: "#5d4037",
+                      fontWeight: "600",
+                      display: "block",
+                      marginBottom: "5px",
+                    }}
+                  >
+                    Notes:
+                  </label>
+                  <textarea
+                    value={chartNotes[config.key] || ""}
+                    onChange={(e) => updateChartNote(config.key, e.target.value)}
+                    placeholder="Add notes..."
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      borderRadius: "4px",
+                      border: "1px solid #e8ddd4",
+                      minHeight: "60px",
+                      fontSize: "13px",
+                    }}
+                  />
+                </div>
+              )}
+
+              {expandedNotes[`${config.key}_analysis`] && (
+                <div
+                  style={{
+                    backgroundColor: "#e3f2fd",
+                    padding: "15px",
+                    borderRadius: "6px",
+                    border: "1px solid #90caf9",
+                    marginTop: "15px",
+                  }}
+                >
+                  <label
+                    style={{
+                      fontSize: "12px",
+                      color: "#1565c0",
+                      fontWeight: "600",
+                      display: "block",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    AI Analysis:
+                  </label>
+                  <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
+                    {chartAnalysis[config.key] ||
+                      "AI analysis will be generated based on your data trends, comparing current performance against historical averages and industry benchmarks. This feature provides actionable insights for improving this metric."}
+                  </p>
                 </div>
               )}
             </div>
@@ -3704,7 +4114,7 @@ const PerformanceEngine = ({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))",
+          gridTemplateColumns: "repeat(2, 1fr)",
           gap: "20px",
           marginBottom: "30px",
         }}
@@ -3729,7 +4139,7 @@ const PerformanceEngine = ({
               {!isInvestorView && (
                 <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
                   <button
-                    onClick={() => toggleNotes(config.key)}
+                    onClick={() => handleAddNotes(config.key)}
                     style={{
                       padding: "8px 16px",
                       backgroundColor: "#e8ddd4",
@@ -3741,10 +4151,10 @@ const PerformanceEngine = ({
                       fontSize: "12px",
                     }}
                   >
-                    Add Notes
+                    ADD notes
                   </button>
                   <button
-                    onClick={() => toggleNotes(`${config.key}_analysis`)}
+                    onClick={() => handleAIAnalysis(config.key)}
                     style={{
                       padding: "8px 16px",
                       backgroundColor: "#e8ddd4",
@@ -3756,8 +4166,65 @@ const PerformanceEngine = ({
                       fontSize: "12px",
                     }}
                   >
-                    Add Analysis
+                    AI analysis
                   </button>
+                </div>
+              )}
+
+              {expandedNotes[config.key] && (
+                <div style={{ marginTop: "15px" }}>
+                  <label
+                    style={{
+                      fontSize: "12px",
+                      color: "#5d4037",
+                      fontWeight: "600",
+                      display: "block",
+                      marginBottom: "5px",
+                    }}
+                  >
+                    Notes:
+                  </label>
+                  <textarea
+                    value={chartNotes[config.key] || ""}
+                    onChange={(e) => updateChartNote(config.key, e.target.value)}
+                    placeholder="Add notes..."
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      borderRadius: "4px",
+                      border: "1px solid #e8ddd4",
+                      minHeight: "60px",
+                      fontSize: "13px",
+                    }}
+                  />
+                </div>
+              )}
+
+              {expandedNotes[`${config.key}_analysis`] && (
+                <div
+                  style={{
+                    backgroundColor: "#e3f2fd",
+                    padding: "15px",
+                    borderRadius: "6px",
+                    border: "1px solid #90caf9",
+                    marginTop: "15px",
+                  }}
+                >
+                  <label
+                    style={{
+                      fontSize: "12px",
+                      color: "#1565c0",
+                      fontWeight: "600",
+                      display: "block",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    AI Analysis:
+                  </label>
+                  <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
+                    {chartAnalysis[config.key] ||
+                      "AI analysis will be generated based on your data trends, comparing current performance against historical averages and industry benchmarks. This feature provides actionable insights for improving this metric."}
+                  </p>
                 </div>
               )}
             </div>
@@ -3768,7 +4235,7 @@ const PerformanceEngine = ({
       {Object.keys(customKPIs).length > 0 && (
         <>
           <h3 style={{ color: "#5d4037", fontSize: "20px", fontWeight: "600", marginBottom: "15px" }}>Custom KPIs</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: "20px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px" }}>
             {Object.values(customKPIs).map((kpi) => (
               <div
                 key={kpi.chartName}
@@ -3788,7 +4255,7 @@ const PerformanceEngine = ({
                 {!isInvestorView && (
                   <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
                     <button
-                      onClick={() => toggleNotes(kpi.chartName)}
+                      onClick={() => handleAddNotes(kpi.chartName)}
                       style={{
                         padding: "8px 16px",
                         backgroundColor: "#e8ddd4",
@@ -3800,10 +4267,10 @@ const PerformanceEngine = ({
                         fontSize: "12px",
                       }}
                     >
-                      Add Notes
+                      ADD notes
                     </button>
                     <button
-                      onClick={() => toggleNotes(`${kpi.chartName}_analysis`)}
+                      onClick={() => handleAIAnalysis(kpi.chartName)}
                       style={{
                         padding: "8px 16px",
                         backgroundColor: "#e8ddd4",
@@ -3815,7 +4282,7 @@ const PerformanceEngine = ({
                         fontSize: "12px",
                       }}
                     >
-                      View Analysis
+                      AI analysis
                     </button>
                   </div>
                 )}
@@ -4115,6 +4582,7 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
   const [selectedViewMode, setSelectedViewMode] = useState("month")
   const [expandedNotes, setExpandedNotes] = useState({})
   const [chartNotes, setChartNotes] = useState({})
+  const [chartAnalysis, setChartAnalysis] = useState({})
   const [showAddKPIModal, setShowAddKPIModal] = useState(false)
   const [newKPI, setNewKPI] = useState({
     name: "",
@@ -4358,10 +4826,17 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
     },
   })
 
-  const toggleNotes = (chartName) => {
+  const handleAddNotes = (chartName) => {
     setExpandedNotes((prev) => ({
       ...prev,
       [chartName]: !prev[chartName],
+    }))
+  }
+
+  const handleAIAnalysis = (chartName) => {
+    setExpandedNotes((prev) => ({
+      ...prev,
+      [`${chartName}_analysis`]: !prev[`${chartName}_analysis`],
     }))
   }
 
@@ -4369,6 +4844,13 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
     setChartNotes((prev) => ({
       ...prev,
       [chartName]: note,
+    }))
+  }
+
+  const updateChartAnalysis = (chartName, analysis) => {
+    setChartAnalysis((prev) => ({
+      ...prev,
+      [chartName]: analysis,
     }))
   }
 
@@ -4610,8 +5092,8 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
         </div>
       </div>
 
-      {/* Chart Grid - 3 per row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: "20px", marginBottom: "30px" }}>
+      {/* Chart Grid - 2 per row */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px", marginBottom: "30px" }}>
         <div
           style={{
             backgroundColor: "#fdfcfb",
@@ -4625,7 +5107,7 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
           {!isInvestorView && (
             <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
               <button
-                onClick={() => toggleNotes("fixedCosts")}
+                onClick={() => handleAddNotes("fixedCosts")}
                 style={{
                   padding: "8px 16px",
                   backgroundColor: "#e8ddd4",
@@ -4637,10 +5119,10 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
                   fontSize: "12px",
                 }}
               >
-                Add Notes
+                ADD notes
               </button>
               <button
-                onClick={() => toggleNotes("fixedCosts_analysis")}
+                onClick={() => handleAIAnalysis("fixedCosts")}
                 style={{
                   padding: "8px 16px",
                   backgroundColor: "#e8ddd4",
@@ -4652,8 +5134,65 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
                   fontSize: "12px",
                 }}
               >
-                View Analysis
+                AI analysis
               </button>
+            </div>
+          )}
+
+          {expandedNotes["fixedCosts"] && (
+            <div style={{ marginTop: "15px" }}>
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "5px",
+                }}
+              >
+                Notes:
+              </label>
+              <textarea
+                value={chartNotes["fixedCosts"] || ""}
+                onChange={(e) => updateChartNote("fixedCosts", e.target.value)}
+                placeholder="Add notes..."
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "60px",
+                  fontSize: "13px",
+                }}
+              />
+            </div>
+          )}
+
+          {expandedNotes["fixedCosts_analysis"] && (
+            <div
+              style={{
+                backgroundColor: "#e3f2fd",
+                padding: "15px",
+                borderRadius: "6px",
+                border: "1px solid #90caf9",
+                marginTop: "15px",
+              }}
+            >
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#1565c0",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "8px",
+                }}
+              >
+                AI Analysis:
+              </label>
+              <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
+                {chartAnalysis["fixedCosts"] ||
+                  "AI analysis will be generated based on your data trends, comparing current performance against historical averages and industry benchmarks. This feature provides actionable insights for improving this metric."}
+              </p>
             </div>
           )}
         </div>
@@ -4671,7 +5210,7 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
           {!isInvestorView && (
             <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
               <button
-                onClick={() => toggleNotes("discretionaryCosts")}
+                onClick={() => handleAddNotes("discretionaryCosts")}
                 style={{
                   padding: "8px 16px",
                   backgroundColor: "#e8ddd4",
@@ -4683,10 +5222,10 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
                   fontSize: "12px",
                 }}
               >
-                Add Notes
+                ADD notes
               </button>
               <button
-                onClick={() => toggleNotes("discretionaryCosts_analysis")}
+                onClick={() => handleAIAnalysis("discretionaryCosts")}
                 style={{
                   padding: "8px 16px",
                   backgroundColor: "#e8ddd4",
@@ -4698,8 +5237,65 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
                   fontSize: "12px",
                 }}
               >
-                View Analysis
+                AI analysis
               </button>
+            </div>
+          )}
+
+          {expandedNotes["discretionaryCosts"] && (
+            <div style={{ marginTop: "15px" }}>
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "5px",
+                }}
+              >
+                Notes:
+              </label>
+              <textarea
+                value={chartNotes["discretionaryCosts"] || ""}
+                onChange={(e) => updateChartNote("discretionaryCosts", e.target.value)}
+                placeholder="Add notes..."
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "60px",
+                  fontSize: "13px",
+                }}
+              />
+            </div>
+          )}
+
+          {expandedNotes["discretionaryCosts_analysis"] && (
+            <div
+              style={{
+                backgroundColor: "#e3f2fd",
+                padding: "15px",
+                borderRadius: "6px",
+                border: "1px solid #90caf9",
+                marginTop: "15px",
+              }}
+            >
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#1565c0",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "8px",
+                }}
+              >
+                AI Analysis:
+              </label>
+              <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
+                {chartAnalysis["discretionaryCosts"] ||
+                  "AI analysis will be generated based on your data trends, comparing current performance against historical averages and industry benchmarks. This feature provides actionable insights for improving this metric."}
+              </p>
             </div>
           )}
         </div>
@@ -4720,7 +5316,7 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
           {!isInvestorView && (
             <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
               <button
-                onClick={() => toggleNotes("lockInDuration")}
+                onClick={() => handleAddNotes("lockInDuration")}
                 style={{
                   padding: "8px 16px",
                   backgroundColor: "#e8ddd4",
@@ -4732,10 +5328,10 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
                   fontSize: "12px",
                 }}
               >
-                Add Notes
+                ADD notes
               </button>
               <button
-                onClick={() => toggleNotes("lockInDuration_analysis")}
+                onClick={() => handleAIAnalysis("lockInDuration")}
                 style={{
                   padding: "8px 16px",
                   backgroundColor: "#e8ddd4",
@@ -4747,8 +5343,65 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
                   fontSize: "12px",
                 }}
               >
-                View Analysis
+                AI analysis
               </button>
+            </div>
+          )}
+
+          {expandedNotes["lockInDuration"] && (
+            <div style={{ marginTop: "15px" }}>
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "5px",
+                }}
+              >
+                Notes:
+              </label>
+              <textarea
+                value={chartNotes["lockInDuration"] || ""}
+                onChange={(e) => updateChartNote("lockInDuration", e.target.value)}
+                placeholder="Add notes..."
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "60px",
+                  fontSize: "13px",
+                }}
+              />
+            </div>
+          )}
+
+          {expandedNotes["lockInDuration_analysis"] && (
+            <div
+              style={{
+                backgroundColor: "#e3f2fd",
+                padding: "15px",
+                borderRadius: "6px",
+                border: "1px solid #90caf9",
+                marginTop: "15px",
+              }}
+            >
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#1565c0",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "8px",
+                }}
+              >
+                AI Analysis:
+              </label>
+              <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
+                {chartAnalysis["lockInDuration"] ||
+                  "AI analysis will be generated based on your data trends, comparing current performance against historical averages and industry benchmarks. This feature provides actionable insights for improving this metric."}
+              </p>
             </div>
           )}
         </div>
@@ -4758,7 +5411,7 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
       {Object.keys(customKPIs).length > 0 && (
         <>
           <h3 style={{ color: "#5d4037", fontSize: "20px", fontWeight: "600", marginBottom: "15px" }}>Custom KPIs</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: "20px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px" }}>
             {Object.values(customKPIs).map((kpi) => (
               <div
                 key={kpi.chartName}
@@ -4778,7 +5431,7 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
                 {!isInvestorView && (
                   <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
                     <button
-                      onClick={() => toggleNotes(kpi.chartName)}
+                      onClick={() => handleAddNotes(kpi.chartName)}
                       style={{
                         padding: "8px 16px",
                         backgroundColor: "#e8ddd4",
@@ -4790,10 +5443,10 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
                         fontSize: "12px",
                       }}
                     >
-                      Add Notes
+                      ADD notes
                     </button>
                     <button
-                      onClick={() => toggleNotes(`${kpi.chartName}_analysis`)}
+                      onClick={() => handleAIAnalysis(kpi.chartName)}
                       style={{
                         padding: "8px 16px",
                         backgroundColor: "#e8ddd4",
@@ -4805,7 +5458,7 @@ const CostAgility = ({ activeSection, viewMode, user, onUpdateChartData, isInves
                         fontSize: "12px",
                       }}
                     >
-                      View Analysis
+                      AI analysis
                     </button>
                   </div>
                 )}
@@ -5036,6 +5689,7 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
   const [selectedViewMode, setSelectedViewMode] = useState("month")
   const [expandedNotes, setExpandedNotes] = useState({})
   const [chartNotes, setChartNotes] = useState({})
+  const [chartAnalysis, setChartAnalysis] = useState({})
   const [showAddKPIModal, setShowAddKPIModal] = useState(false)
   const [newKPI, setNewKPI] = useState({
     name: "",
@@ -5282,10 +5936,17 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
     },
   })
 
-  const toggleNotes = (chartName) => {
+  const handleAddNotes = (chartName) => {
     setExpandedNotes((prev) => ({
       ...prev,
       [chartName]: !prev[chartName],
+    }))
+  }
+
+  const handleAIAnalysis = (chartName) => {
+    setExpandedNotes((prev) => ({
+      ...prev,
+      [`${chartName}_analysis`]: !prev[`${chartName}_analysis`],
     }))
   }
 
@@ -5293,6 +5954,13 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
     setChartNotes((prev) => ({
       ...prev,
       [chartName]: note,
+    }))
+  }
+
+  const updateChartAnalysis = (chartName, analysis) => {
+    setChartAnalysis((prev) => ({
+      ...prev,
+      [chartName]: analysis,
     }))
   }
 
@@ -5534,8 +6202,8 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
         </div>
       </div>
 
-      {/* Chart Grid - 3 per row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: "20px", marginBottom: "30px" }}>
+      {/* Chart Grid - 2 per row */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px", marginBottom: "30px" }}>
         <div
           style={{
             backgroundColor: "#fdfcfb",
@@ -5549,7 +6217,7 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
           {!isInvestorView && (
             <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
               <button
-                onClick={() => toggleNotes("currentRatio")}
+                onClick={() => handleAddNotes("currentRatio")}
                 style={{
                   padding: "8px 16px",
                   backgroundColor: "#e8ddd4",
@@ -5561,10 +6229,10 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
                   fontSize: "12px",
                 }}
               >
-                Add Notes
+                ADD notes
               </button>
               <button
-                onClick={() => toggleNotes("currentRatio_analysis")}
+                onClick={() => handleAIAnalysis("currentRatio")}
                 style={{
                   padding: "8px 16px",
                   backgroundColor: "#e8ddd4",
@@ -5576,8 +6244,65 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
                   fontSize: "12px",
                 }}
               >
-                View Analysis
+                AI analysis
               </button>
+            </div>
+          )}
+
+          {expandedNotes["currentRatio"] && (
+            <div style={{ marginTop: "15px" }}>
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "5px",
+                }}
+              >
+                Notes:
+              </label>
+              <textarea
+                value={chartNotes["currentRatio"] || ""}
+                onChange={(e) => updateChartNote("currentRatio", e.target.value)}
+                placeholder="Add notes..."
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "60px",
+                  fontSize: "13px",
+                }}
+              />
+            </div>
+          )}
+
+          {expandedNotes["currentRatio_analysis"] && (
+            <div
+              style={{
+                backgroundColor: "#e3f2fd",
+                padding: "15px",
+                borderRadius: "6px",
+                border: "1px solid #90caf9",
+                marginTop: "15px",
+              }}
+            >
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#1565c0",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "8px",
+                }}
+              >
+                AI Analysis:
+              </label>
+              <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
+                {chartAnalysis["currentRatio"] ||
+                  "AI analysis will be generated based on your data trends, comparing current performance against historical averages and industry benchmarks. This feature provides actionable insights for improving this metric."}
+              </p>
             </div>
           )}
         </div>
@@ -5595,7 +6320,7 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
           {!isInvestorView && (
             <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
               <button
-                onClick={() => toggleNotes("burnRate")}
+                onClick={() => handleAddNotes("burnRate")}
                 style={{
                   padding: "8px 16px",
                   backgroundColor: "#e8ddd4",
@@ -5607,10 +6332,10 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
                   fontSize: "12px",
                 }}
               >
-                Add Notes
+                ADD notes
               </button>
               <button
-                onClick={() => toggleNotes("burnRate_analysis")}
+                onClick={() => handleAIAnalysis("burnRate")}
                 style={{
                   padding: "8px 16px",
                   backgroundColor: "#e8ddd4",
@@ -5622,8 +6347,65 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
                   fontSize: "12px",
                 }}
               >
-                View Analysis
+                AI analysis
               </button>
+            </div>
+          )}
+
+          {expandedNotes["burnRate"] && (
+            <div style={{ marginTop: "15px" }}>
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "5px",
+                }}
+              >
+                Notes:
+              </label>
+              <textarea
+                value={chartNotes["burnRate"] || ""}
+                onChange={(e) => updateChartNote("burnRate", e.target.value)}
+                placeholder="Add notes..."
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "60px",
+                  fontSize: "13px",
+                }}
+              />
+            </div>
+          )}
+
+          {expandedNotes["burnRate_analysis"] && (
+            <div
+              style={{
+                backgroundColor: "#e3f2fd",
+                padding: "15px",
+                borderRadius: "6px",
+                border: "1px solid #90caf9",
+                marginTop: "15px",
+              }}
+            >
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#1565c0",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "8px",
+                }}
+              >
+                AI Analysis:
+              </label>
+              <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
+                {chartAnalysis["burnRate"] ||
+                  "AI analysis will be generated based on your data trends, comparing current performance against historical averages and industry benchmarks. This feature provides actionable insights for improving this metric."}
+              </p>
             </div>
           )}
         </div>
@@ -5641,7 +6423,7 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
           {!isInvestorView && (
             <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
               <button
-                onClick={() => toggleNotes("cashCover")}
+                onClick={() => handleAddNotes("cashCover")}
                 style={{
                   padding: "8px 16px",
                   backgroundColor: "#e8ddd4",
@@ -5653,10 +6435,10 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
                   fontSize: "12px",
                 }}
               >
-                Add Notes
+                ADD notes
               </button>
               <button
-                onClick={() => toggleNotes("cashCover_analysis")}
+                onClick={() => handleAIAnalysis("cashCover")}
                 style={{
                   padding: "8px 16px",
                   backgroundColor: "#e8ddd4",
@@ -5668,8 +6450,65 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
                   fontSize: "12px",
                 }}
               >
-                View Analysis
+                AI analysis
               </button>
+            </div>
+          )}
+
+          {expandedNotes["cashCover"] && (
+            <div style={{ marginTop: "15px" }}>
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "5px",
+                }}
+              >
+                Notes:
+              </label>
+              <textarea
+                value={chartNotes["cashCover"] || ""}
+                onChange={(e) => updateChartNote("cashCover", e.target.value)}
+                placeholder="Add notes..."
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "60px",
+                  fontSize: "13px",
+                }}
+              />
+            </div>
+          )}
+
+          {expandedNotes["cashCover_analysis"] && (
+            <div
+              style={{
+                backgroundColor: "#e3f2fd",
+                padding: "15px",
+                borderRadius: "6px",
+                border: "1px solid #90caf9",
+                marginTop: "15px",
+              }}
+            >
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#1565c0",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "8px",
+                }}
+              >
+                AI Analysis:
+              </label>
+              <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
+                {chartAnalysis["cashCover"] ||
+                  "AI analysis will be generated based on your data trends, comparing current performance against historical averages and industry benchmarks. This feature provides actionable insights for improving this metric."}
+              </p>
             </div>
           )}
         </div>
@@ -5687,7 +6526,7 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
           {!isInvestorView && (
             <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
               <button
-                onClick={() => toggleNotes("cashflow")}
+                onClick={() => handleAddNotes("cashflow")}
                 style={{
                   padding: "8px 16px",
                   backgroundColor: "#e8ddd4",
@@ -5699,10 +6538,10 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
                   fontSize: "12px",
                 }}
               >
-                Add Notes
+                ADD notes
               </button>
               <button
-                onClick={() => toggleNotes("cashflow_analysis")}
+                onClick={() => handleAIAnalysis("cashflow")}
                 style={{
                   padding: "8px 16px",
                   backgroundColor: "#e8ddd4",
@@ -5714,8 +6553,65 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
                   fontSize: "12px",
                 }}
               >
-                View Analysis
+                AI analysis
               </button>
+            </div>
+          )}
+
+          {expandedNotes["cashflow"] && (
+            <div style={{ marginTop: "15px" }}>
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "5px",
+                }}
+              >
+                Notes:
+              </label>
+              <textarea
+                value={chartNotes["cashflow"] || ""}
+                onChange={(e) => updateChartNote("cashflow", e.target.value)}
+                placeholder="Add notes..."
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "60px",
+                  fontSize: "13px",
+                }}
+              />
+            </div>
+          )}
+
+          {expandedNotes["cashflow_analysis"] && (
+            <div
+              style={{
+                backgroundColor: "#e3f2fd",
+                padding: "15px",
+                borderRadius: "6px",
+                border: "1px solid #90caf9",
+                marginTop: "15px",
+              }}
+            >
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#1565c0",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "8px",
+                }}
+              >
+                AI Analysis:
+              </label>
+              <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
+                {chartAnalysis["cashflow"] ||
+                  "AI analysis will be generated based on your data trends, comparing current performance against historical averages and industry benchmarks. This feature provides actionable insights for improving this metric."}
+              </p>
             </div>
           )}
         </div>
@@ -5733,7 +6629,7 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
           {!isInvestorView && (
             <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
               <button
-                onClick={() => toggleNotes("loanRepayments")}
+                onClick={() => handleAddNotes("loanRepayments")}
                 style={{
                   padding: "8px 16px",
                   backgroundColor: "#e8ddd4",
@@ -5745,10 +6641,10 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
                   fontSize: "12px",
                 }}
               >
-                Add Notes
+                ADD notes
               </button>
               <button
-                onClick={() => toggleNotes("loanRepayments_analysis")}
+                onClick={() => handleAIAnalysis("loanRepayments")}
                 style={{
                   padding: "8px 16px",
                   backgroundColor: "#e8ddd4",
@@ -5760,8 +6656,65 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
                   fontSize: "12px",
                 }}
               >
-                View Analysis
+                AI analysis
               </button>
+            </div>
+          )}
+
+          {expandedNotes["loanRepayments"] && (
+            <div style={{ marginTop: "15px" }}>
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "5px",
+                }}
+              >
+                Notes:
+              </label>
+              <textarea
+                value={chartNotes["loanRepayments"] || ""}
+                onChange={(e) => updateChartNote("loanRepayments", e.target.value)}
+                placeholder="Add notes..."
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "60px",
+                  fontSize: "13px",
+                }}
+              />
+            </div>
+          )}
+
+          {expandedNotes["loanRepayments_analysis"] && (
+            <div
+              style={{
+                backgroundColor: "#e3f2fd",
+                padding: "15px",
+                borderRadius: "6px",
+                border: "1px solid #90caf9",
+                marginTop: "15px",
+              }}
+            >
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#1565c0",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "8px",
+                }}
+              >
+                AI Analysis:
+              </label>
+              <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
+                {chartAnalysis["loanRepayments"] ||
+                  "AI analysis will be generated based on your data trends, comparing current performance against historical averages and industry benchmarks. This feature provides actionable insights for improving this metric."}
+              </p>
             </div>
           )}
         </div>
@@ -5771,7 +6724,7 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
       {Object.keys(customKPIs).length > 0 && (
         <>
           <h3 style={{ color: "#5d4037", fontSize: "20px", fontWeight: "600", marginBottom: "15px" }}>Custom KPIs</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: "20px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px" }}>
             {Object.values(customKPIs).map((kpi) => (
               <div
                 key={kpi.chartName}
@@ -5791,7 +6744,7 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
                 {!isInvestorView && (
                   <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
                     <button
-                      onClick={() => toggleNotes(kpi.chartName)}
+                      onClick={() => handleAddNotes(kpi.chartName)}
                       style={{
                         padding: "8px 16px",
                         backgroundColor: "#e8ddd4",
@@ -5803,10 +6756,10 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
                         fontSize: "12px",
                       }}
                     >
-                      Add Notes
+                      ADD notes
                     </button>
                     <button
-                      onClick={() => toggleNotes(`${kpi.chartName}_analysis`)}
+                      onClick={() => handleAIAnalysis(kpi.chartName)}
                       style={{
                         padding: "8px 16px",
                         backgroundColor: "#e8ddd4",
@@ -5818,7 +6771,7 @@ const LiquiditySurvival = ({ activeSection, viewMode, user, onUpdateChartData, i
                         fontSize: "12px",
                       }}
                     >
-                      View Analysis
+                      AI analysis
                     </button>
                   </div>
                 )}
