@@ -30,10 +30,9 @@ import {
   sendEmailVerification,
   sendPasswordResetEmail,
 } from "../firebaseConfig";
-import { doc, setDoc, getDoc, updateDoc } from "firebase/firestore"; // Added updateDoc
+import { doc, setDoc, getDoc } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import { onAuthStateChanged, deleteUser } from "firebase/auth";
-import { normalizeRoleName } from "../utils/profileHelpers"; // Added this import
 import NDASignupPopup from "../NDAsign";
 import TermsConditionsCheckbox from "./Ts&cs";
 import FormInput from "./FormInput";
@@ -141,6 +140,7 @@ export default function LoginRegister() {
   });
   const [resumingRegistration, setResumingRegistration] = useState(false);
   const [hoveredCard, setHoveredCard] = useState(null);
+const [termsAcceptanceTimestamp, setTermsAcceptanceTimestamp] = useState(null);
 
   // Utility functions
   const validateEmail = (email) => /\S+@\S+\.\S+/.test(email);
@@ -165,7 +165,7 @@ export default function LoginRegister() {
       Catalyst: <Building2 size={16} />,
       Interns: <GraduationCap size={16} />,
       ProgramSponsor: <Award size={16} />,
-      Admin: <TrendingUp size={16} />
+       Admin: <TrendingUp size={16} />
     };
     return iconMap[roleValue] || <Smile size={16} />;
   };
@@ -188,9 +188,9 @@ export default function LoginRegister() {
       ProgramSponsor: "/program-sponsor-profile",
       PROGRAM_SPONSOR: "/program-sponsor-profile",
       // admin
-      Admin: "/admin/dashboard",
-      admin: "/admin/dashboard",
-      ADMIN: "/admin/dashboard",
+       Admin: "/admin/dashboard",
+    admin: "/admin/dashboard",
+    ADMIN: "/admin/dashboard",
     };
     navigate(routeMap[role] || "/auth");
   };
@@ -237,224 +237,368 @@ export default function LoginRegister() {
       setResetError(getCustomErrorMessage(error));
     }
   };
+// 1. Fix handleRegister - Don't show NDA immediately, wait for email verification
+const handleRegister = async () => {
+  setIsLoading(true);
+  const newErrors = {};
 
-  // 1. Fix handleRegister - Don't show NDA immediately, wait for email verification
-  const handleRegister = async () => {
-    setIsLoading(true);
-    const newErrors = {};
+  if (!validateEmail(email)) newErrors.email = "Enter your email";
+  if (username.trim() === "") newErrors.username = "Enter your username";
+  if (password.length < 6)
+    newErrors.password = "Password should be (at least 6 characters)";
+  if (password !== confirmPassword)
+    newErrors.confirmPassword = "Passwords do not match!";
+  if (roles.length === 0) newErrors.role = "Please select at least one role.";
+  if (!agreeToTerms)
+    newErrors.terms = "Please agree to the Terms & Conditions and Mutual NDA";
 
-    if (!validateEmail(email)) newErrors.email = "Enter your email";
-    if (username.trim() === "") newErrors.username = "Enter your username";
-    if (password.length < 6)
-      newErrors.password = "Password should be (at least 6 characters)";
-    if (password !== confirmPassword)
-      newErrors.confirmPassword = "Passwords do not match!";
-    if (roles.length === 0) newErrors.role = "Please select at least one role.";
-    if (!agreeToTerms)
-      newErrors.terms = "Please agree to the Terms & Conditions";
+  if (Object.keys(newErrors).length > 0) {
+    setErrors(newErrors);
+    setIsLoading(false);
+    return;
+  }
 
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
+  setErrors({});
+  setAuthError("");
+
+  try {
+    const userCredential = await createUserWithEmailAndPassword(
+      auth,
+      email,
+      password
+    );
+    const user = userCredential.user;
+
+    await sendEmailVerification(user);
+    setCodeSent(true);
+  } catch (error) {
+    console.error("Registration error:", error);
+    setAuthError(getCustomErrorMessage(error));
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+// Update handleVerify - save T&Cs document and redirect
+
+const handleLogin = async () => {
+  setIsLoading(true);
+  setErrors({});
+  setAuthError("");
+
+  if (!validateEmail(email)) {
+    setErrors({ email: "Enter your email!" });
+    setIsLoading(false);
+    return;
+  }
+  if (!password) {
+    setErrors({ password: "Enter your password!" });
+    setIsLoading(false);
+    return;
+  }
+
+  try {
+    const userCredential = await signInWithEmailAndPassword(
+      auth,
+      email,
+      password
+    );
+    const user = userCredential.user;
+
+    await new Promise(resolve => setTimeout(resolve, 100));
+    await user.reload();
+    const refreshedUser = auth.currentUser;
+    
+    // FIXED: UNCOMMENT email verification check
+    if (refreshedUser.emailVerified) {
+      setAuthError("Please verify your email before logging in. Check your inbox for the verification link.");
+      await auth.signOut(); // Sign out unverified user
       setIsLoading(false);
       return;
     }
 
-    setErrors({});
-    setAuthError("");
+    // Email is verified, continue with normal login flow
+    const userDocRef = doc(db, "users", user.uid);
+    const userDocSnap = await getDoc(userDocRef);
 
-    try {
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
-      const user = userCredential.user;
-
-      // await sendEmailVerification(user);
+    if (!userDocSnap.exists()) {
+      setAuthError("Registration incomplete. Please complete your registration.");
+      setResumingRegistration(true);
+      setIsRegistering(true);
       setCodeSent(true);
 
-      // FIXED: Store complete registration data including roles
-      const ndaData = {
-        email,
-        username,
-        role: roles.join(","),
-        roleArray: roles,
-        password,
+      setRegistrationData({
+        email: user.email,
+        username: "",
         uid: user.uid,
-        termsAccepted: agreeToTerms,
-        termsAcceptedDate: new Date().toISOString(),
-      };
-      setRegistrationData(ndaData);
-      // DON'T show NDA yet - wait for email verification
-    } catch (error) {
-      console.error("Registration error:", error);
-      setAuthError(getCustomErrorMessage(error));
-    } finally {
-      setIsLoading(false);
-    }
-  };
+        termsAccepted: false,
+        termsAcceptedDate: null,
+        roleArray: [],
+        role: "", // Add role field
+      });
 
-  const handleLogin = async () => {
-    setIsLoading(true);
-    setErrors({});
-    setAuthError("");
-
-    if (!validateEmail(email)) {
-      setErrors({ email: "Enter your email!" });
-      setIsLoading(false);
-      return;
-    }
-    if (!password) {
-      setErrors({ password: "Enter your password!" });
+    
       setIsLoading(false);
       return;
     }
 
-    try {
-      const userCredential = await signInWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
-      const user = userCredential.user;
+    const userData = userDocSnap.data();
+    let activeRoles = [];
+    let deletedRoles = [];
 
-      await new Promise(resolve => setTimeout(resolve, 100));
-      await user.reload();
-      const refreshedUser = auth.currentUser;
-      
-      // FIXED: UNCOMMENT email verification check
-      // if (!refreshedUser.emailVerified) {
-      //   setAuthError("Please verify your email before logging in. Check your inbox for the verification link.");
-      //   await auth.signOut(); // Sign out unverified user
-      //   setIsLoading(false);
-      //   return;
-      // }
-
-      // Email is verified, continue with normal login flow
-      const userDocRef = doc(db, "users", user.uid);
-      const userDocSnap = await getDoc(userDocRef);
-
-      if (!userDocSnap.exists()) {
-        setAuthError("Registration incomplete. Please complete your registration.");
-        setResumingRegistration(true);
-        setIsRegistering(true);
-        setCodeSent(true);
-
-        setRegistrationData({
-          email: user.email,
-          username: "",
-          uid: user.uid,
-          termsAccepted: false,
-          termsAcceptedDate: null,
-          roleArray: [],
-          role: "", // Add role field
-        });
-
-        setShowNDA(true);
-        setIsLoading(false);
-        return;
-      }
-
-      const userData = userDocSnap.data();
-      let activeRoles = [];
-      let deletedRoles = [];
-
-      if (userData.roles && typeof userData.roles === "object") {
-        Object.keys(userData.roles).forEach((r) => {
-          const roleObj = userData.roles[r];
-          if (roleObj.deletedStatus === true) {
-            deletedRoles.push({
-              name: r,
-              deletedStatus: true,
-              deletedAt: roleObj.deletedAt,
-            });
-          } else {
-            activeRoles.push({ name: r });
-          }
-        });
-      }
-
-      if (Array.isArray(userData.roleArray)) {
-        userData.roleArray.forEach((r) => {
-          if (!activeRoles.find((ar) => ar.name === r)) {
-            activeRoles.push({ name: r });
-          }
-        });
-      }
-
-      if (typeof userData.role === "string") {
-        userData.role.split(",").forEach((r) => {
-          const roleName = r.trim();
-          if (!activeRoles.find((ar) => ar.name === roleName)) {
-            activeRoles.push({ name: roleName });
-          }
-        });
-      }
-
-      const allRoles = [...activeRoles, ...deletedRoles];
-      setRoleSelectionModal({ show: true, roles: allRoles });
-
-      if (activeRoles.length === 1) {
-        // IMPORTANT: Persist chosen role as currentRole for the user so header reflects it
-        try {
-          const singleRole = activeRoles[0].name || activeRoles[0];
-          const normalized = normalizeRoleName(singleRole);
-          if (auth.currentUser) {
-            const userDocRef = doc(db, "users", auth.currentUser.uid);
-            await updateDoc(userDocRef, { currentRole: normalized });
-          }
-          localStorage.setItem("selectedRole", normalized);
-        } catch (err) {
-          console.error("Error persisting single role:", err);
+    if (userData.roles && typeof userData.roles === "object") {
+      Object.keys(userData.roles).forEach((r) => {
+        const roleObj = userData.roles[r];
+        if (roleObj.deletedStatus === true) {
+          deletedRoles.push({
+            name: r,
+            deletedStatus: true,
+            deletedAt: roleObj.deletedAt,
+          });
+        } else {
+          activeRoles.push({ name: r });
         }
-        
-        setRoleSelectionModal({ show: false, roles: [] });
-        navigateToRoleDashboard(activeRoles[0].name);
-      }
-
-      if (activeRoles.length === 0 && deletedRoles.length > 0) {
-        navigate("/RetrieveAccount", {
-          state: { roleToRetrieve: deletedRoles[0].name },
-        });
-      }
-    } catch (error) {
-      console.error("Login error:", error);
-      setAuthError(getCustomErrorMessage(error));
-    } finally {
-      setIsLoading(false);
+      });
     }
-  };
 
-  const handleVerify = async () => {
-    setCheckingVerification(true);
-    setErrors({});
+    if (Array.isArray(userData.roleArray)) {
+      userData.roleArray.forEach((r) => {
+        if (!activeRoles.find((ar) => ar.name === r)) {
+          activeRoles.push({ name: r });
+        }
+      });
+    }
 
-    try {
-      await auth.currentUser.reload();
-      const user = auth.currentUser;
+    if (typeof userData.role === "string") {
+      userData.role.split(",").forEach((r) => {
+        const roleName = r.trim();
+        if (!activeRoles.find((ar) => ar.name === roleName)) {
+          activeRoles.push({ name: roleName });
+        }
+      });
+    }
 
-      if (user) {
-        setIsEmailVerified(true);
-        // FIXED: Show NDA after email is verified
-        setShowNDA(true);
+    const allRoles = [...activeRoles, ...deletedRoles];
+    setRoleSelectionModal({ show: true, roles: allRoles });
+
+    if (activeRoles.length === 1) {
+      setRoleSelectionModal({ show: false, roles: [] });
+      navigateToRoleDashboard(activeRoles[0].name);
+    }
+
+    if (activeRoles.length === 0 && deletedRoles.length > 0) {
+      navigate("/RetrieveAccount", {
+        state: { roleToRetrieve: deletedRoles[0].name },
+      });
+    }
+  } catch (error) {
+    console.error("Login error:", error);
+    setAuthError(getCustomErrorMessage(error));
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+ const handleVerify = async () => {
+  setCheckingVerification(true);
+  setErrors({});
+
+  try {
+    await auth.currentUser.reload();
+    const user = auth.currentUser;
+
+    if (user) {
+      setIsEmailVerified(true);
+      
+      // Full T&Cs and NDA text content
+      const termsAndNDAContent = `
+BIG MARKETPLACE – PLATFORM TERMS & CONDITIONS AND MUTUAL NDA
+
+Effective Date: ${new Date().toLocaleDateString()}
+Applies To: All Registered Users (SMEs, Funders, Service Providers, Corporates, Accelerators, and Interns)
+
+PART A: MUTUAL NON-DISCLOSURE AGREEMENT (NDA)
+
+1. Purpose
+This Mutual NDA governs the protection and non-disclosure of Confidential Information exchanged between BIG Marketplace users and between each user and Brown Ivory Group Proprietary Limited ("BIG").
+
+2. Definition of Confidential Information
+"Confidential Information" includes, but is not limited to: business plans, financial information, funding requirements, investment terms, product/service data, IP, customer data, documents, and any non-public business or personal data disclosed via the platform or through follow-up communications.
+
+3. Mutual Obligations
+All parties agree to:
+- Keep Confidential Information strictly confidential.
+- Use it solely for evaluation or engagement within the BIG Marketplace platform.
+- Not disclose it to third parties except employees or advisors who are bound by similar confidentiality obligations.
+
+4. Permitted Disclosures
+Information may be disclosed:
+- To advisors who have a need to know.
+- As required by law or legal process (with notice to the disclosing party).
+- If already in the public domain or lawfully obtained from another source.
+
+5. Duration
+This NDA is valid:
+- For two years from date of last disclosure on the platform, or
+- Until the Confidential Information becomes publicly available through no fault of the receiving party.
+
+6. Data Protection
+All users agree to comply with applicable data protection laws, including POPIA. Personal Information may not be misused, shared, or processed outside the intended platform purpose without explicit consent.
+
+7. Return or Destruction
+Upon written request, users must return or delete any Confidential Information shared with them via the platform.
+
+8. No License or IP Rights
+No rights to Confidential Information or underlying IP are granted by this NDA.
+
+9. Breach & Enforcement
+Violation of this NDA may result in:
+- Removal from the BIG Marketplace platform,
+- Legal action and damages, and
+- Blacklisting from the ecosystem.
+
+PART B: PLATFORM TERMS & CONDITIONS
+
+1. Introduction & Acceptance
+1.1. By registering on BIG Marketplace, you agree to these Terms & Conditions and the accompanying Mutual NDA.
+1.2. These terms govern the use of the BIG Marketplace platform, a trust-based ecosystem designed to match high-impact businesses with funders, service providers, and growth enablers.
+1.3. All users agree to act in good faith and uphold the integrity, confidentiality, and accountability standards of the platform.
+
+2. Universal User Responsibilities
+2.1. Maintain complete, truthful, and current profile information.
+2.2. Acknowledge and respect the platform's deal flow lifecycle by updating the status of every interaction (e.g., matched, declined, in negotiation, term sheet signed).
+2.3. Do not engage with any party introduced via BIG Marketplace outside the platform in order to avoid fees or visibility.
+2.4. Accept that BIG Marketplace reserves the right to audit usage logs and communication records where misconduct or circumvention is suspected.
+
+3. SMEs (Small & Medium Enterprises)
+3.1. Undergo BIG Score pre-vetting based on financials, operations, governance, and growth potential.
+3.2. Upload necessary documentation (e.g., CIPC docs, tax clearance, financials).
+3.3. Accurately update deal status, including:
+- "Declined" with reason
+- "Term Sheet Signed" with supporting document
+- "Deal Finalized"
+3.4. Acknowledge that participation in funded engagements or provider relationships may be subject to verification.
+
+4. Funders / Investors
+4.1. Agree to a standard 3% commission fee on all funding deals concluded with SMEs introduced via the platform.
+4.2. Fee Triggers:
+- Triggered upon term sheet signing or equivalent contractual commitment.
+- Payable within 30 days of deal finalisation.
+- Applies to all funding types (grants, equity, loans, convertible notes).
+4.3. Obligations:
+- Update all deal statuses throughout the lifecycle.
+- Upload executed term sheets.
+- Refrain from bypassing platform communication or execution.
+
+5. Service Providers
+5.1. May be listed on the platform following vetting (as applicable).
+5.2. Agree to pay a referral or success fee on new SME engagements sourced through BIG Marketplace, if and when a commercial transaction occurs.
+5.3. Commit to:
+- Delivering services aligned with scope and professional ethics
+- Participating in quality reviews and satisfaction ratings
+- Not circumventing the platform once matched with a business
+
+6. Corporates / Accelerators / Incubators
+6.1. May access the SME database via:
+- Monthly or annual enterprise subscription
+- API integration (where technically feasible and contractually agreed)
+6.2. Agree to:
+- Mark all SME engagements with outcomes (e.g., shortlisted, accepted into program, declined).
+- Participate in platform usage reviews and engagement tracking.
+6.3. Fees:
+- No success-based commission is charged unless separately agreed upon.
+- Customized pricing and licensing may apply for premium features (e.g., scoring access, custom filters, analytics dashboards).
+6.4. Corporates engaging SMEs for ESD/CSR/Procurement purposes must:
+- Respect the pre-vetting system
+- Provide updates on funded or contracted SMEs
+- Use data only for permitted sourcing activities (no data scraping, resale, or off-platform marketing)
+
+7. Data Usage, Privacy & Confidentiality
+7.1. All users are bound by the Mutual Non-Disclosure Agreement (Part A) and data privacy regulations (POPIA/GDPR compliant).
+7.2. BIG Marketplace will not share confidential user data without consent, except to facilitate matchmaking or regulatory compliance.
+7.3. The platform may use anonymized or aggregated data to improve AI matching, user experience, and market insights.
+
+8. Breach & Dispute Resolution
+8.1. Any form of circumvention, data misuse, or failure to pay applicable fees constitutes a material breach.
+8.2. Breaches may result in:
+- Immediate account suspension
+- Legal action to recover fees or damages
+- Blacklisting from the platform
+8.3. Disputes shall be resolved first via internal mediation. If unresolved, disputes will be referred to arbitration under South African commercial law.
+
+9. Amendments & Acceptance
+9.1. BIG Marketplace may amend these terms periodically.
+9.2. Users will be notified of changes and must accept updated terms to continue using the platform.
+
+FINAL ACKNOWLEDGEMENT
+By using this platform, you confirm that you:
+- Have read and understood these Terms & Conditions and the Mutual NDA
+- Agree to be bound by them
+- Agree to maintain confidentiality of all information shared on the platform
+- Acknowledge the fee structures and responsibilities applicable to your stakeholder category
+      `.trim();
+      
+      // Save user data with T&Cs acceptance
+      const finalRoleString = roles.join(",");
+      const acceptanceTimestamp = termsAcceptanceTimestamp || new Date().toISOString();
+      
+      await setDoc(doc(db, "users", user.uid), {
+        email: email,
+        username: username,
+        role: finalRoleString,
+        roleArray: roles,
+        termsAccepted: true,
+        termsAcceptedDate: acceptanceTimestamp,
+        termsVersion: "2.0",
+        termsContent: "BIG Marketplace Platform Terms & Conditions and Mutual NDA",
+        ndaAccepted: true,
+        ndaAcceptedDate: acceptanceTimestamp,
+        createdAt: new Date(),
+        registrationCompleted: true,
+      });
+
+      // Save complete T&Cs acceptance document with full text
+      await setDoc(doc(db, "termsAcceptance", user.uid), {
+        userInfo: {
+          email: email,
+          username: username,
+          role: finalRoleString,
+          roleArray: roles,
+        },
+        termsAccepted: true,
+        ndaAccepted: true,
+        acceptanceDate: acceptanceTimestamp,
+        termsVersion: "2.0",
+        fullTermsContent: termsAndNDAContent, // ADDED: Full T&Cs text
+        ipAddress: null, // Can be added if needed
+        userAgent: navigator.userAgent,
+        timestamp: new Date().toISOString(),
+      });
+
+      // Navigate to dashboard
+      if (roles.length > 1) {
+        setRoleSelectionModal({ show: true, roles: roles });
       } else {
-        setErrors({
-          verificationCode:
-            "Please verify your email first. Check your inbox and click the verification link.",
-        });
+        navigateToRoleDashboard(roles[0]);
       }
-    } catch (error) {
-      console.error("Verification check error:", error);
+    } else {
       setErrors({
         verificationCode:
-          "Error checking verification status. Please try again.",
+          "Please verify your email first. Check your inbox and click the verification link.",
       });
-    } finally {
-      setCheckingVerification(false);
     }
-  };
+  } catch (error) {
+    console.error("Verification check error:", error);
+    setErrors({
+      verificationCode:
+        "Error checking verification status. Please try again.",
+    });
+  } finally {
+    setCheckingVerification(false);
+  }
+};
 
-  const resendVerificationEmail = async () => {
+ const resendVerificationEmail = async () => {
     try {
       if (auth.currentUser) {
         await sendEmailVerification(auth.currentUser);
@@ -466,151 +610,138 @@ export default function LoginRegister() {
     }
   };
 
-  const getRoleDashboardName = (role) => {
-    const dashboardMap = {
-      "Small and Medium Social Enterprises": "SMSEs Dashboard",
-      SMSEs: "SMSEs Dashboard",
-      SMSE: "SMSEs Dashboard",
-      SME: "SMSEs Dashboard",
-      "SME/BUSINESS": "SMSEs Dashboard",
-      Investor: "Investor Dashboard",
-      Advisors: "Advisor Dashboard",
-      Accelerators: "Catalyst Dashboard",
-      Catalyst: "Catalyst Dashboard",
-      Interns: "Intern Dashboard",
-      ProgramSponsor: "Program Sponsor Dashboard",
-      //admin
-      Admin: "Admin Dashboard",
-      admin: "Admin Dashboard",
-      ADMIN: "Admin Dashboard",
-    };
-    return dashboardMap[role] || role;
-  };
 
-  const getRoleDescription = (role) => {
-    const descriptionMap = {
-      "Small and Medium Social Enterprises":
-        "Access funding, growth tools, and partnerships",
-      SMSEs: "Access funding, growth tools, and partnerships",
-      SMSE: "Access funding, growth tools, and partnerships",
-      SME: "Access funding, growth tools, and partnerships",
-      Investor: "Discover investment opportunities and manage portfolio",
-      Advisors: "Connect with businesses and offer expertise",
-      Accelerators: "Support startups and drive innovation",
-      Catalyst: "Support startups and drive innovation",
-      Interns: "Access internship opportunities and career development",
-      ProgramSponsor: "Manage intern programs and track placements",
-      //admin
+  // Add these helper functions at the end of the file
+
+const getRoleDashboardName = (role) => {
+  const dashboardMap = {
+    "Small and Medium Social Enterprises": "SMSEs Dashboard",
+    SMSEs: "SMSEs Dashboard",
+    SMSE: "SMSEs Dashboard",
+    SME: "SMSEs Dashboard",
+    "SME/BUSINESS": "SMSEs Dashboard",
+    Investor: "Investor Dashboard",
+    Advisors: "Advisor Dashboard",
+    Accelerators: "Catalyst Dashboard",
+    Catalyst: "Catalyst Dashboard",
+    Interns: "Intern Dashboard",
+    ProgramSponsor: "Program Sponsor Dashboard",
+//admin
+     Admin: "Admin Dashboard",
+    admin: "Admin Dashboard",
+    ADMIN: "Admin Dashboard",
+  };
+  return dashboardMap[role] || role;
+};
+
+const getRoleDescription = (role) => {
+  const descriptionMap = {
+    "Small and Medium Social Enterprises":
+      "Access funding, growth tools, and partnerships",
+    SMSEs: "Access funding, growth tools, and partnerships",
+    SMSE: "Access funding, growth tools, and partnerships",
+    SME: "Access funding, growth tools, and partnerships",
+    Investor: "Discover investment opportunities and manage portfolio",
+    Advisors: "Connect with businesses and offer expertise",
+    Accelerators: "Support startups and drive innovation",
+    Catalyst: "Support startups and drive innovation",
+    Interns: "Access internship opportunities and career development",
+    ProgramSponsor: "Manage intern programs and track placements",
+    //admin
       Admin: "Manage platform users, settings, and analytics",
-      admin: "Manage platform users, settings, and analytics",
-    };
-    return descriptionMap[role] || "Access your dashboard";
+    admin: "Manage platform users, settings, and analytics",
   };
+  return descriptionMap[role] || "Access your dashboard";
+};
 
-  // Add handleRegistrationComplete function
-  const handleRegistrationComplete = async (ndaData) => {
-    if (ndaData.cancelled) {
-      setShowNDA(false);
-      if (auth.currentUser) {
-        try {
-          await deleteUser(auth.currentUser);
-          setAuthError("Registration cancelled. Your account has been removed.");
-          setEmail("");
-          setUsername("");
-          setPassword("");
-          setConfirmPassword("");
-          setRoles([]);
-          setCodeSent(false);
-          setRegistrationData(null);
-          setAgreeToTerms(false);
-        } catch (error) {
-          console.error("Error deleting user account:", error);
-          setAuthError(
-            "Registration cancelled, but there was an error cleaning up. Please contact support."
-          );
-        }
+// Add handleRegistrationComplete function
+const handleRegistrationComplete = async (ndaData) => {
+  if (ndaData.cancelled) {
+    setShowNDA(false);
+    if (auth.currentUser) {
+      try {
+        await deleteUser(auth.currentUser);
+        setAuthError("Registration cancelled. Your account has been removed.");
+        setEmail("");
+        setUsername("");
+        setPassword("");
+        setConfirmPassword("");
+        setRoles([]);
+        setCodeSent(false);
+        setRegistrationData(null);
+        setAgreeToTerms(false);
+      } catch (error) {
+        console.error("Error deleting user account:", error);
+        setAuthError(
+          "Registration cancelled, but there was an error cleaning up. Please contact support."
+        );
       }
+    }
+    return;
+  }
+
+  try {
+    if (!auth.currentUser) {
+      setAuthError("User authentication lost. Please try again.");
       return;
     }
 
-    try {
-      if (!auth.currentUser) {
-        setAuthError("User authentication lost. Please try again.");
-        return;
-      }
+    const finalUsername = registrationData?.username || username.trim();
+    const finalRoles = registrationData?.roleArray || roles;
+    const finalRoleString = registrationData?.role || roles.join(",");
 
-      // FIXED: Use registrationData which has the roles
-      const finalUsername = registrationData?.username || username.trim();
-      const finalRoles = registrationData?.roleArray || roles;
-      const finalRoleString = registrationData?.role || roles.join(",");
-
-      if (!finalUsername || finalUsername === "") {
-        setAuthError("Please provide a username to complete registration.");
-        setShowNDA(false);
-        return;
-      }
-
-      if (!finalRoles || finalRoles.length === 0) {
-        setAuthError("Please select at least one role to complete registration.");
-        setShowNDA(false);
-        return;
-      }
-
-      if (!agreeToTerms) {
-        setAuthError(
-          "Please agree to the Terms & Conditions to complete registration."
-        );
-        setShowNDA(false);
-        return;
-      }
-
-      // FIXED: Save with proper role data and include currentRole for single-role users
-      const userData = {
-        email: registrationData?.email || email,
-        username: finalUsername,
-        role: finalRoleString,
-        roleArray: finalRoles,
-        ndaSigned: true,
-        ndaSignedDate: new Date().toISOString(),
-        termsAccepted: agreeToTerms,
-        termsAcceptedDate: new Date().toISOString(),
-        createdAt: new Date(),
-        ndaInfo: {
-          pdfUrl: ndaData.pdfUrl || null,
-          signatureUrl: ndaData.signatureUrl || null,
-          userId: ndaData.userId || auth.currentUser.uid,
-        },
-        termsVersion: "1.0",
-        termsContent: "BIG Marketplace Platform Terms & Conditions",
-        registrationCompleted: true,
-      };
-
-      // If user has only one role, set it as currentRole
-      if (finalRoles.length === 1) {
-        userData.currentRole = normalizeRoleName(finalRoles[0]);
-        localStorage.setItem("selectedRole", userData.currentRole);
-      }
-
-      await setDoc(doc(db, "users", auth.currentUser.uid), userData);
-
-      setNdaComplete(true);
+    if (!finalUsername || finalUsername === "") {
+      setAuthError("Please provide a username to complete registration.");
       setShowNDA(false);
-
-      // FIXED: Use finalRoles for navigation
-      if (finalRoles.length > 1) {
-        setRoleSelectionModal({ show: true, roles: finalRoles });
-      } else {
-        navigateToRoleDashboard(finalRoles[0]);
-      }
-    } catch (error) {
-      console.error("Error saving user data:", error);
-      setAuthError(getCustomErrorMessage(error));
+      return;
     }
-  };
 
-  const handleAdvisorCriteriaCancel = () => {
-    setShowAdvisorCriteria(false);
-  };
+    if (!finalRoles || finalRoles.length === 0) {
+      setAuthError("Please select at least one role to complete registration.");
+      setShowNDA(false);
+      return;
+    }
+
+    if (!agreeToTerms) {
+      setAuthError("Please agree to the Terms & Conditions to complete registration.");
+      setShowNDA(false);
+      return;
+    }
+
+    // Save user data with agreement info
+    await setDoc(doc(db, "users", auth.currentUser.uid), {
+      email: registrationData?.email || email,
+      username: finalUsername,
+      role: finalRoleString,
+      roleArray: finalRoles,
+      ndaAgreed: true,
+      ndaAgreedDate: new Date().toISOString(),
+      termsAccepted: agreeToTerms,
+      termsAcceptedDate: new Date().toISOString(),
+      createdAt: new Date(),
+      termsVersion: "1.0",
+      termsContent: "BIG Marketplace Platform Terms & Conditions",
+      registrationCompleted: true,
+    });
+
+    setNdaComplete(true);
+    setShowNDA(false);
+
+    // Navigate to dashboard
+    if (finalRoles.length > 1) {
+      setRoleSelectionModal({ show: true, roles: finalRoles });
+    } else {
+      navigateToRoleDashboard(finalRoles[0]);
+    }
+  } catch (error) {
+    console.error("Error saving user data:", error);
+    setAuthError(getCustomErrorMessage(error));
+  }
+};
+
+const handleAdvisorCriteriaCancel = () => {
+  setShowAdvisorCriteria(false);
+};
 
   // Effects
   useEffect(() => {
@@ -624,36 +755,23 @@ export default function LoginRegister() {
     return () => unsubscribe();
   }, [isRegistering]);
 
-  useEffect(() => {
-    const checkIncompleteRegistration = async () => {
-      const user = auth.currentUser;
-      if (!user || !user.emailVerified) return; // ✅ BLOCK EARLY NDA
+ useEffect(() => {
+  const checkIncompleteRegistration = async () => {
+    const user = auth.currentUser;
+    if (!user || !user.emailVerified) return;
 
-      const userDocRef = doc(db, "users", user.uid);
-      const userDocSnap = await getDoc(userDocRef);
+    const userDocRef = doc(db, "users", user.uid);
+    const userDocSnap = await getDoc(userDocRef);
 
-      if (!userDocSnap.exists()) {
-        setResumingRegistration(true);
-        setIsRegistering(true);
-        setCodeSent(true);
+    if (!userDocSnap.exists()) {
+      // User verified email but didn't complete registration
+      setAuthError("Registration incomplete. Please log out and register again.");
+      await auth.signOut();
+    }
+  };
 
-        setEmail(user.email || "");
-        setRegistrationData((prev) => prev ?? {
-          email: user.email,
-          username: "",
-          uid: user.uid,
-          roleArray: [],
-          role: "",
-          termsAccepted: false,
-          termsAcceptedDate: null,
-        });
-
-        setShowNDA(true);
-      }
-    };
-
-    checkIncompleteRegistration();
-  }, [auth.currentUser]);
+  checkIncompleteRegistration();
+}, [auth.currentUser]);
 
   // Keyboard handlers
   useEffect(() => {
@@ -722,7 +840,7 @@ export default function LoginRegister() {
                 <button
                   key={roleObj.name || index}
                   className={`role-option ${isDeleted ? "deleted" : ""}`}
-                  onClick={async () => {
+                  onClick={() => {
                     if (isDeleted) {
                       localStorage.setItem(
                         "selectedDeletedRole",
@@ -730,23 +848,6 @@ export default function LoginRegister() {
                       );
                       window.location.href = "/RetrieveAccount";
                     } else {
-                      try {
-                        const normalized = normalizeRoleName(roleObj.name);
-                        if (auth.currentUser) {
-                          const userDocRef = doc(
-                            db,
-                            "users",
-                            auth.currentUser.uid
-                          );
-                          await updateDoc(userDocRef, {
-                            currentRole: normalized,
-                          });
-                        }
-                        localStorage.setItem("selectedRole", normalized);
-                      } catch (err) {
-                        console.error("Error setting selected role:", err);
-                      }
-                      setRoleSelectionModal({ show: false, roles: [] });
                       navigateToRoleDashboard(roleObj.name);
                     }
                   }}
@@ -919,11 +1020,12 @@ export default function LoginRegister() {
         {errors.role && <p className="error-text">{errors.role}</p>}
       </div>
 
-      <TermsConditionsCheckbox
-        agreeToTerms={agreeToTerms}
-        setAgreeToTerms={setAgreeToTerms}
-        error={errors.terms}
-      />
+   <TermsConditionsCheckbox
+  agreeToTerms={agreeToTerms}
+  setAgreeToTerms={setAgreeToTerms}
+  error={errors.terms}
+  onAcceptanceTimestampChange={setTermsAcceptanceTimestamp}
+/>
 
       <button type="submit" className="primary-btn" disabled={isLoading}>
         {isLoading ? (
@@ -1070,13 +1172,12 @@ export default function LoginRegister() {
       {renderRoleSelectionModal()}
 
       {/* NDA Popup */}
-      {showNDA && registrationData && (
+      {/* {showNDA && registrationData && (
         <NDASignupPopup
           registrationData={registrationData}
           onRegistrationComplete={handleRegistrationComplete}
         />
-      )}
+      )} */}
     </div>
   );
-  
 }
