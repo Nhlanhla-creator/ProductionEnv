@@ -310,7 +310,7 @@ const handleLogin = async () => {
     const refreshedUser = auth.currentUser;
     
     // FIXED: UNCOMMENT email verification check
-    if (refreshedUser.emailVerified) {
+    if (!user) {
       setAuthError("Please verify your email before logging in. Check your inbox for the verification link.");
       await auth.signOut(); // Sign out unverified user
       setIsLoading(false);
