@@ -23,21 +23,6 @@ import AllSponsors from "./admin/pages/AllSponsors"
 import Subscriptions from "./admin/pages/Subscriptions"
 import QRCodes from "./admin/pages/QRCodes"
 import CardLandingPage from "./admin/pages/CardLandingPage"
-import Delivery from "./admin/pages/Delivery";
-import AdminGovernance from "./admin/pages/AdminGovernance";
-import Growth from "./admin/pages/Growth";
-import PartnersEcosystem from "./admin/pages/PartnersEcosystem";
-import ProductPlatform from "./admin/pages/ProductPlatform";
-import TechArchitecture from "./admin/pages/TechArchitecture";
-import QATesting from "./admin/pages/qatesting";
-import OperationsInternal from "./admin/pages/OperationsInternal"
-import UsersMarketplace from "./admin/pages/UsersMarketplace"
-import PilotsCaseStudies from "./admin/pages/PilotsCaseStudies"
-import ReportingAnalytics from "./admin/pages/ReportingAnalytics"
-import Archive from "./admin/pages/Archive"
-
-
-
 // Admin Settings Subcategory Components
 import AdminUsers from "./admin/pages/AdminUserManagement"
 import ApprovalWorkflows from "./admin/pages/ApprovalWorkflows"
@@ -52,9 +37,10 @@ import CatalystSettings from "./catalyst/CatalystSettings/supportSettings"
 import MySubscriptions from "./smses/BillingInformation/my-subscriptions"
 import BillingInfo from "./smses/BillingInformation/billing-info"
 import InvestorsSubscriptions from "./Investor/BillingAndPayments/investors-subscriptions"
-import BillingInfoInvestors from "./Investor/BillingAndPayments/billing-info-investors"
-import BillingInformation from "./Investor/BillingAndPayments/Myinformation"
-import BillingInformationSMSE from "./smses/BillingInformation/billing-history"
+import BillingInfoInvestors from "./Investor/BillingAndPayments/Myinformation"
+import BillingHistoryInvestor from "./Investor/BillingAndPayments/billing-info-investors"
+import BillingHistorySMSE from "./smses/BillingInformation/billing-history"
+import BillingInformationSMSE from "./smses/BillingInformation/billing-info"
 import AdvisorDocuments from "./advisors/AdvisorDocuments/advisor-documents"
 import CatalystDocuments from "./catalyst/CatalystDocuments/support-documents"
 
@@ -154,6 +140,7 @@ import BIGScoreInvestor from "./main_pages/Investors/BIGScore"
 import HomePageInvestor from "./main_pages/Investors/HomePage"
 import ContactFormInvestor from "./main_pages/Investors/Contact"
 import InsightsInvestor from "./main_pages/Investors/Insights"
+import HowItWorksInvestor from "./main_pages/Investors/HowItWorks"
 import FAQPageInvestor from "./main_pages/Investors/FAQInvestors"
 import HeaderInvestor from "./main_pages/Investors/HeaderInvestors"
 import FAQsAdvisor from "main_pages/Advisors/FAQsAdvisor"
@@ -227,6 +214,7 @@ import InvestorLegalCompliance from "./Investor/InvestorUniversalProfile/LegalCo
 import InvestorProductsServices from "./Investor/InvestorUniversalProfile/FundDetails​"
 import InvestorHowDidYouHear from "./Investor/InvestorUniversalProfile/ApplicationBrief​"
 import InvestorDeclarationConsent from "./Investor/InvestorUniversalProfile/DeclarationConsent"
+import InvestorMessages from "Investor/InvestorMessages/Messages"
 import InvestorCalendar from "./Investor/Calender/InvestorCalendar"
 import MyInvestments from "Investor/MyInvestment/MyInvestments"
 
@@ -259,6 +247,8 @@ import OpportunityMatchesPage from "./smses/MyOpportunityMatches/opportunity-mat
 // Growth Tools Components
 import ShopToolsPage from "./smses/MyGrowthTools/shop"
 import MyToolsPage from "./smses/MyGrowthTools/my-tools"
+import GrowthSuiteLanding from "./smses/MyGrowthTools/Growthsuitelanding"
+import OverallCompanyHealth from "./smses/MyGrowthTools/OverallCompanyHealth"
 import Strategy from "./smses/MyGrowthTools/Strategy"
 import FinancialPerformance from "./smses/MyGrowthTools/FinancialPerformance"
 import CapitalStructure from "./smses/MyGrowthTools/CapitalStructure"
@@ -757,14 +747,6 @@ function App() {
         <Route path="/InsightsInvestor" element={<InsightsInvestor />} />
         <Route path="/FAQPageInvestor" element={<FAQPageInvestor />} />
         <Route path="/HeaderInvestor" element={<HeaderInvestor />} />
-        <Route path="/Strategy" element={<Strategy />} />
-        <Route path="/FinancialPerformance" element={<FinancialPerformance />} />
-        <Route path="/CapitalStructure" element={<CapitalStructure />} />
-        <Route path="/OperationalStrength" element={<OperationalStrength />} />
-        <Route path="/SocialImpact" element={<SocialImpact />} />
-        <Route path="/People" element={<People />} />
-        <Route path="/MarketingSales" element={<MarketingSales />} />
-        <Route path="/RiskManagement" element={<RiskManagement />} />
         <Route path="/BIGscoreAdvisor" element={<BIGscoreAdvisor />} />
         <Route path="/HowWorksAdvisors" element={<HowWorksAdvisors />} />
         <Route path="/InsightsAdvisor" element={<InsightsAdvisor />} />
@@ -798,22 +780,6 @@ function App() {
         <Route path="/verify-email" element={<EmailVerification />} />
         <Route path="/card/:cardId" element={<CardLandingPage />} />
 
-        {/* Admin Notion Routes */}
-        <Route path="/admin/notion/delivery" element={withAdminProtection(Delivery)} />
-        <Route path="/admin/notion/governance" element={withAdminProtection(AdminGovernance)} />
-        <Route path="/admin/notion/growth" element={withAdminProtection(Growth)} />
-        <Route path="/admin/notion/partners-ecosystem" element={withAdminProtection(PartnersEcosystem)} />
-        <Route path="/admin/notion/product-platform" element={withAdminProtection(ProductPlatform)} />
-        <Route path="/admin/notion/tech-architecture" element={withAdminProtection(TechArchitecture)} />
-        <Route path="/admin/notion/qa-testing" element={withAdminProtection(QATesting)} />
-        <Route path="/admin/notion/operations-internal" element={withAdminProtection(OperationsInternal)} />
-        <Route path="/admin/notion/users-marketplace" element={withAdminProtection(UsersMarketplace)} />
-        <Route path="/admin/notion/pilots-case-studies" element={withAdminProtection(PilotsCaseStudies)} />
-        <Route path="/admin/notion/reporting-analytics" element={withAdminProtection(ReportingAnalytics)}/>
-        <Route path="/admin/notion/archive" element={withAdminProtection(Archive)} />
-
-
-       
         {/* Admin Dashboard Routes */}
         <Route path="/admin" element={<Navigate to="/Auth" replace />} />
         <Route path="/admin/dashboard" element={withAdminProtection(AdminDashboard)} />
@@ -841,23 +807,32 @@ function App() {
         <Route path="/profile" element={withProtection(Profile, {}, renderSMERoute)} />
         <Route path="/find-matches" element={withProtection(FindMatches, {}, renderSMERoute)} />
         <Route path="/my-documents" element={withProtection(MyDocuments, {}, renderSMERoute)} />
-        <Route path="/growth" element={withProtection(GrowthEnabler, {}, renderSMERoute)} />
+        <Route path="/growth" element={withProtection(GrowthSuiteLanding, {}, renderSMERoute)} />
         <Route path="/messages" element={withProtection(Messages, {}, renderSMERoute)} />
         <Route path="/calendar" element={withProtection(Calendar, {}, renderSMERoute)} />
         <Route path="/settings" element={withProtection(Settings, {}, renderSMERoute)} />
         <Route path="/documents" element={withProtection(ProfileSummary, {}, renderSMERoute)} />
         <Route path="/billing/subscriptions" element={withProtection(MySubscriptions, {}, renderSMERoute)} />
-        <Route path="/billing/info" element={withProtection(BillingInfo, {}, renderSMERoute)} />
-        <Route path="/billing/growth-tools-orders" element={withProtection(BillingInformationSMSE, {}, renderSMERoute)} />
+        <Route path="/billing/info" element={withProtection(BillingInformationSMSE, {}, renderSMERoute)} />
+        <Route path="/billing/growth-tools-orders" element={withProtection(BillingHistorySMSE, {}, renderSMERoute)} />
+        {/* Investor Billing and Payments Routes */}
+        <Route path="/investor/billing/subscriptions" element={withProtection(InvestorsSubscriptions, {}, renderInvestorRoute)} />
+        <Route path="/investor/billing/history" element={withProtection(BillingHistoryInvestor, {}, renderInvestorRoute)} />
+        <Route path="/investor/billing/info" element={withProtection(BillingInfoInvestors, {}, renderInvestorRoute)} />
+        
+        {/* Growth Suite Routes - NEW */}
+        <Route path="/growth-suite-landing" element={withProtection(GrowthSuiteLanding, {}, renderSMERoute)} />
+        <Route path="/overall-company-health" element={withProtection(OverallCompanyHealth, {}, renderSMERoute)} />
+        <Route path="/Strategy" element={withProtection(Strategy, {}, renderSMERoute)} />
+        <Route path="/FinancialPerformance" element={withProtection(FinancialPerformance, {}, renderSMERoute)} />
+        <Route path="/OperationalStrength" element={withProtection(OperationalStrength, {}, renderSMERoute)} />
+        <Route path="/People" element={withProtection(People, {}, renderSMERoute)} />
+        <Route path="/SocialImpact" element={withProtection(SocialImpact, {}, renderSMERoute)} />
+        <Route path="/MarketingSales" element={withProtection(MarketingSales, {}, renderSMERoute)} />
         
         {/* Growth Tools Sub-Routes */}
         <Route path="/growth/my-tools" element={withProtection(MyToolsPage, {}, renderSMERoute)} />
         <Route path="/growth/shop" element={withProtection(ShopToolsPage, {}, renderSMERoute)} />
-
-        {/* Investor Billing and Payments Routes */}
-        <Route path="/investor/billing/subscriptions" element={withProtection(InvestorsSubscriptions, {}, renderInvestorRoute)} />
-        <Route path="/investor/billing/info" element={withProtection(BillingInfoInvestors, {}, renderInvestorRoute)} />
-        <Route path="/investor/billing/myinfo" element={withProtection(BillingInformation, {}, renderInvestorRoute)} />
 
         {/* Protected Investor Dashboard Routes */}
         <Route path="/investor-documents" element={withProtection(Documents, {}, renderInvestorRoute)} />
@@ -865,7 +840,7 @@ function App() {
         <Route path="/investor-profile" element={withProtection(InvestorUniversalProfile, {}, renderInvestorRoute)} />
         <Route path="/investor-opportunities" element={withProtection(FindMatches, {}, renderInvestorRoute)} />
         <Route path="/investor-portfolio" element={<div>Coming Soon</div>} />
-        <Route path="/investor-messages" element={withProtection(Messages, {}, renderInvestorRoute)} />
+        <Route path="/investor-messages" element={withProtection(InvestorMessages, {}, renderInvestorRoute)} />
         <Route path="/investor-calendar" element={withProtection(InvestorCalendar, {}, renderInvestorRoute)} />
         <Route path="/investor-settings" element={withProtection(InvestorSettings, {}, renderInvestorRoute)} />
         <Route path="/my-investments" element={withProtection(MyInvestments, {}, renderInvestorRoute)} />
