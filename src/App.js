@@ -248,8 +248,6 @@ import GrowthSuiteLanding from "./smses/MyGrowthTools/Growthsuitelanding"
 import OverallCompanyHealth from "./smses/MyGrowthTools/OverallCompanyHealth"
 import ShopToolsPage from "./smses/MyGrowthTools/shop"
 import MyToolsPage from "./smses/MyGrowthTools/my-tools"
-import GrowthSuiteLanding from "./smses/MyGrowthTools/Growthsuitelanding"
-import OverallCompanyHealth from "./smses/MyGrowthTools/OverallCompanyHealth"
 import Strategy from "./smses/MyGrowthTools/Strategy"
 import FinancialPerformance from "./smses/MyGrowthTools/FinancialPerformance"
 import CapitalStructure from "./smses/MyGrowthTools/CapitalStructure"
@@ -278,7 +276,6 @@ import { Insights as InternInsights } from "./Interns/InternInsights/internInsig
 import { AcceleratorInsights as CatalystInsights } from "./catalyst/CatalystInsights/catalystInsights"
 import { InvestorInsights } from "./Investor/InvestorInsights/investorInsights"
 import MyCohorts from "./Investor/MyCohorts/MyCohorts"
-import InvestorMessages from "Investor/InvestorMessages/Messages"
 
 // Initial Data States
 const initialFormData = {
