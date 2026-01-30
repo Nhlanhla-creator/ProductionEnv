@@ -1,10 +1,10 @@
 // tabs/PortfolioOverview.js
 import React, { useState, useEffect } from 'react';
 import { Bar, Pie, Doughnut, Line } from 'react-chartjs-2';
-import { FiEye, FiArrowUp, FiArrowDown, FiEdit, FiGrid, FiCheck } from 'react-icons/fi';
+import { FiEye, FiArrowUp, FiArrowDown, FiEdit } from 'react-icons/fi';
 import { db, auth } from '../../firebaseConfig'; 
-import { collection, query, where, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
-import {
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { 
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
@@ -30,9 +30,694 @@ ChartJS.register(
   Legend
 );
 
-// Styles for PortfolioOverview (keep the same styles)
+// Styles for PortfolioOverview
 const styles = `
-/* ... keep all the existing CSS styles ... */
+.portfolio-overview {
+  width: 100%;
+}
+
+.time-view-controls {
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 10px;
+}
+
+.time-view-selector {
+  display: flex;
+  gap: 8px;
+  background: #f5f5f5;
+  padding: 8px 12px;
+  border-radius: 8px;
+  align-items: center;
+}
+
+.time-view-label {
+  font-size: 12px;
+  color: #666;
+  font-weight: 500;
+  margin-right: 8px;
+}
+
+.time-view-btn {
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  color: #666;
+  transition: none !important;
+  animation: none !important;
+  transform: none !important;
+}
+
+.time-view-btn.active {
+  background-color: #7d5a36;
+  color: white;
+}
+
+.time-view-btn:hover:not(.active) {
+  background-color: #e0e0e0;
+  transform: none !important;
+  animation: none !important;
+}
+
+.charts-grid-4x4 {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 0 10px;
+}
+
+.top-row,
+.bottom-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+
+.chart-container {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  height: 420px;
+  position: relative;
+  overflow: hidden;
+  transition: none !important;
+  animation: none !important;
+  transform: none !important;
+}
+
+.chart-container:hover {
+  transform: none !important;
+  animation: none !important;
+  transition: none !important;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.chart-title {
+  margin: 0 0 10px 0;
+  color: #5e3f26;
+  font-size: 16px;
+  font-weight: 600;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #ede4d8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  line-height: 1.3;
+  min-height: 40px;
+}
+
+.breakdown-icon-btn {
+  background: none;
+  border: none;
+  color: #7d5a36;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 4px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: none !important;
+  animation: none !important;
+  transform: none !important;
+}
+
+.breakdown-icon-btn:hover {
+  background: #f0f0f0;
+  transform: none !important;
+  animation: none !important;
+}
+
+.edit-icon-btn {
+  background: none;
+  border: none;
+  color: #7d5a36;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 4px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: none !important;
+  animation: none !important;
+  transform: none !important;
+  margin-left: 8px;
+}
+
+.edit-icon-btn:hover {
+  background: #f0f0f0;
+  transform: none !important;
+  animation: none !important;
+}
+
+.chart-title-fixed {
+  font-size: 14px;
+  font-weight: 600;
+  color: #7d5a36;
+  margin-bottom: 15px;
+  text-align: center;
+  padding: 8px 12px;
+  background: #f8f9fa;
+  border-radius: 4px;
+  border-left: 3px solid #7d5a36;
+}
+
+.chart-area {
+  flex-grow: 1;
+  min-height: 240px;
+  position: relative;
+  margin-bottom: 10px;
+}
+
+.chart-area-ultra-compact {
+  flex-grow: 1;
+  min-height: 280px;
+  position: relative;
+  margin-bottom: 5px;
+}
+
+.chart-summary-compact {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 15px;
+  padding: 12px 15px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.chart-summary-ultra-compact {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #f0f0f0;
+  background: #f8f9fa;
+  padding: 12px 15px;
+  border-radius: 6px;
+  margin-bottom: 0;
+}
+
+.current-value {
+  font-weight: 600;
+  color: #5e3f26;
+  font-size: 13px;
+}
+
+.target-value {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: #666;
+}
+
+.trend-icon {
+  font-size: 14px;
+}
+
+.trend-icon.up {
+  color: #4CAF50;
+}
+
+.trend-icon.down {
+  color: #f44336;
+}
+
+/* BIG Score Circular Design */
+.big-score-circular {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 15px;
+}
+
+.circular-progress {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.circular-content {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.big-score-value-circular {
+  font-size: 32px;
+  font-weight: 700;
+  color: #5e3f26;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.big-score-label-circular {
+  font-size: 14px;
+  color: #666;
+  font-weight: 500;
+}
+
+.circular-target {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #7d5a36;
+  font-weight: 500;
+  background: #f8f9fa;
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+
+/* Funding Ready Circular Styles */
+.funding-ready-circular {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 15px;
+}
+
+.funding-ready-value-circular {
+  font-size: 32px;
+  font-weight: 700;
+  color: #5e3f26;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.funding-ready-label-circular {
+  font-size: 14px;
+  color: #666;
+  font-weight: 500;
+}
+
+/* Popup Styles */
+.popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 20px;
+}
+
+.popup-container {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  max-width: 90%;
+  max-height: 90%;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.popup-close {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: #666;
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 4px;
+  transition: none !important;
+  animation: none !important;
+  transform: none !important;
+}
+
+.popup-close:hover {
+  background: #f0f0f0;
+  color: #333;
+  transform: none !important;
+  animation: none !important;
+}
+
+.popup-content {
+  width: 100%;
+}
+
+.popup-content h3 {
+  margin: 0 0 20px 0;
+  color: #5e3f26;
+  font-size: 24px;
+  text-align: center;
+  border-bottom: 2px solid #ede4d8;
+  padding-bottom: 15px;
+}
+
+.popup-description {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 20px;
+  text-align: center;
+  line-height: 1.5;
+  font-style: italic;
+  background: #f8f9fa;
+  padding: 12px 15px;
+  border-radius: 6px;
+  border-left: 3px solid #7d5a36;
+}
+
+.popup-chart {
+  height: 300px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.popup-details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.detail-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid #7d5a36;
+}
+
+.detail-label {
+  font-weight: 600;
+  color: #5e3f26;
+  font-size: 14px;
+}
+
+.detail-value {
+  font-weight: 600;
+  color: #7d5a36;
+  font-size: 14px;
+}
+
+.detail-value.positive {
+  color: #4CAF50;
+}
+
+/* BIG Score Popup Styles */
+.big-score-popup {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+}
+
+.big-score-main-popup {
+  text-align: center;
+  padding: 25px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 12px;
+  border: 3px solid #7d5a36;
+}
+
+.big-score-value {
+  font-size: 48px;
+  font-weight: 700;
+  color: #5e3f26;
+  margin-bottom: 10px;
+}
+
+.big-score-label {
+  font-size: 18px;
+  color: #666;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.big-score-target {
+  font-size: 14px;
+  color: #7d5a36;
+  font-weight: 500;
+}
+
+/* Funding Ready Popup Styles */
+.funding-ready-popup {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+}
+
+.readiness-main-popup {
+  text-align: center;
+  padding: 25px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 12px;
+  border: 3px solid #7d5a36;
+}
+
+.readiness-value {
+  font-size: 48px;
+  font-weight: 700;
+  color: #5e3f26;
+  margin-bottom: 10px;
+}
+
+.readiness-label {
+  font-size: 18px;
+  color: #666;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.readiness-target {
+  font-size: 14px;
+  color: #7d5a36;
+  font-weight: 500;
+}
+
+/* Time to Fund Legend Styles */
+.time-to-fund-legend {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #666;
+}
+
+.legend-color {
+  width: 12px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.legend-color.days-to-fund {
+  background-color: #5e3f26;
+}
+
+.legend-color.target-line {
+  background-color: #4CAF50;
+}
+
+/* Data Input Form Styles */
+.data-input-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-label {
+  font-weight: 600;
+  color: #5e3f26;
+  font-size: 14px;
+}
+
+.form-input {
+  padding: 10px 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #7d5a36;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-primary {
+  background-color: #7d5a36;
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: #5e3f26;
+}
+
+.btn-secondary {
+  background-color: #f5f5f5;
+  color: #666;
+}
+
+.btn-secondary:hover {
+  background-color: #e0e0e0;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .top-row,
+  .bottom-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .chart-container {
+    height: 400px;
+  }
+}
+
+@media (max-width: 992px) {
+  .chart-container {
+    height: 380px;
+  }
+}
+
+@media (max-width: 768px) {
+  .top-row,
+  .bottom-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .chart-container {
+    height: 350px;
+    padding: 15px;
+  }
+  
+  .chart-summary-compact,
+  .chart-summary-ultra-compact {
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+  }
+  
+  .chart-summary-compact .current-value,
+  .chart-summary-compact .target-value,
+  .chart-summary-ultra-compact .current-value,
+  .chart-summary-ultra-compact .target-value {
+    justify-content: center;
+    text-align: center;
+  }
+  
+  .big-score-value-circular {
+    font-size: 28px;
+  }
+  
+  .big-score-value-simple,
+  .readiness-value-simple {
+    font-size: 36px;
+  }
+  
+  .time-to-fund-legend {
+    gap: 10px;
+  }
+  
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 576px) {
+  .chart-container {
+    padding: 15px;
+    height: 320px;
+  }
+  
+  .time-view-controls,
+  .charts-grid-4x4 {
+    padding: 0 5px;
+  }
+  
+  .big-score-value-circular {
+    font-size: 24px;
+  }
+  
+  .big-score-label-circular {
+    font-size: 12px;
+  }
+  
+  .big-score-value-simple,
+  .readiness-value-simple {
+    font-size: 32px;
+  }
+}
 `;
 
 // Add styles to document
@@ -45,7 +730,7 @@ const brownShades = [
   '#3f2a18', '#d4c4b0', '#5D4037', '#3E2723'
 ];
 
-// Static chart options (keep the same)
+// Static chart options
 const staticBarOptions = {
   responsive: true,
   maintainAspectRatio: false,
@@ -114,11 +799,12 @@ const staticPieOptions = {
   }
 };
 
-// Function to get financial year start month (keep the same)
+// CORRECTED: Function to get financial year start month - FIXED PATH
 const getFinancialYearStartMonth = async (userId) => {
   try {
     console.log('🔍 Fetching financial year start for user:', userId);
     
+    // CORRECTED: Look in MyuniversalProfiles collection instead of universalProfiles
     const myUniversalProfileRef = doc(db, "MyuniversalProfiles", userId);
     const myUniversalProfileSnap = await getDoc(myUniversalProfileRef);
     
@@ -126,16 +812,19 @@ const getFinancialYearStartMonth = async (userId) => {
       const profileData = myUniversalProfileSnap.data();
       console.log('📋 Full MyuniversalProfiles data:', profileData);
       
+      // CORRECTED PATH: MyuniversalProfiles > formData > fundManageOverview > financialYearStart
       const financialYearStart = profileData.formData?.fundManageOverview?.financialYearStart;
       
       console.log('📅 Financial year start found in MyuniversalProfiles:', financialYearStart);
       
       if (financialYearStart) {
+        // Convert month name to month number (0-11)
         const monthNames = [
           'january', 'february', 'march', 'april', 'may', 'june',
           'july', 'august', 'september', 'october', 'november', 'december'
         ];
         
+        // Clean the month name (remove any extra spaces, convert to lowercase)
         const cleanedMonth = financialYearStart.trim().toLowerCase();
         const monthIndex = monthNames.findIndex(month => 
           month === cleanedMonth
@@ -143,14 +832,16 @@ const getFinancialYearStartMonth = async (userId) => {
         
         if (monthIndex !== -1) {
           console.log(`✅ Financial year starts in month: ${monthIndex + 1} (${financialYearStart})`);
-          return monthIndex;
+          return monthIndex; // Return 0-11
         } else {
           console.log('❌ Month name not recognized:', financialYearStart);
           console.log('Available month names:', monthNames);
         }
       } else {
         console.log('❌ No financialYearStart found in formData.fundManageOverview');
+        console.log('Available formData:', profileData.formData);
         
+        // Try alternative paths
         const altFinancialYearStart = profileData.fundManageOverview?.financialYearStart;
         if (altFinancialYearStart) {
           console.log('🔄 Found financialYearStart in alternative path:', altFinancialYearStart);
@@ -171,41 +862,46 @@ const getFinancialYearStartMonth = async (userId) => {
     }
     
     console.log('⚠️ Using default financial year start: July (month 6)');
-    return 6;
+    return 6; // Default to July if not found
   } catch (error) {
     console.error('❌ Error fetching financial year start:', error);
-    return 6;
+    return 6; // Default to July on error
   }
 };
 
-// Function to calculate quarter based on financial year start (keep the same)
+// Function to calculate quarter based on financial year start
 const getQuarterFromDate = (date, financialYearStartMonth) => {
-  const month = date.getMonth();
+  const month = date.getMonth(); // 0-11
+  
+  // Calculate the adjusted month relative to financial year start
+  // If financial year starts in July (month 6), then:
+  // July (6) = Q1, August (7) = Q1, September (8) = Q1, October (9) = Q2, etc.
   const adjustedMonth = (month - financialYearStartMonth + 12) % 12;
   
   console.log(`📅 Quarter calculation: Month ${month + 1}, Financial Start: ${financialYearStartMonth + 1}, Adjusted Month: ${adjustedMonth}`);
   
   if (adjustedMonth >= 0 && adjustedMonth <= 2) {
     console.log(`✅ Quarter 1: Months ${financialYearStartMonth + 1}-${(financialYearStartMonth + 3) % 12 || 12}`);
-    return 0;
+    return 0; // Q1
   }
   if (adjustedMonth >= 3 && adjustedMonth <= 5) {
     console.log(`✅ Quarter 2: Months ${(financialYearStartMonth + 3) % 12 + 1}-${(financialYearStartMonth + 6) % 12 || 12}`);
-    return 1;
+    return 1; // Q2
   }
   if (adjustedMonth >= 6 && adjustedMonth <= 8) {
     console.log(`✅ Quarter 3: Months ${(financialYearStartMonth + 6) % 12 + 1}-${(financialYearStartMonth + 9) % 12 || 12}`);
-    return 2;
+    return 2; // Q3
   }
   console.log(`✅ Quarter 4: Months ${(financialYearStartMonth + 9) % 12 + 1}-${(financialYearStartMonth) % 12 || 12}`);
-  return 3;
+  return 3; // Q4
 };
 
-// Function to parse amount string to number (keep the same)
+// Function to parse amount string like "R800,000" to number
 const parseAmountToNumber = (amountString) => {
   if (!amountString) return 0;
   
   try {
+    // Remove "R", commas, and any whitespace, then parse to number
     const numericString = amountString.replace(/[R,\s]/g, '');
     return parseFloat(numericString) || 0;
   } catch (error) {
@@ -214,42 +910,8 @@ const parseAmountToNumber = (amountString) => {
   }
 };
 
-// Save user preferences to Firebase (keep the same)
-const saveUserChartPreferences = async (userId, preferences) => {
-  try {
-    const userPrefsRef = doc(db, "userPreferences", userId);
-    await setDoc(userPrefsRef, {
-      portfolioChartPreferences: preferences,
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
-    console.log('✅ Chart preferences saved to Firebase');
-  } catch (error) {
-    console.error('❌ Error saving chart preferences:', error);
-  }
-};
-
-// Load user preferences from Firebase (keep the same)
-const loadUserChartPreferences = async (userId) => {
-  try {
-    const userPrefsRef = doc(db, "userPreferences", userId);
-    const userPrefsSnap = await getDoc(userPrefsRef);
-    
-    if (userPrefsSnap.exists()) {
-      const preferences = userPrefsSnap.data().portfolioChartPreferences;
-      console.log('✅ Chart preferences loaded from Firebase:', preferences);
-      return preferences;
-    } else {
-      console.log('⚠️ No chart preferences found, using defaults');
-      return null;
-    }
-  } catch (error) {
-    console.error('❌ Error loading chart preferences:', error);
-    return null;
-  }
-};
-
-// UPDATED: Fetch support successful deals for catalyst/support users
-const fetchSupportSuccessfulDeals = async () => {
+// Backend Data Fetching Functions
+const fetchInvestorSuccessfulDeals = async () => {
   try {
     const currentUser = auth.currentUser;
     
@@ -258,104 +920,99 @@ const fetchSupportSuccessfulDeals = async () => {
       return {
         smeIds: [],
         applications: [],
-        totalSupportValue: 0
+        totalInvestment: 0
       };
     }
 
-    console.log('🔍 STEP 1: Fetching successful support deals for catalyst:', currentUser.uid);
+    console.log('🔍 STEP 1: Fetching successful deals for investor:', currentUser.uid);
     
-    // STEP 1: Get all catalystApplications where pipelineStage is "Active Support" OR "Support Approved"
+    // STEP 1: Get all investorApplications where pipelineStage is "Deal Complete" AND funderId matches current user
     const q = query(
-      collection(db, "catalystApplications"),
-      where("catalystId", "==", currentUser.uid),
-      where("status", "in", ["Active Support", "Support Approved", "Deal Closed"])
+      collection(db, "investorApplications"),
+      where("pipelineStage", "==", "Deal Complete"),
+      where("funderId", "==", currentUser.uid)
     );
 
     const querySnapshot = await getDocs(q);
-    console.log('📊 STEP 1: Found successful support deals:', querySnapshot.docs.length);
+    console.log('📊 STEP 1: Found successful deals (Deal Complete):', querySnapshot.docs.length);
     
     if (querySnapshot.empty) {
-      console.log('❌ STEP 1: No successful support deals found');
+      console.log('❌ STEP 1: No successful deals found');
       return {
         smeIds: [],
         applications: [],
-        totalSupportValue: 0
+        totalInvestment: 0
       };
     }
     
-    // Extract SME IDs and support data from successful applications
+    // Extract SME IDs and investment data from successful applications
     const smeIds = [];
     const applications = [];
-    let totalSupportValue = 0;
-    const smeDetails = [];
+    let totalInvestment = 0;
+    const smeDetails = []; // Store SME details for debugging
     
     querySnapshot.docs.forEach(doc => {
       const applicationData = doc.data();
-      console.log('📄 Support deal data:', {
+      console.log('📄 Successful deal data:', {
         smeId: applicationData.smeId,
-        programValue: applicationData.programValue,
-        status: applicationData.status,
-        catalystId: applicationData.catalystId,
-        createdAt: applicationData.createdAt
+        investmentAmount: applicationData.fundingDetails?.amountApproved,
+        pipelineStage: applicationData.pipelineStage,
+        funderId: applicationData.funderId,
+        approvedAt: applicationData.fundingDetails?.approvedAt
       });
       
       // Use the SME ID from the application
       const smeId = applicationData.smeId;
       if (smeId) {
         smeIds.push(smeId);
-        applications.push({
-          ...applicationData,
-          id: doc.id
-        });
+        applications.push(applicationData);
         
-        // Parse program value (this might be different structure than funding)
-        const supportValue = parseAmountToNumber(applicationData.programValue || "0");
-        totalSupportValue += supportValue;
+        // Parse amount from string like "R800,000" to number
+        const investmentAmount = parseAmountToNumber(applicationData.fundingDetails?.amountApproved);
+        totalInvestment += investmentAmount;
         
         // Store SME details for debugging
         smeDetails.push({
           smeId: smeId,
-          value: supportValue,
-          status: applicationData.status,
-          createdAt: applicationData.createdAt
+          amount: investmentAmount,
+          approvedAt: applicationData.fundingDetails?.approvedAt
         });
       }
     });
     
-    const uniqueSmeIds = [...new Set(smeIds)];
+    const uniqueSmeIds = [...new Set(smeIds)]; // Remove duplicates
     
-    console.log('🏢 STEP 1: Unique SME IDs from support deals:', uniqueSmeIds);
-    console.log('💰 STEP 1: Total support value from deals:', totalSupportValue);
+    console.log('🏢 STEP 1: Unique SME IDs from successful deals:', uniqueSmeIds);
+    console.log('💰 STEP 1: Total investment from successful deals:', totalInvestment);
     console.log('📄 STEP 1: Number of successful applications:', applications.length);
     console.log('🔍 STEP 1: SME Details:', smeDetails);
     
     return {
       smeIds: uniqueSmeIds,
       applications: applications,
-      totalSupportValue: totalSupportValue,
+      totalInvestment: totalInvestment,
       smeDetails: smeDetails
     };
   } catch (error) {
-    console.error('❌ ERROR: Failed to fetch support successful deals:', error);
+    console.error('❌ ERROR: Failed to fetch investor successful deals:', error);
     return {
       smeIds: [],
       applications: [],
-      totalSupportValue: 0,
+      totalInvestment: 0,
       smeDetails: []
     };
   }
 };
 
-// UPDATED: Fetch active SMEs data for support users
 const fetchActiveSMEsData = async () => {
   try {
-    const successfulDeals = await fetchSupportSuccessfulDeals();
+    const successfulDeals = await fetchInvestorSuccessfulDeals();
     const { smeIds, applications } = successfulDeals;
     
-    console.log('🔍 STEP 2: Processing SMEs from support deals. Total SMEs:', smeIds.length);
+    console.log('🔍 STEP 2: Processing SMEs from successful deals. Total SMEs:', smeIds.length);
     
     if (smeIds.length === 0) {
-      console.log('❌ STEP 2: No SMEs found in support deals');
+      console.log('❌ STEP 2: No SMEs found in successful deals');
       return {
         'Micro': 0,
         'Small': 0,
@@ -372,44 +1029,45 @@ const fetchActiveSMEsData = async () => {
       'Large': 0
     };
     
-    // Fetch universal profiles for each SME from support deals
+    // STEP 3: Fetch universal profiles for each SME from successful deals
     for (const smeId of smeIds) {
       try {
-        console.log('🔍 STEP 3: Fetching profile for SME from support deal:', smeId);
+        console.log('🔍 STEP 3: Fetching profile for SME from successful deal:', smeId);
         const universalProfileRef = doc(db, "universalProfiles", smeId);
         const universalProfileSnap = await getDoc(universalProfileRef);
         
         if (universalProfileSnap.exists()) {
           const profileData = universalProfileSnap.data();
-          console.log('📋 STEP 3: Profile data for support deal SME', smeId, ':', {
+          console.log('📋 STEP 3: Profile data for successful deal SME', smeId, ':', {
             entityOverview: profileData.entityOverview,
             entitySize: profileData.entityOverview?.entitySize,
             companyName: profileData.entityOverview?.tradingName || profileData.entityOverview?.registeredName
           });
           
+          // STEP 4: Get entitySize from entityOverview
           const entitySize = profileData.entityOverview?.entitySize;
-          console.log('🏷️ STEP 4: Entity size found for support deal:', entitySize);
+          console.log('🏷️ STEP 4: Entity size found for successful deal:', entitySize);
           
           if (entitySize && entitySizeCount.hasOwnProperty(entitySize)) {
             entitySizeCount[entitySize]++;
-            console.log(`✅ STEP 4: Counted ${entitySize} from support deal: ${entitySizeCount[entitySize]}`);
+            console.log(`✅ STEP 4: Counted ${entitySize} from successful deal: ${entitySizeCount[entitySize]}`);
           } else {
-            console.log('❌ STEP 4: Invalid entity size for support deal SME:', entitySize);
+            console.log('❌ STEP 4: Invalid entity size for successful deal SME:', entitySize);
             entitySizeCount['Small']++;
           }
         } else {
-          console.log('❌ STEP 3: Profile does not exist for support deal SME:', smeId);
+          console.log('❌ STEP 3: Profile does not exist for successful deal SME:', smeId);
         }
       } catch (error) {
-        console.error(`❌ STEP 3-4: Error processing support deal SME ${smeId}:`, error);
+        console.error(`❌ STEP 3-4: Error processing successful deal SME ${smeId}:`, error);
       }
     }
     
-    console.log('📈 FINAL: Entity size counts from support deals:', entitySizeCount);
-    console.log('📊 FINAL: Total support SMEs processed:', smeIds.length);
+    console.log('📈 FINAL: Entity size counts from successful deals:', entitySizeCount);
+    console.log('📊 FINAL: Total successful SMEs processed:', smeIds.length);
     return entitySizeCount;
   } catch (error) {
-    console.error('❌ ERROR: Failed to fetch active SMEs data from support deals:', error);
+    console.error('❌ ERROR: Failed to fetch active SMEs data from successful deals:', error);
     return {
       'Micro': 0,
       'Small': 0,
@@ -419,16 +1077,16 @@ const fetchActiveSMEsData = async () => {
   }
 };
 
-// UPDATED: BIG Score calculation for support users
+// BIG Score calculation - whole numbers with % sign
 const fetchAverageBIGScore = async () => {
   try {
-    const successfulDeals = await fetchSupportSuccessfulDeals();
+    const successfulDeals = await fetchInvestorSuccessfulDeals();
     const { smeIds } = successfulDeals;
     
-    console.log('🔍 STEP 1: Fetching BIG scores from support deals. Total SMEs:', smeIds.length);
+    console.log('🔍 STEP 1: Fetching BIG scores from successful deals. Total SMEs:', smeIds.length);
     
     if (smeIds.length === 0) {
-      console.log('❌ STEP 1: No SMEs found in support deals for BIG score calculation');
+      console.log('❌ STEP 1: No SMEs found in successful deals for BIG score calculation');
       return {
         averageScore: 0,
         individualScores: [],
@@ -440,7 +1098,7 @@ const fetchAverageBIGScore = async () => {
     let count = 0;
     const individualScores = [];
     
-    // Fetch BIG scores for each SME from support deals
+    // STEP 2: Fetch BIG scores for each SME from successful deals
     for (const smeId of smeIds) {
       try {
         const universalProfileRef = doc(db, "universalProfiles", smeId);
@@ -450,7 +1108,7 @@ const fetchAverageBIGScore = async () => {
           const profileData = universalProfileSnap.data();
           const bigScore = profileData.bigScore;
           
-          console.log(`📊 STEP 2: BIG Score for support deal SME ${smeId}:`, bigScore);
+          console.log(`📊 STEP 2: BIG Score for successful deal SME ${smeId}:`, bigScore);
           
           if (typeof bigScore === 'number' && !isNaN(bigScore)) {
             totalScore += bigScore;
@@ -460,9 +1118,10 @@ const fetchAverageBIGScore = async () => {
               score: bigScore,
               companyName: profileData.entityOverview?.tradingName || profileData.entityOverview?.registeredName || 'Unknown'
             });
-            console.log(`✅ STEP 2: Valid BIG score added from support deal: ${bigScore}`);
+            console.log(`✅ STEP 2: Valid BIG score added from successful deal: ${bigScore}`);
           } else {
-            console.log('❌ STEP 2: Invalid BIG score for support deal SME:', smeId, bigScore);
+            console.log('❌ STEP 2: Invalid BIG score for successful deal SME:', smeId, bigScore);
+            // Use default score for invalid scores
             const defaultScore = 70;
             totalScore += defaultScore;
             count++;
@@ -474,15 +1133,15 @@ const fetchAverageBIGScore = async () => {
             });
           }
         } else {
-          console.log('❌ STEP 2: Profile does not exist for support deal SME:', smeId);
+          console.log('❌ STEP 2: Profile does not exist for successful deal SME:', smeId);
         }
       } catch (error) {
-        console.error(`❌ STEP 2: Error fetching BIG score for support deal SME ${smeId}:`, error);
+        console.error(`❌ STEP 2: Error fetching BIG score for successful deal SME ${smeId}:`, error);
       }
     }
     
     const averageScore = count > 0 ? Math.round(totalScore / count) : 0;
-    console.log('📈 FINAL: Average BIG Score from support deals:', averageScore + '%', 'from', count, 'SMEs');
+    console.log('📈 FINAL: Average BIG Score from successful deals:', averageScore + '%', 'from', count, 'SMEs');
     console.log('🔍 FINAL: Individual BIG Scores:', individualScores);
     
     return {
@@ -491,7 +1150,7 @@ const fetchAverageBIGScore = async () => {
       totalSMEs: count
     };
   } catch (error) {
-    console.error('❌ ERROR: Failed to fetch average BIG score from support deals:', error);
+    console.error('❌ ERROR: Failed to fetch average BIG score from successful deals:', error);
     return {
       averageScore: 0,
       individualScores: [],
@@ -500,16 +1159,16 @@ const fetchAverageBIGScore = async () => {
   }
 };
 
-// UPDATED: Funding Ready Percentage for support users
+// Funding Ready Percentage - count SMEs with BIG Score >= 80%
 const fetchFundingReadyPercentage = async () => {
   try {
-    const successfulDeals = await fetchSupportSuccessfulDeals();
+    const successfulDeals = await fetchInvestorSuccessfulDeals();
     const { smeIds } = successfulDeals;
     
-    console.log('🔍 STEP 1: Calculating funding ready percentage from support deals. Total SMEs:', smeIds.length);
+    console.log('🔍 STEP 1: Calculating funding ready percentage from successful deals. Total SMEs:', smeIds.length);
     
     if (smeIds.length === 0) {
-      console.log('❌ STEP 1: No SMEs found in support deals for funding ready calculation');
+      console.log('❌ STEP 1: No SMEs found in successful deals for funding ready calculation');
       return {
         fundingReadyPercentage: 0,
         fundingReadyCount: 0,
@@ -523,7 +1182,7 @@ const fetchFundingReadyPercentage = async () => {
     const fundingReadySMEs = [];
     const notFundingReadySMEs = [];
     
-    // Check BIG scores for each SME from support deals
+    // STEP 2: Check BIG scores for each SME from successful deals
     for (const smeId of smeIds) {
       try {
         const universalProfileRef = doc(db, "universalProfiles", smeId);
@@ -538,6 +1197,7 @@ const fetchFundingReadyPercentage = async () => {
           
           if (typeof bigScore === 'number' && !isNaN(bigScore)) {
             totalCount++;
+            // Consider SMEs with BIG Score >= 80 as "Funding Ready"
             if (bigScore >= 80) {
               fundingReadyCount++;
               fundingReadySMEs.push({
@@ -557,6 +1217,7 @@ const fetchFundingReadyPercentage = async () => {
           } else {
             console.log('❌ STEP 2: Invalid BIG score for funding ready check SME:', smeId, bigScore);
             totalCount++;
+            // Default to not funding ready if score is invalid
             notFundingReadySMEs.push({
               smeId: smeId,
               companyName: companyName,
@@ -574,7 +1235,7 @@ const fetchFundingReadyPercentage = async () => {
     
     const fundingReadyPercentage = totalCount > 0 ? Math.round((fundingReadyCount / totalCount) * 100) : 0;
     
-    console.log('📈 FINAL: Funding Ready Percentage from support deals:', {
+    console.log('📈 FINAL: Funding Ready Percentage from successful deals:', {
       fundingReadyPercentage: fundingReadyPercentage + '%',
       fundingReadyCount,
       totalCount,
@@ -591,7 +1252,7 @@ const fetchFundingReadyPercentage = async () => {
       notFundingReadySMEs: notFundingReadySMEs
     };
   } catch (error) {
-    console.error('❌ ERROR: Failed to fetch funding ready percentage from support deals:', error);
+    console.error('❌ ERROR: Failed to fetch funding ready percentage from successful deals:', error);
     return {
       fundingReadyPercentage: 0,
       fundingReadyCount: 0,
@@ -602,7 +1263,7 @@ const fetchFundingReadyPercentage = async () => {
   }
 };
 
-// UPDATED: Portfolio Value Calculation for support programs
+// Portfolio Value Calculation with Financial Year Quarters - FIXED YEARLY DATA
 const fetchPortfolioValueData = async () => {
   try {
     const currentUser = auth.currentUser;
@@ -612,200 +1273,219 @@ const fetchPortfolioValueData = async () => {
         currentValue: 0,
         quarterlyData: [0, 0, 0, 0],
         monthlyData: [0, 0, 0, 0, 0, 0],
-        yearlyData: [0],
+        yearlyData: [0], // Only current year
         totalDeals: 0,
-        totalSupportValue: 0,
-        financialYearStartMonth: 6
+        totalInvestment: 0,
+        financialYearStartMonth: 6 // Default to July
       };
     }
 
+    // Get financial year start month - FIXED
     const financialYearStartMonth = await getFinancialYearStartMonth(currentUser.uid);
     console.log(`📅 Using financial year starting in month: ${financialYearStartMonth + 1}`);
     
-    const successfulDeals = await fetchSupportSuccessfulDeals();
+    const successfulDeals = await fetchInvestorSuccessfulDeals();
     const { applications } = successfulDeals;
     
-    console.log('💰 STEP 1: Calculating portfolio value from support deals with FINANCIAL YEAR allocation');
-    console.log('📊 STEP 1: Number of successful support applications:', applications.length);
+    console.log('💰 STEP 1: Calculating portfolio value from successful deals with FINANCIAL YEAR allocation');
+    console.log('📊 STEP 1: Number of successful applications:', applications.length);
     
     if (applications.length === 0) {
-      console.log('❌ STEP 1: No support deals found for portfolio value calculation');
+      console.log('❌ STEP 1: No successful deals found for portfolio value calculation');
       return {
         currentValue: 0,
         quarterlyData: [0, 0, 0, 0],
         monthlyData: [0, 0, 0, 0, 0, 0],
-        yearlyData: [0],
-        yearlyLabels: [`${new Date().getFullYear()}`],
+        yearlyData: [0], // Only current year
         totalDeals: 0,
-        totalSupportValue: 0,
+        totalInvestment: 0,
         financialYearStartMonth
       };
     }
     
+    // Initialize data arrays
     const quarterlyData = [0, 0, 0, 0];
-    const monthlyData = [0, 0, 0, 0, 0, 0];
-    let totalSupportValue = 0;
-    const quarterlyBreakdown = [[], [], [], []];
-    const monthlyBreakdown = [[], [], [], [], [], []];
+    const monthlyData = [0, 0, 0, 0, 0, 0]; // First 6 months of financial year
+    let totalInvestment = 0;
+    const quarterlyBreakdown = [[], [], [], []]; // Store individual investments per quarter
+    const monthlyBreakdown = [[], [], [], [], [], []]; // Store individual investments per month
     
-    const supportByYear = {};
+    // Track investments by calendar year
+    const investmentsByYear = {};
     
+    // STEP 2: Process each application and allocate to correct financial year quarter and month
     for (const application of applications) {
       try {
-        // Parse support value - this could be programValue or fundingRequired
-        const supportValue = parseAmountToNumber(application.programValue || application.fundingRequired || "0");
-        totalSupportValue += supportValue;
+        // Parse amount from string like "R800,000" to number
+        const investmentAmount = parseAmountToNumber(application.fundingDetails?.amountApproved);
+        totalInvestment += investmentAmount;
         
-        // Get creation date
-        const createdAt = application.createdAt;
+        // Get approval date from fundingDetails.approvedAt
+        const approvedAt = application.fundingDetails?.approvedAt;
         
-        if (createdAt) {
+        if (approvedAt) {
           try {
-            const creationDate = new Date(createdAt);
+            const approvalDate = new Date(approvedAt);
             
-            if (!isNaN(creationDate.getTime())) {
-              const creationYear = creationDate.getFullYear();
+            if (!isNaN(approvalDate.getTime())) {
+              const approvalYear = approvalDate.getFullYear();
               
-              if (!supportByYear[creationYear]) {
-                supportByYear[creationYear] = 0;
+              // Track investment by calendar year
+              if (!investmentsByYear[approvalYear]) {
+                investmentsByYear[approvalYear] = 0;
               }
-              supportByYear[creationYear] += supportValue;
+              investmentsByYear[approvalYear] += investmentAmount;
               
-              const quarter = getQuarterFromDate(creationDate, financialYearStartMonth);
-              const creationMonth = creationDate.getMonth();
-              const financialYearMonth = (creationMonth - financialYearStartMonth + 12) % 12;
+              // Calculate quarter based on FINANCIAL YEAR start month
+              const quarter = getQuarterFromDate(approvalDate, financialYearStartMonth);
               
-              console.log(`📅 STEP 2: Processing support deal created at:`, createdAt, {
-                creationYear,
-                creationMonth: creationMonth + 1,
+              // Calculate month in financial year (0-11)
+              const approvalMonth = approvalDate.getMonth();
+              const financialYearMonth = (approvalMonth - financialYearStartMonth + 12) % 12;
+              
+              console.log(`📅 STEP 2: Processing application approved at:`, approvedAt, {
+                approvalYear,
+                approvalMonth: approvalMonth + 1,
                 financialYearStartMonth: financialYearStartMonth + 1,
                 financialYearMonth: financialYearMonth + 1,
                 quarter: quarter + 1,
-                supportValue
+                investmentAmount
               });
               
-              quarterlyData[quarter] += supportValue;
+              // Add investment to the correct quarter
+              quarterlyData[quarter] += investmentAmount;
               quarterlyBreakdown[quarter].push({
-                amount: supportValue,
-                date: createdAt,
+                amount: investmentAmount,
+                date: approvedAt,
                 smeId: application.smeId,
-                year: creationYear
+                year: approvalYear
               });
               
+              // Add investment to the correct month (first 6 months only for display)
               if (financialYearMonth < 6) {
-                monthlyData[financialYearMonth] += supportValue;
+                monthlyData[financialYearMonth] += investmentAmount;
                 monthlyBreakdown[financialYearMonth].push({
-                  amount: supportValue,
-                  date: createdAt,
+                  amount: investmentAmount,
+                  date: approvedAt,
                   smeId: application.smeId,
-                  year: creationYear
+                  year: approvalYear
                 });
               }
               
-              console.log(`✅ STEP 2: Allocated R${supportValue} to Financial Year Q${quarter + 1}, Month ${financialYearMonth + 1}, Year ${creationYear}`);
+              console.log(`✅ STEP 2: Allocated R${investmentAmount} to Financial Year Q${quarter + 1}, Month ${financialYearMonth + 1}, Year ${approvalYear}`);
               
             } else {
-              console.log('❌ STEP 2: Invalid creation date:', createdAt);
-              const equalAmount = supportValue / 4;
+              console.log('❌ STEP 2: Invalid approval date:', approvedAt);
+              // If date is invalid, distribute evenly
+              const equalAmount = investmentAmount / 4;
               quarterlyData.forEach((_, index) => {
                 quarterlyData[index] += equalAmount;
                 quarterlyBreakdown[index].push({
                   amount: equalAmount,
-                  date: createdAt,
+                  date: approvedAt,
                   smeId: application.smeId,
                   note: 'Distributed evenly - invalid date'
                 });
               });
               
-              const monthlyEqualAmount = supportValue / 6;
+              // Distribute evenly across months
+              const monthlyEqualAmount = investmentAmount / 6;
               monthlyData.forEach((_, index) => {
                 monthlyData[index] += monthlyEqualAmount;
                 monthlyBreakdown[index].push({
                   amount: monthlyEqualAmount,
-                  date: createdAt,
+                  date: approvedAt,
                   smeId: application.smeId,
                   note: 'Distributed evenly - invalid date'
                 });
               });
             }
           } catch (dateError) {
-            console.error('❌ STEP 2: Error parsing creation date:', createdAt, dateError);
-            const equalAmount = supportValue / 4;
+            console.error('❌ STEP 2: Error parsing approval date:', approvedAt, dateError);
+            // If date parsing fails, distribute evenly across quarters and months
+            const equalAmount = investmentAmount / 4;
             quarterlyData.forEach((_, index) => {
               quarterlyData[index] += equalAmount;
               quarterlyBreakdown[index].push({
                 amount: equalAmount,
-                date: createdAt,
+                date: approvedAt,
                 smeId: application.smeId,
                 note: 'Distributed evenly - date parsing error'
               });
             });
             
-            const monthlyEqualAmount = supportValue / 6;
+            const monthlyEqualAmount = investmentAmount / 6;
             monthlyData.forEach((_, index) => {
               monthlyData[index] += monthlyEqualAmount;
               monthlyBreakdown[index].push({
                 amount: monthlyEqualAmount,
-                date: createdAt,
+                date: approvedAt,
                 smeId: application.smeId,
                 note: 'Distributed evenly - date parsing error'
               });
             });
           }
         } else {
-          console.log('❌ STEP 2: No createdAt date found for support deal, distributing evenly');
-          const equalAmount = supportValue / 4;
+          console.log('❌ STEP 2: No approvedAt date found for application, distributing evenly');
+          // If no approval date, distribute evenly across quarters and months
+          const equalAmount = investmentAmount / 4;
           quarterlyData.forEach((_, index) => {
             quarterlyData[index] += equalAmount;
             quarterlyBreakdown[index].push({
               amount: equalAmount,
               smeId: application.smeId,
-              note: 'Distributed evenly - no creation date'
+              note: 'Distributed evenly - no approval date'
             });
           });
           
-          const monthlyEqualAmount = supportValue / 6;
+          const monthlyEqualAmount = investmentAmount / 6;
           monthlyData.forEach((_, index) => {
             monthlyData[index] += monthlyEqualAmount;
             monthlyBreakdown[index].push({
               amount: monthlyEqualAmount,
               smeId: application.smeId,
-              note: 'Distributed evenly - no creation date'
+              note: 'Distributed evenly - no approval date'
             });
           });
         }
       } catch (error) {
-        console.error('❌ STEP 2: Error processing support deal:', error);
+        console.error('❌ STEP 2: Error processing application:', error);
       }
     }
     
+    // Calculate yearly data - ONLY include years where we actually have investments
     const currentYear = new Date().getFullYear();
     const yearlyData = [];
     const yearlyLabels = [];
     
-    const supportYears = Object.keys(supportByYear)
+    // Get all years with investments, sorted
+    const investmentYears = Object.keys(investmentsByYear)
       .map(year => parseInt(year))
       .sort((a, b) => a - b);
     
-    console.log('📊 Support years found:', supportYears);
+    console.log('📊 Investment years found:', investmentYears);
     
-    if (supportYears.length > 0) {
-      if (supportYears.includes(currentYear)) {
-        yearlyData.push(supportByYear[currentYear]);
+    if (investmentYears.length > 0) {
+      // Only show current year if we have investments in current year
+      if (investmentYears.includes(currentYear)) {
+        yearlyData.push(investmentsByYear[currentYear]);
         yearlyLabels.push(`${currentYear}`);
       }
       
-      supportYears.forEach(year => {
+      // If we have previous years, show them too (but only if we have actual data)
+      investmentYears.forEach(year => {
         if (year !== currentYear) {
-          yearlyData.push(supportByYear[year]);
+          yearlyData.push(investmentsByYear[year]);
           yearlyLabels.push(`${year}`);
         }
       });
     } else {
-      yearlyData.push(totalSupportValue);
+      // Fallback: just show current year total
+      yearlyData.push(totalInvestment);
       yearlyLabels.push(`${currentYear}`);
     }
     
+    // Convert to R millions and ensure proper formatting
     const quarterlyDataInMillions = quarterlyData.map(amount => 
       parseFloat((amount / 1000000).toFixed(1))
     );
@@ -818,7 +1498,7 @@ const fetchPortfolioValueData = async () => {
       parseFloat((amount / 1000000).toFixed(1))
     );
     
-    const currentValue = parseFloat((totalSupportValue / 1000000).toFixed(1));
+    const currentValue = parseFloat((totalInvestment / 1000000).toFixed(1));
     
     const result = {
       currentValue,
@@ -827,18 +1507,18 @@ const fetchPortfolioValueData = async () => {
       yearlyData: yearlyDataInMillions,
       yearlyLabels: yearlyLabels,
       totalDeals: applications.length,
-      totalSupportValue: totalSupportValue,
+      totalInvestment: totalInvestment,
       financialYearStartMonth,
       quarterlyBreakdown: quarterlyBreakdown,
       monthlyBreakdown: monthlyBreakdown,
-      supportByYear: supportByYear,
-      supportYears: supportYears
+      investmentsByYear: investmentsByYear,
+      investmentYears: investmentYears
     };
     
-    console.log('📈 FINAL: Support portfolio value with accurate yearly data:', result);
+    console.log('📈 FINAL: Portfolio value with accurate yearly data:', result);
     return result;
   } catch (error) {
-    console.error('❌ ERROR: Failed to fetch portfolio value data from support deals:', error);
+    console.error('❌ ERROR: Failed to fetch portfolio value data from successful deals:', error);
     return {
       currentValue: 0,
       quarterlyData: [0, 0, 0, 0],
@@ -846,28 +1526,28 @@ const fetchPortfolioValueData = async () => {
       yearlyData: [0],
       yearlyLabels: [`${new Date().getFullYear()}`],
       totalDeals: 0,
-      totalSupportValue: 0,
+      totalInvestment: 0,
       financialYearStartMonth: 6,
       quarterlyBreakdown: [[], [], [], []],
       monthlyBreakdown: [[], [], [], [], [], []],
-      supportByYear: {},
-      supportYears: []
+      investmentsByYear: {},
+      investmentYears: []
     };
   }
 };
 
-// UPDATED: Time to Support Approval Calculation
-const fetchAverageTimeToSupport = async () => {
+// Time to Fund Calculation with Financial Year Quarters - FIXED YEARLY DATA
+const fetchAverageTimeToFund = async () => {
   try {
     const currentUser = auth.currentUser;
     if (!currentUser) {
       console.log('❌ No user logged in');
       return {
         averageDays: 0,
-        timeToSupportData: [0, 0, 0, 0],
-        monthlyTimeToSupportData: [0, 0, 0, 0, 0, 0],
-        yearlyTimeToSupportData: [0],
-        yearlyTimeToSupportLabels: [`${new Date().getFullYear()}`],
+        timeToFundData: [0, 0, 0, 0],
+        monthlyTimeToFundData: [0, 0, 0, 0, 0, 0],
+        yearlyTimeToFundData: [0], // Only current year
+        yearlyTimeToFundLabels: [`${new Date().getFullYear()}`],
         totalSMEs: 0,
         allProcessingTimes: [],
         financialYearStartMonth: 6,
@@ -875,22 +1555,23 @@ const fetchAverageTimeToSupport = async () => {
       };
     }
 
+    // Get financial year start month - FIXED
     const financialYearStartMonth = await getFinancialYearStartMonth(currentUser.uid);
     console.log(`📅 Using financial year starting in month: ${financialYearStartMonth + 1}`);
     
-    const successfulDeals = await fetchSupportSuccessfulDeals();
+    const successfulDeals = await fetchInvestorSuccessfulDeals();
     const { applications } = successfulDeals;
     
-    console.log('🔍 STEP 1: Calculating average time to support from support deals. Total applications:', applications.length);
+    console.log('🔍 STEP 1: Calculating average time to fund from successful deals. Total applications:', applications.length);
     
     if (applications.length === 0) {
-      console.log('❌ STEP 1: No support applications found for time calculation');
+      console.log('❌ STEP 1: No applications found for time to fund calculation');
       return {
         averageDays: 0,
-        timeToSupportData: [0, 0, 0, 0],
-        monthlyTimeToSupportData: [0, 0, 0, 0, 0, 0],
-        yearlyTimeToSupportData: [0],
-        yearlyTimeToSupportLabels: [`${new Date().getFullYear()}`],
+        timeToFundData: [0, 0, 0, 0],
+        monthlyTimeToFundData: [0, 0, 0, 0, 0, 0],
+        yearlyTimeToFundData: [0],
+        yearlyTimeToFundLabels: [`${new Date().getFullYear()}`],
         totalSMEs: 0,
         allProcessingTimes: [],
         financialYearStartMonth: 6,
@@ -898,28 +1579,33 @@ const fetchAverageTimeToSupport = async () => {
       };
     }
     
-    const quarterlyProcessingTimes = [[], [], [], []];
-    const monthlyProcessingTimes = [[], [], [], [], [], []];
-    const processingTimesByYear = {};
-    const processingDetails = [[], [], [], []];
-    const monthlyProcessingDetails = [[], [], [], [], [], []];
+    const quarterlyProcessingTimes = [[], [], [], []]; // Arrays to store processing times per quarter
+    const monthlyProcessingTimes = [[], [], [], [], [], []]; // Arrays for first 6 months
+    const processingTimesByYear = {}; // Store processing times by calendar year
+    const processingDetails = [[], [], [], []]; // Store detailed processing info per quarter
+    const monthlyProcessingDetails = [[], [], [], [], [], []]; // Store detailed processing info per month
     let totalDays = 0;
     let count = 0;
     const allProcessingTimes = [];
     
+    // STEP 2: Process each application to calculate processing time and allocate to FINANCIAL YEAR quarter, month, and year
     for (const application of applications) {
       try {
-        const applicationDateStr = application.createdAt;
-        const approvalDateStr = application.updatedAt || application.createdAt;
+        // Get application date and approval date
+        const applicationDateStr = application.applicationDate; // "2025-10-14"
+        const approvalDateStr = application.fundingDetails?.approvedAt; // "2025-11-10T09:24:01.430Z"
         
-        console.log(`📅 STEP 2: Processing dates for support application:`, {
+        console.log(`📅 STEP 2: Processing dates for application:`, {
           applicationDate: applicationDateStr,
           approvalDate: approvalDateStr
         });
         
         if (applicationDateStr && approvalDateStr) {
           try {
+            // Parse application date (format: "2025-10-14")
             const applicationDate = new Date(applicationDateStr);
+            
+            // Parse approval date (format: "2025-11-10T09:24:01.430Z")
             const approvalDate = new Date(approvalDateStr);
             
             console.log(`📅 STEP 2: Parsed dates:`, {
@@ -928,37 +1614,44 @@ const fetchAverageTimeToSupport = async () => {
             });
             
             if (!isNaN(applicationDate.getTime()) && !isNaN(approvalDate.getTime())) {
+              // Calculate difference in days
               const timeDiff = approvalDate.getTime() - applicationDate.getTime();
               const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
               
               const approvalYear = approvalDate.getFullYear();
               
-              console.log(`⏱️ STEP 2: Time to support for application: ${daysDiff} days in year ${approvalYear}`);
+              console.log(`⏱️ STEP 2: Time to fund for application: ${daysDiff} days in year ${approvalYear}`);
               
-              if (daysDiff > 0 && daysDiff < 365) {
+              if (daysDiff > 0 && daysDiff < 365) { // Reasonable validation
                 totalDays += daysDiff;
                 count++;
                 allProcessingTimes.push(daysDiff);
                 
+                // Track by calendar year
                 if (!processingTimesByYear[approvalYear]) {
                   processingTimesByYear[approvalYear] = [];
                 }
                 processingTimesByYear[approvalYear].push(daysDiff);
                 
+                // Determine quarter and month based on FINANCIAL YEAR using approval date
                 const quarter = getQuarterFromDate(approvalDate, financialYearStartMonth);
                 const approvalMonth = approvalDate.getMonth();
                 const financialYearMonth = (approvalMonth - financialYearStartMonth + 12) % 12;
                 
+                // Add to quarterly processing times
                 quarterlyProcessingTimes[quarter].push(daysDiff);
                 processingDetails[quarter].push({
                   smeId: application.smeId,
                   days: daysDiff,
                   applicationDate: applicationDateStr,
                   approvalDate: approvalDateStr,
+                  applicationMonth: applicationDate.getMonth() + 1,
+                  approvalMonth: approvalDate.getMonth() + 1,
                   financialYearQuarter: quarter + 1,
                   year: approvalYear
                 });
                 
+                // Add to monthly processing times (first 6 months only)
                 if (financialYearMonth < 6) {
                   monthlyProcessingTimes[financialYearMonth].push(daysDiff);
                   monthlyProcessingDetails[financialYearMonth].push({
@@ -974,6 +1667,7 @@ const fetchAverageTimeToSupport = async () => {
                 console.log(`✅ STEP 2: Allocated ${daysDiff} days to Financial Year Q${quarter + 1}, Month ${financialYearMonth + 1}, Year ${approvalYear}`);
               } else {
                 console.log('⚠️ STEP 2: Invalid day difference calculated:', daysDiff);
+                // Use default and allocate to current quarter, month, and year
                 const defaultDays = 45;
                 totalDays += defaultDays;
                 count++;
@@ -987,6 +1681,7 @@ const fetchAverageTimeToSupport = async () => {
                 }
                 processingTimesByYear[currentYear].push(defaultDays);
                 
+                // Allocate to most recent quarter and month
                 const currentQuarter = getQuarterFromDate(currentDate, financialYearStartMonth);
                 const currentMonth = (currentDate.getMonth() - financialYearStartMonth + 12) % 12;
                 
@@ -1011,7 +1706,8 @@ const fetchAverageTimeToSupport = async () => {
                 }
               }
             } else {
-              console.log('❌ STEP 2: Invalid date parsing for support application');
+              console.log('❌ STEP 2: Invalid date parsing for application');
+              // Use default and allocate to current quarter, month, and year
               const defaultDays = 45;
               totalDays += defaultDays;
               count++;
@@ -1050,6 +1746,7 @@ const fetchAverageTimeToSupport = async () => {
             }
           } catch (dateError) {
             console.error(`❌ STEP 2: Date parsing error:`, dateError);
+            // Use default and allocate to current quarter, month, and year
             const defaultDays = 45;
             totalDays += defaultDays;
             count++;
@@ -1087,7 +1784,8 @@ const fetchAverageTimeToSupport = async () => {
             }
           }
         } else {
-          console.log('❌ STEP 2: Missing dates for support application');
+          console.log('❌ STEP 2: Missing dates for application');
+          // Use default and allocate to current quarter, month, and year
           const defaultDays = 45;
           totalDays += defaultDays;
           count++;
@@ -1125,26 +1823,30 @@ const fetchAverageTimeToSupport = async () => {
           }
         }
       } catch (error) {
-        console.error(`❌ STEP 2: Error processing support application:`, error);
+        console.error(`❌ STEP 2: Error processing application:`, error);
       }
     }
     
-    const timeToSupportData = quarterlyProcessingTimes.map(quarterTimes => {
+    // Calculate average days per quarter
+    const timeToFundData = quarterlyProcessingTimes.map(quarterTimes => {
       if (quarterTimes.length === 0) return 0;
       const quarterAvg = quarterTimes.reduce((sum, days) => sum + days, 0) / quarterTimes.length;
       return Math.round(quarterAvg);
     });
     
-    const monthlyTimeToSupportData = monthlyProcessingTimes.map(monthTimes => {
+    // Calculate average days per month
+    const monthlyTimeToFundData = monthlyProcessingTimes.map(monthTimes => {
       if (monthTimes.length === 0) return 0;
       const monthAvg = monthTimes.reduce((sum, days) => sum + days, 0) / monthTimes.length;
       return Math.round(monthAvg);
     });
     
+    // Calculate yearly data - ONLY include years where we actually have processing times
     const currentYear = new Date().getFullYear();
-    const yearlyTimeToSupportData = [];
-    const yearlyTimeToSupportLabels = [];
+    const yearlyTimeToFundData = [];
+    const yearlyTimeToFundLabels = [];
     
+    // Get all years with processing times, sorted
     const processingYears = Object.keys(processingTimesByYear)
       .map(year => parseInt(year))
       .sort((a, b) => a - b);
@@ -1156,23 +1858,24 @@ const fetchAverageTimeToSupport = async () => {
         const yearTimes = processingTimesByYear[year];
         if (yearTimes.length > 0) {
           const yearAvg = yearTimes.reduce((sum, days) => sum + days, 0) / yearTimes.length;
-          yearlyTimeToSupportData.push(Math.round(yearAvg));
-          yearlyTimeToSupportLabels.push(`${year}`);
+          yearlyTimeToFundData.push(Math.round(yearAvg));
+          yearlyTimeToFundLabels.push(`${year}`);
         }
       });
     } else {
-      yearlyTimeToSupportData.push(averageDays);
-      yearlyTimeToSupportLabels.push(`${currentYear}`);
+      // Fallback: just show current year average
+      yearlyTimeToFundData.push(averageDays);
+      yearlyTimeToFundLabels.push(`${currentYear}`);
     }
     
     const averageDays = count > 0 ? Math.round(totalDays / count) : 0;
     
-    console.log('📈 FINAL: Average time to support with accurate yearly data:', {
+    console.log('📈 FINAL: Average time to fund with accurate yearly data:', {
       averageDays,
-      timeToSupportData,
-      monthlyTimeToSupportData,
-      yearlyTimeToSupportData,
-      yearlyTimeToSupportLabels,
+      timeToFundData,
+      monthlyTimeToFundData,
+      yearlyTimeToFundData,
+      yearlyTimeToFundLabels,
       totalSMEs: count,
       quarterlyCounts: quarterlyProcessingTimes.map(q => q.length),
       monthlyCounts: monthlyProcessingTimes.map(m => m.length),
@@ -1183,10 +1886,10 @@ const fetchAverageTimeToSupport = async () => {
     
     return {
       averageDays,
-      timeToSupportData,
-      monthlyTimeToSupportData,
-      yearlyTimeToSupportData,
-      yearlyTimeToSupportLabels,
+      timeToFundData,
+      monthlyTimeToFundData,
+      yearlyTimeToFundData,
+      yearlyTimeToFundLabels,
       totalSMEs: count,
       allProcessingTimes,
       financialYearStartMonth,
@@ -1196,13 +1899,13 @@ const fetchAverageTimeToSupport = async () => {
       processingYears
     };
   } catch (error) {
-    console.error('❌ ERROR: Failed to fetch average time to support from support deals:', error);
+    console.error('❌ ERROR: Failed to fetch average time to fund from successful deals:', error);
     return {
       averageDays: 0,
-      timeToSupportData: [0, 0, 0, 0],
-      monthlyTimeToSupportData: [0, 0, 0, 0, 0, 0],
-      yearlyTimeToSupportData: [0],
-      yearlyTimeToSupportLabels: [`${new Date().getFullYear()}`],
+      timeToFundData: [0, 0, 0, 0],
+      monthlyTimeToFundData: [0, 0, 0, 0, 0, 0],
+      yearlyTimeToFundData: [0],
+      yearlyTimeToFundLabels: [`${new Date().getFullYear()}`],
       totalSMEs: 0,
       allProcessingTimes: [],
       financialYearStartMonth: 6,
@@ -1214,7 +1917,7 @@ const fetchAverageTimeToSupport = async () => {
   }
 };
 
-// UPDATED: FALLBACK DATA for support users
+// FALLBACK DATA for when investor has no successful deals - FIXED YEARLY DATA
 const getFallbackDataBasedOnUser = () => {
   const currentUser = auth.currentUser;
   const userHash = currentUser?.uid ? currentUser.uid.charCodeAt(0) % 4 : 0;
@@ -1237,16 +1940,16 @@ const getFallbackDataBasedOnUser = () => {
         currentValue: 187, 
         quarterlyData: [45, 42, 48, 52], 
         monthlyData: [15, 18, 22, 20, 25, 28],
-        yearlyData: [187],
+        yearlyData: [187], // Only current year
         yearlyLabels: [`${currentYear}`],
         financialYearStartMonth: 6 
       },
-      timeToSupport: { 
+      timeToFund: { 
         averageDays: 35, 
-        timeToSupportData: [38, 36, 34, 32], 
-        monthlyTimeToSupportData: [40, 38, 37, 36, 35, 34],
-        yearlyTimeToSupportData: [35],
-        yearlyTimeToSupportLabels: [`${currentYear}`],
+        timeToFundData: [38, 36, 34, 32], 
+        monthlyTimeToFundData: [40, 38, 37, 36, 35, 34],
+        yearlyTimeToFundData: [35], // Only current year
+        yearlyTimeToFundLabels: [`${currentYear}`],
         totalSMEs: 29, 
         allProcessingTimes: [32, 35, 38, 40, 33, 36, 34, 37], 
         financialYearStartMonth: 6 
@@ -1266,16 +1969,16 @@ const getFallbackDataBasedOnUser = () => {
         currentValue: 215, 
         quarterlyData: [52, 51, 55, 57], 
         monthlyData: [18, 20, 25, 22, 28, 30],
-        yearlyData: [215],
+        yearlyData: [215], // Only current year
         yearlyLabels: [`${currentYear}`],
         financialYearStartMonth: 6 
       },
-      timeToSupport: { 
+      timeToFund: { 
         averageDays: 32, 
-        timeToSupportData: [35, 34, 32, 29], 
-        monthlyTimeToSupportData: [36, 35, 34, 33, 32, 31],
-        yearlyTimeToSupportData: [32],
-        yearlyTimeToSupportLabels: [`${currentYear}`],
+        timeToFundData: [35, 34, 32, 29], 
+        monthlyTimeToFundData: [36, 35, 34, 33, 32, 31],
+        yearlyTimeToFundData: [32], // Only current year
+        yearlyTimeToFundLabels: [`${currentYear}`],
         totalSMEs: 28, 
         allProcessingTimes: [30, 32, 34, 31, 33, 32, 30, 35], 
         financialYearStartMonth: 6 
@@ -1296,16 +1999,16 @@ const getFallbackDataBasedOnUser = () => {
         currentValue: 198, 
         quarterlyData: [48, 47, 50, 53], 
         monthlyData: [16, 19, 23, 21, 26, 29],
-        yearlyData: [198],
+        yearlyData: [198], // Only current year
         yearlyLabels: [`${currentYear}`],
         financialYearStartMonth: 6 
       },
-      timeToSupport: { 
+      timeToFund: { 
         averageDays: 38, 
-        timeToSupportData: [42, 40, 37, 35], 
-        monthlyTimeToSupportData: [44, 42, 41, 39, 38, 37],
-        yearlyTimeToSupportData: [38],
-        yearlyTimeToSupportLabels: [`${currentYear}`],
+        timeToFundData: [42, 40, 37, 35], 
+        monthlyTimeToFundData: [44, 42, 41, 39, 38, 37],
+        yearlyTimeToFundData: [38], // Only current year
+        yearlyTimeToFundLabels: [`${currentYear}`],
         totalSMEs: 30, 
         allProcessingTimes: [36, 38, 40, 37, 39, 38, 36, 41], 
         financialYearStartMonth: 6 
@@ -1325,16 +2028,16 @@ const getFallbackDataBasedOnUser = () => {
         currentValue: 232, 
         quarterlyData: [56, 58, 57, 61], 
         monthlyData: [20, 22, 27, 25, 30, 33],
-        yearlyData: [232],
+        yearlyData: [232], // Only current year
         yearlyLabels: [`${currentYear}`],
         financialYearStartMonth: 6 
       },
-      timeToSupport: { 
+      timeToFund: { 
         averageDays: 29, 
-        timeToSupportData: [32, 31, 29, 26], 
-        monthlyTimeToSupportData: [34, 33, 32, 31, 30, 29],
-        yearlyTimeToSupportData: [29],
-        yearlyTimeToSupportLabels: [`${currentYear}`],
+        timeToFundData: [32, 31, 29, 26], 
+        monthlyTimeToFundData: [34, 33, 32, 31, 30, 29],
+        yearlyTimeToFundData: [29], // Only current year
+        yearlyTimeToFundLabels: [`${currentYear}`],
         totalSMEs: 31, 
         allProcessingTimes: [27, 29, 31, 28, 30, 29, 27, 32], 
         financialYearStartMonth: 6 
@@ -1346,21 +2049,9 @@ const getFallbackDataBasedOnUser = () => {
 };
 
 const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => {
-  const [timeToSupportView, setTimeToSupportView] = useState('Quarterly');
+  const [timeToFundView, setTimeToFundView] = useState('Quarterly');
   const [fundingFacilitatedData, setFundingFacilitatedData] = useState([15, 18, 22, 20, 25, 28]);
   const [showFundingInput, setShowFundingInput] = useState(false);
-  const [showChartSelector, setShowChartSelector] = useState(false);
-  const [selectedCharts, setSelectedCharts] = useState({
-    portfolioValue: true,
-    activeSMEs: true,
-    bigScore: true,
-    fundingReady: true,
-    fundingFacilitated: true,
-    timeToSupport: true,
-    followOnFunding: true,
-    exitRepayment: true
-  });
-  
   const [portfolioData, setPortfolioData] = useState({
     activeSMEs: { 'Micro': 0, 'Small': 0, 'Medium': 0, 'Large': 0 },
     averageBIGScore: { averageScore: 0, individualScores: [], totalSMEs: 0 },
@@ -1372,19 +2063,19 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
       yearlyData: [0],
       yearlyLabels: [`${new Date().getFullYear()}`],
       totalDeals: 0, 
-      totalSupportValue: 0, 
+      totalInvestment: 0, 
       financialYearStartMonth: 6, 
       quarterlyBreakdown: [[], [], [], []],
       monthlyBreakdown: [[], [], [], [], [], []],
-      supportByYear: {},
-      supportYears: []
+      investmentsByYear: {},
+      investmentYears: []
     },
-    timeToSupport: { 
+    timeToFund: { 
       averageDays: 0, 
-      timeToSupportData: [0, 0, 0, 0], 
-      monthlyTimeToSupportData: [0, 0, 0, 0, 0, 0],
-      yearlyTimeToSupportData: [0],
-      yearlyTimeToSupportLabels: [`${new Date().getFullYear()}`],
+      timeToFundData: [0, 0, 0, 0], 
+      monthlyTimeToFundData: [0, 0, 0, 0, 0, 0],
+      yearlyTimeToFundData: [0],
+      yearlyTimeToFundLabels: [`${new Date().getFullYear()}`],
       totalSMEs: 0, 
       allProcessingTimes: [], 
       financialYearStartMonth: 6, 
@@ -1396,38 +2087,6 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
     loading: true,
     usingFallback: false
   });
-
-  // Load chart preferences on component mount
-  useEffect(() => {
-    const loadPreferences = async () => {
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        const savedPreferences = await loadUserChartPreferences(currentUser.uid);
-        if (savedPreferences) {
-          setSelectedCharts(savedPreferences.selectedCharts || selectedCharts);
-        }
-      }
-    };
-    
-    loadPreferences();
-  }, []);
-
-  // Save preferences when they change
-  useEffect(() => {
-    const savePreferences = async () => {
-      const currentUser = auth.currentUser;
-      if (currentUser && !portfolioData.loading) {
-        const preferences = {
-          selectedCharts,
-          updatedAt: new Date().toISOString()
-        };
-        await saveUserChartPreferences(currentUser.uid, preferences);
-      }
-    };
-
-    const timeoutId = setTimeout(savePreferences, 1000);
-    return () => clearTimeout(timeoutId);
-  }, [selectedCharts]);
 
   // Fetch portfolio data when component mounts
   useEffect(() => {
@@ -1442,76 +2101,77 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
           averageBIGScore: fallbackData.averageBIGScore,
           fundingReadyPercentage: fallbackData.fundingReadyPercentage,
           portfolioValue: fallbackData.portfolioValue,
-          timeToSupport: fallbackData.timeToSupport,
+          timeToFund: fallbackData.timeToFund,
           loading: false,
           usingFallback: true
         });
         return;
       }
       
-      console.log('🚀 STARTING PORTFOLIO DATA FETCH FOR SUPPORT DEALS - User:', currentUser.uid);
+      console.log('🚀 STARTING PORTFOLIO DATA FETCH FOR SUCCESSFUL DEALS - User:', currentUser.uid);
       setPortfolioData(prev => ({ ...prev, loading: true }));
       
       try {
-        const [activeSMEsData, averageBIGScoreData, fundingReadyPercentageData, portfolioValueData, timeToSupportData] = await Promise.all([
+        const [activeSMEsData, averageBIGScoreData, fundingReadyPercentageData, portfolioValueData, timeToFundData] = await Promise.all([
           fetchActiveSMEsData(),
           fetchAverageBIGScore(),
           fetchFundingReadyPercentage(),
           fetchPortfolioValueData(),
-          fetchAverageTimeToSupport()
+          fetchAverageTimeToFund()
         ]);
         
+        // Check if we got any real data from successful deals
         const totalSMEs = Object.values(activeSMEsData).reduce((a, b) => a + b, 0);
         const hasRealData = totalSMEs > 0 || portfolioValueData.currentValue > 0;
         
-        console.log('📊 SUPPORT DEALS DATA FETCH COMPLETED:', {
+        console.log('📊 SUCCESSFUL DEALS DATA FETCH COMPLETED:', {
           hasRealData,
           totalSMEs,
           averageBIGScore: averageBIGScoreData.averageScore,
           fundingReadyPercentage: fundingReadyPercentageData.fundingReadyPercentage,
           portfolioValue: portfolioValueData.currentValue,
           totalDeals: portfolioValueData.totalDeals,
-          totalSupportValue: portfolioValueData.totalSupportValue,
+          totalInvestment: portfolioValueData.totalInvestment,
           financialYearStartMonth: portfolioValueData.financialYearStartMonth,
-          timeToSupport: timeToSupportData.averageDays,
-          timeToSupportSMEs: timeToSupportData.totalSMEs,
-          supportYears: portfolioValueData.supportYears,
-          processingYears: timeToSupportData.processingYears
+          timeToFund: timeToFundData.averageDays,
+          timeToFundSMEs: timeToFundData.totalSMEs,
+          investmentYears: portfolioValueData.investmentYears,
+          processingYears: timeToFundData.processingYears
         });
         
         if (hasRealData) {
-          console.log('✅ USING REAL DATA FROM SUPPORT DEALS');
+          console.log('✅ USING REAL DATA FROM SUCCESSFUL DEALS');
           setPortfolioData({
             activeSMEs: activeSMEsData,
             averageBIGScore: averageBIGScoreData,
             fundingReadyPercentage: fundingReadyPercentageData,
             portfolioValue: portfolioValueData,
-            timeToSupport: timeToSupportData,
+            timeToFund: timeToFundData,
             loading: false,
             usingFallback: false
           });
         } else {
-          console.log('⚠️ USING FALLBACK DATA - no support deals found for this catalyst');
+          console.log('⚠️ USING FALLBACK DATA - no successful deals found for this investor');
           const fallbackData = getFallbackDataBasedOnUser();
           setPortfolioData({
             activeSMEs: fallbackData.activeSMEs,
             averageBIGScore: fallbackData.averageBIGScore,
             fundingReadyPercentage: fallbackData.fundingReadyPercentage,
             portfolioValue: fallbackData.portfolioValue,
-            timeToSupport: fallbackData.timeToSupport,
+            timeToFund: fallbackData.timeToFund,
             loading: false,
             usingFallback: true
           });
         }
       } catch (error) {
-        console.error('❌ ERROR fetching support deals data:', error);
+        console.error('❌ ERROR fetching successful deals data:', error);
         const fallbackData = getFallbackDataBasedOnUser();
         setPortfolioData({
           activeSMEs: fallbackData.activeSMEs,
           averageBIGScore: fallbackData.averageBIGScore,
           fundingReadyPercentage: fallbackData.fundingReadyPercentage,
           portfolioValue: fallbackData.portfolioValue,
-          timeToSupport: fallbackData.timeToSupport,
+          timeToFund: fallbackData.timeToFund,
           loading: false,
           usingFallback: true
         });
@@ -1521,10 +2181,11 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
     fetchPortfolioData();
   }, []);
 
-  // Helper function to get quarter labels based on financial year start (keep the same)
+  // Helper function to get quarter labels based on financial year start
   const getQuarterLabels = (financialYearStartMonth) => {
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     
+    // Calculate quarter ranges based on financial year start
     const q1Start = financialYearStartMonth;
     const q1End = (financialYearStartMonth + 2) % 12;
     
@@ -1545,11 +2206,12 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
     ];
   };
 
-  // Helper function to get financial year months in order (keep the same)
+  // Helper function to get financial year months in order
   const getFinancialYearMonths = (financialYearStartMonth) => {
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const months = [];
     
+    // Start from financial year start month and get next 6 months
     for (let i = 0; i < 6; i++) {
       const monthIndex = (financialYearStartMonth + i) % 12;
       months.push(monthNames[monthIndex]);
@@ -1558,11 +2220,11 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
     return months;
   };
 
-  // Time view data for support
-  const timeToSupportData = {
-    Monthly: portfolioData.timeToSupport.monthlyTimeToSupportData,
-    Quarterly: portfolioData.timeToSupport.timeToSupportData,
-    Yearly: portfolioData.timeToSupport.yearlyTimeToSupportData
+  // Time view data - now using real data from successful deals with FINANCIAL YEAR allocation
+  const timeToFundData = {
+    Monthly: portfolioData.timeToFund.monthlyTimeToFundData,
+    Quarterly: portfolioData.timeToFund.timeToFundData,
+    Yearly: portfolioData.timeToFund.yearlyTimeToFundData
   };
 
   // Portfolio value data for different time views
@@ -1583,17 +2245,21 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
       case 'Quarterly':
         return getQuarterLabels(financialYearStartMonth);
       case 'Yearly':
-        if (timeToSupportView === 'Yearly') {
-          return portfolioData.timeToSupport.yearlyTimeToSupportLabels;
-        } else {
-          return portfolioData.portfolioValue.yearlyLabels;
+        // Use the actual years we have data for
+        if (view === 'Yearly') {
+          if (timeToFundView === 'Yearly') {
+            return portfolioData.timeToFund.yearlyTimeToFundLabels;
+          } else {
+            return portfolioData.portfolioValue.yearlyLabels;
+          }
         }
+        return portfolioData.portfolioValue.yearlyLabels;
       default:
         return getQuarterLabels(financialYearStartMonth);
     }
   };
 
-  // Time View Selector Component (keep the same)
+  // Time View Selector Component
   const TimeViewSelector = ({ currentView, onViewChange, views = ['Monthly', 'Quarterly', 'Yearly'] }) => (
     <div className="time-view-selector">
       <span className="time-view-label">View:</span>
@@ -1609,81 +2275,7 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
     </div>
   );
 
-  // Chart Selection Component (keep the same)
-  const ChartSelectionPopup = () => {
-    const chartOptions = [
-      { id: 'portfolioValue', label: 'Portfolio Value' },
-      { id: 'activeSMEs', label: 'Active SMEs' },
-      { id: 'bigScore', label: 'BIG Score' },
-      { id: 'fundingReady', label: 'Funding Ready %' },
-      { id: 'fundingFacilitated', label: 'Support Facilitated' },
-      { id: 'timeToSupport', label: 'Time to Support' },
-      { id: 'followOnFunding', label: 'Follow-on Support' },
-      { id: 'exitRepayment', label: 'Program Completion' }
-    ];
-
-    const handleToggleChart = (chartId) => {
-      setSelectedCharts(prev => ({
-        ...prev,
-        [chartId]: !prev[chartId]
-      }));
-    };
-
-    const handleSelectAll = () => {
-      const allSelected = {};
-      chartOptions.forEach(option => {
-        allSelected[option.id] = true;
-      });
-      setSelectedCharts(allSelected);
-    };
-
-    const handleDeselectAll = () => {
-      const noneSelected = {};
-      chartOptions.forEach(option => {
-        noneSelected[option.id] = false;
-      });
-      setSelectedCharts(noneSelected);
-    };
-
-    const handleSaveSelection = () => {
-      setShowChartSelector(false);
-    };
-
-    const selectedCount = Object.values(selectedCharts).filter(Boolean).length;
-
-    return (
-      <div className="chart-selector-popup">
-        <h4>Select Charts to Display ({selectedCount} selected)</h4>
-        <div className="chart-selection-grid">
-          {chartOptions.map(option => (
-            <div
-              key={option.id}
-              className={`chart-selection-item ${selectedCharts[option.id] ? 'selected' : ''}`}
-              onClick={() => handleToggleChart(option.id)}
-            >
-              <div className={`chart-selection-checkbox ${selectedCharts[option.id] ? 'checked' : ''}`}>
-                {selectedCharts[option.id] && <FiCheck size={12} />}
-              </div>
-              <span className="chart-selection-label">{option.label}</span>
-            </div>
-          ))}
-        </div>
-        <div className="chart-selection-actions">
-          <button className="chart-selection-btn secondary" onClick={handleDeselectAll}>
-            Deselect All
-          </button>
-          <button className="chart-selection-btn secondary" onClick={handleSelectAll}>
-            Select All
-          </button>
-          <button className="chart-selection-btn primary" onClick={handleSaveSelection}>
-            Apply
-          </button>
-        </div>
-      </div>
-    );
-  };
-
-  // Data generation functions (keep the same)
+  // Data generation functions
   const generateBarData = (labels, data, label, colorIndex) => ({
     labels,
     datasets: [{
@@ -1695,8 +2287,8 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
     }]
   });
 
-  // UPDATED: Support Facilitated Chart (renamed from Funding Facilitated)
-  const SupportFacilitatedChart = ({ title }) => {
+  // NEW: Funding Facilitated Chart with Data Input
+  const FundingFacilitatedChart = ({ title }) => {
     const [tempData, setTempData] = useState([...fundingFacilitatedData]);
     const financialYearMonths = getFinancialYearMonths(portfolioData.portfolioValue.financialYearStartMonth);
 
@@ -1724,19 +2316,19 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
     const chartData = generateBarData(
       financialYearMonths,
       fundingFacilitatedData,
-      'Support Value (R millions)',
+      'Funding (R millions)',
       2
     );
 
     const handleEyeClick = () => {
       const totalFacilitated = fundingFacilitatedData.reduce((sum, value) => sum + value, 0);
-      const maxAllowed = portfolioData.portfolioValue.totalSupportValue / 1000000;
+      const maxAllowed = portfolioData.portfolioValue.totalInvestment / 1000000;
       
       openPopup(
         <div className="popup-content">
           <h3>{title}</h3>
           <div className="popup-description">
-            Monthly support value facilitated from your successful programs - manually input data that reflects your actual support activities
+            Monthly funding facilitated from your successful deals - manually input data that reflects your actual funding activities
           </div>
           <div className="popup-chart">
             <Bar data={chartData} options={staticBarOptions} />
@@ -1753,7 +2345,7 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
               <span className="detail-value" style={{color: '#5e3f26'}}>R {totalFacilitated.toFixed(1)} million</span>
             </div>
             <div className="detail-item">
-              <span className="detail-label">Available from Programs:</span>
+              <span className="detail-label">Available from Deals:</span>
               <span className="detail-value">R {maxAllowed.toFixed(1)} million</span>
             </div>
             <div className="detail-item">
@@ -1802,7 +2394,7 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
         {showFundingInput ? (
           <div className="data-input-form">
             <div className="popup-description">
-              Enter support values for each month (R millions)
+              Enter funding amounts for each month (R millions)
             </div>
             <div className="form-row">
               {financialYearMonths.map((month, index) => (
@@ -1831,7 +2423,7 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
         ) : (
           <>
             <div className="chart-title-fixed">
-              Monthly support from successful programs (R millions)
+              Monthly funding from successful deals (R millions)
             </div>
             <div className="chart-area">
               <Bar data={chartData} options={staticBarOptions} />
@@ -1842,33 +2434,33 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
     );
   };
 
-  // UPDATED: BIG Score Circular Component for support
+  // UPDATED: BIG Score Circular Component with % sign and whole numbers - FIXED to show individual scores
   const BIGScoreInfographic = ({ value, target, title }) => {
     const handleEyeClick = () => {
       const { individualScores, totalSMEs } = portfolioData.averageBIGScore;
       
       openPopup(
         <div className="popup-content">
-          <h3>BIG Score - Support Programs</h3>
+          <h3>BIG Score - Successful Deals</h3>
           <div className="popup-description">
-            Average BIG Score across SMEs from your successful support programs
+            Average BIG Score across SMEs from your successful investment deals
           </div>
           <div className="big-score-popup">
             <div className="big-score-main-popup">
               <div className="big-score-value">{value}%</div>
-              <div className="big-score-label">Your Support Programs BIG Score</div>
+              <div className="big-score-label">Your Successful Deals BIG Score</div>
               <div className="big-score-target">Target: {target}%</div>
             </div>
             <div className="popup-details">
               <div className="detail-item">
                 <span className="detail-label">Data Source:</span>
                 <span className="detail-value">
-                  {portfolioData.usingFallback ? 'Sample Portfolio' : 'Your Support Programs'}
+                  {portfolioData.usingFallback ? 'Sample Portfolio' : 'Your Successful Deals'}
                 </span>
               </div>
               <div className="detail-item">
                 <span className="detail-label">Calculation:</span>
-                <span className="detail-value">Average of SMEs from your support programs</span>
+                <span className="detail-value">Average of SMEs from your successful deals</span>
               </div>
               <div className="detail-item">
                 <span className="detail-label">Scoring Range:</span>
@@ -1879,6 +2471,7 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
                 <span className="detail-value">{totalSMEs}</span>
               </div>
               
+              {/* Show individual SME scores */}
               {individualScores.length > 0 && (
                 <>
                   <div className="detail-item" style={{borderLeftColor: '#4CAF50', marginTop: '15px'}}>
@@ -1917,6 +2510,7 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
         <div className="big-score-circular">
           <div className="circular-progress">
             <svg width="140" height="140" viewBox="0 0 140 140">
+              {/* Background circle */}
               <circle
                 cx="70"
                 cy="70"
@@ -1925,6 +2519,7 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
                 strokeWidth="8"
                 fill="none"
               />
+              {/* Progress circle */}
               <circle
                 cx="70"
                 cy="70"
@@ -1956,16 +2551,16 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
     );
   };
 
-  // UPDATED: Funding Ready Circular Component for support
+  // UPDATED: Funding Ready Circular Component with 80% threshold - FIXED to show individual SMEs
   const FundingReadyCircular = ({ value, target, title }) => {
     const handleEyeClick = () => {
       const { fundingReadySMEs, notFundingReadySMEs, fundingReadyCount, totalCount } = portfolioData.fundingReadyPercentage;
       
       openPopup(
         <div className="popup-content">
-          <h3>Funding Ready - Support Programs</h3>
+          <h3>Funding Ready - Successful Deals</h3>
           <div className="popup-description">
-            Percentage of SMEs in your support programs with BIG Score ≥ 80% (considered "Funding Ready")
+            Percentage of SMEs in your successful deals portfolio with BIG Score ≥ 80% (considered "Funding Ready")
           </div>
           <div className="funding-ready-popup">
             <div className="readiness-main-popup">
@@ -1981,7 +2576,7 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
               <div className="detail-item">
                 <span className="detail-label">Data Source:</span>
                 <span className="detail-value">
-                  {portfolioData.usingFallback ? 'Sample Portfolio' : 'Your Support Programs'}
+                  {portfolioData.usingFallback ? 'Sample Portfolio' : 'Your Successful Deals'}
                 </span>
               </div>
               <div className="detail-item">
@@ -1993,6 +2588,7 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
                 <span className="detail-value" style={{color: '#4CAF50'}}>{fundingReadyCount} out of {totalCount}</span>
               </div>
               
+              {/* Show funding ready SMEs */}
               {fundingReadySMEs.length > 0 && (
                 <>
                   <div className="detail-item" style={{borderLeftColor: '#4CAF50', marginTop: '15px'}}>
@@ -2008,6 +2604,7 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
                 </>
               )}
               
+              {/* Show not funding ready SMEs */}
               {notFundingReadySMEs.length > 0 && (
                 <>
                   <div className="detail-item" style={{borderLeftColor: '#FF9800', marginTop: '15px'}}>
@@ -2050,6 +2647,7 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
         <div className="funding-ready-circular">
           <div className="circular-progress">
             <svg width="140" height="140" viewBox="0 0 140 140">
+              {/* Background circle */}
               <circle
                 cx="70"
                 cy="70"
@@ -2058,6 +2656,7 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
                 strokeWidth="8"
                 fill="none"
               />
+              {/* Progress circle */}
               <circle
                 cx="70"
                 cy="70"
@@ -2089,16 +2688,17 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
     );
   };
 
-  // UPDATED: BarChartWithTitle for support portfolio
+  // UPDATED: BarChartWithTitle to support all time views with accurate yearly data
   const BarChartWithTitle = ({ data, title, chartTitle, chartId }) => {
     const handleEyeClick = () => {
-      const { quarterlyBreakdown, monthlyBreakdown, supportByYear, supportYears } = portfolioData.portfolioValue;
+      const { quarterlyBreakdown, monthlyBreakdown, investmentsByYear, investmentYears } = portfolioData.portfolioValue;
+      const currentYear = new Date().getFullYear();
       
       openPopup(
         <div className="popup-content">
           <h3>{title}</h3>
           <div className="popup-description">
-            Support program value growth from your successful support deals with accurate yearly data based on actual program dates
+            Portfolio value growth from your successful investment deals with accurate yearly data based on actual investment dates
           </div>
           <div className="popup-chart">
             <Bar data={data} options={staticBarOptions} />
@@ -2111,15 +2711,15 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
               </div>
             ))}
             <div className="detail-item" style={{borderLeftColor: '#5e3f26'}}>
-              <span className="detail-label">Successful Programs:</span>
+              <span className="detail-label">Successful Deals:</span>
               <span className="detail-value" style={{color: '#5e3f26'}}>
                 {portfolioData.portfolioValue.totalDeals || 'N/A'}
               </span>
             </div>
             <div className="detail-item">
-              <span className="detail-label">Total Support Value:</span>
+              <span className="detail-label">Total Investment:</span>
               <span className="detail-value">
-                R {portfolioData.portfolioValue.totalSupportValue ? (portfolioData.portfolioValue.totalSupportValue / 1000000).toFixed(1) : '0'} million
+                R {portfolioData.portfolioValue.totalInvestment ? (portfolioData.portfolioValue.totalInvestment / 1000000).toFixed(1) : '0'} million
               </span>
             </div>
             <div className="detail-item">
@@ -2131,42 +2731,44 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
             <div className="detail-item">
               <span className="detail-label">Data Source:</span>
               <span className="detail-value">
-                {portfolioData.usingFallback ? 'Sample Portfolio' : 'Your Support Programs'}
+                {portfolioData.usingFallback ? 'Sample Portfolio' : 'Your Successful Deals'}
               </span>
             </div>
             <div className="detail-item">
               <span className="detail-label">Time View:</span>
-              <span className="detail-value">{timeToSupportView}</span>
+              <span className="detail-value">{timeToFundView}</span>
             </div>
             
-            {supportYears && supportYears.length > 0 && (
+            {/* Show investment years breakdown */}
+            {investmentYears && investmentYears.length > 0 && (
               <>
                 <div className="detail-item" style={{borderLeftColor: '#4CAF50', marginTop: '15px'}}>
-                  <span className="detail-label" style={{fontSize: '16px', fontWeight: '700'}}>Support by Calendar Year:</span>
+                  <span className="detail-label" style={{fontSize: '16px', fontWeight: '700'}}>Investments by Calendar Year:</span>
                   <span className="detail-value" style={{fontSize: '16px', fontWeight: '700'}}></span>
                 </div>
-                {supportYears.map(year => (
+                {investmentYears.map(year => (
                   <div key={year} className="detail-item">
                     <span className="detail-label">{year}:</span>
                     <span className="detail-value">
-                      R {((supportByYear[year] || 0) / 1000000).toFixed(1)} million
+                      R {((investmentsByYear[year] || 0) / 1000000).toFixed(1)} million
                     </span>
                   </div>
                 ))}
               </>
             )}
             
-            {timeToSupportView === 'Quarterly' && quarterlyBreakdown && quarterlyBreakdown.some(q => q.length > 0) && (
+            {/* Show quarterly breakdown for quarterly view */}
+            {timeToFundView === 'Quarterly' && quarterlyBreakdown && quarterlyBreakdown.some(q => q.length > 0) && (
               <>
                 <div className="detail-item" style={{borderLeftColor: '#4CAF50', marginTop: '15px'}}>
-                  <span className="detail-label" style={{fontSize: '16px', fontWeight: '700'}}>Quarterly Program Breakdown:</span>
+                  <span className="detail-label" style={{fontSize: '16px', fontWeight: '700'}}>Quarterly Investment Breakdown:</span>
                   <span className="detail-value" style={{fontSize: '16px', fontWeight: '700'}}></span>
                 </div>
                 {quarterlyBreakdown.map((quarter, index) => (
                   <div key={index} className="detail-item">
                     <span className="detail-label">{getQuarterLabels(portfolioData.portfolioValue.financialYearStartMonth)[index]}:</span>
                     <span className="detail-value">
-                      {quarter.length} programs, R {portfolioData.portfolioValue.quarterlyData[index]}M
+                      {quarter.length} deals, R {portfolioData.portfolioValue.quarterlyData[index]}M
                     </span>
                   </div>
                 ))}
@@ -2197,7 +2799,7 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
     );
   };
 
-  // UPDATED: Active SMEs Pie Chart for support
+  // Active SMEs Pie Chart
   const ActiveSMEsPieChart = ({ title }) => {
     const { activeSMEs, loading } = portfolioData;
     
@@ -2239,9 +2841,9 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
     const handleEyeClick = () => {
       openPopup(
         <div className="popup-content">
-          <h3>Your Support Programs Portfolio</h3>
+          <h3>Your Successful Deals Portfolio</h3>
           <div className="popup-description">
-            Distribution of SMEs from your successful support programs by business size
+            Distribution of SMEs from your successful investment deals by business size
           </div>
           <div className="popup-chart">
             <Pie data={data} options={staticPieOptions} plugins={plugins} />
@@ -2272,17 +2874,17 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
               </span>
             </div>
             <div className="detail-item" style={{borderLeftColor: '#5e3f26'}}>
-              <span className="detail-label">Total SMEs in Support Programs:</span>
+              <span className="detail-label">Total SMEs in Successful Deals:</span>
               <span className="detail-value" style={{color: '#5e3f26'}}>{totalSMEs}</span>
             </div>
             <div className="detail-item">
-              <span className="detail-label">Active Programs:</span>
+              <span className="detail-label">Successful Deals:</span>
               <span className="detail-value">{portfolioData.portfolioValue.totalDeals || 'N/A'}</span>
             </div>
             <div className="detail-item">
               <span className="detail-label">Data Source:</span>
               <span className="detail-value">
-                {portfolioData.usingFallback ? 'Sample Support Programs' : 'Your Actual Support Programs'}
+                {portfolioData.usingFallback ? 'Sample Successful Deals' : 'Your Actual Successful Deals'}
               </span>
             </div>
           </div>
@@ -2312,7 +2914,7 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
               color: '#7d5a36',
               fontSize: '16px'
             }}>
-              Loading your support programs...
+              Loading your successful deals...
             </div>
           ) : totalSMEs === 0 ? (
             <div style={{ 
@@ -2326,11 +2928,11 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
               flexDirection: 'column',
               gap: '10px'
             }}>
-              <div>No active support programs in your portfolio</div>
+              <div>No successful deals in your portfolio</div>
               <div style={{ fontSize: '12px', color: '#999' }}>
                 {portfolioData.usingFallback ? 
-                  'Showing sample support programs portfolio' : 
-                  'You have no Active Support programs yet'
+                  'Showing sample successful deals portfolio' : 
+                  'You have no Deal Complete investments yet'
                 }
               </div>
             </div>
@@ -2342,15 +2944,15 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
     );
   };
 
-  // UPDATED: Time to Support Chart (renamed from Time to Fund)
-  const TimeToSupportChart = ({ value, target, data, title }) => {
-    const labels = getTimeLabels(timeToSupportView, portfolioData.timeToSupport.financialYearStartMonth);
+  // UPDATED: Time to Fund Chart to support all time views with accurate yearly data
+  const TimeToFundChart = ({ value, target, data, title }) => {
+    const labels = getTimeLabels(timeToFundView, portfolioData.timeToFund.financialYearStartMonth);
     
     const chartData = {
       labels: labels,
       datasets: [
         {
-          label: 'Days to Support',
+          label: 'Days to Fund',
           data: data,
           borderColor: brownShades[0],
           backgroundColor: brownShades[0] + '20',
@@ -2401,13 +3003,13 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
     };
 
     const handleEyeClick = () => {
-      const { processingDetails, monthlyProcessingDetails, processingTimesByYear, processingYears } = portfolioData.timeToSupport;
+      const { processingDetails, monthlyProcessingDetails, processingTimesByYear, processingYears } = portfolioData.timeToFund;
       
       openPopup(
         <div className="popup-content">
-          <h3>Time to Support - Programs</h3>
+          <h3>Time to Fund - Successful Deals</h3>
           <div className="popup-description">
-            Average support approval time calculated from your successful programs (application date to approval date) with accurate yearly data based on actual processing dates
+            Average funding time calculated from your successful deals (application date to approval date) with accurate yearly data based on actual processing dates
           </div>
           <div className="popup-chart">
             <Line data={chartData} options={options} />
@@ -2423,29 +3025,30 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
             </div>
             <div className="detail-item">
               <span className="detail-label">SMEs Analyzed:</span>
-              <span className="detail-value">{portfolioData.timeToSupport.totalSMEs || 'N/A'}</span>
+              <span className="detail-value">{portfolioData.timeToFund.totalSMEs || 'N/A'}</span>
             </div>
             <div className="detail-item">
               <span className="detail-label">Financial Year Start:</span>
               <span className="detail-value">
-                Month {portfolioData.timeToSupport.financialYearStartMonth + 1} ({getFinancialYearMonths(portfolioData.timeToSupport.financialYearStartMonth)[0]})
+                Month {portfolioData.timeToFund.financialYearStartMonth + 1} ({getFinancialYearMonths(portfolioData.timeToFund.financialYearStartMonth)[0]})
               </span>
             </div>
             <div className="detail-item">
               <span className="detail-label">Data Source:</span>
               <span className="detail-value">
-                {portfolioData.usingFallback ? 'Sample Data' : 'Your Support Programs'}
+                {portfolioData.usingFallback ? 'Sample Data' : 'Your Successful Deals'}
               </span>
             </div>
             <div className="detail-item">
               <span className="detail-label">Calculation:</span>
-              <span className="detail-value">Application Date → Support Approval Date</span>
+              <span className="detail-value">Application Date → Approval Date</span>
             </div>
             <div className="detail-item">
               <span className="detail-label">Time View:</span>
-              <span className="detail-value">{timeToSupportView}</span>
+              <span className="detail-value">{timeToFundView}</span>
             </div>
             
+            {/* Show processing years breakdown */}
             {processingYears && processingYears.length > 0 && (
               <>
                 <div className="detail-item" style={{borderLeftColor: '#4CAF50', marginTop: '15px'}}>
@@ -2468,7 +3071,8 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
               </>
             )}
             
-            {timeToSupportView === 'Quarterly' && processingDetails && processingDetails.some(q => q.length > 0) && (
+            {/* Show processing details based on current view */}
+            {timeToFundView === 'Quarterly' && processingDetails && processingDetails.some(q => q.length > 0) && (
               <>
                 <div className="detail-item" style={{borderLeftColor: '#4CAF50', marginTop: '15px'}}>
                   <span className="detail-label" style={{fontSize: '16px', fontWeight: '700'}}>Processing Details by Quarter:</span>
@@ -2476,7 +3080,7 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
                 </div>
                 {processingDetails.map((quarter, index) => (
                   <div key={index} className="detail-item">
-                    <span className="detail-label">{getQuarterLabels(portfolioData.timeToSupport.financialYearStartMonth)[index]}:</span>
+                    <span className="detail-label">{getQuarterLabels(portfolioData.timeToFund.financialYearStartMonth)[index]}:</span>
                     <span className="detail-value">
                       {quarter.length} SMEs, Avg: {data[index]} days
                     </span>
@@ -2485,7 +3089,7 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
               </>
             )}
             
-            {timeToSupportView === 'Monthly' && monthlyProcessingDetails && monthlyProcessingDetails.some(m => m.length > 0) && (
+            {timeToFundView === 'Monthly' && monthlyProcessingDetails && monthlyProcessingDetails.some(m => m.length > 0) && (
               <>
                 <div className="detail-item" style={{borderLeftColor: '#4CAF50', marginTop: '15px'}}>
                   <span className="detail-label" style={{fontSize: '16px', fontWeight: '700'}}>Processing Details by Month:</span>
@@ -2493,7 +3097,7 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
                 </div>
                 {monthlyProcessingDetails.map((month, index) => (
                   <div key={index} className="detail-item">
-                    <span className="detail-label">{getFinancialYearMonths(portfolioData.timeToSupport.financialYearStartMonth)[index]}:</span>
+                    <span className="detail-label">{getFinancialYearMonths(portfolioData.timeToFund.financialYearStartMonth)[index]}:</span>
                     <span className="detail-value">
                       {month.length} SMEs, Avg: {data[index]} days
                     </span>
@@ -2519,13 +3123,14 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
           </button>
         </div>
         <div className="chart-area-ultra-compact">
-          <Line data={chartData} options={options} id="time-to-support" />
+          <Line data={chartData} options={options} id="time-to-fund" />
         </div>
         
+        {/* Enhanced Legend at bottom */}
         <div className="time-to-fund-legend">
           <div className="legend-item">
             <div className="legend-color days-to-fund"></div>
-            <span>Days to Support</span>
+            <span>Days to Fund</span>
           </div>
           <div className="legend-item">
             <div className="legend-color target-line"></div>
@@ -2536,9 +3141,9 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
         <div className="chart-summary-ultra-compact">
           <div className="current-value">
             Current: {portfolioData.loading ? '...' : value} days
-            {portfolioData.timeToSupport.totalSMEs > 0 && (
+            {portfolioData.timeToFund.totalSMEs > 0 && (
               <span style={{fontSize: '11px', color: '#666', marginLeft: '5px'}}>
-                (from {portfolioData.timeToSupport.totalSMEs} SMEs)
+                (from {portfolioData.timeToFund.totalSMEs} SMEs)
               </span>
             )}
           </div>
@@ -2555,8 +3160,8 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
     );
   };
 
-  // UPDATED: Follow-on Support Rate Component (renamed from Follow-on Funding)
-  const EnhancedFollowOnSupportChart = ({ value, target, data, title }) => {
+  // Enhanced Follow-on Funding Rate Component
+  const EnhancedFollowOnFundingChart = ({ value, target, data, title }) => {
     const chartData = {
       labels: data.map((_, index) => `Q${index + 1}`),
       datasets: [
@@ -2584,9 +3189,9 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
     const handleEyeClick = () => {
       openPopup(
         <div className="popup-content">
-          <h3>Follow-on Support - Programs</h3>
+          <h3>Follow-on Funding - Successful Deals</h3>
           <div className="popup-description">
-            Follow-on support rates from your successful programs portfolio
+            Follow-on funding rates from your successful deals portfolio
           </div>
           <div className="popup-chart">
             <Bar data={chartData} options={options} />
@@ -2622,7 +3227,7 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
           </button>
         </div>
         <div className="chart-area-ultra-compact">
-          <Bar data={chartData} options={options} id="follow-on-support" />
+          <Bar data={chartData} options={options} id="follow-on-funding" />
         </div>
         <div className="chart-summary-ultra-compact">
           <div className="current-value">Current: {value}%</div>
@@ -2639,13 +3244,13 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
     );
   };
 
-  // UPDATED: Program Completion Chart (renamed from Exit Repayment)
-  const ProgramCompletionChart = ({ value, target, data, title }) => {
+  // Exit Repayment Chart Component
+  const ExitRepaymentChart = ({ value, target, data, title }) => {
     const chartData = {
       labels: data.map((_, index) => `Q${index + 1}`),
       datasets: [
         {
-          label: 'Completion Ratio',
+          label: 'Exit/Repayment Ratio',
           data: data,
           borderColor: brownShades[5],
           backgroundColor: brownShades[5] + '20',
@@ -2698,9 +3303,9 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
     const handleEyeClick = () => {
       openPopup(
         <div className="popup-content">
-          <h3>Program Completion - Support</h3>
+          <h3>Exit/Repayment - Successful Deals</h3>
           <div className="popup-description">
-            Program completion performance from your support programs portfolio
+            Exit and repayment performance from your successful deals portfolio
           </div>
           <div className="popup-chart">
             <Line data={chartData} options={options} />
@@ -2736,7 +3341,7 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
           </button>
         </div>
         <div className="chart-area-ultra-compact">
-          <Line data={chartData} options={options} id="program-completion" />
+          <Line data={chartData} options={options} id="exit-repayment" />
         </div>
         <div className="chart-summary-ultra-compact">
           <div className="current-value">Current: {value}%</div>
@@ -2753,194 +3358,75 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
     );
   };
 
-  // Get selected charts in the correct order
-  const selectedChartComponents = [];
-  
-  if (selectedCharts.portfolioValue) {
-    selectedChartComponents.push({
-      id: 'portfolioValue',
-      component: (
-        <BarChartWithTitle
-          key="portfolioValue"
-          data={generateBarData(
-            getTimeLabels(timeToSupportView, portfolioData.portfolioValue.financialYearStartMonth),
-            getTimeData(timeToSupportView, portfolioValueData),
-            'Support Portfolio Value (R millions)',
-            0
-          )}
-          title="Your Support Programs Portfolio Value"
-          chartTitle={`Program values from successful support deals (${timeToSupportView.toLowerCase()} view in R millions)`}
-          chartId="total-portfolio-value"
-        />
-      )
-    });
-  }
-
-  if (selectedCharts.activeSMEs) {
-    selectedChartComponents.push({
-      id: 'activeSMEs',
-      component: (
-        <ActiveSMEsPieChart
-          key="activeSMEs"
-          title="SMEs in Support Programs"
-        />
-      )
-    });
-  }
-
-  if (selectedCharts.bigScore) {
-    selectedChartComponents.push({
-      id: 'bigScore',
-      component: (
-        <BIGScoreInfographic 
-          key="bigScore"
-          value={portfolioData.averageBIGScore.averageScore} 
-          target={80} 
-          title="Avg. BIG Score - Support Programs"
-        />
-      )
-    });
-  }
-
-  if (selectedCharts.fundingReady) {
-    selectedChartComponents.push({
-      id: 'fundingReady',
-      component: (
-        <FundingReadyCircular 
-          key="fundingReady"
-          value={portfolioData.fundingReadyPercentage.fundingReadyPercentage} 
-          target={75} 
-          title='% Portfolio "Funding Ready"'
-        />
-      )
-    });
-  }
-
-  if (selectedCharts.fundingFacilitated) {
-    selectedChartComponents.push({
-      id: 'fundingFacilitated',
-      component: (
-        <SupportFacilitatedChart
-          key="fundingFacilitated"
-          title="Support Facilitated - Programs"
-        />
-      )
-    });
-  }
-
-  if (selectedCharts.timeToSupport) {
-    selectedChartComponents.push({
-      id: 'timeToSupport',
-      component: (
-        <TimeToSupportChart
-          key="timeToSupport"
-          value={portfolioData.timeToSupport.averageDays}
-          target={30}
-          data={getTimeData(timeToSupportView, timeToSupportData)}
-          title="Avg. Time-to-Support - Programs"
-        />
-      )
-    });
-  }
-
-  if (selectedCharts.followOnFunding) {
-    selectedChartComponents.push({
-      id: 'followOnFunding',
-      component: (
-        <EnhancedFollowOnSupportChart
-          key="followOnFunding"
-          value={27}
-          target={30}
-          data={[22, 24, 25, 27]}
-          title="Follow-on Support Rate - Programs"
-        />
-      )
-    });
-  }
-
-  if (selectedCharts.exitRepayment) {
-    selectedChartComponents.push({
-      id: 'exitRepayment',
-      component: (
-        <ProgramCompletionChart
-          key="exitRepayment"
-          value={12}
-          target={15}
-          data={[10, 11, 12, 12]}
-          title="Program Completion Ratio - Support"
-        />
-      )
-    });
-  }
-
-  // Split charts into top and bottom rows
-  const selectedCount = selectedChartComponents.length;
-  const topRowCharts = selectedChartComponents.slice(0, Math.min(4, selectedCount));
-  const bottomRowCharts = selectedChartComponents.slice(4);
-
-  const getGridClass = (count, prefix) => {
-    if (count === 0) return '';
-    if (count === 1) return `${prefix}-1`;
-    if (count === 2) return `${prefix}-2`;
-    if (count === 3) return `${prefix}-3`;
-    return `${prefix}-4`;
-  };
-
-  const topRowClass = getGridClass(topRowCharts.length, 'charts-top-row');
-  const bottomRowClass = getGridClass(bottomRowCharts.length, 'charts-bottom-row');
-
   return (
     <div className="portfolio-overview">
-      <div className="controls-row">
-        <div className="chart-selection-controls">
-          <div style={{ position: 'relative' }}>
-            <button 
-              className={`chart-selector-btn ${showChartSelector ? 'active' : ''}`}
-              onClick={() => setShowChartSelector(!showChartSelector)}
-              title="Select charts to display"
-            >
-              <FiGrid />
-              Select Charts ({Object.values(selectedCharts).filter(Boolean).length} selected)
-            </button>
-            {showChartSelector && <ChartSelectionPopup />}
-          </div>
+      <div className="time-view-controls">
+        <TimeViewSelector 
+          currentView={timeToFundView} 
+          onViewChange={setTimeToFundView}
+        />
+      </div>
+      
+      {/* TOP ROW - 4 charts */}
+      <div className="charts-grid-4x4">
+        <div className="top-row">
+          <BarChartWithTitle
+            data={generateBarData(
+              getTimeLabels(timeToFundView, portfolioData.portfolioValue.financialYearStartMonth),
+              getTimeData(timeToFundView, portfolioValueData),
+              'Portfolio Value (R millions)',
+              0
+            )}
+            title="Your Successful Deals Portfolio Value"
+            chartTitle={`Investment values from successful deals (${timeToFundView.toLowerCase()} view in R millions)`}
+            chartId="total-portfolio-value"
+          />
+
+          <ActiveSMEsPieChart
+            title="SMEs in Successful Deals"
+          />
+
+          <BIGScoreInfographic 
+            value={portfolioData.averageBIGScore.averageScore} 
+            target={80} 
+            title="Avg. BIG Score - Successful Deals"
+          />
+
+          <FundingReadyCircular 
+            value={portfolioData.fundingReadyPercentage.fundingReadyPercentage} 
+            target={75} 
+            title='% Portfolio "Funding Ready"'
+          />
         </div>
-        
-        <div className="time-view-controls">
-          <TimeViewSelector 
-            currentView={timeToSupportView} 
-            onViewChange={setTimeToSupportView}
+
+        {/* BOTTOM ROW - 4 charts */}
+        <div className="bottom-row">
+          <FundingFacilitatedChart
+            title="Funding Facilitated - Successful Deals"
+          />
+
+          <TimeToFundChart
+            value={portfolioData.timeToFund.averageDays}
+            target={30}
+            data={getTimeData(timeToFundView, timeToFundData)}
+            title="Avg. Time-to-Fund - Successful Deals"
+          />
+
+          <EnhancedFollowOnFundingChart
+            value={27}
+            target={30}
+            data={[22, 24, 25, 27]}
+            title="Follow-on Funding Rate - Successful Deals"
+          />
+
+          <ExitRepaymentChart
+            value={12}
+            target={15}
+            data={[10, 11, 12, 12]}
+            title="Exit / Repayment Ratio - Successful Deals"
           />
         </div>
       </div>
-      
-      {selectedCount === 0 ? (
-        <div style={{
-          textAlign: 'center',
-          padding: '60px 20px',
-          color: '#666',
-          fontSize: '16px',
-          background: '#f8f9fa',
-          borderRadius: '8px',
-          margin: '20px 10px'
-        }}>
-          <p>No charts selected. Please select charts to display using the "Select Charts" button above.</p>
-        </div>
-      ) : (
-        <div className="charts-grid-dynamic">
-          {topRowCharts.length > 0 && (
-            <div className={`charts-top-row ${topRowClass}`}>
-              {topRowCharts.map(chart => chart.component)}
-            </div>
-          )}
-          
-          {bottomRowCharts.length > 0 && (
-            <div className={`charts-bottom-row ${bottomRowClass}`}>
-              {bottomRowCharts.map(chart => chart.component)}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 };

@@ -1,7 +1,7 @@
 // tabs/PipelineFutureOpportunities.js
 import React, { useState, useEffect } from 'react';
 import { Bar, Doughnut } from 'react-chartjs-2';
-import { FiEye, FiGrid, FiCheck } from 'react-icons/fi';
+import { FiEye } from 'react-icons/fi';
 import { Loader } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -12,8 +12,8 @@ import {
   Title,
   Tooltip,
   Legend
-} from 'chart.js';
-import { collection, query, where, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
+} from 'chart.js'; 
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebaseConfig';
 
 // Register ChartJS components
@@ -45,150 +45,6 @@ const styles = `
 .loading-text {
   color: #7d5a50;
   font-size: 16px;
-}
-
-.controls-row {
-  margin-bottom: 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 10px;
-}
-
-.chart-selection-controls {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  position: relative;
-}
-
-.chart-selector-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: #f5f5f5;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #666;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.chart-selector-btn:hover {
-  background: #e0e0e0;
-}
-
-.chart-selector-btn.active {
-  background-color: #7d5a36;
-  color: white;
-}
-
-.chart-selector-popup {
-  position: absolute;
-  top: 40px;
-  left: 0;
-  background: white;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
-  z-index: 1000;
-  min-width: 300px;
-  border: 1px solid #e0e0e0;
-}
-
-.chart-selector-popup h4 {
-  margin: 0 0 15px 0;
-  color: #5e3f26;
-  font-size: 16px;
-  font-weight: 600;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #ede4d8;
-}
-
-.chart-selection-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.chart-selection-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: #f8f9fa;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.chart-selection-item:hover {
-  background: #e9ecef;
-}
-
-.chart-selection-item.selected {
-  background: #e8f5e8;
-  border: 1px solid #4CAF50;
-}
-
-.chart-selection-checkbox {
-  width: 18px;
-  height: 18px;
-  border: 2px solid #7d5a36;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.chart-selection-checkbox.checked {
-  background: #7d5a36;
-  color: white;
-}
-
-.chart-selection-label {
-  font-size: 13px;
-  color: #333;
-  font-weight: 500;
-}
-
-.chart-selection-actions {
-  display: flex;
-  gap: 10px;
-  justify-content: space-between;
-}
-
-.chart-selection-btn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  flex: 1;
-}
-
-.chart-selection-btn.primary {
-  background-color: #7d5a36;
-  color: white;
-}
-
-.chart-selection-btn.primary:hover {
-  background-color: #5e3f26;
-}
-
-.chart-selection-btn.secondary {
-  background-color: #f5f5f5;
-  color: #666;
-}
-
-.chart-selection-btn.secondary:hover {
-  background-color: #e0e0e0;
 }
 
 .charts-grid-4x4 {
@@ -562,25 +418,6 @@ const styles = `
   .chart-container {
     height: 380px;
   }
-  
-  .controls-row {
-    flex-direction: column;
-    gap: 15px;
-    align-items: stretch;
-  }
-  
-  .chart-selection-controls {
-    justify-content: space-between;
-  }
-  
-  .chart-selector-popup {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 90%;
-    max-width: 400px;
-  }
 }
 
 @media (max-width: 768px) {
@@ -620,10 +457,6 @@ const styles = `
   .funnel-value {
     font-size: 12px;
   }
-  
-  .chart-selection-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 @keyframes spin {
@@ -660,62 +493,9 @@ const staticPieOptions = {
   plugins: { legend: { position: 'bottom' } }
 };
 
-// Save user preferences to Firebase
-const saveUserChartPreferences = async (userId, preferences) => {
-  try {
-    const userPrefsRef = doc(db, "userPreferences", userId);
-    await setDoc(userPrefsRef, {
-      pipelineChartPreferences: preferences,
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
-    console.log('✅ Pipeline chart preferences saved to Firebase');
-  } catch (error) {
-    console.error('❌ Error saving pipeline chart preferences:', error);
-  }
-};
-
-// Load user preferences from Firebase
-const loadUserChartPreferences = async (userId) => {
-  try {
-    const userPrefsRef = doc(db, "userPreferences", userId);
-    const userPrefsSnap = await getDoc(userPrefsRef);
-    
-    if (userPrefsSnap.exists()) {
-      const preferences = userPrefsSnap.data().pipelineChartPreferences;
-      console.log('✅ Pipeline chart preferences loaded from Firebase:', preferences);
-      return preferences;
-    } else {
-      console.log('⚠️ No pipeline chart preferences found, using defaults');
-      return null;
-    }
-  } catch (error) {
-    console.error('❌ Error loading pipeline chart preferences:', error);
-    return null;
-  }
-};
-
-// Helper function to calculate days difference
-const calculateDaysDifference = (date1, date2) => {
-  const diffTime = Math.abs(date2 - date1);
-  return Math.floor(diffTime / (1000 * 60 * 60 * 24));
-};
-
-// Helper function to format currency
-const formatCurrency = (amount) => {
-  if (!amount || amount === "Not specified" || amount === "N/A") return "Not specified";
-  if (typeof amount === "string" && amount.includes('R')) return amount;
-  const numAmount = parseFloat(String(amount).replace(/[^0-9.]/g, '')) || 0;
-  if (numAmount >= 1000000) {
-    return `R${(numAmount / 1000000).toFixed(1)}m`;
-  } else if (numAmount >= 1000) {
-    return `R${(numAmount / 1000).toFixed(1)}k`;
-  }
-  return `R${numAmount}`;
-};
-
 const PipelineFutureOpportunities = ({ openPopup }) => {
   const [loading, setLoading] = useState(true);
-  const [activeDeals, setActiveDeals] = useState([]);
+  const [cohorts, setCohorts] = useState([]);
   const [pipelineData, setPipelineData] = useState({
     agingData: { labels: [], values: [] },
     conversionData: { stages: [], values: [] },
@@ -723,49 +503,7 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
     dataConfidence: { labels: [], values: [] },
     coInvestOpportunities: []
   });
-  
-  const [showChartSelector, setShowChartSelector] = useState(false);
-  const [selectedCharts, setSelectedCharts] = useState({
-    pipelineAging: true,
-    pipelineDistribution: true,
-    capitalDeployment: true,
-    dataConfidence: true,
-    activeOpportunities: true
-  });
 
-  // Load chart preferences on component mount
-  useEffect(() => {
-    const loadPreferences = async () => {
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        const savedPreferences = await loadUserChartPreferences(currentUser.uid);
-        if (savedPreferences) {
-          setSelectedCharts(savedPreferences.selectedCharts || selectedCharts);
-        }
-      }
-    };
-    
-    loadPreferences();
-  }, []);
-
-  // Save preferences when they change
-  useEffect(() => {
-    const savePreferences = async () => {
-      const currentUser = auth.currentUser;
-      if (currentUser && !loading) {
-        const preferences = {
-          selectedCharts,
-          updatedAt: new Date().toISOString()
-        };
-        await saveUserChartPreferences(currentUser.uid, preferences);
-      }
-    };
-
-    const timeoutId = setTimeout(savePreferences, 1000);
-    return () => clearTimeout(timeoutId);
-  }, [selectedCharts, loading]);
-
-  // Fetch investor data when component mounts
   useEffect(() => {
     fetchInvestorData();
   }, []);
@@ -776,185 +514,132 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
       const currentUser = auth.currentUser;
       
       if (!currentUser) {
-        console.log("❌ No authenticated user");
+        console.log("No authenticated user");
         setLoading(false);
         return;
       }
 
-      console.log('🔍 Fetching investor applications for pipeline opportunities...');
-
-      // Get all investor applications for this funder
+      // Fetch ALL investor applications (not just Deal Complete)
       const q = query(
         collection(db, "investorApplications"),
         where("funderId", "==", currentUser.uid)
       );
 
       const querySnapshot = await getDocs(q);
-      console.log('📊 Total applications found:', querySnapshot.docs.length);
+      console.log("Found all deals:", querySnapshot.docs.length);
 
-      const activeDealsData = [];
-      
-      // Process each application
-      for (const docSnap of querySnapshot.docs) {
-        const data = docSnap.data();
-        const pipelineStage = data.pipelineStage || data.stage;
-        
-        // Only include ACTIVE deals (not completed or declined)
-        if (pipelineStage !== "Deal Complete" && 
-            pipelineStage !== "Deal Declined" && 
-            pipelineStage !== "Declined" &&
-            pipelineStage !== "Closed") {
+      const cohortsData = await Promise.all(
+        querySnapshot.docs.map(async (docSnap) => {
+          const data = docSnap.data();
           
           try {
-            // Get SME profile data
             let profileData = {};
-            let smeName = data.smeName || "Unknown SME";
-            
+
             if (data.smeId) {
               const profileRef = doc(db, "universalProfiles", data.smeId);
               const profileSnap = await getDoc(profileRef);
-              
+
               if (profileSnap.exists()) {
                 profileData = profileSnap.data();
-                smeName = profileData.entityOverview?.tradingName ||
-                         profileData.entityOverview?.registeredName ||
-                         data.smeName ||
-                         "Unknown SME";
+              } else if (data.userId) {
+                const userProfileRef = doc(db, "universalProfiles", data.userId);
+                const userProfileSnap = await getDoc(userProfileRef);
+                if (userProfileSnap.exists()) {
+                  profileData = userProfileSnap.data();
+                }
               }
             }
 
-            // Calculate days in current stage
-            const updatedDate = data.updatedAt ? new Date(data.updatedAt) : new Date();
-            const daysInStage = calculateDaysDifference(updatedDate, new Date());
-            
-            // Get funding amount
-            let fundingAmount = 0;
-            if (data.fundingDetails?.amountApproved) {
-              fundingAmount = parseFloat(String(data.fundingDetails.amountApproved).replace(/[^0-9.]/g, '')) || 0;
-            } else if (profileData.useOfFunds?.amountRequested) {
-              fundingAmount = parseFloat(String(profileData.useOfFunds.amountRequested).replace(/[^0-9.]/g, '')) || 0;
-            }
+            const smeName =
+              profileData.entityOverview?.tradingName ||
+              profileData.entityOverview?.registeredName ||
+              data.companyName ||
+              data.smeName ||
+              "Unnamed Business";
 
-            // Get sector
-            const sector = profileData.entityOverview?.economicSectors?.[0] || 
-                          data.sector || 
-                          "Not specified";
-
-            // Get investment type
-            const investmentType = data.fundingDetails?.investmentType || 
-                                  profileData.useOfFunds?.fundingInstruments?.[0] || 
-                                  "equity";
-
-            // Calculate deal score
-            const dealScore = calculateDealScore(data, profileData, pipelineStage);
-
-            activeDealsData.push({
+            return {
               id: docSnap.id,
-              smeId: data.smeId,
+              smeId: data.smeId || data.userId,
               smeName,
-              fundingAmount,
-              investmentType: investmentType.toLowerCase(),
-              pipelineStage,
-              updatedAt: data.updatedAt,
+              dealAmount: data.fundingDetails?.amountApproved || data.fundingRequired || 0,
+              dealType: data.fundingDetails?.investmentType || data.investmentType || "equity",
+              completionDate: data.updatedAt || data.createdAt,
+              sector: profileData.entityOverview?.economicSectors?.[0] || data.sector || "Not specified",
+              location: profileData.entityOverview?.location || data.location || "Not specified",
+              pipelineStage: data.pipelineStage,
               createdAt: data.createdAt,
-              daysInStage,
-              sector,
-              profileData,
+              updatedAt: data.updatedAt,
               fundingDetails: data.fundingDetails || {},
-              dealScore,
-              matchPercentage: data.matchPercentage || 0
-            });
-
-            console.log(`✅ Added active deal: ${smeName} - ${pipelineStage} - R${fundingAmount}`);
-            
+              profileData: profileData,
+              status: data.status,
+              isComplete: data.pipelineStage === "Deal Complete"
+            };
           } catch (error) {
-            console.error('❌ Error processing application:', error);
-            continue;
+            console.error("Error fetching profile:", error);
+            return null;
           }
-        }
-      }
+        })
+      );
 
-      console.log(`📈 Active deals found: ${activeDealsData.length}`);
-      setActiveDeals(activeDealsData);
+      const validCohorts = cohortsData.filter(cohort => cohort !== null);
       
-      // Calculate pipeline metrics
-      if (activeDealsData.length > 0) {
-        calculatePipelineMetrics(activeDealsData);
-      } else {
-        // Set default empty data
-        setPipelineData({
-          agingData: {
-            labels: ['<1 month', '1-3 months', '3-6 months', '>6 months'],
-            values: [0, 0, 0, 0]
-          },
-          conversionData: {
-            stages: ['Application', 'Under Review', 'Due Diligence', 'Funding Approved', 'Termsheet'],
-            values: [0, 0, 0, 0, 0]
-          },
-          capitalRequirement: {
-            quarters: ['Next 3 months', '3-6 months', '6-9 months', '9-12 months'],
-            debt: [0, 0, 0, 0],
-            equity: [0, 0, 0, 0],
-            grants: [0, 0, 0, 0]
-          },
-          dataConfidence: {
-            labels: ['High Confidence', 'Medium Confidence', 'Low Confidence'],
-            values: [0, 0, 0]
-          },
-          coInvestOpportunities: []
-        });
-      }
+      // FILTER: Only show deals that are NOT complete (didn't reach the end)
+      const incompleteDeals = validCohorts.filter(cohort => 
+        !cohort.isComplete && 
+        cohort.pipelineStage !== "Deal Complete" &&
+        cohort.pipelineStage !== "declined" &&
+        cohort.pipelineStage !== "withdrawn"
+      );
+
+      console.log("Incomplete deals:", incompleteDeals.length);
+      console.log("Complete deals:", validCohorts.filter(cohort => cohort.isComplete).length);
+
+      setCohorts(incompleteDeals);
+
+      // Calculate pipeline metrics from INCOMPLETE deals only
+      calculatePipelineMetrics(incompleteDeals);
 
       setLoading(false);
     } catch (error) {
-      console.error('❌ Error fetching investor data:', error);
+      console.error("Error fetching investor data:", error);
       setLoading(false);
     }
   };
 
-  const calculateDealScore = (applicationData, profileData, pipelineStage) => {
-    let score = 50; // Base score
-    
-    // Data completeness points
-    if (profileData.entityOverview?.tradingName || profileData.entityOverview?.registeredName) score += 10;
-    if (profileData.entityOverview?.location) score += 5;
-    if (profileData.entityOverview?.economicSectors?.length > 0) score += 5;
-    if (profileData.useOfFunds?.amountRequested) score += 10;
-    if (applicationData.fundingDetails?.amountApproved) score += 15;
-    
-    // Pipeline stage points
-    const stagePoints = {
-      'Application Received': 0,
-      'Under Review': 10,
-      'Due Diligence': 20,
-      'Funding Approved': 30,
-      'Termsheet': 40
-    };
-    
-    score += stagePoints[pipelineStage] || 0;
-    
-    // Match percentage points
-    if (applicationData.matchPercentage) {
-      score += Math.round(applicationData.matchPercentage / 2);
+  const calculatePipelineMetrics = (cohorts) => {
+    if (cohorts.length === 0) {
+      // Set empty/placeholder data
+      setPipelineData({
+        agingData: {
+          labels: ['<1 month', '1-3 months', '3-6 months', '>6 months'],
+          values: [0, 0, 0, 0]
+        },
+        conversionData: {
+          stages: ['Application', 'Under Review', 'Due Diligence', 'Approved'],
+          values: [0, 0, 0, 0]
+        },
+        capitalRequirement: {
+          quarters: ['Q1', 'Q2', 'Q3', 'Q4'],
+          debt: [0, 0, 0, 0],
+          equity: [0, 0, 0, 0],
+          grants: [0, 0, 0, 0]
+        },
+        dataConfidence: {
+          labels: ['Verified', 'Partial', 'Unverified'],
+          values: [0, 0, 0]
+        },
+        coInvestOpportunities: []
+      });
+      return;
     }
-    
-    return Math.min(score, 100);
-  };
 
-  const calculatePipelineMetrics = (deals) => {
+    // 1. Calculate Pipeline Stage Aging for INCOMPLETE deals
     const now = new Date();
+    const agingBuckets = { '<1 month': 0, '1-3 months': 0, '3-6 months': 0, '>6 months': 0 };
     
-    // 1. Pipeline Stage Aging
-    const agingBuckets = { 
-      '<1 month': 0, 
-      '1-3 months': 0, 
-      '3-6 months': 0, 
-      '>6 months': 0 
-    };
-    
-    deals.forEach(deal => {
-      if (deal.updatedAt) {
-        const updatedDate = new Date(deal.updatedAt);
+    cohorts.forEach(cohort => {
+      if (cohort.updatedAt) {
+        const updatedDate = new Date(cohort.updatedAt);
         const monthsDiff = (now - updatedDate) / (1000 * 60 * 60 * 24 * 30);
         
         if (monthsDiff < 1) agingBuckets['<1 month']++;
@@ -964,17 +649,17 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
       }
     });
 
-    // 2. Pipeline Distribution by Stage
+    // 2. Calculate Current Pipeline Distribution (actual stages of incomplete deals)
     const stageCounts = {
-      'Application Received': 0,
+      'Application': 0,
       'Under Review': 0,
       'Due Diligence': 0,
       'Funding Approved': 0,
       'Termsheet': 0
     };
 
-    deals.forEach(deal => {
-      const stage = deal.pipelineStage;
+    cohorts.forEach(cohort => {
+      const stage = cohort.pipelineStage;
       if (stageCounts.hasOwnProperty(stage)) {
         stageCounts[stage]++;
       } else if (stage) {
@@ -982,80 +667,74 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
       }
     });
 
-    // Remove stages with 0 deals
-    const activeStages = Object.keys(stageCounts).filter(stage => stageCounts[stage] > 0);
-    const stageValues = activeStages.map(stage => stageCounts[stage]);
+    // Convert to funnel data (showing current pipeline distribution)
+    const currentStages = Object.keys(stageCounts).filter(stage => stageCounts[stage] > 0);
+    const currentValues = currentStages.map(stage => stageCounts[stage]);
 
-    // 3. Capital Requirement Forecast
+    // 3. Calculate Forecasted Capital Requirement by deal type for INCOMPLETE deals
     const capitalByType = {
       debt: [0, 0, 0, 0],
       equity: [0, 0, 0, 0],
       grants: [0, 0, 0, 0]
     };
 
-    deals.forEach(deal => {
-      const amount = deal.fundingAmount || 0;
+    cohorts.forEach(cohort => {
+      const amount = parseFloat(String(cohort.dealAmount).replace(/[^0-9.]/g, '')) || 0;
       const amountInMillions = amount / 1000000;
-      const dealType = deal.investmentType;
+      const dealType = cohort.dealType.toLowerCase();
       
-      // Distribute across quarters (simplified forecast)
+      // Distribute across quarters (simplified)
       const quarterAmount = amountInMillions / 4;
       
       if (dealType.includes('debt') || dealType.includes('loan')) {
         capitalByType.debt = capitalByType.debt.map(q => q + quarterAmount);
-      } else if (dealType.includes('grant') || dealType.includes('funding')) {
-        capitalByType.grants = capitalByType.grants.map(q => q + quarterAmount);
-      } else {
-        // Default to equity
+      } else if (dealType.includes('equity')) {
         capitalByType.equity = capitalByType.equity.map(q => q + quarterAmount);
+      } else if (dealType.includes('grant')) {
+        capitalByType.grants = capitalByType.grants.map(q => q + quarterAmount);
       }
     });
 
-    // 4. Data Confidence Meter
-    let highConfidence = 0, mediumConfidence = 0, lowConfidence = 0;
+    // 4. Calculate Data Confidence Meter for INCOMPLETE deals
+    let verified = 0, partial = 0, unverified = 0;
     
-    deals.forEach(deal => {
-      const hasCompleteProfile = deal.profileData && 
-        (deal.profileData.entityOverview?.tradingName || deal.profileData.entityOverview?.registeredName) &&
-        deal.profileData.entityOverview?.location &&
-        deal.profileData.entityOverview?.economicSectors?.length > 0;
+    cohorts.forEach(cohort => {
+      const hasCompleteProfile = cohort.profileData && 
+        cohort.profileData.entityOverview?.tradingName &&
+        cohort.profileData.entityOverview?.location;
       
-      const hasFundingDetails = deal.fundingDetails && 
-        deal.fundingDetails.amountApproved;
+      const hasFundingDetails = cohort.fundingDetails && 
+        cohort.fundingDetails.amountApproved;
       
-      const hasFinancials = deal.profileData?.financialOverview?.annualRevenue;
-      
-      if (hasCompleteProfile && hasFundingDetails && hasFinancials) {
-        highConfidence++;
-      } else if ((hasCompleteProfile && hasFundingDetails) || (hasCompleteProfile && hasFinancials)) {
-        mediumConfidence++;
-      } else {
-        lowConfidence++;
-      }
+      if (hasCompleteProfile && hasFundingDetails) verified++;
+      else if (hasCompleteProfile || hasFundingDetails) partial++;
+      else unverified++;
     });
 
-    const totalDeals = highConfidence + mediumConfidence + lowConfidence;
+    const total = verified + partial + unverified;
     const dataConfidence = {
-      labels: ['High Confidence', 'Medium Confidence', 'Low Confidence'],
-      values: totalDeals > 0 ? [
-        Math.round((highConfidence / totalDeals) * 100),
-        Math.round((mediumConfidence / totalDeals) * 100),
-        Math.round((lowConfidence / totalDeals) * 100)
+      labels: ['Verified', 'Partial', 'Unverified'],
+      values: total > 0 ? [
+        Math.round((verified / total) * 100),
+        Math.round((partial / total) * 100),
+        Math.round((unverified / total) * 100)
       ] : [0, 0, 0]
     };
 
-    // 5. Active Pipeline Opportunities (top deals by deal score)
-    const activeOpportunities = [...deals]
-      .sort((a, b) => b.dealScore - a.dealScore)
+    // 5. Prepare Active Pipeline Opportunities (incomplete deals sorted by deal amount)
+    const activeOpportunities = [...cohorts]
+      .sort((a, b) => {
+        const amountA = parseFloat(String(a.dealAmount).replace(/[^0-9.]/g, '')) || 0;
+        const amountB = parseFloat(String(b.dealAmount).replace(/[^0-9.]/g, '')) || 0;
+        return amountB - amountA;
+      })
       .slice(0, 5)
-      .map(deal => ({
-        smeName: deal.smeName,
-        stage: deal.pipelineStage,
-        ask: formatCurrency(deal.fundingAmount),
-        score: deal.dealScore,
-        daysInStage: `${deal.daysInStage} days`,
-        sector: deal.sector,
-        matchPercentage: deal.matchPercentage
+      .map(cohort => ({
+        smeName: cohort.smeName,
+        stage: cohort.pipelineStage || 'Application',
+        ask: formatCurrency(cohort.dealAmount),
+        score: calculateDealScore(cohort), // Calculate based on actual data
+        daysInStage: calculateDaysInStage(cohort)
       }));
 
     setPipelineData({
@@ -1064,12 +743,12 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
         values: Object.values(agingBuckets)
       },
       conversionData: {
-        stages: activeStages,
-        values: stageValues
+        stages: currentStages,
+        values: currentValues
       },
       capitalRequirement: {
-        quarters: ['Next 3 months', '3-6 months', '6-9 months', '9-12 months'],
-        debt: capitalByType.debt.map(v => Math.round(v * 10) / 10),
+        quarters: ['Q1', 'Q2', 'Q3', 'Q4'],
+        debt: capitalByType.debt.map(v => Math.round(v * 10) / 10), // Keep one decimal
         equity: capitalByType.equity.map(v => Math.round(v * 10) / 10),
         grants: capitalByType.grants.map(v => Math.round(v * 10) / 10)
       },
@@ -1078,161 +757,48 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
     });
   };
 
-  // Chart Selection Component
-  const ChartSelectionPopup = () => {
-    const chartOptions = [
-      { id: 'pipelineAging', label: 'Pipeline Stage Aging' },
-      { id: 'pipelineDistribution', label: 'Pipeline Distribution' },
-      { id: 'capitalDeployment', label: 'Capital Deployment' },
-      { id: 'dataConfidence', label: 'Data Confidence Meter' },
-      { id: 'activeOpportunities', label: 'Active Opportunities' }
-    ];
-
-    const handleToggleChart = (chartId) => {
-      setSelectedCharts(prev => ({
-        ...prev,
-        [chartId]: !prev[chartId]
-      }));
+  const calculateDealScore = (cohort) => {
+    // Calculate a score based on data completeness and deal stage
+    let score = 50; // Base score
+    
+    // Add points for data completeness
+    if (cohort.profileData?.entityOverview?.tradingName) score += 10;
+    if (cohort.fundingDetails?.amountApproved) score += 15;
+    if (cohort.profileData?.entityOverview?.location) score += 10;
+    if (cohort.profileData?.entityOverview?.economicSectors?.length > 0) score += 10;
+    
+    // Add points for pipeline stage (later stages get higher scores)
+    const stageWeights = {
+      'Application': 0,
+      'Under Review': 5,
+      'Due Diligence': 10,
+      'Funding Approved': 15,
+      'Termsheet': 20
     };
+    
+    score += stageWeights[cohort.pipelineStage] || 0;
+    
+    return Math.min(score, 100);
+  };
 
-    const handleSelectAll = () => {
-      const allSelected = {};
-      chartOptions.forEach(option => {
-        allSelected[option.id] = true;
-      });
-      setSelectedCharts(allSelected);
-    };
+  const calculateDaysInStage = (cohort) => {
+    if (!cohort.updatedAt) return 'Unknown';
+    const updatedDate = new Date(cohort.updatedAt);
+    const now = new Date();
+    const daysDiff = Math.floor((now - updatedDate) / (1000 * 60 * 60 * 24));
+    return `${daysDiff} days`;
+  };
 
-    const handleDeselectAll = () => {
-      const noneSelected = {};
-      chartOptions.forEach(option => {
-        noneSelected[option.id] = false;
-      });
-      setSelectedCharts(noneSelected);
-    };
-
-    const handleSaveSelection = () => {
-      setShowChartSelector(false);
-    };
-
-    const selectedCount = Object.values(selectedCharts).filter(Boolean).length;
-
-    return (
-      <div style={{
-        position: 'absolute',
-        top: '40px',
-        left: '0',
-        background: 'white',
-        borderRadius: '12px',
-        padding: '20px',
-        boxShadow: '0 8px 30px rgba(0, 0, 0, 0.2)',
-        zIndex: 1000,
-        minWidth: '300px',
-        border: '1px solid #e0e0e0'
-      }}>
-        <h4 style={{
-          margin: '0 0 15px 0',
-          color: '#5e3f26',
-          fontSize: '16px',
-          fontWeight: 600,
-          paddingBottom: '10px',
-          borderBottom: '1px solid #ede4d8'
-        }}>
-          Select Charts to Display ({selectedCount} selected)
-        </h4>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: '12px',
-          marginBottom: '20px'
-        }}>
-          {chartOptions.map(option => (
-            <div
-              key={option.id}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '8px 12px',
-                background: selectedCharts[option.id] ? '#e8f5e8' : '#f8f9fa',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                border: selectedCharts[option.id] ? '1px solid #4CAF50' : 'none'
-              }}
-              onClick={() => handleToggleChart(option.id)}
-            >
-              <div style={{
-                width: '18px',
-                height: '18px',
-                border: '2px solid #7d5a36',
-                borderRadius: '4px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: selectedCharts[option.id] ? '#7d5a36' : 'transparent',
-                color: selectedCharts[option.id] ? 'white' : 'transparent'
-              }}>
-                {selectedCharts[option.id] && <FiCheck size={12} />}
-              </div>
-              <span style={{
-                fontSize: '13px',
-                color: '#333',
-                fontWeight: 500
-              }}>{option.label}</span>
-            </div>
-          ))}
-        </div>
-        <div style={{
-          display: 'flex',
-          gap: '10px',
-          justifyContent: 'space-between'
-        }}>
-          <button style={{
-            padding: '8px 16px',
-            border: 'none',
-            borderRadius: '6px',
-            fontSize: '13px',
-            fontWeight: 500,
-            cursor: 'pointer',
-            transition: 'all 0.2s',
-            flex: 1,
-            backgroundColor: '#f5f5f5',
-            color: '#666'
-          }} onClick={handleDeselectAll}>
-            Deselect All
-          </button>
-          <button style={{
-            padding: '8px 16px',
-            border: 'none',
-            borderRadius: '6px',
-            fontSize: '13px',
-            fontWeight: 500,
-            cursor: 'pointer',
-            transition: 'all 0.2s',
-            flex: 1,
-            backgroundColor: '#f5f5f5',
-            color: '#666'
-          }} onClick={handleSelectAll}>
-            Select All
-          </button>
-          <button style={{
-            padding: '8px 16px',
-            border: 'none',
-            borderRadius: '6px',
-            fontSize: '13px',
-            fontWeight: 500,
-            cursor: 'pointer',
-            transition: 'all 0.2s',
-            flex: 1,
-            backgroundColor: '#7d5a36',
-            color: 'white'
-          }} onClick={handleSaveSelection}>
-            Apply
-          </button>
-        </div>
-      </div>
-    );
+  const formatCurrency = (amount) => {
+    if (!amount || amount === "Not specified") return "Not specified";
+    if (typeof amount === "string" && amount.includes('R')) return amount;
+    const numAmount = parseFloat(String(amount).replace(/[^0-9.]/g, '')) || 0;
+    if (numAmount >= 1000000) {
+      return `R${(numAmount / 1000000).toFixed(1)}m`;
+    } else if (numAmount >= 1000) {
+      return `R${(numAmount / 1000).toFixed(1)}k`;
+    }
+    return `R${numAmount}`;
   };
 
   // Data generation functions
@@ -1266,48 +832,22 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
   });
 
   // Chart Components
-  const BarChartWithTitle = ({ data, title, chartTitle, chartId, description }) => {
+  const BarChartWithTitle = ({ data, title, chartTitle, chartId }) => {
     const handleEyeClick = () => {
       openPopup(
-        <div style={{ width: '100%' }}>
-          <h3 style={{
-            margin: '0 0 20px 0',
-            color: '#5e3f26',
-            fontSize: '24px',
-            textAlign: 'center',
-            borderBottom: '2px solid #ede4d8',
-            paddingBottom: '15px'
-          }}>{title}</h3>
-          <div style={{
-            fontSize: '14px',
-            color: '#666',
-            marginBottom: '20px',
-            textAlign: 'center',
-            lineHeight: '1.5',
-            fontStyle: 'italic',
-            background: '#f8f9fa',
-            padding: '12px 15px',
-            borderRadius: '6px',
-            borderLeft: '3px solid #7d5a36'
-          }}>
-            {description}
+        <div className="popup-content">
+          <h3>{title}</h3>
+          <div className="popup-description">
+            Detailed breakdown of {title.toLowerCase()}
           </div>
-          <div style={{ height: '300px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="popup-chart">
             <Bar data={data} options={staticBarOptions} />
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '20px' }}>
+          <div className="popup-details">
             {data.labels.map((label, index) => (
-              <div key={label} style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '12px',
-                background: '#f8f9fa',
-                borderRadius: '8px',
-                borderLeft: '4px solid #7d5a36'
-              }}>
-                <span style={{ fontWeight: 600, color: '#5e3f26', fontSize: '14px' }}>{label}:</span>
-                <span style={{ fontWeight: 600, color: '#7d5a36', fontSize: '14px' }}>{data.datasets[0].data[index]} deals</span>
+              <div key={label} className="detail-item">
+                <span className="detail-label">{label}:</span>
+                <span className="detail-value">{data.datasets[0].data[index]}</span>
               </div>
             ))}
           </div>
@@ -1316,80 +856,79 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
     };
 
     return (
-      <div style={{
-        background: 'white',
-        borderRadius: '8px',
-        padding: '20px',
-        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)',
-        display: 'flex',
-        flexDirection: 'column',
-        height: '420px',
-        position: 'relative',
-        overflow: 'hidden'
-      }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '10px'
-        }}>
-          <h3 style={{
-            margin: '0 0 10px 0',
-            color: '#5e3f26',
-            fontSize: '16px',
-            fontWeight: 600,
-            paddingBottom: '10px',
-            borderBottom: '1px solid #ede4d8',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            lineHeight: 1.3,
-            minHeight: '40px',
-            flex: 1
-          }}>{title}</h3>
-          <button style={{
-            background: 'none',
-            border: 'none',
-            color: '#7d5a36',
-            cursor: 'pointer',
-            padding: '6px',
-            borderRadius: '4px',
-            width: '28px',
-            height: '28px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }} onClick={handleEyeClick} title="View breakdown">
+      <div className="chart-container">
+        <div className="chart-header">
+          <h3 className="chart-title">{title}</h3>
+          <button className="breakdown-icon-btn" onClick={handleEyeClick} title="View breakdown">
             <FiEye />
           </button>
         </div>
-        <div style={{
-          fontSize: '14px',
-          fontWeight: 600,
-          color: '#7d5a36',
-          marginBottom: '15px',
-          textAlign: 'center',
-          padding: '8px 12px',
-          background: '#f8f9fa',
-          borderRadius: '4px',
-          borderLeft: '3px solid #7d5a36'
-        }}>{chartTitle}</div>
-        <div style={{ flexGrow: 1, minHeight: '240px', position: 'relative', marginBottom: '10px' }}>
-          {data.labels.length > 0 && data.datasets[0].data.some(value => value > 0) ? (
-            <Bar data={data} options={staticBarOptions} />
-          ) : (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '100%',
-              color: '#7d5a50',
-              fontSize: '14px',
-              textAlign: 'center'
-            }}>
-              No data available
-            </div>
-          )}
+        <div className="chart-title-fixed">{chartTitle}</div>
+        <div className="chart-area">
+          <Bar data={data} options={staticBarOptions} />
+        </div>
+      </div>
+    );
+  };
+
+  // Pie Chart with Numbers ALWAYS visible
+  const PieChartWithNumbers = ({ title, labels, data, chartId }) => {
+    const chartData = generatePieData(labels, data);
+
+    const plugins = [{
+      id: 'centerText',
+      afterDraw: (chart) => {
+        const ctx = chart.ctx;
+        const { chartArea: { left, right, top, bottom, width, height } } = chart;
+        
+        chart.data.datasets.forEach((dataset, i) => {
+          chart.getDatasetMeta(i).data.forEach((arc, index) => {
+            const { x, y } = arc.tooltipPosition();
+            
+            ctx.save();
+            ctx.font = 'bold 14px Arial';
+            ctx.fillStyle = '#fff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(dataset.data[index], x, y);
+            ctx.restore();
+          });
+        });
+      }
+    }];
+
+    const handleEyeClick = () => {
+      openPopup(
+        <div className="popup-content">
+          <h3>{title}</h3>
+          <div className="popup-description">
+            Detailed percentage breakdown of {title.toLowerCase()}
+          </div>
+          <div className="popup-chart">
+            <Doughnut data={chartData} options={staticPieOptions} plugins={plugins} />
+          </div>
+          <div className="popup-details">
+            {labels.map((label, index) => (
+              <div key={label} className="detail-item">
+                <span className="detail-label">{label}:</span>
+                <span className="detail-value">{data[index]}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    };
+
+    return (
+      <div className="chart-container">
+        <div className="chart-header">
+          <h3 className="chart-title">{title}</h3>
+          <button className="breakdown-icon-btn" onClick={handleEyeClick} title="View breakdown">
+            <FiEye />
+          </button>
+        </div>
+        <div className="chart-area">
+          <Doughnut data={chartData} options={staticPieOptions} plugins={plugins} />
         </div>
       </div>
     );
@@ -1401,69 +940,37 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
     
     const handleEyeClick = () => {
       openPopup(
-        <div style={{ width: '100%' }}>
-          <h3 style={{
-            margin: '0 0 20px 0',
-            color: '#5e3f26',
-            fontSize: '24px',
-            textAlign: 'center',
-            borderBottom: '2px solid #ede4d8',
-            paddingBottom: '15px'
-          }}>Current Pipeline Distribution</h3>
-          <div style={{
-            fontSize: '14px',
-            color: '#666',
-            marginBottom: '20px',
-            textAlign: 'center',
-            lineHeight: '1.5',
-            fontStyle: 'italic',
-            background: '#f8f9fa',
-            padding: '12px 15px',
-            borderRadius: '6px',
-            borderLeft: '3px solid #7d5a36'
-          }}>
+        <div className="popup-content">
+          <h3>Current Pipeline Distribution</h3>
+          <div className="popup-description">
             Active deals distributed across pipeline stages
           </div>
-          <div style={{ height: '300px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px', width: '100%', padding: '20px' }}>
+          <div className="popup-chart">
+            <div className="funnel-container-popup">
               {stages.map((stage, index) => {
                 const width = (values[index] / maxValue) * 80 + 20;
                 return (
-                  <div key={stage} style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+                  <div key={stage} className="funnel-stage-popup">
                     <div 
+                      className="funnel-bar-popup"
                       style={{
                         width: `${width}%`,
-                        height: '50px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '0 20px',
-                        borderRadius: '6px',
-                        minWidth: '200px',
                         backgroundColor: colors[index] || brownShades[index % brownShades.length]
                       }}
                     >
-                      <span style={{ color: 'white', fontWeight: 600, fontSize: '14px', textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}>{stage}</span>
-                      <span style={{ color: 'white', fontWeight: 700, fontSize: '16px', textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}>{values[index]} deals</span>
+                      <span className="funnel-label-popup">{stage}</span>
+                      <span className="funnel-value-popup">{values[index]} deals</span>
                     </div>
                   </div>
                 );
               })}
             </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '20px' }}>
+          <div className="popup-details">
             {stages.map((stage, index) => (
-              <div key={stage} style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '12px',
-                background: '#f8f9fa',
-                borderRadius: '8px',
-                borderLeft: '4px solid #7d5a36'
-              }}>
-                <span style={{ fontWeight: 600, color: '#5e3f26', fontSize: '14px' }}>{stage}:</span>
-                <span style={{ fontWeight: 600, color: '#7d5a36', fontSize: '14px' }}>{values[index]} active deals</span>
+              <div key={stage} className="detail-item">
+                <span className="detail-label">{stage}:</span>
+                <span className="detail-value">{values[index]} active deals</span>
               </div>
             ))}
           </div>
@@ -1472,92 +979,33 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
     };
 
     return (
-      <div style={{
-        background: 'white',
-        borderRadius: '8px',
-        padding: '20px',
-        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)',
-        display: 'flex',
-        flexDirection: 'column',
-        height: '420px',
-        position: 'relative',
-        overflow: 'hidden'
-      }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '10px'
-        }}>
-          <h3 style={{
-            margin: '0 0 10px 0',
-            color: '#5e3f26',
-            fontSize: '16px',
-            fontWeight: 600,
-            paddingBottom: '10px',
-            borderBottom: '1px solid #ede4d8',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            lineHeight: 1.3,
-            minHeight: '40px',
-            flex: 1
-          }}>{title}</h3>
-          <button style={{
-            background: 'none',
-            border: 'none',
-            color: '#7d5a36',
-            cursor: 'pointer',
-            padding: '6px',
-            borderRadius: '4px',
-            width: '28px',
-            height: '28px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }} onClick={handleEyeClick} title="View breakdown">
+      <div className="chart-container">
+        <div className="chart-header">
+          <h3 className="chart-title">{title}</h3>
+          <button className="breakdown-icon-btn" onClick={handleEyeClick} title="View breakdown">
             <FiEye />
           </button>
         </div>
-        <div style={{ flexGrow: 1, minHeight: '240px', position: 'relative', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          {stages.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', height: '100%', justifyContent: 'center', width: '100%' }}>
-              {stages.map((stage, index) => {
-                const width = (values[index] / maxValue) * 80 + 20;
-                return (
-                  <div key={stage} style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
-                    <div 
-                      style={{
-                        width: `${width}%`,
-                        height: '40px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '0 15px',
-                        borderRadius: '4px',
-                        backgroundColor: colors[index] || brownShades[index % brownShades.length]
-                      }}
-                    >
-                      <span style={{ color: 'white', fontWeight: 600, fontSize: '12px', textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}>{stage}</span>
-                      <span style={{ color: 'white', fontWeight: 700, fontSize: '14px', textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}>{values[index]}</span>
-                    </div>
+        <div className="chart-area">
+          <div className="funnel-container">
+            {stages.map((stage, index) => {
+              const width = (values[index] / maxValue) * 80 + 20;
+              return (
+                <div key={stage} className="funnel-stage">
+                  <div 
+                    className="funnel-bar"
+                    style={{
+                      width: `${width}%`,
+                      backgroundColor: colors[index] || brownShades[index % brownShades.length]
+                    }}
+                  >
+                    <span className="funnel-label">{stage}</span>
+                    <span className="funnel-value">{values[index]}</span>
                   </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '100%',
-              color: '#7d5a50',
-              fontSize: '14px',
-              textAlign: 'center'
-            }}>
-              No active pipeline data
-            </div>
-          )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     );
@@ -1565,304 +1013,144 @@ const PipelineFutureOpportunities = ({ openPopup }) => {
 
   if (loading) {
     return (
-      <div style={{ width: '100%' }}>
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '400px',
-          gap: '16px'
-        }}>
+      <div className="pipeline-opportunities">
+        <div className="loading-container">
           <Loader size={48} style={{ color: "#a67c52", animation: "spin 1s linear infinite" }} />
-          <p style={{ color: '#7d5a50', fontSize: '16px' }}>Loading pipeline data...</p>
+          <p className="loading-text">Loading pipeline data...</p>
         </div>
       </div>
     );
   }
 
-  // Get selected charts
-  const selectedChartComponents = [];
-  
-  // Add Pipeline Stage Aging chart if selected
-  if (selectedCharts.pipelineAging) {
-    selectedChartComponents.push({
-      id: 'pipelineAging',
-      component: (
-        <BarChartWithTitle
-          key="pipelineAging"
-          data={generateBarData(
-            pipelineData.agingData.labels,
-            pipelineData.agingData.values,
-            '# of Deals',
-            0
-          )}
-          title="Pipeline Stage Aging"
-          chartTitle="Active deals by time in current stage"
-          chartId="pipeline-aging"
-          description="Shows how long deals have been stuck in their current pipeline stage"
-        />
-      )
-    });
-  }
+  return (
+    <div className="pipeline-opportunities">
+      {/* TOP ROW - 4 charts */}
+      <div className="charts-grid-4x4">
+        <div className="top-row">
+          <BarChartWithTitle
+            data={generateBarData(
+              pipelineData.agingData.labels,
+              pipelineData.agingData.values,
+              '# of Deals',
+              0
+            )}
+            title="Pipeline Stage Aging"
+            chartTitle="Active deals by time in current stage"
+            chartId="pipeline-aging"
+          />
 
-  // Add Pipeline Distribution chart if selected
-  if (selectedCharts.pipelineDistribution) {
-    selectedChartComponents.push({
-      id: 'pipelineDistribution',
-      component: (
-        <FunnelChart 
-          key="pipelineDistribution"
-          stages={pipelineData.conversionData.stages}
-          values={pipelineData.conversionData.values}
-          colors={[brownShades[0], brownShades[1], brownShades[2], brownShades[3], brownShades[4]]}
-          title="Current Pipeline Distribution"
-        />
-      )
-    });
-  }
+          <FunnelChart 
+            stages={pipelineData.conversionData.stages}
+            values={pipelineData.conversionData.values}
+            colors={[brownShades[0], brownShades[1], brownShades[2], brownShades[3]]}
+            title="Current Pipeline Distribution"
+          />
 
-  // Add Capital Deployment chart if selected
-  if (selectedCharts.capitalDeployment) {
-    selectedChartComponents.push({
-      id: 'capitalDeployment',
-      component: (
-        <BarChartWithTitle
-          key="capitalDeployment"
-          data={generateStackedBarData(
-            pipelineData.capitalRequirement.quarters,
-            [
-              { label: 'Debt', values: pipelineData.capitalRequirement.debt },
-              { label: 'Equity', values: pipelineData.capitalRequirement.equity },
-              { label: 'Grants', values: pipelineData.capitalRequirement.grants }
-            ]
-          )}
-          title="Forecasted Capital Deployment"
-          chartTitle="Capital required for active pipeline (R millions)"
-          chartId="capital-requirement"
-          description="Estimated capital needed for active deals over the next 12 months"
-        />
-      )
-    });
-  }
+          <BarChartWithTitle
+            data={generateStackedBarData(
+              pipelineData.capitalRequirement.quarters,
+              [
+                { label: 'Debt', values: pipelineData.capitalRequirement.debt },
+                { label: 'Equity', values: pipelineData.capitalRequirement.equity },
+                { label: 'Grants', values: pipelineData.capitalRequirement.grants }
+              ]
+            )}
+            title="Forecasted Capital Deployment"
+            chartTitle="Capital required for active pipeline (R millions)"
+            chartId="capital-requirement"
+          />
 
-  // Add Active Opportunities table if selected
-  if (selectedCharts.activeOpportunities) {
-    selectedChartComponents.push({
-      id: 'activeOpportunities',
-      component: (
-        <div key="activeOpportunities" style={{
-          background: 'white',
-          borderRadius: '8px',
-          padding: '20px',
-          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)',
-          display: 'flex',
-          flexDirection: 'column',
-          height: '450px',
-          gridColumn: '1 / -1',
-          position: 'relative',
-          overflow: 'hidden'
-        }}>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '10px'
-          }}>
-            <h3 style={{
-              margin: '0 0 10px 0',
-              color: '#5e3f26',
-              fontSize: '16px',
-              fontWeight: 600,
-              paddingBottom: '10px',
-              borderBottom: '1px solid #ede4d8',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              lineHeight: 1.3,
-              minHeight: '40px',
-              flex: 1
-            }}>Active Pipeline Opportunities</h3>
-            <button 
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#7d5a36',
-                cursor: 'pointer',
-                padding: '6px',
-                borderRadius: '4px',
-                width: '28px',
-                height: '28px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-              onClick={() => openPopup(
-                <div style={{ width: '100%' }}>
-                  <h3 style={{
-                    margin: '0 0 20px 0',
-                    color: '#5e3f26',
-                    fontSize: '24px',
-                    textAlign: 'center',
-                    borderBottom: '2px solid #ede4d8',
-                    paddingBottom: '15px'
-                  }}>Active Pipeline Opportunities</h3>
-                  <div style={{
-                    fontSize: '14px',
-                    color: '#666',
-                    marginBottom: '20px',
-                    textAlign: 'center',
-                    lineHeight: '1.5',
-                    fontStyle: 'italic',
-                    background: '#f8f9fa',
-                    padding: '12px 15px',
-                    borderRadius: '6px',
-                    borderLeft: '3px solid #7d5a36'
-                  }}>
-                    Your current active deals that haven't reached completion
-                  </div>
-                  <div style={{ overflowX: 'auto', marginTop: '15px' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-                      <thead>
-                        <tr>
-                          <th style={{ backgroundColor: '#f5f5f5', color: '#5e3f26', fontWeight: 600, padding: '12px', textAlign: 'left', borderBottom: '2px solid #ede4d8' }}>SME</th>
-                          <th style={{ backgroundColor: '#f5f5f5', color: '#5e3f26', fontWeight: 600, padding: '12px', textAlign: 'left', borderBottom: '2px solid #ede4d8' }}>Current Stage</th>
-                          <th style={{ backgroundColor: '#f5f5f5', color: '#5e3f26', fontWeight: 600, padding: '12px', textAlign: 'left', borderBottom: '2px solid #ede4d8' }}>Investment Ask</th>
-                          <th style={{ backgroundColor: '#f5f5f5', color: '#5e3f26', fontWeight: 600, padding: '12px', textAlign: 'left', borderBottom: '2px solid #ede4d8' }}>Deal Score</th>
-                          <th style={{ backgroundColor: '#f5f5f5', color: '#5e3f26', fontWeight: 600, padding: '12px', textAlign: 'left', borderBottom: '2px solid #ede4d8' }}>Time in Stage</th>
-                          <th style={{ backgroundColor: '#f5f5f5', color: '#5e3f26', fontWeight: 600, padding: '12px', textAlign: 'left', borderBottom: '2px solid #ede4d8' }}>Sector</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {pipelineData.coInvestOpportunities.map((opp, idx) => (
-                          <tr key={idx}>
-                            <td style={{ padding: '12px', borderBottom: '1px solid #f0f0f0' }}>{opp.smeName}</td>
-                            <td style={{ padding: '12px', borderBottom: '1px solid #f0f0f0' }}>{opp.stage}</td>
-                            <td style={{ padding: '12px', borderBottom: '1px solid #f0f0f0' }}>{opp.ask}</td>
-                            <td style={{ padding: '12px', borderBottom: '1px solid #f0f0f0' }}>{opp.score}</td>
-                            <td style={{ padding: '12px', borderBottom: '1px solid #f0f0f0' }}>{opp.daysInStage}</td>
-                            <td style={{ padding: '12px', borderBottom: '1px solid #f0f0f0' }}>{opp.sector}</td>
+          <PieChartWithNumbers
+            title="Data Confidence Meter"
+            labels={pipelineData.dataConfidence.labels}
+            data={pipelineData.dataConfidence.values}
+            chartId="data-confidence"
+          />
+        </div>
+
+        {/* BOTTOM - Full width table */}
+        <div className="bottom-full">
+          <div className="chart-container full-width">
+            <div className="chart-header">
+              <h3 className="chart-title">Active Pipeline Opportunities</h3>
+              <button 
+                className="breakdown-icon-btn"
+                onClick={() => openPopup(
+                  <div className="popup-content">
+                    <h3>Active Pipeline Opportunities</h3>
+                    <div className="popup-description">
+                      Your current active deals that haven't reached completion
+                    </div>
+                    <div className="table-container-popup">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>SME</th>
+                            <th>Current Stage</th>
+                            <th>Investment Ask</th>
+                            <th>Deal Score</th>
+                            <th>Time in Stage</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {pipelineData.coInvestOpportunities.map((opp, idx) => (
+                            <tr key={idx}>
+                              <td>{opp.smeName}</td>
+                              <td>{opp.stage}</td>
+                              <td>{opp.ask}</td>
+                              <td>{opp.score}</td>
+                              <td>{opp.daysInStage}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
+                )}
+                title="View details"
+              >
+                <FiEye />
+              </button>
+            </div>
+            <div className="table-container">
+              {pipelineData.coInvestOpportunities.length > 0 ? (
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>SME</th>
+                      <th>Current Stage</th>
+                      <th>Investment Ask</th>
+                      <th>Deal Score</th>
+                      <th>Time in Stage</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pipelineData.coInvestOpportunities.map((opp, idx) => (
+                      <tr key={idx}>
+                        <td>{opp.smeName}</td>
+                        <td>{opp.stage}</td>
+                        <td>{opp.ask}</td>
+                        <td>{opp.score}</td>
+                        <td>{opp.daysInStage}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  height: '100%',
+                  color: '#7d5a50',
+                  fontSize: '14px'
+                }}>
+                  No active pipeline opportunities found
                 </div>
               )}
-              title="View details"
-            >
-              <FiEye />
-            </button>
-          </div>
-          <div style={{ overflowX: 'auto', marginTop: '10px', height: '300px' }}>
-            {pipelineData.coInvestOpportunities.length > 0 ? (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-                <thead>
-                  <tr>
-                    <th style={{ backgroundColor: '#f5f5f5', color: '#5e3f26', fontWeight: 600, padding: '12px', textAlign: 'left', borderBottom: '2px solid #ede4d8' }}>SME</th>
-                    <th style={{ backgroundColor: '#f5f5f5', color: '#5e3f26', fontWeight: 600, padding: '12px', textAlign: 'left', borderBottom: '2px solid #ede4d8' }}>Current Stage</th>
-                    <th style={{ backgroundColor: '#f5f5f5', color: '#5e3f26', fontWeight: 600, padding: '12px', textAlign: 'left', borderBottom: '2px solid #ede4d8' }}>Investment Ask</th>
-                    <th style={{ backgroundColor: '#f5f5f5', color: '#5e3f26', fontWeight: 600, padding: '12px', textAlign: 'left', borderBottom: '2px solid #ede4d8' }}>Deal Score</th>
-                    <th style={{ backgroundColor: '#f5f5f5', color: '#5e3f26', fontWeight: 600, padding: '12px', textAlign: 'left', borderBottom: '2px solid #ede4d8' }}>Time in Stage</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pipelineData.coInvestOpportunities.map((opp, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                      <td style={{ padding: '12px' }}>{opp.smeName}</td>
-                      <td style={{ padding: '12px' }}>{opp.stage}</td>
-                      <td style={{ padding: '12px' }}>{opp.ask}</td>
-                      <td style={{ padding: '12px' }}>{opp.score}</td>
-                      <td style={{ padding: '12px' }}>{opp.daysInStage}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                height: '100%',
-                color: '#7d5a50',
-                fontSize: '14px',
-                textAlign: 'center',
-                padding: '20px'
-              }}>
-                No active pipeline opportunities found. All deals are either completed or declined.
-              </div>
-            )}
+            </div>
           </div>
         </div>
-      )
-    });
-  }
-
-  return (
-    <div style={{ width: '100%' }}>
-      {/* Chart Selection Controls */}
-      <div style={{
-        marginBottom: '20px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '0 10px'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', position: 'relative' }}>
-          <div style={{ position: 'relative' }}>
-            <button 
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '8px 16px',
-                background: showChartSelector ? '#7d5a36' : '#f5f5f5',
-                border: 'none',
-                borderRadius: '8px',
-                fontSize: '14px',
-                fontWeight: 500,
-                color: showChartSelector ? 'white' : '#666',
-                cursor: 'pointer',
-                transition: 'all 0.2s'
-              }}
-              onClick={() => setShowChartSelector(!showChartSelector)}
-              title="Select charts to display"
-            >
-              <FiGrid />
-              Select Charts ({Object.values(selectedCharts).filter(Boolean).length} selected)
-            </button>
-            {showChartSelector && <ChartSelectionPopup />}
-          </div>
-        </div>
-      </div>
-      
-      {/* Charts Grid */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '0 10px' }}>
-        {selectedChartComponents.filter(chart => chart.id !== 'activeOpportunities').length > 0 && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px' }}>
-            {selectedChartComponents.filter(chart => chart.id !== 'activeOpportunities').map(chart => chart.component)}
-          </div>
-        )}
-        
-        {selectedChartComponents.filter(chart => chart.id === 'activeOpportunities').length > 0 && (
-          <div>
-            {selectedChartComponents.filter(chart => chart.id === 'activeOpportunities').map(chart => chart.component)}
-          </div>
-        )}
-        
-        {selectedChartComponents.length === 0 && (
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            height: '200px',
-            color: '#666',
-            fontSize: '16px',
-            textAlign: 'center'
-          }}>
-            No charts selected. Click "Select Charts" to choose which charts to display.
-          </div>
-        )}
       </div>
     </div>
   );

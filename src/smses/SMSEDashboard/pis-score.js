@@ -745,7 +745,6 @@ ${evaluationData}`;
         position: "relative",
         width: "100%",
         minWidth: "210px",
-        maxWidth: "000px",
       }}>
         {/* Header with gradient */}
         <div style={{

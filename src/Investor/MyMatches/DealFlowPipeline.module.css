@@ -1,6 +1,6 @@
 /* Investor Pipeline Styles - Matches Intern Pipeline Design */
 
-:root {
+:root { 
   --brown-50: #efebe9;
   --brown-100: #d7ccc8;
   --brown-200: #bcaaa4;
@@ -32,6 +32,7 @@
   margin: 0;
   position: relative;
   font-family: 'Comic Sans MS', 'Segoe UI', cursive, sans-serif;
+  overflow-x: auto;
   transition: background-color 0.3s ease;
 }
 

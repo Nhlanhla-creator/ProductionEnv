@@ -1,85 +1,93 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { ChevronDown, Check, FileCheck, CheckCircle, TrendingUp, AlertCircle, Info } from "lucide-react"
+import { useState, useEffect } from "react";
+import {
+  ChevronDown,
+  Check,
+  FileCheck,
+  CheckCircle,
+  TrendingUp,
+  AlertCircle,
+  Info,
+} from "lucide-react";
 
 export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
-  const [showModal, setShowModal] = useState(false)
-  const [complianceScore, setComplianceScore] = useState(0)
-  const [complianceDocuments, setComplianceDocuments] = useState([])
-  const [showAboutScore, setShowAboutScore] = useState(false)
-  const [showScoreBreakdown, setShowScoreBreakdown] = useState(false)
-  const [hoveredField, setHoveredField] = useState(null)
+  const [showModal, setShowModal] = useState(false);
+  const [complianceScore, setComplianceScore] = useState(0);
+  const [complianceDocuments, setComplianceDocuments] = useState([]);
+  const [showAboutScore, setShowAboutScore] = useState(false);
+  const [showScoreBreakdown, setShowScoreBreakdown] = useState(false);
+  const [hoveredField, setHoveredField] = useState(null);
 
   // Add/remove body class to prevent scrolling when modal is open
   useEffect(() => {
     if (showModal) {
-      document.body.classList.add("modal-open")
-      document.body.style.overflow = "hidden"
+      document.body.classList.add("modal-open");
+      document.body.style.overflow = "hidden";
     } else {
-      document.body.classList.remove("modal-open")
-      document.body.style.overflow = ""
+      document.body.classList.remove("modal-open");
+      document.body.style.overflow = "";
     }
     // Cleanup on unmount
     return () => {
-      document.body.classList.remove("modal-open")
-      document.body.style.overflow = ""
-    }
-  }, [showModal])
+      document.body.classList.remove("modal-open");
+      document.body.style.overflow = "";
+    };
+  }, [showModal]);
 
   useEffect(() => {
     if (profileData) {
-      const { score, documents } = calculateComplianceStatus(profileData)
-      setComplianceScore(score)
-      setComplianceDocuments(documents)
-      if (onScoreUpdate) onScoreUpdate(score)
+      const { score, documents } = calculateComplianceStatus(profileData);
+      setComplianceScore(score);
+      setComplianceDocuments(documents);
+      if (onScoreUpdate) onScoreUpdate(score);
     }
-  }, [profileData])
+  }, [profileData]);
 
   const checkFieldExists = (data, path) => {
-    const parts = path.split(".")
-    let current = data
+    const parts = path.split(".");
+    let current = data;
     for (const part of parts) {
-      if (!current || !(part in current)) return false
-      current = current[part]
+      if (!current || !(part in current)) return false;
+      current = current[part];
     }
     // Array or string (like a COID number or file URL)
-    if (Array.isArray(current)) return current.length > 0
-    if (typeof current === "string") return current.trim().length > 0
-    return !!current
-  }
+    if (Array.isArray(current)) return current.length > 0;
+    if (typeof current === "string") return current.trim().length > 0;
+    return !!current;
+  };
 
   const checkFieldExistsInDocuments = (data, documentId) => {
     try {
-      if (!data || !data.documents) return false
-      const files = data.documents[documentId]
-      return Array.isArray(files) ? files.length > 0 : !!files
+      if (!data || !data.documents) return false;
+      const files = data.documents[documentId];
+      return Array.isArray(files) ? files.length > 0 : !!files;
     } catch (error) {
-      console.error(`Error checking document ${documentId}:`, error)
-      return false
+      console.error(`Error checking document ${documentId}:`, error);
+      return false;
     }
-  }
+  };
 
   const checkFieldExistsInFundingDocuments = (data, documentId) => {
     try {
-      if (!data || !data.fundingDocuments) return false
-      const files = data.fundingDocuments[documentId]
-      return Array.isArray(files) ? files.length > 0 : !!files
+      if (!data || !data.fundingDocuments) return false;
+      const files = data.fundingDocuments[documentId];
+      return Array.isArray(files) ? files.length > 0 : !!files;
     } catch (error) {
-      console.error(`Error checking funding document ${documentId}:`, error)
-      return false
+      console.error(`Error checking funding document ${documentId}:`, error);
+      return false;
     }
-  }
+  };
 
   const calculateComplianceStatus = (data) => {
-    const stageRaw = data.entityOverview?.operationStage?.toLowerCase()
+    const stageRaw = data.entityOverview?.operationStage?.toLowerCase();
 
     // Map operation stages to weight categories
-    let weightKey = "earlyStage" // default
+    let weightKey = "earlyStage"; // default
     if (["growth", "scale-up"].includes(stageRaw)) {
-      weightKey = "growthStage"
+      weightKey = "growthStage";
     } else if (["mature"].includes(stageRaw)) {
-      weightKey = "matureStage"
+      weightKey = "matureStage";
     }
 
     const rubric = [
@@ -107,7 +115,9 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
         displayName: "VAT registration (if applicable)",
         description: "VAT number present",
         importance: "Needed for turnover above R1M",
-        condition: () => Number.parseFloat(data.financialOverview?.annualRevenue || "0") > 1000000,
+        condition: () =>
+          Number.parseFloat(data.financialOverview?.annualRevenue || "0") >
+          1000000,
         weights: { earlyStage: 0.0, growthStage: 0.05, matureStage: 0.05 },
       },
       {
@@ -115,7 +125,8 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
         path: "legalCompliance.bbbeeCert",
         displayName: "B-BBEE certification",
         description: "B-BBEE certificate uploaded",
-        importance: "Essential for corporate procurement – only relevant for RSA",
+        importance:
+          "Essential for corporate procurement – only relevant for RSA",
         compulsory: true,
         weights: { earlyStage: 0.1, growthStage: 0.15, matureStage: 0.15 },
       },
@@ -143,9 +154,11 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
         importance: "Confirms financial separation from owners",
         verifyFn: (data) => {
           // Check bank confirmation in either documents or fundingDocuments
-          return checkFieldExistsInDocuments(data, "bankConfirmation") ||
+          return (
+            checkFieldExistsInDocuments(data, "bankConfirmation") ||
             checkFieldExistsInFundingDocuments(data, "bankConfirmation") ||
-            checkFieldExists(data, "financialOverview.bankAccount");
+            checkFieldExists(data, "financialOverview.bankAccount")
+          );
         },
         weights: { earlyStage: 0.1, growthStage: 0.15, matureStage: 0.2 },
       },
@@ -175,8 +188,10 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
         importance: "e.g., FSP license, Health Dept permit, Mining permits",
         verifyFn: (data) => {
           // Check for either accreditation docs or specific licenses
-          return checkFieldExistsInDocuments(data, "industryAccreditationDocs") ||
-            checkFieldExists(data, "legalCompliance.industryAccreditations");
+          return (
+            checkFieldExistsInDocuments(data, "industryAccreditationDocs") ||
+            checkFieldExists(data, "legalCompliance.industryAccreditations")
+          );
         },
         weights: { earlyStage: 0.0, growthStage: 0.05, matureStage: 0.1 },
       },
@@ -188,17 +203,17 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
         weights: { earlyStage: 0.1, growthStage: 0.1, matureStage: 0.1 },
         isProfileScore: true,
       },
-    ]
+    ];
 
-    let totalScore = 0
-    let maxScore = 0
+    let totalScore = 0;
+    let maxScore = 0;
 
-     const documents = rubric.map((doc) => {
-    let verified = false
-    let weight = doc.weights[weightKey]
+    const documents = rubric.map((doc) => {
+      let verified = false;
+      let weight = doc.weights[weightKey];
 
-    if (doc.condition && !doc.condition()) {
-      weight = 0
+      if (doc.condition && !doc.condition()) {
+        weight = 0;
       } else if (doc.isProfileScore) {
         const totalSections = [
           "instructions",
@@ -210,31 +225,33 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
           "howDidYouHear",
           "documents",
           "declarationConsent",
-        ]
-        const completedMap = data.completedSections || {}
-        const completedCount = totalSections.filter((key) => completedMap[key]).length
-        const completionRatio = completedCount / totalSections.length
+        ];
+        const completedMap = data.completedSections || {};
+        const completedCount = totalSections.filter(
+          (key) => completedMap[key]
+        ).length;
+        const completionRatio = completedCount / totalSections.length;
 
         // Always contribute partial weight to totalScore
-        totalScore += weight * completionRatio
-        maxScore += weight
+        totalScore += weight * completionRatio;
+        maxScore += weight;
 
         // Consider 80%+ as verified ✅
-        verified = completionRatio >= 0.8
+        verified = completionRatio >= 0.8;
       } else if (doc.verifyFn) {
-      verified = doc.verifyFn(data)
-    } else if (doc.documentId) {
-      // Check AI validation status
-      const verification = data.verification?.[doc.documentId];
-      verified = verification && verification.status === "verified";
-    } else {
-      verified = checkFieldExists(data, doc.path)
-    }
+        verified = doc.verifyFn(data);
+      } else if (doc.documentId) {
+        // Check AI validation status
+        const verification = data.verification?.[doc.documentId];
+        verified = verification && verification.status === "verified";
+      } else {
+        verified = checkFieldExists(data, doc.path);
+      }
 
-         if (weight > 0) {
-      maxScore += weight
-      if (verified) totalScore += weight
-    }
+      if (weight > 0) {
+        maxScore += weight;
+        if (verified) totalScore += weight;
+      }
 
       return {
         path: doc.path,
@@ -244,45 +261,53 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
         compulsory: doc.compulsory || false,
         verified,
         weight: Math.round(weight * 100),
-      }
-    })
+      };
+    });
 
-    const finalScore = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0
+    const finalScore =
+      maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
 
     return {
       score: finalScore,
       documents: documents.filter((doc) => doc.weight > 0), // Only show documents with weight > 0
-    }
-  }
+    };
+  };
 
   // Updated score levels with new color scheme
   const getScoreLevel = (score) => {
-    if (score > 90) return { level: "Fully compliant", color: "#1B5E20", icon: CheckCircle }
-    if (score >= 81) return { level: "Highly compliant", color: "#4CAF50", icon: CheckCircle }
-    if (score >= 61) return { level: "Mostly compliant", color: "#FF9800", icon: TrendingUp }
-    if (score >= 41) return { level: "Partially compliant", color: "#F44336", icon: AlertCircle }
-    return { level: "Non-compliant", color: "#B71C1C", icon: AlertCircle }
-  }
+    if (score > 90)
+      return { level: "Fully compliant", color: "#1B5E20", icon: CheckCircle };
+    if (score >= 81)
+      return { level: "Highly compliant", color: "#4CAF50", icon: CheckCircle };
+    if (score >= 61)
+      return { level: "Mostly compliant", color: "#FF9800", icon: TrendingUp };
+    if (score >= 41)
+      return {
+        level: "Partially compliant",
+        color: "#F44336",
+        icon: AlertCircle,
+      };
+    return { level: "Non-compliant", color: "#B71C1C", icon: AlertCircle };
+  };
 
-  const scoreLevel = getScoreLevel(complianceScore)
-  const ScoreIcon = scoreLevel.icon
+  const scoreLevel = getScoreLevel(complianceScore);
+  const ScoreIcon = scoreLevel.icon;
 
   return (
     <>
       {/* Enhanced Outside Card Design - Same as PIS Score */}
       <div
-         style={{
-    background: "linear-gradient(135deg, #ffffff 0%, #faf8f6 100%)",
-    borderRadius: "20px",
-    boxShadow: "0 8px 32px rgba(141, 110, 99, 0.15)",
-    border: "1px solid #e8ddd6",
-    overflow: "hidden",
-    position: "relative",
-    width: "100%", // Add this line to make it full width
-    minWidth: "210px", // Add this for minimum width
-    maxWidth: "000px", // Add this to limit maximum width (optional)
-  }}
->
+        style={{
+          background: "linear-gradient(135deg, #ffffff 0%, #faf8f6 100%)",
+          borderRadius: "20px",
+          boxShadow: "0 8px 32px rgba(141, 110, 99, 0.15)",
+          border: "1px solid #e8ddd6",
+          overflow: "hidden",
+          position: "relative",
+          width: "100%", // Add this line to make it full width
+          minWidth: "210px", // Add this for minimum width
+        }}
+      >
         {/* Header with gradient */}
         <div
           style={{
@@ -466,12 +491,12 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
               whiteSpace: "nowrap",
             }}
             onMouseOver={(e) => {
-              e.target.style.transform = "translateY(-2px)"
-              e.target.style.boxShadow = "0 6px 20px rgba(93, 64, 55, 0.4)"
+              e.target.style.transform = "translateY(-2px)";
+              e.target.style.boxShadow = "0 6px 20px rgba(93, 64, 55, 0.4)";
             }}
             onMouseOut={(e) => {
-              e.target.style.transform = "translateY(0px)"
-              e.target.style.boxShadow = "0 4px 16px rgba(93, 64, 55, 0.3)"
+              e.target.style.transform = "translateY(0px)";
+              e.target.style.boxShadow = "0 4px 16px rgba(93, 64, 55, 0.3)";
             }}
           >
             <span>Score breakdown</span>
@@ -516,7 +541,7 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
           }}
           onClick={(e) => {
             if (e.target === e.currentTarget) {
-              setShowModal(false)
+              setShowModal(false);
             }
           }}
         >
@@ -577,7 +602,8 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
                   textAlign: "center",
                   marginBottom: "30px",
                   padding: "20px",
-                  background: "linear-gradient(135deg, #fdf8f6 0%, #f3e8dc 100%)",
+                  background:
+                    "linear-gradient(135deg, #fdf8f6 0%, #f3e8dc 100%)",
                   borderRadius: "12px",
                   border: "1px solid #d6b88a",
                 }}
@@ -665,7 +691,9 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
                   <ChevronDown
                     size={20}
                     style={{
-                      transform: showAboutScore ? "rotate(180deg)" : "rotate(0deg)",
+                      transform: showAboutScore
+                        ? "rotate(180deg)"
+                        : "rotate(0deg)",
                       transition: "transform 0.2s ease",
                     }}
                   />
@@ -679,9 +707,10 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
                     }}
                   >
                     <p style={{ marginBottom: "16px", lineHeight: "1.6" }}>
-                      The compliance score measures whether a business meets the core legal and regulatory requirements
-                      needed to operate formally and access funding opportunities. Weightings are adjusted based on your
-                      business stage.
+                      The compliance score measures whether a business meets the
+                      core legal and regulatory requirements needed to operate
+                      formally and access funding opportunities. Weightings are
+                      adjusted based on your business stage.
                     </p>
 
                     <div
@@ -693,19 +722,49 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
                         borderLeft: "4px solid #8d6e63",
                       }}
                     >
-                      <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>
+                      <p
+                        style={{
+                          fontWeight: "bold",
+                          marginBottom: "8px",
+                          color: "#6d4c41",
+                        }}
+                      >
                         Essential requirements verified:
                       </p>
-                      <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037" }}>
-                        <li style={{ marginBottom: "4px" }}>CIPC business registration</li>
-                        <li style={{ marginBottom: "4px" }}>SARS tax compliance status</li>
-                        <li style={{ marginBottom: "4px" }}>VAT registration (where applicable)</li>
-                        <li style={{ marginBottom: "4px" }}>Verified business address & Director IDs</li>
-                        <li style={{ marginBottom: "4px" }}>Ownership and shareholding structure</li>
-                        <li style={{ marginBottom: "4px" }}>B-BBEE certification</li>
-                        <li style={{ marginBottom: "4px" }}>UIF & COIDA registration (for growth/mature)</li>
-                        <li style={{ marginBottom: "4px" }}>POPIA compliance documentation</li>
-                        <li style={{ marginBottom: "4px" }}>Complete business profile</li>
+                      <ul
+                        style={{
+                          margin: "0",
+                          paddingLeft: "20px",
+                          color: "#5d4037",
+                        }}
+                      >
+                        <li style={{ marginBottom: "4px" }}>
+                          CIPC business registration
+                        </li>
+                        <li style={{ marginBottom: "4px" }}>
+                          SARS tax compliance status
+                        </li>
+                        <li style={{ marginBottom: "4px" }}>
+                          VAT registration (where applicable)
+                        </li>
+                        <li style={{ marginBottom: "4px" }}>
+                          Verified business address & Director IDs
+                        </li>
+                        <li style={{ marginBottom: "4px" }}>
+                          Ownership and shareholding structure
+                        </li>
+                        <li style={{ marginBottom: "4px" }}>
+                          B-BBEE certification
+                        </li>
+                        <li style={{ marginBottom: "4px" }}>
+                          UIF & COIDA registration (for growth/mature)
+                        </li>
+                        <li style={{ marginBottom: "4px" }}>
+                          POPIA compliance documentation
+                        </li>
+                        <li style={{ marginBottom: "4px" }}>
+                          Complete business profile
+                        </li>
                       </ul>
                     </div>
 
@@ -718,29 +777,57 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
                         borderLeft: "4px solid #8d6e63",
                       }}
                     >
-                      <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>Score breakdown:</p>
-                      <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037" }}>
+                      <p
+                        style={{
+                          fontWeight: "bold",
+                          marginBottom: "8px",
+                          color: "#6d4c41",
+                        }}
+                      >
+                        Score breakdown:
+                      </p>
+                      <ul
+                        style={{
+                          margin: "0",
+                          paddingLeft: "20px",
+                          color: "#5d4037",
+                        }}
+                      >
                         <li style={{ marginBottom: "4px" }}>
-                          <strong>91-100%:</strong> Fully compliant - ready for all opportunities
+                          <strong>91-100%:</strong> Fully compliant - ready for
+                          all opportunities
                         </li>
                         <li style={{ marginBottom: "4px" }}>
-                          <strong>81-90%:</strong> Highly compliant - minor gaps to address
+                          <strong>81-90%:</strong> Highly compliant - minor gaps
+                          to address
                         </li>
                         <li style={{ marginBottom: "4px" }}>
-                          <strong>61-80%:</strong> Mostly compliant - some documentation needed
+                          <strong>61-80%:</strong> Mostly compliant - some
+                          documentation needed
                         </li>
                         <li style={{ marginBottom: "4px" }}>
-                          <strong>41-60%:</strong> Partially compliant - significant gaps present
+                          <strong>41-60%:</strong> Partially compliant -
+                          significant gaps present
                         </li>
                         <li style={{ marginBottom: "4px" }}>
-                          <strong>0-40%:</strong> Non-compliant - substantial work required
+                          <strong>0-40%:</strong> Non-compliant - substantial
+                          work required
                         </li>
                       </ul>
                     </div>
 
-                    <p style={{ marginBottom: "0", lineHeight: "1.6", fontStyle: "italic", color: "#6d4c41" }}>
-                      This assessment is tailored to your business stage, with higher weight given to critical documents
-                      like registration certificates, tax clearance, and B-BBEE certification.
+                    <p
+                      style={{
+                        marginBottom: "0",
+                        lineHeight: "1.6",
+                        fontStyle: "italic",
+                        color: "#6d4c41",
+                      }}
+                    >
+                      This assessment is tailored to your business stage, with
+                      higher weight given to critical documents like
+                      registration certificates, tax clearance, and B-BBEE
+                      certification.
                     </p>
                   </div>
                 )}
@@ -772,7 +859,9 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
                   <ChevronDown
                     size={20}
                     style={{
-                      transform: showScoreBreakdown ? "rotate(180deg)" : "rotate(0deg)",
+                      transform: showScoreBreakdown
+                        ? "rotate(180deg)"
+                        : "rotate(0deg)",
                       transition: "transform 0.2s ease",
                     }}
                   />
@@ -790,7 +879,10 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
                         key={index}
                         style={{
                           padding: "15px",
-                          borderBottom: index < complianceDocuments.length - 1 ? "1px solid #e8d8cf" : "none",
+                          borderBottom:
+                            index < complianceDocuments.length - 1
+                              ? "1px solid #e8d8cf"
+                              : "none",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "space-between",
@@ -814,8 +906,12 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
                               width: "24px",
                               height: "24px",
                               borderRadius: "50%",
-                              backgroundColor: doc.verified ? "#4CAF50" : "#f3e8dc",
-                              border: doc.verified ? "2px solid #4CAF50" : "2px solid #d6b88a",
+                              backgroundColor: doc.verified
+                                ? "#4CAF50"
+                                : "#f3e8dc",
+                              border: doc.verified
+                                ? "2px solid #4CAF50"
+                                : "2px solid #d6b88a",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
@@ -826,7 +922,15 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
                             {doc.verified ? (
                               <Check size={14} color="white" />
                             ) : (
-                              <span style={{ color: "#F44336", fontSize: "16px", fontWeight: "bold" }}>×</span>
+                              <span
+                                style={{
+                                  color: "#F44336",
+                                  fontSize: "16px",
+                                  fontWeight: "bold",
+                                }}
+                              >
+                                ×
+                              </span>
                             )}
                           </div>
                           <div style={{ flex: 1 }}>
@@ -857,7 +961,13 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
                                   Required
                                 </span>
                               )}
-                              {doc.importance && <Info size={12} color="#8d6e63" style={{ cursor: "help" }} />}
+                              {doc.importance && (
+                                <Info
+                                  size={12}
+                                  color="#8d6e63"
+                                  style={{ cursor: "help" }}
+                                />
+                              )}
                             </div>
                             <div
                               style={{
@@ -909,7 +1019,8 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
                                 transform: "translateX(-50%)",
                                 borderWidth: "6px",
                                 borderStyle: "solid",
-                                borderColor: "#5d4037 transparent transparent transparent",
+                                borderColor:
+                                  "#5d4037 transparent transparent transparent",
                               }}
                             ></div>
                           </div>
@@ -924,5 +1035,5 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
         </div>
       )}
     </>
-  )
+  );
 }

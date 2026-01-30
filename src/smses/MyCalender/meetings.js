@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Calendar as CalendarIcon, Plus, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import styled, { keyframes } from 'styled-components';
 import Modal from './Modal';
 import CreateEventForm from './CreateEventForm';
 import MeetingDetails from './MeetingDetails';
 import { db } from '../../firebaseConfig';
-import { collection, query, where, onSnapshot, getDoc, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 // Color palette
@@ -656,161 +656,211 @@ const Meetings = ({ stats, setStats }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedMeeting, setSelectedMeeting] = useState(null);
   const [meetings, setMeetings] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [requesterCache, setRequesterCache] = useState({});
 
+  // Memoize date calculations
+  const now = useMemo(() => new Date(), []);
+
+  // Cache requester details to avoid duplicate fetches
+  const fetchRequesterDetails = useCallback(async (requesterIds) => {
+    const uniqueIds = [...new Set(requesterIds.filter(id => id && !requesterCache[id]))];
+    
+    if (uniqueIds.length === 0) return {};
+
+    try {
+      const profilesRef = collection(db, "MyuniversalProfiles");
+      const queries = uniqueIds.map(id => 
+        query(profilesRef, where("__name__", "==", id))
+      );
+
+      const snapshots = await Promise.all(queries.map(q => getDocs(q)));
+      const newCache = { ...requesterCache };
+
+      snapshots.forEach((snapshot, index) => {
+        if (!snapshot.empty) {
+          const doc = snapshot.docs[0];
+          const formData = doc.data()?.formData;
+          const requesterId = uniqueIds[index];
+
+          let requesterName = '';
+          
+          // Determine name based on document structure
+          if (formData?.entityOverview?.registeredName) {
+            requesterName = formData.entityOverview.registeredName;
+          } else if (formData?.contactDetails?.primaryContactName) {
+            requesterName = formData.contactDetails.primaryContactName;
+          } else if (formData?.fundManageOverview?.registeredName) {
+            requesterName = formData.fundManageOverview.registeredName;
+          } else {
+            requesterName = 'Unknown';
+          }
+
+          newCache[requesterId] = requesterName;
+        }
+      });
+
+      setRequesterCache(newCache);
+      return newCache;
+    } catch (err) {
+      console.warn("Error fetching requester details:", err);
+      return requesterCache;
+    }
+  }, [requesterCache]);
+
+  // Optimize Firestore listener
   useEffect(() => {
-    const unsubscribeAuth = getAuth().onAuthStateChanged(async (user) => {
-      if (!user) return;
+    setLoading(true);
+    const auth = getAuth();
+    
+    const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
 
-      const q1 = query(collection(db, "smeCalendarEvents"), where("smeId", "==", user.uid));
-      const q2 = query(collection(db, "supplierCalendarEvents"), where("supplierId", "==", user.uid));
+      // Fetch both collections in parallel
+      const fetchMeetings = async () => {
+        try {
+          const [smeSnapshot, supplierSnapshot] = await Promise.all([
+            getDocs(query(collection(db, "smeCalendarEvents"), where("smeId", "==", user.uid))),
+            getDocs(query(collection(db, "supplierCalendarEvents"), where("supplierId", "==", user.uid)))
+          ]);
 
-      const processCombinedSnapshot = async (snapshot1, snapshot2) => {
-        const allDocs = [...snapshot1.docs, ...snapshot2.docs];
-        const groupedMeetings = {};
-
-        for (const docSnap of allDocs) {
-          const data = docSnap.data();
-          const counterpartId = data.customerId || data.funderId;
-          const groupKey = `${counterpartId}-${data.title}`;
-
-          if (!groupedMeetings[groupKey]) {
-            let requesterName = '';
-            let requesterType = '';
-            let requesterId = '';
-
-            // Determine requester type and ID
-            if (data.funderId) {
-              requesterType = 'Investor';
-              requesterId = data.funderId;
-            } else if (data.customerId) {
-              requesterType = 'Customer';
-              requesterId = data.customerId;
-            } else if (data.smeId) {
-              requesterType = 'SME';
-              requesterId = data.smeId;
-            } else if (docSnap.ref.parent.id === 'supplierCalendarEvents') {
-              requesterType = 'Supplier';
-            } else {
-              requesterType = 'SME';
+          const allDocs = [...smeSnapshot.docs, ...supplierSnapshot.docs];
+          
+          // Collect unique requester IDs first
+          const requesterIds = [];
+          const meetingsData = [];
+          
+          allDocs.forEach(docSnap => {
+            const data = docSnap.data();
+            const counterpartId = data.customerId || data.funderId;
+            
+            if (counterpartId) {
+              requesterIds.push(counterpartId);
             }
 
-            // Fetch requester details if we have an ID
-            if (requesterId) {
-              try {
-                const requesterDoc = await getDoc(doc(db, "MyuniversalProfiles", requesterId));
-                if (requesterDoc.exists()) {
-                  const formData = requesterDoc.data()?.formData;
-                  
-                  // For SME, get the registeredName from entityOverview
-                  if (requesterType === 'SME') {
-                    requesterName = formData?.entityOverview?.registeredName || 
-                    formData?.contactDetails?.primaryContactName||'SME';
-                  } 
-                  // For Investor, get from fundManageOverview
-                  else if (requesterType === 'Investor') {
-                    requesterName = formData?.fundManageOverview?.registeredName || 
-                                   formData?.contactDetails?.primaryContactName || 
-                                   'Investor';
-                  }
-                  // For Customer, get from appropriate section
-                  else if (requesterType === 'Customer') {
-                    requesterName = formData?.entityOverview?.registeredName ||
-                                   formData?.contactDetails?.primaryContactName || 
-                                   'Customer';
-                  }
-                  // Fallback for any other type
-                  else {
-                    requesterName = formData?.entityOverview?.registeredName ||
-                                   formData?.contactDetails?.primaryContactName || 
-                                   requesterType;
-                  }
-                }
-              } catch (err) {
-                console.warn("Error fetching requester details:", err);
-                requesterName = requesterType; // Fallback to type
-              }
-            }
+            // Parse dates once and store
+            const slots = (data.availableDates || []).map(slot => ({
+              ...slot,
+              date: slot.date?.toDate ? slot.date.toDate() : new Date(slot.date),
+              status: slot.status || 'available'
+            }));
 
-            // If we still don't have a name, use the type
-            if (!requesterName) {
-              requesterName = requesterType;
-            }
-
-            groupedMeetings[groupKey] = {
-              id: groupKey,
+            meetingsData.push({
               docId: docSnap.id,
+              id: `${docSnap.ref.parent.id}-${docSnap.id}`,
               name: data.title || 'Meeting',
-              requesterName,
-              requesterType,
-              requesterId,
               counterpartId,
               smeAppId: data.smeAppId,
               investorAppId: data.investorAppId,
               location: data.location || 'Virtual',
-              slots: [],
-              isExpanded: false,
+              slots,
               status: data.status || 'pending',
-              collection: docSnap.ref.parent.id
-            };
-          }
-
-          (data.availableDates || []).forEach(slot => {
-            const parsedDate = slot.date?.toDate ? slot.date.toDate() : new Date(slot.date);
-            groupedMeetings[groupKey].slots.push({
-              id: `${docSnap.id}-${slot.date}`,
-              ...slot,
-              date: parsedDate,
-              location: data.location,
-              status: slot.status || 'available'
+              collection: docSnap.ref.parent.id,
+              requesterType: data.funderId ? 'Investor' : 
+                           data.customerId ? 'Customer' : 
+                           data.supplierId ? 'Supplier' : 'SME'
             });
           });
 
-          if (data.status) {
-            groupedMeetings[groupKey].status = data.status;
-          }
-        }
+          // Fetch all requester details in batch
+          const cache = await fetchRequesterDetails(requesterIds);
+          
+          // Enhance meetings with requester names
+          const enhancedMeetings = meetingsData.map(meeting => ({
+            ...meeting,
+            requesterName: cache[meeting.counterpartId] || meeting.requesterType,
+            requesterId: meeting.counterpartId
+          }));
 
-        setMeetings(Object.values(groupedMeetings));
-        setLoading(false);
+          setMeetings(enhancedMeetings);
+          setLoading(false);
+        } catch (error) {
+          console.error("Error fetching meetings:", error);
+          setLoading(false);
+        }
       };
 
-      let snapshot1, snapshot2;
-      let hasSnapshot1 = false;
-      let hasSnapshot2 = false;
+      // Initial fetch
+      fetchMeetings();
 
-      const unsub1 = onSnapshot(q1, (snap) => {
-        snapshot1 = snap;
-        hasSnapshot1 = true;
-        if (hasSnapshot1 && hasSnapshot2) {
-          processCombinedSnapshot(snapshot1, snapshot2);
-        }
-      });
+      // Set up real-time listeners with debouncing
+      let timeoutId;
+      const debouncedUpdate = () => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(fetchMeetings, 1000); // Debounce updates
+      };
 
-      const unsub2 = onSnapshot(q2, (snap) => {
-        snapshot2 = snap;
-        hasSnapshot2 = true;
-        if (hasSnapshot1 && hasSnapshot2) {
-          processCombinedSnapshot(snapshot1, snapshot2);
-        }
-      });
+      const unsub1 = onSnapshot(
+        query(collection(db, "smeCalendarEvents"), where("smeId", "==", user.uid)),
+        debouncedUpdate
+      );
+
+      const unsub2 = onSnapshot(
+        query(collection(db, "supplierCalendarEvents"), where("supplierId", "==", user.uid)),
+        debouncedUpdate
+      );
 
       return () => {
         unsub1();
         unsub2();
+        clearTimeout(timeoutId);
       };
     });
 
     return () => unsubscribeAuth();
-  }, []);
+  }, [fetchRequesterDetails]);
 
-  const handleCreateEvent = (newEvent) => {
-    setMeetings([...meetings, newEvent]);
+  // Optimize filtering with memoization
+  const filteredMeetings = useMemo(() => {
+    return meetings.filter(meeting => {
+      // Early return for invalid meetings
+      if (!meeting.slots || meeting.slots.length === 0) return false;
+
+      const hasValidDates = meeting.slots.some(slot => slot.date instanceof Date);
+      if (!hasValidDates) return false;
+
+      switch (activeTab) {
+        case 'upcoming':
+          return meeting.status === 'scheduled' && 
+                 meeting.slots.some(slot => slot.date > now);
+        
+        case 'past':
+          return meeting.status === 'completed' || 
+                 meeting.slots.every(slot => slot.date < now);
+        
+        case 'pending':
+          return meeting.status === 'pending' || 
+                 meeting.slots.some(slot => slot.status === 'pending');
+        
+        default:
+          return true;
+      }
+    });
+  }, [meetings, activeTab, now]);
+
+  // Optimize calendar data preparation
+  const calendarMeetings = useMemo(() => {
+    return meetings.flatMap(meeting => 
+      meeting.slots.map(slot => ({
+        ...meeting,
+        slot,
+        dateKey: slot.date.toDateString(),
+        hourKey: `${slot.date.getDate()}-${slot.date.getHours()}`
+      }))
+    );
+  }, [meetings]);
+
+  // Optimize event handlers
+  const handleCreateEvent = useCallback((newEvent) => {
+    setMeetings(prev => [...prev, newEvent]);
     setStats(prev => ({ ...prev, created: prev.created + 1 }));
     setShowCreateModal(false);
-  };
+  }, [setStats]);
 
-  const handleMeetingAction = async (id, action) => {
+  const handleMeetingAction = useCallback(async (id, action) => {
     try {
       const meetingToUpdate = meetings.find(m => m.id === id);
       
@@ -826,39 +876,33 @@ const Meetings = ({ stats, setStats }) => {
           return;
         }
 
-        const updatedMeetings = meetings.map(meeting => {
-          if (meeting.id === id) {
-            return { ...meeting, status: 'scheduled' };
-          }
-          if (
-            meeting.smeAppId === meetingToUpdate.smeAppId &&
-            meeting.investorAppId === meetingToUpdate.investorAppId &&
-            meeting.id !== meetingToUpdate.id
-          ) {
-            return null;
-          }
-          return meeting;
-        }).filter(Boolean);
-
-        setMeetings(updatedMeetings);
+        setMeetings(prev => prev
+          .map(meeting => {
+            if (meeting.id === id) {
+              return { ...meeting, status: 'scheduled' };
+            }
+            if (
+              meeting.smeAppId === meetingToUpdate.smeAppId &&
+              meeting.investorAppId === meetingToUpdate.investorAppId &&
+              meeting.id !== meetingToUpdate.id
+            ) {
+              return null;
+            }
+            return meeting;
+          })
+          .filter(Boolean)
+        );
+        
         setStats(prev => ({ ...prev, scheduled: prev.scheduled + 1 }));
       } else if (action === 'completed') {
-        const updatedMeetings = meetings.map(meeting => {
-          if (meeting.id === id) {
-            return { ...meeting, status: 'completed' };
-          }
-          return meeting;
-        });
-        setMeetings(updatedMeetings);
+        setMeetings(prev => prev.map(meeting => 
+          meeting.id === id ? { ...meeting, status: 'completed' } : meeting
+        ));
         setStats(prev => ({ ...prev, completed: prev.completed + 1 }));
       } else if (action === 'cancelled') {
-        const updatedMeetings = meetings.map(meeting => {
-          if (meeting.id === id) {
-            return { ...meeting, status: 'cancelled' };
-          }
-          return meeting;
-        });
-        setMeetings(updatedMeetings);
+        setMeetings(prev => prev.map(meeting => 
+          meeting.id === id ? { ...meeting, status: 'cancelled' } : meeting
+        ));
         setStats(prev => ({ ...prev, cancelled: prev.cancelled + 1 }));
       }
     } catch (error) {
@@ -866,113 +910,83 @@ const Meetings = ({ stats, setStats }) => {
     } finally {
       setSelectedMeeting(null);
     }
-  };
+  }, [meetings, setStats]);
 
-  const filteredMeetings = meetings.filter(meeting => {
-    const now = new Date();
-    const validSlots = meeting.slots.filter(slot => slot.date instanceof Date);
-
-    if (validSlots.length === 0) return false;
-
-    if (activeTab === 'upcoming') {
-      return meeting.status === 'scheduled' && 
-             validSlots.some(slot => slot.date > now);
-    } else if (activeTab === 'past') {
-      return meeting.status === 'completed' || 
-             validSlots.every(slot => slot.date < now);
-    } else if (activeTab === 'pending') {
-      return meeting.status === 'pending' || 
-             validSlots.some(slot => slot.status === 'pending');
-    }
-    return true;
-  });
-
-  // Calendar functions
-  const navigateDate = (direction) => {
-    const newDate = new Date(currentDate);
-    if (calendarView === 'day') {
-      newDate.setDate(newDate.getDate() + (direction === 'next' ? 1 : -1));
-    } else if (calendarView === 'week') {
-      newDate.setDate(newDate.getDate() + (direction === 'next' ? 7 : -7));
-    } else if (calendarView === 'month') {
-      newDate.setMonth(newDate.getMonth() + (direction === 'next' ? 1 : -1));
-    }
-    setCurrentDate(newDate);
-  };
-
-  const goToToday = () => {
-    setCurrentDate(new Date());
-  };
-
-  const renderDayView = () => {
+  // Optimize calendar view rendering with memoization
+  const renderDayView = useCallback(() => {
     const dayStart = new Date(currentDate);
     dayStart.setHours(0, 0, 0, 0);
     
     const dayEnd = new Date(currentDate);
     dayEnd.setHours(23, 59, 59, 999);
     
-    const dayMeetings = meetings.flatMap(meeting => 
-      meeting.slots
-        .filter(slot => slot.date >= dayStart && slot.date <= dayEnd)
-        .map(slot => ({ ...meeting, slot }))
-        .sort((a, b) => a.slot.date - b.slot.date));
+    const dayMeetings = calendarMeetings
+      .filter(({ slot }) => slot.date >= dayStart && slot.date <= dayEnd)
+      .sort((a, b) => a.slot.date - b.slot.date);
+
+    // Group by hour for better performance
+    const meetingsByHour = {};
+    dayMeetings.forEach(meeting => {
+      const hour = meeting.slot.date.getHours();
+      if (!meetingsByHour[hour]) meetingsByHour[hour] = [];
+      meetingsByHour[hour].push(meeting);
+    });
 
     return (
       <DayView>
         <DayHeader>
           <DayTitle>
-            {currentDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+            {currentDate.toLocaleDateString('en-US', { 
+              weekday: 'long', 
+              month: 'long', 
+              day: 'numeric', 
+              year: 'numeric' 
+            })}
           </DayTitle>
         </DayHeader>
         <TimeSlots>
-          {Array.from({ length: 24 }).map((_, hour) => {
-            const hourStart = new Date(currentDate);
-            hourStart.setHours(hour, 0, 0, 0);
-            
-            const hourEnd = new Date(currentDate);
-            hourEnd.setHours(hour, 59, 59, 999);
-            
-            const hourMeetings = dayMeetings.filter(
-              ({ slot }) => slot.date >= hourStart && slot.date <= hourEnd
-            );
-
-            return (
-              <HourRow key={hour}>
-                <HourLabel>
-                  {hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`}
-                </HourLabel>
-                <HourEvents>
-                  {hourMeetings.map((meeting, idx) => (
-                    <CalendarEvent key={idx} status={meeting.status}>
-                      <EventTime>
-                        {meeting.slot.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </EventTime>
-                      <EventTitle>{meeting.name}</EventTitle>
-                      <EventCounterpart>{meeting.requesterName}</EventCounterpart>
-                    </CalendarEvent>
-                  ))}
-                </HourEvents>
-              </HourRow>
-            );
-          })}
+          {Array.from({ length: 24 }).map((_, hour) => (
+            <HourRow key={hour}>
+              <HourLabel>
+                {hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`}
+              </HourLabel>
+              <HourEvents>
+                {(meetingsByHour[hour] || []).map((meeting, idx) => (
+                  <CalendarEvent key={idx} status={meeting.status}>
+                    <EventTime>
+                      {meeting.slot.date.toLocaleTimeString([], { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                      })}
+                    </EventTime>
+                    <EventTitle>{meeting.name}</EventTitle>
+                    <EventCounterpart>{meeting.requesterName}</EventCounterpart>
+                  </CalendarEvent>
+                ))}
+              </HourEvents>
+            </HourRow>
+          ))}
         </TimeSlots>
       </DayView>
     );
-  };
+  }, [currentDate, calendarMeetings]);
 
-  const renderWeekView = () => {
+  const renderWeekView = useCallback(() => {
     const startOfWeek = new Date(currentDate);
     startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
     startOfWeek.setHours(0, 0, 0, 0);
     
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(endOfWeek.getDate() + 6);
-    endOfWeek.setHours(23, 59, 59, 999);
+    const weekMeetingsByDay = Array(7).fill().map(() => []);
     
-    const weekMeetings = meetings.flatMap(meeting => 
-      meeting.slots
-        .filter(slot => slot.date >= startOfWeek && slot.date <= endOfWeek)
-        .map(slot => ({ ...meeting, slot })));
+    calendarMeetings.forEach(meeting => {
+      const dayIndex = Math.floor(
+        (meeting.slot.date - startOfWeek) / (24 * 60 * 60 * 1000)
+      );
+      
+      if (dayIndex >= 0 && dayIndex < 7) {
+        weekMeetingsByDay[dayIndex].push(meeting);
+      }
+    });
 
     return (
       <WeekView>
@@ -981,60 +995,65 @@ const Meetings = ({ stats, setStats }) => {
             const day = new Date(startOfWeek);
             day.setDate(day.getDate() + i);
             const isToday = day.toDateString() === new Date().toDateString();
+            
             return (
               <WeekdayHeader key={i} className={isToday ? 'today' : ''}>
-                <WeekdayName>{day.toLocaleDateString('en-US', { weekday: 'short' })}</WeekdayName>
+                <WeekdayName>
+                  {day.toLocaleDateString('en-US', { weekday: 'short' })}
+                </WeekdayName>
                 <WeekdayDate>{day.getDate()}</WeekdayDate>
               </WeekdayHeader>
             );
           })}
         </WeekHeader>
         <WeekGrid>
-          {Array.from({ length: 7 }).map((_, dayIdx) => {
+          {weekMeetingsByDay.map((dayMeetings, dayIdx) => {
             const day = new Date(startOfWeek);
             day.setDate(day.getDate() + dayIdx);
             const isToday = day.toDateString() === new Date().toDateString();
             
-            const dayStart = new Date(day);
-            dayStart.setHours(0, 0, 0, 0);
-            
-            const dayEnd = new Date(day);
-            dayEnd.setHours(23, 59, 59, 999);
-            
-            const dayMeetings = weekMeetings
-              .filter(({ slot }) => slot.date >= dayStart && slot.date <= dayEnd)
-              .sort((a, b) => a.slot.date - b.slot.date);
-
             return (
               <WeekdayCell key={dayIdx} className={isToday ? 'today' : ''}>
-                {dayMeetings.map((meeting, idx) => (
-                  <CalendarEvent key={idx} status={meeting.status}>
-                    <EventTime>
-                      {meeting.slot.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </EventTime>
-                    <EventTitle>{meeting.name}</EventTitle>
-                  </CalendarEvent>
-                ))}
+                {dayMeetings
+                  .sort((a, b) => a.slot.date - b.slot.date)
+                  .map((meeting, idx) => (
+                    <CalendarEvent key={idx} status={meeting.status}>
+                      <EventTime>
+                        {meeting.slot.date.toLocaleTimeString([], { 
+                          hour: '2-digit', 
+                          minute: '2-digit' 
+                        })}
+                      </EventTime>
+                      <EventTitle>{meeting.name}</EventTitle>
+                    </CalendarEvent>
+                  ))}
               </WeekdayCell>
             );
           })}
         </WeekGrid>
       </WeekView>
     );
-  };
+  }, [currentDate, calendarMeetings]);
 
-  const renderMonthView = () => {
+  const renderMonthView = useCallback(() => {
     const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
     const lastDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
     
     const startDay = firstDayOfMonth.getDay();
     const daysInMonth = lastDayOfMonth.getDate();
     
-    const prevMonthDays = new Date(currentDate.getFullYear(), currentDate.getMonth(), 0).getDate();
-    const nextMonthDays = 42 - (daysInMonth + startDay);
-    
-    const monthMeetings = meetings.flatMap(meeting => 
-      meeting.slots.map(slot => ({ ...meeting, slot })));
+    // Pre-calculate meetings for the month
+    const monthMeetingsByDay = {};
+    calendarMeetings.forEach(meeting => {
+      if (
+        meeting.slot.date.getMonth() === currentDate.getMonth() &&
+        meeting.slot.date.getFullYear() === currentDate.getFullYear()
+      ) {
+        const day = meeting.slot.date.getDate();
+        if (!monthMeetingsByDay[day]) monthMeetingsByDay[day] = [];
+        monthMeetingsByDay[day].push(meeting);
+      }
+    });
 
     return (
       <MonthView>
@@ -1044,42 +1063,37 @@ const Meetings = ({ stats, setStats }) => {
           ))}
         </MonthHeader>
         <MonthGrid>
-          {Array.from({ length: startDay }).map((_, i) => {
-            const day = prevMonthDays - startDay + i + 1;
+          {Array.from({ length: 42 }).map((_, i) => {
+            let day, className = '';
+            
+            if (i < startDay) {
+              // Previous month
+              day = i + 1;
+              className = 'other-month';
+            } else if (i < startDay + daysInMonth) {
+              // Current month
+              day = i - startDay + 1;
+              const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+              if (date.toDateString() === new Date().toDateString()) {
+                className = 'today';
+              }
+            } else {
+              // Next month
+              day = i - startDay - daysInMonth + 1;
+              className = 'other-month';
+            }
+            
             return (
-              <MonthDay key={`prev-${i}`} className="other-month">
-                <DayNumber>{day}</DayNumber>
-              </MonthDay>
-            );
-          })}
-          
-          {Array.from({ length: daysInMonth }).map((_, i) => {
-            const day = i + 1;
-            const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-            const isToday = date.toDateString() === new Date().toDateString();
-            
-            const dayStart = new Date(date);
-            dayStart.setHours(0, 0, 0, 0);
-            
-            const dayEnd = new Date(date);
-            dayEnd.setHours(23, 59, 59, 999);
-            
-            const dayMeetings = monthMeetings
-              .filter(({ slot }) => slot.date >= dayStart && slot.date <= dayEnd)
-              .sort((a, b) => a.slot.date - b.slot.date);
-
-            return (
-              <MonthDay key={`current-${i}`} className={isToday ? 'today' : ''}>
+              <MonthDay key={i} className={className}>
                 <DayNumber>{day}</DayNumber>
                 <DayEvents>
-                  {dayMeetings.map((meeting, idx) => (
-                    <CalendarEvent 
-                      key={idx} 
-                      status={meeting.status}
-                      title={`${meeting.name} with ${meeting.requesterName} at ${meeting.slot.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
-                    >
+                  {(monthMeetingsByDay[day] || []).map((meeting, idx) => (
+                    <CalendarEvent key={idx} status={meeting.status}>
                       <EventTime>
-                        {meeting.slot.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {meeting.slot.date.toLocaleTimeString([], { 
+                          hour: '2-digit', 
+                          minute: '2-digit' 
+                        })}
                       </EventTime>
                       <EventTitle>{meeting.name}</EventTitle>
                     </CalendarEvent>
@@ -1088,36 +1102,44 @@ const Meetings = ({ stats, setStats }) => {
               </MonthDay>
             );
           })}
-          
-          {Array.from({ length: nextMonthDays }).map((_, i) => {
-            const day = i + 1;
-            return (
-              <MonthDay key={`next-${i}`} className="other-month">
-                <DayNumber>{day}</DayNumber>
-              </MonthDay>
-            );
-          })}
         </MonthGrid>
       </MonthView>
     );
-  };
+  }, [currentDate, calendarMeetings]);
 
-  if (loading) {
-    return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100%',
-        color: colors.textDark
-      }}>
-        Loading meetings...
-      </div>
-    );
-  }
+  // Optimize calendar navigation
+  const navigateDate = useCallback((direction) => {
+    setCurrentDate(prev => {
+      const newDate = new Date(prev);
+      const increment = direction === 'next' ? 1 : -1;
+      
+      switch (calendarView) {
+        case 'day': newDate.setDate(newDate.getDate() + increment); break;
+        case 'week': newDate.setDate(newDate.getDate() + (increment * 7)); break;
+        case 'month': newDate.setMonth(newDate.getMonth() + increment); break;
+      }
+      
+      return newDate;
+    });
+  }, [calendarView]);
 
-  return (
-    <MeetingsContainer>
+  const goToToday = useCallback(() => {
+    setCurrentDate(new Date());
+  }, []);
+
+  // Memoize the calendar content based on view
+  const calendarContent = useMemo(() => {
+    switch (calendarView) {
+      case 'day': return renderDayView();
+      case 'week': return renderWeekView();
+      case 'month': return renderMonthView();
+      default: return renderMonthView();
+    }
+  }, [calendarView, renderDayView, renderWeekView, renderMonthView]);
+
+  // Memoize the main content to prevent unnecessary re-renders
+  const mainContent = useMemo(() => (
+    <>
       <Header>
         <Title>Meetings</Title>
         <HeaderActions>
@@ -1133,24 +1155,15 @@ const Meetings = ({ stats, setStats }) => {
       </Header>
 
       <Tabs>
-        <TabButton
-          className={activeTab === 'upcoming' ? 'active' : ''}
-          onClick={() => setActiveTab('upcoming')}
-        >
-          Upcoming
-        </TabButton>
-        <TabButton
-          className={activeTab === 'pending' ? 'active' : ''}
-          onClick={() => setActiveTab('pending')}
-        >
-          Pending
-        </TabButton>
-        <TabButton
-          className={activeTab === 'past' ? 'active' : ''}
-          onClick={() => setActiveTab('past')}
-        >
-          Past
-        </TabButton>
+        {['upcoming', 'pending', 'past'].map(tab => (
+          <TabButton
+            key={tab}
+            className={activeTab === tab ? 'active' : ''}
+            onClick={() => setActiveTab(tab)}
+          >
+            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+          </TabButton>
+        ))}
       </Tabs>
 
       <TableContainer>
@@ -1175,7 +1188,7 @@ const Meetings = ({ stats, setStats }) => {
               </tr>
             ) : (
               filteredMeetings.map((meeting, index) => (
-                <TableRow key={index} className={meeting.status}>
+                <TableRow key={`${meeting.id}-${index}`}>
                   <TableCell>{meeting.name}</TableCell>
                   <TableCell>{meeting.requesterType}</TableCell>
                   <TableCell>{meeting.requesterName}</TableCell>
@@ -1202,6 +1215,28 @@ const Meetings = ({ stats, setStats }) => {
           </tbody>
         </Table>
       </TableContainer>
+    </>
+  ), [activeTab, filteredMeetings]);
+
+  // Render loading state
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100%',
+        color: colors.textDark
+      }}>
+        Loading meetings...
+      </div>
+    );
+  }
+
+  // Main render
+  return (
+    <MeetingsContainer>
+      {mainContent}
 
       {showCreateModal && (
         <Modal onClose={() => setShowCreateModal(false)}>
@@ -1231,10 +1266,19 @@ const Meetings = ({ stats, setStats }) => {
                   <ChevronLeft size={20} />
                 </NavButton>
                 <CalendarTitle>
-                  {calendarView === 'month' && currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                  {calendarView === 'week' && `${currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - 
-                    ${new Date(currentDate.getTime() + 6 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
-                  {calendarView === 'day' && currentDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                  {calendarView === 'month' && 
+                    currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                  {calendarView === 'week' && 
+                    `${currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - 
+                    ${new Date(currentDate.getTime() + 6 * 24 * 60 * 60 * 1000)
+                      .toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
+                  {calendarView === 'day' && 
+                    currentDate.toLocaleDateString('en-US', { 
+                      weekday: 'long', 
+                      month: 'long', 
+                      day: 'numeric', 
+                      year: 'numeric' 
+                    })}
                 </CalendarTitle>
                 <NavButton onClick={() => navigateDate('next')}>
                   <ChevronRight size={20} />
@@ -1253,9 +1297,7 @@ const Meetings = ({ stats, setStats }) => {
               </CalendarActions>
             </CalendarHeader>
             <CalendarContent>
-              {calendarView === 'day' && renderDayView()}
-              {calendarView === 'week' && renderWeekView()}
-              {calendarView === 'month' && renderMonthView()}
+              {calendarContent}
             </CalendarContent>
           </CalendarModal>
         </Modal>

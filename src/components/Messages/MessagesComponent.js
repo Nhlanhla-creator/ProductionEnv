@@ -124,7 +124,6 @@ const MessagesComponent = ({ config = {} }) => {
       maxWidth: "100vw",
       overflowX: "hidden",
       padding: "10px 0",
-      margin: "0",
       marginLeft: isSidebarCollapsed
         ? `${collapsedLeft}px`
         : `${expandedLeft}px`,
@@ -520,8 +519,8 @@ const MessagesComponent = ({ config = {} }) => {
   };
 
   return (
-    <div style={getContainerStyles()}>
-      <div className="messages-page">
+    <div >
+      <div className="messages-page" style={getContainerStyles()}>
         <div className="messages-header">
           <h2>
             Messages{" "}
