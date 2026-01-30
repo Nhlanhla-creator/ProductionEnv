@@ -3,10 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import Meetings from './Meetings';
 import './Calendar.css';
+import { db } from '../../firebaseConfig'
+import Upsell from '../../components/Upsell/Upsell'
+import useSubscriptionPlan from "../../hooks/useSubscriptionPlan" 
 
-const Calendar = () => {
+const InvestorCalendar = () => {
   const [events, setEvents] = useState([]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const { currentPlan, subscriptionLoading } = useSubscriptionPlan()
 
   useEffect(() => {
     const checkSidebarState = () => {
@@ -27,7 +31,9 @@ const Calendar = () => {
   }, [])
 
   useEffect(() => {
-    // Sample data initialization
+    // Sample data initialization (deferred until subscription check completes)
+    if (subscriptionLoading) return
+
     const sampleEvents = [
       {
         id: '1',
@@ -56,20 +62,50 @@ const Calendar = () => {
     ];
 
     setEvents(sampleEvents);
-  }, []);
+  }, [subscriptionLoading]);
+
+
 
   const getContainerStyles = () => ({
     width: "100%",
     minHeight: "100vh",
     maxWidth: "100vw",
     overflowX: "hidden",
-    padding: `70px 20px 20px ${isSidebarCollapsed ? "100px" : "270px"}`,
+    padding: `72px 20px 20px ${isSidebarCollapsed ? "80px" : "280px"}`,
     margin: "0",
     boxSizing: "border-box",
     position: "relative",
     transition: "padding 0.3s ease",
     backgroundColor: "#f8f9fa",
   })
+
+  if (subscriptionLoading) {
+    return (
+      <div style={getContainerStyles()}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
+          <div style={{ textAlign: "center", color: "#6d4c41" }}>
+            <h2>Checking subscription...</h2>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (currentPlan === 'basic') {
+    return (
+      <Upsell
+        title={"Calendar"}
+        subtitle={"Schedule meetings and manage events. Available on Engage & Partner plans."}
+        features={["Create & manage meetings","Send invitations & track RSVPs","Sync with external calendars","Meeting notes & attachments"]}
+        variant={"center"}
+        expandedWidth={280}
+        collapsedWidth={80}
+        plans={["Engage", "Partner"]}
+        upgradeMessage={"Upgrade to Engage or Partner to enable the calendar with meeting scheduling, RSVPs, and external calendar sync."}
+        primaryLabel={"View Available Plans"}
+      />
+    )
+  }
 
   return (
     <div className="calendar-system" style={getContainerStyles()}>
@@ -84,4 +120,4 @@ const Calendar = () => {
   );
 };
 
-export default Calendar;
+export default InvestorCalendar;

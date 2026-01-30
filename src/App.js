@@ -49,12 +49,12 @@ import InvestorSettings from "./Investor/Settings/Setttings"
 import CatalystSettings from "./catalyst/CatalystSettings/supportSettings"
 
 // Billing and Payment Components
-import MySubscriptions from "./smses/BillingInformation/my-subscriptions"
-import BillingInfo from "./smses/BillingInformation/billing-info"
-import InvestorsSubscriptions from "./Investor/BillingAndPayments/investors-subscriptions"
-import BillingInfoInvestors from "./Investor/BillingAndPayments/billing-info-investors"
-import BillingInformation from "./Investor/BillingAndPayments/Myinformation"
-import BillingInformationSMSE from "./smses/BillingInformation/billing-history"
+import MySubscriptions from "./smses/BillingInformation/subscriptions"
+import InvestorsSubscriptions from "./Investor/BillingAndPayments/subscriptions"
+import BillingInfoInvestors from "./Investor/BillingAndPayments/billing-info"
+import BillingHistoryInvestor from "./Investor/BillingAndPayments/billing-history"
+import BillingHistorySMSE from "./smses/BillingInformation/billing-history"
+import BillingInformationSMSE from "./smses/BillingInformation/billing-info"
 import AdvisorDocuments from "./advisors/AdvisorDocuments/advisor-documents"
 import CatalystDocuments from "./catalyst/CatalystDocuments/support-documents"
 
@@ -257,6 +257,8 @@ import SMSEAdvisorMatchesPage from "./smses/MyAdvisorMatches/advisor-matches"
 import OpportunityMatchesPage from "./smses/MyOpportunityMatches/opportunity-matches"
 
 // Growth Tools Components
+import GrowthSuiteLanding from "./smses/MyGrowthTools/Growthsuitelanding"
+import OverallCompanyHealth from "./smses/MyGrowthTools/OverallCompanyHealth"
 import ShopToolsPage from "./smses/MyGrowthTools/shop"
 import MyToolsPage from "./smses/MyGrowthTools/my-tools"
 import Strategy from "./smses/MyGrowthTools/Strategy"
@@ -287,6 +289,7 @@ import { Insights as InternInsights } from "./Interns/InternInsights/internInsig
 import { AcceleratorInsights as CatalystInsights } from "./catalyst/CatalystInsights/catalystInsights"
 import { InvestorInsights } from "./Investor/InvestorInsights/investorInsights"
 import MyCohorts from "./Investor/MyCohorts/MyCohorts"
+import InvestorMessages from "Investor/InvestorMessages/Messages"
 
 // Initial Data States
 const initialFormData = {
@@ -841,23 +844,33 @@ function App() {
         <Route path="/profile" element={withProtection(Profile, {}, renderSMERoute)} />
         <Route path="/find-matches" element={withProtection(FindMatches, {}, renderSMERoute)} />
         <Route path="/my-documents" element={withProtection(MyDocuments, {}, renderSMERoute)} />
-        <Route path="/growth" element={withProtection(GrowthEnabler, {}, renderSMERoute)} />
+        <Route path="/growth" element={withProtection(GrowthSuiteLanding, {}, renderSMERoute)} />
         <Route path="/messages" element={withProtection(Messages, {}, renderSMERoute)} />
         <Route path="/calendar" element={withProtection(Calendar, {}, renderSMERoute)} />
         <Route path="/settings" element={withProtection(Settings, {}, renderSMERoute)} />
         <Route path="/documents" element={withProtection(ProfileSummary, {}, renderSMERoute)} />
         <Route path="/billing/subscriptions" element={withProtection(MySubscriptions, {}, renderSMERoute)} />
-        <Route path="/billing/info" element={withProtection(BillingInfo, {}, renderSMERoute)} />
-        <Route path="/billing/growth-tools-orders" element={withProtection(BillingInformationSMSE, {}, renderSMERoute)} />
+        <Route path="/billing/info" element={withProtection(BillingInformationSMSE, {}, renderSMERoute)} />
+        <Route path="/billing/growth-tools-orders" element={withProtection(BillingHistorySMSE, {}, renderSMERoute)} />
         
         {/* Growth Tools Sub-Routes */}
         <Route path="/growth/my-tools" element={withProtection(MyToolsPage, {}, renderSMERoute)} />
         <Route path="/growth/shop" element={withProtection(ShopToolsPage, {}, renderSMERoute)} />
 
+        {/* Growth Suite Routes - NEW */}
+        <Route path="/growth-suite-landing" element={withProtection(GrowthSuiteLanding, {}, renderSMERoute)} />
+        <Route path="/overall-company-health" element={withProtection(OverallCompanyHealth, {}, renderSMERoute)} />
+        <Route path="/Strategy" element={withProtection(Strategy, {}, renderSMERoute)} />
+        <Route path="/FinancialPerformance" element={withProtection(FinancialPerformance, {}, renderSMERoute)} />
+        <Route path="/OperationalStrength" element={withProtection(OperationalStrength, {}, renderSMERoute)} />
+        <Route path="/People" element={withProtection(People, {}, renderSMERoute)} />
+        <Route path="/SocialImpact" element={withProtection(SocialImpact, {}, renderSMERoute)} />
+        <Route path="/MarketingSales" element={withProtection(MarketingSales, {}, renderSMERoute)} />
+        
         {/* Investor Billing and Payments Routes */}
         <Route path="/investor/billing/subscriptions" element={withProtection(InvestorsSubscriptions, {}, renderInvestorRoute)} />
         <Route path="/investor/billing/info" element={withProtection(BillingInfoInvestors, {}, renderInvestorRoute)} />
-        <Route path="/investor/billing/myinfo" element={withProtection(BillingInformation, {}, renderInvestorRoute)} />
+        <Route path="/investor/billing/history" element={withProtection(BillingHistoryInvestor, {}, renderInvestorRoute)} />
 
         {/* Protected Investor Dashboard Routes */}
         <Route path="/investor-documents" element={withProtection(Documents, {}, renderInvestorRoute)} />
@@ -865,7 +878,7 @@ function App() {
         <Route path="/investor-profile" element={withProtection(InvestorUniversalProfile, {}, renderInvestorRoute)} />
         <Route path="/investor-opportunities" element={withProtection(FindMatches, {}, renderInvestorRoute)} />
         <Route path="/investor-portfolio" element={<div>Coming Soon</div>} />
-        <Route path="/investor-messages" element={withProtection(Messages, {}, renderInvestorRoute)} />
+        <Route path="/investor-messages" element={withProtection(InvestorMessages, {}, renderInvestorRoute)} />
         <Route path="/investor-calendar" element={withProtection(InvestorCalendar, {}, renderInvestorRoute)} />
         <Route path="/investor-settings" element={withProtection(InvestorSettings, {}, renderInvestorRoute)} />
         <Route path="/my-investments" element={withProtection(MyInvestments, {}, renderInvestorRoute)} />
@@ -919,7 +932,7 @@ function App() {
         <Route path="/advisor-settings" element={withProtection(AdvisorSettings, {}, renderAdvisorRoute)} />
         
         {/* Advisor Billing Routes */}
-        <Route path="/advisor/billing/info" element={withProtection(BillingInfo, {}, renderAdvisorRoute)} />
+        <Route path="/advisor/billing/info" element={withProtection(BillingInformationSMSE, {}, renderAdvisorRoute)} />
         <Route path="/advisor/billing/subscriptions" element={withProtection(MySubscriptions, {}, renderAdvisorRoute)} />
         <Route path="/advisor/billing/history" element={withProtection(MyDocuments, {}, renderAdvisorRoute)} />
 

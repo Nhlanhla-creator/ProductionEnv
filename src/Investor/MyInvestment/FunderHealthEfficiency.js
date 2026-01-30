@@ -13,7 +13,7 @@ import {
   PointElement,
   Title,
   Tooltip,
-  Legend
+  Legend 
 } from 'chart.js';
 
 // Register ChartJS components
@@ -143,7 +143,7 @@ const styles = `
   height: 28px;
   display: flex;
   align-items: center;
-  justifyContent: center;
+  justify-content: center;
   transition: none !important;
   animation: none !important;
   transform: none !important;
@@ -184,7 +184,7 @@ const styles = `
 .loading-state {
   display: flex;
   align-items: center;
-  justifyContent: center;
+  justify-content: center;
   height: 100%;
   color: #7d5a36;
   font-size: 16px;
@@ -194,7 +194,7 @@ const styles = `
 .empty-state {
   display: flex;
   align-items: center;
-  justifyContent: center;
+  justify-content: center;
   height: 100%;
   color: #666;
   font-size: 14px;
@@ -224,7 +224,7 @@ const styles = `
   height: 140px;
   display: flex;
   align-items: center;
-  justifyContent: center;
+  justify-content: center;
 }
 
 .circular-content {
@@ -608,7 +608,7 @@ const staticLineOptions = {
   }
 };
 
-// UPDATED: Fetch investor applications data with proper pipeline stage mapping
+// NEW: Fetch investor applications data with updated categorization
 const fetchInvestorApplicationsData = async () => {
   try {
     const currentUser = auth.currentUser;
@@ -626,19 +626,19 @@ const fetchInvestorApplicationsData = async () => {
       };
     }
 
-    console.log('🔍 Fetching applications for investor:', currentUser.uid);
+    console.log('🔍 STEP 1: Fetching applications for investor:', currentUser.uid);
     
-    // Get all investorApplications where funderId matches current user
+    // STEP 1: Get all investorApplications where funderId matches current user
     const q = query(
       collection(db, "investorApplications"),
       where("funderId", "==", currentUser.uid)
     );
 
     const querySnapshot = await getDocs(q);
-    console.log('📊 Found applications for this funder:', querySnapshot.docs.length);
+    console.log('📊 STEP 1: Found applications for this funder:', querySnapshot.docs.length);
     
     if (querySnapshot.empty) {
-      console.log('❌ No applications found for this funder');
+      console.log('❌ STEP 1: No applications found for this funder');
       return {
         application: 0,
         evaluation: 0,
@@ -650,7 +650,7 @@ const fetchInvestorApplicationsData = async () => {
       };
     }
     
-    // Count applications by stage - MATCHING YOUR PIPELINE STAGES
+    // Count applications by stage with new categorization
     let application = 0;
     let evaluation = 0;
     let dealClosed = 0;
@@ -658,7 +658,7 @@ const fetchInvestorApplicationsData = async () => {
     
     querySnapshot.docs.forEach(doc => {
       const applicationData = doc.data();
-      const stage = applicationData.pipelineStage || applicationData.stage;
+      const stage = applicationData.stage;
       
       console.log('📄 Application data:', {
         stage: stage,
@@ -666,23 +666,22 @@ const fetchInvestorApplicationsData = async () => {
         funderId: applicationData.funderId
       });
       
-      // CATEGORIZATION LOGIC matching your InvestorSMETable component:
+      // NEW CATEGORIZATION LOGIC:
       if (stage === "Deal Complete") {
         dealClosed++;
-      } else if (stage === "Deal Declined" || stage === "Declined") {
+      } else if (stage === "Deal Declined") {
         withdrawnDeclined++;
-      } else if (stage === "Application Received" || stage === "Application Sent" || !stage) {
+      } else if (!stage || stage === "Not specified" || stage === "Submitted") {
         application++;
       } else {
         // All other stages fall under Evaluation
-        // This includes: "Under Review", "Due Diligence", "Funding Approved", "Termsheet"
         evaluation++;
       }
     });
     
     const totalApplications = application + evaluation + dealClosed + withdrawnDeclined;
     
-    console.log('📈 Application counts for funder:', {
+    console.log('📈 FINAL: Application counts for funder (NEW CATEGORIES):', {
       application,
       evaluation,
       dealClosed,
@@ -713,7 +712,7 @@ const fetchInvestorApplicationsData = async () => {
   }
 };
 
-// UPDATED: Fetch estimated review time from MyuniversalProfiles
+// NEW: Fetch estimated review time from universalProfiles
 const fetchEstimatedReviewTime = async () => {
   try {
     const currentUser = auth.currentUser;
@@ -726,14 +725,14 @@ const fetchEstimatedReviewTime = async () => {
       };
     }
 
-    console.log('🔍 Fetching estimated review time for investor:', currentUser.uid);
+    console.log('🔍 STEP 1: Fetching estimated review time for investor:', currentUser.uid);
     
-    // Get the investor's MyuniversalProfiles (not universalProfiles for investors)
-    const universalProfileRef = doc(db, "MyuniversalProfiles", currentUser.uid);
+    // Get the investor's universal profile
+    const universalProfileRef = doc(db, "universalProfiles", currentUser.uid);
     const universalProfileSnap = await getDoc(universalProfileRef);
     
     if (!universalProfileSnap.exists()) {
-      console.log('❌ No MyuniversalProfiles found for investor');
+      console.log('❌ STEP 1: No universal profile found for investor');
       return {
         averageDays: 0,
         usingFallback: true
@@ -741,20 +740,25 @@ const fetchEstimatedReviewTime = async () => {
     }
     
     const profileData = universalProfileSnap.data();
-    const formData = profileData.formData;
+    const estimatedReviewTime = profileData.formData?.applicationBrief?.estimatedReviewTime;
     
-    // Check different possible locations for estimated review time
-    const estimatedReviewTime = formData?.applicationBrief?.estimatedReviewTime || 
-                               formData?.estimatedReviewTime || 
-                               "2-4 weeks"; // Default fallback
+    console.log('📋 STEP 1: Estimated review time found:', estimatedReviewTime);
     
-    console.log('📋 Estimated review time found:', estimatedReviewTime);
+    if (!estimatedReviewTime) {
+      console.log('❌ STEP 1: No estimated review time found in profile');
+      return {
+        averageDays: 0,
+        usingFallback: true
+      };
+    }
     
-    // Parse the estimated review time
-    let averageDays = 14; // Default 2 weeks
+    // Parse the estimated review time (e.g., "1-2 weeks" to average days)
+    let averageDays = 0;
     
     if (typeof estimatedReviewTime === 'string') {
+      // Handle different formats
       if (estimatedReviewTime.includes('week')) {
+        // Handle "1-2 weeks" format
         const weekMatch = estimatedReviewTime.match(/(\d+)-?(\d+)?\s*week/);
         if (weekMatch) {
           const minWeeks = parseInt(weekMatch[1]);
@@ -762,6 +766,7 @@ const fetchEstimatedReviewTime = async () => {
           averageDays = Math.round(((minWeeks + maxWeeks) / 2) * 7);
         }
       } else if (estimatedReviewTime.includes('day')) {
+        // Handle "5-7 days" format
         const dayMatch = estimatedReviewTime.match(/(\d+)-?(\d+)?\s*day/);
         if (dayMatch) {
           const minDays = parseInt(dayMatch[1]);
@@ -769,6 +774,7 @@ const fetchEstimatedReviewTime = async () => {
           averageDays = Math.round((minDays + maxDays) / 2);
         }
       } else {
+        // Try to extract numbers and assume days
         const numberMatch = estimatedReviewTime.match(/(\d+)/);
         if (numberMatch) {
           averageDays = parseInt(numberMatch[1]);
@@ -778,12 +784,13 @@ const fetchEstimatedReviewTime = async () => {
       averageDays = estimatedReviewTime;
     }
     
-    // Ensure reasonable value
+    // Ensure we have a reasonable value
     if (averageDays <= 0 || averageDays > 365) {
-      averageDays = 14;
+      console.log('⚠️ STEP 1: Invalid average days calculated, using fallback');
+      averageDays = 14; // Default fallback
     }
     
-    console.log('📈 Final estimated review time in days:', averageDays);
+    console.log('📈 FINAL: Estimated review time in days:', averageDays);
     
     return {
       averageDays,
@@ -798,7 +805,7 @@ const fetchEstimatedReviewTime = async () => {
   }
 };
 
-// UPDATED: Fetch average approved funding amount from successful deals
+// NEW: Fetch average approved funding amount for funded SMEs
 const fetchAverageApprovedFunding = async () => {
   try {
     const currentUser = auth.currentUser;
@@ -813,25 +820,25 @@ const fetchAverageApprovedFunding = async () => {
       };
     }
 
-    console.log('🔍 Fetching approved funding data for investor:', currentUser.uid);
+    console.log('🔍 STEP 1: Fetching approved funding data for investor:', currentUser.uid);
     
-    // Get successful deals
+    // Get successful deals to calculate average approved funding
     const q = query(
       collection(db, "investorApplications"),
       where("funderId", "==", currentUser.uid),
-      where("pipelineStage", "==", "Deal Complete")
+      where("stage", "==", "Deal Complete")
     );
 
     const querySnapshot = await getDocs(q);
-    console.log('📊 Found successful deals for funding calculation:', querySnapshot.docs.length);
+    console.log('📊 STEP 1: Found successful deals for funding calculation:', querySnapshot.docs.length);
     
     if (querySnapshot.empty) {
-      console.log('❌ No successful deals found');
+      console.log('❌ STEP 1: No successful deals found for funding calculation');
       return {
         averageFunding: 0,
         totalFunding: 0,
         fundedDeals: 0,
-        usingFallback: false
+        usingFallback: true
       };
     }
     
@@ -850,6 +857,7 @@ const fetchAverageApprovedFunding = async () => {
       
       // Extract approved funding amount
       if (fundingDetails && fundingDetails.amountApproved) {
+        // Handle different formats - could be string "R800,000" or number 800000
         let amount = fundingDetails.amountApproved;
         
         if (typeof amount === 'string') {
@@ -862,34 +870,16 @@ const fetchAverageApprovedFunding = async () => {
           fundedDeals++;
           console.log(`✅ Added funding amount: R${amount} for SME: ${applicationData.smeId}`);
         }
-      } else {
-        // If no fundingDetails, try to get from useOfFunds
-        const smeProfileRef = doc(db, "universalProfiles", applicationData.smeId);
-        getDoc(smeProfileRef).then(smeProfileSnap => {
-          if (smeProfileSnap.exists()) {
-            const smeData = smeProfileSnap.data();
-            const amountRequested = smeData.useOfFunds?.amountRequested;
-            if (amountRequested) {
-              let amount = amountRequested;
-              if (typeof amount === 'string') {
-                amount = parseFloat(amount.replace(/[R,]/g, '').trim());
-              }
-              if (!isNaN(amount) && amount > 0) {
-                totalFunding += amount;
-                fundedDeals++;
-              }
-            }
-          }
-        });
       }
     });
     
     const averageFunding = fundedDeals > 0 ? Math.round(totalFunding / fundedDeals) : 0;
     
-    console.log('📈 Approved funding data:', {
+    console.log('📈 FINAL: Approved funding data:', {
       averageFunding,
       totalFunding,
-      fundedDeals
+      fundedDeals,
+      usingFallback: false
     });
     
     return {
@@ -909,7 +899,7 @@ const fetchAverageApprovedFunding = async () => {
   }
 };
 
-// UPDATED: Fetch Co-Funders data with cap-table integration
+// UPDATED: Fetch Co-Funders data with registeredName and COUNTING ARRAYS UNDER INVESTORS
 const fetchCoFundersData = async () => {
   try {
     const currentUser = auth.currentUser;
@@ -923,20 +913,20 @@ const fetchCoFundersData = async () => {
       };
     }
 
-    console.log('🔍 Fetching Co-Funders data for investor:', currentUser.uid);
+    console.log('🔍 STEP 1: Fetching Co-Funders data for investor:', currentUser.uid);
     
-    // Get successful deals
+    // STEP 1: Get all investorApplications where funderId matches current user and stage is "Deal Complete"
     const applicationsQuery = query(
       collection(db, "investorApplications"),
       where("funderId", "==", currentUser.uid),
-      where("pipelineStage", "==", "Deal Complete")
+      where("stage", "==", "Deal Complete")
     );
 
     const applicationsSnapshot = await getDocs(applicationsQuery);
-    console.log('📊 Found successful deals:', applicationsSnapshot.docs.length);
+    console.log('📊 STEP 1: Found successful deals for this funder:', applicationsSnapshot.docs.length);
     
     if (applicationsSnapshot.empty) {
-      console.log('❌ No successful deals found');
+      console.log('❌ STEP 1: No successful deals found for this funder');
       return {
         smeCoFunders: [],
         loading: false,
@@ -951,33 +941,24 @@ const fetchCoFundersData = async () => {
       const applicationData = applicationDoc.data();
       const smeId = applicationData.smeId;
       
-      console.log('🔍 Processing SME:', smeId);
+      console.log('🔍 STEP 2: Processing SME:', smeId);
       
       try {
-        // Get SME registeredName from universalProfiles
+        // STEP 2: Get SME registeredName from universalProfiles
         const smeProfileRef = doc(db, "universalProfiles", smeId);
         const smeProfileSnap = await getDoc(smeProfileRef);
         
         if (!smeProfileSnap.exists()) {
-          console.log('❌ No universal profile found for SME:', smeId);
-          // Use smeName from application as fallback
-          const registeredName = applicationData.smeName || `SME-${smeId.substring(0, 8)}`;
-          smeCoFunders.push({
-            registeredName,
-            coFunderCount: 1
-          });
+          console.log('❌ STEP 2: No universal profile found for SME:', smeId);
           continue;
         }
         
         const smeProfileData = smeProfileSnap.data();
-        const registeredName = smeProfileData.entityOverview?.registeredName ||
-                              smeProfileData.entityOverview?.tradingName ||
-                              applicationData.smeName || 
-                              `SME-${smeId.substring(0, 8)}`;
+        const registeredName = smeProfileData.entityOverview?.registeredName || `SME-${smeId.substring(0, 8)}`;
         
-        console.log('🏢 Found registered name:', registeredName);
+        console.log('🏢 STEP 2: Found registered name:', registeredName);
         
-        // Get cap-table data for this SME
+        // STEP 3: Get cap-table data for this SME
         const capTableQuery = query(
           collection(db, "cap-table"),
           where("smeId", "==", smeId)
@@ -985,45 +966,55 @@ const fetchCoFundersData = async () => {
         
         const capTableSnapshot = await getDocs(capTableQuery);
         
-        let coFunderCount = 1; // At least the current user
-        
-        if (!capTableSnapshot.empty) {
-          capTableSnapshot.docs.forEach(capTableDoc => {
-            const capTableData = capTableDoc.data();
-            const investors = capTableData.investors || [];
-            
-            console.log('👥 Raw investors array:', investors);
-            
-            // Count unique investors (excluding current user for now)
-            const uniqueInvestors = new Set();
-            investors.forEach(investor => {
-              if (investor.investorId !== currentUser.uid) {
-                uniqueInvestors.add(investor.investorId || investor.name);
-              }
-            });
-            
-            coFunderCount += uniqueInvestors.size;
+        if (capTableSnapshot.empty) {
+          console.log('❌ STEP 3: No cap-table found for SME:', smeId);
+          // If no cap-table, assume only current user as investor
+          smeCoFunders.push({
+            registeredName,
+            coFunderCount: 1
           });
+          continue;
         }
+        
+        // STEP 4: COUNT ARRAYS UNDER INVESTORS - SIMPLE COUNT OF ARRAY ITEMS
+        let totalInvestorArrays = 0;
+        
+        capTableSnapshot.docs.forEach(capTableDoc => {
+          const capTableData = capTableDoc.data();
+          const investors = capTableData.investors || [];
+          
+          console.log('👥 STEP 4: Raw investors array:', investors);
+          console.log('👥 STEP 4: Number of arrays/items in investors:', investors.length);
+          
+          // SIMPLE COUNT: Just count the number of items in the investors array
+          // Each item in the array represents a co-funder position
+          totalInvestorArrays += investors.length;
+          
+          console.log(`👥 STEP 4: Added ${investors.length} investor arrays to count`);
+        });
+        
+        // Ensure at least 1 investor (the current user)
+        const coFunderCount = Math.max(1, totalInvestorArrays);
         
         smeCoFunders.push({
           registeredName,
           coFunderCount
         });
         
-        console.log('✅ Added SME to co-funders list:', {
+        console.log('✅ STEP 4: Added SME to co-funders list:', {
           registeredName,
-          coFunderCount
+          coFunderCount,
+          totalInvestorArrays
         });
         
       } catch (error) {
         console.error(`❌ ERROR processing SME ${smeId}:`, error);
-        // Continue with next SME
+        // Continue with next SME even if one fails
         continue;
       }
     }
     
-    console.log('📈 Final Co-Funders data:', smeCoFunders);
+    console.log('📈 FINAL: Co-Funders data:', smeCoFunders);
     
     return {
       smeCoFunders,
@@ -1040,7 +1031,7 @@ const fetchCoFundersData = async () => {
   }
 };
 
-// Fallback data generator
+// FALLBACK DATA with updated categories
 const getFallbackDataBasedOnUser = () => {
   const currentUser = auth.currentUser;
   const userHash = currentUser?.uid ? currentUser.uid.charCodeAt(0) % 4 : 0;
@@ -1126,7 +1117,7 @@ const generateYearlyData = () => {
   };
 };
 
-const FunderHealthEfficiency = ({ openPopup, currentUser }) => {
+const FunderHealthEfficiency = ({ openPopup }) => {
   const [vettingTimeView, setVettingTimeView] = useState('Monthly');
   const [efficiencyData, setEfficiencyData] = useState({
     applications: { application: 0, evaluation: 0, dealClosed: 0, withdrawnDeclined: 0, total: 0 },
@@ -1146,11 +1137,13 @@ const FunderHealthEfficiency = ({ openPopup, currentUser }) => {
     yearly: generateYearlyData()
   });
 
-  // Fetch efficiency data when component mounts or user changes
+  // Fetch efficiency data when component mounts
   useEffect(() => {
     const fetchEfficiencyData = async () => {
+      const currentUser = auth.currentUser;
+      
       if (!currentUser) {
-        console.log('❌ No current user - cannot fetch data');
+        console.log('❌ No current user found - cannot fetch data');
         const fallbackData = getFallbackDataBasedOnUser();
         setEfficiencyData({
           applications: fallbackData.applications,
@@ -1165,7 +1158,7 @@ const FunderHealthEfficiency = ({ openPopup, currentUser }) => {
         return;
       }
       
-      console.log('🚀 Starting efficiency data fetch for investor:', currentUser.uid);
+      console.log('🚀 STARTING EFFICIENCY DATA FETCH FOR INVESTOR - User:', currentUser.uid);
       setEfficiencyData(prev => ({ ...prev, loading: true }));
       
       try {
@@ -1177,11 +1170,9 @@ const FunderHealthEfficiency = ({ openPopup, currentUser }) => {
         ]);
         
         // Check if we got any real data
-        const hasRealData = applicationsData.totalApplications > 0 || 
-                          !applicationsData.usingFallback ||
-                          fundingData.fundedDeals > 0;
+        const hasRealData = applicationsData.totalApplications > 0 || !applicationsData.usingFallback;
         
-        console.log('📊 Efficiency data fetch completed:', {
+        console.log('📊 EFFICIENCY DATA FETCH COMPLETED:', {
           hasRealData,
           applicationsData,
           reviewTimeData,
@@ -1189,10 +1180,9 @@ const FunderHealthEfficiency = ({ openPopup, currentUser }) => {
           coFundersData
         });
         
-        if (hasRealData) {
-          console.log('✅ Using real data from Firebase');
+        if (hasRealData && coFundersData.smeCoFunders.length > 0) {
+          console.log('✅ USING REAL DATA FROM INVESTOR APPLICATIONS AND CO-FUNDERS');
           const fallbackData = getFallbackDataBasedOnUser();
-          
           setEfficiencyData({
             applications: {
               application: applicationsData.application,
@@ -1205,13 +1195,13 @@ const FunderHealthEfficiency = ({ openPopup, currentUser }) => {
             averageFunding: fundingData.averageFunding > 0 ? fundingData.averageFunding : fallbackData.averageFunding,
             totalFunding: fundingData.totalFunding,
             fundedDeals: fundingData.fundedDeals,
-            coFunders: coFundersData.smeCoFunders.length > 0 ? coFundersData.smeCoFunders : fallbackData.coFunders,
+            coFunders: coFundersData.smeCoFunders,
             loading: false,
             usingFallback: false
           });
         } else {
-          // Use fallback data if no real data found
-          console.log('⚠️ Using fallback data - no real data found');
+          // Use fallback data if no applications found
+          console.log('⚠️ USING FALLBACK DATA - no applications or co-funders found for this investor');
           const fallbackData = getFallbackDataBasedOnUser();
           setEfficiencyData({
             applications: fallbackData.applications,
@@ -1242,7 +1232,7 @@ const FunderHealthEfficiency = ({ openPopup, currentUser }) => {
     };
     
     fetchEfficiencyData();
-  }, [currentUser]);
+  }, []);
 
   // Time view data
   const getTimeData = (view) => {
@@ -1293,14 +1283,14 @@ const FunderHealthEfficiency = ({ openPopup, currentUser }) => {
     }))
   });
 
-  // Applications Bar Chart
+  // UPDATED: Applications Bar Chart with new categories and proper y-axis configuration
   const ApplicationsBarChart = ({ data, title, chartTitle, chartId }) => {
     const handleEyeClick = () => {
       openPopup(
         <div className="popup-content">
           <h3>{title}</h3>
           <div className="popup-description">
-            Application funnel analysis for your investment portfolio with real pipeline stage data
+            Application funnel analysis for your investment portfolio with updated categorization
           </div>
           <div className="popup-chart">
             <Bar data={data} options={staticApplicationsBarOptions} />
@@ -1327,14 +1317,14 @@ const FunderHealthEfficiency = ({ openPopup, currentUser }) => {
             <div className="detail-item">
               <span className="detail-label">Data Source:</span>
               <span className="detail-value">
-                {efficiencyData.usingFallback ? 'Sample Data' : 'Your Applications (Firebase)'}
+                {efficiencyData.usingFallback ? 'Sample Data' : 'Your Applications'}
               </span>
             </div>
             <div className="detail-item">
-              <span className="detail-label">Pipeline Stages:</span>
+              <span className="detail-label">Categorization Logic:</span>
               <span className="detail-value" style={{fontSize: '12px', textAlign: 'left'}}>
-                • Application: Application Received/Sent<br/>
-                • Evaluation: Under Review, Due Diligence, Funding Approved, Termsheet<br/>
+                • Application: Not specified, Submitted, or no stage<br/>
+                • Evaluation: All other stages<br/>
                 • Deal Closed: Deal Complete<br/>
                 • Withdrawn/Declined: Deal Declined
               </span>
@@ -1374,7 +1364,7 @@ const FunderHealthEfficiency = ({ openPopup, currentUser }) => {
     );
   };
 
-  // Vetting Time Circular Component
+  // NEW: Vetting Time Circular Component with time-based data
   const VettingTimeCircular = ({ value, target, title }) => {
     const handleEyeClick = () => {
       const timeData = getTimeData(vettingTimeView);
@@ -1383,7 +1373,7 @@ const FunderHealthEfficiency = ({ openPopup, currentUser }) => {
         <div className="popup-content">
           <h3>Estimated Vetting Time - {vettingTimeView}</h3>
           <div className="popup-description">
-            Your estimated review time for investment applications
+            Your estimated review time for investment applications over time
           </div>
           <div className="popup-chart">
             <Line 
@@ -1403,9 +1393,13 @@ const FunderHealthEfficiency = ({ openPopup, currentUser }) => {
               <span className="detail-value">{target} days</span>
             </div>
             <div className="detail-item">
+              <span className="detail-label">Time View:</span>
+              <span className="detail-value">{vettingTimeView}</span>
+            </div>
+            <div className="detail-item">
               <span className="detail-label">Data Source:</span>
               <span className="detail-value">
-                {efficiencyData.usingFallback ? 'Sample Data' : 'Your Profile (MyuniversalProfiles)'}
+                {efficiencyData.usingFallback ? 'Sample Data' : 'Your Profile Settings'}
               </span>
             </div>
           </div>
@@ -1413,6 +1407,7 @@ const FunderHealthEfficiency = ({ openPopup, currentUser }) => {
       );
     };
 
+    // Calculate efficiency percentage (lower days are better)
     const efficiencyPercentage = value > 0 ? Math.max(0, Math.round(((target - value) / target) * 100 + 100)) : 0;
 
     return (
@@ -1427,6 +1422,7 @@ const FunderHealthEfficiency = ({ openPopup, currentUser }) => {
         <div className="circular-chart">
           <div className="circular-progress">
             <svg width="140" height="140" viewBox="0 0 140 140">
+              {/* Background circle */}
               <circle
                 cx="70"
                 cy="70"
@@ -1435,6 +1431,7 @@ const FunderHealthEfficiency = ({ openPopup, currentUser }) => {
                 strokeWidth="8"
                 fill="none"
               />
+              {/* Progress circle */}
               <circle
                 cx="70"
                 cy="70"
@@ -1466,7 +1463,7 @@ const FunderHealthEfficiency = ({ openPopup, currentUser }) => {
     );
   };
 
-  // Average Funding Circular Component
+  // NEW: Average Funding Circular Component with time-based data
   const AverageFundingCircular = ({ value, title }) => {
     const handleEyeClick = () => {
       const timeData = getTimeData(vettingTimeView);
@@ -1475,7 +1472,7 @@ const FunderHealthEfficiency = ({ openPopup, currentUser }) => {
         <div className="popup-content">
           <h3>Average Approved Funding - {vettingTimeView}</h3>
           <div className="popup-description">
-            Breakdown of average funding amounts approved for your successful investment deals
+            Breakdown of average funding amounts approved for your successful investment deals over time
           </div>
           <div className="popup-chart">
             <Line 
@@ -1512,9 +1509,13 @@ const FunderHealthEfficiency = ({ openPopup, currentUser }) => {
               <span className="detail-value">{efficiencyData.fundedDeals}</span>
             </div>
             <div className="detail-item">
+              <span className="detail-label">Time View:</span>
+              <span className="detail-value">{vettingTimeView}</span>
+            </div>
+            <div className="detail-item">
               <span className="detail-label">Data Source:</span>
               <span className="detail-value">
-                {efficiencyData.usingFallback ? 'Sample Data' : 'Your Successful Deals (Firebase)'}
+                {efficiencyData.usingFallback ? 'Sample Data' : 'Your Successful Deals'}
               </span>
             </div>
           </div>
@@ -1522,6 +1523,7 @@ const FunderHealthEfficiency = ({ openPopup, currentUser }) => {
       );
     };
 
+    // Calculate funding efficiency (higher average funding is better)
     const efficiencyPercentage = value > 0 ? Math.min(100, Math.round((value / 1000000) * 100)) : 0;
 
     return (
@@ -1536,6 +1538,7 @@ const FunderHealthEfficiency = ({ openPopup, currentUser }) => {
         <div className="circular-chart">
           <div className="circular-progress">
             <svg width="140" height="140" viewBox="0 0 140 140">
+              {/* Background circle */}
               <circle
                 cx="70"
                 cy="70"
@@ -1544,6 +1547,7 @@ const FunderHealthEfficiency = ({ openPopup, currentUser }) => {
                 strokeWidth="8"
                 fill="none"
               />
+              {/* Progress circle */}
               <circle
                 cx="70"
                 cy="70"
@@ -1575,7 +1579,7 @@ const FunderHealthEfficiency = ({ openPopup, currentUser }) => {
     );
   };
 
-  // Co-Funders Bar Chart
+  // UPDATED: Co-Funders Bar Chart with registeredName and SIMPLE ARRAY COUNTING
   const CoFundersBarChart = ({ data, title, chartTitle, chartId }) => {
     const handleEyeClick = () => {
       const timeData = getTimeData(vettingTimeView);
@@ -1584,7 +1588,7 @@ const FunderHealthEfficiency = ({ openPopup, currentUser }) => {
         <div className="popup-content">
           <h3>Co-Funders - {vettingTimeView}</h3>
           <div className="popup-description">
-            Number of co-funders for each SME in your investment portfolio
+            Number of co-funders for each SME in your investment portfolio over time
           </div>
           <div className="popup-chart">
             <Bar data={data} options={staticCoFundersBarOptions} />
@@ -1609,9 +1613,31 @@ const FunderHealthEfficiency = ({ openPopup, currentUser }) => {
               </span>
             </div>
             <div className="detail-item">
+              <span className="detail-label">Time View:</span>
+              <span className="detail-value">{vettingTimeView}</span>
+            </div>
+            <div className="detail-item">
               <span className="detail-label">Data Source:</span>
               <span className="detail-value">
-                {efficiencyData.usingFallback ? 'Sample Data' : 'Portfolio & Cap Tables (Firebase)'}
+                {efficiencyData.usingFallback ? 'Sample Data' : 'Your Portfolio & Cap Tables'}
+              </span>
+            </div>
+            <div className="detail-item">
+              <span className="detail-label">Data Collection Logic:</span>
+              <span className="detail-value" style={{fontSize: '12px', textAlign: 'left'}}>
+                • Get successful deals from investorApplications<br/>
+                • Retrieve SME registered names from universalProfiles<br/>
+                • Count investor arrays from cap-table collections<br/>
+                • Display number of co-funders per SME
+              </span>
+            </div>
+            <div className="detail-item">
+              <span className="detail-label">Investor Counting Logic:</span>
+              <span className="detail-value" style={{fontSize: '12px', textAlign: 'left'}}>
+                • SIMPLE ARRAY COUNTING: Count all items in investors arrays<br/>
+                • Each array item represents a co-funder position<br/>
+                • No validation of content - pure array length counting<br/>
+                • Ensure at least 1 investor (current user)
               </span>
             </div>
           </div>
@@ -1649,7 +1675,7 @@ const FunderHealthEfficiency = ({ openPopup, currentUser }) => {
     );
   };
 
-  // Prepare co-funders data for chart
+  // Prepare co-funders data for chart - using registeredName
   const coFundersLabels = efficiencyData.coFunders.map(sme => 
     sme.registeredName.length > 15 ? sme.registeredName.substring(0, 15) + '...' : sme.registeredName
   );

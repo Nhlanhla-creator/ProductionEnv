@@ -11,7 +11,7 @@ import {
   ArcElement,
   Title,
   Tooltip,
-  Legend
+  Legend 
 } from 'chart.js';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebaseConfig';
@@ -113,7 +113,7 @@ const styles = `
   height: 28px;
   display: flex;
   align-items: center;
-  justifyContent: center;
+  justify-content: center;
   transition: none !important;
   animation: none !important;
   transform: none !important;
@@ -210,7 +210,7 @@ const styles = `
   background: rgba(0, 0, 0, 0.7);
   display: flex;
   align-items: center;
-  justifyContent: center;
+  justify-content: center;
   z-index: 10000;
   padding: 20px;
 }
@@ -280,7 +280,7 @@ const styles = `
   margin-bottom: 20px;
   display: flex;
   align-items: center;
-  justifyContent: center;
+  justify-content: center;
 }
 
 .popup-details {
@@ -325,74 +325,9 @@ const styles = `
   margin-bottom: 20px;
 }
 
-/* Impact Metrics */
-.impact-metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 15px;
-  margin-bottom: 20px;
-  padding: 20px;
-  background: linear-gradient(135deg, #fdf8f6 0%, #f3e8dc 100%);
-  border-radius: 8px;
-  border: 1px solid #ede4d8;
-}
-
-.metric-card {
-  text-align: center;
-  padding: 15px;
-  background: white;
-  border-radius: 6px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-  border-top: 3px solid #8d6e63;
-}
-
-.metric-value {
-  font-size: 24px;
-  font-weight: 700;
-  color: #5e3f26;
-  margin-bottom: 4px;
-}
-
-.metric-label {
-  font-size: 12px;
-  color: #7d5a50;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-/* Status badges */
-.impact-badge {
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: 500;
-  display: inline-block;
-  text-align: center;
-  min-width: 60px;
-}
-
-.impact-badge.high {
-  background-color: #4CAF50;
-  color: white;
-}
-
-.impact-badge.medium {
-  background-color: #FFC107;
-  color: white;
-}
-
-.impact-badge.low {
-  background-color: #f44336;
-  color: white;
-}
-
 /* Responsive Design */
 @media (max-width: 1200px) {
   .three-column-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .impact-metrics-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
@@ -403,10 +338,6 @@ const styles = `
   }
   
   .three-column-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .impact-metrics-grid {
     grid-template-columns: 1fr;
   }
   
@@ -485,13 +416,6 @@ const ESGImpactPerformance = ({ openPopup }) => {
   const [esgData, setEsgData] = useState({
     pillarScores: { environmental: 0, social: 0, governance: 0 },
     sdgAlignment: {},
-    impactMetrics: {
-      jobsCreated: 0,
-      womenOwnership: 0,
-      youthEmpowerment: 0,
-      blackOwnership: 0,
-      communityImpact: 0
-    },
     governanceCompliance: { compliant: 0, partial: 0, atRisk: 0 },
     topContributors: []
   });
@@ -511,16 +435,14 @@ const ESGImpactPerformance = ({ openPopup }) => {
         return;
       }
 
-      console.log("Fetching ESG data for accelerator:", currentUser.uid);
-
-      // CHANGED: Fetch accelerator's portfolio SMEs from acceleratorApplications
+      // Fetch investor's portfolio SMEs
       const applicationsQuery = query(
-        collection(db, "acceleratorApplications"),
-        where("acceleratorId", "==", currentUser.uid)
+        collection(db, "investorApplications"),
+        where("funderId", "==", currentUser.uid)
       );
 
       const applicationsSnapshot = await getDocs(applicationsQuery);
-      console.log("Found accelerator applications for ESG analysis:", applicationsSnapshot.docs.length);
+      console.log("Found applications for ESG analysis:", applicationsSnapshot.docs.length);
 
       // Process each SME's ESG/Impact data
       const esgPromises = applicationsSnapshot.docs.map(async (appDoc) => {
@@ -542,69 +464,51 @@ const ESGImpactPerformance = ({ openPopup }) => {
           const smeName =
             profileData.entityOverview?.tradingName ||
             profileData.entityOverview?.registeredName ||
-            appData.smeName ||
             appData.companyName ||
+            appData.smeName ||
             "Unnamed Business";
 
-          // Extract ESG/Impact metrics from profile - focusing on support accelerator relevant metrics
-          const socialImpact = profileData.socialImpact || {};
+          // Extract ESG/Impact metrics from profile
+          const impactMeasurement = profileData.impactMeasurement || {};
           const legalCompliance = profileData.legalCompliance || {};
           const entityOverview = profileData.entityOverview || {};
           const ownershipManagement = profileData.ownershipManagement || {};
-          const growthPotential = profileData.growthPotential || {};
-          const impactMeasurement = profileData.impactMeasurement || {};
-          
-          // Get support-specific compliance scores if available
-          const complianceScore = profileData.supportScores?.complianceScore || profileData.complianceScore || 0;
-          const governanceScore = profileData.supportScores?.governanceScore || profileData.governanceScore || 0;
-
-          // Calculate scores based on SME data
-          const environmentalScore = calculateEnvironmentalScore(impactMeasurement, growthPotential);
-          const socialScore = calculateSocialScore(socialImpact, entityOverview, ownershipManagement);
-          const governanceScoreCalc = calculateGovernanceScore(complianceScore, governanceScore, legalCompliance);
-          const overallESGScore = calculateOverallESGScore(environmentalScore, socialScore, governanceScoreCalc);
+          const complianceScore = profileData.complianceScore || 0;
+          const governanceScore = profileData.governanceScore || 0;
 
           return {
             id: appDoc.id,
             smeId: appData.smeId,
             smeName,
-            pipelineStage: appData.pipelineStage || 'Active Support',
             // Environmental metrics
             environmental: {
-              score: environmentalScore,
-              greenTechnology: growthPotential.greenTechnology === 'yes' ? 1 : 0,
-              localisation: growthPotential.localisation === 'yes' ? 1 : 0,
-              energyEfficiency: impactMeasurement.energyEfficiency || 0
+              carbonFootprint: impactMeasurement.carbonFootprint || 0,
+              renewableEnergy: impactMeasurement.renewableEnergyUsage || 0,
+              wasteReduction: impactMeasurement.wasteReduction || 0,
+              score: calculateEnvironmentalScore(impactMeasurement)
             },
             // Social metrics
             social: {
-              score: socialScore,
-              jobsCreated: parseInt(socialImpact.jobsToBeCreated) || 0,
-              womenOwnership: parseFloat(socialImpact.womenOwnership) || 0,
-              youthOwnership: parseFloat(socialImpact.youthOwnership) || 0,
-              blackOwnership: parseFloat(socialImpact.blackOwnership) || 0,
-              communityImpact: socialImpact.environmentalCommunityImpact || '',
-              empowerment: growthPotential.empowerment === 'yes' ? 1 : 0
+              jobsCreated: impactMeasurement.jobsCreated || entityOverview.employeeCount || 0,
+              womenEmployment: ownershipManagement.femaleOwnership || 0,
+              youthEmployment: impactMeasurement.youthEmployed || 0,
+              trainingHours: impactMeasurement.trainingHoursProvided || 0,
+              communityImpact: impactMeasurement.communityBenefit || '',
+              score: calculateSocialScore(impactMeasurement, entityOverview, ownershipManagement)
             },
             // Governance metrics
             governance: {
-              score: governanceScoreCalc,
               complianceScore: complianceScore,
               governanceScore: governanceScore,
               bbbeeLevel: legalCompliance.bbbeeLevel || 'Not rated',
               boardDiversity: ownershipManagement.femaleOwnership > 25 ? 'High' : 'Medium',
-              auditStatus: legalCompliance.lastAuditDate ? 'Current' : 'Pending'
+              auditStatus: legalCompliance.lastAuditDate ? 'Current' : 'Pending',
+              score: calculateGovernanceScore(complianceScore, governanceScore, legalCompliance)
             },
-            // SDG alignment - common SDGs for support accelerators
-            sdgs: getSMEsdgs(profileData),
+            // SDG alignment
+            sdgs: impactMeasurement.sdgsTargeted || [],
             // Overall ESG score
-            overallESGScore: overallESGScore,
-            // Raw data for calculations
-            rawData: {
-              socialImpact,
-              growthPotential,
-              entityOverview
-            }
+            overallESGScore: calculateOverallESGScore(impactMeasurement, complianceScore, governanceScore, entityOverview, ownershipManagement)
           };
         } catch (error) {
           console.error("Error processing SME ESG data:", error);
@@ -613,7 +517,7 @@ const ESGImpactPerformance = ({ openPopup }) => {
       });
 
       const allESGData = (await Promise.all(esgPromises)).filter(data => data !== null);
-      console.log("Processed ESG data for accelerator:", allESGData.length, allESGData);
+      console.log("Processed ESG data:", allESGData.length);
 
       // Calculate portfolio-wide metrics
       const metrics = calculatePortfolioMetrics(allESGData);
@@ -626,67 +530,59 @@ const ESGImpactPerformance = ({ openPopup }) => {
     }
   };
 
-  const calculateEnvironmentalScore = (impactMeasurement, growthPotential) => {
+  const calculateEnvironmentalScore = (impactMeasurement) => {
     let score = 0;
     let factors = 0;
 
-    // Green technology adoption
-    if (growthPotential.greenTechnology === 'yes') {
-      score += 40;
-      factors++;
-    }
-
-    // Localisation efforts
-    if (growthPotential.localisation === 'yes') {
+    // Carbon footprint tracking
+    if (impactMeasurement.carbonFootprint) {
       score += 30;
       factors++;
     }
 
-    // Energy efficiency
-    if (impactMeasurement.energyEfficiency) {
-      const efficiencyScore = Math.min(parseFloat(impactMeasurement.energyEfficiency), 100);
-      score += efficiencyScore * 0.3; // Up to 30 points
+    // Renewable energy usage
+    const renewableUsage = parseFloat(impactMeasurement.renewableEnergyUsage || 0);
+    if (renewableUsage > 0) {
+      score += Math.min(renewableUsage, 100) * 0.4; // Up to 40 points
+      factors++;
+    }
+
+    // Waste reduction efforts
+    if (impactMeasurement.wasteReduction) {
+      score += 30;
       factors++;
     }
 
     return factors > 0 ? Math.round(score / factors) : 0;
   };
 
-  const calculateSocialScore = (socialImpact, entityOverview, ownershipManagement) => {
+  const calculateSocialScore = (impactMeasurement, entityOverview, ownershipManagement) => {
     let score = 0;
     let factors = 0;
 
-    // Jobs to be created (future impact)
-    const jobsToCreate = parseInt(socialImpact.jobsToBeCreated) || 0;
-    if (jobsToCreate > 0) {
-      score += Math.min((jobsToCreate / 5) * 20, 40); // Up to 40 points based on jobs
+    // Job creation
+    const jobsCreated = parseInt(impactMeasurement.jobsCreated || entityOverview.employeeCount || 0);
+    if (jobsCreated > 0) {
+      score += Math.min((jobsCreated / 10) * 20, 30); // Up to 30 points based on jobs
       factors++;
     }
 
-    // Women ownership
-    const womenOwnership = parseFloat(socialImpact.womenOwnership) || 0;
+    // Women employment/ownership
+    const womenOwnership = parseFloat(ownershipManagement.femaleOwnership || 0);
     if (womenOwnership > 0) {
       score += Math.min(womenOwnership, 100) * 0.25; // Up to 25 points
       factors++;
     }
 
-    // Youth ownership
-    const youthOwnership = parseFloat(socialImpact.youthOwnership) || 0;
-    if (youthOwnership > 0) {
-      score += Math.min(youthOwnership, 100) * 0.25; // Up to 25 points
+    // Youth employment
+    if (impactMeasurement.youthEmployed && impactMeasurement.youthEmployed > 0) {
+      score += 20;
       factors++;
     }
 
-    // Black ownership
-    const blackOwnership = parseFloat(socialImpact.blackOwnership) || 0;
-    if (blackOwnership > 0) {
-      score += Math.min(blackOwnership, 100) * 0.20; // Up to 20 points
-      factors++;
-    }
-
-    // Empowerment focus
-    if (socialImpact.empowermentFocus || entityOverview.empowerment === 'yes') {
-      score += 10;
+    // Training and development
+    if (impactMeasurement.trainingHoursProvided && impactMeasurement.trainingHoursProvided > 0) {
+      score += 25;
       factors++;
     }
 
@@ -711,79 +607,19 @@ const ESGImpactPerformance = ({ openPopup }) => {
 
     // B-BBEE certification
     if (legalCompliance.bbbeeLevel) {
-      const bbbeeScore = calculateBBBEEPoints(legalCompliance.bbbeeLevel);
-      score += bbbeeScore * 0.2; // Up to 20 points
+      score += 20;
       factors++;
     }
 
     return factors > 0 ? Math.round(score / factors) : 0;
   };
 
-  const calculateBBBEEPoints = (bbbeeLevel) => {
-    const levelPoints = {
-      'Level 1': 135,
-      'Level 2': 125,
-      'Level 3': 110,
-      'Level 4': 100,
-      'Level 5': 80,
-      'Level 6': 60,
-      'Level 7': 50,
-      'Level 8': 10
-    };
-    return levelPoints[bbbeeLevel] || 0;
-  };
+  const calculateOverallESGScore = (impactMeasurement, complianceScore, governanceScore, entityOverview, ownershipManagement) => {
+    const envScore = calculateEnvironmentalScore(impactMeasurement);
+    const socScore = calculateSocialScore(impactMeasurement, entityOverview, ownershipManagement);
+    const govScore = calculateGovernanceScore(complianceScore, governanceScore, {});
 
-  const calculateOverallESGScore = (envScore, socScore, govScore) => {
     return Math.round((envScore + socScore + govScore) / 3);
-  };
-
-  const getSMEsdgs = (profileData) => {
-    const sdgs = [];
-    
-    // Common SDGs for support accelerators
-    const socialImpact = profileData.socialImpact || {};
-    const growthPotential = profileData.growthPotential || {};
-    const entityOverview = profileData.entityOverview || {};
-    
-    // SDG 1: No Poverty - if creating jobs or economic opportunities
-    if ((socialImpact.jobsToBeCreated && socialImpact.jobsToBeCreated > 0) || 
-        (entityOverview.operationStage && entityOverview.operationStage.includes('growth'))) {
-      sdgs.push('SDG 1');
-    }
-    
-    // SDG 4: Quality Education - if skills development or training
-    if (profileData.enterpriseReadiness?.hasMentor === 'yes' || 
-        profileData.enterpriseReadiness?.supportPreviouslyReceived) {
-      sdgs.push('SDG 4');
-    }
-    
-    // SDG 5: Gender Equality - if women ownership
-    if ((socialImpact.womenOwnership && socialImpact.womenOwnership > 0) ||
-        (profileData.ownershipManagement?.femaleOwnership && profileData.ownershipManagement.femaleOwnership > 0)) {
-      sdgs.push('SDG 5');
-    }
-    
-    // SDG 8: Decent Work and Economic Growth
-    sdgs.push('SDG 8'); // All SMEs contribute to this
-    
-    // SDG 9: Industry, Innovation and Infrastructure
-    if (profileData.enterpriseReadiness?.hasBusinessPlan === 'yes' ||
-        profileData.enterpriseReadiness?.hasMVPPrototype === 'yes') {
-      sdgs.push('SDG 9');
-    }
-    
-    // SDG 10: Reduced Inequality
-    if ((socialImpact.blackOwnership && socialImpact.blackOwnership > 0) ||
-        (socialImpact.youthOwnership && socialImpact.youthOwnership > 0)) {
-      sdgs.push('SDG 10');
-    }
-    
-    // SDG 13: Climate Action - if green technology
-    if (growthPotential.greenTechnology === 'yes') {
-      sdgs.push('SDG 13');
-    }
-    
-    return sdgs.slice(0, 3); // Return top 3 most relevant SDGs
   };
 
   const calculatePortfolioMetrics = (allESGData) => {
@@ -791,13 +627,6 @@ const ESGImpactPerformance = ({ openPopup }) => {
       return {
         pillarScores: { environmental: 0, social: 0, governance: 0 },
         sdgAlignment: {},
-        impactMetrics: {
-          jobsCreated: 0,
-          womenOwnership: 0,
-          youthEmpowerment: 0,
-          blackOwnership: 0,
-          communityImpact: 0
-        },
         governanceCompliance: { compliant: 0, partial: 0, atRisk: 0 },
         topContributors: []
       };
@@ -830,19 +659,6 @@ const ESGImpactPerformance = ({ openPopup }) => {
       sdgAlignment[sdg] = Math.round((sdgCounts[sdg] / allESGData.length) * 100);
     });
 
-    // Calculate impact metrics
-    const totalJobs = allESGData.reduce((sum, sme) => sum + (sme.social.jobsCreated || 0), 0);
-    const avgWomenOwnership = Math.round(
-      allESGData.reduce((sum, sme) => sum + (sme.social.womenOwnership || 0), 0) / allESGData.length
-    );
-    const avgYouthOwnership = Math.round(
-      allESGData.reduce((sum, sme) => sum + (sme.social.youthOwnership || 0), 0) / allESGData.length
-    );
-    const avgBlackOwnership = Math.round(
-      allESGData.reduce((sum, sme) => sum + (sme.social.blackOwnership || 0), 0) / allESGData.length
-    );
-    const communityImpactCount = allESGData.filter(sme => sme.social.communityImpact).length;
-
     // Calculate governance compliance breakdown
     let compliant = 0;
     let partial = 0;
@@ -850,8 +666,8 @@ const ESGImpactPerformance = ({ openPopup }) => {
 
     allESGData.forEach(sme => {
       const govScore = sme.governance.score;
-      if (govScore >= 70) compliant++;
-      else if (govScore >= 40) partial++;
+      if (govScore >= 80) compliant++;
+      else if (govScore >= 50) partial++;
       else atRisk++;
     });
 
@@ -873,21 +689,21 @@ const ESGImpactPerformance = ({ openPopup }) => {
 
         if (sme.environmental.score > sme.social.score && sme.environmental.score > sme.governance.score) {
           pillar = 'Environmental';
-          if (sme.environmental.greenTechnology) {
-            stat = `Green technology focus`;
-          } else if (sme.environmental.localisation) {
-            stat = `Localisation efforts`;
+          if (sme.environmental.renewableEnergy > 0) {
+            stat = `${sme.environmental.renewableEnergy}% renewable energy`;
+          } else if (sme.environmental.carbonFootprint) {
+            stat = `Carbon footprint tracking`;
           } else {
             stat = `${sme.environmental.score} environmental score`;
           }
         } else if (sme.social.score > sme.governance.score) {
           pillar = 'Social';
           if (sme.social.jobsCreated > 0) {
-            stat = `${sme.social.jobsCreated} future jobs`;
-          } else if (sme.social.womenOwnership > 0) {
-            stat = `${sme.social.womenOwnership}% women ownership`;
-          } else if (sme.social.youthOwnership > 0) {
-            stat = `${sme.social.youthOwnership}% youth ownership`;
+            stat = `${sme.social.jobsCreated} jobs created`;
+          } else if (sme.social.trainingHours > 0) {
+            stat = `${sme.social.trainingHours}+ training hours`;
+          } else if (sme.social.womenEmployment > 0) {
+            stat = `${sme.social.womenEmployment}% women ownership`;
           } else {
             stat = `${sme.social.score} social score`;
           }
@@ -897,8 +713,7 @@ const ESGImpactPerformance = ({ openPopup }) => {
           smeName: sme.smeName,
           pillar,
           stat,
-          overallScore: sme.overallESGScore,
-          pipelineStage: sme.pipelineStage
+          overallScore: sme.overallESGScore
         };
       });
 
@@ -909,13 +724,6 @@ const ESGImpactPerformance = ({ openPopup }) => {
         governance: avgGovernance
       },
       sdgAlignment,
-      impactMetrics: {
-        jobsCreated: totalJobs,
-        womenOwnership: avgWomenOwnership,
-        youthEmpowerment: avgYouthOwnership,
-        blackOwnership: avgBlackOwnership,
-        communityImpact: communityImpactCount
-      },
       governanceCompliance,
       topContributors
     };
@@ -973,7 +781,7 @@ const ESGImpactPerformance = ({ openPopup }) => {
           <div className="popup-content">
             <h3>{title}</h3>
             <div className="popup-description">
-              No data available for {title.toLowerCase()}. Data will appear when SMEs complete their impact assessments.
+              No data available for {title.toLowerCase()}. Data will appear when SMEs complete their ESG assessments.
             </div>
             <div className="popup-chart">
               <div className="empty-state">
@@ -1066,7 +874,7 @@ const ESGImpactPerformance = ({ openPopup }) => {
           <div className="popup-content">
             <h3>{title}</h3>
             <div className="popup-description">
-              No data available for {title.toLowerCase()}. Data will appear when SMEs complete their impact assessments.
+              No data available for {title.toLowerCase()}. Data will appear when SMEs complete their ESG assessments.
             </div>
             <div className="popup-chart">
               <div className="empty-state">
@@ -1139,39 +947,18 @@ const ESGImpactPerformance = ({ openPopup }) => {
   const hasPillarData = esgData.pillarScores.environmental + esgData.pillarScores.social + esgData.pillarScores.governance > 0;
   const hasSDGData = Object.keys(esgData.sdgAlignment).length > 0;
   const hasGovernanceData = esgData.governanceCompliance.compliant + esgData.governanceCompliance.partial + esgData.governanceCompliance.atRisk > 0;
-  const hasImpactMetrics = esgData.impactMetrics.jobsCreated > 0 || esgData.impactMetrics.womenOwnership > 0;
 
   // Prepare SDG data for chart - always show structure even if no data
   const sdgLabels = hasSDGData 
     ? Object.keys(esgData.sdgAlignment).slice(0, 4)
-    : ['SDG 1', 'SDG 5', 'SDG 8', 'SDG 10']; // Default SDG labels for support accelerators
+    : ['SDG 1', 'SDG 8', 'SDG 9', 'SDG 13']; // Default SDG labels for empty state
   const sdgValues = hasSDGData 
     ? sdgLabels.map(sdg => esgData.sdgAlignment[sdg])
     : [0, 0, 0, 0];
 
   return (
     <div className="esg-impact">
-      {/* Impact Metrics Summary */}
-      <div className="impact-metrics-grid">
-        <div className="metric-card">
-          <div className="metric-value">{esgData.impactMetrics.jobsCreated}</div>
-          <div className="metric-label">Future Jobs</div>
-        </div>
-        <div className="metric-card">
-          <div className="metric-value">{esgData.impactMetrics.womenOwnership}%</div>
-          <div className="metric-label">Women Ownership</div>
-        </div>
-        <div className="metric-card">
-          <div className="metric-value">{esgData.impactMetrics.youthEmpowerment}%</div>
-          <div className="metric-label">Youth Ownership</div>
-        </div>
-        <div className="metric-card">
-          <div className="metric-value">{esgData.impactMetrics.blackOwnership}%</div>
-          <div className="metric-label">Black Ownership</div>
-        </div>
-      </div>
-
-      {/* Three Column Grid for Charts */}
+      {/* Three Column Grid for First 3 Charts */}
       <div className="three-column-grid">
         {/* ESG Pillar Scores */}
         {hasPillarData ? (
@@ -1245,14 +1032,14 @@ const ESGImpactPerformance = ({ openPopup }) => {
       <div className="esg-charts-grid">
         <div className="chart-container full-width">
           <div className="chart-header">
-            <h3 className="chart-title">Top 5 ESG Contributors in Support Portfolio</h3>
+            <h3 className="chart-title">Top 5 ESG Contributors</h3>
             <button 
               className="breakdown-icon-btn"
               onClick={() => openPopup(
                 <div className="popup-content">
-                  <h3>Top 5 ESG Contributors in Support Portfolio</h3>
+                  <h3>Top 5 ESG Contributors</h3>
                   <div className="popup-description">
-                    Leading SMEs in your support portfolio for environmental, social, and governance performance
+                    Leading SMEs in your portfolio for environmental, social, and governance performance
                   </div>
                   {esgData.topContributors.length > 0 ? (
                     <div className="table-container-popup">
@@ -1260,7 +1047,6 @@ const ESGImpactPerformance = ({ openPopup }) => {
                         <thead>
                           <tr>
                             <th>SME</th>
-                            <th>Support Stage</th>
                             <th>Primary Pillar</th>
                             <th>Key Metric</th>
                             <th>ESG Score</th>
@@ -1270,21 +1056,9 @@ const ESGImpactPerformance = ({ openPopup }) => {
                           {esgData.topContributors.map((contributor, idx) => (
                             <tr key={idx}>
                               <td>{contributor.smeName}</td>
-                              <td>
-                                <span className="impact-badge medium">
-                                  {contributor.pipelineStage}
-                                </span>
-                              </td>
                               <td>{contributor.pillar}</td>
                               <td>{contributor.stat}</td>
-                              <td>
-                                <span className={`impact-badge ${
-                                  contributor.overallScore >= 70 ? 'high' : 
-                                  contributor.overallScore >= 40 ? 'medium' : 'low'
-                                }`}>
-                                  {contributor.overallScore}
-                                </span>
-                              </td>
+                              <td>{contributor.overallScore}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1312,7 +1086,6 @@ const ESGImpactPerformance = ({ openPopup }) => {
                 <thead>
                   <tr>
                     <th>SME</th>
-                    <th>Support Stage</th>
                     <th>Primary Pillar</th>
                     <th>Key Metric</th>
                     <th>ESG Score</th>
@@ -1322,21 +1095,9 @@ const ESGImpactPerformance = ({ openPopup }) => {
                   {esgData.topContributors.map((contributor, idx) => (
                     <tr key={idx}>
                       <td>{contributor.smeName}</td>
-                      <td>
-                        <span className="impact-badge medium">
-                          {contributor.pipelineStage}
-                        </span>
-                      </td>
                       <td>{contributor.pillar}</td>
                       <td>{contributor.stat}</td>
-                      <td>
-                        <span className={`impact-badge ${
-                          contributor.overallScore >= 70 ? 'high' : 
-                          contributor.overallScore >= 40 ? 'medium' : 'low'
-                        }`}>
-                          {contributor.overallScore}
-                        </span>
-                      </td>
+                      <td>{contributor.overallScore}</td>
                     </tr>
                   ))}
                 </tbody>

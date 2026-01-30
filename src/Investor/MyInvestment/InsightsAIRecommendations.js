@@ -5,7 +5,7 @@ import { Loader } from 'lucide-react';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebaseConfig';
 
-// Styles for InsightsAIRecommendations
+// Styles for InsightsAIRecommendations 
 const styles = `
 .insights-ai {
   width: 100%;
@@ -453,7 +453,7 @@ const InsightsAIRecommendations = ({ openPopup }) => {
     topPerformers: [],
     atRiskSMEs: [],
     trendAlerts: [],
-    performanceFlags: [] // Renamed from defaultFlags
+    defaultFlags: [] // Added to store flags from loan repayments
   });
 
   useEffect(() => {
@@ -471,14 +471,14 @@ const InsightsAIRecommendations = ({ openPopup }) => {
         return;
       }
 
-      // Fetch all catalyst's support applications
+      // Fetch all investor's applications (all stages)
       const applicationsQuery = query(
-        collection(db, "catalystApplications"),
-        where("catalystId", "==", currentUser.uid)
+        collection(db, "investorApplications"),
+        where("funderId", "==", currentUser.uid)
       );
 
       const applicationsSnapshot = await getDocs(applicationsQuery);
-      console.log("Found support applications:", applicationsSnapshot.docs.length);
+      console.log("Found applications:", applicationsSnapshot.docs.length);
 
       // Process all applications to get SME data
       const smeDataPromises = applicationsSnapshot.docs.map(async (appDoc) => {
@@ -506,74 +506,47 @@ const InsightsAIRecommendations = ({ openPopup }) => {
             appData.smeName ||
             "Unnamed Business";
 
-          const programValue = appData.programValue || appData.fundingRequired || 0;
-          const status = appData.status || "New Application";
-          const pipelineStage = appData.pipelineStage || "Evaluation";
+          const dealAmount = appData.fundingDetails?.amountApproved || appData.fundingRequired || 0;
+          const pipelineStage = appData.pipelineStage || "Application";
           
           // Calculate days since last update
           const lastUpdate = appData.updatedAt ? new Date(appData.updatedAt) : new Date(appData.createdAt);
           const daysSinceUpdate = Math.floor((new Date() - lastUpdate) / (1000 * 60 * 60 * 24));
 
-          // Fetch performance flags for this SME (renamed from default flags)
-          let performanceFlags = [];
+          // Fetch default flags for this SME
+          let defaultFlags = [];
           if (appData.smeId) {
             try {
-              const flagsRef = doc(db, "smePerformance", appData.smeId); // Changed collection name
+              const flagsRef = doc(db, "loan-repayments", appData.smeId);
               const flagsSnap = await getDoc(flagsRef);
               if (flagsSnap.exists()) {
                 const flagsData = flagsSnap.data();
-                performanceFlags = flagsData.performanceFlags || flagsData.flags || [];
+                defaultFlags = flagsData.flags || [];
               }
             } catch (error) {
-              console.log("No performance flags found for SME:", appData.smeId);
+              console.log("No default flags found for SME:", appData.smeId);
             }
-          }
-
-          // Check for missed milestones or deliverables
-          let missedMilestones = 0;
-          if (appData.programMilestones) {
-            const currentDate = new Date();
-            missedMilestones = appData.programMilestones.filter(milestone => {
-              const dueDate = new Date(milestone.dueDate);
-              return milestone.status !== 'completed' && dueDate < currentDate;
-            }).length;
-          }
-
-          // Calculate engagement score based on interactions
-          let engagementScore = 0;
-          if (appData.interactions) {
-            const recentInteractions = appData.interactions.filter(interaction => {
-              const interactionDate = new Date(interaction.date);
-              return (new Date() - interactionDate) < (30 * 24 * 60 * 60 * 1000); // Last 30 days
-            });
-            engagementScore = Math.min(recentInteractions.length * 20, 100);
           }
 
           return {
             id: appDoc.id,
-            smeId: appData.smeId,
+            smeId: appData.smeId || appData.userId,
             smeName,
-            programValue,
+            dealAmount,
             bigScore,
-            status,
             pipelineStage,
             sector: profileData.entityOverview?.economicSectors?.[0] || "Not specified",
             location: profileData.entityOverview?.location || "Not specified",
             createdAt: appData.createdAt,
             updatedAt: appData.updatedAt,
             daysSinceUpdate,
-            programStartDate: appData.programStartDate,
-            programEndDate: appData.programEndDate,
-            programMilestones: appData.programMilestones || [],
-            missedMilestones,
-            engagementScore,
-            performanceFlags,
-            // Risk indicators for support programs
-            isStagnant: daysSinceUpdate > 90, // Stagnant if no update in 90 days
-            isDeclined: status?.toLowerCase().includes('declined'),
-            isCompleted: status?.toLowerCase().includes('completed') || status === "Deal Closed",
-            hasLowEngagement: engagementScore < 40,
-            hasMissedMilestones: missedMilestones > 0,
+            status: appData.status,
+            fundingDetails: appData.fundingDetails || {},
+            defaultFlags, // Add default flags to SME data
+            // Risk indicators
+            missedReports: daysSinceUpdate > 90 ? Math.floor(daysSinceUpdate / 45) : 0,
+            isStagnant: daysSinceUpdate > 180,
+            isDeclined: pipelineStage?.toLowerCase().includes('decline'),
             profileData
           };
         } catch (error) {
@@ -583,10 +556,10 @@ const InsightsAIRecommendations = ({ openPopup }) => {
       });
 
       const allSMEData = (await Promise.all(smeDataPromises)).filter(sme => sme !== null);
-      console.log("Processed SME data for insights:", allSMEData.length);
+      console.log("Processed SME data:", allSMEData.length);
 
       // Calculate insights
-      const insights = calculateSupportInsights(allSMEData);
+      const insights = calculateInsights(allSMEData);
       setInsightsData(insights);
 
       setLoading(false);
@@ -596,74 +569,65 @@ const InsightsAIRecommendations = ({ openPopup }) => {
     }
   };
 
-  const calculateSupportInsights = (smeData) => {
-    const activePrograms = smeData.filter(sme => 
+  const calculateInsights = (smeData) => {
+    // 1. Top 5 High Performers (based on BIG Score and deal progress)
+    const activeDeals = smeData.filter(sme => 
       !sme.isDeclined && 
-      !sme.isCompleted &&
-      sme.status !== "withdrawn"
+      sme.pipelineStage !== "withdrawn"
     );
 
-    // 1. Top 5 High Performers in Support Programs
-    const topPerformers = [...activePrograms]
+    const topPerformers = [...activeDeals]
       .sort((a, b) => {
-        // Sort by engagement score, then BIG score, then program value
-        if (b.engagementScore !== a.engagementScore) {
-          return b.engagementScore - a.engagementScore;
-        }
+        // Sort by BIG Score first, then by deal amount
         if (b.bigScore !== a.bigScore) {
           return b.bigScore - a.bigScore;
         }
-        const valueA = parseFloat(String(a.programValue).replace(/[^0-9.]/g, '')) || 0;
-        const valueB = parseFloat(String(b.programValue).replace(/[^0-9.]/g, '')) || 0;
-        return valueB - valueA;
+        const amountA = parseFloat(String(a.dealAmount).replace(/[^0-9.]/g, '')) || 0;
+        const amountB = parseFloat(String(b.dealAmount).replace(/[^0-9.]/g, '')) || 0;
+        return amountB - amountA;
       })
       .slice(0, 5)
       .map(sme => {
-        const value = parseFloat(String(sme.programValue).replace(/[^0-9.]/g, '')) || 0;
+        const amount = parseFloat(String(sme.dealAmount).replace(/[^0-9.]/g, '')) || 0;
         
         return {
           smeName: sme.smeName,
-          score: sme.engagementScore || 0,
-          progress: calculateSupportProgress(sme),
-          programValue: formatCurrency(value),
-          reason: getSupportPerformanceReason(sme)
+          score: sme.bigScore || 0,
+          growth: calculateGrowthPercentage(sme),
+          ask: formatCurrency(amount),
+          reason: getPerformanceReason(sme)
         };
       });
 
-    // 2. At-Risk / Watchlist SMEs in Support Programs
+    // 2. At-Risk / Watchlist SMEs - Now includes default flags
     const atRiskSMEs = smeData
       .filter(sme => {
-        // Identify at-risk SMEs based on support program criteria
+        // Identify at-risk SMEs based on various criteria including default flags
         return (
-          sme.hasMissedMilestones ||
-          sme.missedMilestones > 1 ||
+          sme.missedReports > 0 ||
           sme.isStagnant ||
-          sme.hasLowEngagement ||
-          sme.performanceFlags.length > 0 ||
           sme.bigScore < 50 ||
-          (sme.status === "Under Review" && sme.daysSinceUpdate > 60) ||
-          (sme.status === "Due Diligence" && sme.daysSinceUpdate > 90) ||
-          (sme.programMilestones?.length > 0 && 
-           sme.programMilestones.filter(m => m.status !== 'completed').length > 2)
+          sme.defaultFlags.length > 0 || // Include SMEs with default flags
+          (sme.pipelineStage === "Under Review" && sme.daysSinceUpdate > 60) ||
+          (sme.pipelineStage === "Due Diligence" && sme.daysSinceUpdate > 90)
         );
       })
       .slice(0, 5)
       .map(sme => ({
         smeName: sme.smeName,
-        riskFlag: getSupportRiskFlag(sme),
-        action: getSupportRecommendedAction(sme),
-        performanceFlags: sme.performanceFlags
+        riskFlag: getRiskFlag(sme),
+        action: getRecommendedAction(sme),
+        defaultFlags: sme.defaultFlags // Include actual default flags
       }));
 
-    // 3. Support Program Trend Alerts
-    const trendAlerts = calculateSupportTrendAlerts(smeData);
+    // 3. Portfolio Trend Alerts
+    const trendAlerts = calculateTrendAlerts(smeData);
 
-    // 4. Aggregate performance flags across portfolio
-    const allPerformanceFlags = smeData.flatMap(sme => 
-      sme.performanceFlags.map(flag => ({
+    // 4. Aggregate default flags across portfolio
+    const allDefaultFlags = smeData.flatMap(sme => 
+      sme.defaultFlags.map(flag => ({
         ...flag,
-        smeName: sme.smeName,
-        severity: flag.severity || flag.status || "medium"
+        smeName: sme.smeName
       }))
     );
 
@@ -671,169 +635,141 @@ const InsightsAIRecommendations = ({ openPopup }) => {
       topPerformers,
       atRiskSMEs,
       trendAlerts,
-      performanceFlags: allPerformanceFlags
+      defaultFlags: allDefaultFlags
     };
   };
 
-  const calculateSupportProgress = (sme) => {
-    // Calculate progress based on program milestones and status
-    let progress = 0;
-    
-    if (sme.programMilestones && sme.programMilestones.length > 0) {
-      const completedMilestones = sme.programMilestones.filter(m => m.status === 'completed').length;
-      progress = Math.round((completedMilestones / sme.programMilestones.length) * 100);
-    } else {
-      // Fallback based on status
-      const statusWeights = {
-        'evaluation': 20,
-        'under review': 40,
-        'due diligence': 60,
-        'decision': 75,
-        'support approved': 90,
-        'active support': 95,
-        'deal closed': 100,
-        'completed': 100
-      };
-      
-      progress = statusWeights[sme.status?.toLowerCase()] || 
-                statusWeights[sme.pipelineStage?.toLowerCase()] || 0;
-    }
-    
-    // Adjust based on engagement
-    progress = Math.min(progress + Math.floor(sme.engagementScore / 10), 100);
-    
-    return Math.max(progress, 5); // Minimum 5% progress
+  const calculateGrowthPercentage = (sme) => {
+    // Calculate growth based on pipeline progression
+    const stageWeights = {
+      'application': 20,
+      'under review': 40,
+      'due diligence': 60,
+      'funding approved': 80,
+      'termsheet': 90,
+      'deal complete': 100
+    };
+
+    const currentWeight = stageWeights[sme.pipelineStage?.toLowerCase()] || 0;
+    const timeBonus = Math.min(sme.daysSinceUpdate < 30 ? 10 : 0, 10);
+    const scoreBonus = Math.min(Math.floor(sme.bigScore / 10), 10);
+
+    return Math.min(currentWeight + timeBonus + scoreBonus - 20, 99);
   };
 
-  const getSupportPerformanceReason = (sme) => {
-    if (sme.engagementScore >= 80) return "Excellent engagement";
-    if (sme.engagementScore >= 60) return "Strong participation";
-    if (sme.bigScore >= 80) return "High fundability potential";
-    if (sme.status === "Active Support") return "Actively progressing";
-    if (sme.status === "Support Approved") return "Program approved";
-    if (sme.programMilestones?.every(m => m.status === 'completed')) return "All milestones achieved";
-    return "Good program candidate";
+  const getPerformanceReason = (sme) => {
+    if (sme.bigScore >= 80) return "Excellent fundability score";
+    if (sme.bigScore >= 70) return "Strong growth potential";
+    if (sme.pipelineStage === "Deal Complete") return "Successfully closed deal";
+    if (sme.pipelineStage === "Funding Approved") return "Approved for funding";
+    if (sme.sector?.toLowerCase().includes("tech")) return "High-growth sector";
+    return "Promising opportunity";
   };
 
-  const getSupportRiskFlag = (sme) => {
-    // Check for performance flags first
-    if (sme.performanceFlags && sme.performanceFlags.length > 0) {
-      const criticalFlags = sme.performanceFlags.filter(flag => 
-        flag.severity === "critical" || flag.status === "Critical"
-      );
-      const warningFlags = sme.performanceFlags.filter(flag => 
-        flag.severity === "warning" || flag.status === "Warning"
-      );
+  const getRiskFlag = (sme) => {
+    // Check for default flags first
+    if (sme.defaultFlags && sme.defaultFlags.length > 0) {
+      const criticalFlags = sme.defaultFlags.filter(flag => flag.status === "Critical");
+      const warningFlags = sme.defaultFlags.filter(flag => flag.status === "Warning");
       
       if (criticalFlags.length > 0) {
-        return `${criticalFlags.length} critical performance issue${criticalFlags.length > 1 ? 's' : ''}`;
+        return `${criticalFlags.length} critical default flag${criticalFlags.length > 1 ? 's' : ''}`;
       }
       if (warningFlags.length > 0) {
-        return `${warningFlags.length} performance warning${warningFlags.length > 1 ? 's' : ''}`;
+        return `${warningFlags.length} warning default flag${warningFlags.length > 1 ? 's' : ''}`;
       }
-      return `${sme.performanceFlags.length} performance flag${sme.performanceFlags.length > 1 ? 's' : ''}`;
+      return `${sme.defaultFlags.length} default flag${sme.defaultFlags.length > 1 ? 's' : ''}`;
     }
     
-    // Other risk indicators
-    if (sme.missedMilestones >= 2) return `${sme.missedMilestones} missed milestones`;
-    if (sme.isStagnant) return "Program stagnation (>3mo)";
-    if (sme.hasLowEngagement) return "Low engagement score";
+    if (sme.missedReports >= 2) return `Missed ${sme.missedReports} reports`;
+    if (sme.isStagnant) return "Pipeline stagnation (>6mo)";
     if (sme.bigScore < 40) return "Low fundability score";
-    if (sme.daysSinceUpdate > 60) return "No recent updates";
+    if (sme.bigScore < 50) return "Below target score";
+    if (sme.daysSinceUpdate > 90) return "No recent updates";
     return "Requires attention";
   };
 
-  const getSupportRecommendedAction = (sme) => {
-    // Prioritize actions based on performance flags
-    if (sme.performanceFlags && sme.performanceFlags.length > 0) {
-      const criticalFlags = sme.performanceFlags.filter(flag => 
-        flag.severity === "critical" || flag.status === "Critical"
-      );
+  const getRecommendedAction = (sme) => {
+    // Prioritize actions based on default flags
+    if (sme.defaultFlags && sme.defaultFlags.length > 0) {
+      const criticalFlags = sme.defaultFlags.filter(flag => flag.status === "Critical");
       if (criticalFlags.length > 0) return "Immediate intervention required";
       
-      const warningFlags = sme.performanceFlags.filter(flag => 
-        flag.severity === "warning" || flag.status === "Warning"
-      );
-      if (warningFlags.length > 0) return "Review performance issues urgently";
+      const warningFlags = sme.defaultFlags.filter(flag => flag.status === "Warning");
+      if (warningFlags.length > 0) return "Review default flags urgently";
       
-      return "Monitor performance metrics";
+      return "Monitor default flags";
     }
     
-    // Other action recommendations
-    if (sme.missedMilestones >= 2) return "Follow up on milestones";
-    if (sme.isStagnant) return "Review program progress";
-    if (sme.hasLowEngagement) return "Increase engagement";
-    if (sme.bigScore < 40) return "Assess fundability support";
-    if (sme.daysSinceUpdate > 60) return "Request program update";
-    return "Schedule program review";
+    if (sme.missedReports >= 2) return "Follow up immediately";
+    if (sme.isStagnant) return "Review and decide";
+    if (sme.bigScore < 40) return "Request improvements";
+    if (sme.bigScore < 50) return "Monitor progress";
+    if (sme.daysSinceUpdate > 90) return "Request status update";
+    return "Schedule review";
   };
 
-  const calculateSupportTrendAlerts = (smeData) => {
-    const totalPrograms = smeData.length;
-    if (totalPrograms === 0) {
+  const calculateTrendAlerts = (smeData) => {
+    const totalSMEs = smeData.length;
+    if (totalSMEs === 0) {
       return [
         {
-          title: "Support Portfolio",
+          title: "Portfolio Status",
           value: "No Data",
-          description: "Start building your support portfolio",
+          description: "Start building your portfolio",
           isPositive: true
         }
       ];
     }
 
-    // Calculate various support program metrics
+    // Calculate various metrics
     const declined = smeData.filter(sme => sme.isDeclined).length;
-    const declineRate = totalPrograms > 0 ? ((declined / totalPrograms) * 100).toFixed(1) : 0;
+    const declineRate = ((declined / totalSMEs) * 100).toFixed(1);
 
-    const completed = smeData.filter(sme => sme.isCompleted).length;
-    const completionRate = totalPrograms > 0 ? ((completed / totalPrograms) * 100).toFixed(1) : 0;
-
-    const avgEngagement = (smeData.reduce((sum, sme) => sum + (sme.engagementScore || 0), 0) / totalPrograms).toFixed(1);
-    const highEngagement = smeData.filter(sme => sme.engagementScore >= 60).length;
-    const engagementRate = totalPrograms > 0 ? ((highEngagement / totalPrograms) * 100).toFixed(1) : 0;
-
-    const avgBigScore = (smeData.reduce((sum, sme) => sum + (sme.bigScore || 0), 0) / totalPrograms).toFixed(1);
+    const avgBigScore = (smeData.reduce((sum, sme) => sum + (sme.bigScore || 0), 0) / totalSMEs).toFixed(1);
     const highScorers = smeData.filter(sme => sme.bigScore >= 70).length;
-    const scoreImprovement = totalPrograms > 0 ? ((highScorers / totalPrograms) * 100).toFixed(1) : 0;
+    const scoreImprovement = ((highScorers / totalSMEs) * 100).toFixed(1);
 
-    // Performance flags metrics
-    const smesWithFlags = smeData.filter(sme => sme.performanceFlags && sme.performanceFlags.length > 0).length;
-    const flagsRate = totalPrograms > 0 ? ((smesWithFlags / totalPrograms) * 100).toFixed(1) : 0;
+    const stagnantCount = smeData.filter(sme => sme.isStagnant).length;
+    const activeDeals = smeData.filter(sme => 
+      sme.pipelineStage === "Under Review" || 
+      sme.pipelineStage === "Due Diligence" ||
+      sme.pipelineStage === "Funding Approved"
+    ).length;
 
-    // Milestone completion metrics
-    const totalMilestones = smeData.reduce((sum, sme) => sum + (sme.programMilestones?.length || 0), 0);
-    const completedMilestones = smeData.reduce((sum, sme) => {
-      if (sme.programMilestones) {
-        return sum + sme.programMilestones.filter(m => m.status === 'completed').length;
-      }
-      return sum;
-    }, 0);
-    const milestoneCompletionRate = totalMilestones > 0 ? ((completedMilestones / totalMilestones) * 100).toFixed(1) : 0;
+    const completedDeals = smeData.filter(sme => 
+      sme.pipelineStage === "Deal Complete"
+    ).length;
+    const successRate = totalSMEs > 0 ? ((completedDeals / totalSMEs) * 100).toFixed(1) : 0;
+
+    // Calculate default flags metrics
+    const smesWithFlags = smeData.filter(sme => sme.defaultFlags && sme.defaultFlags.length > 0).length;
+    const flagsRate = ((smesWithFlags / totalSMEs) * 100).toFixed(1);
 
     return [
       {
-        title: "Completion Rate",
-        value: `${completionRate}%`,
-        description: `${completed} programs successfully completed`,
-        isPositive: parseFloat(completionRate) >= 20
+        title: "Decline Rate",
+        value: `${declineRate}%`,
+        description: declined > 0 ? `${declined} applications declined` : "No declines in portfolio",
+        isPositive: parseFloat(declineRate) < 15
       },
       {
-        title: "Avg Engagement",
-        value: avgEngagement,
-        description: `${engagementRate}% of portfolio highly engaged`,
-        isPositive: parseFloat(avgEngagement) >= 50
+        title: "Avg BIG Score",
+        value: avgBigScore,
+        description: `${scoreImprovement}% of portfolio above 70`,
+        isPositive: parseFloat(avgBigScore) >= 60
       },
       {
-        title: "Performance Flags",
+        title: "Default Flags",
         value: `${flagsRate}%`,
-        description: `${smesWithFlags} programs with performance flags`,
-        isPositive: parseFloat(flagsRate) < 10
+        description: `${smesWithFlags} SMEs with default flags`,
+        isPositive: parseFloat(flagsRate) === 0
       },
       {
-        title: "Milestone Completion",
-        value: `${milestoneCompletionRate}%`,
-        description: `${completedMilestones} of ${totalMilestones} milestones completed`,
-        isPositive: parseFloat(milestoneCompletionRate) >= 80
+        title: "Success Rate",
+        value: `${successRate}%`,
+        description: `${completedDeals} deals successfully closed`,
+        isPositive: parseFloat(successRate) >= 20
       }
     ];
   };
@@ -882,7 +818,7 @@ const InsightsAIRecommendations = ({ openPopup }) => {
       <div className="insights-ai">
         <div className="loading-container">
           <Loader size={48} style={{ color: "#a67c52", animation: "spin 1s linear infinite" }} />
-          <p className="loading-text">Loading support program insights...</p>
+          <p className="loading-text">Loading portfolio insights...</p>
         </div>
       </div>
     );
@@ -898,17 +834,17 @@ const InsightsAIRecommendations = ({ openPopup }) => {
       </div>
       
       <div className="insights-charts-grid">
-        {/* Top 5 High Performers in Support Programs */}
+        {/* Top 5 High Performers */}
         <div className="chart-container full-width">
           <div className="chart-header">
-            <h3 className="chart-title">Top 5 High-Performers in Your Support Programs</h3>
+            <h3 className="chart-title">Top 5 High-Performers in Your Portfolio</h3>
             <button 
               className="breakdown-icon-btn"
               onClick={() => openPopup(
                 <div className="popup-content">
                   <h3>Top 5 High-Performers</h3>
                   <div className="popup-description">
-                    SMEs in your support programs showing exceptional engagement and strong progress
+                    SMEs in your portfolio showing exceptional performance and strong fundability scores
                   </div>
                   {insightsData.topPerformers.length > 0 ? (
                     <div className="table-container-popup">
@@ -916,9 +852,9 @@ const InsightsAIRecommendations = ({ openPopup }) => {
                         <thead>
                           <tr>
                             <th>SME</th>
-                            <th>Engagement Score</th>
+                            <th>BIG Score</th>
                             <th>Progress</th>
-                            <th>Program Value</th>
+                            <th>Investment</th>
                             <th>Reason</th>
                           </tr>
                         </thead>
@@ -927,8 +863,8 @@ const InsightsAIRecommendations = ({ openPopup }) => {
                             <tr key={idx}>
                               <td>{performer.smeName}</td>
                               <td>{performer.score}</td>
-                              <td>{performer.progress}%</td>
-                              <td>{performer.programValue}</td>
+                              <td>+{performer.growth}%</td>
+                              <td>{performer.ask}</td>
                               <td>{performer.reason}</td>
                             </tr>
                           ))}
@@ -939,7 +875,7 @@ const InsightsAIRecommendations = ({ openPopup }) => {
                     <div className="empty-state">
                       <div className="empty-state-icon">📊</div>
                       <div className="empty-state-text">
-                        No high-performing SMEs in your support programs yet
+                        No high-performing SMEs in your portfolio yet
                       </div>
                     </div>
                   )}
@@ -956,9 +892,9 @@ const InsightsAIRecommendations = ({ openPopup }) => {
                 <thead>
                   <tr>
                     <th>SME</th>
-                    <th>Engagement Score</th>
+                    <th>BIG Score</th>
                     <th>Progress</th>
-                    <th>Program Value</th>
+                    <th>Investment</th>
                     <th>Reason</th>
                   </tr>
                 </thead>
@@ -967,8 +903,8 @@ const InsightsAIRecommendations = ({ openPopup }) => {
                     <tr key={idx}>
                       <td>{performer.smeName}</td>
                       <td>{performer.score}</td>
-                      <td style={{ color: '#4CAF50', fontWeight: '600' }}>{performer.progress}%</td>
-                      <td>{performer.programValue}</td>
+                      <td style={{ color: '#4CAF50', fontWeight: '600' }}>+{performer.growth}%</td>
+                      <td>{performer.ask}</td>
                       <td>{performer.reason}</td>
                     </tr>
                   ))}
@@ -978,25 +914,25 @@ const InsightsAIRecommendations = ({ openPopup }) => {
               <div className="empty-state">
                 <div className="empty-state-icon">📊</div>
                 <div className="empty-state-text">
-                  No high-performing SMEs in your support programs yet.<br/>
-                  As you engage with more SMEs in support programs, top performers will appear here.
+                  No high-performing SMEs in your portfolio yet.<br/>
+                  As you invest in more companies, top performers will appear here.
                 </div>
               </div>
             )}
           </div>
         </div>
 
-        {/* At-Risk / Watchlist SMEs in Support Programs */}
+        {/* At-Risk / Watchlist SMEs - ALWAYS shows empty table structure */}
         <div className="chart-container full-width">
           <div className="chart-header">
-            <h3 className="chart-title">At-Risk / Watchlist SMEs in Support Programs</h3>
+            <h3 className="chart-title">At-Risk / Watchlist SMEs</h3>
             <button 
               className="breakdown-icon-btn"
               onClick={() => openPopup(
                 <div className="popup-content">
                   <h3>At-Risk / Watchlist SMEs</h3>
                   <div className="popup-description">
-                    SMEs in your support programs requiring attention due to performance, engagement, or progress concerns
+                    SMEs in your portfolio requiring attention due to performance or activity concerns
                   </div>
                   {insightsData.atRiskSMEs.length > 0 ? (
                     <div className="table-container-popup">
@@ -1036,8 +972,8 @@ const InsightsAIRecommendations = ({ openPopup }) => {
                       <div className="empty-state">
                         <div className="empty-state-icon">✅</div>
                         <div className="empty-state-text">
-                          No at-risk SMEs detected in your support programs.<br/>
-                          All support programs are progressing within acceptable parameters.
+                          No at-risk SMEs detected in your portfolio.<br/>
+                          All companies are performing within acceptable parameters.
                         </div>
                       </div>
                     </div>
@@ -1086,55 +1022,12 @@ const InsightsAIRecommendations = ({ openPopup }) => {
                 <div className="empty-state">
                   <div className="empty-state-icon">✅</div>
                   <div className="empty-state-text">
-                    No at-risk SMEs detected in your support programs.<br/>
-                    All support programs are progressing within acceptable parameters.
+                    No at-risk SMEs detected in your portfolio.<br/>
+                    All companies are performing within acceptable parameters.
                   </div>
                 </div>
               </div>
             )}
-          </div>
-        </div>
-
-        {/* Support Program Trend Alerts */}
-        <div className="chart-container full-width">
-          <div className="chart-header">
-            <h3 className="chart-title">Support Program Performance Alerts</h3>
-            <button 
-              className="breakdown-icon-btn"
-              onClick={() => openPopup(
-                <div className="popup-content">
-                  <h3>Support Program Performance Metrics</h3>
-                  <div className="popup-description">
-                    Key performance indicators and trends across your support program portfolio
-                  </div>
-                  <div className="trend-alerts-grid-popup">
-                    {insightsData.trendAlerts.map((alert, idx) => (
-                      <TrendAlertCard
-                        key={idx}
-                        title={alert.title}
-                        value={alert.value}
-                        description={alert.description}
-                        isPositive={alert.isPositive}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-              title="View details"
-            >
-              <FiEye />
-            </button>
-          </div>
-          <div className="trend-alerts-grid">
-            {insightsData.trendAlerts.map((alert, idx) => (
-              <TrendAlertCard
-                key={idx}
-                title={alert.title}
-                value={alert.value}
-                description={alert.description}
-                isPositive={alert.isPositive}
-              />
-            ))}
           </div>
         </div>
       </div>

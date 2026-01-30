@@ -291,7 +291,7 @@ export const investorMenuItems = [
         id: "billing-info",
         label: "Billing Information",
         icon: <DollarSign size={16} />,
-        route: "/investor/billing/myinfo",
+        route: "/investor/billing/info",
       },
       {
         id: "subscriptions",
@@ -303,7 +303,7 @@ export const investorMenuItems = [
         id: "transactions",
         label: "Billing History",
         icon: <Package size={16} />,
-        route: "/investor/billing/info",
+        route: "/investor/billing/history",
       },
     ],
   },

@@ -1,7 +1,7 @@
 // tabs/PerformanceRiskDashboard.js
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Bar, Line, Radar } from 'react-chartjs-2';
-import { FiEye, FiGrid, FiCheck } from 'react-icons/fi';
+import { FiEye } from 'react-icons/fi';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -14,9 +14,7 @@ import {
   Tooltip,
   Legend,
   Filler
-} from 'chart.js';
-import { collection, query, where, getDocs, doc, setDoc, getDoc } from 'firebase/firestore';
-import { db, auth } from '../../firebaseConfig';
+} from 'chart.js'; 
 
 // Register ChartJS components
 ChartJS.register(
@@ -36,150 +34,6 @@ ChartJS.register(
 const styles = `
 .performance-risk {
   width: 100%;
-}
-
-.controls-row {
-  margin-bottom: 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 10px;
-}
-
-.chart-selection-controls {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  position: relative;
-}
-
-.chart-selector-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: #f5f5f5;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #666;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.chart-selector-btn:hover {
-  background: #e0e0e0;
-}
-
-.chart-selector-btn.active {
-  background-color: #7d5a36;
-  color: white;
-}
-
-.chart-selector-popup {
-  position: absolute;
-  top: 40px;
-  left: 0;
-  background: white;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
-  z-index: 1000;
-  min-width: 300px;
-  border: 1px solid #e0e0e0;
-}
-
-.chart-selector-popup h4 {
-  margin: 0 0 15px 0;
-  color: #5e3f26;
-  font-size: 16px;
-  font-weight: 600;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #ede4d8;
-}
-
-.chart-selection-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.chart-selection-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: #f8f9fa;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.chart-selection-item:hover {
-  background: #e9ecef;
-}
-
-.chart-selection-item.selected {
-  background: #e8f5e8;
-  border: 1px solid #4CAF50;
-}
-
-.chart-selection-checkbox {
-  width: 18px;
-  height: 18px;
-  border: 2px solid #7d5a36;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.chart-selection-checkbox.checked {
-  background: #7d5a36;
-  color: white;
-}
-
-.chart-selection-label {
-  font-size: 13px;
-  color: #333;
-  font-weight: 500;
-}
-
-.chart-selection-actions {
-  display: flex;
-  gap: 10px;
-  justify-content: space-between;
-}
-
-.chart-selection-btn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  flex: 1;
-}
-
-.chart-selection-btn.primary {
-  background-color: #7d5a36;
-  color: white;
-}
-
-.chart-selection-btn.primary:hover {
-  background-color: #5e3f26;
-}
-
-.chart-selection-btn.secondary {
-  background-color: #f5f5f5;
-  color: #666;
-}
-
-.chart-selection-btn.secondary:hover {
-  background-color: #e0e0e0;
 }
 
 .performance-charts-grid {
@@ -387,12 +241,6 @@ const styles = `
 }
 
 /* Responsive Design */
-@media (max-width: 1200px) {
-  .performance-charts-grid {
-    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-  }
-}
-
 @media (max-width: 992px) {
   .performance-charts-grid {
     grid-template-columns: 1fr;
@@ -400,25 +248,6 @@ const styles = `
   
   .chart-container {
     height: 380px;
-  }
-  
-  .controls-row {
-    flex-direction: column;
-    gap: 15px;
-    align-items: stretch;
-  }
-  
-  .chart-selection-controls {
-    justify-content: space-between;
-  }
-  
-  .chart-selector-popup {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 90%;
-    max-width: 400px;
   }
 }
 
@@ -438,16 +267,12 @@ const styles = `
   .performance-charts-grid {
     padding: 0 5px;
   }
-  
-  .chart-selection-grid {
-    grid-template-columns: 1fr;
-  }
 }
 `;
 
-// Styles for PerformanceRiskDashboard (keep existing styles)
+// Add styles to document
 const styleSheet = document.createElement('style');
-styleSheet.textContent = styles; // Use your existing styles constant
+styleSheet.textContent = styles;
 document.head.appendChild(styleSheet);
 
 const brownShades = [
@@ -455,7 +280,7 @@ const brownShades = [
   '#3f2a18', '#d4c4b0', '#5D4037', '#3E2723'
 ];
 
-// Static options (keep existing)
+// Static options
 const staticBarOptions = {
   responsive: true,
   maintainAspectRatio: false,
@@ -494,290 +319,8 @@ const staticRadarOptions = {
   }
 };
 
-// Save user preferences to Firebase (keep existing)
-const saveUserChartPreferences = async (userId, preferences) => {
-  try {
-    const userPrefsRef = doc(db, "userPreferences", userId);
-    await setDoc(userPrefsRef, {
-      performanceChartPreferences: preferences,
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
-    console.log('✅ Performance chart preferences saved to Firebase');
-  } catch (error) {
-    console.error('❌ Error saving performance chart preferences:', error);
-  }
-};
-
-// Load user preferences from Firebase (keep existing)
-const loadUserChartPreferences = async (userId) => {
-  try {
-    const userPrefsRef = doc(db, "userPreferences", userId);
-    const userPrefsSnap = await getDoc(userPrefsRef);
-    
-    if (userPrefsSnap.exists()) {
-      const preferences = userPrefsSnap.data().performanceChartPreferences;
-      console.log('✅ Performance chart preferences loaded from Firebase:', preferences);
-      return preferences;
-    } else {
-      console.log('⚠️ No performance chart preferences found, using defaults');
-      return null;
-    }
-  } catch (error) {
-    console.error('❌ Error loading performance chart preferences:', error);
-    return null;
-  }
-};
-
 const PerformanceRiskDashboard = ({ openPopup }) => {
-  const [showChartSelector, setShowChartSelector] = useState(false);
-  const [selectedCharts, setSelectedCharts] = useState({
-    programCompletionRate: true,
-    smeEngagementIndex: true,
-    skillDevelopment: true,
-    bigScoreImprovement: true,
-    socioeconomicImpact: true
-  });
-  const [performanceData, setPerformanceData] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  // Load chart preferences on component mount
-  useEffect(() => {
-    const loadPreferences = async () => {
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        const savedPreferences = await loadUserChartPreferences(currentUser.uid);
-        if (savedPreferences) {
-          setSelectedCharts(savedPreferences.selectedCharts || selectedCharts);
-        }
-        await fetchPerformanceData();
-      }
-    };
-    
-    loadPreferences();
-  }, []);
-
-  // Save preferences when they change
-  useEffect(() => {
-    const savePreferences = async () => {
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        const preferences = {
-          selectedCharts,
-          updatedAt: new Date().toISOString()
-        };
-        await saveUserChartPreferences(currentUser.uid, preferences);
-      }
-    };
-
-    const timeoutId = setTimeout(savePreferences, 1000);
-    return () => clearTimeout(timeoutId);
-  }, [selectedCharts]);
-
-  // Fetch performance data from support programs
-  const fetchPerformanceData = async () => {
-    try {
-      setLoading(true);
-      const currentUser = auth.currentUser;
-      
-      if (!currentUser) {
-        console.log("No authenticated user");
-        setLoading(false);
-        return;
-      }
-
-      // Fetch all catalyst's support applications
-      const applicationsQuery = query(
-        collection(db, "catalystApplications"),
-        where("catalystId", "==", currentUser.uid)
-      );
-
-      const applicationsSnapshot = await getDocs(applicationsQuery);
-      console.log("Found support applications for performance analysis:", applicationsSnapshot.docs.length);
-
-      // Process all applications to calculate performance metrics
-      const smeDataPromises = applicationsSnapshot.docs.map(async (appDoc) => {
-        const appData = appDoc.data();
-        
-        try {
-          let profileData = {};
-          let initialBigScore = 0;
-          let currentBigScore = 0;
-
-          // Fetch SME profile
-          if (appData.smeId) {
-            const profileRef = doc(db, "universalProfiles", appData.smeId);
-            const profileSnap = await getDoc(profileRef);
-
-            if (profileSnap.exists()) {
-              profileData = profileSnap.data();
-              currentBigScore = profileData.bigScore || 0;
-              
-              // Try to get initial BIG score from program start
-              if (appData.programStartDate) {
-                // For demo, we'll simulate some improvement
-                initialBigScore = Math.max(0, currentBigScore - Math.floor(Math.random() * 20));
-              } else {
-                initialBigScore = currentBigScore;
-              }
-            }
-          }
-
-          const smeName = profileData.entityOverview?.tradingName ||
-                         profileData.entityOverview?.registeredName ||
-                         appData.companyName ||
-                         appData.smeName ||
-                         "Unnamed Business";
-
-          // Calculate program metrics
-          const status = appData.status || "New Application";
-          const isCompleted = status.toLowerCase().includes('completed') || 
-                             status === "Deal Closed" || 
-                             status === "Support Declined";
-          const isActive = status === "Active Support" || status === "Support Approved";
-          
-          // Calculate engagement score
-          let engagementScore = 0;
-          if (appData.interactions) {
-            const recentInteractions = appData.interactions.filter(interaction => {
-              const interactionDate = new Date(interaction.date);
-              return (new Date() - interactionDate) < (30 * 24 * 60 * 60 * 1000); // Last 30 days
-            });
-            engagementScore = Math.min(recentInteractions.length * 25, 100); // Max 4 interactions per month
-          }
-
-          // Calculate skill development (placeholder - would need actual data)
-          const skillDevelopment = appData.skillDevelopmentScore || 
-                                  Math.floor(Math.random() * 30) + 40; // 40-70 for demo
-
-          // Determine socioeconomic impact
-          const entitySize = profileData.entityOverview?.entitySize || "Small";
-          const location = profileData.entityOverview?.location || "Urban";
-          const isRural = location.toLowerCase().includes('rural');
-          const isYouthOwned = profileData.entityOverview?.ownerAge === "Youth" || 
-                               profileData.entityOverview?.yearsInOperation < 3;
-          const isWomenOwned = profileData.entityOverview?.ownerGender === "Female" || false;
-
-          return {
-            id: appDoc.id,
-            smeId: appData.smeId,
-            smeName,
-            status,
-            isCompleted,
-            isActive,
-            engagementScore,
-            initialBigScore,
-            currentBigScore,
-            bigScoreImprovement: currentBigScore - initialBigScore,
-            skillDevelopment,
-            programStartDate: appData.programStartDate,
-            programEndDate: appData.programEndDate,
-            entitySize,
-            location,
-            isRural,
-            isYouthOwned,
-            isWomenOwned,
-            sector: profileData.entityOverview?.economicSectors?.[0] || "Not specified",
-            programValue: appData.programValue || appData.fundingRequired || 0
-          };
-        } catch (error) {
-          console.error("Error processing SME performance data:", error);
-          return null;
-        }
-      });
-
-      const allSMEData = (await Promise.all(smeDataPromises)).filter(sme => sme !== null);
-      console.log("Processed SME performance data:", allSMEData.length);
-
-      // Calculate aggregate performance metrics
-      const metrics = calculatePerformanceMetrics(allSMEData);
-      setPerformanceData(metrics);
-      setLoading(false);
-
-    } catch (error) {
-      console.error("Error fetching performance data:", error);
-      setLoading(false);
-    }
-  };
-
-  const calculatePerformanceMetrics = (smeData) => {
-    const totalPrograms = smeData.length;
-    if (totalPrograms === 0) {
-      return {
-        // Return demo data when no real data exists
-        programCompletionRate: { q1: 15, q2: 17, q3: 18, q4: 19 },
-        engagementIndex: { q1: 65, q2: 68, q3: 72, q4: 75 },
-        skillDevelopment: { services: 45, tech: 60, manufacturing: 55, retail: 50, agriculture: 40 },
-        bigScoreImprovement: { q1: 5, q2: 6, q3: 7, q4: 8 },
-        socioeconomicImpact: { youth: 30, women: 35, rural: 25, overall: 65 }
-      };
-    }
-
-    // Calculate metrics by quarter (simplified for demo)
-    const completedPrograms = smeData.filter(sme => sme.isCompleted).length;
-    const completionRate = totalPrograms > 0 ? (completedPrograms / totalPrograms) * 100 : 0;
-    
-    const avgEngagement = smeData.reduce((sum, sme) => sum + (sme.engagementScore || 0), 0) / totalPrograms;
-    const avgBigScoreImprovement = smeData.reduce((sum, sme) => sum + (sme.bigScoreImprovement || 0), 0) / totalPrograms;
-    
-    // Count diverse SMEs
-    const youthOwned = smeData.filter(sme => sme.isYouthOwned).length;
-    const womenOwned = smeData.filter(sme => sme.isWomenOwned).length;
-    const rural = smeData.filter(sme => sme.isRural).length;
-    
-    // Calculate diversity metrics
-    const diversityMetrics = {
-      youth: totalPrograms > 0 ? (youthOwned / totalPrograms) * 100 : 0,
-      women: totalPrograms > 0 ? (womenOwned / totalPrograms) * 100 : 0,
-      rural: totalPrograms > 0 ? (rural / totalPrograms) * 100 : 0,
-      overall: Math.min((youthOwned + womenOwned + rural) / totalPrograms * 50, 100) // Weighted overall score
-    };
-
-    // Group skill development by sector
-    const sectorSkillData = {};
-    smeData.forEach(sme => {
-      if (sme.sector && sme.sector !== "Not specified") {
-        if (!sectorSkillData[sme.sector]) {
-          sectorSkillData[sme.sector] = { total: 0, count: 0 };
-        }
-        sectorSkillData[sme.sector].total += sme.skillDevelopment;
-        sectorSkillData[sme.sector].count++;
-      }
-    });
-
-    // Calculate average skill development by sector
-    const skillDevelopmentBySector = {};
-    Object.entries(sectorSkillData).forEach(([sector, data]) => {
-      skillDevelopmentBySector[sector] = Math.round(data.total / data.count);
-    });
-
-    // Fill in any missing popular sectors
-    const popularSectors = ['Services', 'Technology', 'Manufacturing', 'Retail', 'Agriculture'];
-    popularSectors.forEach(sector => {
-      if (!skillDevelopmentBySector[sector]) {
-        skillDevelopmentBySector[sector] = 45 + Math.floor(Math.random() * 20); // 45-65 for demo
-      }
-    });
-
-    return {
-      programCompletionRate: { q1: 15, q2: 17, q3: 18, q4: 19 }, // Use realistic demo data
-      engagementIndex: { 
-        q1: Math.round(avgEngagement * 0.9), 
-        q2: Math.round(avgEngagement * 0.95),
-        q3: Math.round(avgEngagement * 1.0),
-        q4: Math.round(avgEngagement * 1.05)
-      },
-      skillDevelopment: skillDevelopmentBySector,
-      bigScoreImprovement: { 
-        q1: Math.max(3, Math.round(avgBigScoreImprovement * 0.8)),
-        q2: Math.max(4, Math.round(avgBigScoreImprovement * 0.9)),
-        q3: Math.max(5, Math.round(avgBigScoreImprovement * 1.0)),
-        q4: Math.max(6, Math.round(avgBigScoreImprovement * 1.1))
-      },
-      socioeconomicImpact: diversityMetrics
-    };
-  };
-
-  // Data generation functions (keep existing)
+  // Data generation functions
   const generateBarData = (labels, data, label, colorIndex) => ({
     labels,
     datasets: [{
@@ -831,85 +374,14 @@ const PerformanceRiskDashboard = ({ openPopup }) => {
     ]
   });
 
-  // Chart Selection Component (keep existing)
-  const ChartSelectionPopup = () => {
-    const chartOptions = [
-      { id: 'programCompletionRate', label: 'Program Completion Rate' },
-      { id: 'smeEngagementIndex', label: 'SME Engagement Index' },
-      { id: 'skillDevelopment', label: 'Skill Development' },
-      { id: 'bigScoreImprovement', label: 'BIG Score Improvement' },
-      { id: 'socioeconomicImpact', label: 'Socioeconomic Impact' }
-    ];
-
-    const handleToggleChart = (chartId) => {
-      setSelectedCharts(prev => ({
-        ...prev,
-        [chartId]: !prev[chartId]
-      }));
-    };
-
-    const handleSelectAll = () => {
-      const allSelected = {};
-      chartOptions.forEach(option => {
-        allSelected[option.id] = true;
-      });
-      setSelectedCharts(allSelected);
-    };
-
-    const handleDeselectAll = () => {
-      const noneSelected = {};
-      chartOptions.forEach(option => {
-        noneSelected[option.id] = false;
-      });
-      setSelectedCharts(noneSelected);
-    };
-
-    const handleSaveSelection = () => {
-      setShowChartSelector(false);
-    };
-
-    const selectedCount = Object.values(selectedCharts).filter(Boolean).length;
-
-    return (
-      <div className="chart-selector-popup">
-        <h4>Select Charts to Display ({selectedCount} selected)</h4>
-        <div className="chart-selection-grid">
-          {chartOptions.map(option => (
-            <div
-              key={option.id}
-              className={`chart-selection-item ${selectedCharts[option.id] ? 'selected' : ''}`}
-              onClick={() => handleToggleChart(option.id)}
-            >
-              <div className={`chart-selection-checkbox ${selectedCharts[option.id] ? 'checked' : ''}`}>
-                {selectedCharts[option.id] && <FiCheck size={12} />}
-              </div>
-              <span className="chart-selection-label">{option.label}</span>
-            </div>
-          ))}
-        </div>
-        <div className="chart-selection-actions">
-          <button className="chart-selection-btn secondary" onClick={handleDeselectAll}>
-            Deselect All
-          </button>
-          <button className="chart-selection-btn secondary" onClick={handleSelectAll}>
-            Select All
-          </button>
-          <button className="chart-selection-btn primary" onClick={handleSaveSelection}>
-            Apply
-          </button>
-        </div>
-      </div>
-    );
-  };
-
-  // Chart Components with real data integration
+  // Chart Components
   const BarChartWithTitle = ({ data, title, chartTitle, chartId }) => {
     const handleEyeClick = () => {
       openPopup(
         <div className="popup-content">
           <h3>{title}</h3>
           <div className="popup-description">
-            Detailed breakdown of {title.toLowerCase()} from your support programs
+            Detailed breakdown of {title.toLowerCase()}
           </div>
           <div className="popup-chart">
             <Bar data={data} options={staticBarOptions} />
@@ -918,15 +390,9 @@ const PerformanceRiskDashboard = ({ openPopup }) => {
             {data.labels.map((label, index) => (
               <div key={label} className="detail-item">
                 <span className="detail-label">{label}:</span>
-                <span className="detail-value">{data.datasets[0].data[index]}%</span>
+                <span className="detail-value">{data.datasets[0].data[index]}</span>
               </div>
             ))}
-            <div className="detail-item">
-              <span className="detail-label">Data Source:</span>
-              <span className="detail-value">
-                {performanceData ? 'Your Support Programs' : 'Demo Data'}
-              </span>
-            </div>
           </div>
         </div>
       );
@@ -954,7 +420,7 @@ const PerformanceRiskDashboard = ({ openPopup }) => {
         <div className="popup-content">
           <h3>{title}</h3>
           <div className="popup-description">
-            Quarterly trend analysis of {title.toLowerCase()} in support programs
+            Detailed trend analysis of {title.toLowerCase()}
           </div>
           <div className="popup-chart">
             <Line data={data} options={staticLineOptions} />
@@ -964,16 +430,10 @@ const PerformanceRiskDashboard = ({ openPopup }) => {
               <div key={label} className="detail-item">
                 <span className="detail-label">{label}:</span>
                 <span className="detail-value">
-                  {data.datasets.map(ds => `${ds.label}: ${ds.data[index]}%`).join(' | ')}
+                  {data.datasets.map(ds => `${ds.label}: ${ds.data[index]}`).join(' | ')}
                 </span>
               </div>
             ))}
-            <div className="detail-item">
-              <span className="detail-label">Data Source:</span>
-              <span className="detail-value">
-                {performanceData ? 'Your Support Programs' : 'Demo Data'}
-              </span>
-            </div>
           </div>
         </div>
       );
@@ -1001,7 +461,7 @@ const PerformanceRiskDashboard = ({ openPopup }) => {
         <div className="popup-content">
           <h3>{title}</h3>
           <div className="popup-description">
-            Performance comparison across different socioeconomic impact metrics
+            Performance comparison across different diversity and inclusion metrics
           </div>
           <div className="popup-chart">
             <Radar data={data} options={staticRadarOptions} />
@@ -1011,16 +471,10 @@ const PerformanceRiskDashboard = ({ openPopup }) => {
               <div key={label} className="detail-item">
                 <span className="detail-label">{label}:</span>
                 <span className="detail-value">
-                  Actual: {data.datasets[0].data[index]}% | Target: {data.datasets[1].data[index]}%
+                  Actual: {data.datasets[0].data[index]} | Target: {data.datasets[1].data[index]}
                 </span>
               </div>
             ))}
-            <div className="detail-item">
-              <span className="detail-label">Data Source:</span>
-              <span className="detail-value">
-                {performanceData ? 'Your Support Programs' : 'Demo Data'}
-              </span>
-            </div>
           </div>
         </div>
       );
@@ -1041,188 +495,69 @@ const PerformanceRiskDashboard = ({ openPopup }) => {
     );
   };
 
-  if (loading) {
-    return (
-      <div className="performance-risk">
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
-          height: '200px',
-          color: '#666',
-          fontSize: '16px'
-        }}>
-          Loading performance data...
-        </div>
-      </div>
-    );
-  }
-
-  // Get selected charts
-  const selectedChartComponents = [];
-  
-  // Use real data when available, otherwise use demo data
-  const completionData = performanceData?.programCompletionRate || { q1: 15, q2: 17, q3: 18, q4: 19 };
-  const engagementData = performanceData?.engagementIndex || { q1: 65, q2: 68, q3: 72, q4: 75 };
-  const skillData = performanceData?.skillDevelopment || { 
-    Services: 45, Technology: 60, Manufacturing: 55, Retail: 50, Agriculture: 40 
-  };
-  const improvementData = performanceData?.bigScoreImprovement || { q1: 5, q2: 6, q3: 7, q4: 8 };
-  const impactData = performanceData?.socioeconomicImpact || { 
-    youth: 30, women: 35, rural: 25, overall: 65 
-  };
-
-  // Add Program Completion Rate chart if selected
-  if (selectedCharts.programCompletionRate) {
-    selectedChartComponents.push({
-      id: 'programCompletionRate',
-      component: (
-        <BarChartWithTitle
-          key="programCompletionRate"
-          data={generateBarData(
-            ['Q1', 'Q2', 'Q3', 'Q4'],
-            [completionData.q1, completionData.q2, completionData.q3, completionData.q4],
-            '% Completion',
-            0
-          )}
-          title="Program Completion Rate"
-          chartTitle="Support program completion rates per quarter (%)"
-          chartId="program-completion-rate"
-        />
-      )
-    });
-  }
-
-  // Add SME Engagement Index chart if selected
-  if (selectedCharts.smeEngagementIndex) {
-    selectedChartComponents.push({
-      id: 'smeEngagementIndex',
-      component: (
-        <LineChartWithTitle
-          key="smeEngagementIndex"
-          data={generateLineData(
-            ['Q1', 'Q2', 'Q3', 'Q4'],
-            [
-              { label: 'Engagement Score', values: [engagementData.q1, engagementData.q2, engagementData.q3, engagementData.q4] },
-              { label: 'Target (70%)', values: [70, 70, 70, 70] }
-            ]
-          )}
-          title="SME Engagement Index"
-          chartTitle="SME engagement scores vs target (%)"
-          chartId="sme-engagement-index"
-        />
-      )
-    });
-  }
-
-  // Add Skill Development chart if selected
-  if (selectedCharts.skillDevelopment) {
-    selectedChartComponents.push({
-      id: 'skillDevelopment',
-      component: (
-        <BarChartWithTitle
-          key="skillDevelopment"
-          data={generateStackedBarData(
-            Object.keys(skillData),
-            [
-              { 
-                label: 'Skill Development', 
-                values: Object.values(skillData) 
-              }
-            ]
-          )}
-          title="Skill Development by Sector"
-          chartTitle="Average skill development scores by sector (0-100)"
-          chartId="skill-development"
-        />
-      )
-    });
-  }
-
-  // Add BIG Score Improvement chart if selected
-  if (selectedCharts.bigScoreImprovement) {
-    selectedChartComponents.push({
-      id: 'bigScoreImprovement',
-      component: (
-        <LineChartWithTitle
-          key="bigScoreImprovement"
-          data={generateLineData(
-            ['Q1', 'Q2', 'Q3', 'Q4'],
-            [
-              { 
-                label: 'BIG Score Improvement', 
-                values: [improvementData.q1, improvementData.q2, improvementData.q3, improvementData.q4] 
-              },
-              { 
-                label: 'Target (10 points)', 
-                values: [10, 10, 10, 10] 
-              }
-            ]
-          )}
-          title="BIG Score Improvement"
-          chartTitle="Average BIG score improvement per quarter (points)"
-          chartId="big-score-improvement"
-        />
-      )
-    });
-  }
-
-  // Add Socioeconomic Impact chart if selected
-  if (selectedCharts.socioeconomicImpact) {
-    selectedChartComponents.push({
-      id: 'socioeconomicImpact',
-      component: (
-        <RadarChartWithTitle
-          key="socioeconomicImpact"
-          data={generateRadarData(
-            ['Youth-owned', 'Women-led', 'Rural-based', 'Overall Impact'],
-            [impactData.youth, impactData.women, impactData.rural, impactData.overall],
-            [30, 35, 25, 60] // Target values
-          )}
-          title="Socioeconomic Impact Score"
-          chartId="socioeconomic-impact"
-        />
-      )
-    });
-  }
-
   return (
     <div className="performance-risk">
-      {/* Chart Selection Controls */}
-      <div className="controls-row">
-        <div className="chart-selection-controls">
-          <div style={{ position: 'relative' }}>
-            <button 
-              className={`chart-selector-btn ${showChartSelector ? 'active' : ''}`}
-              onClick={() => setShowChartSelector(!showChartSelector)}
-              title="Select charts to display"
-            >
-              <FiGrid />
-              Select Charts ({Object.values(selectedCharts).filter(Boolean).length} selected)
-            </button>
-            {showChartSelector && <ChartSelectionPopup />}
-          </div>
-        </div>
-      </div>
-      
-      {/* Charts Grid */}
       <div className="performance-charts-grid">
-        {selectedChartComponents.map(chart => chart.component)}
-        
-        {selectedChartComponents.length === 0 && (
-          <div style={{ 
-            gridColumn: '1 / -1',
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            height: '200px',
-            color: '#666',
-            fontSize: '16px',
-            textAlign: 'center'
-          }}>
-            No charts selected. Click "Select Charts" to choose which charts to display.
-          </div>
-        )}
+        <BarChartWithTitle
+          data={generateBarData(
+            ['Q1', 'Q2', 'Q3', 'Q4'],
+            [7.5, 9.8, 6.1, 4.2],
+            '% Defaults',
+            0
+          )}
+          title="Default / Non-performing Ratio"
+          chartTitle="Default rates per quarter (%)"
+          chartId="default-ratio"
+        />
+
+        <LineChartWithTitle
+          data={generateLineData(
+            ['Q1', 'Q2', 'Q3', 'Q4'],
+            [
+              { label: 'Revenue Growth', values: [9, 10, 12, 11] },
+              { label: 'Benchmark (8%)', values: [8, 8, 8, 8] }
+            ]
+          )}
+          title="SME Growth Index"
+          chartTitle="Revenue growth vs benchmark (%)"
+          chartId="sme-growth-index"
+        />
+
+        <BarChartWithTitle
+          data={generateStackedBarData(
+            ['Agriculture', 'Services', 'Manufacturing', 'Retail', 'Tech'],
+            [
+              { label: 'New Jobs', values: [800, 1000, 600, 400, 300] },
+              { label: 'Retained Jobs', values: [400, 500, 400, 300, 200] }
+            ]
+          )}
+          title="Job Creation / Retention"
+          chartTitle="Jobs created and retained by sector"
+          chartId="job-creation"
+        />
+
+        <LineChartWithTitle
+          data={generateLineData(
+            ['Q1', 'Q2', 'Q3', 'Q4'],
+            [
+              { label: 'Graduation Rate', values: [15, 17, 18, 19] },
+              { label: 'Target (25%)', values: [20, 21, 23, 25] }
+            ]
+          )}
+          title="SME Graduation Rate (to 80+ BIG Score)"
+          chartTitle="Graduation rate vs target (%)"
+          chartId="graduation-rate"
+        />
+
+        <RadarChartWithTitle
+          data={generateRadarData(
+            ['Women', 'Youth', 'Rural', 'Black-owned'],
+            [38, 24, 45, 72],
+            [35, 25, 40, 70]
+          )}
+          title="Diversity & Inclusion Score"
+          chartId="diversity-inclusion"
+        />
       </div>
     </div>
   );

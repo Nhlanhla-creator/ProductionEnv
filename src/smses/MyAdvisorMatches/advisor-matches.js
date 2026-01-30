@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
 import { onAuthStateChanged } from "firebase/auth"
 import { auth } from "../../firebaseConfig"
 import { AdvisorFlowPipeline } from "./advisor-flow-pipeline"
@@ -10,6 +11,8 @@ import { db } from "../../firebaseConfig"
 import styles from "./advisor.module.css"
 import AdvisorTabbedTables from "./advisor-tabbed-tables";
 import { X, ArrowRight } from 'lucide-react'
+import Upsell from "../../components/Upsell/Upsell" // Import the Upsell component
+import useSubscriptionPlan from "../../hooks/useSubscriptionPlan" // Import the subscription hook
 
 const onboardingSteps = [
   {
@@ -61,10 +64,14 @@ export default function SupportProgramsPage() {
     withdrawn: 0,
   })
   const [loading, setLoading] = useState(false)
-  const [applications, setApplications] = useState([]) // ADD THIS
-  const [successfulDeals, setSuccessfulDeals] = useState([]) // ADD THIS
+  const [applications, setApplications] = useState([])
+  const [successfulDeals, setSuccessfulDeals] = useState([])
+  
+  // Use subscription hook
+  const { currentPlan, subscriptionLoading } = useSubscriptionPlan()
+  const navigate = useNavigate()
 
-  // Initialize filters state (you can customize this based on your needs)
+  // Initialize filters state
   const [filters, setFilters] = useState({})
 
   const statusToStageId = {
@@ -109,8 +116,6 @@ export default function SupportProgramsPage() {
 
     return () => observer.disconnect()
   }, [])
-
-
 
   useEffect(() => {
     const fetchStageCounts = async () => {
@@ -315,21 +320,18 @@ export default function SupportProgramsPage() {
     minHeight: "100vh",
     maxWidth: "100vw",
     overflowX: "hidden",
-    padding: `80px 10px 20px ${isSidebarCollapsed ? "100px" : "250px"}`,
+    padding: `72px 10px 20px ${isSidebarCollapsed ? "80px" : "280px"}`,
     margin: "0",
     boxSizing: "border-box",
     position: "relative",
     transition: "padding 0.3s ease",
-    backgroundImage: "url('../../assets/BiGBackround.png')",
-    backgroundSize: "cover",
-    backgroundPosition: "center",
-    backgroundRepeat: "no-repeat",
-    backgroundAttachment: "fixed"
+    backgroundColor: "#f8f9fa",
   })
 
-  if (!authChecked) {
+  // Combined loading check
+  if (!authChecked || subscriptionLoading) {
     return (
-      <div style={getContainerStyles()} className={styles.loadingContainer}>
+      <div style={getContainerStyles()}>
         <div
           style={{
             display: 'flex',
@@ -340,12 +342,37 @@ export default function SupportProgramsPage() {
             color: '#666'
           }}
         >
-          <p>Loading...</p>
+          <p>{subscriptionLoading ? "Checking subscription..." : "Loading..."}</p>
         </div>
       </div>
     )
   }
 
+  // Show Upsell for Basic plan users
+  if (currentPlan === "basic") {
+    return (
+      <Upsell
+        title={"Advisor Matching"}
+        subtitle={"Discover and connect with experienced advisors who can guide your startup journey and provide mentorship."}
+        features={[
+          "Access to verified advisor database",
+          "Advisor expertise and industry analytics",
+          "Direct communication with mentors",
+          "Deal flow pipeline tracking",
+          "Advanced filtering by industry and experience"
+        ]}
+        variant={"center"}
+        expandedWidth={280}
+        collapsedWidth={80}
+        plans={["Standard", "Premium"]}
+        upgradeMessage={"Upgrade to Standard or Premium to access advisor matching features including direct mentor communication and expertise analytics."}
+        primaryLabel={"View Available Plans"}
+        onPrimary={() => navigate("/billing/subscriptions")}
+      />
+    )
+  }
+
+  // For Standard and Premium plans, show the regular advisor matches page
   return (
     <div style={getContainerStyles()} className={styles.pageContainer}>
       {/* Global styles for consistent headers and animations */}
@@ -572,13 +599,13 @@ export default function SupportProgramsPage() {
         }}
         className={styles.contentWrapper}
       >
-        {/* UPDATED: Pipeline section with compact styling matching intern page */}
+        {/* Pipeline section with compact styling */}
         <div
           style={{
             width: '100%',
             maxWidth: '100%',
-            padding: '5px 20px 2px 20px', // Same compact padding as intern
-            margin: '0 0 5px 0', // Same compact margin as intern
+            padding: '5px 20px 2px 20px',
+            margin: '0 0 5px 0',
             backgroundColor: 'rgba(255, 255, 255, 0.95)',
             borderRadius: '8px',
             boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
@@ -590,7 +617,7 @@ export default function SupportProgramsPage() {
           <div
             style={{
               width: '100%',
-              overflow: 'hidden' // Hide scrollbars like intern page
+              overflow: 'hidden'
             }}
             className={styles.sectionContent}
           >
@@ -619,7 +646,7 @@ export default function SupportProgramsPage() {
             onCountChange={setPrimaryMatchCount}
             onConnectionRequested={handleConnectionUpdate}
             loading={false}
-            applications={applications} // ADD THIS
+            applications={applications}
             successfulDeals={successfulDeals}
           />
         </div>

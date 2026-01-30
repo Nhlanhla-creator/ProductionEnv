@@ -1128,7 +1128,7 @@ useEffect(() => {
               zIndex: "999999",
               maxHeight: "90vh",
               overflowY: "auto",
-              width: "90%",
+              width: "100%",
               maxWidth: "800px",
               border: "1px solid #ccc",
             }}
@@ -1430,10 +1430,7 @@ useEffect(() => {
   <div
     style={{
       position: "fixed",
-      top: "0",
-      left: "0",
-      right: "0",
-      bottom: "0",
+      inset: "0",
       backgroundColor: "rgba(0, 0, 0, 0.6)",
       display: "flex",
       alignItems: "center",
@@ -1457,6 +1454,7 @@ useEffect(() => {
         zIndex: "999999",
         maxWidth: "500px",
         width: "100%",
+        height: "90vh",
         border: "2px solid #8D6E63",
         overflow: "hidden",
       }}
@@ -1506,7 +1504,7 @@ useEffect(() => {
       </div>
 
       {/* Content */}
-      <div style={{ padding: "30px" }}>
+      <div style={{ padding: "30px", height: "calc(100% - 88px)", overflowY: "auto" }}>
         <div
           style={{
             textAlign: "center",

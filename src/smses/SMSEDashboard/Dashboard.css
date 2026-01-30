@@ -12,8 +12,8 @@
   --shadow-color: rgba(62, 39, 35, 0.1);
   --card-border-radius: clamp(0.5rem, 1.5vw, 0.75rem);
   --card-shadow: 0 4px 12px rgba(77, 52, 46, 0.08);
-  --sidebar-width: clamp(200px, 15vw, 300px);
-  --sidebar-collapsed-width: clamp(60px, 5vw, 100px);
+  --sidebar-width: 280px;
+  --sidebar-collapsed-width: 80px;
 }
 
 .dashboard-container {
@@ -35,7 +35,7 @@
 .content {
   flex: 1;
   margin-left: var(--sidebar-width);
-  width: calc(100% - var(--sidebar-width));
+  
   padding: clamp(1rem, 1.5vw, 2rem);
   transition: margin-left 0.3s ease, width 0.3s ease;
   overflow-x: auto;
