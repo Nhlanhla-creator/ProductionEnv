@@ -36,15 +36,150 @@ ChartJS.register(
   Legend,
 )
 
+// Helper function to get months array based on year
+
+
+// Key Question Component with Show More functionality
+const KeyQuestionBox = ({ question, signals, decisions }) => {
+  const [showMore, setShowMore] = useState(false)
+  
+  // Get first sentence
+  const getFirstSentence = (text) => {
+    const match = text.match(/^[^.!?]+[.!?]/)
+    return match ? match[0] : text.split('.')[0] + '.'
+  }
+  
+  return (
+    <div
+      style={{
+        backgroundColor: "#fff9c4",
+        padding: "15px 20px",
+        borderRadius: "8px",
+        marginBottom: "20px",
+        border: "1px solid #f9a825",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "flex-start", marginBottom: "8px" }}>
+        <strong style={{ color: "#5d4037", fontSize: "14px", minWidth: "100px" }}>Key Question:</strong>
+        <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px", flex: 1 }}>
+          {showMore ? question : getFirstSentence(question)}
+        </span>
+      {!showMore && (question.length > getFirstSentence(question).length || signals || decisions) && (
+          <button
+            onClick={() => setShowMore(true)}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#5d4037",
+              fontWeight: "600",
+              cursor: "pointer",
+              marginLeft: "10px",
+              textDecoration: "underline",
+              whiteSpace: "nowrap",
+            }}
+          >
+            See more
+          </button>
+        )}
+      </div>
+      
+      {showMore && (
+        <>
+          <div style={{ display: "flex", alignItems: "flex-start", marginBottom: "8px" }}>
+            <strong style={{ color: "#5d4037", fontSize: "14px", minWidth: "100px" }}>Key Signals:</strong>
+            <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px", flex: 1 }}>{signals}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "flex-start" }}>
+            <strong style={{ color: "#5d4037", fontSize: "14px", minWidth: "100px" }}>Key Decisions:</strong>
+            <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px", flex: 1 }}>{decisions}</span>
+          </div>
+          <button
+            onClick={() => setShowMore(false)}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#5d4037",
+              fontWeight: "600",
+              cursor: "pointer",
+              marginTop: "10px",
+              textDecoration: "underline",
+            }}
+          >
+            See less
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
+// AI Analysis Component
+const AIAnalysisButton = ({ onAIAnalysis }) => {
+  const [showAnalysis, setShowAnalysis] = useState(false)
+  const [analysis, setAnalysis] = useState("")
+
+  const handleAIAnalysis = () => {
+    setShowAnalysis(!showAnalysis)
+    if (onAIAnalysis) onAIAnalysis(analysis)
+  }
+
+  return (
+    <div style={{ marginTop: "20px" }}>
+      <button
+        onClick={handleAIAnalysis}
+        style={{
+          padding: "10px 20px",
+          backgroundColor: "#4a352f",
+          color: "#fdfcfb",
+          border: "none",
+          borderRadius: "6px",
+          cursor: "pointer",
+          fontWeight: "600",
+          fontSize: "14px",
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+        }}
+      >
+        AI Analysis
+      </button>
+      
+      {showAnalysis && (
+        <div
+          style={{
+            backgroundColor: "#e3f2fd",
+            padding: "15px",
+            borderRadius: "6px",
+            border: "1px solid #90caf9",
+            marginTop: "10px",
+          }}
+        >
+          <label
+            style={{
+              fontSize: "12px",
+              color: "#1565c0",
+              fontWeight: "600",
+              display: "block",
+              marginBottom: "8px",
+            }}
+          >
+            AI Analysis:
+          </label>
+          <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
+            {analysis || "AI analysis will be generated based on your data trends, comparing current performance against historical averages and industry benchmarks. This feature provides actionable insights for improving this metric."}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const SECTION_DATA = {
   "strategic-clarity": {
     name: "Strategic Clarity",
-    notes: {
-      keyQuestion: "Is there a clear, articulated strategy that guides decision-making across the business?",
-      keySignals: "Strategic priorities are explicit, Operating intent is consistent",
-      keyDecisions:
-        "Is the business intentionally steered or founder-driven? Is strategic clarification required before scaling or funding? Can external stakeholders understand the business direction?",
-    },
+    keyQuestion: "Is there a clear, articulated strategy that guides decision-making across the business?",
+    keySignals: "Strategic priorities are explicit, Operating intent is consistent",
+    keyDecisions: "Is the business intentionally steered or founder-driven? Is strategic clarification required before scaling or funding? Can external stakeholders understand the business direction?",
     kpis: [
       "Vision",
       "Mission",
@@ -55,12 +190,9 @@ const SECTION_DATA = {
   },
   "operating-model": {
     name: "Operating Model",
-    notes: {
-      keyQuestion:
-        "Is the way the business operates clearly defined and understood? Is the operating model fit for the current size and complexity of the business?",
-      keySignals: "Current operating model explicit, not assumed.",
-      keyDecisions: "Op model visibility, scalability, replicability, execution dependability",
-    },
+    keyQuestion: "Is the way the business operates clearly defined and understood? Is the operating model fit for the current size and complexity of the business?",
+    keySignals: "Current operating model explicit, not assumed.",
+    keyDecisions: "Op model visibility, scalability, replicability, execution dependability",
     kpis: [
       "Operating model definition",
       "Operating Model Fit: draw a table similar to heat map with each component of business canvas and we can do an analysis to see if it Strained 🔴 Strained 🟡 Misaligned 🔴",
@@ -68,32 +200,25 @@ const SECTION_DATA = {
   },
   "strategy-operationalisation": {
     name: "Strategy Operationalisation",
-    notes: {
-      keyQuestion: "Is strategy translated into clear goals, milestones, and management focus?",
-      keySignals: "Strategic goals exist, Milestones are defined, Progress is reviewed, Accountability is clear",
-      keyDecisions:
-        "Business execution-ready for growth? Alignment to strategy, likelihood of absorbing funding effectively?",
-    },
+    keyQuestion: "Is strategy translated into clear goals, milestones, and management focus?",
+    keySignals: "Strategic goals exist, Milestones are defined, Progress is reviewed, Accountability is clear",
+    keyDecisions: "Business execution-ready for growth? Alignment to strategy, likelihood of absorbing funding effectively?",
     kpis: ["Goal and Milestone table"],
   },
   "strategic-risk-control": {
     name: "Strategic Risk Control",
-    notes: {
-      keyQuestion: "Are strategic risks identified, monitored, and mitigated?",
-      keySignals: "Risk register exists, Risks prioritised, Mitigations tracked, Ownership assigned",
-      keyDecisions: "Business governability, existential risk mitigation, risk maturity sufficiency assessment",
-    },
+    keyQuestion: "Are strategic risks identified, monitored, and mitigated?",
+    keySignals: "Risk register exists, Risks prioritised, Mitigations tracked, Ownership assigned",
+    keyDecisions: "Business governability, existential risk mitigation, risk maturity sufficiency assessment",
     kpis: [
       'Risk Management (change to Risk Register), and add "Owner" after Likelihood. Also add "review cadence" after status. Change mitigation status dropdown to 🟢 Controlled 🟡 Partially controlled 🔴 Uncontrolled',
     ],
   },
   "change-adaptability": {
     name: "Change and adaptability",
-    notes: {
-      keyQuestion: "Can the business adapt strategy in response to change without losing control?",
-      keySignals: "Strategy reviews occur, Adjustments are deliberate, Learning is institutionalised",
-      keyDecisions: "Business resilience, change management, growth signals",
-    },
+    keyQuestion: "Can the business adapt strategy in response to change without losing control?",
+    keySignals: "Strategy reviews occur, Adjustments are deliberate, Learning is institutionalised",
+    keyDecisions: "Business resilience, change management, growth signals",
     kpis: [
       'Strategy review calendar (with place for status "done or not done"',
       "Adjustments documented",
@@ -122,7 +247,6 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
   })
   const [showModal, setShowModal] = useState(false)
   const [showPriorityModal, setShowPriorityModal] = useState(false)
- const [notesExpanded, setNotesExpanded] = useState(false)
   const [newValue, setNewValue] = useState("")
   const [newPriority, setNewPriority] = useState({
     description: "",
@@ -269,8 +393,6 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
     }))
   }
 
- 
-
   return (
     <div
       style={{
@@ -281,56 +403,12 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
     >
-      {/* Notes Section with See More */}
- <div
-        style={{
-          backgroundColor: "#f5f0eb",
-          padding: "15px",
-          borderRadius: "6px",
-          marginBottom: "20px",
-          border: "2px solid #7d5a50",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", flex: 1 }}>Section Notes</h4>
-          <button
-            onClick={() => setNotesExpanded(!notesExpanded)}
-            style={{
-              background: "none",
-              border: "none",
-              color: "#5d4037",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
-              fontSize: "14px",
-            }}
-          >
-            {notesExpanded ? <FaChevronUp /> : <FaChevronDown />}
-            {notesExpanded ? "See Less" : "See More"}
-          </button>
-        </div>
-        
-        {!notesExpanded ? (
-          <div style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6" }}>
-            <p style={{ margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              <strong>Key Question:</strong> {SECTION_DATA["strategic-clarity"].notes.keyQuestion}
-            </p>
-          </div>
-        ) : (
-          <div style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6" }}>
-            <p style={{ marginBottom: "8px" }}>
-              <strong>Key Question:</strong> {SECTION_DATA["strategic-clarity"].notes.keyQuestion}
-            </p>
-            <p style={{ marginBottom: "8px" }}>
-              <strong>Key Signals:</strong> {SECTION_DATA["strategic-clarity"].notes.keySignals}
-            </p>
-            <p style={{ marginBottom: "0" }}>
-              <strong>Key Decisions:</strong> {SECTION_DATA["strategic-clarity"].notes.keyDecisions}
-            </p>
-          </div>
-        )}
-      </div>
+      {/* Key Question Section */}
+      <KeyQuestionBox
+        question={SECTION_DATA["strategic-clarity"].keyQuestion}
+        signals={SECTION_DATA["strategic-clarity"].keySignals}
+        decisions={SECTION_DATA["strategic-clarity"].keyDecisions}
+      />
 
       {!currentUser && (
         <div
@@ -683,6 +761,9 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
             )}
           </div>
 
+          {/* AI Analysis Section */}
+          <AIAnalysisButton />
+
           {!isInvestorView && (
             <div style={{ marginTop: "20px", textAlign: "right" }}>
               <button
@@ -899,8 +980,12 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
   )
 }
 
-// Business Model Canvas Component (unchanged but renamed in tab)
+// Business Model Canvas Component with sub-tabs
 const BusinessModelCanvas = ({ activeSection, currentUser, isInvestorView }) => {
+  const [activeSubTab, setActiveSubTab] = useState("all")
+  const [viewMode, setViewMode] = useState("month")
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  
   const [canvasData, setCanvasData] = useState({
     keyPartners: "",
     keyActivities: "",
@@ -912,7 +997,8 @@ const BusinessModelCanvas = ({ activeSection, currentUser, isInvestorView }) => 
     costStructure: "",
     revenueStreams: "",
   })
-  const [notesExpanded, setNotesExpanded] = useState(false)
+
+ 
 
   useEffect(() => {
     const loadCanvasData = async () => {
@@ -973,6 +1059,7 @@ const BusinessModelCanvas = ({ activeSection, currentUser, isInvestorView }) => 
     }
   }
 
+
   return (
     <div
       style={{
@@ -983,56 +1070,12 @@ const BusinessModelCanvas = ({ activeSection, currentUser, isInvestorView }) => 
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
     >
-      {/* Notes Section with See More */}
-       <div
-        style={{
-          backgroundColor: "#f5f0eb",
-          padding: "15px",
-          borderRadius: "6px",
-          marginBottom: "20px",
-          border: "2px solid #7d5a50",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", flex: 1 }}>Section Notes</h4>
-          <button
-            onClick={() => setNotesExpanded(!notesExpanded)}
-            style={{
-              background: "none",
-              border: "none",
-              color: "#5d4037",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
-              fontSize: "14px",
-            }}
-          >
-            {notesExpanded ? <FaChevronUp /> : <FaChevronDown />}
-            {notesExpanded ? "See Less" : "See More"}
-          </button>
-        </div>
-        
-        {!notesExpanded ? (
-          <div style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6" }}>
-            <p style={{ margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              <strong>Key Question:</strong> {SECTION_DATA["operating-model"].notes.keyQuestion}
-            </p>
-          </div>
-        ) : (
-          <div style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6" }}>
-            <p style={{ marginBottom: "8px" }}>
-              <strong>Key Question:</strong> {SECTION_DATA["operating-model"].notes.keyQuestion}
-            </p>
-            <p style={{ marginBottom: "8px" }}>
-              <strong>Key Signals:</strong> {SECTION_DATA["operating-model"].notes.keySignals}
-            </p>
-            <p style={{ marginBottom: "0" }}>
-              <strong>Key Decisions:</strong> {SECTION_DATA["operating-model"].notes.keyDecisions}
-            </p>
-          </div>
-        )}
-      </div>
+      {/* Key Question Section */}
+      <KeyQuestionBox
+        question={SECTION_DATA["operating-model"].keyQuestion}
+        signals={SECTION_DATA["operating-model"].keySignals}
+        decisions={SECTION_DATA["operating-model"].keyDecisions}
+      />
 
       {!currentUser && (
         <div
@@ -1051,329 +1094,376 @@ const BusinessModelCanvas = ({ activeSection, currentUser, isInvestorView }) => 
 
       {currentUser && (
         <>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(5, 1fr)",
-              gridTemplateRows: "auto auto",
-              gap: "15px",
-              marginBottom: "20px",
-            }}
-          >
-            {/* Key Partners */}
-            <div
-              style={{
-                gridColumn: "1",
-                gridRow: "1 / 3",
-                backgroundColor: "white",
-                padding: "15px",
-                borderRadius: "6px",
-                border: "2px solid #e8ddd4",
-              }}
-            >
-              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>Key Partners</h4>
-              <textarea
-                value={canvasData.keyPartners}
-                onChange={(e) => setCanvasData((prev) => ({ ...prev, keyPartners: e.target.value }))}
-                placeholder="Who are your key partners?"
-                rows="10"
-                disabled={isInvestorView}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "1px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "12px",
-                  boxSizing: "border-box",
-                  resize: "vertical",
-                  fontFamily: "inherit",
-                  backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                  cursor: isInvestorView ? "not-allowed" : "text",
-                }}
-              />
-            </div>
+       
 
-            {/* Key Activities */}
-            <div
-              style={{
-                gridColumn: "2",
-                gridRow: "1",
-                backgroundColor: "white",
-                padding: "15px",
-                borderRadius: "6px",
-                border: "2px solid #e8ddd4",
-              }}
-            >
-              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>Key Activities</h4>
-              <textarea
-                value={canvasData.keyActivities}
-                onChange={(e) => setCanvasData((prev) => ({ ...prev, keyActivities: e.target.value }))}
-                placeholder="What key activities do you perform?"
-                rows="4"
-                disabled={isInvestorView}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "1px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "12px",
-                  boxSizing: "border-box",
-                  resize: "vertical",
-                  fontFamily: "inherit",
-                  backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                  cursor: isInvestorView ? "not-allowed" : "text",
-                }}
-              />
-            </div>
+         
 
-            {/* Value Propositions */}
+          {/* Content based on active sub-tab */}
+          {activeSubTab === "all" ? (
             <div
               style={{
-                gridColumn: "3",
-                gridRow: "1 / 3",
-                backgroundColor: "white",
-                padding: "15px",
-                borderRadius: "6px",
-                border: "2px solid #e8ddd4",
+                display: "grid",
+                gridTemplateColumns: "repeat(5, 1fr)",
+                gridTemplateRows: "auto auto",
+                gap: "15px",
+                marginBottom: "20px",
               }}
             >
-              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>
-                Value Propositions
-              </h4>
-              <textarea
-                value={canvasData.valuePropositions}
-                onChange={(e) => setCanvasData((prev) => ({ ...prev, valuePropositions: e.target.value }))}
-                placeholder="What value do you deliver?"
-                rows="10"
-                disabled={isInvestorView}
+              {/* Key Partners */}
+              <div
                 style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "1px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "12px",
-                  boxSizing: "border-box",
-                  resize: "vertical",
-                  fontFamily: "inherit",
-                  backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                  cursor: isInvestorView ? "not-allowed" : "text",
+                  gridColumn: "1",
+                  gridRow: "1 / 3",
+                  backgroundColor: "white",
+                  padding: "15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
                 }}
-              />
-            </div>
+              >
+                <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>Key Partners</h4>
+                <textarea
+                  value={canvasData.keyPartners}
+                  onChange={(e) => setCanvasData((prev) => ({ ...prev, keyPartners: e.target.value }))}
+                  placeholder="Who are your key partners?"
+                  rows="10"
+                  disabled={isInvestorView}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    border: "1px solid #e8ddd4",
+                    borderRadius: "4px",
+                    fontSize: "12px",
+                    boxSizing: "border-box",
+                    resize: "vertical",
+                    fontFamily: "inherit",
+                    backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                    cursor: isInvestorView ? "not-allowed" : "text",
+                  }}
+                />
+              </div>
 
-            {/* Customer Relationships */}
-            <div
-              style={{
-                gridColumn: "4",
-                gridRow: "1",
-                backgroundColor: "white",
-                padding: "15px",
-                borderRadius: "6px",
-                border: "2px solid #e8ddd4",
-              }}
-            >
-              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>
-                Customer Relationships
-              </h4>
-              <textarea
-                value={canvasData.customerRelationships}
-                onChange={(e) => setCanvasData((prev) => ({ ...prev, customerRelationships: e.target.value }))}
-                placeholder="What relationships do you have with customers?"
-                rows="4"
-                disabled={isInvestorView}
+              {/* Key Activities */}
+              <div
                 style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "1px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "12px",
-                  boxSizing: "border-box",
-                  resize: "vertical",
-                  fontFamily: "inherit",
-                  backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                  cursor: isInvestorView ? "not-allowed" : "text",
+                  gridColumn: "2",
+                  gridRow: "1",
+                  backgroundColor: "white",
+                  padding: "15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
                 }}
-              />
-            </div>
+              >
+                <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>Key Activities</h4>
+                <textarea
+                  value={canvasData.keyActivities}
+                  onChange={(e) => setCanvasData((prev) => ({ ...prev, keyActivities: e.target.value }))}
+                  placeholder="What key activities do you perform?"
+                  rows="4"
+                  disabled={isInvestorView}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    border: "1px solid #e8ddd4",
+                    borderRadius: "4px",
+                    fontSize: "12px",
+                    boxSizing: "border-box",
+                    resize: "vertical",
+                    fontFamily: "inherit",
+                    backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                    cursor: isInvestorView ? "not-allowed" : "text",
+                  }}
+                />
+              </div>
 
-            {/* Customer Segments */}
-            <div
-              style={{
-                gridColumn: "5",
-                gridRow: "1 / 3",
-                backgroundColor: "white",
-                padding: "15px",
-                borderRadius: "6px",
-                border: "2px solid #e8ddd4",
-              }}
-            >
-              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>
-                Customer Segments
-              </h4>
-              <textarea
-                value={canvasData.customerSegments}
-                onChange={(e) => setCanvasData((prev) => ({ ...prev, customerSegments: e.target.value }))}
-                placeholder="Who are your customers?"
-                rows="10"
-                disabled={isInvestorView}
+              {/* Value Propositions */}
+              <div
                 style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "1px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "12px",
-                  boxSizing: "border-box",
-                  resize: "vertical",
-                  fontFamily: "inherit",
-                  backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                  cursor: isInvestorView ? "not-allowed" : "text",
+                  gridColumn: "3",
+                  gridRow: "1 / 3",
+                  backgroundColor: "white",
+                  padding: "15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
                 }}
-              />
-            </div>
+              >
+                <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>
+                  Value Proposition
+                </h4>
+                <textarea
+                  value={canvasData.valuePropositions}
+                  onChange={(e) => setCanvasData((prev) => ({ ...prev, valuePropositions: e.target.value }))}
+                  placeholder="What value do you deliver?"
+                  rows="10"
+                  disabled={isInvestorView}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    border: "1px solid #e8ddd4",
+                    borderRadius: "4px",
+                    fontSize: "12px",
+                    boxSizing: "border-box",
+                    resize: "vertical",
+                    fontFamily: "inherit",
+                    backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                    cursor: isInvestorView ? "not-allowed" : "text",
+                  }}
+                />
+              </div>
 
-            {/* Key Resources */}
-            <div
-              style={{
-                gridColumn: "2",
-                gridRow: "2",
-                backgroundColor: "white",
-                padding: "15px",
-                borderRadius: "6px",
-                border: "2px solid #e8ddd4",
-              }}
-            >
-              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>Key Resources</h4>
-              <textarea
-                value={canvasData.keyResources}
-                onChange={(e) => setCanvasData((prev) => ({ ...prev, keyResources: e.target.value }))}
-                placeholder="What key resources do you need?"
-                rows="4"
-                disabled={isInvestorView}
+              {/* Customer Relationships */}
+              <div
                 style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "1px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "12px",
-                  boxSizing: "border-box",
-                  resize: "vertical",
-                  fontFamily: "inherit",
-                  backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                  cursor: isInvestorView ? "not-allowed" : "text",
+                  gridColumn: "4",
+                  gridRow: "1",
+                  backgroundColor: "white",
+                  padding: "15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
                 }}
-              />
-            </div>
+              >
+                <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>
+                  Customer Relationships
+                </h4>
+                <textarea
+                  value={canvasData.customerRelationships}
+                  onChange={(e) => setCanvasData((prev) => ({ ...prev, customerRelationships: e.target.value }))}
+                  placeholder="What relationships do you have with customers?"
+                  rows="4"
+                  disabled={isInvestorView}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    border: "1px solid #e8ddd4",
+                    borderRadius: "4px",
+                    fontSize: "12px",
+                    boxSizing: "border-box",
+                    resize: "vertical",
+                    fontFamily: "inherit",
+                    backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                    cursor: isInvestorView ? "not-allowed" : "text",
+                  }}
+                />
+              </div>
 
-            {/* Channels */}
-            <div
-              style={{
-                gridColumn: "4",
-                gridRow: "2",
-                backgroundColor: "white",
-                padding: "15px",
-                borderRadius: "6px",
-                border: "2px solid #e8ddd4",
-              }}
-            >
-              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>Channels</h4>
-              <textarea
-                value={canvasData.channels}
-                onChange={(e) => setCanvasData((prev) => ({ ...prev, channels: e.target.value }))}
-                placeholder="How do you reach customers?"
-                rows="4"
-                disabled={isInvestorView}
+              {/* Customer Segments */}
+              <div
                 style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "1px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "12px",
-                  boxSizing: "border-box",
-                  resize: "vertical",
-                  fontFamily: "inherit",
-                  backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                  cursor: isInvestorView ? "not-allowed" : "text",
+                  gridColumn: "5",
+                  gridRow: "1 / 3",
+                  backgroundColor: "white",
+                  padding: "15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
                 }}
-              />
+              >
+                <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>
+                  Customer Segments
+                </h4>
+                <textarea
+                  value={canvasData.customerSegments}
+                  onChange={(e) => setCanvasData((prev) => ({ ...prev, customerSegments: e.target.value }))}
+                  placeholder="Who are your customers?"
+                  rows="10"
+                  disabled={isInvestorView}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    border: "1px solid #e8ddd4",
+                    borderRadius: "4px",
+                    fontSize: "12px",
+                    boxSizing: "border-box",
+                    resize: "vertical",
+                    fontFamily: "inherit",
+                    backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                    cursor: isInvestorView ? "not-allowed" : "text",
+                  }}
+                />
+              </div>
+
+              {/* Key Resources */}
+              <div
+                style={{
+                  gridColumn: "2",
+                  gridRow: "2",
+                  backgroundColor: "white",
+                  padding: "15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                }}
+              >
+                <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>Key Resources</h4>
+                <textarea
+                  value={canvasData.keyResources}
+                  onChange={(e) => setCanvasData((prev) => ({ ...prev, keyResources: e.target.value }))}
+                  placeholder="What key resources do you need?"
+                  rows="4"
+                  disabled={isInvestorView}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    border: "1px solid #e8ddd4",
+                    borderRadius: "4px",
+                    fontSize: "12px",
+                    boxSizing: "border-box",
+                    resize: "vertical",
+                    fontFamily: "inherit",
+                    backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                    cursor: isInvestorView ? "not-allowed" : "text",
+                  }}
+                />
+              </div>
+
+              {/* Channels */}
+              <div
+                style={{
+                  gridColumn: "4",
+                  gridRow: "2",
+                  backgroundColor: "white",
+                  padding: "15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                }}
+              >
+                <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>Channels</h4>
+                <textarea
+                  value={canvasData.channels}
+                  onChange={(e) => setCanvasData((prev) => ({ ...prev, channels: e.target.value }))}
+                  placeholder="How do you reach customers?"
+                  rows="4"
+                  disabled={isInvestorView}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    border: "1px solid #e8ddd4",
+                    borderRadius: "4px",
+                    fontSize: "12px",
+                    boxSizing: "border-box",
+                    resize: "vertical",
+                    fontFamily: "inherit",
+                    backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                    cursor: isInvestorView ? "not-allowed" : "text",
+                  }}
+                />
+              </div>
             </div>
-          </div>
+          ) : (
+            <div>
+              <div
+                style={{
+                  backgroundColor: "white",
+                  padding: "20px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  marginBottom: "20px",
+                }}
+              >
+               
+                <textarea
+                  value={canvasData[activeSubTab] || ""}
+                  onChange={(e) => setCanvasData((prev) => ({ ...prev, [activeSubTab]: e.target.value }))}
+                
+                  rows="6"
+                  disabled={isInvestorView}
+                  style={{
+                    width: "100%",
+                    padding: "15px",
+                    border: "1px solid #e8ddd4",
+                    borderRadius: "4px",
+                    fontSize: "14px",
+                    boxSizing: "border-box",
+                    resize: "vertical",
+                    fontFamily: "inherit",
+                    backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                    cursor: isInvestorView ? "not-allowed" : "text",
+                  }}
+                />
+              </div>
+              
+              
+            </div>
+          )}
 
           {/* Cost Structure and Revenue Streams - Full Width Bottom Section */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "15px",
-              marginBottom: "20px",
-            }}
-          >
-            {/* Cost Structure */}
+          {(activeSubTab === "all" || activeSubTab === "costStructure" || activeSubTab === "revenueStreams") && (
             <div
               style={{
-                backgroundColor: "white",
-                padding: "15px",
-                borderRadius: "6px",
-                border: "2px solid #e8ddd4",
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "15px",
+                marginBottom: "20px",
               }}
             >
-              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>Cost Structure</h4>
-              <textarea
-                value={canvasData.costStructure}
-                onChange={(e) => setCanvasData((prev) => ({ ...prev, costStructure: e.target.value }))}
-                placeholder="What are your main costs?"
-                rows="4"
-                disabled={isInvestorView}
+              {/* Cost Structure */}
+              <div
                 style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "1px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "12px",
-                  boxSizing: "border-box",
-                  resize: "vertical",
-                  fontFamily: "inherit",
-                  backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                  cursor: isInvestorView ? "not-allowed" : "text",
+                  backgroundColor: "white",
+                  padding: "15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
                 }}
-              />
-            </div>
+              >
+                <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>Cost Structure</h4>
+                <textarea
+                  value={canvasData.costStructure}
+                  onChange={(e) => setCanvasData((prev) => ({ ...prev, costStructure: e.target.value }))}
+                  placeholder="What are your main costs?"
+                  rows="4"
+                  disabled={isInvestorView}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    border: "1px solid #e8ddd4",
+                    borderRadius: "4px",
+                    fontSize: "12px",
+                    boxSizing: "border-box",
+                    resize: "vertical",
+                    fontFamily: "inherit",
+                    backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                    cursor: isInvestorView ? "not-allowed" : "text",
+                  }}
+                />
+              </div>
 
-            {/* Revenue Streams */}
-            <div
-              style={{
-                backgroundColor: "white",
-                padding: "15px",
-                borderRadius: "6px",
-                border: "2px solid #e8ddd4",
-              }}
-            >
-              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>
-                Revenue Streams
-              </h4>
-              <textarea
-                value={canvasData.revenueStreams}
-                onChange={(e) => setCanvasData((prev) => ({ ...prev, revenueStreams: e.target.value }))}
-                placeholder="How do you generate revenue?"
-                rows="4"
-                disabled={isInvestorView}
+              {/* Revenue Streams */}
+              <div
                 style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "1px solid #e8ddd4",
-                  borderRadius: "4px",
-                  fontSize: "12px",
-                  boxSizing: "border-box",
-                  resize: "vertical",
-                  fontFamily: "inherit",
-                  backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                  cursor: isInvestorView ? "not-allowed" : "text",
+                  backgroundColor: "white",
+                  padding: "15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
                 }}
-              />
+              >
+                <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>
+                  Revenue Streams
+                </h4>
+                <textarea
+                  value={canvasData.revenueStreams}
+                  onChange={(e) => setCanvasData((prev) => ({ ...prev, revenueStreams: e.target.value }))}
+                  placeholder="How do you generate revenue?"
+                  rows="4"
+                  disabled={isInvestorView}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    border: "1px solid #e8ddd4",
+                    borderRadius: "4px",
+                    fontSize: "12px",
+                    boxSizing: "border-box",
+                    resize: "vertical",
+                    fontFamily: "inherit",
+                    backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                    cursor: isInvestorView ? "not-allowed" : "text",
+                  }}
+                />
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* AI Analysis Section */}
+          <AIAnalysisButton />
 
           {!isInvestorView && (
-            <div style={{ textAlign: "right" }}>
+            <div style={{ textAlign: "right", marginTop: "20px" }}>
               <button
                 onClick={handleSaveCanvas}
                 style={{
@@ -1397,81 +1487,35 @@ const BusinessModelCanvas = ({ activeSection, currentUser, isInvestorView }) => 
   )
 }
 
-// Strategic Goals Component (renamed to Strategy Operationalisation)
+// Strategy Operationalisation Component with sub-tabs
 const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, currentUser, isInvestorView }) => {
-   const [notesExpanded, setNotesExpanded] = useState(false)
-const categories = [
-  {
-    key: "Growth",
-    name: "Growth",
-    color: "#4A2E1F", // very dark espresso brown
-  },
-  {
-    key: "Marketing",
-    name: "Marketing",
-    color: "#6B3F2A", // dark cocoa brown
-  },
-  {
-    key: "Finance",
-    name: "Finance",
-    color: "#8B5A2B", // classic medium brown
-  },
-  {
-    key: "Operations",
-    name: "Operations",
-    color: "#A47148", // warm tan brown
-  },
-  {
-    key: "Systems & Technology",
-    name: "Systems & Technology",
-    color: "#7A5230", // roasted brown
-  },
-  {
-    key: "People",
-    name: "People",
-    color: "#C6A27E", // light caramel
-  },
-  {
-    key: "Governance",
-    name: "Governance",
-    color: "#E0C4A8", // soft beige brown
-  },
-  {
-    key: "Milestones",
-    name: "Milestones",
-    color: "#9d8573", // medium brown
-  },
-  {
-    key: "R&D",
-    name: "R&D",
-    color: "#b8a491", // light brown
-  },
-  {
-    key: "ESG",
-    name: "ESG",
-    color: "#8b7355", // golden brown
-  },
+  const [activeSubTab, setActiveSubTab] = useState("all")
+  const [viewMode, setViewMode] = useState("month")
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  
+  const categories = [
+    { key: "Growth", name: "Growth", color: "#4A2E1F" },
+    { key: "Marketing", name: "Marketing", color: "#6B3F2A" },
+    { key: "Finance", name: "Finance", color: "#8B5A2B" },
+    { key: "Operations", name: "Operations", color: "#A47148" },
+    { key: "Systems & Technology", name: "Systems & Technology", color: "#7A5230" },
+    { key: "People", name: "People", color: "#C6A27E" },
+    { key: "Governance", name: "Governance", color: "#E0C4A8" },
+    { key: "Milestones", name: "Milestones", color: "#9d8573" },
+    { key: "R&D", name: "R&D", color: "#b8a491" },
+    { key: "ESG", name: "ESG", color: "#8b7355" },
   ]
 
-  const [visibleCategories, setVisibleCategories] = useState({
-    "Growth": true,
-    "Marketing": true,
-    "Finance": true,
-    "Operations": true,
-    "Systems & Technology": true,
-    "People": true,
-    "Governance": true,
-    "Milestones": true,
-    "R&D": true,
-    "ESG": true,
-  })
+  const subTabs = [
+    { id: "all", label: "All" },
+    ...categories.map(cat => ({ id: cat.key, label: cat.name })),
+  ]
 
   const [showMilestoneModal, setShowMilestoneModal] = useState(false)
   const [editingMilestone, setEditingMilestone] = useState(null)
   const [filterBy, setFilterBy] = useState("all")
   const [selectedMonth, setSelectedMonth] = useState("")
-  const [selectedYear, setSelectedYear] = useState("")
-  const [expandedContent, setExpandedContent] = useState({})
+  const [selectedYearFilter, setSelectedYearFilter] = useState("")
   const [newMilestone, setNewMilestone] = useState({
     growthStage: "",
     customGrowthStage: "",
@@ -1486,13 +1530,6 @@ const categories = [
   })
 
   if (activeSection !== "strategy-operationalisation") return null
-
-  const toggleCategoryVisibility = (categoryKey) => {
-    setVisibleCategories((prev) => ({
-      ...prev,
-      [categoryKey]: !prev[categoryKey],
-    }))
-  }
 
   const calculateGoalCompletion = (goalNumber, growthStage) => {
     const relevantMilestones = milestoneData.filter(
@@ -1696,6 +1733,7 @@ const categories = [
   const owners = ["Product Team", "Business Dev", "Legal Team", "Engineering", "Marketing", "Operations"]
 
   const filteredMilestones = milestoneData.filter((milestone) => {
+    if (activeSubTab !== "all" && milestone.growthStage !== activeSubTab) return false
     if (filterBy === "all") return true
     if (goalDomains.includes(filterBy)) return milestone.growthStage === filterBy
     if (statuses.includes(filterBy)) return milestone.status === filterBy
@@ -1703,11 +1741,11 @@ const categories = [
     if (goals.includes(filterBy)) return milestone.goal === filterBy
     return true
   }).filter((milestone) => {
-    if (!selectedMonth && !selectedYear) return true
+    if (!selectedMonth && !selectedYearFilter) return true
     
     const targetDate = new Date(milestone.targetDate)
     const monthMatch = !selectedMonth || (targetDate.getMonth() + 1) === parseInt(selectedMonth)
-    const yearMatch = !selectedYear || targetDate.getFullYear() === parseInt(selectedYear)
+    const yearMatch = !selectedYearFilter || targetDate.getFullYear() === parseInt(selectedYearFilter)
     
     return monthMatch && yearMatch
   })
@@ -1833,31 +1871,8 @@ const categories = [
     }
   }
 
-  const toggleExpand = (section) => {
-    setExpandedContent((prev) => ({
-      ...prev,
-      [section]: !prev[section],
-    }))
-  }
 
-  const months = [
-    { value: "", label: "All Months" },
-    { value: "1", label: "January" },
-    { value: "2", label: "February" },
-    { value: "3", label: "March" },
-    { value: "4", label: "April" },
-    { value: "5", label: "May" },
-    { value: "6", label: "June" },
-    { value: "7", label: "July" },
-    { value: "8", label: "August" },
-    { value: "9", label: "September" },
-    { value: "10", label: "October" },
-    { value: "11", label: "November" },
-    { value: "12", label: "December" },
-  ]
 
-  const currentYear = new Date().getFullYear()
-  const years = Array.from({ length: 5 }, (_, i) => currentYear + i)
 
   return (
     <div
@@ -1869,158 +1884,101 @@ const categories = [
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
     >
-      {/* Notes Section with See More */}
-     <div
-        style={{
-          backgroundColor: "#f5f0eb",
-          padding: "15px",
-          borderRadius: "6px",
-          marginBottom: "20px",
-          border: "2px solid #7d5a50",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", flex: 1 }}>Section Notes</h4>
-          <button
-            onClick={() => setNotesExpanded(!notesExpanded)}
-            style={{
-              background: "none",
-              border: "none",
-              color: "#5d4037",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
-              fontSize: "14px",
-            }}
-          >
-            {notesExpanded ? <FaChevronUp /> : <FaChevronDown />}
-            {notesExpanded ? "See Less" : "See More"}
-          </button>
-        </div>
-        
-        {!notesExpanded ? (
-          <div style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6" }}>
-            <p style={{ margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              <strong>Key Question:</strong> {SECTION_DATA["strategy-operationalisation"].notes.keyQuestion}
-            </p>
-          </div>
-        ) : (
-          <div style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6" }}>
-            <p style={{ marginBottom: "8px" }}>
-              <strong>Key Question:</strong> {SECTION_DATA["strategy-operationalisation"].notes.keyQuestion}
-            </p>
-            <p style={{ marginBottom: "8px" }}>
-              <strong>Key Signals:</strong> {SECTION_DATA["strategy-operationalisation"].notes.keySignals}
-            </p>
-            <p style={{ marginBottom: "0" }}>
-              <strong>Key Decisions:</strong> {SECTION_DATA["strategy-operationalisation"].notes.keyDecisions}
-            </p>
-          </div>
-        )}
-      </div>
+      {/* Key Question Section */}
+      <KeyQuestionBox
+        question={SECTION_DATA["strategy-operationalisation"].keyQuestion}
+        signals={SECTION_DATA["strategy-operationalisation"].keySignals}
+        decisions={SECTION_DATA["strategy-operationalisation"].keyDecisions}
+      />
 
       <h3 style={{ color: "#4a352f", marginBottom: "10px" }}>Strategic Goals Progress</h3>
 
-      <div style={{ marginBottom: "20px", padding: "15px", backgroundColor: "#fdfcfb", borderRadius: "6px" }}>
-        <p style={{ color: "#4a352f", marginBottom: "10px", fontWeight: "500" }}>Select charts to display:</p>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "15px" }}>
-          {categories.map((category) => (
-            <div
-              key={category.key}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                padding: "8px 12px",
-                backgroundColor: visibleCategories[category.key] ? category.color : "#f5f0e1",
-                borderRadius: "6px",
-                border: "2px solid #e6d7c3",
-                transition: "all 0.2s ease",
-                position: "relative",
-              }}
-            >
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  cursor: "pointer",
-                  flex: 1,
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={visibleCategories[category.key]}
-                  onChange={() => toggleCategoryVisibility(category.key)}
-                  style={{ cursor: "pointer" }}
-                />
-                <span
-                  style={{
-                    color: visibleCategories[category.key] ? "#ffffff" : "#4a352f",
-                    fontWeight: "500",
-                    fontSize: "13px",
-                  }}
-                >
-                  {category.name}
-                </span>
-              </label>
-              {visibleCategories[category.key] && (
-                <button
-                  onClick={() => toggleCategoryVisibility(category.key)}
-                  style={{
-                    background: "rgba(255, 255, 255, 0.3)",
-                    border: "1px solid rgba(255, 255, 255, 0.5)",
-                    borderRadius: "4px",
-                    color: "#ffffff",
-                    cursor: "pointer",
-                    fontSize: "14px",
-                    fontWeight: "bold",
-                    padding: "2px 6px",
-                    marginLeft: "4px",
-                  }}
-                  title="Remove chart"
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
+      {/* Sub Tabs Navigation */}
+      <div style={{ display: "flex", gap: "10px", marginBottom: "20px", flexWrap: "wrap" }}>
+        {subTabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveSubTab(tab.id)}
+            style={{
+              padding: "10px 20px",
+              backgroundColor: activeSubTab === tab.id ? "#7d5a50" : "#e6d7c3",
+              color: activeSubTab === tab.id ? "#fdfcfb" : "#4a352f",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: "500",
+              fontSize: "14px",
+              flexShrink: 0,
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))",
-          gap: "20px",
-          marginBottom: "30px",
-        }}
-      >
-        {categories
-          .filter((category) => visibleCategories[category.key])
-          .map((category) => {
-            const chartData = createChartData(category.key, category.color)
-            if (chartData.labels.length === 0) return null
+      {/* View Mode Selector */}
+      <div style={{ display: "flex", gap: "10px", marginBottom: "20px", alignItems: "center" }}>
+       
+      
+      </div>
 
-            return (
-              <div
-                key={category.key}
-                style={{
-                  backgroundColor: "#fdfcfb",
-                  padding: "20px",
-                  borderRadius: "8px",
-                  border: `2px solid ${category.color}`,
-                }}
-              >
-                <h4 style={{ color: "#4a352f", marginBottom: "15px", fontSize: "15px" }}>{category.name}</h4>
-                <div style={{ height: "250px" }}>
-                  <Bar data={chartData} options={chartOptions} data-growth-stage={category.key} />
+      {/* Charts based on active sub-tab */}
+      {activeSubTab === "all" ? (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))",
+            gap: "20px",
+            marginBottom: "30px",
+          }}
+        >
+          {categories
+            .filter((category) => {
+              const chartData = createChartData(category.key, category.color)
+              return chartData.labels.length > 0
+            })
+            .map((category) => {
+              const chartData = createChartData(category.key, category.color)
+              return (
+                <div
+                  key={category.key}
+                  style={{
+                    backgroundColor: "#fdfcfb",
+                    padding: "20px",
+                    borderRadius: "8px",
+                    border: `2px solid ${category.color}`,
+                  }}
+                >
+                  <h4 style={{ color: "#4a352f", marginBottom: "15px", fontSize: "15px" }}>{category.name}</h4>
+                  <div style={{ height: "250px" }}>
+                    <Bar data={chartData} options={chartOptions} data-growth-stage={category.key} />
+                  </div>
                 </div>
-              </div>
-            )
-          })}
-      </div>
+              )
+            })}
+        </div>
+      ) : (
+        <div
+          style={{
+            backgroundColor: "#fdfcfb",
+            padding: "20px",
+            borderRadius: "8px",
+            border: `2px solid ${categories.find(c => c.key === activeSubTab)?.color || "#7d5a50"}`,
+            marginBottom: "30px",
+          }}
+        >
+          <h4 style={{ color: "#4a352f", marginBottom: "15px", fontSize: "15px" }}>
+            {categories.find(c => c.key === activeSubTab)?.name || activeSubTab}
+          </h4>
+          <div style={{ height: "250px" }}>
+            <Bar 
+              data={createChartData(activeSubTab, categories.find(c => c.key === activeSubTab)?.color || "#7d5a50")} 
+              options={chartOptions} 
+              data-growth-stage={activeSubTab} 
+            />
+          </div>
+        </div>
+      )}
 
       <div style={{ marginBottom: "20px", display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
         <label style={{ color: "#4a352f", fontWeight: "500" }}>Filter by:</label>
@@ -2070,51 +2028,7 @@ const categories = [
           </optgroup>
         </select>
 
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-          <select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            style={{
-              padding: "8px 12px",
-              border: "2px solid #e8ddd4",
-              borderRadius: "4px",
-              backgroundColor: "white",
-              color: "#4a352f",
-              cursor: "pointer",
-              fontSize: "14px",
-              minWidth: "120px",
-            }}
-          >
-            {months.map((month) => (
-              <option key={month.value} value={month.value}>
-                {month.label}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(e.target.value)}
-            style={{
-              padding: "8px 12px",
-              border: "2px solid #e8ddd4",
-              borderRadius: "4px",
-              backgroundColor: "white",
-              color: "#4a352f",
-              cursor: "pointer",
-              fontSize: "14px",
-              minWidth: "100px",
-            }}
-          >
-            <option value="">All Years</option>
-            {years.map((year) => (
-              <option key={year} value={year}>
-                {year}
-              </option>
-            ))}
-          </select>
-        </div>
-
+     
         {!isInvestorView && (
           <button
             onClick={handleAddMilestone}
@@ -2235,6 +2149,9 @@ const categories = [
           </table>
         )}
       </div>
+
+      {/* AI Analysis Section */}
+      <AIAnalysisButton />
 
       {/* Milestone Modal */}
       {showMilestoneModal && !isInvestorView && (
@@ -2541,7 +2458,6 @@ const categories = [
 }
 
 const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
-   const [notesExpanded, setNotesExpanded] = useState(false)
   const [riskData, setRiskData] = useState({
     "financial-risk": [],
     "market-risk": [],
@@ -2554,7 +2470,6 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
   const [hoveredRiskType, setHoveredRiskType] = useState(null)
   const [selectedMonth, setSelectedMonth] = useState("")
   const [selectedYear, setSelectedYear] = useState("")
-  const [expandedContent, setExpandedContent] = useState({})
 
   const riskCategories = [
     { id: "business-risk", name: "Business Risk (All)", color: "#7d5a50" },
@@ -2774,28 +2689,6 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     })
   }
 
-  const toggleExpand = (section) => {
-    setExpandedContent((prev) => ({
-      ...prev,
-      [section]: !prev[section],
-    }))
-  }
-
-  const months = [
-    { value: "", label: "All Months" },
-    { value: "1", label: "January" },
-    { value: "2", label: "February" },
-    { value: "3", label: "March" },
-    { value: "4", label: "April" },
-    { value: "5", label: "May" },
-    { value: "6", label: "June" },
-    { value: "7", label: "July" },
-    { value: "8", label: "August" },
-    { value: "9", label: "September" },
-    { value: "10", label: "October" },
-    { value: "11", label: "November" },
-    { value: "12", label: "December" },
-  ]
 
   const currentYear = new Date().getFullYear()
   const years = Array.from({ length: 5 }, (_, i) => currentYear + i)
@@ -2810,104 +2703,16 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
     >
-      {/* Notes Section with See More */}
-      <div
-        style={{
-          backgroundColor: "#f5f0eb",
-          padding: "15px",
-          borderRadius: "6px",
-          marginBottom: "20px",
-          border: "2px solid #7d5a50",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", flex: 1 }}>Section Notes</h4>
-          <button
-            onClick={() => setNotesExpanded(!notesExpanded)}
-            style={{
-              background: "none",
-              border: "none",
-              color: "#5d4037",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
-              fontSize: "14px",
-            }}
-          >
-            {notesExpanded ? <FaChevronUp /> : <FaChevronDown />}
-            {notesExpanded ? "See Less" : "See More"}
-          </button>
-        </div>
-        
-        {!notesExpanded ? (
-          <div style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6" }}>
-            <p style={{ margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              <strong>Key Question:</strong> {SECTION_DATA["strategic-risk-control"].notes.keyQuestion}
-            </p>
-          </div>
-        ) : (
-          <div style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6" }}>
-            <p style={{ marginBottom: "8px" }}>
-              <strong>Key Question:</strong> {SECTION_DATA["strategic-risk-control"].notes.keyQuestion}
-            </p>
-            <p style={{ marginBottom: "8px" }}>
-              <strong>Key Signals:</strong> {SECTION_DATA["strategic-risk-control"].notes.keySignals}
-            </p>
-            <p style={{ marginBottom: "0" }}>
-              <strong>Key Decisions:</strong> {SECTION_DATA["strategic-risk-control"].notes.keyDecisions}
-            </p>
-          </div>
-        )}
-      </div>
+      {/* Key Question Section */}
+      <KeyQuestionBox
+        question={SECTION_DATA["strategic-risk-control"].keyQuestion}
+        signals={SECTION_DATA["strategic-risk-control"].keySignals}
+        decisions={SECTION_DATA["strategic-risk-control"].keyDecisions}
+      />
+
       <h3 style={{ color: "#4a352f", marginBottom: "20px" }}>Risk Register</h3>
 
-      {/* Month/Year Filter */}
-      <div style={{ marginBottom: "20px", display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-        <label style={{ color: "#4a352f", fontWeight: "500" }}>Filter Actions by:</label>
-        <select
-          value={selectedMonth}
-          onChange={(e) => setSelectedMonth(e.target.value)}
-          style={{
-            padding: "8px 12px",
-            border: "2px solid #e8ddd4",
-            borderRadius: "4px",
-            backgroundColor: "white",
-            color: "#4a352f",
-            cursor: "pointer",
-            fontSize: "14px",
-            minWidth: "120px",
-          }}
-        >
-          {months.map((month) => (
-            <option key={month.value} value={month.value}>
-              {month.label}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={selectedYear}
-          onChange={(e) => setSelectedYear(e.target.value)}
-          style={{
-            padding: "8px 12px",
-            border: "2px solid #e8ddd4",
-            borderRadius: "4px",
-            backgroundColor: "white",
-            color: "#4a352f",
-            cursor: "pointer",
-            fontSize: "14px",
-            minWidth: "100px",
-          }}
-        >
-          <option value="">All Years</option>
-          {years.map((year) => (
-            <option key={year} value={year}>
-              {year}
-            </option>
-          ))}
-        </select>
-      </div>
+    
 
       {/* Risk Category Tabs with hover tooltips */}
       <div
@@ -3360,12 +3165,14 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
           </div>
         )
       })}
+
+      {/* AI Analysis Section */}
+      <AIAnalysisButton />
     </div>
   )
 }
 
 const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
-   const [notesExpanded, setNotesExpanded] = useState(false)
   const [reviewData, setReviewData] = useState([])
   const [adjustments, setAdjustments] = useState([])
   const [pivots, setPivots] = useState([])
@@ -3390,7 +3197,6 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
   })
   const [selectedMonth, setSelectedMonth] = useState("")
   const [selectedYear, setSelectedYear] = useState("")
-  const [expandedContent, setExpandedContent] = useState({})
 
   useEffect(() => {
     const loadChangeData = async () => {
@@ -3595,28 +3401,6 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
     return monthMatch && yearMatch
   })
 
-  const toggleExpand = (section) => {
-    setExpandedContent((prev) => ({
-      ...prev,
-      [section]: !prev[section],
-    }))
-  }
-
-  const months = [
-    { value: "", label: "All Months" },
-    { value: "1", label: "January" },
-    { value: "2", label: "February" },
-    { value: "3", label: "March" },
-    { value: "4", label: "April" },
-    { value: "5", label: "May" },
-    { value: "6", label: "June" },
-    { value: "7", label: "July" },
-    { value: "8", label: "August" },
-    { value: "9", label: "September" },
-    { value: "10", label: "October" },
-    { value: "11", label: "November" },
-    { value: "12", label: "December" },
-  ]
 
   const currentYear = new Date().getFullYear()
   const years = Array.from({ length: 5 }, (_, i) => currentYear + i)
@@ -3631,104 +3415,15 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
     >
-      {/* Notes Section with See More */}
-      <div
-        style={{
-          backgroundColor: "#f5f0eb",
-          padding: "15px",
-          borderRadius: "6px",
-          marginBottom: "20px",
-          border: "2px solid #7d5a50",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", flex: 1 }}>Section Notes</h4>
-          <button
-            onClick={() => setNotesExpanded(!notesExpanded)}
-            style={{
-              background: "none",
-              border: "none",
-              color: "#5d4037",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
-              fontSize: "14px",
-            }}
-          >
-            {notesExpanded ? <FaChevronUp /> : <FaChevronDown />}
-            {notesExpanded ? "See Less" : "See More"}
-          </button>
-        </div>
-        
-        {!notesExpanded ? (
-          <div style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6" }}>
-            <p style={{ margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              <strong>Key Question:</strong> {SECTION_DATA["change-adaptability"].notes.keyQuestion}
-            </p>
-          </div>
-        ) : (
-          <div style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6" }}>
-            <p style={{ marginBottom: "8px" }}>
-              <strong>Key Question:</strong> {SECTION_DATA["change-adaptability"].notes.keyQuestion}
-            </p>
-            <p style={{ marginBottom: "8px" }}>
-              <strong>Key Signals:</strong> {SECTION_DATA["change-adaptability"].notes.keySignals}
-            </p>
-            <p style={{ marginBottom: "0" }}>
-              <strong>Key Decisions:</strong> {SECTION_DATA["change-adaptability"].notes.keyDecisions}
-            </p>
-          </div>
-        )}
-      </div>
-      
+      {/* Key Question Section */}
+      <KeyQuestionBox
+        question={SECTION_DATA["change-adaptability"].keyQuestion}
+        signals={SECTION_DATA["change-adaptability"].keySignals}
+        decisions={SECTION_DATA["change-adaptability"].keyDecisions}
+      />
 
       {/* Month/Year Filter */}
-      <div style={{ marginBottom: "20px", display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-        <label style={{ color: "#4a352f", fontWeight: "500" }}>Filter by:</label>
-        <select
-          value={selectedMonth}
-          onChange={(e) => setSelectedMonth(e.target.value)}
-          style={{
-            padding: "8px 12px",
-            border: "2px solid #e8ddd4",
-            borderRadius: "4px",
-            backgroundColor: "white",
-            color: "#4a352f",
-            cursor: "pointer",
-            fontSize: "14px",
-            minWidth: "120px",
-          }}
-        >
-          {months.map((month) => (
-            <option key={month.value} value={month.value}>
-              {month.label}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={selectedYear}
-          onChange={(e) => setSelectedYear(e.target.value)}
-          style={{
-            padding: "8px 12px",
-            border: "2px solid #e8ddd4",
-            borderRadius: "4px",
-            backgroundColor: "white",
-            color: "#4a352f",
-            cursor: "pointer",
-            fontSize: "14px",
-            minWidth: "100px",
-          }}
-        >
-          <option value="">All Years</option>
-          {years.map((year) => (
-            <option key={year} value={year}>
-              {year}
-            </option>
-          ))}
-        </select>
-      </div>
+     
 
       {/* Strategy Review Calendar */}
       <div
@@ -3831,14 +3526,13 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
         )}
       </div>
 
-     
-
       {/* Pivot History Documented */}
       <div
         style={{
           backgroundColor: "#f7f3f0",
           padding: "20px",
           borderRadius: "6px",
+          marginBottom: "30px",
         }}
       >
         <div
@@ -3942,6 +3636,9 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
           </div>
         )}
       </div>
+
+      {/* AI Analysis Section */}
+      <AIAnalysisButton />
 
       {/* Modals */}
       {showReviewModal && !isInvestorView && (
@@ -4339,13 +4036,10 @@ const Strategy = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [milestoneData, setMilestoneData] = useState([])
   const [currentUser, setCurrentUser] = useState(null)
-   const [notesExpanded, setNotesExpanded] = useState(false)
-
   const [isInvestorView, setIsInvestorView] = useState(false)
   const [viewingSMEId, setViewingSMEId] = useState(null)
   const [viewingSMEName, setViewingSMEName] = useState("")
   const [selectedCohort, setSelectedCohort] = useState(null)
-
   const [showFullDescription, setShowFullDescription] = useState(false)
 
   useEffect(() => {
@@ -4459,75 +4153,72 @@ const Strategy = () => {
           </div>
         )}
 
-        <div style={{ padding: "60px 20px 20px 20px", width: "100%", boxSizing: "border-box" }}>
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "25px",
-              margin: isInvestorView ? "20px 0" : "50px 0 20px 0",
-              borderRadius: "8px",
-              boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-              border: "2px solid #7d5a50",
-              width: "100%",
-              boxSizing: "border-box",
-            }}
-          >
-            <h1 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "32px" }}>
+                <div style={{ padding: "50px", paddingTop: "100px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+            <h1 style={{ color: "#5d4037", fontSize: "32px", fontWeight: "700", margin: 0 }}>
               Strategy & Execution
             </h1>
-            <p style={{ color: "#4a352f", fontSize: "15px", lineHeight: "1.6", marginBottom: "20px" }}>
-              <strong>
-                Strategy & Execution health reflects how deliberately the business is steered, not whether the strategy
-                itself is 'right'. It tests intentionality, coherence, and control — not success.
-              </strong>
-            </p>
-
-            {showFullDescription && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginTop: "20px" }}>
-                <div>
-                  <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
-                    What this dashboard DOES
-                  </h3>
-                  <ul style={{ color: "#4a352f", fontSize: "14px", lineHeight: "1.7", margin: 0, paddingLeft: "20px" }}>
-                    <li>Assesses whether the business is deliberately steered, not reactive</li>
-                    <li>Evaluates whether strategy is translated into structure, priorities, and action</li>
-                    <li>Surfaces strategic execution risk, not operational performance</li>
-                    <li>Tests whether the operating model fits the business's current reality</li>
-                  </ul>
-                </div>
-
-                <div>
-                  <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
-                    What this dashboard does NOT do
-                  </h3>
-                  <ul style={{ color: "#4a352f", fontSize: "14px", lineHeight: "1.7", margin: 0, paddingLeft: "20px" }}>
-                    <li>Evaluate strategy quality or competitiveness</li>
-                    <li>Track operational KPIs (Ops dashboard does that)</li>
-                    <li>Measure performance outcomes (Finance & Ops do that)</li>
-                    <li>Manage projects or OKRs</li>
-                    <li>Replace business planning or consulting work</li>
-                  </ul>
-                </div>
-              </div>
-            )}
-
+            
             <button
               onClick={() => setShowFullDescription(!showFullDescription)}
               style={{
-                marginTop: "15px",
                 padding: "8px 16px",
-                backgroundColor: "transparent",
-                color: "#7d5a50",
-                border: "1px solid #7d5a50",
-                borderRadius: "4px",
+                backgroundColor: "#7d5a50",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "6px",
                 cursor: "pointer",
-                fontWeight: "500",
-                fontSize: "14px",
+                fontWeight: "600",
+                fontSize: "13px",
+                whiteSpace: "nowrap",
               }}
             >
-              {showFullDescription ? "Show less" : "Read more"}
+              {showFullDescription ? "See less" : "See more"}
             </button>
           </div>
+
+          {/* Strategy Description */}
+          {showFullDescription && (
+            <div
+              style={{
+                backgroundColor: "#fdfcfb",
+                padding: "20px",
+                borderRadius: "8px",
+                boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+                marginBottom: "30px",
+              }}
+            >
+         
+              <div style={{ marginTop: "-30px", paddingTop: "20px", borderTop: "1px solid #e8ddd4" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginTop: "20px" }}>
+                  <div>
+                    <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
+                      What this dashboard DOES
+                    </h3>
+                    <ul style={{ color: "#4a352f", fontSize: "14px", lineHeight: "1.7", margin: 0, paddingLeft: "20px" }}>
+                      <li>Assesses whether the business is deliberately steered, not reactive</li>
+                      <li>Evaluates whether strategy is translated into structure, priorities, and action</li>
+                      <li>Surfaces strategic execution risk, not operational performance</li>
+                      <li>Tests whether the operating model fits the business's current reality</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
+                      What this dashboard does NOT do
+                    </h3>
+                    <ul style={{ color: "#4a352f", fontSize: "14px", lineHeight: "1.7", margin: 0, paddingLeft: "20px" }}>
+                      <li>Evaluate strategy quality or competitiveness</li>
+                      <li>Track operational KPIs (Ops dashboard does that)</li>
+                      <li>Measure performance outcomes (Finance & Ops do that)</li>
+                      <li>Manage projects or OKRs</li>
+                      <li>Replace business planning or consulting work</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Tab buttons */}
           <div

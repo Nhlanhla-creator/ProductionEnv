@@ -35,9 +35,16 @@ import {
   Shield,
 } from "lucide-react"
 import styles from "./all-advisors.module.css"
+import { collection, query, where, getDocs, doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore"
+import { auth } from "../../firebaseConfig"
+import databaseService from "../../services/databaseService"
 
 function AllAdvisors() {
   const navigate = useNavigate()
+
+  
+  const [currentDatabase, setCurrentDatabase] = useState(
+          databaseService.getCurrentDatabase())
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
@@ -68,100 +75,146 @@ function AllAdvisors() {
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(10)
 
-  // Mock Advisor data - replace with real API calls
-  const [advisorData, setAdvisorData] = useState([
-    {
-      id: 1,
-      username: "johnstrategy",
-      email: "john.smith@strategyconsult.com",
-      companyName: "John Smith Consulting",
-      created: "2024-01-25",
-      lastEdited: "2024-06-21",
-      status: "active",
-      profileImage: null,
-      profile: {
-        fullName: "John Smith",
-        jobTitle: "Senior Business Strategy Advisor",
-        company: "Strategy Consulting Group",
-        expertiseAreas: "Business Strategy, Operations, Market Entry",
-        industries: "Technology, Healthcare, Financial Services",
-        experienceLevel: "15+ years",
-        advisoryServices: "Strategic Planning, Business Development, Operational Excellence",
-        location: "Cape Town, South Africa",
-        phone: "+27 21 555 7890",
-        website: "www.johnstrategy.com",
-      },
-      documents: {
-        nda: { signed: true, date: "2024-02-01" },
-        compliance: { status: "approved", documents: 8 },
-        uploads: 12,
-      },
-    },
-    {
-      id: 2,
-      username: "sarahfinance",
-      email: "sarah@financialadvisory.co.za",
-      companyName: "Financial Advisory Partners",
-      created: "2024-03-12",
-      lastEdited: "2024-06-19",
-      status: "active",
-      profileImage: null,
-      profile: {
-        fullName: "Sarah Johnson",
-        jobTitle: "Chief Financial Advisor",
-        company: "Financial Advisory Partners",
-        expertiseAreas: "Financial Planning, Investment Strategy, Risk Management",
-        industries: "Fintech, Manufacturing, Retail",
-        experienceLevel: "12+ years",
-        advisoryServices: "CFO Services, Financial Modeling, Investment Advisory",
-        location: "Johannesburg, South Africa",
-        phone: "+27 11 444 5678",
-        website: "www.financialadvisory.co.za",
-      },
-      documents: {
-        nda: { signed: true, date: "2024-03-18" },
-        compliance: { status: "approved", documents: 10 },
-        uploads: 15,
-      },
-    },
-    {
-      id: 3,
-      username: "miketech",
-      email: "mike@techadvisor.com",
-      companyName: "Tech Innovation Advisory",
-      created: "2024-05-08",
-      lastEdited: "2024-06-16",
-      status: "pending",
-      profileImage: null,
-      profile: {
-        fullName: "Mike Chen",
-        jobTitle: "Technology & Innovation Advisor",
-        company: "Tech Innovation Advisory",
-        expertiseAreas: "Digital Transformation, AI/ML, Product Development",
-        industries: "Technology, Startups, E-commerce",
-        experienceLevel: "10+ years",
-        advisoryServices: "CTO Advisory, Technical Due Diligence, Innovation Strategy",
-        location: "Durban, South Africa",
-        phone: "+27 31 777 9012",
-        website: "www.techadvisor.com",
-      },
-      documents: {
-        nda: { signed: false, date: null },
-        compliance: { status: "pending", documents: 4 },
-        uploads: 6,
-      },
-    },
-  ])
 
-  useEffect(() => {
-    // Simulate loading
-    const timer = setTimeout(() => {
-      setLoading(false)
-    }, 1000)
+// Remove the mock data and replace with:
+const [advisorData, setAdvisorData] = useState([]);
 
-    return () => clearTimeout(timer)
-  }, [])
 
+ // ADD this function to get the current database instance
+      const getCurrentDb = () => {
+        return databaseService.getFirestore();
+      }
+    
+      // ADD this effect to listen for database changes
+      useEffect(() => {
+        const handleDatabaseChange = () => {
+          const newDatabase = databaseService.getCurrentDatabase();
+          setCurrentDatabase(newDatabase);
+          // Refresh data when database changes
+          fetchAdvisors();
+        };
+    
+        // Listen for storage changes
+        window.addEventListener('storage', handleDatabaseChange);
+        
+        // Listen for custom event
+        window.addEventListener('databaseChanged', handleDatabaseChange);
+    
+        return () => {
+          window.removeEventListener('storage', handleDatabaseChange);
+          window.removeEventListener('databaseChanged', handleDatabaseChange);
+        };
+      }, []);
+
+  const fetchAdvisors = async () => {
+    try {
+      setLoading(true);
+      
+       const db = getCurrentDb();
+      // Fetch from Firestore collection 'advisorProfiles'
+      const advisorsRef = collection(db, 'advisorProfiles');
+      const querySnapshot = await getDocs(advisorsRef);
+      
+      // Map Firestore data to your expected format
+      const fetchedAdvisors = querySnapshot.docs.map((doc, index) => {
+        const data = doc.data();
+        const formData = data.formData || {};
+        const contactDetails = formData.contactDetails || {};
+        
+        // Format the date from Firestore
+        const formatFirestoreDate = (timestamp) => {
+          if (timestamp && timestamp.toDate) {
+            return timestamp.toDate().toISOString().split('T')[0];
+          }
+          return timestamp || "2024-01-01";
+        };
+        
+        const createdAt = formatFirestoreDate(data.createdAt);
+        
+        return {
+          id: index + 1,
+          firestoreId: doc.id, // Store for editing
+          username: formData.username || 
+                    contactDetails.email?.split('@')[0] || 
+                    `advisor_${index + 1}`,
+          email: contactDetails.email || '',
+          companyName: contactDetails.company || "Not Provided",
+          created: createdAt,
+          lastEdited: formatFirestoreDate(data.updatedAt) || createdAt,
+          status: data.status || "active",
+          profileImage: null,
+
+          profile: {
+            fullName: contactDetails.primaryContactName || "Not Provided",
+            jobTitle: contactDetails.jobTitle || "Not Provided",
+            company: contactDetails.company || "Not Provided",
+            expertiseAreas: formData.expertiseAreas || "Not Provided",
+            industries: formData.industries || "Not Provided",
+            experienceLevel: formData.experienceLevel || "Not Provided",
+            advisoryServices: formData.advisoryServices || "Not Provided",
+            location: contactDetails.location || "South Africa",
+            phone: contactDetails.primaryContactMobile || "+27 xxx xxx xxx",
+            website: contactDetails.website || "Not Provided",
+          },
+          documents: {
+            nda: { signed: data.ndaSigned || false, date: formatFirestoreDate(data.ndaDate) },
+            compliance: { 
+              status: data.complianceStatus || "pending", 
+              documents: data.complianceDocuments || 0 
+            },
+            uploads: data.totalUploads || 0,
+          },
+        };
+      });
+      
+      setAdvisorData(fetchedAdvisors);
+    } catch (error) {
+      console.error("Error fetching advisor data:", error);
+      setAdvisorData([]); // Set empty array on error
+    } finally {
+      setLoading(false);
+    }
+  };
+    // UPDATE your useEffect
+    useEffect(() => {
+      fetchAdvisors();
+    }, []); // Keep empty dependencies
+  
+// Update the loading simulation to work with real data fetch
+useEffect(() => {
+  if (!loading) return;
+  
+  const timer = setTimeout(() => {
+    // This acts as a fallback in case Firestore fetch takes too long
+    if (advisorData.length === 0) {
+      // Optionally keep showing loading or set empty data
+      setLoading(false);
+    }
+  }, 3000);
+
+  return () => clearTimeout(timer);
+}, [loading, advisorData.length]);
+
+const toggleDatabase = () => {
+    // Get the new database
+    const newDatabase = databaseService.toggleDatabase();
+    
+    // Update local state
+    setCurrentDatabase(newDatabase);
+    
+    // Dispatch event for other components
+    window.dispatchEvent(new CustomEvent('databaseChanged', {
+      detail: { database: newDatabase }
+    }));
+    
+    // Refresh data
+    fetchAdvisors();
+    
+    // Show alert for production mode
+    if (newDatabase === 'production') {
+      alert('⚠️ WARNING: Switched to PRODUCTION database. All data is LIVE.');
+    }
+  };
   // Helper functions for documents
   const getAdvisorDocuments = (advisorId) => {
     // Mock advisor documents data
@@ -483,6 +536,7 @@ function AllAdvisors() {
   }
 
   const TabContent = ({ tab, advisor }) => {
+      console.log("Advisor data in TabContent:", advisor); // Debug log
     switch (tab) {
       case "profile":
         return (
@@ -721,6 +775,21 @@ function AllAdvisors() {
       </div>
 
       <div className={styles.tableContainer}>
+         <div style={{
+                    position: 'fixed',
+                    top: '20px',
+                    right: '80px',
+                    backgroundColor: currentDatabase === 'testing' ? '#4CAF50' : '#f44336',
+                    color: 'white',
+                    padding: '8px 12px',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    zIndex: 1000,
+                    cursor: 'pointer'
+                  }} onClick={toggleDatabase}>
+                    {currentDatabase === 'testing' ? '🟢 TESTING' : '🔴 PRODUCTION'}
+                  </div>
         <table className={styles.table}>
           <thead>
             <tr>
