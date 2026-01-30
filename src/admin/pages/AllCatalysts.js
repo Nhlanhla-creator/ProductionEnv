@@ -34,8 +34,15 @@ import {
   Shield,
 } from "lucide-react"
 import styles from "./all-catalysts.module.css"
+import { collection, query, where, getDocs, doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore"
+import databaseService from "../../services/databaseService"
+
 
 function AllCatalysts() {
+
+      const [currentDatabase, setCurrentDatabase] = useState(
+        databaseService.getCurrentDatabase()
+      )
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
@@ -64,94 +71,149 @@ function AllCatalysts() {
   const [activeTab, setActiveTab] = useState("profile")
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(10)
+  const [catalystData, setCatalystData] = useState([]);
 
-  // Mock Catalyst data - replace with real API calls
-  const [catalystData, setCatalystData] = useState([
-    {
-      id: 1,
-      username: "techaccelerator",
-      email: "info@techaccelerator.co.za",
-      companyName: "TechAccelerator",
-      created: "2024-02-10",
-      lastEdited: "2024-06-20",
-      status: "active",
-      profileImage: null,
-      profile: {
-        organizationName: "TechAccelerator Innovation Hub",
-        programType: "Accelerator",
-        focusAreas: "Technology, Fintech, AI",
-        programDuration: "3-6 months",
-        supportOffered: "Mentorship, Funding, Office Space, Legal Support",
-        location: "Cape Town, South Africa",
-        phone: "+27 21 789 0123",
-        website: "www.techaccelerator.co.za",
-      },
-      documents: {
-        nda: { signed: true, date: "2024-02-15" },
-        compliance: { status: "approved", documents: 10 },
-        uploads: 20,
-      },
-    },
-    {
-      id: 2,
-      username: "startupincubator",
-      email: "hello@startupincubator.com",
-      companyName: "Startup Incubator SA",
-      created: "2024-03-05",
-      lastEdited: "2024-06-18",
-      status: "active",
-      profileImage: null,
-      profile: {
-        organizationName: "Startup Incubator South Africa",
-        programType: "Incubator",
-        focusAreas: "Early Stage, Healthcare, CleanTech",
-        programDuration: "6-12 months",
-        supportOffered: "Mentorship, Market Access, Product Development",
-        location: "Johannesburg, South Africa",
-        phone: "+27 11 654 3210",
-        website: "www.startupincubator.com",
-      },
-      documents: {
-        nda: { signed: true, date: "2024-03-10" },
-        compliance: { status: "approved", documents: 15 },
-        uploads: 28,
-      },
-    },
-    {
-      id: 3,
-      username: "innovationlab",
-      email: "contact@innovationlab.co.za",
-      companyName: "Innovation Lab",
-      created: "2024-04-20",
-      lastEdited: "2024-06-15",
-      status: "pending",
-      profileImage: null,
-      profile: {
-        organizationName: "Innovation Lab Research Center",
-        programType: "Research & Development",
-        focusAreas: "Manufacturing, AgriTech, IoT",
-        programDuration: "12+ months",
-        supportOffered: "Research Facilities, Technical Expertise, IP Support",
-        location: "Durban, South Africa",
-        phone: "+27 31 987 6543",
-        website: "www.innovationlab.co.za",
-      },
-      documents: {
-        nda: { signed: false, date: null },
-        compliance: { status: "pending", documents: 3 },
-        uploads: 5,
-      },
-    },
-  ])
+    // ADD this function to get the current database instance
+      const getCurrentDb = () => {
+        return databaseService.getFirestore();
+      }
+    
+      // ADD this effect to listen for database changes
+      useEffect(() => {
+        const handleDatabaseChange = () => {
+          const newDatabase = databaseService.getCurrentDatabase();
+          setCurrentDatabase(newDatabase);
+          // Refresh data when database changes
+          fetchCatalysts();
+        };
+    
+        // Listen for storage changes
+        window.addEventListener('storage', handleDatabaseChange);
+        
+        // Listen for custom event
+        window.addEventListener('databaseChanged', handleDatabaseChange);
+    
+        return () => {
+          window.removeEventListener('storage', handleDatabaseChange);
+          window.removeEventListener('databaseChanged', handleDatabaseChange);
+        };
+      }, []);
 
+      const fetchCatalysts = async () => {
+    try {
+      
+      setLoading(true);
+      
+       const db = getCurrentDb();
+       
+      // Fetch from Firestore collection 'catalystProfiles'
+      const catalystsRef = collection(db, 'catalystProfiles');
+      const querySnapshot = await getDocs(catalystsRef);
+      
+      // Map Firestore data to your expected format
+      const fetchedCatalysts = querySnapshot.docs.map((doc, index) => {
+        const data = doc.data();
+        const formData = data.formData || {};
+        
+        // Format the date from Firestore
+        const formatFirestoreDate = (timestamp) => {
+          if (timestamp && timestamp.toDate) {
+            return timestamp.toDate().toISOString().split('T')[0];
+          }
+          return timestamp || "2024-01-01";
+        };
+        
+        // Get company/organization name - check different possible fields
+        const companyName = formData?.entityOverview?.registeredName || 
+                           "Not Provided";
+        
+        // Get email - check different possible fields
+        const email = formData?.contactDetails?.businessEmail || 'Not Provided';
+        
+        // Create username from company name if not exists
+        const username = companyName.toLowerCase().replace(/[^a-z0-9]/g, '_') || `catalyst_${index + 1}`;
+        
+        return {
+          id: index + 1,
+          firestoreId: doc.id, // Store for updates
+          username: username,
+          email: email,
+          companyName: companyName,
+          created: formatFirestoreDate(data.createdAt) || "2024-01-01",
+          lastEdited: formatFirestoreDate(data.lastEdited) || formatFirestoreDate(data.createdAt) || "2024-01-01",
+          status: data.status || formData.status || "active",
+          profileImage: null,
+          profile: {
+            organizationName: formData.organizationName || companyName || "Not Provided",
+            programType: formData.programType || "Not Specified",
+            focusAreas: formData.focusAreas || formData.industry || "Not Specified",
+            programDuration: formData.programDuration || "Not Specified",
+            supportOffered: formData.supportOffered || "Not Specified",
+            location: formData.location || formData.city || "South Africa",
+            phone: formData.phone || formData.phoneNumber || "+27 XX XXX XXXX",
+            website: formData.website || formData.websiteUrl || "Not Provided",
+          },
+          documents: {
+            nda: { 
+              signed: formData.ndaSigned || formData.ndaAgreed || false, 
+              date: formatFirestoreDate(formData.ndaDate) 
+            },
+            compliance: { 
+              status: formData.complianceStatus || "pending", 
+              documents: formData.complianceDocuments || 0 
+            },
+            uploads: formData.totalUploads || formData.documentsUploaded || 0,
+          },
+        };
+      });
+      
+      setCatalystData(fetchedCatalysts);
+    } catch (error) {
+      console.error("Error fetching catalyst data:", error);
+      setCatalystData([]); // Or keep empty array
+    } finally {
+      setLoading(false);
+    }
+  };
+
+    // UPDATE your useEffect
   useEffect(() => {
-    // Simulate loading
-    const timer = setTimeout(() => {
-      setLoading(false)
-    }, 1000)
+    fetchCatalysts();
+  }, []); // Keep empty dependencies
 
-    return () => clearTimeout(timer)
-  }, [])
+
+// Keep your existing useEffect for loading simulation
+useEffect(() => {
+  if (!loading) return; // Only run if still loading
+  
+  const timer = setTimeout(() => {
+    setLoading(false);
+  }, 1000);
+
+  return () => clearTimeout(timer);
+}, [loading]);
+
+
+  const toggleDatabase = () => {
+    // Get the new database
+    const newDatabase = databaseService.toggleDatabase();
+    
+    // Update local state
+    setCurrentDatabase(newDatabase);
+    
+    // Dispatch event for other components
+    window.dispatchEvent(new CustomEvent('databaseChanged', {
+      detail: { database: newDatabase }
+    }));
+    
+    // Refresh data
+    fetchCatalysts();
+    
+    // Show alert for production mode
+    if (newDatabase === 'production') {
+      alert('⚠️ WARNING: Switched to PRODUCTION database. All data is LIVE.');
+    }
+  };
 
   // Helper functions for documents
   const getCatalystDocuments = (catalystId) => {
@@ -543,6 +605,7 @@ function AllCatalysts() {
               </div>
               
               <div className={styles.documentsTableContainer}>
+                
                 <table className={styles.documentsTable}>
                   <thead>
                     <tr>
@@ -699,6 +762,21 @@ function AllCatalysts() {
       </div>
 
       <div className={styles.tableContainer}>
+         <div style={{
+                    position: 'fixed',
+                    top: '20px',
+                    right: '80px',
+                    backgroundColor: currentDatabase === 'testing' ? '#4CAF50' : '#f44336',
+                    color: 'white',
+                    padding: '8px 12px',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    zIndex: 1000,
+                    cursor: 'pointer'
+                  }} onClick={toggleDatabase}>
+                    {currentDatabase === 'testing' ? '🟢 TESTING' : '🔴 PRODUCTION'}
+                  </div>
         <table className={styles.table}>
           <thead>
             <tr>

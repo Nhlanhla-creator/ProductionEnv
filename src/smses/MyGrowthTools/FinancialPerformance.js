@@ -82,7 +82,7 @@ const KeyQuestionBox = ({ question, signals, decisions, section }) => {
         <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
           {showMore ? question : getFirstSentence(question)}
         </span>
-        {!showMore && question.length > getFirstSentence(question).length && (
+    {!showMore && (question.length > getFirstSentence(question).length || signals || decisions) && (
           <button
             onClick={() => setShowMore(true)}
             style={{
@@ -95,7 +95,7 @@ const KeyQuestionBox = ({ question, signals, decisions, section }) => {
               textDecoration: "underline",
             }}
           >
-            Show more
+            See more
           </button>
         )}
       </div>
@@ -122,7 +122,7 @@ const KeyQuestionBox = ({ question, signals, decisions, section }) => {
               textDecoration: "underline",
             }}
           >
-            Show less
+            See less
           </button>
         </>
       )}
@@ -142,7 +142,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
   const [expandedNotes, setExpandedNotes] = useState({})
   const [kpiNotes, setKpiNotes] = useState({})
   const [kpiAnalysis, setKpiAnalysis] = useState({})
-  const [navData, setNavData] = useState(Array(12).fill(""))
+const [navData, setNavData] = useState(Array(12).fill("0"))
   const [financialYear, setFinancialYear] = useState("FY")
   
   // Balance Sheet Data Structure - FIXED with correct hierarchy
@@ -231,11 +231,11 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
   const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
 
   const subTabs = [
-    { id: "balance-sheet", label: "Balance Sheet" },
-    { id: "solvency", label: "Solvency" },
-    { id: "leverage", label: "Leverage" },
-    { id: "equity", label: "Equity" },
-  ]
+  { id: "balance-sheet", label: "Balance Sheet" },
+  { id: "solvency", label: "Solvency" },
+  { id: "leverage", label: "Leverage" },
+  { id: "equity", label: "Equity Structure & Capital Discipline" },
+]
 
   useEffect(() => {
     if (user) {
@@ -2534,120 +2534,116 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
     </div>
   )
 
-  const renderSolvency = () => (
-    <div>
-      <KeyQuestionBox
-        question="Is the business financially solvent and appropriately structured for its current stage? Is the business structurally investable by institutional capital?"
-        signals="Leverage, balance sheet strength"
-        decisions="Raise equity vs debt, restructure balance sheet"
-        section="solvency"
-      />
-      
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
-        {!isInvestorView && (
-          <button
-            onClick={() => {}}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#5d4037",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontWeight: "600",
-              fontSize: "13px",
-            }}
-          >
-            Add KPI
-          </button>
-        )}
-      </div>
-      
-      {/* 2 charts per row for Solvency */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px" }}>
-        {renderKPICard("Debt to Equity Ratio", solvencyData.debtToEquity, "debtToEquity", "ratio")}
-        {renderKPICard("Interest Coverage Ratio", solvencyData.interestCoverage, "interestCoverage", "ratio")}
-        {renderKPICard("Debt Service Coverage Ratio", solvencyData.debtServiceCoverage, "debtServiceCoverage", "ratio")}
-        {renderKPICard("NAV (Net Asset Value)", solvencyData.nav, "nav", "ZAR")}
-      </div>
+ const renderSolvency = () => (
+  <div>
+    <KeyQuestionBox
+      question="Is the business financially solvent and appropriately structured for its current stage? Is the business structurally investable by institutional capital?"
+      signals="Leverage, balance sheet strength"
+      decisions="Raise equity vs debt, restructure balance sheet"
+      section="solvency"
+    />
+    
+    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
+      {!isInvestorView && (
+        <button
+          onClick={() => {}}
+          style={{
+            padding: "8px 16px",
+            backgroundColor: "#5d4037",
+            color: "#fdfcfb",
+            border: "none",
+            borderRadius: "4px",
+            cursor: "pointer",
+            fontWeight: "600",
+            fontSize: "13px",
+          }}
+        >
+          Add KPI
+        </button>
+      )}
     </div>
-  )
+    
+    {/* CHANGED: 2 charts per row for Solvency */}
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px" }}>
+      {renderKPICard("NAV", navData, "nav", "ZAR")}
+      {renderKPICard("Equity Ratio", equityData.equityRatio, "equityRatio", "%")}
+      {renderKPICard("Liabilities:Assets Ratio", leverageData.totalDebtRatio, "liabilitiesAssetsRatio", "ratio")}
+    </div>
+  </div>
+)
+ const renderLeverage = () => (
+  <div>
+    <KeyQuestionBox
+      question="Is the business financially solvent and appropriately structured for its current stage? Is the business structurally investable by institutional capital?"
+      signals="Leverage, balance sheet strength"
+      decisions="Raise equity vs debt, restructure balance sheet"
+      section="leverage"
+    />
+    
+    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
+      {!isInvestorView && (
+        <button
+          onClick={() => {}}
+          style={{
+            padding: "8px 16px",
+            backgroundColor: "#5d4037",
+            color: "#fdfcfb",
+            border: "none",
+            borderRadius: "4px",
+            cursor: "pointer",
+            fontWeight: "600",
+            fontSize: "13px",
+          }}
+        >
+          Add KPI
+        </button>
+      )}
+    </div>
+    
+    {/* NEW: Leverage charts */}
+   <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px" }}>
+      {renderKPICard("Debt:Equity", solvencyData.debtToEquity, "debtToEquity", "ratio")}
+      {renderKPICard("Debt:Assets", leverageData.totalDebtRatio, "debtToAssets", "ratio")}
+    </div>
+  </div>
+)
 
-  const renderLeverage = () => (
-    <div>
-      <KeyQuestionBox
-        question="Is the business financially solvent and appropriately structured for its current stage? Is the business structurally investable by institutional capital?"
-        signals="Leverage, balance sheet strength"
-        decisions="Raise equity vs debt, restructure balance sheet"
-        section="leverage"
-      />
-      
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
-        {!isInvestorView && (
-          <button
-            onClick={() => {}}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#5d4037",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontWeight: "600",
-              fontSize: "13px",
-            }}
-          >
-            Add KPI
-          </button>
-        )}
-      </div>
-      
-      {/* 2 charts per row for Leverage */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px" }}>
-        {renderKPICard("Total Debt Ratio", leverageData.totalDebtRatio, "totalDebtRatio", "ratio")}
-        {renderKPICard("Long-Term Debt Ratio", leverageData.longTermDebtRatio, "longTermDebtRatio", "ratio")}
-        {renderKPICard("Equity Multiplier", leverageData.equityMultiplier, "equityMultiplier", "ratio")}
-      </div>
+ const renderEquityTab = () => (
+  <div>
+    <KeyQuestionBox
+      question="Is the business financially solvent and appropriately structured for its current stage? Is the business structurally investable by institutional capital?"
+      signals="Leverage, balance sheet strength"
+      decisions="Raise equity vs debt, restructure balance sheet"
+      section="equity"
+    />
+    
+    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
+      {!isInvestorView && (
+        <button
+          onClick={() => {}}
+          style={{
+            padding: "8px 16px",
+            backgroundColor: "#5d4037",
+            color: "#fdfcfb",
+            border: "none",
+            borderRadius: "4px",
+            cursor: "pointer",
+            fontWeight: "600",
+            fontSize: "13px",
+          }}
+        >
+          Add KPI
+        </button>
+      )}
     </div>
-  )
-
-  const renderEquityTab = () => (
-    <div>
-      <KeyQuestionBox
-        question="Is the business financially solvent and appropriately structured for its current stage? Is the business structurally investable by institutional capital?"
-        signals="Leverage, balance sheet strength"
-        decisions="Raise equity vs debt, restructure balance sheet"
-        section="equity"
-      />
-      
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
-        {!isInvestorView && (
-          <button
-            onClick={() => {}}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#5d4037",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontWeight: "600",
-              fontSize: "13px",
-            }}
-          >
-            Add KPI
-          </button>
-        )}
-      </div>
-      
-      {/* 2 charts per row for Equity */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px" }}>
-        {renderKPICard("Return on Equity (ROE)", equityData.returnOnEquity, "returnOnEquity", "%")}
-        {renderKPICard("Equity Ratio", equityData.equityRatio, "equityRatio", "%")}
-        {renderKPICard("Book Value Per Share", equityData.bookValuePerShare, "bookValuePerShare", "ZAR")}
-      </div>
+    
+    {/* NEW: Equity Structure & Capital Discipline charts */}
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px" }}>
+      {renderKPICard("Ownership % (Equity)", equityData.returnOnEquity, "ownershipEquity", "%")}
+      {renderKPICard("Dividend Policy / Capital Retention Behaviour", equityData.bookValuePerShare, "dividendPolicy", "ZAR")}
     </div>
-  )
+  </div>
+)
 
   if (activeSection !== "capital-structure") return null
 
@@ -3228,17 +3224,17 @@ const PerformanceEngine = ({
   onUpdateChartData,
   isInvestorView,
 }) => {
-  const [chartViewMode, setChartViewMode] = useState("data")
-  const [visibleCharts, setVisibleCharts] = useState({
-    sales: true,
-    cogs: true,
-    opex: true,
-    grossProfit: true,
-    netProfit: true,
-    ebitda: true,
-    gpMargin: true,
-    npMargin: true,
-  })
+ const [visibleCharts, setVisibleCharts] = useState({
+  sales: true,
+  cogs: true,
+  opex: true,
+  grossProfit: true,
+  netProfit: true,
+  // Remove these since we're not showing separate margin charts
+  ebitda: false,
+  gpMargin: false,
+  npMargin: false,
+})
   const [showModal, setShowModal] = useState(false)
   const [showVariance, setShowVariance] = useState(false)
   const [expandedNotes, setExpandedNotes] = useState({})
@@ -3415,19 +3411,17 @@ const PerformanceEngine = ({
     const npMargin = sales.map((s, i) => (s !== 0 ? (netProfit[i] / s) * 100 : 0))
     const npMarginBudget = salesBudget.map((s, i) => (s !== 0 ? (netProfitBudget[i] / s) * 100 : 0))
 
-    const chartData = {
-      sales: { actual: sales.map((val) => val / 1000000), budget: salesBudget.map((val) => val / 1000000) },
-      cogs: { actual: cogs.map((val) => val / 1000000), budget: cogsBudget.map((val) => val / 1000000) },
-      opex: { actual: opex.map((val) => val / 1000000), budget: opexBudget.map((val) => val / 1000000) },
-      grossProfit: {
-        actual: grossProfit.map((val) => val / 1000000),
-        budget: grossProfitBudget.map((val) => val / 1000000),
-      },
-      ebitda: { actual: ebitda.map((val) => val / 1000000), budget: ebitdaBudget.map((val) => val / 1000000) },
-      netProfit: { actual: netProfit.map((val) => val / 1000000), budget: netProfitBudget.map((val) => val / 1000000) },
-      gpMargin: { actual: gpMargin, budget: gpMarginBudget },
-      npMargin: { actual: npMargin, budget: npMarginBudget },
-    }
+  const chartData = {
+  sales: { actual: sales.map((val) => val / 1000000), budget: salesBudget.map((val) => val / 1000000) },
+  cogs: { actual: cogs.map((val) => val / 1000000), budget: cogsBudget.map((val) => val / 1000000) },
+  opex: { actual: opex.map((val) => val / 1000000), budget: opexBudget.map((val) => val / 1000000) },
+  grossProfit: {
+    actual: grossProfit.map((val) => val / 1000000),
+    budget: grossProfitBudget.map((val) => val / 1000000),
+  },
+  netProfit: { actual: netProfit.map((val) => val / 1000000), budget: netProfitBudget.map((val) => val / 1000000) },
+  // Remove gpMargin and npMargin from here since we're not using separate margin charts
+}
 
     setFirebaseChartData(chartData)
 
@@ -3845,17 +3839,14 @@ const PerformanceEngine = ({
   }
 
   const chartConfigs = [
-    { key: "sales", title: "Revenue", visible: visibleCharts.sales },
-    { key: "cogs", title: "COGS", visible: visibleCharts.cogs },
-    { key: "opex", title: "Opex", visible: visibleCharts.opex },
-    { key: "grossProfit", title: "GP & GP %", visible: visibleCharts.grossProfit },
-    { key: "netProfit", title: "NP & NP %", visible: visibleCharts.netProfit },
-  ]
+  { key: "sales", title: "Revenue", visible: visibleCharts.sales },
+  { key: "cogs", title: "COGS", visible: visibleCharts.cogs },
+  { key: "opex", title: "Opex", visible: visibleCharts.opex },
+  { key: "grossProfit", title: "GP & GP Margin", visible: visibleCharts.grossProfit },
+  { key: "netProfit", title: "NP & NP Margin", visible: visibleCharts.netProfit },
+]
 
-  const marginChartConfigs = [
-    { key: "gpMargin", title: "GP Margin (%)", visible: visibleCharts.gpMargin, isPercentage: true },
-    { key: "npMargin", title: "NP Margin (%)", visible: visibleCharts.npMargin, isPercentage: true },
-  ]
+  
 
   return (
     <div style={{ paddingTop: "20px" }}>
@@ -3992,14 +3983,14 @@ const PerformanceEngine = ({
       </div>
 
       {/* Chart Grid - 2 per row */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(2, 1fr)",
-          gap: "20px",
-          marginBottom: "30px",
-        }}
-      >
+     <div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "repeat(3, 1fr)",
+    gap: "20px",
+    marginBottom: "30px",
+  }}
+>
         {chartConfigs
           .filter((config) => config.visible)
           .map((config) => (
@@ -4110,126 +4101,7 @@ const PerformanceEngine = ({
       </div>
 
       {/* Margin Charts */}
-      <h3 style={{ color: "#5d4037", fontSize: "20px", fontWeight: "600", marginBottom: "15px" }}>Margin Analysis</h3>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(2, 1fr)",
-          gap: "20px",
-          marginBottom: "30px",
-        }}
-      >
-        {marginChartConfigs
-          .filter((config) => config.visible)
-          .map((config) => (
-            <div
-              key={config.key}
-              style={{
-                backgroundColor: "#fdfcfb",
-                padding: "20px",
-                borderRadius: "8px",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              }}
-            >
-              <Line
-                data={createChartData(config.key, config.isPercentage)}
-                options={chartOptions(config.title, config.isPercentage)}
-              />
-
-              {!isInvestorView && (
-                <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
-                  <button
-                    onClick={() => handleAddNotes(config.key)}
-                    style={{
-                      padding: "8px 16px",
-                      backgroundColor: "#e8ddd4",
-                      color: "#5d4037",
-                      border: "none",
-                      borderRadius: "4px",
-                      cursor: "pointer",
-                      fontWeight: "600",
-                      fontSize: "12px",
-                    }}
-                  >
-                    ADD notes
-                  </button>
-                  <button
-                    onClick={() => handleAIAnalysis(config.key)}
-                    style={{
-                      padding: "8px 16px",
-                      backgroundColor: "#e8ddd4",
-                      color: "#5d4037",
-                      border: "none",
-                      borderRadius: "4px",
-                      cursor: "pointer",
-                      fontWeight: "600",
-                      fontSize: "12px",
-                    }}
-                  >
-                    AI analysis
-                  </button>
-                </div>
-              )}
-
-              {expandedNotes[config.key] && (
-                <div style={{ marginTop: "15px" }}>
-                  <label
-                    style={{
-                      fontSize: "12px",
-                      color: "#5d4037",
-                      fontWeight: "600",
-                      display: "block",
-                      marginBottom: "5px",
-                    }}
-                  >
-                    Notes:
-                  </label>
-                  <textarea
-                    value={chartNotes[config.key] || ""}
-                    onChange={(e) => updateChartNote(config.key, e.target.value)}
-                    placeholder="Add notes..."
-                    style={{
-                      width: "100%",
-                      padding: "10px",
-                      borderRadius: "4px",
-                      border: "1px solid #e8ddd4",
-                      minHeight: "60px",
-                      fontSize: "13px",
-                    }}
-                  />
-                </div>
-              )}
-
-              {expandedNotes[`${config.key}_analysis`] && (
-                <div
-                  style={{
-                    backgroundColor: "#e3f2fd",
-                    padding: "15px",
-                    borderRadius: "6px",
-                    border: "1px solid #90caf9",
-                    marginTop: "15px",
-                  }}
-                >
-                  <label
-                    style={{
-                      fontSize: "12px",
-                      color: "#1565c0",
-                      fontWeight: "600",
-                      display: "block",
-                      marginBottom: "8px",
-                    }}
-                  >
-                    AI Analysis:
-                  </label>
-                  <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
-                    {chartAnalysis[config.key] ||
-                      "AI analysis will be generated based on your data trends, comparing current performance against historical averages and industry benchmarks. This feature provides actionable insights for improving this metric."}
-                  </p>
-                </div>
-              )}
-            </div>
-          ))}
-      </div>
+    
 
       {/* Custom KPIs */}
       {Object.keys(customKPIs).length > 0 && (
@@ -7129,7 +7001,7 @@ const FinancialPerformance = () => {
   }
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh" }}>
+    <div style={{ display: "flex", minHeight: "100vh" , padding: "14px", paddingLeft: "40px" }}>
       <Sidebar />
 
       <div style={getContentStyles()}>
@@ -7179,95 +7051,76 @@ const FinancialPerformance = () => {
           </div>
         )}
 
-        <div style={{ padding: "20px" }}>
-          <h1 style={{ color: "#5d4037", fontSize: "32px", fontWeight: "700", marginBottom: "20px" }}>
-            Financial Performance
-          </h1>
+      <div style={{ padding: "20px", paddingTop: "40px", marginLeft: "20px" }}>
+  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+    <h1 style={{ color: "#5d4037", fontSize: "32px", fontWeight: "700", margin: 0 }}>
+      Financial Performance
+    </h1>
+    
+    <button
+      onClick={() => setShowFullDescription(!showFullDescription)}
+      style={{
+        padding: "8px 16px",
+        backgroundColor: "#7d5a50",
+        color: "#fdfcfb",
+        border: "none",
+        borderRadius: "6px",
+        cursor: "pointer",
+        fontWeight: "600",
+        fontSize: "13px",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {showFullDescription ? "See less" : "See more"}
+    </button>
+  </div>
 
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "20px",
-              borderRadius: "8px",
-              boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-                marginBottom: "15px",
-              }}
-            >
-              <div>
-                <strong style={{ color: "#5d4037", fontSize: "16px", display: "block", marginBottom: "5px" }}>
-                  What this dashboard DOES
-                </strong>
-                <span style={{ color: "#5d4037", fontSize: "15px" }}>
-                  Assesses solvency, liquidity, survivability, capital quality, and financial risk
-                </span>
-              </div>
+  {/* Financial Performance Description */}
+  {showFullDescription && (
+    <div
+      style={{
+        backgroundColor: "#fdfcfb",
+        padding: "20px",
+        borderRadius: "8px",
+        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+        marginBottom: "30px",
+      }}
+    >
+    
 
-              <button
-                onClick={() => setShowFullDescription(!showFullDescription)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  fontSize: "13px",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {showFullDescription ? "See Less" : "See More"}
-              </button>
-            </div>
+      
+                <div style={{ padding: "50px", paddingTop: "100px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginTop: "-80px" }}>
+          <div>
+            <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
+              What this dashboard DOES
+            </h3>
+            <ul style={{ color: "#4a352f", fontSize: "14px", lineHeight: "1.7", margin: 0, paddingLeft: "20px" }}>
+              <li>Assesses solvency, liquidity, and financial survivability</li>
+              <li>Evaluates capital structure quality and financial risk</li>
+              <li>Monitors cash runway and burn rate for survival planning</li>
+              <li>Tests cost agility and ability to flex under pressure</li>
+              <li>Measures performance engine health and margin sustainability</li>
+            </ul>
+          </div>
 
-            <div>
-              <strong style={{ color: "#5d4037", fontSize: "16px", display: "block", marginBottom: "5px" }}>
-                What this dashboard, do
-              </strong>
-              <span style={{ color: "#5d4037", fontSize: "15px" }}>
-                Bookkeeping, invoicing, payments, payroll, accounting automation
-              </span>
-            </div>
-
-            {showFullDescription && (
-              <div style={{ marginTop: "20px", paddingTop: "20px", borderTop: "1px solid #e8ddd4" }}>
-                <p style={{ color: "#5d4037", fontSize: "14px", lineHeight: "1.6", marginBottom: "12px" }}>
-                  This dashboard provides a comprehensive view of your business's financial health across four key
-                  dimensions:
-                </p>
-                <ul style={{ color: "#5d4037", fontSize: "14px", lineHeight: "1.8", paddingLeft: "20px" }}>
-                  <li>
-                    <strong>Capital Structure:</strong> Evaluate whether your business is financially solvent and
-                    appropriately structured for its current stage
-                  </li>
-                  <li>
-                    <strong>Performance Engine:</strong> Assess if your business model is economically viable through
-                    margin trends and profitability direction
-                  </li>
-                  <li>
-                    <strong>Cost Agility:</strong> Determine if your cost structure can flex under revenue pressure and
-                    identify opportunities for restructuring
-                  </li>
-                  <li>
-                    <strong>Liquidity & Survival:</strong> Monitor cash runway and burn risk to ensure your business can
-                    survive unexpected shocks
-                  </li>
-                </ul>
-                <p style={{ color: "#5d4037", fontSize: "14px", lineHeight: "1.6", marginTop: "12px" }}>
-                  Each section provides key metrics, signals, and decision points to help you make informed strategic
-                  choices about your business's financial future.
-                </p>
-              </div>
-            )}
+          <div>
+            <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
+              What this dashboard does NOT do
+            </h3>
+            <ul style={{ color: "#4a352f", fontSize: "14px", lineHeight: "1.7", margin: 0, paddingLeft: "20px" }}>
+              <li>Bookkeeping, invoicing, or payments processing</li>
+              <li>Payroll management or accounting automation</li>
+              <li>Tax compliance or audit preparation</li>
+              <li>Regulatory reporting or statutory filings</li>
+              <li>Operational transaction processing</li>
+            </ul>
           </div>
         </div>
+      </div>
+    </div>
+  )}
+</div>
 
         {/* Main Tab Buttons */}
         <div
