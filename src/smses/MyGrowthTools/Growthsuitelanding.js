@@ -25,8 +25,8 @@ function GrowthSuiteLanding() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #faf7f2 0%, #f5f0e1 100%)',
-      padding: `40px 24px 40px ${isSidebarCollapsed ? "100px" : "270px"}`,
+      backgroundColor: '#f7f3f0',
+      padding: `70px 20px 20px ${isSidebarCollapsed ? "100px" : "270px"}`,
       margin: "0",
       width: '100%',
       boxSizing: 'border-box',
@@ -39,33 +39,30 @@ function GrowthSuiteLanding() {
       }}>
         {/* Hero Section */}
         <div style={{
-          background: 'white',
-          borderRadius: '24px',
-          boxShadow: '0 20px 60px rgba(125, 90, 80, 0.08)',
-          padding: '48px',
-          marginBottom: '32px',
-          border: '1px solid #f0e6d9'
+          backgroundColor: '#fdfcfb',
+          borderRadius: '12px',
+          boxShadow: '0 2px 8px rgba(93, 64, 55, 0.1)',
+          padding: '40px',
+          marginBottom: '30px',
+          border: '1px solid #e8ddd4'
         }}>
-          <div style={{
-            borderLeft: '6px solid #a67c52',
-            paddingLeft: '32px',
-            marginBottom: '32px'
-          }}>
+          <div style={{ marginBottom: '30px' }}>
             <h1 style={{
-              fontSize: '48px',
-              fontWeight: '800',
-              color: '#4a352f',
-              marginBottom: '16px',
+              fontSize: '32px',
+              fontWeight: '700',
+              color: '#5d4037',
+              marginBottom: '10px',
               lineHeight: '1.2',
-              letterSpacing: '-0.02em'
+              marginTop: 0
             }}>
               Growth Suite Overview
             </h1>
             <p style={{
-              fontSize: '18px',
+              fontSize: '16px',
               color: '#7d5a50',
               fontStyle: 'italic',
-              fontWeight: '500'
+              fontWeight: '500',
+              margin: 0
             }}>
               Decision support and risk management for resilient, investable businesses
             </p>
@@ -74,27 +71,28 @@ function GrowthSuiteLanding() {
           {/* Main Content Grid */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(500px, 1fr))',
-            gap: '32px',
-            marginBottom: '40px'
+            gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+            gap: '20px',
+            marginBottom: '30px'
           }}>
             {/* What It Is */}
             <div style={{
-              background: 'linear-gradient(135deg, #f5f0e1 0%, #faf7f2 100%)',
-              borderRadius: '16px',
-              padding: '32px',
-              border: '2px solid #e6d7c3'
+              backgroundColor: '#f7f3f0',
+              borderRadius: '8px',
+              padding: '20px',
+              border: '2px solid #7d5a50',
+              height: '100%'
             }}>
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
-                marginBottom: '24px'
+                marginBottom: '20px'
               }}>
-                <Target size={28} style={{ color: '#a67c52', marginRight: '12px' }} />
+                <Target size={24} style={{ color: '#7d5a50', marginRight: '12px' }} />
                 <h2 style={{
-                  fontSize: '28px',
+                  fontSize: '20px',
                   fontWeight: '700',
-                  color: '#4a352f',
+                  color: '#5d4037',
                   margin: 0
                 }}>
                   What the BIG Growth Suite is
@@ -102,50 +100,50 @@ function GrowthSuiteLanding() {
               </div>
 
               <p style={{
-                fontSize: '17px',
-                lineHeight: '1.7',
+                fontSize: '14px',
+                lineHeight: '1.6',
                 color: '#4a352f',
-                marginBottom: '24px'
+                marginBottom: '20px'
               }}>
-                A <strong style={{ color: '#a67c52' }}>decision support and risk management system</strong> developed 
+                A <strong style={{ color: '#7d5a50' }}>decision support and risk management system</strong> developed 
                 from real management consulting engagements, designed to help founders, executives, boards, funders, 
                 and partners answer one question:
               </p>
 
               <div style={{
-                background: 'white',
-                borderLeft: '4px solid #a67c52',
-                padding: '24px',
-                borderRadius: '0 12px 12px 0',
-                boxShadow: '0 4px 12px rgba(125, 90, 80, 0.08)',
-                marginBottom: '24px'
+                backgroundColor: '#fdfcfb',
+                borderLeft: '4px solid #7d5a50',
+                padding: '15px',
+                borderRadius: '0 6px 6px 0',
+                marginBottom: '20px',
+                border: '1px solid #e8ddd4'
               }}>
                 <p style={{
-                  fontSize: '20px',
+                  fontSize: '16px',
                   fontWeight: '700',
-                  color: '#7d5a50',
+                  color: '#5d4037',
                   margin: 0,
-                  lineHeight: '1.5'
+                  lineHeight: '1.4'
                 }}>
                   "Is this business resilient, investable, and scalable — and what could break it?"
                 </p>
               </div>
 
               <div style={{
-                background: 'white',
-                borderRadius: '12px',
-                padding: '24px',
-                border: '1px solid #e6d7c3'
+                backgroundColor: '#fdfcfb',
+                borderRadius: '6px',
+                padding: '20px',
+                border: '1px solid #e8ddd4'
               }}>
                 <p style={{
-                  fontSize: '16px',
+                  fontSize: '14px',
                   fontWeight: '700',
-                  color: '#4a352f',
-                  marginBottom: '16px'
+                  color: '#5d4037',
+                  marginBottom: '15px'
                 }}>
                   It:
                 </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {[
                     "Abstracts complexity",
                     "Surfaces risk early",
@@ -156,17 +154,17 @@ function GrowthSuiteLanding() {
                     <div key={index} style={{
                       display: 'flex',
                       alignItems: 'flex-start',
-                      gap: '12px'
+                      gap: '10px'
                     }}>
-                      <CheckCircle size={20} style={{ 
-                        color: '#a67c52', 
+                      <CheckCircle size={18} style={{ 
+                        color: '#7d5a50', 
                         flexShrink: 0,
                         marginTop: '2px'
                       }} />
                       <span style={{
-                        fontSize: '15px',
+                        fontSize: '13px',
                         color: '#4a352f',
-                        lineHeight: '1.6'
+                        lineHeight: '1.5'
                       }}>
                         {item}
                       </span>
@@ -178,21 +176,22 @@ function GrowthSuiteLanding() {
 
             {/* What It's NOT */}
             <div style={{
-              background: 'linear-gradient(135deg, #faf7f2 0%, #f5f0e1 100%)',
-              borderRadius: '16px',
-              padding: '32px',
-              border: '2px solid #e6d7c3'
+              backgroundColor: '#f7f3f0',
+              borderRadius: '8px',
+              padding: '20px',
+              border: '2px solid #7d5a50',
+              height: '100%'
             }}>
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
-                marginBottom: '24px'
+                marginBottom: '20px'
               }}>
-                <XCircle size={28} style={{ color: '#7d5a50', marginRight: '12px' }} />
+                <XCircle size={24} style={{ color: '#7d5a50', marginRight: '12px' }} />
                 <h2 style={{
-                  fontSize: '28px',
+                  fontSize: '20px',
                   fontWeight: '700',
-                  color: '#4a352f',
+                  color: '#5d4037',
                   margin: 0
                 }}>
                   What the BIG Growth Suite is NOT
@@ -201,8 +200,9 @@ function GrowthSuiteLanding() {
 
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-                gap: '12px'
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: '10px',
+                marginBottom: '20px'
               }}>
                 {[
                   "ERP",
@@ -213,27 +213,26 @@ function GrowthSuiteLanding() {
                   "ESG reporting platform"
                 ].map((item, index) => (
                   <div key={index} style={{
-                    background: 'white',
-                    padding: '16px',
-                    borderRadius: '10px',
-                    border: '2px solid #e6d7c3',
+                    backgroundColor: '#fdfcfb',
+                    padding: '12px',
+                    borderRadius: '6px',
+                    border: '1px solid #e8ddd4',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '10px',
-                    transition: 'all 0.2s ease',
+                    gap: '8px',
                     cursor: 'default'
                   }}>
                     <span style={{
-                      fontSize: '20px',
+                      fontSize: '16px',
                       fontWeight: '700',
                       color: '#7d5a50'
                     }}>
                       ✕
                     </span>
                     <span style={{
-                      fontSize: '14px',
+                      fontSize: '13px',
                       fontWeight: '600',
-                      color: '#4a352f'
+                      color: '#5d4037'
                     }}>
                       {item}
                     </span>
@@ -243,36 +242,34 @@ function GrowthSuiteLanding() {
 
               {/* Positioning Statement */}
               <div style={{
-                marginTop: '24px',
-                background: 'white',
-                borderRadius: '12px',
-                padding: '24px',
-                border: '2px solid #c8b6a6',
-                boxShadow: '0 4px 12px rgba(166, 124, 82, 0.1)'
+                backgroundColor: '#fdfcfb',
+                borderRadius: '6px',
+                padding: '20px',
+                border: '2px solid #7d5a50',
               }}>
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '12px',
-                  marginBottom: '12px'
+                  gap: '10px',
+                  marginBottom: '10px'
                 }}>
-                  <Shield size={24} style={{ color: '#a67c52' }} />
+                  <Shield size={20} style={{ color: '#7d5a50' }} />
                   <span style={{
-                    fontSize: '16px',
+                    fontSize: '14px',
                     fontWeight: '700',
-                    color: '#4a352f'
+                    color: '#5d4037'
                   }}>
                     Positioning
                   </span>
                 </div>
                 <p style={{
-                  fontSize: '16px',
-                  lineHeight: '1.7',
+                  fontSize: '13px',
+                  lineHeight: '1.6',
                   color: '#4a352f',
                   margin: 0
                 }}>
-                  It sits <strong style={{ color: '#a67c52' }}>above</strong> operational systems 
-                  and focuses on <strong style={{ color: '#a67c52' }}>interpretation, prioritisation, 
+                  It sits <strong style={{ color: '#7d5a50' }}>above</strong> operational systems 
+                  and focuses on <strong style={{ color: '#7d5a50' }}>interpretation, prioritisation, 
                   and judgement</strong>.
                 </p>
               </div>
@@ -281,34 +278,36 @@ function GrowthSuiteLanding() {
 
           {/* Design Principles */}
           <div style={{
-            background: 'white',
-            borderRadius: '16px',
-            padding: '32px',
-            border: '2px solid #e6d7c3',
-            marginBottom: '24px'
+            backgroundColor: '#fdfcfb',
+            borderRadius: '8px',
+            padding: '20px',
+            border: '2px solid #7d5a50',
+            marginBottom: '20px'
           }}>
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              marginBottom: '24px'
+              marginBottom: '20px',
+              flexWrap: 'wrap',
+              gap: '10px'
             }}>
-              <Zap size={28} style={{ color: '#a67c52', marginRight: '12px' }} />
+              <Zap size={24} style={{ color: '#7d5a50', marginRight: '10px' }} />
               <h2 style={{
-                fontSize: '28px',
+                fontSize: '20px',
                 fontWeight: '700',
-                color: '#4a352f',
+                color: '#5d4037',
                 margin: 0
               }}>
                 Design principles
               </h2>
               <span style={{
-                marginLeft: '12px',
-                fontSize: '14px',
+                fontSize: '12px',
                 fontWeight: '600',
                 color: '#7d5a50',
-                background: '#f5f0e1',
-                padding: '4px 12px',
-                borderRadius: '20px'
+                backgroundColor: '#f7f3f0',
+                padding: '4px 10px',
+                borderRadius: '4px',
+                border: '1px solid #7d5a50'
               }}>
                 non-negotiable
               </span>
@@ -316,26 +315,25 @@ function GrowthSuiteLanding() {
 
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-              gap: '16px'
+              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+              gap: '15px'
             }}>
               {[
-                { label: "Decision-led, not data-led", gradient: "linear-gradient(135deg, #f5f0e1 0%, #faf7f2 100%)" },
-                { label: "Risk-weighted, not activity-driven", gradient: "linear-gradient(135deg, #e6d7c3 0%, #f5f0e1 100%)" },
-                { label: "Modular (switch on/off by relevance)", gradient: "linear-gradient(135deg, #f0e6d9 0%, #e6d7c3 100%)" },
-                { label: "Board- and funder-credible", gradient: "linear-gradient(135deg, #faf7f2 0%, #f0e6d9 100%)" },
-                { label: "AI as analyst, not operator", gradient: "linear-gradient(135deg, #f5f0e1 0%, #e6d7c3 100%)" }
+                { label: "Decision-led, not data-led" },
+                { label: "Risk-weighted, not activity-driven" },
+                { label: "Modular (switch on/off by relevance)" },
+                { label: "Board- and funder-credible" },
+                { label: "AI as analyst, not operator" }
               ].map((principle, index) => (
                 <div key={index} style={{
-                  background: principle.gradient,
-                  borderLeft: '4px solid #a67c52',
-                  padding: '20px',
-                  borderRadius: '0 12px 12px 0',
-                  transition: 'all 0.2s ease',
-                  boxShadow: '0 2px 8px rgba(125, 90, 80, 0.06)'
+                  backgroundColor: '#f7f3f0',
+                  borderLeft: '4px solid #7d5a50',
+                  padding: '15px',
+                  borderRadius: '0 6px 6px 0',
+                  border: '1px solid #e8ddd4'
                 }}>
                   <span style={{
-                    fontSize: '15px',
+                    fontSize: '13px',
                     fontWeight: '600',
                     color: '#4a352f',
                     lineHeight: '1.5'
@@ -350,41 +348,41 @@ function GrowthSuiteLanding() {
 
         {/* Financial Disclaimer */}
         <div style={{
-          background: 'linear-gradient(135deg, #e6d7c3 0%, #c8b6a6 100%)',
-          borderRadius: '20px',
-          padding: '40px',
-          border: '3px solid #a67c52',
-          boxShadow: '0 12px 40px rgba(166, 124, 82, 0.15)'
+          backgroundColor: '#f7f3f0',
+          borderRadius: '8px',
+          padding: '20px',
+          border: '2px solid #7d5a50',
+          marginBottom: '20px'
         }}>
           <div style={{
             display: 'flex',
             alignItems: 'flex-start',
-            gap: '16px',
-            marginBottom: '24px'
+            gap: '15px',
+            marginBottom: '20px'
           }}>
             <div style={{
-              background: 'white',
-              borderRadius: '12px',
-              padding: '12px',
+              backgroundColor: '#fdfcfb',
+              borderRadius: '6px',
+              padding: '10px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 4px 12px rgba(125, 90, 80, 0.2)'
+              border: '1px solid #e8ddd4'
             }}>
-              <Info size={32} style={{ color: '#a67c52' }} />
+              <Info size={24} style={{ color: '#7d5a50' }} />
             </div>
             <div>
               <h3 style={{
-                fontSize: '28px',
-                fontWeight: '800',
-                color: '#4a352f',
+                fontSize: '20px',
+                fontWeight: '700',
+                color: '#5d4037',
                 margin: 0,
-                marginBottom: '4px'
+                marginBottom: '5px'
               }}>
                 Financial Information Disclaimer
               </h3>
               <p style={{
-                fontSize: '14px',
+                fontSize: '13px',
                 color: '#7d5a50',
                 margin: 0,
                 fontWeight: '500'
@@ -395,18 +393,17 @@ function GrowthSuiteLanding() {
           </div>
 
           <div style={{
-            background: 'white',
-            borderRadius: '16px',
-            padding: '32px',
-            border: '2px solid #a67c52',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)'
+            backgroundColor: '#fdfcfb',
+            borderRadius: '6px',
+            padding: '20px',
+            border: '1px solid #e8ddd4'
           }}>
             <div style={{
               display: 'flex',
               flexDirection: 'column',
-              gap: '20px',
-              fontSize: '15px',
-              lineHeight: '1.8',
+              gap: '15px',
+              fontSize: '13px',
+              lineHeight: '1.6',
               color: '#4a352f'
             }}>
               <p style={{ margin: 0 }}>
@@ -428,16 +425,18 @@ function GrowthSuiteLanding() {
                 supplementary schedules, in order to validate or confirm reported figures.
               </p>
               <div style={{
-                background: 'linear-gradient(135deg, #f5f0e1 0%, #e6d7c3 50%)',
-                borderLeft: '4px solid #a67c52',
-                padding: '20px',
-                borderRadius: '0 12px 12px 0',
-                marginTop: '8px'
+                backgroundColor: '#f7f3f0',
+                borderLeft: '4px solid #7d5a50',
+                padding: '15px',
+                borderRadius: '0 6px 6px 0',
+                marginTop: '10px',
+                border: '1px solid #e8ddd4'
               }}>
                 <p style={{ 
                   margin: 0,
                   fontWeight: '600',
-                  color: '#4a352f'
+                  color: '#4a352f',
+                  fontSize: '13px'
                 }}>
                   BIG Marketplace assumes responsibility for the accuracy, completeness, or appropriateness of financial information 
                   supplied by users only when such information has undergone a formal verification or validation process facilitated by the platform.
