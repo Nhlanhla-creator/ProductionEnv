@@ -352,6 +352,7 @@ export default function SupportProgramsPage() {
   if (currentPlan === "basic") {
     return (
       <Upsell
+        userType={"sme"}
         title={"Advisor Matching"}
         subtitle={"Discover and connect with experienced advisors who can guide your startup journey and provide mentorship."}
         features={[

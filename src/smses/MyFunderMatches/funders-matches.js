@@ -184,6 +184,7 @@ export default function FundingMatchesPage() {
   if (currentPlan === "basic" || currentPlan === "standard") {
     return (
       <Upsell
+        userType={"sme"}
         title={"Funding Matching"}
         subtitle={"Discover and connect with investors and funding opportunities that match your business profile and growth stage."}
         features={[

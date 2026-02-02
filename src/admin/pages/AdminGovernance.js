@@ -92,7 +92,7 @@ const AdminGovernance = () => {
   // Styles
   const styles = {
     container: { display: 'flex', height: '100vh', fontFamily: 'sans-serif' },
-    sidebar: { width: '280px', background: '#fff', borderRight: '1px solid #ccc', display: 'flex', flexDirection: 'column', overflowY: 'auto', marginLeft: 'var(--sidebar-width)' },
+    sidebar: { width: '280px', background: '#fff', borderRight: '1px solid #ccc', display: 'flex', flexDirection: 'column', overflowY: 'auto', marginLeft: '5px' },
     sidebarHeader: { padding: '24px', borderBottom: '1px solid #ccc', backgroundColor: '#f0e6d9' },
     sidebarTitle: { fontSize: '20px', fontWeight: '600', margin: 0 },
     sidebarNav: { padding: '12px 0', flex: 1 },
@@ -102,7 +102,7 @@ const AdminGovernance = () => {
     navChevron: { display: 'flex', alignItems: 'center' },
     subItems: { backgroundColor: '#f0e6d9', borderLeft: '3px solid #c8b6a6', marginLeft: '20px' },
     subItem: (isActive) => ({ padding: '10px 20px 10px 40px', cursor: 'pointer', borderLeft: isActive ? '2px solid #7d5a50' : '2px solid transparent', backgroundColor: isActive ? '#c8b6a6' : 'transparent' }),
-    mainContent: { flex: 1, padding: '24px' },
+    mainContent: { flex: 1, padding: '4px' },
     headerTitle: { fontSize: '28px', fontWeight: '600', marginBottom: '12px' }
   };
 

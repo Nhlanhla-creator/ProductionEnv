@@ -162,6 +162,7 @@ export default function InternMatchesPage() {
   if (currentPlan === "basic") {
     return (
       <Upsell
+        userType={"sme"}
         title={"Intern Matching"}
         subtitle={"Discover and connect with talented interns who align with your team's needs and goals."}
         features={[
