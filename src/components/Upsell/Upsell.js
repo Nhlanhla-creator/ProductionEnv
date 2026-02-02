@@ -3,6 +3,7 @@ import { Lock, ArrowRight, X } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 
 export default function Upsell({
+  userType = "investor",
   title = "Premium Feature",
   subtitle = "Upgrade to access this feature",
   features = [],
@@ -97,7 +98,15 @@ export default function Upsell({
 
   const handlePrimary = () => {
     if (typeof onPrimary === "function") return onPrimary()
-    navigate("/investor/billing/subscriptions")
+    
+    switch (userType) {
+      case "investor":
+        navigate("/investor/billing/subscriptions")
+      case "sme":
+        navigate("/billing/subscriptions")
+      default:
+        navigate("/billing/subscriptions")
+    }
   }
 
   // Shared inner card style for consistent appearance

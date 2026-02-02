@@ -154,7 +154,7 @@ function AdminSidebar() {
   const menuItems = [
    {
   id: "notion",
-  label: "Notion",
+  label: "Shared Drive",
   icon: <FileText size={18} />,
   hasSubmenu: true,
   subItems: [
@@ -162,7 +162,7 @@ function AdminSidebar() {
       id: "admin-governance",
       label: "Admin Governance",
       icon: <ShieldCheck size={16} />,
-      route: "/admin/notion/admin-governance"
+      route: "/admin/notion/governance"
     },
     {
       id: "growth",

@@ -1,7 +1,8 @@
 "use client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom"
 import "./App.css"
+import styles from "./AdminLayout.module.css"
 import HomeHeader from "./main_pages/SMEs/HomeHeader"
 import { useAuth } from "./context/useAuth" // Import the auth hook
 import ProtectedRoute from "./context/ProtectedRoute" // Import the ProtectedRoute component
@@ -30,6 +31,20 @@ import PaymentGateway from "./admin/pages/PaymentGatewaySettings"
 import EmailTemplates from "./admin/pages/EmailTemplates"
 import SystemConfig from "./admin/pages/SystemConfigurations"
 import BackupExport from "./admin/pages/BackupExportData"
+
+import Delivery from "./admin/pages/Delivery";
+import AdminGovernance from "./admin/pages/AdminGovernance";
+import Growth from "./admin/pages/Growth";
+import PartnersEcosystem from "./admin/pages/PartnersEcosystem";
+import ProductPlatform from "./admin/pages/ProductPlatform";
+import TechArchitecture from "./admin/pages/TechArchitecture";
+import QATesting from "./admin/pages/qatesting";
+import OperationsInternal from "./admin/pages/OperationsInternal"
+import UsersMarketplace from "./admin/pages/UsersMarketplace"
+import PilotsCaseStudies from "./admin/pages/PilotsCaseStudies"
+import ReportingAnalytics from "./admin/pages/ReportingAnalytics"
+import Archive from "./admin/pages/Archive"
+
 import InvestorSettings from "./Investor/Settings/Setttings"
 import CatalystSettings from "./catalyst/CatalystSettings/supportSettings"
 
@@ -433,17 +448,62 @@ function App() {
 
   // Admin Protected Layout
   const AdminLayout = ({ children }) => {
-    const location = useLocation()
-    return (
-      <div className="app-layout">
-        <AdminSidebar />
-        <div className="main-content">
-          <AdminHeader />
-          <div className="page-content">{children}</div>
-        </div>
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    const updateSidebarState = () => {
+      try {
+        if (typeof document !== "undefined" && document.body) {
+          setIsSidebarCollapsed(document.body.classList.contains("admin-sidebar-collapsed"));
+        } else {
+          setIsSidebarCollapsed(localStorage.getItem("sidebarOpen") === "false");
+        }
+      } catch (e) {
+        setIsSidebarCollapsed(false);
+      }
+    };
+
+    // Initial check
+    updateSidebarState();
+
+    // MutationObserver to watch body class changes
+    let observer = null;
+    try {
+      if (document && document.body && window.MutationObserver) {
+        observer = new MutationObserver(() => updateSidebarState());
+        observer.observe(document.body, { 
+          attributes: true, 
+          attributeFilter: ["class"] 
+        });
+      }
+    } catch (e) {
+      console.error("MutationObserver not supported:", e);
+    }
+
+    // Listen to custom events and storage changes
+    window.addEventListener("sidebarToggle", updateSidebarState);
+    window.addEventListener("storage", updateSidebarState);
+
+    return () => {
+      if (observer) observer.disconnect();
+      window.removeEventListener("sidebarToggle", updateSidebarState);
+      window.removeEventListener("storage", updateSidebarState);
+    };
+  }, []);
+
+  return (
+    <div className="app-layout">
+      <AdminSidebar />
+      <div
+        className={`${styles.mainContent} ${isSidebarCollapsed ? styles.sidebarCollapsed : styles.sidebarExpanded}`}
+      >
+        <AdminHeader isSidebarCollapsed={isSidebarCollapsed} />
+        <div>{children}</div>
       </div>
-    )
-  }
+    </div>
+  );
+};
+
 
   // SME Protected Layout
   const SMELayout = ({ children }) => {
@@ -778,6 +838,20 @@ function App() {
         <Route path="/CharmSchool" element={<CharmSchool />} />
         <Route path="/verify-email" element={<EmailVerification />} />
         <Route path="/card/:cardId" element={<CardLandingPage />} />
+
+        {/* Admin Notion Routes */}
+        <Route path="/admin/notion/delivery" element={withAdminProtection(Delivery)} />
+        <Route path="/admin/notion/governance" element={withAdminProtection(AdminGovernance)} />
+        <Route path="/admin/notion/growth" element={withAdminProtection(Growth)} />
+        <Route path="/admin/notion/partners-ecosystem" element={withAdminProtection(PartnersEcosystem)} />
+        <Route path="/admin/notion/product-platform" element={withAdminProtection(ProductPlatform)} />
+        <Route path="/admin/notion/tech-architecture" element={withAdminProtection(TechArchitecture)} />
+        <Route path="/admin/notion/qa-testing" element={withAdminProtection(QATesting)} />
+        <Route path="/admin/notion/operations-internal" element={withAdminProtection(OperationsInternal)} />
+        <Route path="/admin/notion/users-marketplace" element={withAdminProtection(UsersMarketplace)} />
+        <Route path="/admin/notion/pilots-case-studies" element={withAdminProtection(PilotsCaseStudies)} />
+        <Route path="/admin/notion/reporting-analytics" element={withAdminProtection(ReportingAnalytics)}/>
+        <Route path="/admin/notion/archive" element={withAdminProtection(Archive)} />
 
         {/* Admin Dashboard Routes */}
         <Route path="/admin" element={<Navigate to="/Auth" replace />} />
