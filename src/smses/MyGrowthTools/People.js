@@ -43,11 +43,11 @@ const KeyQuestionBox = ({ question, signals, decisions, section }) => {
   return (
     <div
       style={{
-        backgroundColor: "#fff9c4",
+        backgroundColor: "	#DCDCDC",
         padding: "15px 20px",
         borderRadius: "8px",
         marginBottom: "20px",
-        border: "1px solid #f9a825",
+        border: "1px solid 	#5d4037",
       }}
     >
       <div style={{ marginBottom: "8px" }}>
@@ -55,7 +55,7 @@ const KeyQuestionBox = ({ question, signals, decisions, section }) => {
         <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
           {showMore ? question : getFirstSentence(question)}
         </span>
-        {!showMore && question.length > getFirstSentence(question).length && (
+       {!showMore && (question.length > getFirstSentence(question).length || signals || decisions) && (
           <button
             onClick={() => setShowMore(true)}
             style={{
@@ -2990,92 +2990,124 @@ const PeoplePerformance = () => {
           </div>
         )}
 
-        <div style={{ padding: "20px" }}>
-          <h1 style={{ color: "#5d4037", fontSize: "32px", fontWeight: "700", marginBottom: "20px" }}>
-            People Performance
-          </h1>
+      <div style={{ padding: "20px", paddingTop: "40px", marginLeft: "20px" }}>
+  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+    <h1 style={{ color: "#5d4037", fontSize: "32px", fontWeight: "700", margin: 0 }}>
+      People Performance
+    </h1>
+    
+    <button
+      onClick={() => setShowFullDescription(!showFullDescription)}
+      style={{
+        padding: "8px 16px",
+        backgroundColor: "#7d5a50",
+        color: "#fdfcfb",
+        border: "none",
+        borderRadius: "6px",
+        cursor: "pointer",
+        fontWeight: "600",
+        fontSize: "13px",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {showFullDescription ? "See less" : "See more"}
+    </button>
+  </div>
 
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "20px",
-              borderRadius: "8px",
-              boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-                marginBottom: "15px",
-              }}
-            >
-              <div>
-                <strong style={{ color: "#5d4037", fontSize: "16px", display: "block", marginBottom: "5px" }}>
-                  What this dashboard DOES
-                </strong>
-                <span style={{ color: "#5d4037", fontSize: "15px" }}>
-                  Assesses organisational resilience, execution capacity, continuity risk
-                </span>
-              </div>
+  {/* People Performance Description */}
+  {showFullDescription && (
+    <div
+      style={{
+        backgroundColor: "#fdfcfb",
+        padding: "20px",
+        borderRadius: "8px",
+        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+        marginBottom: "30px",
+      }}
+    >
+      <div style={{ padding: "50px", paddingTop: "100px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginTop: "-80px" }}>
+          <div>
+            <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
+              What this dashboard DOES
+            </h3>
+            <ul style={{ color: "#4a352f", fontSize: "14px", lineHeight: "1.7", margin: 0, paddingLeft: "20px" }}>
+              <li>Assesses organisational resilience and execution capacity</li>
+              <li>Evaluates continuity risk and talent retention</li>
+              <li>Monitors productivity scaling with headcount growth</li>
+              <li>Measures capability development and skills investment</li>
+              <li>Analyzes workforce demographics and representation</li>
+            </ul>
+          </div>
 
-              <button
-                onClick={() => setShowFullDescription(!showFullDescription)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  fontSize: "13px",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {showFullDescription ? "See Less" : "See More"}
-              </button>
-            </div>
-
-            <div>
-              <strong style={{ color: "#5d4037", fontSize: "16px", display: "block", marginBottom: "5px" }}>
-                What this dashboard does not do
-              </strong>
-              <span style={{ color: "#5d4037", fontSize: "15px" }}>
-                Payroll, leave, performance reviews, HR administration
-              </span>
-            </div>
-
-            {showFullDescription && (
-              <div style={{ marginTop: "20px", paddingTop: "20px", borderTop: "1px solid #e8ddd4" }}>
-                <p style={{ color: "#5d4037", fontSize: "14px", lineHeight: "1.6", marginBottom: "12px" }}>
-                  This dashboard provides a comprehensive view of your organization's people performance across five key dimensions:
-                </p>
-                <ul style={{ color: "#5d4037", fontSize: "14px", lineHeight: "1.8", paddingLeft: "20px" }}>
-                  <li>
-                    <strong>Execution Capacity & Scalability:</strong> Evaluate leadership capacity and team sufficiency for current and near-term workload
-                  </li>
-                  <li>
-                    <strong>Productivity:</strong> Assess if output is scaling with headcount through efficiency trends
-                  </li>
-                  <li>
-                    <strong>Capability & Training:</strong> Determine if the business is investing enough in skills development for future growth
-                  </li>
-                  <li>
-                    <strong>Stability & Continuity:</strong> Monitor talent leakage risks and ensure business continuity
-                  </li>
-                  <li>
-                    <strong>Employee Composition:</strong> Analyze workforce demographics and representation for external credibility
-                  </li>
-                </ul>
-                <p style={{ color: "#5d4037", fontSize: "14px", lineHeight: "1.6", marginTop: "12px" }}>
-                  Each section provides key metrics, signals, and decision points to help you make informed strategic choices about your organization's human capital.
-                </p>
-              </div>
-            )}
+          <div>
+            <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
+              What this dashboard does NOT do
+            </h3>
+            <ul style={{ color: "#4a352f", fontSize: "14px", lineHeight: "1.7", margin: 0, paddingLeft: "20px" }}>
+              <li>Payroll processing or salary management</li>
+              <li>Leave and attendance tracking</li>
+              <li>Performance review administration</li>
+              <li>HR compliance and policy management</li>
+              <li>Recruitment and onboarding workflows</li>
+            </ul>
           </div>
         </div>
+
+        <div style={{ marginTop: "30px", paddingTop: "20px", borderTop: "1px solid #e8ddd4" }}>
+          <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
+            Key People Performance Dimensions
+          </h3>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+            <div>
+              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
+                Execution Capacity & Scalability
+              </h4>
+              <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
+                Evaluate leadership capacity and team sufficiency for current and near-term workload
+              </p>
+            </div>
+            <div>
+              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
+                Productivity
+              </h4>
+              <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
+                Assess if output is scaling with headcount through efficiency trends
+              </p>
+            </div>
+            <div>
+              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
+                Capability & Training
+              </h4>
+              <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
+                Determine if the business is investing enough in skills development for future growth
+              </p>
+            </div>
+            <div>
+              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
+                Stability & Continuity
+              </h4>
+              <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
+                Monitor talent leakage risks and ensure business continuity
+              </p>
+            </div>
+            <div style={{ gridColumn: "span 2" }}>
+              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
+                Employee Composition
+              </h4>
+              <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
+                Analyze workforce demographics and representation for external credibility
+              </p>
+            </div>
+          </div>
+          <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", marginTop: "15px" }}>
+            Each section provides key metrics, signals, and decision points to help you make informed strategic choices about your organization's human capital.
+          </p>
+        </div>
+      </div>
+    </div>
+  )}
+</div>
 
         {/* Main Tab Buttons */}
         <div
