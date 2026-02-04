@@ -1285,6 +1285,13 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
   const [selectedStage, setSelectedStage] = useState("")
   const [stageNotes, setStageNotes] = useState("")
 
+
+  const [companyOwnerId, setCompanyOwnerId] = useState(null)
+const [isCompanyMember, setIsCompanyMember] = useState(false)
+const [effectiveUserId, setEffectiveUserId] = useState(null)
+const [userRole, setUserRole] = useState(null)
+
+
   const getStageFields = (stage) => {
     const fields = {
       showMessage: true,
@@ -1409,19 +1416,73 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
     setModalType(null)
   }
 
-  useEffect(() => {
-    const fetchInternApplications = async () => {
-      setLoading(true)
-      try {
-        const user = auth.currentUser
-        if (!user) {
-          console.log("No authenticated user")
-          setLoading(false)
-          return
-        }
 
-        const smeUserId = user.uid
-        const smeUserDoc = await getDoc(doc(db, "universalProfiles", smeUserId))
+  // Check company membership on mount
+useEffect(() => {
+  const checkCompanyMembership = async () => {
+    const user = auth.currentUser
+    if (!user) return
+
+    try {
+      const userDocRef = doc(db, "users", user.uid)
+      const userDocSnap = await getDoc(userDocRef)
+      
+      if (userDocSnap.exists()) {
+        const userData = userDocSnap.data()
+        const userCompanyId = userData.companyId
+        const userCompanyRole = userData.userRole
+        
+        if (userCompanyId) {
+          const companyDocRef = doc(db, "companies", userCompanyId)
+          const companyDocSnap = await getDoc(companyDocRef)
+          
+          if (companyDocSnap.exists()) {
+            const companyData = companyDocSnap.data()
+            const ownerId = companyData.createdBy
+            
+            setUserRole(userCompanyRole || 'viewer')
+            
+            if (ownerId === user.uid) {
+              setIsCompanyMember(false)
+              setEffectiveUserId(user.uid)
+            } else {
+              setIsCompanyMember(true)
+              setCompanyOwnerId(ownerId)
+              setEffectiveUserId(ownerId)
+            }
+          }
+        } else {
+          setIsCompanyMember(false)
+          setEffectiveUserId(user.uid)
+          setUserRole('owner')
+        }
+      }
+    } catch (error) {
+      console.error("Error checking company membership:", error)
+      setEffectiveUserId(user.uid)
+      setUserRole('owner')
+    }
+  }
+
+  checkCompanyMembership()
+}, [])
+
+
+ useEffect(() => {
+  const fetchInternApplications = async () => {
+    if (!effectiveUserId) return
+    
+    setLoading(true)
+    try {
+      const user = auth.currentUser
+      if (!user) {
+        console.log("No authenticated user")
+        setLoading(false)
+        return
+      }
+
+      const smeUserId = effectiveUserId
+      const smeUserDoc = await getDoc(doc(db, "universalProfiles", smeUserId))
         const smeUserData = smeUserDoc.exists() ? smeUserDoc.data() : {}
 
         const applicationsQuery = query(collection(db, "internshipApplications"), where("sponsorId", "==", smeUserId))
@@ -1706,7 +1767,7 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
     }
 
     fetchInternApplications()
-  }, [])
+}, [effectiveUserId])
 
   const handleFilterChange = (filterName, value) => {
     setLocalFilters((prev) => ({
@@ -1768,9 +1829,18 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
     setMeetingPurpose("") // Reset meeting purpose
   }
 
-  const handleStageUpdate = async () => {
-    // Determine the fields relevant to the selected stage
-    const stageFields = getStageFields(selectedStage)
+const handleStageUpdate = async () => {
+  // Check permissions for company members
+  if (isCompanyMember && !['owner', 'admin', 'manager'].includes(userRole)) {
+    setNotification({
+      type: "warning",
+      message: "You don't have permission to update application stages.",
+    })
+    return
+  }
+
+  // Determine the fields relevant to the selected stage
+  const stageFields = getStageFields(selectedStage)
     const errors = {}
 
     if (!selectedStage) {
@@ -1809,10 +1879,10 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
 
     setIsSubmitting(true)
     try {
-      const user = auth.currentUser
-      if (!user) throw new Error("User not authenticated")
+     const user = auth.currentUser
+if (!user) throw new Error("User not authenticated")
 
-      const sponsorId = user.uid
+const sponsorId = effectiveUserId
       const internId = selectedInternForStage.id // This is the application ID
 
       let attachmentUrl = null
@@ -1826,6 +1896,8 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
         status: selectedStage,
         pipelineStage: selectedStage,
         updatedAt: serverTimestamp(),
+          lastUpdatedBy: user.uid,           // ADD THIS
+  lastUpdatedByRole: userRole, 
         ...(stageNotes && { lastMessage: stageNotes }), // Use stageNotes as lastMessage
         ...(stageFields.showInterview && {
           interviewDetails: {
@@ -2123,20 +2195,31 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
   }
 
   const handleRequestIntern = async (intern) => {
-    try {
-      const user = auth.currentUser
-      if (!user) {
-        setNotification({ type: "error", message: "User not authenticated. Please log in." })
-        return
-      }
+  try {
+    const user = auth.currentUser
+    if (!user) {
+      setNotification({ type: "error", message: "User not authenticated. Please log in." })
+      return
+    }
 
-      console.log("Starting intern request for:", intern.internName)
+    // Check permissions for company members
+    if (isCompanyMember && !['owner', 'admin'].includes(userRole)) {
+      setNotification({
+        type: "warning",
+        message: "Only company owners and admins can request interns.",
+      })
+      return
+    }
+
+    console.log("Starting intern request for:", intern.internName)
       console.log("SME User ID:", user.uid)
       console.log("Intern object:", intern)
+      const internId = intern.internId
+const sponsorId = effectiveUserId
 
       let smeData = {}
       try {
-        const smeDoc = await getDoc(doc(db, "universalProfiles", user.uid))
+        const smeDoc = await getDoc(doc(db, "universalProfiles", sponsorId))
         smeData = smeDoc.exists() ? smeDoc.data() : {}
         console.log("SME data retrieved:", smeData)
       } catch (smeError) {
@@ -2144,7 +2227,7 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
       }
       let internshipInformation = {}
       try {
-        const smeDoc = await getDoc(doc(db, "internApplications", user.uid))
+        const smeDoc = await getDoc(doc(db, "internApplications", sponsorId))
         internshipInformation = smeDoc.exists() ? smeDoc.data() : {}
         console.log("SME data retrieved:", internshipInformation)
       } catch (smeError) {
@@ -2192,8 +2275,7 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
         console.warn("Could not retrieve evaluation scores:", evaluationError)
       }
 
-      const internId = intern.internId
-      const sponsorId = user.uid
+     
       const requestDocId = `${sponsorId}_${internId}`
 
       console.log("Request document ID:", requestDocId)
@@ -2229,6 +2311,8 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
         provinces: internFormData.personalOverview?.provinces || [],
         cities: internFormData.personalOverview?.cities || [],
         sponsorId: sponsorId,
+          submittedBy: user.uid,              // ADD THIS
+  submittedByRole: userRole,          // ADD THIS
         sponsorName:
           smeData.entityOverview?.tradingName || smeData.entityOverview?.registeredName || "Our Organization",
         sponsorEmail: user.email || smeData.contactEmail || "Not provided",
@@ -2652,14 +2736,14 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
     return missingCount > 4
   }
 
-  const applyLocalFilters = () => {
-    let updatedInterns = [...interns]
+const applyLocalFilters = () => {
+  let updatedInterns = [...interns]
 
-    updatedInterns = updatedInterns.filter((intern) => {
-      const user = auth.currentUser
-      if (user && intern.internId === user.uid) {
-        return false
-      }
+  updatedInterns = updatedInterns.filter((intern) => {
+    const user = auth.currentUser
+    if ((user && intern.internId === user.uid) || (effectiveUserId && intern.internId === effectiveUserId)) {
+      return false
+    }
 
       if (hasTooManyMissingFields(intern)) {
         return false
@@ -2719,7 +2803,51 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
 
   return (
     <div style={{ padding: "20px", width: "100%", maxWidth: "100vw", overflowX: "hidden" }}>
+   
+    {/* Company Member Banner */}
+    {isCompanyMember && (
+      <div style={{
+        backgroundColor: userRole === 'viewer' ? '#fef3c7' : '#e0f2fe',
+        border: `2px solid ${userRole === 'viewer' ? '#f59e0b' : '#0369a1'}`,
+        borderRadius: '12px',
+        padding: '16px 24px',
+        marginBottom: '24px',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+      }}>
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '12px', 
+          marginBottom: '8px' 
+        }}>
+          <span style={{ fontSize: '24px' }}>🤝</span>
+          <h3 style={{ 
+            margin: 0, 
+            color: userRole === 'viewer' ? '#f59e0b' : '#0369a1', 
+            fontWeight: '700',
+            fontSize: '1.1rem'
+          }}>
+            Company Internship Applications - Role: {userRole?.toUpperCase()}
+          </h3>
+        </div>
+        <p style={{ 
+          margin: 0, 
+          color: '#4a5568', 
+          fontSize: '0.95rem',
+          lineHeight: '1.5'
+        }}>
+          {userRole === 'owner' && 'You can view and manage all company internship applications.'}
+          {userRole === 'admin' && 'You can view and request interns for the company.'}
+          {userRole === 'manager' && 'You can view and update internship application stages.'}
+          {userRole === 'employee' && 'You can view company internship applications.'}
+          {userRole === 'viewer' && 'You have read-only access to company internship applications.'}
+        </p>
+      </div>
+    )}
+
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}></div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+        
         <h2 style={{ fontSize: "20px", fontWeight: "bold" }}>Intern Applications</h2>
         <button
           onClick={() => setShowFilters(true)}

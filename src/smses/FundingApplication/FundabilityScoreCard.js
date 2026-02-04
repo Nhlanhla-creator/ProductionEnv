@@ -18,7 +18,8 @@ const FundabilityScoreCard = ({ applicationData }) => {
     const [businessPlanAnalysis, setBusinessPlanAnalysis] = useState(null)
     const [pitchDeckAnalysis, setPitchDeckAnalysis] = useState(null)
     const [guaranteesAnalysis, setGuaranteesAnalysis] = useState(null)
-const [creditReportAnalysis, setCreditReportAnalysis] = useState(null)
+    const [creditReportAnalysis, setCreditReportAnalysis] = useState(null)
+    const [financialStrengthAnalysis, setFinancialStrengthAnalysis] = useState(null)
 
     const { callFunction, loading, error } = useFirebaseFunctions();
 
@@ -69,6 +70,17 @@ const [creditReportAnalysis, setCreditReportAnalysis] = useState(null)
                 })
             }
 
+            // Fetch Financial Strength Analysis (placeholder for now)
+            // This will be implemented when we have the actual data source
+            setFinancialStrengthAnalysis({
+                capitalStructure: 0,
+                performanceEngine: 0,
+                costAgility: 0,
+                liquidityAndSurvival: 0,
+                overallScore: 0,
+                timestamp: new Date().toISOString()
+            })
+
         } catch (error) {
             console.error("Error fetching AI evaluations:", error)
             setEvaluationError("Failed to load AI analysis data")
@@ -100,16 +112,24 @@ const [creditReportAnalysis, setCreditReportAnalysis] = useState(null)
         return 0;
     };
 
-    // Enhanced scoring with AI data
+    // Enhanced scoring with AI data - Updated with equal weighting for 5 components
  const calculateFundabilityScore = (data) => {
     const breakdown = {
-        businessPlanAnalysis: { score: 0, max: 25, weight: 0.25, rawScore: 0, maxRaw: 5 },
-        pitchDeckScore: { score: 0, max: 25, weight: 0.25, rawScore: 0, maxRaw: 5 },
-        guarantees: { score: 0, max: 25, weight: 0.25, rawScore: 0, maxRaw: 5, uploaded: 0, total: 19 },
-        creditReport: { score: 0, max: 25, weight: 0.25, rawScore: 0, maxRaw: 5 }
+        businessPlanAnalysis: { score: 0, max: 20, weight: 0.20, rawScore: 0, maxRaw: 5 },
+        pitchDeckScore: { score: 0, max: 20, weight: 0.20, rawScore: 0, maxRaw: 5 },
+        guarantees: { score: 0, max: 20, weight: 0.20, rawScore: 0, maxRaw: 5, uploaded: 0, total: 19 },
+        creditReport: { score: 0, max: 20, weight: 0.20, rawScore: 0, maxRaw: 5 },
+        financialStrength: { score: 0, max: 20, weight: 0.20, rawScore: 0, maxRaw: 5, 
+            subcomponents: {
+                capitalStructure: 0,
+                performanceEngine: 0,
+                costAgility: 0,
+                liquidityAndSurvival: 0
+            }
+        }
     };
 
-    // Business Plan Analysis (25%) - Only use AI evaluation, default to 0
+    // Business Plan Analysis (20%) - Only use AI evaluation, default to 0
     if (businessPlanAnalysis?.score) {
         const rawScore = (businessPlanAnalysis.score / 100) * 5;
         const businessPlanScore = (rawScore / 5) * 100;
@@ -117,7 +137,7 @@ const [creditReportAnalysis, setCreditReportAnalysis] = useState(null)
         breakdown.businessPlanAnalysis.rawScore = Math.round(rawScore * 10) / 10;
     }
 
-    // Pitch Deck Score (25%) - Only use AI evaluation, default to 0
+    // Pitch Deck Score (20%) - Only use AI evaluation, default to 0
     if (pitchDeckAnalysis?.score) {
         const rawScore = (pitchDeckAnalysis.score / 100) * 5;
         const pitchDeckScore = (rawScore / 5) * 100;
@@ -130,7 +150,7 @@ const [creditReportAnalysis, setCreditReportAnalysis] = useState(null)
         breakdown.pitchDeckScore.rawScore = rawScore;
     }
 
-    // Guarantees (25%) - Calculate based on uploaded documents
+    // Guarantees (20%) - Calculate based on uploaded documents
     if (data?.guarantees) {
         const guaranteeFields = [
             'signedCustomerContracts',
@@ -176,8 +196,7 @@ const [creditReportAnalysis, setCreditReportAnalysis] = useState(null)
         breakdown.guarantees.total = totalGuarantees;
     }
 
-
-       // Credit Report (25%) - Convert from 850 scale to percentage, then to 5-point scale
+    // Credit Report (20%) - Convert from 850 scale to percentage, then to 5-point scale
     if (creditReportAnalysis?.score) {
         const scoreOutOf850 = creditReportAnalysis.score;
         const percentageScore = (scoreOutOf850 / 850) * 100;
@@ -186,12 +205,40 @@ const [creditReportAnalysis, setCreditReportAnalysis] = useState(null)
         breakdown.creditReport.rawScore = Math.round(rawScore * 10) / 10;
     }
 
-    // Calculate weighted total score
+    // Financial Strength (20%) - Placeholder for now, will be calculated when data is available
+    if (financialStrengthAnalysis?.overallScore) {
+        // If we have an overall score from the analysis
+        const rawScore = (financialStrengthAnalysis.overallScore / 100) * 5;
+        const financialStrengthScore = financialStrengthAnalysis.overallScore;
+        breakdown.financialStrength.score = Math.min(financialStrengthScore, 100);
+        breakdown.financialStrength.rawScore = Math.round(rawScore * 10) / 10;
+        
+        // Store subcomponent scores
+        if (financialStrengthAnalysis.capitalStructure !== undefined) {
+            breakdown.financialStrength.subcomponents.capitalStructure = financialStrengthAnalysis.capitalStructure;
+        }
+        if (financialStrengthAnalysis.performanceEngine !== undefined) {
+            breakdown.financialStrength.subcomponents.performanceEngine = financialStrengthAnalysis.performanceEngine;
+        }
+        if (financialStrengthAnalysis.costAgility !== undefined) {
+            breakdown.financialStrength.subcomponents.costAgility = financialStrengthAnalysis.costAgility;
+        }
+        if (financialStrengthAnalysis.liquidityAndSurvival !== undefined) {
+            breakdown.financialStrength.subcomponents.liquidityAndSurvival = financialStrengthAnalysis.liquidityAndSurvival;
+        }
+    } else {
+        // Default placeholder values
+        breakdown.financialStrength.score = 0;
+        breakdown.financialStrength.rawScore = 0;
+    }
+
+    // Calculate weighted total score with 5 equal components
     const totalScore = Math.round(
         (breakdown.businessPlanAnalysis.score * breakdown.businessPlanAnalysis.weight) +
         (breakdown.pitchDeckScore.score * breakdown.pitchDeckScore.weight) +
         (breakdown.guarantees.score * breakdown.guarantees.weight) +
-        (breakdown.creditReport.score * breakdown.creditReport.weight)
+        (breakdown.creditReport.score * breakdown.creditReport.weight) +
+        (breakdown.financialStrength.score * breakdown.financialStrength.weight)
     );
 
     return {
@@ -230,7 +277,7 @@ const [creditReportAnalysis, setCreditReportAnalysis] = useState(null)
     };
 
     useEffect(() => {
-    if (applicationData || businessPlanAnalysis || pitchDeckAnalysis || guaranteesAnalysis || creditReportAnalysis) {
+    if (applicationData || businessPlanAnalysis || pitchDeckAnalysis || guaranteesAnalysis || creditReportAnalysis || financialStrengthAnalysis) {
         const { score, breakdown } = calculateFundabilityScore(applicationData);
         setFundabilityScore(score);
         setScoreBreakdown(breakdown);
@@ -253,7 +300,7 @@ const [creditReportAnalysis, setCreditReportAnalysis] = useState(null)
         
         animate();
     }
-}, [applicationData, businessPlanAnalysis, pitchDeckAnalysis, guaranteesAnalysis, creditReportAnalysis]);
+}, [applicationData, businessPlanAnalysis, pitchDeckAnalysis, guaranteesAnalysis, creditReportAnalysis, financialStrengthAnalysis]);
 
     const getTierInfo = (score) => {
         if (score >= 85) return {
@@ -298,7 +345,8 @@ const formatRequirementName = (key) => {
         businessPlanAnalysis: "Business Plan Analysis",
         pitchDeckScore: "Pitch Deck Score",
         guarantees: "Guarantees & Security",
-        creditReport: "Credit Report"
+        creditReport: "Credit Report",
+        financialStrength: "Financial Strength"
     };
     return names[key] || key;
 };
@@ -308,6 +356,25 @@ const formatRequirementName = (key) => {
         if (analysis.score >= 80) return { text: "Excellent", color: "#4CAF50" };
         if (analysis.score >= 60) return { text: "Good", color: "#FF9800" };
         return { text: "Needs Work", color: "#F44336" };
+    };
+
+    const getFinancialStrengthIcon = () => {
+        return (
+            <div style={{
+                width: '20px',
+                height: '20px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #9C27B0, #673AB7)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'white',
+                fontSize: '10px',
+                fontWeight: 'bold'
+            }}>
+                $$
+            </div>
+        );
     };
 
     const tierInfo = getTierInfo(fundabilityScore);
@@ -339,7 +406,7 @@ const formatRequirementName = (key) => {
                     borderRadius: "20px",
                     padding: "32px",
                     width: "90%",
-                    maxWidth: "800px",
+                    maxWidth: "900px",
                     maxHeight: "80vh",
                     overflow: "auto",
                     position: "relative",
@@ -457,120 +524,158 @@ const formatRequirementName = (key) => {
                     {/* AI Analysis Status */}
                     <div style={{
                         display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
                         gap: '16px',
                         marginBottom: '24px'
                     }}>
-                       <div style={{
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-    gap: '16px',
-    marginBottom: '24px'
-}}>
-    {/* Business Plan Card */}
-    <div style={{
-        padding: '16px',
-        background: 'white',
-        borderRadius: '12px',
-        border: `2px solid ${getAnalysisStatus(businessPlanAnalysis).color}20`,
-        textAlign: 'center'
-    }}>
-        <FileText size={24} color={getAnalysisStatus(businessPlanAnalysis).color} />
-        <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
-            Business Plan
-        </div>
-        <div style={{ 
-            fontSize: '12px', 
-            color: getAnalysisStatus(businessPlanAnalysis).color,
-            fontWeight: '600'
-        }}>
-            {getAnalysisStatus(businessPlanAnalysis).text}
-        </div>
-        {businessPlanAnalysis?.rawScore && (
-            <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
-                Score: {businessPlanAnalysis.rawScore}/5
-            </div>
-        )}
-    </div>
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                            gap: '16px',
+                            marginBottom: '24px'
+                        }}>
+                            {/* Business Plan Card */}
+                            <div style={{
+                                padding: '16px',
+                                background: 'white',
+                                borderRadius: '12px',
+                                border: `2px solid ${getAnalysisStatus(businessPlanAnalysis).color}20`,
+                                textAlign: 'center'
+                            }}>
+                                <FileText size={24} color={getAnalysisStatus(businessPlanAnalysis).color} />
+                                <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
+                                    Business Plan
+                                </div>
+                                <div style={{ 
+                                    fontSize: '12px', 
+                                    color: getAnalysisStatus(businessPlanAnalysis).color,
+                                    fontWeight: '600'
+                                }}>
+                                    {getAnalysisStatus(businessPlanAnalysis).text}
+                                </div>
+                                {businessPlanAnalysis?.rawScore && (
+                                    <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
+                                        Score: {businessPlanAnalysis.rawScore}/5
+                                    </div>
+                                )}
+                            </div>
 
-    {/* Pitch Deck Card */}
-    <div style={{
-        padding: '16px',
-        background: 'white',
-        borderRadius: '12px',
-        border: `2px solid ${getAnalysisStatus(pitchDeckAnalysis).color}20`,
-        textAlign: 'center'
-    }}>
-        <Presentation size={24} color={getAnalysisStatus(pitchDeckAnalysis).color} />
-        <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
-            Pitch Deck
-        </div>
-        <div style={{ 
-            fontSize: '12px', 
-            color: getAnalysisStatus(pitchDeckAnalysis).color,
-            fontWeight: '600'
-        }}>
-            {getAnalysisStatus(pitchDeckAnalysis).text}
-        </div>
-        {pitchDeckAnalysis?.rawScore && (
-            <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
-                Score: {pitchDeckAnalysis.rawScore}/5
-            </div>
-        )}
-    </div>
+                            {/* Pitch Deck Card */}
+                            <div style={{
+                                padding: '16px',
+                                background: 'white',
+                                borderRadius: '12px',
+                                border: `2px solid ${getAnalysisStatus(pitchDeckAnalysis).color}20`,
+                                textAlign: 'center'
+                            }}>
+                                <Presentation size={24} color={getAnalysisStatus(pitchDeckAnalysis).color} />
+                                <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
+                                    Pitch Deck
+                                </div>
+                                <div style={{ 
+                                    fontSize: '12px', 
+                                    color: getAnalysisStatus(pitchDeckAnalysis).color,
+                                    fontWeight: '600'
+                                }}>
+                                    {getAnalysisStatus(pitchDeckAnalysis).text}
+                                </div>
+                                {pitchDeckAnalysis?.rawScore && (
+                                    <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
+                                        Score: {pitchDeckAnalysis.rawScore}/5
+                                    </div>
+                                )}
+                            </div>
 
-    {/* Guarantees Card - Shows uploaded count instead of AI status */}
-    <div style={{
-        padding: '16px',
-        background: 'white',
-        borderRadius: '12px',
-        border: `2px solid #4CAF5020`,
-        textAlign: 'center'
-    }}>
-        <Shield size={24} color="#4CAF50" />
-        <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
-            Guarantees
-        </div>
-        <div style={{ 
-            fontSize: '12px', 
-            color: '#4CAF50',
-            fontWeight: '600'
-        }}>
-            {scoreBreakdown.guarantees?.uploaded || 0}/{scoreBreakdown.guarantees?.total || 19} Uploaded
-        </div>
-        {scoreBreakdown.guarantees?.rawScore > 0 && (
-            <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
-                Score: {scoreBreakdown.guarantees.rawScore}/5
-            </div>
-        )}
-    </div>
+                            {/* Guarantees Card - Shows uploaded count instead of AI status */}
+                            <div style={{
+                                padding: '16px',
+                                background: 'white',
+                                borderRadius: '12px',
+                                border: `2px solid #4CAF5020`,
+                                textAlign: 'center'
+                            }}>
+                                <Shield size={24} color="#4CAF50" />
+                                <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
+                                    Guarantees
+                                </div>
+                                <div style={{ 
+                                    fontSize: '12px', 
+                                    color: '#4CAF50',
+                                    fontWeight: '600'
+                                }}>
+                                    {scoreBreakdown.guarantees?.uploaded || 0}/{scoreBreakdown.guarantees?.total || 19} Uploaded
+                                </div>
+                                {scoreBreakdown.guarantees?.rawScore > 0 && (
+                                    <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
+                                        Score: {scoreBreakdown.guarantees.rawScore}/5
+                                    </div>
+                                )}
+                            </div>
 
-    {/* Credit Report Card */}
-    <div style={{
-        padding: '16px',
-        background: 'white',
-        borderRadius: '12px',
-        border: `2px solid ${getAnalysisStatus(creditReportAnalysis).color}20`,
-        textAlign: 'center'
-    }}>
-        <DollarSign size={24} color={getAnalysisStatus(creditReportAnalysis).color} />
-        <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
-            Credit Report
-        </div>
-        <div style={{ 
-            fontSize: '12px', 
-            color: getAnalysisStatus(creditReportAnalysis).color,
-            fontWeight: '600'
-        }}>
-            {getAnalysisStatus(creditReportAnalysis).text}
-        </div>
-        {creditReportAnalysis?.rawScore && (
-            <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
-                Score: {creditReportAnalysis.rawScore}/5
-            </div>
-        )}
-    </div>
-</div>
+                            {/* Credit Report Card */}
+                            <div style={{
+                                padding: '16px',
+                                background: 'white',
+                                borderRadius: '12px',
+                                border: `2px solid ${getAnalysisStatus(creditReportAnalysis).color}20`,
+                                textAlign: 'center'
+                            }}>
+                                <DollarSign size={24} color={getAnalysisStatus(creditReportAnalysis).color} />
+                                <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
+                                    Credit Report
+                                </div>
+                                <div style={{ 
+                                    fontSize: '12px', 
+                                    color: getAnalysisStatus(creditReportAnalysis).color,
+                                    fontWeight: '600'
+                                }}>
+                                    {getAnalysisStatus(creditReportAnalysis).text}
+                                </div>
+                                {creditReportAnalysis?.rawScore && (
+                                    <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
+                                        Score: {creditReportAnalysis.rawScore}/5
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Financial Strength Card */}
+                            <div style={{
+                                padding: '16px',
+                                background: 'white',
+                                borderRadius: '12px',
+                                border: `2px solid #9C27B020`,
+                                textAlign: 'center'
+                            }}>
+                                <div style={{
+                                    width: '30px',
+                                    height: '30px',
+                                    borderRadius: '50%',
+                                    background: 'linear-gradient(135deg, #9C27B0, #673AB7)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    margin: '0 auto 8px auto',
+                                    color: 'white'
+                                }}>
+                                    $$
+                                </div>
+                                <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
+                                    Financial Strength
+                                </div>
+                                <div style={{ 
+                                    fontSize: '12px', 
+                                    color: '#9C27B0',
+                                    fontWeight: '600'
+                                }}>
+                                    Analysis Pending
+                                </div>
+                                {scoreBreakdown.financialStrength?.rawScore > 0 && (
+                                    <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
+                                        Score: {scoreBreakdown.financialStrength.rawScore}/5
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>
 
                     {/* Score Breakdown */}
@@ -589,87 +694,176 @@ const formatRequirementName = (key) => {
                             gap: '16px'
                         }}>
                             {Object.entries(scoreBreakdown).map(([key, data]) => (
-    <div key={key} style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        padding: '16px',
-        background: 'rgba(250, 247, 242, 0.8)',
-        borderRadius: '12px',
-        border: '1px solid rgba(200, 182, 166, 0.2)'
-    }}>
-        <div style={{
-            width: '20px',
-            height: '20px',
-            borderRadius: '50%',
-            background: tierInfo.color,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white',
-            fontSize: '12px',
-            fontWeight: 'bold'
-        }}>
-            {key === 'businessPlanAnalysis' ? <FileText size={12} /> : 
-             key === 'pitchDeckScore' ? <Presentation size={12} /> : 
-             key === 'guarantees' ? <Shield size={12} /> :
-             <DollarSign size={12} />}
-        </div>
-        <div style={{ flex: 1 }}>
-            <span style={{
-                color: '#4a352f',
-                fontWeight: '600',
-                fontSize: '14px'
-            }}>
-                {formatRequirementName(key)}
-            </span>
-            <div style={{
-                fontSize: '12px',
-                color: '#7d5a50',
-                marginTop: '4px'
-            }}>
-                Weight: {Math.round(data.weight * 100)}%
-                {key === 'guarantees' && data.uploaded !== undefined && 
-                    ` • ${data.uploaded}/${data.total} Uploaded`}
-                {data.rawScore > 0 && key !== 'guarantees' && ` • AI Score: ${data.rawScore}/${data.maxRaw}`}
-                {data.rawScore > 0 && key === 'guarantees' && ` • Score: ${data.rawScore}/${data.maxRaw}`}
-            </div>
-        </div>
-        <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px'
-        }}>
-            <div style={{
-                width: '80px',
-                height: '8px',
-                background: '#f3e8dc',
-                borderRadius: '4px',
-                overflow: 'hidden',
-                border: '1px solid #d6b88a'
-            }}>
-                <div style={{
-                    width: `${data.score}%`,
-                    backgroundColor: data.score >= 80 ? '#4CAF50' : 
-                                  data.score >= 60 ? '#FF9800' : '#F44336',
-                    height: '100%',
-                    borderRadius: '4px',
-                    transition: 'width 0.3s ease'
-                }}></div>
-            </div>
-            <span style={{
-                fontWeight: '600',
-                color: '#4a352f',
-                fontSize: '14px',
-                minWidth: '35px',
-                textAlign: 'right'
-            }}>
-                {Math.round(data.score)}%
-            </span>
-        </div>
-    </div>
-))}
+                                <div key={key} style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    padding: '16px',
+                                    background: 'rgba(250, 247, 242, 0.8)',
+                                    borderRadius: '12px',
+                                    border: '1px solid rgba(200, 182, 166, 0.2)'
+                                }}>
+                                    <div style={{
+                                        width: '20px',
+                                        height: '20px',
+                                        borderRadius: '50%',
+                                        background: tierInfo.color,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: 'white',
+                                        fontSize: '12px',
+                                        fontWeight: 'bold'
+                                    }}>
+                                        {key === 'businessPlanAnalysis' ? <FileText size={12} /> : 
+                                         key === 'pitchDeckScore' ? <Presentation size={12} /> : 
+                                         key === 'guarantees' ? <Shield size={12} /> :
+                                         key === 'creditReport' ? <DollarSign size={12} /> :
+                                         getFinancialStrengthIcon()}
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                        <span style={{
+                                            color: '#4a352f',
+                                            fontWeight: '600',
+                                            fontSize: '14px'
+                                        }}>
+                                            {formatRequirementName(key)}
+                                        </span>
+                                        <div style={{
+                                            fontSize: '12px',
+                                            color: '#7d5a50',
+                                            marginTop: '4px'
+                                        }}>
+                                            Weight: {Math.round(data.weight * 100)}%
+                                            {key === 'guarantees' && data.uploaded !== undefined && 
+                                                ` • ${data.uploaded}/${data.total} Uploaded`}
+                                            {key === 'financialStrength' && data.subcomponents && 
+                                                ` • Capital Structure: ${data.subcomponents.capitalStructure}, Performance Engine: ${data.subcomponents.performanceEngine}, Cost Agility: ${data.subcomponents.costAgility}, Liquidity & Survival: ${data.subcomponents.liquidityAndSurvival}`}
+                                            {data.rawScore > 0 && key !== 'guarantees' && ` • AI Score: ${data.rawScore}/${data.maxRaw}`}
+                                            {data.rawScore > 0 && key === 'guarantees' && ` • Score: ${data.rawScore}/${data.maxRaw}`}
+                                        </div>
+                                    </div>
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '12px'
+                                    }}>
+                                        <div style={{
+                                            width: '80px',
+                                            height: '8px',
+                                            background: '#f3e8dc',
+                                            borderRadius: '4px',
+                                            overflow: 'hidden',
+                                            border: '1px solid #d6b88a'
+                                        }}>
+                                            <div style={{
+                                                width: `${data.score}%`,
+                                                backgroundColor: data.score >= 80 ? '#4CAF50' : 
+                                                              data.score >= 60 ? '#FF9800' : '#F44336',
+                                                height: '100%',
+                                                borderRadius: '4px',
+                                                transition: 'width 0.3s ease'
+                                            }}></div>
+                                        </div>
+                                        <span style={{
+                                            fontWeight: '600',
+                                            color: '#4a352f',
+                                            fontSize: '14px',
+                                            minWidth: '35px',
+                                            textAlign: 'right'
+                                        }}>
+                                            {Math.round(data.score)}%
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
 
+                            {/* Financial Strength Subcomponents */}
+                            {scoreBreakdown.financialStrength && (
+                                <div style={{
+                                    marginTop: '12px',
+                                    padding: '16px',
+                                    background: 'rgba(156, 39, 176, 0.05)',
+                                    borderRadius: '12px',
+                                    border: '1px solid rgba(156, 39, 176, 0.2)'
+                                }}>
+                                    <div style={{
+                                        fontWeight: '600',
+                                        color: '#9C27B0',
+                                        fontSize: '14px',
+                                        marginBottom: '12px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px'
+                                    }}>
+                                        <div style={{
+                                            width: '16px',
+                                            height: '16px',
+                                            borderRadius: '50%',
+                                            background: 'linear-gradient(135deg, #9C27B0, #673AB7)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            color: 'white',
+                                            fontSize: '10px',
+                                            fontWeight: 'bold'
+                                        }}>
+                                            $$
+                                        </div>
+                                        Financial Strength Components
+                                    </div>
+                                    <div style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                                        gap: '12px'
+                                    }}>
+                                        {[
+                                            { name: 'Capital Structure', value: scoreBreakdown.financialStrength.subcomponents?.capitalStructure || 0 },
+                                            { name: 'Performance Engine', value: scoreBreakdown.financialStrength.subcomponents?.performanceEngine || 0 },
+                                            { name: 'Cost Agility', value: scoreBreakdown.financialStrength.subcomponents?.costAgility || 0 },
+                                            { name: 'Liquidity & Survival', value: scoreBreakdown.financialStrength.subcomponents?.liquidityAndSurvival || 0 }
+                                        ].map((component, index) => (
+                                            <div key={index} style={{
+                                                padding: '12px',
+                                                background: 'white',
+                                                borderRadius: '8px',
+                                                border: '1px solid rgba(156, 39, 176, 0.1)'
+                                            }}>
+                                                <div style={{
+                                                    fontSize: '12px',
+                                                    fontWeight: '600',
+                                                    color: '#9C27B0',
+                                                    marginBottom: '4px'
+                                                }}>
+                                                    {component.name}
+                                                </div>
+                                                <div style={{
+                                                    fontSize: '14px',
+                                                    fontWeight: '600',
+                                                    color: '#4a352f'
+                                                }}>
+                                                    {component.value}/100
+                                                </div>
+                                                <div style={{
+                                                    width: '100%',
+                                                    height: '4px',
+                                                    background: '#f3e8dc',
+                                                    borderRadius: '2px',
+                                                    marginTop: '6px',
+                                                    overflow: 'hidden'
+                                                }}>
+                                                    <div style={{
+                                                        width: `${component.value}%`,
+                                                        height: '100%',
+                                                        background: 'linear-gradient(135deg, #9C27B0, #673AB7)',
+                                                        borderRadius: '2px'
+                                                    }}></div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -886,16 +1080,16 @@ const formatRequirementName = (key) => {
                             color: '#7d5a50'
                         }}>
                            <div style={{
-    width: '6px',
-    height: '6px',
-    borderRadius: '50%',
-    backgroundColor: 
-        businessPlanAnalysis && pitchDeckAnalysis && guaranteesAnalysis && creditReportAnalysis ? '#4CAF50' :
-        businessPlanAnalysis || pitchDeckAnalysis || guaranteesAnalysis || creditReportAnalysis ? '#FF9800' : '#F44336'
-}} />
-{businessPlanAnalysis && pitchDeckAnalysis && guaranteesAnalysis && creditReportAnalysis ? 'AI Analysis Complete' :
- businessPlanAnalysis || pitchDeckAnalysis || guaranteesAnalysis || creditReportAnalysis ? 'Partial AI Analysis' : 
- 'AI Analysis Pending'}
+                                width: '6px',
+                                height: '6px',
+                                borderRadius: '50%',
+                                backgroundColor: 
+                                    businessPlanAnalysis && pitchDeckAnalysis && guaranteesAnalysis && creditReportAnalysis && financialStrengthAnalysis ? '#4CAF50' :
+                                    businessPlanAnalysis || pitchDeckAnalysis || guaranteesAnalysis || creditReportAnalysis || financialStrengthAnalysis ? '#FF9800' : '#F44336'
+                            }} />
+                            {businessPlanAnalysis && pitchDeckAnalysis && guaranteesAnalysis && creditReportAnalysis && financialStrengthAnalysis ? 'AI Analysis Complete' :
+                             businessPlanAnalysis || pitchDeckAnalysis || guaranteesAnalysis || creditReportAnalysis || financialStrengthAnalysis ? 'Partial AI Analysis' : 
+                             'AI Analysis Pending'}
                         </div>
                     </div>
                 </div>

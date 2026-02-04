@@ -211,7 +211,9 @@ const needsRegeneration = (summary) => {
     });
     return () => unsubscribe();
   }, [propUserId]);
-useEffect(() => {
+
+  
+ useEffect(() => {
   if (!userId || !apiKey) {
     console.log("No userId or apiKey available, skipping data fetch");
     return;
@@ -224,10 +226,9 @@ useEffect(() => {
     setError(null);
 
     try {
-      // 1. Always try to load existing summary first
+      // Use the userId prop (which is now effectiveUserId from parent)
       const existingSummary = await loadSummaryFromFirebase(userId);
       
-      // 2. Check if we should generate a new evaluation
       const shouldTriggerNew = await checkTriggerFundabilityEvaluation(userId);
       
       if (shouldTriggerNew) {
@@ -239,7 +240,6 @@ useEffect(() => {
       } else if (existingSummary && existingSummary.reportData) {
         console.log("Loading existing summary from Firebase");
         
-        // 3. Only regenerate if summary has fallback text AND no valid data
         const shouldRegenerate = needsRegeneration(existingSummary.improvementSummary) && 
                                 !hasValidEvaluationData(existingSummary.reportData);
         
@@ -247,13 +247,11 @@ useEffect(() => {
           console.log("Regenerating summary due to fallback text...");
           await generateNewEvaluation(userId);
         } else {
-          // Load existing data
           setReportData(existingSummary.reportData);
           setTopPriorities(existingSummary.topPriorities);
           setImprovementSummary(existingSummary.improvementSummary);
         }
       } else {
-        // No summary exists at all
         console.log("No existing summary found, generating new one");
         await generateNewEvaluation(userId);
       }
@@ -266,7 +264,7 @@ useEffect(() => {
   };
 
   fetchData();
-}, [userId]);
+}, [userId, apiKey]);
 // Helper to check if report has valid evaluation data
 const hasValidEvaluationData = (reportData) => {
   if (!reportData) return false;
@@ -1440,7 +1438,12 @@ export function Dashboard() {
   const [leadershipScore, setLeadershipScore] = useState(0) // New state
   const [fundabilityScore, setFundabilityScore] = useState(0)
   const [pisScore, setPisScore] = useState(0)
-  
+  // Add these state variables after existing state declarations in Dashboard component
+const [companyOwnerId, setCompanyOwnerId] = useState(null);
+const [isCompanyMember, setIsCompanyMember] = useState(false);
+const [effectiveUserId, setEffectiveUserId] = useState(null);
+const [userRole, setUserRole] = useState(null);
+
   const apiKey = API_KEYS.OPENAI
   console.log(apiKey)
   const user = auth.currentUser
@@ -1505,53 +1508,95 @@ export function Dashboard() {
     const userId = auth.currentUser?.uid
     return userId ? `${baseKey}_${userId}` : baseKey
   }
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setIsAuthenticated(true)
-      }
-      setAuthChecked(true)
-    })
-
-    return () => unsubscribe()
-  }, [])
-
-  useEffect(() => {
-    if (!isAuthenticated) return
-
-    const fetchProfileData = async () => {
+useEffect(() => {
+  const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    if (user) {
       try {
-        const userId = auth.currentUser?.uid
-        if (!userId) {
-          console.error("User not logged in")
-          setLoading(false)
-          return
+        setIsAuthenticated(true);
+        
+        // Check if user is part of a company
+        const userDocRef = doc(db, "users", user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        
+        if (userDocSnap.exists()) {
+          const userData = userDocSnap.data();
+          const userCompanyId = userData.companyId;
+          const userCompanyRole = userData.userRole;
+          
+          if (userCompanyId) {
+            // User is part of a company, fetch company details
+            const companyDocRef = doc(db, "companies", userCompanyId);
+            const companyDocSnap = await getDoc(companyDocRef);
+            
+            if (companyDocSnap.exists()) {
+              const companyData = companyDocSnap.data();
+              const ownerId = companyData.createdBy;
+              
+              // Set user role
+              setUserRole(userCompanyRole || 'viewer');
+              
+              // Check if current user is the owner
+              if (ownerId === user.uid) {
+                // Current user is the owner
+                setIsCompanyMember(false);
+                setEffectiveUserId(user.uid);
+              } else {
+                // Current user is a member, use owner's ID for data
+                setIsCompanyMember(true);
+                setCompanyOwnerId(ownerId);
+                setEffectiveUserId(ownerId);
+              }
+            }
+          } else {
+            // No company, use current user as owner
+            setIsCompanyMember(false);
+            setEffectiveUserId(user.uid);
+            setUserRole('owner');
+          }
         }
-
-        const docRef = doc(db, "universalProfiles", userId)
-        const docSnap = await getDoc(docRef)
-
-        if (docSnap.exists()) {
-          setProfileData({ id: userId, formData: docSnap.data() })
-        } else {
-          console.error("No profile found")
-        }
-
-        const hasSeenDashboardPopup = localStorage.getItem(getUserSpecificKey("hasSeenDashboardPopup")) === "true"
-        if (!hasSeenDashboardPopup) {
-          setShowDashboardPopup(true)
-        }
-
-        setLoading(false)
-      } catch (err) {
-        console.error("Error fetching profile data:", err)
-        setLoading(false)
+      } catch (error) {
+        console.error("Error checking company membership:", error);
+        setEffectiveUserId(user.uid);
+        setUserRole('owner');
       }
     }
+    setAuthChecked(true);
+  });
 
-    fetchProfileData()
-  }, [isAuthenticated])
+  return () => unsubscribe();
+}, []);
+
+ useEffect(() => {
+  if (!isAuthenticated || !effectiveUserId) return;
+
+  const fetchProfileData = async () => {
+    try {
+      const userId = effectiveUserId; // Use effectiveUserId instead of current user
+
+      const docRef = doc(db, "universalProfiles", userId);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        setProfileData({ id: userId, formData: docSnap.data() });
+      } else {
+        console.error("No profile found");
+      }
+
+      const hasSeenDashboardPopup = localStorage.getItem(getUserSpecificKey("hasSeenDashboardPopup")) === "true";
+      if (!hasSeenDashboardPopup) {
+        setShowDashboardPopup(true);
+      }
+
+      setLoading(false);
+    } catch (err) {
+      console.error("Error fetching profile data:", err);
+      setLoading(false);
+    }
+  };
+
+  fetchProfileData();
+}, [isAuthenticated, effectiveUserId]);
+
 
   const handleNextDashboardStep = () => {
     if (currentDashboardStep < dashboardSteps.length - 1) {
@@ -1576,6 +1621,8 @@ export function Dashboard() {
 
   return (
     <div className="dashboard-container bg-[#EFEBE9]">
+   
+
       {showDashboardPopup && (
         <div className="popup-overlay">
           <div className="welcome-popup dashboard-popup">
@@ -1609,7 +1656,45 @@ export function Dashboard() {
       <div className="content">
         <main className="dashboard-main">
           <DashboardHeader userName={userName} />
-
+   {isCompanyMember && (
+  <div style={{
+    backgroundColor: userRole === 'viewer' ? '#fef3c7' : '#e0f2fe',
+    border: `2px solid ${userRole === 'viewer' ? '#f59e0b' : '#0369a1'}`,
+    borderRadius: '12px',
+    padding: '16px 24px',
+    marginBottom: '24px',
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+  }}>
+    <div style={{ 
+      display: 'flex', 
+      alignItems: 'center', 
+      gap: '12px', 
+      marginBottom: '8px' 
+    }}>
+      <Bus size={24} color={userRole === 'viewer' ? '#f59e0b' : '#0369a1'} />
+      <h3 style={{ 
+        margin: 0, 
+        color: userRole === 'viewer' ? '#f59e0b' : '#0369a1', 
+        fontWeight: '700',
+        fontSize: '1.1rem'
+      }}>
+        Company Member Dashboard - Role: {userRole?.toUpperCase()}
+      </h3>
+    </div>
+    <p style={{ 
+      margin: 0, 
+      color: '#4a5568', 
+      fontSize: '0.95rem',
+      lineHeight: '1.5'
+    }}>
+      {userRole === 'owner' && 'You have full access to all company data and metrics.'}
+      {userRole === 'admin' && 'You can view and manage most company metrics and applications.'}
+      {userRole === 'manager' && 'You can view company metrics and manage team activities.'}
+      {userRole === 'employee' && 'You can view company metrics and track applications.'}
+      {userRole === 'viewer' && 'You have read-only access to company metrics and data.'}
+    </p>
+  </div>
+)}
           {/* Tab Navigation */}
           <section className="tab-navigation" style={{ marginTop: '40px', marginBottom: '30px' }}>
             <div style={{
@@ -1682,7 +1767,8 @@ export function Dashboard() {
             <>
               {/* Top Row - Application Tracker (full width) */}
               <section className="tracker-section" style={{ marginBottom: '20px' }}>
-                <ApplicationTracker styles={styles} userId={profileData?.id} />
+               <ApplicationTracker styles={styles} userId={effectiveUserId} />
+
               </section>
 
               {/* Row 1 - BIG Score, Customer Reviews, and wider Summary Report */}
@@ -1709,7 +1795,7 @@ export function Dashboard() {
                 {apiKey && (
                   <SummaryReportCard
                     styles={styles}
-                    userId={profileData?.id}
+                     userId={effectiveUserId}
                     apiKey={apiKey}
                   />
                 )}
@@ -1761,40 +1847,44 @@ export function Dashboard() {
                   gap: '20px',
                   marginBottom: '20px'
                 }}>
-                  <ComplianceScoreCard
-                    styles={styles}
-                    profileData={profileData?.formData}
-                    onScoreUpdate={setComplianceScore}
-                    apiKey={apiKey}
-                  />
+                <ComplianceScoreCard
+  styles={styles}
+  profileData={profileData?.formData}
+  onScoreUpdate={setComplianceScore}
+  apiKey={apiKey}
+  userId={effectiveUserId} // Add this prop
+/>
 
-                  <LegitimacyScoreCard
-                    styles={styles}
-                    profileData={profileData?.formData}
-                    onScoreUpdate={setLegitimacyScore}
-                    apiKey={apiKey}
-                  />
+<LegitimacyScoreCard
+  styles={styles}
+  profileData={profileData?.formData}
+  onScoreUpdate={setLegitimacyScore}
+  apiKey={apiKey}
+  userId={effectiveUserId} // Add this prop
+/>
 
-                  <LeadershipScoreCard
-                    styles={styles}
-                    profileData={profileData?.formData}
-                    onScoreUpdate={setLeadershipScore}
-                    apiKey={apiKey}
-                  />
+<LeadershipScoreCard
+  styles={styles}
+  profileData={profileData?.formData}
+  onScoreUpdate={setLeadershipScore}
+  apiKey={apiKey}
+  userId={effectiveUserId} // Add this prop
+/>
 
-                  <PISScoreCard
-                    styles={styles}
-                    profileData={profileData?.formData}
-                    onScoreUpdate={setPisScore}
-                    apiKey={apiKey}
-                  />
+<PISScoreCard
+  styles={styles}
+  profileData={profileData?.formData}
+  onScoreUpdate={setPisScore}
+  apiKey={apiKey}
+  userId={effectiveUserId} // Add this prop
+/>
 
-                  <FundabilityScoreCard
-                    profileData={profileData?.formData}
-                    userId={profileData?.id}
-                    onScoreUpdate={setFundabilityScore}
-                    apiKey={apiKey}
-                  />
+<FundabilityScoreCard
+  profileData={profileData?.formData}
+  userId={effectiveUserId} // Changed from profileData?.id
+  onScoreUpdate={setFundabilityScore}
+  apiKey={apiKey}
+/>
                 </section>
               )}
 

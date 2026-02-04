@@ -617,7 +617,6 @@ OUTPUT FORMAT:
           position: "relative",
           width: "100%", // Add this line to make it full width
           minWidth: "210px", // Add this for minimum width
-          maxWidth: "000px", // Add this to limit maximum width (optional)
         }}
       >
         {/* Header with gradient */}

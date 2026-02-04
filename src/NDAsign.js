@@ -17,15 +17,15 @@ import { Canvas as FabricCanvas, PencilBrush } from "fabric";
 import { se } from "date-fns/locale";
 
 const NDASignupPopup = ({ onRegistrationComplete, registrationData }) => {
-  // Extract registration data from props with default values to prevent undefined errors
+  // FIXED: Properly extract roles from registrationData
   const initialUserInfo = {
     email: registrationData?.email || "",
-    role: registrationData?.role || "",
+    role: registrationData?.role || "", // Keep comma-separated string
+    roleArray: registrationData?.roleArray || [], // Keep array
     username: registrationData?.username || "",
     password: registrationData?.password || "",
     uid: registrationData?.uid || "",
   };
-
   const [showNDA, setShowNDA] = useState(true); // Start showing the NDA
   const [signatureData, setSignatureData] = useState(null);
   const [userInfo, setUserInfo] = useState(initialUserInfo);
@@ -49,19 +49,20 @@ const NDASignupPopup = ({ onRegistrationComplete, registrationData }) => {
     measurementId: "G-LK13NE8TBS",
   };
 
+
   // Initialize Firebase
   const app = initializeApp(firebaseConfig);
   const storage = getStorage(app);
   const db = getFirestore(app);
   const firebaseAuth = getAuth(app);
 
-  // Handle data passed from registration screen
   useEffect(() => {
     if (registrationData && Object.keys(registrationData).length > 0) {
-      // Make sure to properly set userInfo with valid data or defaults
+      // FIXED: Include roleArray in userInfo
       setUserInfo({
         email: registrationData.email || "",
         role: registrationData.role || "",
+        roleArray: registrationData.roleArray || [],
         username: registrationData.username || "",
         password: registrationData.password || "",
         uid: registrationData.uid || "",
@@ -70,7 +71,7 @@ const NDASignupPopup = ({ onRegistrationComplete, registrationData }) => {
       // Only show NDA if we have the required data
       if (
         registrationData.email &&
-        registrationData.role &&
+        (registrationData.role || registrationData.roleArray?.length > 0) &&
         registrationData.username
       ) {
         setShowNDA(true);
@@ -168,17 +169,16 @@ const NDASignupPopup = ({ onRegistrationComplete, registrationData }) => {
     setSignatureData(null);
   };
 
-  // Handle user registration and NDA submission
   const handleSubmitNDA = async () => {
     if (!signatureData) {
       alert("Please sign the document before submitting");
       return;
     }
 
-    // Validate required fields before proceeding
-    if (!userInfo.email || !userInfo.username || !userInfo.role) {
+    // FIXED: Validate that we have roles
+    if (!userInfo.email || !userInfo.username || (!userInfo.role && !userInfo.roleArray?.length)) {
       setErrorMessage(
-        "Required information is missing. Please ensure all fields are filled."
+        "Required information is missing. Please ensure all fields including roles are filled."
       );
       return;
     }
@@ -188,8 +188,7 @@ const NDASignupPopup = ({ onRegistrationComplete, registrationData }) => {
     try {
       let userId = userInfo.uid || null;
 
-      // 1. If user already has a UID (from registration in parent component), use it
-      // Otherwise create a new user account if registration data is provided
+      // If user already has a UID, use it
       if (!userId && userInfo.email && userInfo.password) {
         try {
           const userCredential = await createUserWithEmailAndPassword(
@@ -207,36 +206,35 @@ const NDASignupPopup = ({ onRegistrationComplete, registrationData }) => {
           return;
         }
       } else if (!userId) {
-        // Use current authenticated user if available or generate temp ID
         userId = auth.currentUser?.uid || `temp_${Date.now()}`;
       }
 
-      // 2. Create the signed document with user info and date
+      // FIXED: Include roleArray in signed document
       const signedDate = new Date();
       const signedDocument = {
         userInfo: {
           email: userInfo.email,
           username: userInfo.username,
           role: userInfo.role,
+          roleArray: userInfo.roleArray, // Include role array
         },
-        signature: signatureData, // Base64 data URL
+        signature: signatureData,
         ndaContent: "BIG Marketplace Mutual NDA",
         dateSigned: signedDate.toISOString(),
       };
 
-      // 3. Upload signature image to Storage
+      // Upload signature
       const signatureRef = ref(storage, `ndas/${userId}/signature`);
       await uploadString(signatureRef, signatureData, "data_url");
-
-      // 4. Get the download URL for the signature
       const signatureUrl = await getDownloadURL(signatureRef);
 
-      // 5. Save NDA document to Firestore with the signature URL
+      // FIXED: Save with roleArray to Firestore
       const ndaDocData = {
         userInfo: {
           email: userInfo.email,
           username: userInfo.username,
           role: userInfo.role,
+          roleArray: userInfo.roleArray, // Include role array
         },
         signatureUrl,
         ndaContent: "BIG Marketplace Mutual NDA",
@@ -245,18 +243,16 @@ const NDASignupPopup = ({ onRegistrationComplete, registrationData }) => {
 
       await setDoc(doc(db, "ndas", userId), ndaDocData);
 
-      // 6. Generate and save PDF
       signedDocument.signatureUrl = signatureUrl;
       setSavedNDA(signedDocument);
 
-      // 7. Generate PDF immediately after signing
+      // Generate PDF
       const pdfBlob = await generateAndSavePDF(signedDocument, userId);
 
-      // 8. Close NDA popup and complete registration
       setShowNDA(false);
       setRegistrationComplete(true);
 
-      // 9. Notify parent component that registration is complete with PDF URL
+      // FIXED: Pass roleArray to parent
       if (
         onRegistrationComplete &&
         typeof onRegistrationComplete === "function"
@@ -541,11 +537,15 @@ const NDASignupPopup = ({ onRegistrationComplete, registrationData }) => {
       pdf.setFont("helvetica", "normal");
       pdf.text(ndaData.userInfo.username, margin + 40, yPosition);
 
+        // FIXED: Display roles properly in signature section
       yPosition += 10;
       pdf.setFont("helvetica", "bold");
-      pdf.text("Role:", margin, yPosition);
+      pdf.text("Role(s):", margin, yPosition);
       pdf.setFont("helvetica", "normal");
-      pdf.text(ndaData.userInfo.role, margin + 40, yPosition);
+      
+      // Display roles - use roleArray if available, otherwise use role string
+      const roleDisplay = ndaData.userInfo.roleArray?.join(", ") || ndaData.userInfo.role;
+      pdf.text(roleDisplay, margin + 40, yPosition);
 
       yPosition += 10;
       pdf.setFont("helvetica", "bold");
@@ -832,8 +832,11 @@ const NDASignupPopup = ({ onRegistrationComplete, registrationData }) => {
                   <p>
                     <strong>Email:</strong> {userInfo.email || "N/A"}
                   </p>
-                  <p>
-                    <strong>Role:</strong> {userInfo.role || "N/A"}
+                   <p>
+                    <strong>Role(s):</strong> {
+                      /* FIXED: Display roles properly */
+                      userInfo.roleArray?.join(", ") || userInfo.role || "N/A"
+                    }
                   </p>
                   <p>
                     <strong>Signature:</strong>
@@ -902,5 +905,6 @@ const NDASignupPopup = ({ onRegistrationComplete, registrationData }) => {
     </div>
   );
 };
+
 
 export default NDASignupPopup;

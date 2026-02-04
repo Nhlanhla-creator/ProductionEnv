@@ -13,7 +13,7 @@ import {
   PointElement,
   Title,
   Tooltip,
-  Legend
+  Legend 
 } from 'chart.js';
 
 // Register ChartJS components

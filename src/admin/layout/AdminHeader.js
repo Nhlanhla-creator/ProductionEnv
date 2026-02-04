@@ -12,7 +12,7 @@ import { onAuthStateChanged } from "firebase/auth"
 import { doc } from "firebase/firestore"
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage"
 
-function AdminHeader({ companyName, profileImage, setProfileImage }) {
+function AdminHeader({ companyName, profileImage, setProfileImage, isSidebarCollapsed }) {
   const navigate = useNavigate()
   const [date, setDate] = useState(new Date())
   const [dropdownOpen, setDropdownOpen] = useState(false)
@@ -334,7 +334,7 @@ function AdminHeader({ companyName, profileImage, setProfileImage }) {
   }
 
   return (
-    <header className={styles.header}>
+    <header className={styles.header} style={isSidebarCollapsed ? {left: "80px"} : {left: "280px"}}>
       <div className={styles["header-left"]}>
         <div className={styles["header-logo"]}>
           <img src="/MainLogo.png" alt="Company Logo" className={styles["logo-image"]} />

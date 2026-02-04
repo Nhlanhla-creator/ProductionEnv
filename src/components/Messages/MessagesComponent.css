@@ -1,6 +1,3 @@
-
-
-
 :root {
   --brown-1: #f7f3f0; 
   --brown-2: #ede4d8; 
@@ -14,8 +11,6 @@
 
 
 .messages-page {
-  margin-top: 60px;
-  margin-left: 250px;
   display: flex;
   flex-direction: column;
   height: calc(100vh - 80px);
@@ -69,13 +64,14 @@
 
 .search-icon {
   position: absolute;
-  left: 12px;
+  right: 12px;
   color: var(--brown-5);
   z-index: 1;
 }
 
 .search-bar input {
-  padding: 0.6rem 1rem 0.6rem 2.5rem;
+  padding: 0.6rem;
+  padding-left: 2.5rem !important;
   border: 1px solid var(--brown-3);
   border-radius: 6px;
   background-color: var(--brown-1);
@@ -279,6 +275,7 @@
   max-height: 2.8em;
   overflow: hidden;
   display: -webkit-box;
+  line-clamp: 2;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }

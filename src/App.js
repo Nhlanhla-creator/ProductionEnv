@@ -1,7 +1,8 @@
 "use client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom"
 import "./App.css"
+import styles from "./AdminLayout.module.css"
 import HomeHeader from "./main_pages/SMEs/HomeHeader"
 import { useAuth } from "./context/useAuth" // Import the auth hook
 import ProtectedRoute from "./context/ProtectedRoute" // Import the ProtectedRoute component
@@ -30,16 +31,30 @@ import PaymentGateway from "./admin/pages/PaymentGatewaySettings"
 import EmailTemplates from "./admin/pages/EmailTemplates"
 import SystemConfig from "./admin/pages/SystemConfigurations"
 import BackupExport from "./admin/pages/BackupExportData"
+
+import Delivery from "./admin/pages/Delivery";
+import AdminGovernance from "./admin/pages/AdminGovernance";
+import Growth from "./admin/pages/Growth";
+import PartnersEcosystem from "./admin/pages/PartnersEcosystem";
+import ProductPlatform from "./admin/pages/ProductPlatform";
+import TechArchitecture from "./admin/pages/TechArchitecture";
+import QATesting from "./admin/pages/qatesting";
+import OperationsInternal from "./admin/pages/OperationsInternal"
+import UsersMarketplace from "./admin/pages/UsersMarketplace"
+import PilotsCaseStudies from "./admin/pages/PilotsCaseStudies"
+import ReportingAnalytics from "./admin/pages/ReportingAnalytics"
+import Archive from "./admin/pages/Archive"
+
 import InvestorSettings from "./Investor/Settings/Setttings"
 import CatalystSettings from "./catalyst/CatalystSettings/supportSettings"
 
 // Billing and Payment Components
-import MySubscriptions from "./smses/BillingInformation/my-subscriptions"
-import BillingInfo from "./smses/BillingInformation/billing-info"
-import InvestorsSubscriptions from "./Investor/BillingAndPayments/investors-subscriptions"
-import BillingInfoInvestors from "./Investor/BillingAndPayments/billing-info-investors"
-import BillingInformation from "./Investor/BillingAndPayments/Myinformation"
-import BillingInformationSMSE from "./smses/BillingInformation/billing-history"
+import MySubscriptions from "./smses/BillingInformation/subscriptions"
+import InvestorsSubscriptions from "./Investor/BillingAndPayments/subscriptions"
+import BillingInfoInvestors from "./Investor/BillingAndPayments/billing-info"
+import BillingHistoryInvestor from "./Investor/BillingAndPayments/billing-history"
+import BillingHistorySMSE from "./smses/BillingInformation/billing-history"
+import BillingInformationSMSE from "./smses/BillingInformation/billing-info"
 import AdvisorDocuments from "./advisors/AdvisorDocuments/advisor-documents"
 import CatalystDocuments from "./catalyst/CatalystDocuments/support-documents"
 
@@ -213,6 +228,7 @@ import InvestorLegalCompliance from "./Investor/InvestorUniversalProfile/LegalCo
 import InvestorProductsServices from "./Investor/InvestorUniversalProfile/FundDetails​"
 import InvestorHowDidYouHear from "./Investor/InvestorUniversalProfile/ApplicationBrief​"
 import InvestorDeclarationConsent from "./Investor/InvestorUniversalProfile/DeclarationConsent"
+import InvestorMessages from "Investor/InvestorMessages/Messages"
 import InvestorCalendar from "./Investor/Calender/InvestorCalendar"
 import MyInvestments from "Investor/MyInvestment/MyInvestments"
 
@@ -243,6 +259,8 @@ import SMSEAdvisorMatchesPage from "./smses/MyAdvisorMatches/advisor-matches"
 import OpportunityMatchesPage from "./smses/MyOpportunityMatches/opportunity-matches"
 
 // Growth Tools Components
+import GrowthSuiteLanding from "./smses/MyGrowthTools/Growthsuitelanding"
+import OverallCompanyHealth from "./smses/MyGrowthTools/OverallCompanyHealth"
 import ShopToolsPage from "./smses/MyGrowthTools/shop"
 import MyToolsPage from "./smses/MyGrowthTools/my-tools"
 import Strategy from "./smses/MyGrowthTools/Strategy"
@@ -430,17 +448,62 @@ function App() {
 
   // Admin Protected Layout
   const AdminLayout = ({ children }) => {
-    const location = useLocation()
-    return (
-      <div className="app-layout">
-        <AdminSidebar />
-        <div className="main-content">
-          <AdminHeader />
-          <div className="page-content">{children}</div>
-        </div>
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    const updateSidebarState = () => {
+      try {
+        if (typeof document !== "undefined" && document.body) {
+          setIsSidebarCollapsed(document.body.classList.contains("admin-sidebar-collapsed"));
+        } else {
+          setIsSidebarCollapsed(localStorage.getItem("sidebarOpen") === "false");
+        }
+      } catch (e) {
+        setIsSidebarCollapsed(false);
+      }
+    };
+
+    // Initial check
+    updateSidebarState();
+
+    // MutationObserver to watch body class changes
+    let observer = null;
+    try {
+      if (document && document.body && window.MutationObserver) {
+        observer = new MutationObserver(() => updateSidebarState());
+        observer.observe(document.body, { 
+          attributes: true, 
+          attributeFilter: ["class"] 
+        });
+      }
+    } catch (e) {
+      console.error("MutationObserver not supported:", e);
+    }
+
+    // Listen to custom events and storage changes
+    window.addEventListener("sidebarToggle", updateSidebarState);
+    window.addEventListener("storage", updateSidebarState);
+
+    return () => {
+      if (observer) observer.disconnect();
+      window.removeEventListener("sidebarToggle", updateSidebarState);
+      window.removeEventListener("storage", updateSidebarState);
+    };
+  }, []);
+
+  return (
+    <div className="app-layout">
+      <AdminSidebar />
+      <div
+        className={`${styles.mainContent} ${isSidebarCollapsed ? styles.sidebarCollapsed : styles.sidebarExpanded}`}
+      >
+        <AdminHeader isSidebarCollapsed={isSidebarCollapsed} />
+        <div>{children}</div>
       </div>
-    )
-  }
+    </div>
+  );
+};
+
 
   // SME Protected Layout
   const SMELayout = ({ children }) => {
@@ -743,14 +806,6 @@ function App() {
         <Route path="/InsightsInvestor" element={<InsightsInvestor />} />
         <Route path="/FAQPageInvestor" element={<FAQPageInvestor />} />
         <Route path="/HeaderInvestor" element={<HeaderInvestor />} />
-        <Route path="/Strategy" element={<Strategy />} />
-        <Route path="/FinancialPerformance" element={<FinancialPerformance />} />
-        <Route path="/CapitalStructure" element={<CapitalStructure />} />
-        <Route path="/OperationalStrength" element={<OperationalStrength />} />
-        <Route path="/SocialImpact" element={<SocialImpact />} />
-        <Route path="/People" element={<People />} />
-        <Route path="/MarketingSales" element={<MarketingSales />} />
-        <Route path="/RiskManagement" element={<RiskManagement />} />
         <Route path="/BIGscoreAdvisor" element={<BIGscoreAdvisor />} />
         <Route path="/HowWorksAdvisors" element={<HowWorksAdvisors />} />
         <Route path="/InsightsAdvisor" element={<InsightsAdvisor />} />
@@ -784,6 +839,20 @@ function App() {
         <Route path="/verify-email" element={<EmailVerification />} />
         <Route path="/card/:cardId" element={<CardLandingPage />} />
 
+        {/* Admin Notion Routes */}
+        <Route path="/admin/notion/delivery" element={withAdminProtection(Delivery)} />
+        <Route path="/admin/notion/governance" element={withAdminProtection(AdminGovernance)} />
+        <Route path="/admin/notion/growth" element={withAdminProtection(Growth)} />
+        <Route path="/admin/notion/partners-ecosystem" element={withAdminProtection(PartnersEcosystem)} />
+        <Route path="/admin/notion/product-platform" element={withAdminProtection(ProductPlatform)} />
+        <Route path="/admin/notion/tech-architecture" element={withAdminProtection(TechArchitecture)} />
+        <Route path="/admin/notion/qa-testing" element={withAdminProtection(QATesting)} />
+        <Route path="/admin/notion/operations-internal" element={withAdminProtection(OperationsInternal)} />
+        <Route path="/admin/notion/users-marketplace" element={withAdminProtection(UsersMarketplace)} />
+        <Route path="/admin/notion/pilots-case-studies" element={withAdminProtection(PilotsCaseStudies)} />
+        <Route path="/admin/notion/reporting-analytics" element={withAdminProtection(ReportingAnalytics)}/>
+        <Route path="/admin/notion/archive" element={withAdminProtection(Archive)} />
+
         {/* Admin Dashboard Routes */}
         <Route path="/admin" element={<Navigate to="/Auth" replace />} />
         <Route path="/admin/dashboard" element={withAdminProtection(AdminDashboard)} />
@@ -811,23 +880,33 @@ function App() {
         <Route path="/profile" element={withProtection(Profile, {}, renderSMERoute)} />
         <Route path="/find-matches" element={withProtection(FindMatches, {}, renderSMERoute)} />
         <Route path="/my-documents" element={withProtection(MyDocuments, {}, renderSMERoute)} />
-        <Route path="/growth" element={withProtection(GrowthEnabler, {}, renderSMERoute)} />
+        <Route path="/growth" element={withProtection(GrowthSuiteLanding, {}, renderSMERoute)} />
         <Route path="/messages" element={withProtection(Messages, {}, renderSMERoute)} />
         <Route path="/calendar" element={withProtection(Calendar, {}, renderSMERoute)} />
         <Route path="/settings" element={withProtection(Settings, {}, renderSMERoute)} />
         <Route path="/documents" element={withProtection(ProfileSummary, {}, renderSMERoute)} />
         <Route path="/billing/subscriptions" element={withProtection(MySubscriptions, {}, renderSMERoute)} />
-        <Route path="/billing/info" element={withProtection(BillingInfo, {}, renderSMERoute)} />
-        <Route path="/billing/growth-tools-orders" element={withProtection(BillingInformationSMSE, {}, renderSMERoute)} />
+        <Route path="/billing/info" element={withProtection(BillingInformationSMSE, {}, renderSMERoute)} />
+        <Route path="/billing/growth-tools-orders" element={withProtection(BillingHistorySMSE, {}, renderSMERoute)} />
         
         {/* Growth Tools Sub-Routes */}
         <Route path="/growth/my-tools" element={withProtection(MyToolsPage, {}, renderSMERoute)} />
         <Route path="/growth/shop" element={withProtection(ShopToolsPage, {}, renderSMERoute)} />
 
+        {/* Growth Suite Routes - NEW */}
+        <Route path="/growth-suite-landing" element={withProtection(GrowthSuiteLanding, {}, renderSMERoute)} />
+        <Route path="/overall-company-health" element={withProtection(OverallCompanyHealth, {}, renderSMERoute)} />
+        <Route path="/Strategy" element={withProtection(Strategy, {}, renderSMERoute)} />
+        <Route path="/FinancialPerformance" element={withProtection(FinancialPerformance, {}, renderSMERoute)} />
+        <Route path="/OperationalStrength" element={withProtection(OperationalStrength, {}, renderSMERoute)} />
+        <Route path="/People" element={withProtection(People, {}, renderSMERoute)} />
+        <Route path="/SocialImpact" element={withProtection(SocialImpact, {}, renderSMERoute)} />
+        <Route path="/MarketingSales" element={withProtection(MarketingSales, {}, renderSMERoute)} />
+        
         {/* Investor Billing and Payments Routes */}
         <Route path="/investor/billing/subscriptions" element={withProtection(InvestorsSubscriptions, {}, renderInvestorRoute)} />
         <Route path="/investor/billing/info" element={withProtection(BillingInfoInvestors, {}, renderInvestorRoute)} />
-        <Route path="/investor/billing/myinfo" element={withProtection(BillingInformation, {}, renderInvestorRoute)} />
+        <Route path="/investor/billing/history" element={withProtection(BillingHistoryInvestor, {}, renderInvestorRoute)} />
 
         {/* Protected Investor Dashboard Routes */}
         <Route path="/investor-documents" element={withProtection(Documents, {}, renderInvestorRoute)} />
@@ -835,7 +914,7 @@ function App() {
         <Route path="/investor-profile" element={withProtection(InvestorUniversalProfile, {}, renderInvestorRoute)} />
         <Route path="/investor-opportunities" element={withProtection(FindMatches, {}, renderInvestorRoute)} />
         <Route path="/investor-portfolio" element={<div>Coming Soon</div>} />
-        <Route path="/investor-messages" element={withProtection(Messages, {}, renderInvestorRoute)} />
+        <Route path="/investor-messages" element={withProtection(InvestorMessages, {}, renderInvestorRoute)} />
         <Route path="/investor-calendar" element={withProtection(InvestorCalendar, {}, renderInvestorRoute)} />
         <Route path="/investor-settings" element={withProtection(InvestorSettings, {}, renderInvestorRoute)} />
         <Route path="/my-investments" element={withProtection(MyInvestments, {}, renderInvestorRoute)} />
@@ -889,7 +968,7 @@ function App() {
         <Route path="/advisor-settings" element={withProtection(AdvisorSettings, {}, renderAdvisorRoute)} />
         
         {/* Advisor Billing Routes */}
-        <Route path="/advisor/billing/info" element={withProtection(BillingInfo, {}, renderAdvisorRoute)} />
+        <Route path="/advisor/billing/info" element={withProtection(BillingInformationSMSE, {}, renderAdvisorRoute)} />
         <Route path="/advisor/billing/subscriptions" element={withProtection(MySubscriptions, {}, renderAdvisorRoute)} />
         <Route path="/advisor/billing/history" element={withProtection(MyDocuments, {}, renderAdvisorRoute)} />
 
@@ -1006,5 +1085,6 @@ function App() {
     </Router>
   )
 }
+
 
 export default App

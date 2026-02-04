@@ -1,12 +1,15 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
 import { onAuthStateChanged } from "firebase/auth"
 import { auth } from "../../firebaseConfig"
 import FundingFlowPipeline from "./funding-flow-pipeline"
 import TabbedFundingTables from "./tabbed-funding-tables"
 import styles from "./funding.module.css"
 import { X, ArrowRight } from "lucide-react"
+import Upsell from "../../components/Upsell/Upsell" // Import the Upsell component
+import useSubscriptionPlan from "../../hooks/useSubscriptionPlan" // Import the subscription hook
 
 const onboardingSteps = [
   {
@@ -52,6 +55,11 @@ export default function FundingMatchesPage() {
   const [selectedPipelineStage, setSelectedPipelineStage] = useState(null)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [activeTab, setActiveTab] = useState("matches")
+  
+  // Use subscription hook
+  const { currentPlan, subscriptionLoading } = useSubscriptionPlan()
+
+  const navigate = useNavigate()
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -144,21 +152,18 @@ export default function FundingMatchesPage() {
     minHeight: "100vh",
     maxWidth: "100vw",
     overflowX: "hidden",
-    padding: `80px 10px 20px ${isSidebarCollapsed ? "100px" : "250px"}`,
+    padding: `72px 10px 20px ${isSidebarCollapsed ? "80px" : "280px"}`,
     margin: "0",
     boxSizing: "border-box",
     position: "relative",
     transition: "padding 0.3s ease",
-    backgroundImage: "url('../../assets/BiGBackround.png')",
-    backgroundSize: "cover",
-    backgroundPosition: "center",
-    backgroundRepeat: "no-repeat",
-    backgroundAttachment: "fixed",
+    backgroundColor: "#f8f9fa",
   })
 
-  if (!authChecked) {
+  // Combined loading check
+  if (!authChecked || subscriptionLoading) {
     return (
-      <div style={getContainerStyles()} className={styles.loadingContainer}>
+      <div style={getContainerStyles()}>
         <div
           style={{
             display: "flex",
@@ -169,12 +174,39 @@ export default function FundingMatchesPage() {
             color: "#666",
           }}
         >
-          <p>Loading...</p>
+          <p>{subscriptionLoading ? "Checking subscription..." : "Loading..."}</p>
         </div>
       </div>
     )
   }
 
+  // Show Upsell for Basic and Standard plan users
+  if (currentPlan === "standard") {
+    return (
+      <Upsell
+        userType={"sme"}
+        title={"Funding Matching"}
+        subtitle={"Discover and connect with investors and funding opportunities that match your business profile and growth stage."}
+        features={[
+          "Access to verified investor database",
+          "Funding pipeline tracking and analytics",
+          "Direct communication with investors",
+          "Advanced filtering by investment criteria",
+          "Deal flow management and tracking",
+          "Term sheet and negotiation tools"
+        ]}
+        variant={"center"}
+        expandedWidth={280}
+        collapsedWidth={80}
+        plans={["Premium"]}
+        upgradeMessage={"Upgrade to Premium to access exclusive funding matching features including direct investor communication and deal flow management."}
+        primaryLabel={"View Premium Plan"}
+      />
+    )
+  }
+
+  // Only show funding matches for Premium users
+  // (currentPlan === "premium")
   const handleDealComplete = () => {
     setActiveTab("successful")
   }
@@ -408,8 +440,8 @@ export default function FundingMatchesPage() {
           style={{
             width: "100%",
             maxWidth: "100%",
-            padding: "5px 20px 2px 20px", // Same compact padding as other pipelines
-            margin: "0 0 5px 0", // Same compact margin as other pipelines
+            padding: "5px 20px 2px 20px",
+            margin: "0 0 5px 0",
             backgroundColor: "rgba(255, 255, 255, 0.95)",
             borderRadius: "8px",
             boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
@@ -421,7 +453,7 @@ export default function FundingMatchesPage() {
           <div
             style={{
               width: "100%",
-              overflow: "hidden", // Hide scrollbars like other pipelines
+              overflow: "hidden",
             }}
             className={styles.sectionContent}
           >

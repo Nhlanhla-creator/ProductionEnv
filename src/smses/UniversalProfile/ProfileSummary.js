@@ -217,7 +217,6 @@ const ProfileSummary = ({ data, onEdit }) => {
           fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
           minHeight: "100vh",
           width: "100%",
-          background: "linear-gradient(135deg, #faf7f2 0%, #f5f0e1 50%, #f0e6d9 100%)",
           padding: "16px",
           paddingLeft: "calc(var(--sidebar-width) + 24px)",
           paddingTop: "80px",

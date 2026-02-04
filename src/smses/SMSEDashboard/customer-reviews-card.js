@@ -1,104 +1,128 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { ChevronDown, Star, MessageCircle } from "lucide-react"
-import { auth, db } from '../../firebaseConfig'
-import { collection, getDocs, doc, getDoc, query, where } from "firebase/firestore"
-import { onAuthStateChanged } from "firebase/auth"
-
+import { useState, useEffect } from "react";
+import { ChevronDown, Star, MessageCircle } from "lucide-react";
+import { auth, db } from "../../firebaseConfig";
+import {
+  collection,
+  getDocs,
+  doc,
+  getDoc,
+  query,
+  where,
+} from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 
 export function CustomerReviewsCard({ styles }) {
- 
-  const [showReviewsModal, setShowReviewsModal] = useState(false)
-  const [selectedReview, setSelectedReview] = useState(null)
-  const [showDetailModal, setShowDetailModal] = useState(false)
-  const [reviews, setReviews] = useState([])
-  const [username, setUsername] = useState("")
+  const [showReviewsModal, setShowReviewsModal] = useState(false);
+  const [selectedReview, setSelectedReview] = useState(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [reviews, setReviews] = useState([]);
+  const [username, setUsername] = useState("");
 
   // Mock existing reviews data
-useEffect(() => {
-  const fetchReviews = async () => {
-    try {
-      const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
-        if (!currentUser) return
+  useEffect(() => {
+    const fetchReviews = async () => {
+      try {
+        const unsubscribeAuth = onAuthStateChanged(
+          auth,
+          async (currentUser) => {
+            if (!currentUser) return;
 
-        try {
-          // Step 1: Get the logged-in user's profile
-          const userDocRef = doc(db, "universalProfiles", currentUser.uid)
-          const userDocSnap = await getDoc(userDocRef)
+            try {
+              // Step 1: Get the logged-in user's profile
+              const userDocRef = doc(db, "universalProfiles", currentUser.uid);
+              const userDocSnap = await getDoc(userDocRef);
 
-          if (userDocSnap.exists()) {
-            const userData = userDocSnap.data()
-            // Fetch the whole registeredName
-          const registeredName = userData.entityOverview?.registeredName || userData.registeredName
+              if (userDocSnap.exists()) {
+                const userData = userDocSnap.data();
+                // Fetch the whole registeredName
+                const registeredName =
+                  userData.entityOverview?.registeredName ||
+                  userData.registeredName;
 
-            console.log(registeredName)
+                console.log(registeredName);
 
-            if (registeredName) {
-              // Step 2: Use registeredName to fetch reviews
-              const reviewsCol = collection(db, "supplierReviews")
-              const q = query(reviewsCol, where("supplierName", "==", registeredName))
-              const reviewsSnapshot = await getDocs(q)
+                if (registeredName) {
+                  // Step 2: Use registeredName to fetch reviews
+                  const reviewsCol = collection(db, "supplierReviews");
+                  const q = query(
+                    reviewsCol,
+                    where("supplierName", "==", registeredName)
+                  );
+                  const reviewsSnapshot = await getDocs(q);
 
-              const reviewsData = reviewsSnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data(),
-              }))
+                  const reviewsData = reviewsSnapshot.docs.map((doc) => ({
+                    id: doc.id,
+                    ...doc.data(),
+                  }));
 
-              setReviews(reviewsData)
-            } else {
-              console.warn("No registeredName found in user profile")
+                  setReviews(reviewsData);
+                } else {
+                  console.warn("No registeredName found in user profile");
+                }
+              } else {
+                console.warn("User profile not found in universalProfiles");
+              }
+            } catch (error) {
+              console.error("Error fetching user reviews:", error);
             }
-          } else {
-            console.warn("User profile not found in universalProfiles")
           }
-        } catch (error) {
-          console.error("Error fetching user reviews:", error)
-        }
-      })
+        );
 
-      return () => unsubscribeAuth()
-    } catch (error) {
-      console.error("Error setting up auth listener:", error)
-    }
-  }
+        return () => unsubscribeAuth();
+      } catch (error) {
+        console.error("Error setting up auth listener:", error);
+      }
+    };
 
-  fetchReviews()
-}, [])
+    fetchReviews();
+  }, []);
 
   // Calculate average rating
-const averageRating = reviews.length
-  ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
-  : 0
-const roundedAverage = Math.round(averageRating)
-
+  const averageRating = reviews.length
+    ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+    : 0;
+  const roundedAverage = Math.round(averageRating);
 
   const getAverageLabel = (rating) => {
-    if (reviews.length === 0) return { level: "No Reviews", color: "#757575" }
+    if (reviews.length === 0) return { level: "No Reviews", color: "#757575" };
     switch (Math.round(rating)) {
-      case 1: return { level: "Challenged", color: "#B71C1C" }
-      case 2: return { level: "Developing", color: "#F44336" }
-      case 3: return { level: "Fair", color: "#FF9800" }
-      case 4: return { level: "Commended", color: "#4CAF50" }
-      case 5: return { level: "Celebrated", color: "#1B5E20" }
-      default: return { level: "Challenged", color: "#B71C1C" }
+      case 1:
+        return { level: "Challenged", color: "#B71C1C" };
+      case 2:
+        return { level: "Developing", color: "#F44336" };
+      case 3:
+        return { level: "Fair", color: "#FF9800" };
+      case 4:
+        return { level: "Commended", color: "#4CAF50" };
+      case 5:
+        return { level: "Celebrated", color: "#1B5E20" };
+      default:
+        return { level: "Challenged", color: "#B71C1C" };
     }
-  }
+  };
 
   const getReviewLevel = (rating) => {
-    if (reviews.length === 0) return { level: "No Reviews", color: "#757575" }
+    if (reviews.length === 0) return { level: "No Reviews", color: "#757575" };
     switch (Math.round(rating)) {
-      case 1: return { level: "Needs Attention", color: "#B71C1C" }
-      case 2: return { level: "Emerging Trust", color: "#F44336" }
-      case 3: return { level: "Fair Experience", color: "#FF9800" }
-      case 4: return { level: "Great Feedback", color: "#4CAF50" }
-      case 5: return { level: "Outstanding", color: "#1B5E20" }
-      default: return { level: "Needs Attention", color: "#B71C1C" }
+      case 1:
+        return { level: "Needs Attention", color: "#B71C1C" };
+      case 2:
+        return { level: "Emerging Trust", color: "#F44336" };
+      case 3:
+        return { level: "Fair Experience", color: "#FF9800" };
+      case 4:
+        return { level: "Great Feedback", color: "#4CAF50" };
+      case 5:
+        return { level: "Outstanding", color: "#1B5E20" };
+      default:
+        return { level: "Needs Attention", color: "#B71C1C" };
     }
-  }
+  };
 
-  const averageLabel = getAverageLabel(averageRating)
-  const reviewLevel = getReviewLevel(averageRating)
+  const averageLabel = getAverageLabel(averageRating);
+  const reviewLevel = getReviewLevel(averageRating);
 
   return (
     <>
@@ -143,13 +167,22 @@ const roundedAverage = Math.round(averageRating)
             </h2>
             <MessageCircle size={24} style={{ opacity: 0.8 }} />
           </div>
-          <p style={{ margin: "0", fontSize: "13px", opacity: 0.9, fontWeight: 400 }}>
+          <p
+            style={{
+              margin: "0",
+              fontSize: "13px",
+              opacity: 0.9,
+              fontWeight: 400,
+            }}
+          >
             Client Feedback & Ratings
           </p>
         </div>
 
         {/* Content */}
-        <div style={{ padding: "24px", background: "white", textAlign: "center" }}>
+        <div
+          style={{ padding: "24px", background: "white", textAlign: "center" }}
+        >
           {/* Summary */}
           <div
             style={{
@@ -164,10 +197,23 @@ const roundedAverage = Math.round(averageRating)
             }}
           >
             {/* Review Count */}
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-         <span style={{ fontSize: "28px", fontWeight: "800", color: "#5d4037", lineHeight: 1 }}>
-  {reviews.length}
-</span>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "28px",
+                  fontWeight: "800",
+                  color: "#5d4037",
+                  lineHeight: 1,
+                }}
+              >
+                {reviews.length}
+              </span>
               <span
                 style={{
                   fontSize: "12px",
@@ -183,11 +229,29 @@ const roundedAverage = Math.round(averageRating)
             </div>
 
             {/* Divider */}
-            <div style={{ width: "1px", height: "40px", backgroundColor: "#e8ddd6" }} />
+            <div
+              style={{
+                width: "1px",
+                height: "40px",
+                backgroundColor: "#e8ddd6",
+              }}
+            />
 
             {/* Average Rating */}
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-              <div style={{ display: "flex", alignItems: "center", marginBottom: "4px" }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  marginBottom: "4px",
+                }}
+              >
                 {[...Array(5)].map((_, i) => (
                   <Star
                     key={i}
@@ -207,7 +271,9 @@ const roundedAverage = Math.round(averageRating)
                   letterSpacing: "0.5px",
                 }}
               >
-                {reviews.length > 0 ? `${averageRating.toFixed(1)} ${averageLabel.level}` : averageLabel.level}
+                {reviews.length > 0
+                  ? `${averageRating.toFixed(1)} ${averageLabel.level}`
+                  : averageLabel.level}
               </span>
             </div>
           </div>
@@ -324,16 +390,35 @@ const roundedAverage = Math.round(averageRating)
             {/* List of Reviews */}
             <div style={{ padding: "20px" }}>
               {reviews.length === 0 ? (
-                <div style={{ textAlign: "center", color: "#757575", padding: "40px 20px" }}>
-                  <MessageCircle size={48} style={{ opacity: 0.3, marginBottom: "16px" }} />
-                  <p style={{ fontSize: "16px", fontWeight: "500", marginBottom: "8px" }}>No Reviews Yet</p>
-                  <p style={{ fontSize: "14px", opacity: 0.7 }}>Be the first to leave a review for this supplier.</p>
+                <div
+                  style={{
+                    textAlign: "center",
+                    color: "#757575",
+                    padding: "40px 20px",
+                  }}
+                >
+                  <MessageCircle
+                    size={48}
+                    style={{ opacity: 0.3, marginBottom: "16px" }}
+                  />
+                  <p
+                    style={{
+                      fontSize: "16px",
+                      fontWeight: "500",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    No Reviews Yet
+                  </p>
+                  <p style={{ fontSize: "14px", opacity: 0.7 }}>
+                    Be the first to leave a review for this supplier.
+                  </p>
                 </div>
               ) : (
                 reviews.map((review) => (
                   <div
                     key={review.id}
-                    style={{ 
+                    style={{
                       marginBottom: "16px",
                       padding: "16px",
                       borderRadius: "8px",
@@ -341,14 +426,31 @@ const roundedAverage = Math.round(averageRating)
                       cursor: "pointer",
                       transition: "background-color 0.2s",
                     }}
-                    onClick={() => { setSelectedReview(review); setShowDetailModal(true) }}
+                    onClick={() => {
+                      setSelectedReview(review);
+                      setShowDetailModal(true);
+                    }}
                   >
-                    <h4 style={{ margin: 0, color: "#5a3921" }}>{review.customerName}</h4>
-                    <p style={{ margin: "0 0 4px 0", color: "#8b6d4f", fontSize: "1em" }}>
+                    <h4 style={{ margin: 0, color: "#5a3921" }}>
+                      {review.customerName}
+                    </h4>
+                    <p
+                      style={{
+                        margin: "0 0 4px 0",
+                        color: "#8b6d4f",
+                        fontSize: "1em",
+                      }}
+                    >
                       {review.feedbackTheme}
                     </p>
-                    <p style={{ margin: 0, color: "#a69b8f", fontSize: "0.8em" }}>
-                      {review.date?.seconds ? new Date(review.date.seconds * 1000).toLocaleDateString() : review.date}
+                    <p
+                      style={{ margin: 0, color: "#a69b8f", fontSize: "0.8em" }}
+                    >
+                      {review.date?.seconds
+                        ? new Date(
+                            review.date.seconds * 1000
+                          ).toLocaleDateString()
+                        : review.date}
                     </p>
                     <div style={{ display: "flex" }}>
                       {[...Array(5)].map((_, i) => (
@@ -360,7 +462,9 @@ const roundedAverage = Math.round(averageRating)
                         />
                       ))}
                     </div>
-                    <div style={{ color: "#5a3921", lineHeight: "1.5" }}>{review.comment}</div>
+                    <div style={{ color: "#5a3921", lineHeight: "1.5" }}>
+                      {review.comment}
+                    </div>
                   </div>
                 ))
               )}
@@ -427,11 +531,21 @@ const roundedAverage = Math.round(averageRating)
               </button>
             </div>
             <div style={{ padding: "20px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "16px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: "16px",
+                }}
+              >
                 <div>
-                  <h4 style={{ margin: "0 0 6px 0", color: "#5a3921" }}>{selectedReview.name}</h4>
+                  <h4 style={{ margin: "0 0 6px 0", color: "#5a3921" }}>
+                    {selectedReview.name}
+                  </h4>
                   <p style={{ margin: 0, color: "#a69b8f", fontSize: "0.8em" }}>
-                    {new Date(selectedReview.date.seconds * 1000).toLocaleDateString()}
+                    {new Date(
+                      selectedReview.date.seconds * 1000
+                    ).toLocaleDateString()}
                   </p>
                 </div>
                 <div style={{ display: "flex" }}>
@@ -446,7 +560,13 @@ const roundedAverage = Math.round(averageRating)
                   ))}
                 </div>
               </div>
-              <div style={{ color: "#5a3921", lineHeight: "1.6", fontSize: "1.05em" }}>
+              <div
+                style={{
+                  color: "#5a3921",
+                  lineHeight: "1.6",
+                  fontSize: "1.05em",
+                }}
+              >
                 {selectedReview.comment}
               </div>
             </div>
@@ -454,5 +574,5 @@ const roundedAverage = Math.round(averageRating)
         </div>
       )}
     </>
-  )
+  );
 }

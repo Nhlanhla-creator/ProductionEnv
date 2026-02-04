@@ -9,7 +9,7 @@ import { db, auth } from '../../firebaseConfig';
 const styles = `
 .data-integrity {
   width: 100%;
-}
+} 
 
 .loading-container {
   display: flex;

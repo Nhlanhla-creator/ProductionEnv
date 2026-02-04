@@ -1,7 +1,7 @@
 // tabs/PerformanceRiskDashboard.js
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Bar, Line, Radar } from 'react-chartjs-2';
-import { FiEye, FiGrid, FiCheck } from 'react-icons/fi';
+import { FiEye } from 'react-icons/fi';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -14,9 +14,7 @@ import {
   Tooltip,
   Legend,
   Filler
-} from 'chart.js';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { db, auth } from '../../firebaseConfig';
+} from 'chart.js'; 
 
 // Register ChartJS components
 ChartJS.register(
@@ -36,150 +34,6 @@ ChartJS.register(
 const styles = `
 .performance-risk {
   width: 100%;
-}
-
-.controls-row {
-  margin-bottom: 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 10px;
-}
-
-.chart-selection-controls {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  position: relative;
-}
-
-.chart-selector-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: #f5f5f5;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #666;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.chart-selector-btn:hover {
-  background: #e0e0e0;
-}
-
-.chart-selector-btn.active {
-  background-color: #7d5a36;
-  color: white;
-}
-
-.chart-selector-popup {
-  position: absolute;
-  top: 40px;
-  left: 0;
-  background: white;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
-  z-index: 1000;
-  min-width: 300px;
-  border: 1px solid #e0e0e0;
-}
-
-.chart-selector-popup h4 {
-  margin: 0 0 15px 0;
-  color: #5e3f26;
-  font-size: 16px;
-  font-weight: 600;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #ede4d8;
-}
-
-.chart-selection-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.chart-selection-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: #f8f9fa;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.chart-selection-item:hover {
-  background: #e9ecef;
-}
-
-.chart-selection-item.selected {
-  background: #e8f5e8;
-  border: 1px solid #4CAF50;
-}
-
-.chart-selection-checkbox {
-  width: 18px;
-  height: 18px;
-  border: 2px solid #7d5a36;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.chart-selection-checkbox.checked {
-  background: #7d5a36;
-  color: white;
-}
-
-.chart-selection-label {
-  font-size: 13px;
-  color: #333;
-  font-weight: 500;
-}
-
-.chart-selection-actions {
-  display: flex;
-  gap: 10px;
-  justify-content: space-between;
-}
-
-.chart-selection-btn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  flex: 1;
-}
-
-.chart-selection-btn.primary {
-  background-color: #7d5a36;
-  color: white;
-}
-
-.chart-selection-btn.primary:hover {
-  background-color: #5e3f26;
-}
-
-.chart-selection-btn.secondary {
-  background-color: #f5f5f5;
-  color: #666;
-}
-
-.chart-selection-btn.secondary:hover {
-  background-color: #e0e0e0;
 }
 
 .performance-charts-grid {
@@ -387,12 +241,6 @@ const styles = `
 }
 
 /* Responsive Design */
-@media (max-width: 1200px) {
-  .performance-charts-grid {
-    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-  }
-}
-
 @media (max-width: 992px) {
   .performance-charts-grid {
     grid-template-columns: 1fr;
@@ -400,25 +248,6 @@ const styles = `
   
   .chart-container {
     height: 380px;
-  }
-  
-  .controls-row {
-    flex-direction: column;
-    gap: 15px;
-    align-items: stretch;
-  }
-  
-  .chart-selection-controls {
-    justify-content: space-between;
-  }
-  
-  .chart-selector-popup {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 90%;
-    max-width: 400px;
   }
 }
 
@@ -437,10 +266,6 @@ const styles = `
   
   .performance-charts-grid {
     padding: 0 5px;
-  }
-  
-  .chart-selection-grid {
-    grid-template-columns: 1fr;
   }
 }
 `;
@@ -494,83 +319,7 @@ const staticRadarOptions = {
   }
 };
 
-// Save user preferences to Firebase
-const saveUserChartPreferences = async (userId, preferences) => {
-  try {
-    const userPrefsRef = doc(db, "userPreferences", userId);
-    await setDoc(userPrefsRef, {
-      performanceChartPreferences: preferences,
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
-    console.log('✅ Performance chart preferences saved to Firebase');
-  } catch (error) {
-    console.error('❌ Error saving performance chart preferences:', error);
-  }
-};
-
-// Load user preferences from Firebase
-const loadUserChartPreferences = async (userId) => {
-  try {
-    const userPrefsRef = doc(db, "userPreferences", userId);
-    const userPrefsSnap = await getDoc(userPrefsRef);
-    
-    if (userPrefsSnap.exists()) {
-      const preferences = userPrefsSnap.data().performanceChartPreferences;
-      console.log('✅ Performance chart preferences loaded from Firebase:', preferences);
-      return preferences;
-    } else {
-      console.log('⚠️ No performance chart preferences found, using defaults');
-      return null;
-    }
-  } catch (error) {
-    console.error('❌ Error loading performance chart preferences:', error);
-    return null;
-  }
-};
-
 const PerformanceRiskDashboard = ({ openPopup }) => {
-  const [showChartSelector, setShowChartSelector] = useState(false);
-  const [selectedCharts, setSelectedCharts] = useState({
-    defaultRatio: true,
-    smeGrowthIndex: true,
-    jobCreation: true,
-    graduationRate: true,
-    diversityInclusion: true
-  });
-
-  // Load chart preferences on component mount
-  useEffect(() => {
-    const loadPreferences = async () => {
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        const savedPreferences = await loadUserChartPreferences(currentUser.uid);
-        if (savedPreferences) {
-          setSelectedCharts(savedPreferences.selectedCharts || selectedCharts);
-        }
-      }
-    };
-    
-    loadPreferences();
-  }, []);
-
-  // Save preferences when they change
-  useEffect(() => {
-    const savePreferences = async () => {
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        const preferences = {
-          selectedCharts,
-          updatedAt: new Date().toISOString()
-        };
-        await saveUserChartPreferences(currentUser.uid, preferences);
-      }
-    };
-
-    // Debounce the save to prevent too many writes
-    const timeoutId = setTimeout(savePreferences, 1000);
-    return () => clearTimeout(timeoutId);
-  }, [selectedCharts]);
-
   // Data generation functions
   const generateBarData = (labels, data, label, colorIndex) => ({
     labels,
@@ -624,77 +373,6 @@ const PerformanceRiskDashboard = ({ openPopup }) => {
       }
     ]
   });
-
-  // Chart Selection Component
-  const ChartSelectionPopup = () => {
-    const chartOptions = [
-      { id: 'defaultRatio', label: 'Default Ratio' },
-      { id: 'smeGrowthIndex', label: 'SME Growth Index' },
-      { id: 'jobCreation', label: 'Job Creation' },
-      { id: 'graduationRate', label: 'Graduation Rate' },
-      { id: 'diversityInclusion', label: 'Diversity & Inclusion' }
-    ];
-
-    const handleToggleChart = (chartId) => {
-      setSelectedCharts(prev => ({
-        ...prev,
-        [chartId]: !prev[chartId]
-      }));
-    };
-
-    const handleSelectAll = () => {
-      const allSelected = {};
-      chartOptions.forEach(option => {
-        allSelected[option.id] = true;
-      });
-      setSelectedCharts(allSelected);
-    };
-
-    const handleDeselectAll = () => {
-      const noneSelected = {};
-      chartOptions.forEach(option => {
-        noneSelected[option.id] = false;
-      });
-      setSelectedCharts(noneSelected);
-    };
-
-    const handleSaveSelection = () => {
-      setShowChartSelector(false);
-    };
-
-    const selectedCount = Object.values(selectedCharts).filter(Boolean).length;
-
-    return (
-      <div className="chart-selector-popup">
-        <h4>Select Charts to Display ({selectedCount} selected)</h4>
-        <div className="chart-selection-grid">
-          {chartOptions.map(option => (
-            <div
-              key={option.id}
-              className={`chart-selection-item ${selectedCharts[option.id] ? 'selected' : ''}`}
-              onClick={() => handleToggleChart(option.id)}
-            >
-              <div className={`chart-selection-checkbox ${selectedCharts[option.id] ? 'checked' : ''}`}>
-                {selectedCharts[option.id] && <FiCheck size={12} />}
-              </div>
-              <span className="chart-selection-label">{option.label}</span>
-            </div>
-          ))}
-        </div>
-        <div className="chart-selection-actions">
-          <button className="chart-selection-btn secondary" onClick={handleDeselectAll}>
-            Deselect All
-          </button>
-          <button className="chart-selection-btn secondary" onClick={handleSelectAll}>
-            Select All
-          </button>
-          <button className="chart-selection-btn primary" onClick={handleSaveSelection}>
-            Apply
-          </button>
-        </div>
-      </div>
-    );
-  };
 
   // Chart Components
   const BarChartWithTitle = ({ data, title, chartTitle, chartId }) => {
@@ -817,16 +495,10 @@ const PerformanceRiskDashboard = ({ openPopup }) => {
     );
   };
 
-  // Get selected charts
-  const selectedChartComponents = [];
-  
-  // Add Default Ratio chart if selected
-  if (selectedCharts.defaultRatio) {
-    selectedChartComponents.push({
-      id: 'defaultRatio',
-      component: (
+  return (
+    <div className="performance-risk">
+      <div className="performance-charts-grid">
         <BarChartWithTitle
-          key="defaultRatio"
           data={generateBarData(
             ['Q1', 'Q2', 'Q3', 'Q4'],
             [7.5, 9.8, 6.1, 4.2],
@@ -837,17 +509,8 @@ const PerformanceRiskDashboard = ({ openPopup }) => {
           chartTitle="Default rates per quarter (%)"
           chartId="default-ratio"
         />
-      )
-    });
-  }
 
-  // Add SME Growth Index chart if selected
-  if (selectedCharts.smeGrowthIndex) {
-    selectedChartComponents.push({
-      id: 'smeGrowthIndex',
-      component: (
         <LineChartWithTitle
-          key="smeGrowthIndex"
           data={generateLineData(
             ['Q1', 'Q2', 'Q3', 'Q4'],
             [
@@ -859,17 +522,8 @@ const PerformanceRiskDashboard = ({ openPopup }) => {
           chartTitle="Revenue growth vs benchmark (%)"
           chartId="sme-growth-index"
         />
-      )
-    });
-  }
 
-  // Add Job Creation chart if selected
-  if (selectedCharts.jobCreation) {
-    selectedChartComponents.push({
-      id: 'jobCreation',
-      component: (
         <BarChartWithTitle
-          key="jobCreation"
           data={generateStackedBarData(
             ['Agriculture', 'Services', 'Manufacturing', 'Retail', 'Tech'],
             [
@@ -881,17 +535,8 @@ const PerformanceRiskDashboard = ({ openPopup }) => {
           chartTitle="Jobs created and retained by sector"
           chartId="job-creation"
         />
-      )
-    });
-  }
 
-  // Add Graduation Rate chart if selected
-  if (selectedCharts.graduationRate) {
-    selectedChartComponents.push({
-      id: 'graduationRate',
-      component: (
         <LineChartWithTitle
-          key="graduationRate"
           data={generateLineData(
             ['Q1', 'Q2', 'Q3', 'Q4'],
             [
@@ -903,17 +548,8 @@ const PerformanceRiskDashboard = ({ openPopup }) => {
           chartTitle="Graduation rate vs target (%)"
           chartId="graduation-rate"
         />
-      )
-    });
-  }
 
-  // Add Diversity & Inclusion chart if selected
-  if (selectedCharts.diversityInclusion) {
-    selectedChartComponents.push({
-      id: 'diversityInclusion',
-      component: (
         <RadarChartWithTitle
-          key="diversityInclusion"
           data={generateRadarData(
             ['Women', 'Youth', 'Rural', 'Black-owned'],
             [38, 24, 45, 72],
@@ -922,47 +558,6 @@ const PerformanceRiskDashboard = ({ openPopup }) => {
           title="Diversity & Inclusion Score"
           chartId="diversity-inclusion"
         />
-      )
-    });
-  }
-
-  return (
-    <div className="performance-risk">
-      {/* Chart Selection Controls */}
-      <div className="controls-row">
-        <div className="chart-selection-controls">
-          <div style={{ position: 'relative' }}>
-            <button 
-              className={`chart-selector-btn ${showChartSelector ? 'active' : ''}`}
-              onClick={() => setShowChartSelector(!showChartSelector)}
-              title="Select charts to display"
-            >
-              <FiGrid />
-              Select Charts ({Object.values(selectedCharts).filter(Boolean).length} selected)
-            </button>
-            {showChartSelector && <ChartSelectionPopup />}
-          </div>
-        </div>
-      </div>
-      
-      {/* Charts Grid */}
-      <div className="performance-charts-grid">
-        {selectedChartComponents.map(chart => chart.component)}
-        
-        {selectedChartComponents.length === 0 && (
-          <div style={{ 
-            gridColumn: '1 / -1',
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            height: '200px',
-            color: '#666',
-            fontSize: '16px',
-            textAlign: 'center'
-          }}>
-            No charts selected. Click "Select Charts" to choose which charts to display.
-          </div>
-        )}
       </div>
     </div>
   );

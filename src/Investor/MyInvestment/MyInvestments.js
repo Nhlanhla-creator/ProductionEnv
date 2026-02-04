@@ -29,6 +29,11 @@ import {
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
+// Subscription gating
+import { db, auth } from "../../firebaseConfig"
+import Upsell from "../../components/Upsell/Upsell"
+import useSubscriptionPlan from "../../hooks/useSubscriptionPlan"
+
 // Import all tab components
 import PortfolioOverview from './PortfolioOverview';
 import PortfolioComposition from './PortfolioComposition';
@@ -85,11 +90,11 @@ const styles = `
 }
 
 .categories-grid {
-  display: inline-flex;
+  display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 5px 0;
-  white-space: nowrap;
-}
+} 
 
 .category-btn {
   padding: 12px 20px;
@@ -439,6 +444,7 @@ const MyInvestments = () => {
   const [popupContent, setPopupContent] = useState(null);
   const [showPopup, setShowPopup] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const { currentPlan, subscriptionLoading } = useSubscriptionPlan(currentUser?.uid)
   const sectionRef = useRef(null);
 
   // Get current user from Firebase auth or your auth context
@@ -711,6 +717,34 @@ const MyInvestments = () => {
     backgroundColor: "#f8f9fa",
   });
 
+  // Subscription gating render guards
+  if (subscriptionLoading) {
+    return (
+      <div className="investments-container" style={getContainerStyles()}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
+          <div style={{ textAlign: "center", color: "#6d4c41" }}>
+            <h2>Checking subscription...</h2>
+          </div>
+        </div>
+      </div>
+    )
+  } 
+
+  if (currentPlan === "basic" || currentPlan === "engage") {
+    return (
+      <Upsell
+        title={"My Portfolio"}
+        subtitle={"Access portfolio analytics, AI insights, and exportable reports on our Engage & Partner plans."}
+        features={["Portfolio & Cohort analytics", "AI recommendations & alerts", "Exportable reports & PDFs", "Priority support and account setup"]}
+        variant={"center"}
+        mainMarginLeft={`${isSidebarCollapsed ? "100px" : "270px"}`}
+        plans={["Partner"]}
+        upgradeMessage={"Upgrade your subscription to unlock comprehensive portfolio analytics, AI-driven insights, and exportable reports to optimize your investment strategy."}
+        primaryLabel={"View Available Plans"}
+      />
+    )
+  }
+
   const allCategories = [
     'Portfolio Overview',
     'Portfolio Composition', 
@@ -723,18 +757,14 @@ const MyInvestments = () => {
     'Pipeline & Future Opportunities'
   ];
 
-  const topCategories = allCategories.slice(0, 5);
-  const bottomCategories = allCategories.slice(5);
-
   return (
     <div className="investments-container" style={getContainerStyles()}>
       <div className="investments-content">
         <h2 className="investments-title">My Portfolio</h2>
 
-        {/* Top Categories Row - 5 tabs */}
         <div className="categories-scroll-container">
           <div className="categories-grid">
-            {topCategories.map((category) => (
+            {allCategories.map((category) => (
               <button
                 key={category}
                 className={`category-btn ${activeCategory === category ? 'active' : ''}`}
@@ -745,23 +775,7 @@ const MyInvestments = () => {
               </button>
             ))}
           </div>
-        </div>
-
-        {/* Bottom Categories Row - 4 tabs */}
-        <div className="categories-scroll-container">
-          <div className="categories-grid">
-            {bottomCategories.map((category) => (
-              <button
-                key={category}
-                className={`category-btn ${activeCategory === category ? 'active' : ''}`}
-                onClick={() => setActiveCategory(category)}
-              >
-                <span className="btn-icon">{sectionData[category].icon}</span>
-                {category}
-              </button>
-            ))}
-          </div>
-        </div>
+        </div> 
 
         <div className="section-content" ref={sectionRef}>
           <div className="section-header">
