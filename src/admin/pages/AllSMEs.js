@@ -29,11 +29,20 @@ import {
   Check,
   File,
   Shield,
+  LockKeyhole,
 } from "lucide-react"
 import styles from "./all-smes.module.css"
+import { collection, query, where, getDocs, doc, getDoc, deleteDoc } from "firebase/firestore"
+import * as XLSX from 'xlsx';
+import databaseService from "../../services/databaseService"
 
 function AllSMEs() {
   const navigate = useNavigate()
+  
+  const [currentDatabase, setCurrentDatabase] = useState(
+    databaseService.getCurrentDatabase()
+  )
+  
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
@@ -60,246 +69,170 @@ function AllSMEs() {
   const [activeTab, setActiveTab] = useState("profile")
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(10)
+  const [smeData, setSMEData] = useState([])
 
-  // Mock SME data - replace with real API calls
-  const [smeData, setSMEData] = useState([
-    {
-      id: 1,
-      username: "techstart2024",
-      email: "john@techstart.com",
-      companyName: "TechStart Solutions",
-      created: "2024-01-15",
-      lastEdited: "2024-06-20",
-      status: "active",
-      profileImage: null,
-      profile: {
-        registeredName: "TechStart Solutions Pty Ltd",
-        industry: "Technology",
-        employees: "10-50",
-        revenue: "$500K - $1M",
-        location: "Cape Town, South Africa",
-        phone: "+27 21 123 4567",
-        website: "www.techstart.com",
-      },
-      applications: {
-        funding: { status: "approved", amount: "$250,000", date: "2024-05-15" },
-        advisory: { status: "pending", type: "Business Strategy", date: "2024-06-10" },
-        product: { status: "approved", category: "SaaS Platform", date: "2024-04-20" },
-      },
-      documents: {
-        nda: { signed: true, date: "2024-01-20" },
-        compliance: { status: "approved", documents: 8 },
-        uploads: 15,
-      },
-      payments: {
-        subscription: "Premium",
-        status: "paid",
-        amount: "$299/month",
-        nextBilling: "2024-07-15",
-      },
-    },
-    {
-      id: 2,
-      username: "greentech_sa",
-      email: "sarah@greentech.co.za",
-      companyName: "GreenTech Industries",
-      created: "2024-02-28",
-      lastEdited: "2024-06-18",
-      status: "active",
-      profileImage: null,
-      profile: {
-        registeredName: "GreenTech Industries Ltd",
-        industry: "Clean Energy",
-        employees: "50-100",
-        revenue: "$1M - $5M",
-        location: "Johannesburg, South Africa",
-        phone: "+27 11 987 6543",
-        website: "www.greentech.co.za",
-      },
-      applications: {
-        funding: { status: "approved", amount: "$500,000", date: "2024-04-10" },
-        advisory: { status: "approved", type: "Financial Planning", date: "2024-03-15" },
-        product: { status: "pending", category: "Solar Solutions", date: "2024-06-01" },
-      },
-      documents: {
-        nda: { signed: true, date: "2024-03-05" },
-        compliance: { status: "approved", documents: 12 },
-        uploads: 23,
-      },
-      payments: {
-        subscription: "Enterprise",
-        status: "paid",
-        amount: "$599/month",
-        nextBilling: "2024-07-28",
-      },
-    },
-    {
-      id: 3,
-      username: "innovate_corp",
-      email: "mike@innovate.com",
-      companyName: "InnovateCorp",
-      created: "2024-03-10",
-      lastEdited: "2024-06-15",
-      status: "pending",
-      profileImage: null,
-      profile: {
-        registeredName: "InnovateCorp Pty Ltd",
-        industry: "Manufacturing",
-        employees: "20-50",
-        revenue: "$500K - $1M",
-        location: "Durban, South Africa",
-        phone: "+27 31 456 7890",
-        website: "www.innovatecorp.com",
-      },
-      applications: {
-        funding: { status: "pending", amount: "$150,000", date: "2024-06-01" },
-        advisory: { status: "not_applied", type: null, date: null },
-        product: { status: "rejected", category: "Manufacturing Tools", date: "2024-05-20" },
-      },
-      documents: {
-        nda: { signed: false, date: null },
-        compliance: { status: "pending", documents: 3 },
-        uploads: 7,
-      },
-      payments: {
-        subscription: "Basic",
-        status: "overdue",
-        amount: "$99/month",
-        nextBilling: "2024-06-10",
-      },
-    },
-  ])
+  // ADD this function to get the current database instance
+  const getCurrentDb = () => {
+    return databaseService.getFirestore();
+  }
 
+  // ADD this effect to listen for database changes
   useEffect(() => {
-    // Simulate loading
+    const handleDatabaseChange = () => {
+      const newDatabase = databaseService.getCurrentDatabase();
+      setCurrentDatabase(newDatabase);
+      // Refresh data when database changes
+      fetchSMEs();
+    };
+
+    // Listen for storage changes
+    window.addEventListener('storage', handleDatabaseChange);
+    
+    // Listen for custom event
+    window.addEventListener('databaseChanged', handleDatabaseChange);
+
+    return () => {
+      window.removeEventListener('storage', handleDatabaseChange);
+      window.removeEventListener('databaseChanged', handleDatabaseChange);
+    };
+  }, []);
+
+const fetchSMEs = async () => {
+  try {
+    setLoading(true);
+    
+    const db = getCurrentDb();
+    const usersRef = collection(db, 'universalProfiles');
+    const usersSnapshot = await getDocs(usersRef);
+    
+    const usersData = usersSnapshot.docs.map((doc, index) => {
+      const userData = doc.data();
+      const entityOverview = userData.entityOverview || {};
+      const contactDetails = userData.contactDetails || {};
+      
+      // Get verification data exactly as stored
+      const verificationData = userData.verification || {};
+      
+      const formatFirestoreDate = (timestamp) => {
+        if (timestamp && timestamp.toDate) {
+          return timestamp.toDate().toISOString().split('T')[0];
+        }
+        return timestamp || "2024-01-01";
+      };
+      
+      const createdAt = formatFirestoreDate(userData.createdAt);
+      
+      return {
+        id: index + 1,
+        firestoreId: doc.id,
+        username: userData.username || "N/A",
+        email: contactDetails.email || userData.email || 'N/A',
+        companyName: entityOverview.registeredName || entityOverview.companyName || "N/A",
+        created: createdAt,
+        lastEdited: formatFirestoreDate(userData.updatedAt) || createdAt,
+        status: userData.status || "active",
+        authStatus: userData.authStatus || "enabled",
+        profileImage: null,
+        profile: {
+          registeredName: entityOverview.registeredName || "N/A",
+          industry: entityOverview.economicSectors || entityOverview.sector || "N/A",
+          employees: entityOverview.employeeCount || entityOverview.numberOfEmployees || "N/A",
+          revenue: userData?.financialOverview?.annualRevenue || "N/A",
+          location: entityOverview.region || contactDetails.city || "South Africa",
+          phone: contactDetails.mobile || "+27 XXX XXX XXX",
+          website: contactDetails.website || "N/A",
+          entitySize: entityOverview.entitySize || "N/A"
+
+        },
+        // Store verification data as-is
+        verification: verificationData,
+        // ... rest of your data
+      };
+    });
+    
+    setSMEData(usersData);
+  } catch (error) {
+    console.error("Error fetching SME data:", error);
+    setSMEData([]);
+  } finally {
+    setLoading(false);
+  }
+};
+  // UPDATE your useEffect
+  useEffect(() => {
+    fetchSMEs();
+  }, []); // Keep empty dependencies
+
+  // Your existing loading simulation
+  useEffect(() => {
     const timer = setTimeout(() => {
       setLoading(false)
     }, 1000)
 
     return () => clearTimeout(timer)
   }, [])
+  
+  // ADD this toggle function
+  const toggleDatabase = () => {
+    // Get the new database
+    const newDatabase = databaseService.toggleDatabase();
+    
+    // Update local state
+    setCurrentDatabase(newDatabase);
+    
+    // Dispatch event for other components
+    window.dispatchEvent(new CustomEvent('databaseChanged', {
+      detail: { database: newDatabase }
+    }));
+    
+    // Refresh data
+    fetchSMEs();
+    
+    // Show alert for production mode
+    if (newDatabase === 'production') {
+      alert('⚠️ WARNING: Switched to PRODUCTION database. All data is LIVE.');
+    }
+  };
 
   // Helper functions for documents
-  const getSMEDocuments = (smeId) => {
-    // Mock compliance documents data
-    return [
-      {
-        id: 1,
-        fileName: "NDA_Agreement.pdf",
-        type: "nda",
-        status: "signed",
-        uploadDate: "2024-01-20",
-        reviewDate: "2024-01-22",
-        expiryDate: "2026-01-20",
-        fileSize: "245 KB",
-        reviewer: "Legal Team",
-      },
-      {
-        id: 2,
-        fileName: "Company_Registration_Certificate.pdf",
-        type: "compliance_business_registration",
-        subType: "Company registration certificate",
-        weight: "15%",
-        status: "approved",
-        uploadDate: "2024-02-15",
-        reviewDate: "2024-02-18",
-        expiryDate: null,
-        fileSize: "890 KB",
-        reviewer: "Compliance Team",
-      },
-      {
-        id: 3,
-        fileName: "Tax_Clearance_Certificate.pdf",
-        type: "compliance_tax",
-        subType: "Tax clearance certificate",
-        weight: "22%",
-        status: "approved",
-        uploadDate: "2024-02-16",
-        reviewDate: "2024-02-19",
-        expiryDate: "2025-02-16",
-        fileSize: "567 KB",
-        reviewer: "Compliance Team",
-      },
-      {
-        id: 4,
-        fileName: "Business_Address_Proof.pdf",
-        type: "compliance_address",
-        subType: "Utility bill or lease agreement",
-        weight: "6%",
-        status: "approved",
-        uploadDate: "2024-02-17",
-        reviewDate: "2024-02-20",
-        expiryDate: null,
-        fileSize: "234 KB",
-        reviewer: "Compliance Team",
-      },
-      {
-        id: 5,
-        fileName: "Directors_ID_Documents.zip",
-        type: "compliance_directors_id",
-        subType: "ID documents uploaded",
-        weight: "11%",
-        status: "approved",
-        uploadDate: "2024-02-18",
-        reviewDate: "2024-02-21",
-        expiryDate: null,
-        fileSize: "1.2 MB",
-        reviewer: "Compliance Team",
-      },
-      {
-        id: 6,
-        fileName: "Share_Register.pdf",
-        type: "compliance_ownership",
-        subType: "Share register uploaded",
-        weight: "11%",
-        status: "approved",
-        uploadDate: "2024-02-19",
-        reviewDate: "2024-02-22",
-        expiryDate: null,
-        fileSize: "445 KB",
-        reviewer: "Compliance Team",
-      },
-      {
-        id: 7,
-        fileName: "BBBEE_Certificate.pdf",
-        type: "compliance_bbbee",
-        subType: "B-BBEE certificate uploaded",
-        weight: "16%",
-        status: "approved",
-        uploadDate: "2024-02-20",
-        reviewDate: "2024-02-23",
-        expiryDate: "2025-02-20",
-        fileSize: "678 KB",
-        reviewer: "Compliance Team",
-      },
-      {
-        id: 8,
-        fileName: "Company_Profile.pdf",
-        type: "compliance_profile",
-        subType: "Company brochure or profile uploaded",
-        weight: "6%",
-        status: "approved",
-        uploadDate: "2024-02-21",
-        reviewDate: "2024-02-24",
-        expiryDate: null,
-        fileSize: "2.1 MB",
-        reviewer: "Compliance Team",
-      },
-      {
-        id: 9,
-        fileName: "COID_Registration.pdf",
-        type: "compliance_coid",
-        subType: "COID registration certificate",
-        weight: "13%",
-        status: "pending",
-        uploadDate: "2024-06-22",
-        reviewDate: null,
-        expiryDate: null,
-        fileSize: "389 KB",
-        reviewer: null,
-      },
-    ]
+const getSMEDocuments = (smeId) => {
+  const sme = smeData.find(s => s.id === smeId);
+  if (!sme || !sme.verification) {
+    return []; // Return empty array if no verification data
   }
+  
+  // Convert verification map to array
+  const documentsList = [];
+  
+  Object.entries(sme.verification).forEach(([docType, docData]) => {
+    if (docData && typeof docData === 'object') {
+      // Format dates if they exist
+      const formatDateIfExists = (timestamp) => {
+        if (!timestamp) return null;
+        if (timestamp.toDate) {
+          return timestamp.toDate();
+        }
+        try {
+          return new Date(timestamp);
+        } catch {
+          return null;
+        }
+      };
+      
+      documentsList.push({
+        id: `${smeId}_${docType}`,
+        fileName: docType.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()),
+        type: docType,
+        status: docData.status || 'pending',
+        message: docData.message || '',
+        lastChecked: formatDateIfExists(docData.lastChecked),
+        validatedAt: formatDateIfExists(docData.validatedAt),
+      });
+    }
+  });
+  
+  return documentsList;
+};
 
   const isExpiringSoon = (expiryDate) => {
     if (!expiryDate) return false
@@ -360,30 +293,21 @@ function AllSMEs() {
   }
 
   const handleDocumentAction = (action, document) => {
-    switch (action) {
-      case "approve":
-        alert(`Approving ${document.fileName}...`)
-        break
-      case "reject":
-        if (window.confirm(`Are you sure you want to reject ${document.fileName}?`)) {
-          alert(`Rejecting ${document.fileName}...`)
-        }
-        break
-      case "download":
-        alert(`Downloading ${document.fileName}...`)
-        break
-      case "view":
-        alert(`Opening ${document.fileName} for preview...`)
-        break
-      case "delete":
-        if (window.confirm(`Are you sure you want to delete ${document.fileName}?`)) {
-          alert(`Deleting ${document.fileName}...`)
-        }
-        break
-      default:
-        break
-    }
+  if (action === "view") {
+    // Simple view showing all document info
+    const details = `
+📄 ${document.fileName}
+
+Status: ${document.status}
+${document.message ? `Message: ${document.message}\n` : ''}
+${document.lastChecked ? `Last Checked: ${formatDate(document.lastChecked)}\n` : ''}
+${document.validatedAt ? `Validated At: ${formatDate(document.validatedAt)}\n` : ''}
+    `.trim();
+    
+    alert(details);
   }
+  // Remove other actions for now
+};
 
   const filteredSMEs = smeData.filter((sme) => {
     const matchesSearch = 
@@ -401,40 +325,96 @@ function AllSMEs() {
   const endIndex = startIndex + itemsPerPage
   const currentSMEs = filteredSMEs.slice(startIndex, endIndex)
 
-  const handleAction = (action, sme) => {
-    switch (action) {
-      case "view":
-        setSelectedSME(sme)
-        setShowViewModal(true)
-        setActiveTab("profile")
-        break
-      case "edit":
-        setSelectedSME(sme)
-        setEditFormData({
-          username: sme.username,
-          email: sme.email,
-          companyName: sme.companyName,
-          status: sme.status,
-          profile: { ...sme.profile }
-        })
-        setShowEditModal(true)
-        break
-      case "delete":
-        if (window.confirm(`Are you sure you want to delete ${sme.companyName}?`)) {
-          setSMEData(smeData.filter(s => s.id !== sme.id))
-        }
-        break
-      case "block":
-        if (window.confirm(`Are you sure you want to block ${sme.companyName}?`)) {
-          setSMEData(smeData.map(s => 
-            s.id === sme.id ? { ...s, status: "blocked" } : s
-          ))
-        }
-        break
-      default:
-        break
-    }
+  const deleteSME = async (smeId, smeData) => {
+  try {
+    const db = getCurrentDb();
+    
+     if (currentDatabase === 'production') {
+    const confirmProduction = window.confirm(
+      `⚠️ WARNING: You are about to delete from PRODUCTION database.\n\n` +
+      `This will permanently delete ${smeData.companyName} from the live database.\n\n` +
+      `Are you absolutely sure?`
+    );
+    if (!confirmProduction) return;
   }
+    // Show confirmation dialog
+    if (!window.confirm(`Are you sure you want to delete ${smeData.companyName}? This action cannot be undone.`)) {
+      return;
+    }
+    
+    // Get the Firestore document ID from your smeData
+    const firestoreId = smeData.firestoreId;
+    
+    if (!firestoreId) {
+      console.error("No Firestore ID found for this SME");
+      alert("Error: Unable to delete. No valid document ID found.");
+      return;
+    }
+    
+    // Reference to the specific document
+    const smeRef = doc(db, 'universalProfiles', firestoreId);
+    
+    // Delete the document
+    await deleteDoc(smeRef);
+    
+    // Also delete any related documents in subcollections if needed
+    // Example: delete subcollection documents
+    // const subcollections = ['applications', 'documents', 'payments'];
+    // for (const subcollection of subcollections) {
+    //   const subRef = collection(db, 'universalProfiles', firestoreId, subcollection);
+    //   const subSnapshot = await getDocs(subRef);
+    //   const deletePromises = subSnapshot.docs.map(doc => deleteDoc(doc.ref));
+    //   await Promise.all(deletePromises);
+    // }
+    
+    // Update local state
+    setSMEData(prevData => prevData.filter(s => s.firestoreId !== firestoreId));
+    
+    // Show success message
+    alert(`Successfully deleted ${smeData.companyName}`);
+    
+  } catch (error) {
+    console.error("Error deleting SME:", error);
+    alert(`Error deleting SME: ${error.message}`);
+  }
+};
+
+  const handleAction = async (action, sme) => {
+  switch (action) {
+    case "view":
+      setSelectedSME(sme)
+      setShowViewModal(true)
+      setActiveTab("profile")
+      break
+    case "edit":
+      setSelectedSME(sme)
+      setEditFormData({
+        username: sme.username,
+        email: sme.email,
+        companyName: sme.companyName,
+        status: sme.status,
+        profile: { ...sme.profile }
+      })
+      setShowEditModal(true)
+      break
+    case "delete":
+      await deleteSME(sme.id, sme); // Use the new delete function
+      break
+    case "block":
+      if (window.confirm(`Are you sure you want to block ${sme.companyName}?`)) {
+        // You might want to update this in Firestore too
+        // await updateSMEStatus(sme.firestoreId, "blocked");
+        
+        // Update local state for now
+        setSMEData(smeData.map(s => 
+          s.id === sme.id ? { ...s, status: "blocked" } : s
+        ))
+      }
+      break
+    default:
+      break
+  }
+}
 
   const handleEditSave = () => {
     setSMEData(smeData.map(sme => 
@@ -495,6 +475,77 @@ function AllSMEs() {
     })
   }
 
+  const exportToExcel = () => {
+  try {
+    const dataToExport = filteredSMEs;
+    
+    if (dataToExport.length === 0) {
+      alert("No data to export!");
+      return;
+    }
+    
+    const excelData = dataToExport.map(sme => ({
+      Email: sme.email,
+      "Company Name": sme.companyName,
+      Created: sme.created,
+      Status: sme.status,
+      Industry: sme.profile.industry || "",
+    }));
+    
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    
+    // Calculate dynamic column widths based on content
+    const calculateColumnWidths = (data) => {
+      const widths = [];
+      const keys = Object.keys(data[0] || {});
+      
+      keys.forEach((key, colIndex) => {
+        // Start with header width
+        let maxLength = key.length;
+        
+        // Check all rows for this column
+        data.forEach(row => {
+          const cellValue = String(row[key] || '');
+          if (cellValue.length > maxLength) {
+            maxLength = cellValue.length;
+          }
+        });
+        
+        // Add some padding and set a reasonable max
+        const width = Math.min(Math.max(maxLength + 2, 10), 50);
+        widths.push({ wch: width });
+      });
+      
+      return widths;
+    };
+    
+    worksheet['!cols'] = calculateColumnWidths(excelData);
+    
+    // Optional: Format headers with bold text
+    const range = XLSX.utils.decode_range(worksheet['!ref']);
+    for (let C = range.s.c; C <= range.e.c; ++C) {
+      const headerCell = XLSX.utils.encode_cell({ r: 0, c: C });
+      if (!worksheet[headerCell]) continue;
+      worksheet[headerCell].s = {
+        font: { bold: true },
+        fill: { fgColor: { rgb: "E0E0E0" } } // Light gray background
+      };
+    }
+    
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "SMEs");
+    
+    const fileName = `SMEs_${new Date().toISOString().split('T')[0]}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+    
+    alert(`Exported ${dataToExport.length} records!`);
+    
+  } catch (error) {
+    console.error("Export error:", error);
+    alert("Export failed: " + error.message);
+  }
+};
+
   const getStatusBadge = (status) => {
     const statusStyles = {
       active: styles.statusActive,
@@ -504,6 +555,8 @@ function AllSMEs() {
     }
     
     return (
+
+      
       <span className={`${styles.statusBadge} ${statusStyles[status] || ""}`}>
         {status.charAt(0).toUpperCase() + status.slice(1)}
       </span>
@@ -518,6 +571,7 @@ function AllSMEs() {
       day: "numeric",
     })
   }
+
 
   const TabContent = ({ tab, sme }) => {
     switch (tab) {
@@ -659,84 +713,59 @@ function AllSMEs() {
                       <th>Actions</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {smeDocuments.map((document) => (
-                      <tr key={document.id} className={
-                        isExpired(document.expiryDate) ? styles.expiredRow :
-                        isExpiringSoon(document.expiryDate) ? styles.expiringRow : ""
-                      }>
-                        <td>
-                          <div className={styles.documentCell}>
-                            <File size={16} className={styles.fileIcon} />
-                            <div className={styles.documentInfo}>
-                              <span className={styles.fileName}>{document.fileName}</span>
-                              <span className={styles.fileSize}>{document.fileSize}</span>
-                              {document.subType && (
-                                <span className={styles.subType}>{document.subType}</span>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                        <td>{getDocumentTypeBadge(document.type, document.subType, document.weight)}</td>
-                        <td>{getDocumentStatusBadge(document.status)}</td>
-                        <td>{formatDate(document.uploadDate)}</td>
-                        <td>{formatDate(document.reviewDate)}</td>
-                        <td>
-                          {document.expiryDate && (
-                            <span className={
-                              isExpired(document.expiryDate) ? styles.expiredDate :
-                              isExpiringSoon(document.expiryDate) ? styles.expiringDate : ""
-                            }>
-                              {formatDate(document.expiryDate)}
-                            </span>
-                          )}
-                        </td>
-                        <td>
-                          <div className={styles.actions}>
-                            <button
-                              className={styles.actionBtn}
-                              onClick={() => handleDocumentAction("view", document)}
-                              title="View Document"
-                            >
-                              <Eye size={16} />
-                            </button>
-                            <button
-                              className={styles.actionBtn}
-                              onClick={() => handleDocumentAction("download", document)}
-                              title="Download"
-                            >
-                              <Download size={16} />
-                            </button>
-                            {document.status === "pending" && (
-                              <>
-                                <button
-                                  className={styles.actionBtn}
-                                  onClick={() => handleDocumentAction("approve", document)}
-                                  title="Approve"
-                                >
-                                  <CheckCircle size={16} />
-                                </button>
-                                <button
-                                  className={styles.actionBtn}
-                                  onClick={() => handleDocumentAction("reject", document)}
-                                  title="Reject"
-                                >
-                                  <X size={16} />
-                                </button>
-                              </>
-                            )}
-                            <button
-                              className={styles.actionBtn}
-                              onClick={() => handleDocumentAction("delete", document)}
-                              title="Delete"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
+                 <tbody>
+  {getSMEDocuments(selectedSME.id).map((document) => (
+    <tr key={document.id}>
+      <td>
+        <div className={styles.documentCell}>
+          <File size={16} className={styles.fileIcon} />
+          <div className={styles.documentInfo}>
+            <span className={styles.fileName}>{document.fileName}</span>
+            {document.message && (
+              <span className={styles.documentMessage}>
+              View Document
+              </span>
+            )}
+          </div>
+        </div>
+      </td>
+      <td>
+        {/* Show document type */}
+        <span className={`${styles.statusBadge} ${styles.statusPending}`}>
+          {document.type}
+        </span>
+      </td>
+      <td>
+        {/* Show status from Firestore */}
+        <span className={`${styles.statusBadge} ${
+          document.status === 'verified' ? styles.statusActive :
+          document.status === 'pending' ? styles.statusPending :
+          document.status === 'rejected' ? styles.statusBlocked :
+          styles.statusPending
+        }`}>
+          {document.status}
+        </span>
+      </td>
+      <td>
+        {document.lastChecked ? formatDate(document.lastChecked) : "Not checked"}
+      </td>
+      <td>
+        {document.validatedAt ? formatDate(document.validatedAt) : "Not validated"}
+      </td>
+      <td>
+        <div className={styles.actions}>
+          <button
+            className={styles.actionBtn}
+            onClick={() => handleDocumentAction("view", document)}
+            title="View Document Details"
+          >
+            <Eye size={16} />
+          </button>
+        </div>
+      </td>
+    </tr>
+  ))}
+</tbody>
                 </table>
               </div>
             </div>
@@ -783,10 +812,10 @@ function AllSMEs() {
           <p className={styles.subtitle}>Manage and monitor all SME accounts</p>
         </div>
         <div className={styles.headerActions}>
-          <button className={styles.actionButton} onClick={() => alert("Export functionality coming soon!")}>
-            <Download size={16} />
-            Export
-          </button>
+          <button className={styles.actionButton} onClick={exportToExcel}>
+          <Download size={16} />
+          Export to Excel
+        </button>
           <button className={styles.primaryButton} onClick={() => setShowAddModal(true)}>
             <Plus size={16} />
             Add SME
@@ -822,12 +851,29 @@ function AllSMEs() {
       </div>
 
       <div className={styles.tableContainer}>
+
+        <div style={{
+            position: 'fixed',
+            top: '20px',
+            right: '80px',
+            backgroundColor: currentDatabase === 'testing' ? '#4CAF50' : '#f44336',
+            color: 'white',
+            padding: '8px 12px',
+            borderRadius: '4px',
+            fontSize: '12px',
+            fontWeight: 'bold',
+            zIndex: 1000,
+            cursor: 'pointer'
+          }} onClick={toggleDatabase}>
+            {currentDatabase === 'testing' ? '🟢 TESTING' : '🔴 PRODUCTION'}
+          </div>
+
         <table className={styles.table}>
           <thead>
             <tr>
               <th>Username</th>
-              <th>Email</th>
               <th>Company Name</th>
+             <th>Entity Size</th>
               <th>Created</th>
               <th>Last Edited</th>
               <th>Status</th>
@@ -846,11 +892,11 @@ function AllSMEs() {
                         <span>{sme.username.charAt(0).toUpperCase()}</span>
                       )}
                     </div>
-                    <span>{sme.username}</span>
+                    <span>{sme.email}</span>
                   </div>
                 </td>
-                <td>{sme.email}</td>
                 <td className={styles.companyName}>{sme.companyName}</td>
+                <td className={styles.companyName}>{sme.profile.entitySize}</td>
                 <td>{formatDate(sme.created)}</td>
                 <td>{formatDate(sme.lastEdited)}</td>
                 <td>{getStatusBadge(sme.status)}</td>
@@ -875,7 +921,7 @@ function AllSMEs() {
                       onClick={() => handleAction("block", sme)}
                       title="Block"
                     >
-                      <Ban size={16} />
+                      <LockKeyhole size={16} />
                     </button>
                     <button
                       className={styles.actionBtn}

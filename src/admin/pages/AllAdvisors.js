@@ -35,9 +35,17 @@ import {
   Shield,
 } from "lucide-react"
 import styles from "./all-advisors.module.css"
+import { collection, query, where, getDocs, doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore"
+import { auth } from "../../firebaseConfig"
+import * as XLSX from 'xlsx';
+import databaseService from "../../services/databaseService"
 
 function AllAdvisors() {
   const navigate = useNavigate()
+
+  
+  const [currentDatabase, setCurrentDatabase] = useState(
+          databaseService.getCurrentDatabase())
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
@@ -49,7 +57,7 @@ function AllAdvisors() {
   const [addFormData, setAddFormData] = useState({
     username: "",
     email: "",
-    companyName: "",
+    Employer: "",
     status: "pending",
     profile: {
       fullName: "",
@@ -68,100 +76,147 @@ function AllAdvisors() {
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(10)
 
-  // Mock Advisor data - replace with real API calls
-  const [advisorData, setAdvisorData] = useState([
-    {
-      id: 1,
-      username: "johnstrategy",
-      email: "john.smith@strategyconsult.com",
-      companyName: "John Smith Consulting",
-      created: "2024-01-25",
-      lastEdited: "2024-06-21",
-      status: "active",
-      profileImage: null,
-      profile: {
-        fullName: "John Smith",
-        jobTitle: "Senior Business Strategy Advisor",
-        company: "Strategy Consulting Group",
-        expertiseAreas: "Business Strategy, Operations, Market Entry",
-        industries: "Technology, Healthcare, Financial Services",
-        experienceLevel: "15+ years",
-        advisoryServices: "Strategic Planning, Business Development, Operational Excellence",
-        location: "Cape Town, South Africa",
-        phone: "+27 21 555 7890",
-        website: "www.johnstrategy.com",
-      },
-      documents: {
-        nda: { signed: true, date: "2024-02-01" },
-        compliance: { status: "approved", documents: 8 },
-        uploads: 12,
-      },
-    },
-    {
-      id: 2,
-      username: "sarahfinance",
-      email: "sarah@financialadvisory.co.za",
-      companyName: "Financial Advisory Partners",
-      created: "2024-03-12",
-      lastEdited: "2024-06-19",
-      status: "active",
-      profileImage: null,
-      profile: {
-        fullName: "Sarah Johnson",
-        jobTitle: "Chief Financial Advisor",
-        company: "Financial Advisory Partners",
-        expertiseAreas: "Financial Planning, Investment Strategy, Risk Management",
-        industries: "Fintech, Manufacturing, Retail",
-        experienceLevel: "12+ years",
-        advisoryServices: "CFO Services, Financial Modeling, Investment Advisory",
-        location: "Johannesburg, South Africa",
-        phone: "+27 11 444 5678",
-        website: "www.financialadvisory.co.za",
-      },
-      documents: {
-        nda: { signed: true, date: "2024-03-18" },
-        compliance: { status: "approved", documents: 10 },
-        uploads: 15,
-      },
-    },
-    {
-      id: 3,
-      username: "miketech",
-      email: "mike@techadvisor.com",
-      companyName: "Tech Innovation Advisory",
-      created: "2024-05-08",
-      lastEdited: "2024-06-16",
-      status: "pending",
-      profileImage: null,
-      profile: {
-        fullName: "Mike Chen",
-        jobTitle: "Technology & Innovation Advisor",
-        company: "Tech Innovation Advisory",
-        expertiseAreas: "Digital Transformation, AI/ML, Product Development",
-        industries: "Technology, Startups, E-commerce",
-        experienceLevel: "10+ years",
-        advisoryServices: "CTO Advisory, Technical Due Diligence, Innovation Strategy",
-        location: "Durban, South Africa",
-        phone: "+27 31 777 9012",
-        website: "www.techadvisor.com",
-      },
-      documents: {
-        nda: { signed: false, date: null },
-        compliance: { status: "pending", documents: 4 },
-        uploads: 6,
-      },
-    },
-  ])
 
-  useEffect(() => {
-    // Simulate loading
-    const timer = setTimeout(() => {
-      setLoading(false)
-    }, 1000)
+// Remove the mock data and replace with:
+const [advisorData, setAdvisorData] = useState([]);
 
-    return () => clearTimeout(timer)
-  }, [])
 
+ // ADD this function to get the current database instance
+      const getCurrentDb = () => {
+        return databaseService.getFirestore();
+      }
+    
+      // ADD this effect to listen for database changes
+      useEffect(() => {
+        const handleDatabaseChange = () => {
+          const newDatabase = databaseService.getCurrentDatabase();
+          setCurrentDatabase(newDatabase);
+          // Refresh data when database changes
+          fetchAdvisors();
+        };
+    
+        // Listen for storage changes
+        window.addEventListener('storage', handleDatabaseChange);
+        
+        // Listen for custom event
+        window.addEventListener('databaseChanged', handleDatabaseChange);
+    
+        return () => {
+          window.removeEventListener('storage', handleDatabaseChange);
+          window.removeEventListener('databaseChanged', handleDatabaseChange);
+        };
+      }, []);
+
+  const fetchAdvisors = async () => {
+    try {
+      setLoading(true);
+      
+       const db = getCurrentDb();
+      // Fetch from Firestore collection 'advisorProfiles'
+      const advisorsRef = collection(db, 'advisorProfiles');
+      const querySnapshot = await getDocs(advisorsRef);
+      
+      // Map Firestore data to your expected format
+      const fetchedAdvisors = querySnapshot.docs.map((doc, index) => {
+        const data = doc.data();
+        const formData = data.formData || {};
+        const contactDetails = formData.contactDetails || {};
+        
+        // Format the date from Firestore
+        const formatFirestoreDate = (timestamp) => {
+          if (timestamp && timestamp.toDate) {
+            return timestamp.toDate().toISOString().split('T')[0];
+          }
+          return timestamp || "2024-01-01";
+        };
+        
+        const createdAt = formatFirestoreDate(data.createdAt);
+        const personalProfessionalOverview = formData?.personalProfessionalOverview
+        
+        return {
+          id: index + 1,
+          firestoreId: doc.id, // Store for editing
+          username: formData.username || 
+                    contactDetails.email?.split('@')[0] || 
+                    `advisor_${index + 1}`,
+          email: contactDetails.email || '',
+          Employer: formData?.personalProfessionalOverview?.currentEmployer || "Not Provided",
+          created: createdAt,
+          lastEdited: formatFirestoreDate(data.updatedAt) || createdAt,
+          status: data.status || "active",
+          profileImage: null,
+
+          profile: {
+            fullName: (formData?.contactDetails?.name || "") + " " + (formData?.contactDetails?.surname || ""),
+            jobTitle: contactDetails.position || "Not Provided",
+            company: personalProfessionalOverview?.currentEmployer || "Not Provided",
+            expertiseAreas: formData.expertiseAreas || "Not Provided",
+            industries: personalProfessionalOverview?.industryExperience?.join(", ") || "",
+            experienceLevel: personalProfessionalOverview?.mentorshipExperience || "Not Provided",
+            advisoryServices: formData?.selectionCriteria?.advisorySupportType|| "Not Provided",
+            location: (formData?.contactDetails?.country || "") + ", " + (formData?.contactDetails?.city || "") || "South Africa",
+            phone: contactDetails.mobile || "+27 XXX XXX XXX",
+            linkedIn: contactDetails.linkedinProfile || "Not Provided",
+          },
+          documents: {
+            nda: { signed: data.ndaSigned || false, date: formatFirestoreDate(data.ndaDate) },
+            compliance: { 
+              status: data.complianceStatus || "pending", 
+              documents: data.complianceDocuments || 0 
+            },
+            uploads: data.totalUploads || 0,
+          },
+        };
+      });
+      
+      setAdvisorData(fetchedAdvisors);
+    } catch (error) {
+      console.error("Error fetching advisor data:", error);
+      setAdvisorData([]); // Set empty array on error
+    } finally {
+      setLoading(false);
+    }
+  };
+    // UPDATE your useEffect
+    useEffect(() => {
+      fetchAdvisors();
+    }, []); // Keep empty dependencies
+  
+// Update the loading simulation to work with real data fetch
+useEffect(() => {
+  if (!loading) return;
+  
+  const timer = setTimeout(() => {
+    // This acts as a fallback in case Firestore fetch takes too long
+    if (advisorData.length === 0) {
+      // Optionally keep showing loading or set empty data
+      setLoading(false);
+    }
+  }, 3000);
+
+  return () => clearTimeout(timer);
+}, [loading, advisorData.length]);
+
+const toggleDatabase = () => {
+    // Get the new database
+    const newDatabase = databaseService.toggleDatabase();
+    
+    // Update local state
+    setCurrentDatabase(newDatabase);
+    
+    // Dispatch event for other components
+    window.dispatchEvent(new CustomEvent('databaseChanged', {
+      detail: { database: newDatabase }
+    }));
+    
+    // Refresh data
+    fetchAdvisors();
+    
+    // Show alert for production mode
+    if (newDatabase === 'production') {
+      alert('⚠️ WARNING: Switched to PRODUCTION database. All data is LIVE.');
+    }
+  };
   // Helper functions for documents
   const getAdvisorDocuments = (advisorId) => {
     // Mock advisor documents data
@@ -359,7 +414,7 @@ function AllAdvisors() {
     const matchesSearch = 
       advisor.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
       advisor.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      advisor.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      advisor.Employer.toLowerCase().includes(searchTerm.toLowerCase()) ||
       advisor.profile.fullName.toLowerCase().includes(searchTerm.toLowerCase())
     
     const matchesStatus = statusFilter === "all" || advisor.status === statusFilter
@@ -384,19 +439,19 @@ function AllAdvisors() {
         setEditFormData({
           username: advisor.username,
           email: advisor.email,
-          companyName: advisor.companyName,
+          Employer: advisor.Employer,
           status: advisor.status,
           profile: { ...advisor.profile }
         })
         setShowEditModal(true)
         break
       case "delete":
-        if (window.confirm(`Are you sure you want to delete ${advisor.companyName}?`)) {
+        if (window.confirm(`Are you sure you want to delete ${advisor.Employer}?`)) {
           setAdvisorData(advisorData.filter(a => a.id !== advisor.id))
         }
         break
       case "block":
-        if (window.confirm(`Are you sure you want to block ${advisor.companyName}?`)) {
+        if (window.confirm(`Are you sure you want to block ${advisor.Employer}?`)) {
           setAdvisorData(advisorData.map(a => 
             a.id === advisor.id ? { ...a, status: "blocked" } : a
           ))
@@ -441,7 +496,7 @@ function AllAdvisors() {
     setAddFormData({
       username: "",
       email: "",
-      companyName: "",
+      Employer: "",
       status: "pending",
       profile: {
         fullName: "",
@@ -457,6 +512,45 @@ function AllAdvisors() {
       }
     })
   }
+
+   const exportToExcel = () => {
+    try {
+      // Use whatever data is currently filtered/shown
+      const dataToExport = filteredAdvisors;
+      
+      if (dataToExport.length === 0) {
+        alert("No data to export!");
+        return;
+      }
+      
+      // Simple format - just basic data
+      const excelData = dataToExport.map(advisor => ({
+        Username: advisor.username,
+        Email: advisor.email,
+        "Company Name": advisor.Employer,
+        Created: advisor.created,
+        Status: advisor.status,
+        Industry: advisor.profile.industry,
+        Employees: advisor.profile.employees,
+        Revenue: advisor.profile.revenue,
+      }));
+      
+      // Create worksheet
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Advisors");
+      
+      // Download
+      const fileName = `SMEs_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+      
+      alert(`Exported ${dataToExport.length} records!`);
+      
+    } catch (error) {
+      console.error("Export error:", error);
+      alert("Export failed: " + error.message);
+    }
+  };
 
   const getStatusBadge = (status) => {
     const statusStyles = {
@@ -483,6 +577,7 @@ function AllAdvisors() {
   }
 
   const TabContent = ({ tab, advisor }) => {
+      console.log("Advisor data in TabContent:", advisor); // Debug log
     switch (tab) {
       case "profile":
         return (
@@ -535,10 +630,17 @@ function AllAdvisors() {
                   <span>Phone:</span>
                   <span>{advisor.profile.phone}</span>
                 </div>
-                <div className={styles.profileItem}>
+               <div className={styles.profileItem}>
                   <Mail size={16} />
-                  <span>Website:</span>
-                  <span>{advisor.profile.website}</span>
+                  <span>LinkedIn:</span>
+                  <a 
+                    href={advisor.profile.linkedIn} 
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline"
+                  >
+                    {advisor.profile.linkedIn}
+                  </a>
                 </div>
               </div>
             </div>
@@ -681,11 +783,11 @@ function AllAdvisors() {
           <h1 className={styles.title}>All Advisors</h1>
           <p className={styles.subtitle}>Manage and monitor all business advisors</p>
         </div>
-        <div className={styles.headerActions}>
-          <button className={styles.actionButton} onClick={() => alert("Export functionality coming soon!")}>
-            <Download size={16} />
-            Export
-          </button>
+         <div className={styles.headerActions}>
+                 <button className={styles.actionButton} onClick={exportToExcel}>
+                 <Download size={16} />
+                 Export to Excel
+               </button>
           <button className={styles.primaryButton} onClick={() => setShowAddModal(true)}>
             <Plus size={16} />
             Add Advisor
@@ -721,6 +823,21 @@ function AllAdvisors() {
       </div>
 
       <div className={styles.tableContainer}>
+         <div style={{
+                    position: 'fixed',
+                    top: '20px',
+                    right: '80px',
+                    backgroundColor: currentDatabase === 'testing' ? '#4CAF50' : '#f44336',
+                    color: 'white',
+                    padding: '8px 12px',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    zIndex: 1000,
+                    cursor: 'pointer'
+                  }} onClick={toggleDatabase}>
+                    {currentDatabase === 'testing' ? '🟢 TESTING' : '🔴 PRODUCTION'}
+                  </div>
         <table className={styles.table}>
           <thead>
             <tr>
@@ -749,7 +866,7 @@ function AllAdvisors() {
                   </div>
                 </td>
                 <td>{advisor.email}</td>
-                <td className={styles.companyName}>{advisor.companyName}</td>
+                <td>{advisor.Employer}</td>
                 <td>{formatDate(advisor.created)}</td>
                 <td>{formatDate(advisor.lastEdited)}</td>
                 <td>{getStatusBadge(advisor.status)}</td>
@@ -825,7 +942,7 @@ function AllAdvisors() {
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <div className={styles.modalTitle}>
-                <h2>{selectedAdvisor.companyName}</h2>
+                <h2>{selectedAdvisor.Employer}</h2>
                 <p>{selectedAdvisor.profile.fullName} • {selectedAdvisor.email}</p>
               </div>
               <button
@@ -866,7 +983,7 @@ function AllAdvisors() {
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <div className={styles.modalTitle}>
-                <h2>Edit Advisor: {selectedAdvisor.companyName}</h2>
+                <h2>Edit Advisor: {selectedAdvisor.Employer}</h2>
                 <p>Update advisor information</p>
               </div>
               <button
@@ -904,8 +1021,8 @@ function AllAdvisors() {
                       <label>Company Name</label>
                       <input
                         type="text"
-                        value={editFormData.companyName || ""}
-                        onChange={(e) => setEditFormData({...editFormData, companyName: e.target.value})}
+                        value={editFormData.Employer || ""}
+                        onChange={(e) => setEditFormData({...editFormData, Employer: e.target.value})}
                         className={styles.formInput}
                       />
                     </div>
@@ -1127,8 +1244,8 @@ function AllAdvisors() {
                       <label>Company Name *</label>
                       <input
                         type="text"
-                        value={addFormData.companyName}
-                        onChange={(e) => setAddFormData({...addFormData, companyName: e.target.value})}
+                        value={addFormData.Employer}
+                        onChange={(e) => setAddFormData({...addFormData, Employer: e.target.value})}
                         className={styles.formInput}
                         placeholder="Enter company/practice name"
                       />
@@ -1300,7 +1417,7 @@ function AllAdvisors() {
                   <button
                     className={styles.saveButton}
                     onClick={handleAddAdvisor}
-                    disabled={!addFormData.username || !addFormData.email || !addFormData.companyName}
+                    disabled={!addFormData.username || !addFormData.email || !addFormData.Employer}
                   >
                     <Check size={16} />
                     Create Advisor

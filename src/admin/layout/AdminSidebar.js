@@ -23,6 +23,7 @@ import {
   Download,
   Shield,
   QrCode,
+  Globe,
   Handshake,
   UserPlus,
 } from "lucide-react"
@@ -141,7 +142,13 @@ function AdminSidebar() {
       icon: <LayoutDashboard size={18} />, 
       route: "/admin/dashboard" 
     },
-    {
+     { 
+      id: "ecosystem", 
+      label: "Ecosystem", 
+      icon: <Globe size={18} />, 
+      hasSubmenu: true,
+      subItems: [
+        {
       id: "smes",
       label: "All SMEs",
       icon: <Building2 size={18} />,
@@ -177,6 +184,9 @@ function AdminSidebar() {
       icon: <Handshake size={18} />,
       route: "/admin/sponsors",
     },
+      ]
+    },
+   
     {
       id: "qr-codes",
       label: "QR Codes",

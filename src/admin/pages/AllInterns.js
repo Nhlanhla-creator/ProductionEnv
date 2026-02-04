@@ -31,10 +31,19 @@ import {
   TrendingUp,
 } from "lucide-react"
 import styles from "./all-interns.module.css"
+import { collection, query, where, getDocs, doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore"
+// import { db, auth } from "../../firebaseConfig"
+import databaseService from "../../services/databaseService"
+import * as XLSX from 'xlsx';
+
 
 function AllInterns() {
   const navigate = useNavigate()
+
+    const [currentDatabase, setCurrentDatabase] = useState(
+      databaseService.getCurrentDatabase())
   const [loading, setLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [selectedIntern, setSelectedIntern] = useState(null)
@@ -68,146 +77,189 @@ function AllInterns() {
   const [activeTab, setActiveTab] = useState("profile")
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(10)
+const [internData, setInternData] = useState([]);
 
-  // Mock Intern data
-  const [internData, setInternData] = useState([
-    {
-      id: 1,
-      username: "john_doe_2024",
-      email: "john.doe@university.ac.za",
-      fullName: "John Doe",
-      created: "2024-01-15",
-      lastEdited: "2024-06-20",
-      status: "active",
-      profileImage: null,
-      profile: {
-        university: "University of Cape Town",
-        degree: "Bachelor of Commerce",
-        fieldOfStudy: "Business Administration",
-        yearOfStudy: "3rd Year",
-        expectedGraduation: "2025-06",
-        phone: "+27 72 123 4567",
-        location: "Cape Town, South Africa",
-        skills: "Excel, PowerPoint, Data Analysis, Project Management",
-      },
-      internship: {
-        department: "Business Development",
-        supervisor: "Sarah Johnson",
-        startDate: "2024-01-15",
-        endDate: "2024-06-30",
-        position: "Business Development Intern",
-        hoursCompleted: 480,
-        hoursRequired: 600,
-      },
-      documents: {
-        cv: { uploaded: true, date: "2024-01-10" },
-        transcript: { uploaded: true, date: "2024-01-10" },
-        applicationLetter: { uploaded: true, date: "2024-01-10" },
-        idDocument: { uploaded: true, date: "2024-01-10" },
-        totalUploads: 8,
-      },
-      performance: {
-        tasksCompleted: 24,
-        totalTasks: 30,
-        evaluationScore: 4.2,
-        attendance: 95,
-        lastEvaluation: "2024-06-15",
-      },
-    },
-    {
-      id: 2,
-      username: "sarah_williams",
-      email: "sarah.williams@wits.ac.za",
-      fullName: "Sarah Williams",
-      created: "2024-02-01",
-      lastEdited: "2024-06-18",
-      status: "active",
-      profileImage: null,
-      profile: {
-        university: "University of the Witwatersrand",
-        degree: "Bachelor of Science",
-        fieldOfStudy: "Computer Science",
-        yearOfStudy: "4th Year",
-        expectedGraduation: "2024-12",
-        phone: "+27 71 987 6543",
-        location: "Johannesburg, South Africa",
-        skills: "Python, JavaScript, React, Database Management, UI/UX",
-      },
-      internship: {
-        department: "Technology & Innovation",
-        supervisor: "Michael Chen",
-        startDate: "2024-02-01",
-        endDate: "2024-07-31",
-        position: "Software Development Intern",
-        hoursCompleted: 520,
-        hoursRequired: 600,
-      },
-      documents: {
-        cv: { uploaded: true, date: "2024-01-25" },
-        transcript: { uploaded: true, date: "2024-01-25" },
-        applicationLetter: { uploaded: true, date: "2024-01-25" },
-        idDocument: { uploaded: true, date: "2024-01-25" },
-        totalUploads: 12,
-      },
-      performance: {
-        tasksCompleted: 28,
-        totalTasks: 32,
-        evaluationScore: 4.7,
-        attendance: 98,
-        lastEvaluation: "2024-06-10",
-      },
-    },
-    {
-      id: 3,
-      username: "thabo_mokoena",
-      email: "thabo.mokoena@up.ac.za",
-      fullName: "Thabo Mokoena",
-      created: "2024-03-10",
-      lastEdited: "2024-06-15",
-      status: "pending",
-      profileImage: null,
-      profile: {
-        university: "University of Pretoria",
-        degree: "Bachelor of Engineering",
-        fieldOfStudy: "Mechanical Engineering",
-        yearOfStudy: "2nd Year",
-        expectedGraduation: "2026-12",
-        phone: "+27 73 456 7890",
-        location: "Pretoria, South Africa",
-        skills: "CAD, SolidWorks, Technical Drawing, Problem Solving",
-      },
-      internship: {
-        department: "Engineering & Operations",
-        supervisor: "David Smith",
-        startDate: "2024-07-01",
-        endDate: "2024-12-31",
-        position: "Engineering Intern",
-        hoursCompleted: 0,
-        hoursRequired: 600,
-      },
-      documents: {
-        cv: { uploaded: true, date: "2024-03-05" },
-        transcript: { uploaded: false, date: null },
-        applicationLetter: { uploaded: true, date: "2024-03-05" },
-        idDocument: { uploaded: false, date: null },
-        totalUploads: 2,
-      },
-      performance: {
-        tasksCompleted: 0,
-        totalTasks: 0,
-        evaluationScore: 0,
-        attendance: 0,
-        lastEvaluation: null,
-      },
-    },
-  ])
+  const getCurrentDb = () => {
+    return databaseService.getFirestore();
+  }
 
+  // ADD this effect to listen for database changes
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoading(false)
-    }, 1000)
-    return () => clearTimeout(timer)
-  }, [])
+    const handleDatabaseChange = () => {
+      const newDatabase = databaseService.getCurrentDatabase();
+      setCurrentDatabase(newDatabase);
+      // Refresh data when database changes
+      fetchInterns();
+    };
+
+    // Listen for storage changes
+    window.addEventListener('storage', handleDatabaseChange);
+    
+    // Listen for custom event
+    window.addEventListener('databaseChanged', handleDatabaseChange);
+
+    return () => {
+      window.removeEventListener('storage', handleDatabaseChange);
+      window.removeEventListener('databaseChanged', handleDatabaseChange);
+    };
+  }, []);
+
+
+  const fetchInterns = async () => {
+    try {
+      setLoading(true);
+    
+      const db = getCurrentDb();
+
+      const internsRef = collection(db, 'internProfiles');
+      const querySnapshot = await getDocs(internsRef);
+      
+      // DEBUG: Log the first document to see structure
+      if (querySnapshot.docs.length > 0) {
+        console.log("First Firestore document:", querySnapshot.docs[0].data());
+        console.log("formData:", querySnapshot.docs[0].data().formData);
+      }
+      
+      const fetchedInterns = querySnapshot.docs.map((doc, index) => {
+        const data = doc.data();
+        const formData = data.formData || {};
+        
+        // DEBUG: Log each document structure
+        console.log(`Document ${index} formData keys:`, Object.keys(formData));
+        
+        // Format the date from Firestore
+        const formatFirestoreDate = (timestamp) => {
+          if (timestamp && timestamp.toDate) {
+            return timestamp.toDate().toISOString().split('T')[0];
+          }
+          return timestamp || "2024-01-01";
+        };
+        
+        const fullName = formData.fullName || 
+                        formData.personalOverview?.fullName || 
+                        formData.name || 
+                        "Not Provided";
+        
+        // Get academic data
+        const academicOverview = formData.academicOverview || {};
+        
+        const personalOverview = formData.personalOverview || {};
+        return {
+          id: index + 1,
+          firestoreId: doc.id, 
+          username: fullName.toLowerCase().replace(/\s+/g, '_') + "_2024" || `intern_${index + 1}`,
+          email: data.userEmail || formData.email || 'N/A', 
+          fullName: fullName,
+          created: formatFirestoreDate(data.createdAt) || "2024-01-01",
+          lastEdited: formatFirestoreDate(data.lastEdited) || formatFirestoreDate(data.createdAt) || "2024-01-01",
+          status: data.status || formData.status || "active",
+          profileImage: null,
+          profile: {
+            university: academicOverview.institution || 
+                       academicOverview.university || 
+                       formData.university || 
+                       "Not Provided",
+            degree: academicOverview.degree || 
+                   formData.degree || 
+                   "Bachelor's Degree",
+            fieldOfStudy: academicOverview.fieldOfStudy || 
+                         academicOverview.major || 
+                         formData.fieldOfStudy || 
+                         "Not Specified",
+            yearOfStudy: academicOverview.yearOfStudy || 
+                        formData.yearOfStudy || 
+                        "Not Specified",
+            expectedGraduation: academicOverview.expectedGraduation || 
+                               formData.expectedGraduation || 
+                               "2025-06",
+            phone: personalOverview.phone || 
+                   formData.phoneNumber || 
+                   formData.contactNumber || 
+                   "+27 XX XXX XXXX",
+            location: formData.location || 
+                     formData.city || 
+                     formData.address || 
+                     "South Africa",
+            skills: formData.skills || "Not Specified",
+          },
+          internship: {
+            department: formData.department || 
+                       academicOverview.department || 
+                       "To be assigned",
+            supervisor: formData.supervisor || "Not assigned",
+            startDate: formatFirestoreDate(formData.startDate) || 
+                      formatFirestoreDate(data.createdAt) || 
+                      "2024-01-01",
+            endDate: formatFirestoreDate(formData.endDate) || "2024-12-31",
+            position: formData.position || "Intern",
+            hoursCompleted: formData.hoursCompleted || 0,
+            hoursRequired: formData.hoursRequired || 600,
+          },
+          documents: {
+            cv: { uploaded: formData.cvUploaded || false, date: formatFirestoreDate(formData.cvUploadDate) },
+            transcript: { uploaded: formData.transcriptUploaded || false, date: formatFirestoreDate(formData.transcriptUploadDate) },
+            applicationLetter: { uploaded: formData.applicationLetterUploaded || false, date: formatFirestoreDate(formData.applicationLetterUploadDate) },
+            idDocument: { uploaded: formData.idDocumentUploaded || false, date: formatFirestoreDate(formData.idDocumentUploadDate) },
+            totalUploads: formData.totalUploads || 0,
+          },
+          performance: {
+            tasksCompleted: formData.tasksCompleted || 0,
+            totalTasks: formData.totalTasks || 0,
+            evaluationScore: formData.evaluationScore || 0,
+            attendance: formData.attendance || 0,
+            lastEvaluation: formatFirestoreDate(formData.lastEvaluation),
+          },
+        };
+      });
+      
+      console.log("Fetched interns:", fetchedInterns);
+      setInternData(fetchedInterns);
+    } catch (error) {
+      console.error("Error fetching intern data:", error);
+      setInternData([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+    // UPDATE your useEffect
+    useEffect(() => {
+      fetchInterns();
+    }, []); // Keep empty dependencies
+
+
+// Your existing useEffect for loading simulation (remove or modify):
+useEffect(() => {
+  if (!loading) return; // Only run if still loading
+  
+  const timer = setTimeout(() => {
+    // This will be overridden by the Firestore fetch, but keeps loading state
+    setLoading(false);
+  }, 1000);
+
+  return () => clearTimeout(timer);
+}, [loading]);
+
+  const toggleDatabase = () => {
+    // Get the new database
+    const newDatabase = databaseService.toggleDatabase();
+    
+    // Update local state
+    setCurrentDatabase(newDatabase);
+    
+    // Dispatch event for other components
+    window.dispatchEvent(new CustomEvent('databaseChanged', {
+      detail: { database: newDatabase }
+    }));
+    
+    // Refresh data
+    fetchInterns();
+    
+    // Show alert for production mode
+    if (newDatabase === 'production') {
+      alert('⚠️ WARNING: Switched to PRODUCTION database. All data is LIVE.');
+    }
+  };
 
   const getInternDocuments = (internId) => {
     return [
@@ -297,55 +349,275 @@ function AllInterns() {
   const currentInterns = filteredInterns.slice(startIndex, endIndex)
 
   const handleAction = (action, intern) => {
-    switch (action) {
-      case "view":
-        setSelectedIntern(intern)
-        setShowViewModal(true)
-        setActiveTab("profile")
-        break
-      case "edit":
-        setSelectedIntern(intern)
-        setEditFormData({
-          username: intern.username,
-          email: intern.email,
-          fullName: intern.fullName,
-          status: intern.status,
-          profile: { ...intern.profile },
-          internship: { ...intern.internship }
-        })
-        setShowEditModal(true)
-        break
-      case "delete":
-        if (window.confirm(`Are you sure you want to delete ${intern.fullName}?`)) {
-          setInternData(internData.filter(i => i.id !== intern.id))
+   setSelectedIntern(intern);
+  
+  if (action === "view") {
+    setShowViewModal(true);
+    setActiveTab("profile");
+  } else if (action === "edit") {
+    setShowEditModal(true);
+    // Set edit form data with all intern data
+    setEditFormData({
+      username: intern.username || "",
+      email: intern.email || "",
+      fullName: intern.fullName || "",
+      status: intern.status || "active",
+      profile: {
+        university: intern.profile?.university || "",
+        degree: intern.profile?.degree || "",
+        fieldOfStudy: intern.profile?.fieldOfStudy || "",
+        yearOfStudy: intern.profile?.yearOfStudy || "",
+        phone: intern.profile?.phone || "",
+        location: intern.profile?.location || "",
+        skills: intern.profile?.skills || "",
+      },
+      internship: {
+        position: intern.internship?.position || "",
+        department: intern.internship?.department || "",
+        supervisor: intern.internship?.supervisor || "",
+        startDate: intern.internship?.startDate || "",
+        endDate: intern.internship?.endDate || "",
+        hoursCompleted: intern.internship?.hoursCompleted || 0,
+        hoursRequired: intern.internship?.hoursRequired || 600,
+      }
+    });
+  
+  } else if (action === "block") {
+    // Handle block action
+    handleBlock(intern);
+  } else if (action === "delete") {
+    // Handle delete action
+    handleDelete(intern);
+  }
+};
+
+ const handleEditSave = async () => {
+  try {
+    if (!selectedIntern) {
+      console.error("No intern selected for editing");
+      setShowEditModal(false);
+      return;
+    }
+
+    if (!selectedIntern.firestoreId) {
+      console.error("No Firestore document ID found for intern:", selectedIntern.id);
+      alert("Cannot save changes: Missing document reference. Please refresh and try again.");
+      setShowEditModal(false);
+      setSelectedIntern(null);
+      setEditFormData({});
+      return;
+    }
+
+    // Prepare the update data
+    const updateData = {};
+    
+    // Update basic fields if changed
+    if (editFormData.email && editFormData.email !== selectedIntern.email) {
+      updateData.userEmail = editFormData.email;
+    }
+    
+    // Update formData fields using dot notation
+    // Basic information
+    if (editFormData.fullName && editFormData.fullName !== selectedIntern.fullName) {
+      updateData['formData.fullName'] = editFormData.fullName;
+    }
+    
+    if (editFormData.status && editFormData.status !== selectedIntern.status) {
+      updateData.status = editFormData.status;
+    }
+    
+    // Academic profile
+    if (editFormData.profile) {
+      if (editFormData.profile.university && editFormData.profile.university !== selectedIntern.profile?.university) {
+        updateData['formData.academicOverview.institution'] = editFormData.profile.university;
+      }
+      
+      if (editFormData.profile.degree && editFormData.profile.degree !== selectedIntern.profile?.degree) {
+        updateData['formData.academicOverview.degree'] = editFormData.profile.degree;
+      }
+      
+      if (editFormData.profile.fieldOfStudy && editFormData.profile.fieldOfStudy !== selectedIntern.profile?.fieldOfStudy) {
+        updateData['formData.academicOverview.fieldOfStudy'] = editFormData.profile.fieldOfStudy;
+      }
+      
+      if (editFormData.profile.yearOfStudy && editFormData.profile.yearOfStudy !== selectedIntern.profile?.yearOfStudy) {
+        updateData['formData.academicOverview.yearOfStudy'] = editFormData.profile.yearOfStudy;
+      }
+      
+      if (editFormData.profile.phone && editFormData.profile.phone !== selectedIntern.profile?.phone) {
+        updateData['formData.phone'] = editFormData.profile.phone;
+      }
+      
+      if (editFormData.profile.location && editFormData.profile.location !== selectedIntern.profile?.location) {
+        updateData['formData.location'] = editFormData.profile.location;
+      }
+    }
+    
+    // Internship details
+    if (editFormData.internship) {
+      if (editFormData.internship.position && editFormData.internship.position !== selectedIntern.internship?.position) {
+        updateData['formData.position'] = editFormData.internship.position;
+      }
+      
+      if (editFormData.internship.department && editFormData.internship.department !== selectedIntern.internship?.department) {
+        updateData['formData.department'] = editFormData.internship.department;
+      }
+      
+      if (editFormData.internship.supervisor && editFormData.internship.supervisor !== selectedIntern.internship?.supervisor) {
+        updateData['formData.supervisor'] = editFormData.internship.supervisor;
+      }
+      
+      if (editFormData.internship.startDate && editFormData.internship.startDate !== selectedIntern.internship?.startDate) {
+        updateData['formData.startDate'] = editFormData.internship.startDate;
+      }
+      
+      if (editFormData.internship.endDate && editFormData.internship.endDate !== selectedIntern.internship?.endDate) {
+        updateData['formData.endDate'] = editFormData.internship.endDate;
+      }
+    }
+    
+    // Always update the lastEdited timestamp
+    updateData.lastEdited = new Date().toISOString();
+    
+    // Check if there are any changes to save
+    if (Object.keys(updateData).length === 1 && updateData.lastEdited) {
+      console.log("No changes detected");
+      setShowEditModal(false);
+      setSelectedIntern(null);
+      setEditFormData({});
+      return;
+    }
+    
+    // Show loading state (optional)
+    setIsSaving(true);
+    
+    // Update in Firestore
+    const db = getCurrentDb();
+    const internRef = doc(db, 'internProfiles', selectedIntern.firestoreId);
+    await updateDoc(internRef, updateData);
+    
+    // Update local state for immediate UI feedback
+    const updatedInternData = internData.map(intern => {
+      if (intern.id === selectedIntern.id) {
+        const updatedIntern = {
+          ...intern,
+          // Update basic fields
+          ...(editFormData.email && { email: editFormData.email }),
+          ...(editFormData.fullName && { fullName: editFormData.fullName }),
+          ...(editFormData.status && { status: editFormData.status }),
+          lastEdited: new Date().toISOString().split('T')[0],
+        };
+        
+        // Update profile fields
+        if (editFormData.profile) {
+          updatedIntern.profile = {
+            ...intern.profile,
+            ...(editFormData.profile.university && { university: editFormData.profile.university }),
+            ...(editFormData.profile.degree && { degree: editFormData.profile.degree }),
+            ...(editFormData.profile.fieldOfStudy && { fieldOfStudy: editFormData.profile.fieldOfStudy }),
+            ...(editFormData.profile.yearOfStudy && { yearOfStudy: editFormData.profile.yearOfStudy }),
+            ...(editFormData.profile.phone && { phone: editFormData.profile.phone }),
+            ...(editFormData.profile.location && { location: editFormData.profile.location }),
+          };
         }
-        break
-      case "block":
-        if (window.confirm(`Are you sure you want to block ${intern.fullName}?`)) {
-          setInternData(internData.map(i => 
-            i.id === intern.id ? { ...i, status: "blocked" } : i
-          ))
+        
+        // Update internship fields
+        if (editFormData.internship) {
+          updatedIntern.internship = {
+            ...intern.internship,
+            ...(editFormData.internship.position && { position: editFormData.internship.position }),
+            ...(editFormData.internship.department && { department: editFormData.internship.department }),
+            ...(editFormData.internship.supervisor && { supervisor: editFormData.internship.supervisor }),
+            ...(editFormData.internship.startDate && { startDate: editFormData.internship.startDate }),
+            ...(editFormData.internship.endDate && { endDate: editFormData.internship.endDate }),
+          };
         }
-        break
-      default:
-        break
+        
+        return updatedIntern;
+      }
+      return intern;
+    });
+    
+    setInternData(updatedInternData);
+    
+    // Show success message (optional)
+    console.log("Intern updated successfully!");
+    
+    // Optional: Show a toast notification
+    // toast.success("Intern details updated successfully!");
+    
+  } catch (error) {
+    console.error("Error updating intern in Firestore:", error);
+    
+    // Detailed error handling
+    if (error.code === 'permission-denied') {
+      alert("Permission denied: You don't have permission to update this intern.");
+    } else if (error.code === 'not-found') {
+      alert("Intern not found: The document may have been deleted.");
+    } else if (error.code === 'unavailable') {
+      alert("Network error: Please check your internet connection and try again.");
+    } else {
+      alert(`Failed to save changes: ${error.message}`);
+    }
+    
+    // Optionally refetch data to ensure UI consistency
+    // await fetchInterns();
+    
+  } finally {
+    // Always clean up
+    setShowEditModal(false);
+    setSelectedIntern(null);
+    setEditFormData({});
+    setIsSaving(false);
+  }
+};
+
+const handleDelete = async (intern) => {
+  if (window.confirm(`Are you sure you want to delete ${intern.fullName}? This action cannot be undone.`)) {
+    try {
+      // Remove from Firestore
+      const db = getCurrentDb();
+      const docRef = doc(db, 'internProfiles', intern.firestoreId);
+      await deleteDoc(docRef);
+      
+      // Update local state
+      setInternData(prev => prev.filter(i => i.id !== intern.id));
+      
+      alert(`${intern.fullName} has been deleted successfully.`);
+    } catch (error) {
+      console.error("Error deleting intern:", error);
+      alert(`Failed to delete intern: ${error.message}`);
     }
   }
+};
 
-  const handleEditSave = () => {
-    setInternData(internData.map(intern => 
-      intern.id === selectedIntern.id 
-        ? { 
-            ...intern, 
-            ...editFormData,
-            lastEdited: new Date().toISOString().split('T')[0]
-          } 
-        : intern
-    ))
-    setShowEditModal(false)
-    setSelectedIntern(null)
-    setEditFormData({})
+const handleBlock = async (intern) => {
+  if (window.confirm(`Are you sure you want to ${intern.status === 'blocked' ? 'unblock' : 'block'} ${intern.fullName}?`)) {
+    try {
+      const newStatus = intern.status === 'blocked' ? 'active' : 'blocked';
+      
+      // Update in Firestore
+      const db = getCurrentDb();
+      const docRef = doc(db, 'internProfiles', intern.firestoreId);
+      await updateDoc(docRef, {
+        status: newStatus,
+        lastEdited: new Date().toISOString()
+      });
+      
+      // Update local state
+      setInternData(prev => prev.map(i => 
+        i.id === intern.id 
+          ? { ...i, status: newStatus, lastEdited: new Date().toISOString().split('T')[0] }
+          : i
+      ));
+      
+      alert(`${intern.fullName} has been ${newStatus === 'blocked' ? 'blocked' : 'unblocked'} successfully.`);
+    } catch (error) {
+      console.error("Error blocking/unblocking intern:", error);
+      alert(`Failed to update status: ${error.message}`);
+    }
   }
+};
 
   const handleAddIntern = () => {
     const newIntern = {
@@ -396,6 +668,45 @@ function AllInterns() {
       }
     })
   }
+
+   const exportToExcel = () => {
+    try {
+      // Use whatever data is currently filtered/shown
+      const dataToExport = filteredInterns;
+      
+      if (dataToExport.length === 0) {
+        alert("No data to export!");
+        return;
+      }
+      
+      // Simple format - just basic data
+      const excelData = dataToExport.map(intern => ({
+        Username: intern.username,
+        Email: intern.email,
+        "Company Name": intern.companyName,
+        Created: intern.created,
+        Status: intern.status,
+        Industry: intern.profile.industry,
+        Employees: intern.profile.employees,
+        Revenue: intern.profile.revenue,
+      }));
+      
+      // Create worksheet
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "SMEs");
+      
+      // Download
+      const fileName = `SMEs_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+      
+      alert(`Exported ${dataToExport.length} records!`);
+      
+    } catch (error) {
+      console.error("Export error:", error);
+      alert("Export failed: " + error.message);
+    }
+  };
 
   const getStatusBadge = (status) => {
     const statusStyles = {
@@ -573,6 +884,7 @@ function AllInterns() {
               </div>
               
               <div className={styles.documentsTableContainer}>
+
                 <table className={styles.documentsTable}>
                   <thead>
                     <tr>
@@ -654,11 +966,11 @@ function AllInterns() {
           <h1 className={styles.title}>All Interns</h1>
           <p className={styles.subtitle}>Manage and monitor all intern accounts</p>
         </div>
-        <div className={styles.headerActions}>
-          <button className={styles.actionButton} onClick={() => alert("Export functionality coming soon!")}>
-            <Download size={16} />
-            Export
-          </button>
+         <div className={styles.headerActions}>
+                 <button className={styles.actionButton} onClick={exportToExcel}>
+                 <Download size={16} />
+                 Export to Excel
+               </button>
           <button className={styles.primaryButton} onClick={() => setShowAddModal(true)}>
             <Plus size={16} />
             Add Intern
@@ -694,13 +1006,28 @@ function AllInterns() {
       </div>
 
       <div className={styles.tableContainer}>
+         <div style={{
+                    position: 'fixed',
+                    top: '20px',
+                    right: '80px',
+                    backgroundColor: currentDatabase === 'testing' ? '#4CAF50' : '#f44336',
+                    color: 'white',
+                    padding: '8px 12px',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    zIndex: 1000,
+                    cursor: 'pointer'
+                  }} onClick={toggleDatabase}>
+                    {currentDatabase === 'testing' ? '🟢 TESTING' : '🔴 PRODUCTION'}
+                  </div>
         <table className={styles.table}>
           <thead>
             <tr>
               <th>Full Name</th>
               <th>Email</th>
-              <th>University</th>
-              <th>Department</th>
+              <th>Institution</th>
+              <th>Field Of Study</th>
               <th>Start Date</th>
               <th>Status</th>
               <th>Actions</th>
@@ -723,7 +1050,7 @@ function AllInterns() {
                 </td>
                 <td>{intern.email}</td>
                 <td>{intern.profile.university}</td>
-                <td>{intern.internship.department}</td>
+                <td>{intern.profile.fieldOfStudy}</td>
                 <td>{formatDate(intern.internship.startDate)}</td>
                 <td>{getStatusBadge(intern.status)}</td>
                 <td>
