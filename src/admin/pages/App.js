@@ -7,6 +7,7 @@ import HomeHeader from "./main_pages/SMEs/HomeHeader"
 import AdminSidebar from "./admin/layout/AdminSidebar"
 import AdminHeader from "./admin/layout/AdminHeader"
 import AdminDashboard from "./admin/pages/AdminDashboard"
+import Ecosystem from "./admin/pages/Ecosystem" // NEW
 import AllSMEs from "./admin/pages/AllSMEs"
 import AllInvestors from "./admin/pages/AllInvestors"
 import AllCatalysts from "./admin/pages/AllCatalysts"
@@ -761,6 +762,7 @@ function App() {
         {/* Admin Dashboard Routes - UPDATED */}
         <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
         <Route path="/admin/dashboard" element={renderAdminRoute(AdminDashboard)} />
+        <Route path="/admin/ecosystem" element={renderAdminRoute(Ecosystem)} />
         <Route path="/admin/smes" element={renderAdminRoute(AllSMEs)} />
         <Route path="/admin/investors" element={renderAdminRoute(AllInvestors)} />
         <Route path="/admin/catalysts" element={renderAdminRoute(AllCatalysts)} />
