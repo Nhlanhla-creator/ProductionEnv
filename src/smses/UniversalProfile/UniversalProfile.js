@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { CheckCircle, ChevronRight, ChevronLeft, Save, X, ArrowRight } from "lucide-react"
+import { CheckCircle, ChevronRight, ChevronLeft, Save, X, ArrowRight,Users } from "lucide-react"
 import { doc, setDoc, getDoc } from "firebase/firestore"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
 import { auth, db, storage } from "../../firebaseConfig" // adjust based on your setup
@@ -20,6 +20,7 @@ import Documents from "./Documents"
 import DeclarationConsent from "./declaration-consent"
 import ProfileSummary from "./ProfileSummary"
 import { onAuthStateChanged } from "firebase/auth";
+
 
 const sections = [
   { id: "instructions", label: "Instructions" },
@@ -155,6 +156,16 @@ export default function UniversalProfile() {
   const [showSummary, setShowSummary] = useState(false)
   const [profileData, setProfileData] = useState(null)
   const [isEditing, setIsEditing] = useState(false)
+//company ish
+
+const [companyOwnerId, setCompanyOwnerId] = useState(null);
+const [isCompanyMember, setIsCompanyMember] = useState(false);
+const [effectiveUserId, setEffectiveUserId] = useState(null);
+const [userRole, setUserRole] = useState(null);
+const [editPermissions, setEditPermissions] = useState({});
+const [editHistory, setEditHistory] = useState([]);
+const [showEditHistory, setShowEditHistory] = useState(false);
+
   const isProfileComplete = () => {
     return Object.entries(sectionValidations).every(([sectionKey, validate]) => {
       const valid = validate(formData[sectionKey] || {});
@@ -168,6 +179,41 @@ export default function UniversalProfile() {
   const [showWelcomePopup, setShowWelcomePopup] = useState(false)
   const [showCongratulationsPopup, setShowCongratulationsPopup] = useState(false)
   const [currentOnboardingStep, setCurrentOnboardingStep] = useState(0)
+const ROLE_PERMISSIONS = {
+  owner: {
+    canEditAll: true,
+    sections: ['instructions', 'entityOverview', 'ownershipManagement', 'contactDetails', 
+               'legalCompliance', 'financialOverview', 'governance', 'productsServices', 
+               'howDidYouHear', 'documents', 'declarationConsent']
+  },
+  companyadmin: {
+    canEditAll: false,
+    sections: ['entityOverview', 'contactDetails', 'legalCompliance', 'financialOverview', 
+               'governance', 'productsServices', 'documents']
+  },
+  manager: {
+    canEditAll: false,
+    sections: ['contactDetails', 'productsServices', 'documents']
+  },
+  employee: {
+    canEditAll: false,
+    sections: ['contactDetails', 'documents']
+  },
+  viewer: {
+    canEditAll: false,
+    sections: []
+  }
+};
+
+const canEditSection = (sectionId) => {
+  if (!userRole) return false;
+  
+  const permissions = ROLE_PERMISSIONS[userRole];
+  if (!permissions) return false;
+  
+  return permissions.canEditAll || permissions.sections.includes(sectionId);
+};
+
 
   const [completedSections, setCompletedSections] = useState({
     instructions: true,
@@ -265,15 +311,61 @@ const [validationModal, setValidationModal] = useState({
     },
   })
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
+
+
+ useEffect(() => {
+  const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      try {
+        // Check if user is part of a company
+        const userDocRef = doc(db, "users", user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        
+        if (userDocSnap.exists()) {
+          const userData = userDocSnap.data();
+          const userCompanyId = userData.companyId;
+          const userCompanyRole = userData.userRole; // Get user's role
+          
+          if (userCompanyId) {
+            // User is part of a company, fetch company details
+            const companyDocRef = doc(db, "companies", userCompanyId);
+            const companyDocSnap = await getDoc(companyDocRef);
+            
+            if (companyDocSnap.exists()) {
+              const companyData = companyDocSnap.data();
+              const ownerId = companyData.createdBy;
+              
+              // Set user role
+              setUserRole(userCompanyRole || 'viewer');
+              
+              // Check if current user is the owner
+              if (ownerId === user.uid) {
+                // Current user is the owner
+                setIsCompanyMember(false);
+                setEffectiveUserId(user.uid);
+                setEditPermissions(ROLE_PERMISSIONS.owner);
+              } else {
+                // Current user is a member, use owner's ID for data
+                setIsCompanyMember(true);
+                setCompanyOwnerId(ownerId);
+                setEffectiveUserId(ownerId);
+                setEditPermissions(ROLE_PERMISSIONS[userCompanyRole] || ROLE_PERMISSIONS.viewer);
+              }
+            }
+          } else {
+            // No company, use current user as owner
+            setIsCompanyMember(false);
+            setEffectiveUserId(user.uid);
+            setUserRole('owner');
+            setEditPermissions(ROLE_PERMISSIONS.owner);
+          }
+        }
+        
+        // Load saved data from localStorage
         const savedData = localStorage.getItem(getUserSpecificKey("universalProfileData"));
         const savedCompletedSections = localStorage.getItem(getUserSpecificKey("universalProfileCompletedSections"));
         const savedSubmissionStatus = localStorage.getItem(getUserSpecificKey("profileSubmitted"));
         const hasSeenWelcomePopup = localStorage.getItem(getUserSpecificKey("hasSeenWelcomePopup")) === "true";
-        const hasSeenCongratulationsPopup =
-          localStorage.getItem(getUserSpecificKey("hasSeenCongratulationsPopup")) === "true";
 
         if (savedData) setFormData(JSON.parse(savedData));
         if (savedCompletedSections) setCompletedSections(JSON.parse(savedCompletedSections));
@@ -286,15 +378,22 @@ const [validationModal, setValidationModal] = useState({
           setShowWelcomePopup(true);
           localStorage.setItem(getUserSpecificKey("hasSeenWelcomePopup"), "true");
         }
-      } else {
-        // Redirect to login or home page if not authenticated
-        navigate("/login");
+      } catch (error) {
+        console.error("Error checking company membership:", error);
+        setEffectiveUserId(user.uid);
+        setUserRole('owner');
+        setEditPermissions(ROLE_PERMISSIONS.owner);
       }
-      setLoading(false); // Done loading regardless
-    });
+    } else {
+      navigate("/login");
+    }
+    setLoading(false);
+  });
 
-    return () => unsubscribe(); // Cleanup listener on unmount
-  }, []);
+  return () => unsubscribe();
+}, []);
+
+
   // Helper function to get user-specific localStorage key
   const getUserSpecificKey = (baseKey) => {
     const userId = auth.currentUser?.uid
@@ -417,78 +516,120 @@ const [validationModal, setValidationModal] = useState({
     return await uploadRecursive(data, section)
   }
 
-  const saveDataToFirebase = async (section = null, isFinalSubmit = false) => {
-    setLoading(true)
-    const userId = auth.currentUser?.uid
-    if (!userId) throw new Error("User not logged in.")
-
-    if (!userId) return;
-
-    const docRef = doc(db, "universalProfiles", userId);
-    const sectionData = section ? formData[section] : formData;
-
-   const uploaded = section
-  ? {
-      ...(section !== "instructions" && {
-        [section]: await uploadFilesAndReplaceWithURLs(sectionData, section),
-      }),
-    }
-  : await uploadFilesAndReplaceWithURLs(sectionData, "full");
-
-
-    const dataToSave = {
-      ...uploaded,
-      
-  completedSections, // Always include
-
-      ...(isFinalSubmit || !section ? { completedSections } : {}),
-    };
-    const triggerSections = ["enterpriseReadiness","documentUpload","entityOverview","legalCompliance","governance","contactDetails","financialOverview"];
-  const triggerSectionsFundability = [
-  "enterpriseReadiness",
-  "documentUpload",
-  "entityOverview",
-    "legalCompliance",
-  "governance",
-  "contactDetails",
-  "financialOverview", // Added financialOverview to fundability triggers
-];
-
-const triggerSectionsLegitimacy = [
-   "enterpriseReadiness",
-  "documentUpload",
-  "entityOverview",
-    "legalCompliance",
-  "governance",
-  "contactDetails",
-  "financialOverview", // Added financialOverview to legitimacy triggers
-];
-
-if (section) {
-  const triggerPayload = {};
-
-  if (triggerSectionsFundability.includes(section)) {
-    triggerPayload.triggerFundabilityEvaluation = true;
+const saveDataToFirebase = async (section = null, isFinalSubmit = false) => {
+  setLoading(true);
+  
+  // Use effectiveUserId instead of current user
+  const userId = effectiveUserId || auth.currentUser?.uid;
+  const currentUser = auth.currentUser;
+  
+  if (!userId) {
+    setLoading(false);
+    throw new Error("User not logged in.");
   }
 
-  if (triggerSectionsLegitimacy.includes(section)) {
-    triggerPayload.triggerLegitimacyEvaluation = true;
+  // Check if user has permission to edit this section
+  if (section && !canEditSection(section)) {
+    alert(`You don't have permission to edit the ${sections.find(s => s.id === section)?.label.replace(/\n/g, " ")} section. Your role (${userRole}) does not allow this.`);
+    setLoading(false);
+    return;
   }
 
-  if (Object.keys(triggerPayload).length > 0) {
-    await setDoc(docRef, triggerPayload, { merge: true });
-  }
-}
+  const docRef = doc(db, "universalProfiles", userId);
+  const sectionData = section ? formData[section] : formData;
 
+  const uploaded = section
+    ? {
+        ...(section !== "instructions" && {
+          [section]: await uploadFilesAndReplaceWithURLs(sectionData, section),
+        }),
+      }
+    : await uploadFilesAndReplaceWithURLs(sectionData, "full");
 
-    await setDoc(docRef, dataToSave, { merge: true });
-    setLoading(false)
+  // Get user details for edit log
+  const userDocRef = doc(db, "users", currentUser.uid);
+  const userDocSnap = await getDoc(userDocRef);
+  const userName = userDocSnap.exists() ? 
+    (userDocSnap.data().username || userDocSnap.data().email || currentUser.email) : 
+    currentUser.email;
+
+  // Create edit log entry
+  const editLogEntry = {
+    editedBy: currentUser.uid,
+    editedByName: userName,
+    editedByEmail: currentUser.email,
+    role: userRole,
+    section: section || 'full_profile',
+    sectionName: section ? sections.find(s => s.id === section)?.label.replace(/\n/g, " ") : 'Full Profile',
+    timestamp: new Date().toISOString(),
+    action: isFinalSubmit ? 'submitted' : 'updated'
   };
+
+  // Get existing edit history
+  const profileSnap = await getDoc(docRef);
+  const existingHistory = profileSnap.exists() ? (profileSnap.data().editHistory || []) : [];
+
+  const dataToSave = {
+    ...uploaded,
+    completedSections,
+    ...(isFinalSubmit || !section ? { completedSections } : {}),
+    lastEditedBy: currentUser.uid,
+    lastEditedByName: userName,
+    lastEditedAt: new Date().toISOString(),
+    lastEditedByRole: userRole,
+    editHistory: [...existingHistory, editLogEntry]
+  };
+
+  const triggerSectionsFundability = [
+    "enterpriseReadiness",
+    "documentUpload",
+    "entityOverview",
+    "legalCompliance",
+    "governance",
+    "contactDetails",
+    "financialOverview",
+  ];
+
+  const triggerSectionsLegitimacy = [
+    "enterpriseReadiness",
+    "documentUpload",
+    "entityOverview",
+    "legalCompliance",
+    "governance",
+    "contactDetails",
+    "financialOverview",
+  ];
+
+  if (section) {
+    const triggerPayload = {};
+
+    if (triggerSectionsFundability.includes(section)) {
+      triggerPayload.triggerFundabilityEvaluation = true;
+    }
+
+    if (triggerSectionsLegitimacy.includes(section)) {
+      triggerPayload.triggerLegitimacyEvaluation = true;
+    }
+
+    if (Object.keys(triggerPayload).length > 0) {
+      await setDoc(docRef, triggerPayload, { merge: true });
+    }
+  }
+
+  await setDoc(docRef, dataToSave, { merge: true });
+  
+  // Update local edit history
+  setEditHistory([...existingHistory, editLogEntry]);
+  
+  setLoading(false);
+};
+
+
 
 
   const handleSaveSection = async () => {
     await saveDataToFirebase(activeSection)
-    alert("Section saved to Firebase!")
+    alert("Section saved!")
   }
 const handleSaveAndContinue = async () => {
   const sectionData = formData[activeSection] || {};
@@ -662,60 +803,63 @@ const handleSaveAndContinue = async () => {
         return <Instructions />
     }
   }
+useEffect(() => {
+  const fetchProfileData = async () => {
+    try {
+      setLoading(true);
+      
+      // Wait for effectiveUserId to be set
+      if (!effectiveUserId) return;
 
-  useEffect(() => {
-   const fetchProfileData = async () => {
-  try {
-    setLoading(true)
-    const userId = auth.currentUser?.uid
-    if (!userId) throw new Error("User not logged in")
+      const docRef = doc(db, "universalProfiles", effectiveUserId);
+      const docSnap = await getDoc(docRef);
 
-    const docRef = doc(db, "universalProfiles", userId)
-    const docSnap = await getDoc(docRef)
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setProfileData(data);
 
-    if (docSnap.exists()) {
-      const data = docSnap.data()
-      setProfileData(data)
+        if (data.completedSections) {
+          setCompletedSections(prev => ({
+            ...prev,
+            instructions: true,
+            ...data.completedSections,
+          }));
+          localStorage.setItem(getUserSpecificKey("universalProfileCompletedSections"), JSON.stringify(data.completedSections));
+        }
 
-      // Prefer Firebase completedSections over localStorage
-      if (data.completedSections) {
-        setCompletedSections(prev => ({
+        setFormData(prev => ({
           ...prev,
-          instructions: true,
-          ...data.completedSections,
-        }))
-        // Overwrite localStorage with latest Firebase version
-        localStorage.setItem(getUserSpecificKey("universalProfileCompletedSections"), JSON.stringify(data.completedSections))
+          ...data,
+        }));
+
+        const isProfileComplete =
+          data?.declarationConsent?.accuracy &&
+          data?.declarationConsent?.dataProcessing &&
+          data?.declarationConsent?.termsConditions;
+
+        if (isProfileComplete && !isEditing) {
+          setProfileSubmitted(true);
+          setShowSummary(true);
+        }
+      } else {
+        if (isCompanyMember) {
+          setError("Company profile not found. Please contact the company owner to complete the Universal Profile.");
+        } else {
+          setError("No profile found. Please complete your Universal Profile first.");
+        }
       }
-
-      setFormData(prev => ({
-        ...prev,
-        ...data,
-      }))
-
-      const isProfileComplete =
-        data?.declarationConsent?.accuracy &&
-        data?.declarationConsent?.dataProcessing &&
-        data?.declarationConsent?.termsConditions
-
-      if (isProfileComplete && !isEditing) {
-        setProfileSubmitted(true)
-        setShowSummary(true)
-      }
-    } else {
-      setError("No profile found. Please complete your Universal Profile first.")
+    } catch (err) {
+      console.error("Error fetching profile data:", err);
+      setError("Failed to load profile data. Please try again later.");
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    console.error("Error fetching profile data:", err)
-    setError("Failed to load profile data. Please try again later.")
-  } finally {
-    setLoading(false)
+  };
+
+  if (effectiveUserId) {
+    fetchProfileData();
   }
-}
-
-
-    fetchProfileData()
-  }, [isEditing])
+}, [isEditing, effectiveUserId]);
 
   // Auto-complete documents section when all required documents are uploaded
   useEffect(() => {
@@ -836,7 +980,38 @@ const handleSaveAndContinue = async () => {
       <h1>My Universal Profile</h1>
 
       <div className="profile-tracker">
+{isCompanyMember && (
+  <div style={{
+    backgroundColor: userRole === 'viewer' ? '#fef3c7' : '#e0f2fe',
+    border: `1px solid ${userRole === 'viewer' ? '#f59e0b' : '#0369a1'}`,
+    borderRadius: '8px',
+    padding: '1rem',
+    marginBottom: '1rem',
+  }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+      <Users size={20} color={userRole === 'viewer' ? '#f59e0b' : '#0369a1'} />
+      <p style={{ margin: 0, color: userRole === 'viewer' ? '#f59e0b' : '#0369a1', fontWeight: '600' }}>
+        Company Member - Role: {userRole?.toUpperCase()}
+      </p>
+    </div>
+    <p style={{ margin: 0, color: '#4a5568', fontSize: '0.875rem' }}>
+      {userRole === 'owner' && 'You have full access to edit all sections.'}
+      {userRole === 'companyadmin' && 'You can edit most sections except ownership and final declarations.'}
+      {userRole === 'manager' && 'You can edit contact details, products/services, and documents.'}
+      {userRole === 'employee' && 'You can edit contact details and upload documents.'}
+      {userRole === 'viewer' && 'You have read-only access. Contact the owner for edit permissions.'}
+    </p>
+    {editPermissions?.sections?.length > 0 && (
+      <p style={{ margin: '0.5rem 0 0 0', color: '#4a5568', fontSize: '0.875rem', fontWeight: '500' }}>
+        Editable sections: {editPermissions.sections.map(s => 
+          sections.find(sec => sec.id === s)?.label.replace(/\n/g, " ")
+        ).join(', ')}
+      </p>
+    )}
+  </div>
+)}
         <div className="profile-tracker-inner">
+
           {sections.map((section) => (
            <button
               key={section.id}
