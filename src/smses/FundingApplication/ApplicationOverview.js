@@ -29,7 +29,11 @@ export const renderApplicationOverview = (data, updateFormData) => {
             >
               <option value="">Select Application Type</option>
               {applicationType.map((type) => (
-                <option key={type.value} value={type.value}>
+                <option 
+                  key={type.value} 
+                  value={type.value}
+                  title={type.tooltip || ""}
+                >
                   {type.label}
                 </option>
               ))}
@@ -63,19 +67,8 @@ export const renderApplicationOverview = (data, updateFormData) => {
           </FormField>
 
           <FormField 
-            label="Funding Stage " 
-            tooltip={
-              <div className="tooltip-content">
-                <ul>
-                  <li><strong>Pre-Seed:</strong> Idea/concept stage, validating market need</li>
-                  <li><strong>Seed:</strong> Building MVP, initial market testing</li>
-                  <li><strong>Series A:</strong> Scaling product and initial customer base</li>
-                  <li><strong>Series B:</strong> Expanding market reach and operations</li>
-                  <li><strong>Maturity:</strong> Stable revenue, optimizing operations</li>
-                  <li><strong>Exit:</strong> Preparing for acquisition or IPO</li>
-                </ul>
-              </div>
-            }
+            label="Funding Stage" 
+            tooltip="Hover over options to see definitions"
             required
           >
             <select
@@ -87,7 +80,11 @@ export const renderApplicationOverview = (data, updateFormData) => {
             >
               <option value="">Select Funding Stage</option>
               {businessFundingStage.map((stage) => (
-                <option key={stage.value} value={stage.value}>
+                <option 
+                  key={stage.value} 
+                  value={stage.value}
+                  title={stage.tooltip || ""}
+                >
                   {stage.label}
                 </option>
               ))}
@@ -106,7 +103,11 @@ export const renderApplicationOverview = (data, updateFormData) => {
             >
               <option value="">Select Urgency</option>
               {urgencyOptions.map((option) => (
-                <option key={option.value} value={option.value}>
+                <option 
+                  key={option.value} 
+                  value={option.value}
+                  title={option.tooltip || ""}
+                >
                   {option.label}
                 </option>
               ))}
@@ -135,7 +136,11 @@ export const renderApplicationOverview = (data, updateFormData) => {
             >
               <option value="">Additional Support Required</option>
               {supportFormatOptions.map((format) => (
-                <option key={format.value} value={format.value}>
+                <option 
+                  key={format.value} 
+                  value={format.value}
+                  title={format.tooltip || ""}
+                >
                   {format.label}
                 </option>
               ))}

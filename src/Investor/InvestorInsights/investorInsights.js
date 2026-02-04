@@ -2,13 +2,16 @@ import { useEffect, useRef, useState } from "react"
 import { Chart, registerables } from "chart.js"
 import { TrendingUp, DollarSign, Users, Clock, Building2, MapPin, Target, Award } from "lucide-react"
 import styles from "../MyMatches/investor-funding.module.css"
-import { db } from "../../firebaseConfig"
+import { db, auth } from "../../firebaseConfig"
 import { collection, query, onSnapshot, getDocs, where, doc, getDoc } from "firebase/firestore"
+import Upsell from "../../components/Upsell/Upsell"
+import useSubscriptionPlan from "../../hooks/useSubscriptionPlan"
 
 Chart.register(...registerables)
 
 export function InvestorInsights() {
   const [activeTab, setActiveTab] = useState("investment-demand")
+  const { currentPlan, subscriptionLoading } = useSubscriptionPlan()
   const charts = useRef([])
   const [realTimeInsights, setRealTimeInsights] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -41,6 +44,8 @@ export function InvestorInsights() {
     accent2: "#4e342e",
     accent3: "#3e2723",
   }
+
+
 
   const fetchRealTimeInsights = () => {
     setLoading(true)
@@ -356,11 +361,14 @@ export function InvestorInsights() {
   }
 
   useEffect(() => {
+    if (subscriptionLoading) return
+    if (currentPlan === "basic") return
+
     const unsubscribe = fetchRealTimeInsights()
     return () => {
       if (unsubscribe) unsubscribe()
     }
-  }, [])
+  }, [subscriptionLoading, currentPlan])
 
   useEffect(() => {
     if (!realTimeInsights) return
@@ -987,6 +995,50 @@ export function InvestorInsights() {
       charts.current.forEach((chart) => chart.destroy())
     }
   }, [activeTab, realTimeInsights])
+
+  // Subscription check takes priority: show upsell early if the user is on Discover
+  if (subscriptionLoading) {
+    return (
+      <div
+        style={{
+          paddingTop: "40px",
+          paddingLeft: "280px",
+          paddingRight: "20px",
+          minHeight: "100vh",
+          backgroundColor: "#fafafa",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <div style={{ textAlign: "center", color: "#6d4c41" }}>
+          <h2>Checking subscription...</h2>
+        </div>
+      </div>
+    )
+  }
+
+  if (currentPlan === "basic") {
+    return (
+      <Upsell
+        title={"BIG Insights Analytics"}
+        subtitle={"Unlock powerful analytics and real-time insights to discover investment opportunities, track market trends, and make data-driven decisions with our comprehensive platform analytics."}
+        features={[
+          "Real-time investment demand analytics",
+          "Success rates & performance trends by investment type",
+          "Sector-level investment analysis & breakdowns",
+          "Deal flow engagement metrics & ROI tracking",
+          "Geographic investment patterns & regional insights",
+          "Comprehensive market intelligence for informed decisions",
+        ]}
+        variant={"card"}
+        sidebarWidth={280}
+        plans={["Engage", "Partner"]}
+        upgradeMessage={"Upgrade your subscription to access exclusive analytics, advanced reporting, and strategic insights that power successful investment decisions."}
+        primaryLabel={"View Available Plans"}
+      />
+    )
+  }
 
   if (loading || !realTimeInsights) {
     return (

@@ -3,6 +3,9 @@ import { useState, useRef, useEffect } from "react"
 import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore"
 import { db, auth } from "../../firebaseConfig"
 import { Trophy, Users, TrendingUp, Building, MapPin, DollarSign, Calendar, Eye, Wrench, Loader, RefreshCw, X, BarChart3, ChevronDown } from "lucide-react"
+import { useNavigate } from "react-router-dom"
+import Upsell from "../../components/Upsell/Upsell"
+import useSubscriptionPlan from "../../hooks/useSubscriptionPlan" 
 
 const formatLabel = (value) => {
   if (!value) return ""
@@ -47,26 +50,44 @@ function MyCohorts() {
   const [selectedCohort, setSelectedCohort] = useState(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
 
+  const { currentPlan, subscriptionLoading } = useSubscriptionPlan()
+  const navigate = useNavigate()
+
   useEffect(() => {
-    fetchCohorts()
-    
+    // Note: do NOT fetch cohorts here. We wait for subscription check first to prioritize the upsell or subscription UI.
     // Check sidebar state from localStorage or a global state
     const checkSidebarState = () => {
       const sidebarState = localStorage.getItem('sidebarOpen')
       setIsSidebarOpen(sidebarState !== 'false')
     }
-    
+
     checkSidebarState()
-    
+
     // Listen for sidebar toggle events
     window.addEventListener('sidebarToggle', checkSidebarState)
     window.addEventListener('storage', checkSidebarState)
-    
+
     return () => {
       window.removeEventListener('sidebarToggle', checkSidebarState)
       window.removeEventListener('storage', checkSidebarState)
     }
   }, [])
+
+  // Load cohorts only after subscription is known and the user is allowed to view cohorts
+  useEffect(() => {
+    if (subscriptionLoading) return
+    if (currentPlan === "basic") {
+      // Ensure we aren't stuck in loading state for discover users
+      setCohorts([])
+      setLoading(false)
+      return
+    }
+
+    // For non-discover plans, fetch cohorts
+    fetchCohorts()
+  }, [subscriptionLoading, currentPlan])
+
+
 
   const getCachedCohorts = () => {
     try {
@@ -262,6 +283,23 @@ function MyCohorts() {
 
   const mainMarginLeft = isSidebarOpen ? "250px" : "80px"
 
+  if (subscriptionLoading) {
+    return (
+      <div style={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        minHeight: "60vh",
+        marginLeft: mainMarginLeft,
+        padding: "20px",
+        transition: "margin-left 0.3s ease"
+      }}>
+        <Loader size={36} style={{ color: "#a67c52", animation: "spin 1s linear infinite" }} />
+        <p style={{ color: "#7d5a50", fontSize: "16px", marginLeft: "12px" }}>Checking subscription...</p>
+      </div>
+    )
+  }
+
   if (loading) {
     return (
       <div style={{
@@ -278,6 +316,21 @@ function MyCohorts() {
         <Loader size={48} style={{ color: "#a67c52", animation: "spin 1s linear infinite" }} />
         <p style={{ color: "#7d5a50", fontSize: "16px" }}>Loading your portfolio...</p>
       </div>
+    )
+  }
+
+  if (currentPlan === "basic") {
+    return (
+      <Upsell
+        title={"My Cohorts"}
+        subtitle={"The My Cohorts feature is available on our Engage and Partner plans. Upgrade now to manage your investment cohorts, access detailed portfolio analytics and priority support."}
+        features={["Portfolio & cohort analytics", "Manage and track SME investments", "Private deal room access", "Priority support and reporting"]}
+        variant={"center"}
+        mainMarginLeft={mainMarginLeft}
+        plans={["Engage", "Partner"]}
+        upgradeMessage={"Upgrade your subscription to manage your investment cohorts, access detailed portfolio analytics and priority support."}
+        primaryLabel={"View Available Plans"}
+      />
     )
   }
 

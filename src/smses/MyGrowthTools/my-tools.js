@@ -3,20 +3,22 @@ import { useState, useMemo, useEffect } from "react"
 import {
   Search,
   Download,
-  Eye,
   Check,
   Package,
-  Settings,
   Target,
   Award,
   Users,
-  Shield,
   ShoppingCart,
   Filter,
   Calendar,
   FileText,
   Star,
   Zap,
+  ExternalLink,
+  Clock,
+  CheckCircle,
+  MessageSquare,
+  Paperclip,
 } from "lucide-react"
 import { collection, query, where, getDocs, getFirestore } from "firebase/firestore"
 import { getAuth } from "firebase/auth"
@@ -30,83 +32,83 @@ const MyToolsPage = () => {
   const db = getFirestore()
   const user = auth.currentUser
 
-  // Define a consistent color palette for dark brown shades
   const colors = {
-    darkBrown: "#372C27", // Deep coffee/espresso
-    mediumBrown: "#5D4037", // Rich, warm brown
-    lightBrown: "#8D6E63", // Muted, earthy brown
-    accentGold: "#A67C52", // Golden brown for highlights
-    offWhite: "#F5F2F0", // Soft off-white for text/backgrounds
-    cream: "#EFEBE9", // Slightly darker cream
-    lightTan: "#D7CCC8", // Very light tan for borders
-    darkText: "#2C2927", // Very dark text on light backgrounds
-    lightText: "#F5F2F0", // Light text on dark backgrounds
+    darkBrown: "#372C27",
+    mediumBrown: "#5D4037",
+    lightBrown: "#8D6E63",
+    accentGold: "#A67C52",
+    offWhite: "#F5F2F0",
+    cream: "#EFEBE9",
+    lightTan: "#D7CCC8",
+    darkText: "#2C2927",
+    lightText: "#F5F2F0",
     gradientStart: "#4A352F",
     gradientEnd: "#7D5A50",
   }
 
-  // Enhanced styles for better design
   const styles = {
     container: {
-      marginLeft: "280px", // Account for sidebar
-      padding: "0 1.5rem 0 1.5rem", // Remove right margin, keep left/right padding
+      padding: "0 0.5rem",
       fontFamily: "'Inter', 'Segoe UI', 'Roboto', sans-serif",
-      background: colors.offWhite, // Use defined color
-      minHeight: "100vh",
-      width: "calc(100vw - 280px)", // Full width minus sidebar
-      maxWidth: "none", // Remove max-width constraint
+      background: colors.offWhite,
+      minHeight: "calc(100vh - 100px)",
+      width: "100%",
+      maxWidth: "100%",
+      overflow: "visible",
     },
     betaNotice: {
-      background: "linear-gradient(135deg, #FFF3CD 0%, #FFF8E1 100%)",
-      color: "#856404",
-      border: "2px solid #FFC107",
+      background: "linear-gradient(135deg, #D1FAE5 0%, #A7F3D0 100%)",
+      color: "#065F46",
+      border: "2px solid #34D399",
       borderRadius: "16px",
       padding: "1.25rem 2rem",
-      margin: "60px auto 3rem auto",
-      width: "100%", // Full width
-      maxWidth: "none", // Remove max-width constraint
+      margin: "0 auto 2rem auto",
+      width: "100%",
+      maxWidth: "100%",
       fontWeight: 600,
       fontSize: "1rem",
       textAlign: "center",
-      boxShadow: "0 8px 24px rgba(255, 193, 7, 0.2)",
+      boxShadow: "0 8px 24px rgba(52, 211, 153, 0.2)",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
       gap: "0.75rem",
     },
     pageHeader: {
-      background: `linear-gradient(135deg, ${colors.offWhite} 0%, ${colors.cream} 100%)`, // Use defined colors
+      background: `linear-gradient(135deg, ${colors.offWhite} 0%, ${colors.cream} 100%)`,
       borderRadius: "20px",
-      padding: "3rem 2.5rem",
-      marginBottom: "2.5rem",
-      boxShadow: `0 8px 32px ${colors.darkBrown}15`, // Use defined color
-      border: `1px solid ${colors.lightTan}`, // Use defined color
+      padding: "2.5rem 2rem",
+      marginBottom: "2rem",
+      boxShadow: `0 8px 32px ${colors.darkBrown}15`,
+      border: `1px solid ${colors.lightTan}`,
+      width: "100%",
     },
     headerContent: {
       display: "flex",
       justifyContent: "space-between",
       alignItems: "center",
       flexWrap: "wrap",
-      gap: "2rem",
+      gap: "1.5rem",
+      width: "100%",
     },
     headerText: {
       flex: "1",
-      minWidth: "300px",
+      minWidth: "250px",
     },
     pageTitle: {
-      fontSize: "2.75rem",
+      fontSize: "2.25rem",
       fontWeight: "800",
-      background: `linear-gradient(135deg, ${colors.darkBrown} 0%, ${colors.mediumBrown} 100%)`, // Use defined colors
+      background: `linear-gradient(135deg, ${colors.darkBrown} 0%, ${colors.mediumBrown} 100%)`,
       backgroundClip: "text",
       WebkitBackgroundClip: "text",
       color: "transparent",
-      margin: "0 0 1rem 0",
-      letterSpacing: "-1px",
+      margin: "0 0 0.75rem 0",
+      letterSpacing: "-0.5px",
     },
     pageSubtitle: {
-      fontSize: "1.25rem",
-      color: colors.mediumBrown, // Use defined color
-      lineHeight: "1.6",
+      fontSize: "1.1rem",
+      color: colors.mediumBrown,
+      lineHeight: "1.5",
       margin: "0",
     },
     headerActions: {
@@ -114,13 +116,13 @@ const MyToolsPage = () => {
       gap: "1rem",
     },
     shopMoreBtn: {
-      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`, // Use defined colors
-      color: colors.lightText, // Use defined color
+      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
+      color: colors.lightText,
       border: "none",
-      padding: "1rem 2rem",
-      borderRadius: "12px",
+      padding: "0.875rem 1.75rem",
+      borderRadius: "10px",
       fontWeight: "700",
-      fontSize: "1rem",
+      fontSize: "0.95rem",
       cursor: "pointer",
       transition: "all 0.3s ease",
       display: "flex",
@@ -128,19 +130,22 @@ const MyToolsPage = () => {
       gap: "0.5rem",
       textTransform: "uppercase",
       letterSpacing: "0.5px",
-      boxShadow: `0 4px 16px ${colors.accentGold}30`, // Use defined color
+      boxShadow: `0 4px 16px ${colors.accentGold}30`,
+      whiteSpace: "nowrap",
     },
     controlsSection: {
-      background: colors.offWhite, // Use defined color
+      background: colors.offWhite,
       borderRadius: "16px",
-      padding: "2rem",
-      marginBottom: "2.5rem",
-      boxShadow: `0 4px 16px ${colors.darkBrown}10`, // Use defined color
-      border: `1px solid ${colors.lightTan}`, // Use defined color
+      padding: "1.5rem",
+      marginBottom: "2rem",
+      boxShadow: `0 4px 16px ${colors.darkBrown}10`,
+      border: `1px solid ${colors.lightTan}`,
+      width: "100%",
     },
     searchContainer: {
       position: "relative",
-      marginBottom: "2rem",
+      marginBottom: "1.5rem",
+      width: "100%",
       maxWidth: "500px",
     },
     searchIcon: {
@@ -148,150 +153,165 @@ const MyToolsPage = () => {
       left: "1rem",
       top: "50%",
       transform: "translateY(-50%)",
-      color: colors.accentGold, // Use defined color
+      color: colors.accentGold,
       width: "1.25rem",
       height: "1.25rem",
     },
     searchInput: {
       width: "100%",
-      padding: "1rem 1rem 1rem 3rem",
-      borderRadius: "12px",
-      border: `2px solid ${colors.lightTan}`, // Use defined color
-      fontSize: "1rem",
+      padding: "0.875rem 1rem 0.875rem 3rem",
+      borderRadius: "10px",
+      border: `2px solid ${colors.lightTan}`,
+      fontSize: "0.95rem",
       transition: "all 0.3s ease",
-      background: colors.cream, // Use defined color
-      color: colors.darkText, // Use defined color
+      background: colors.cream,
+      color: colors.darkText,
     },
     filtersContainer: {
       display: "flex",
       alignItems: "center",
       gap: "1rem",
       flexWrap: "wrap",
+      width: "100%",
     },
     filterIcon: {
-      color: colors.accentGold, // Use defined color
+      color: colors.accentGold,
       width: "1.25rem",
       height: "1.25rem",
     },
     filterButtons: {
       display: "flex",
-      gap: "0.75rem",
+      gap: "0.5rem",
       flexWrap: "wrap",
+      flex: "1",
     },
     filterBtn: {
-      padding: "0.75rem 1.5rem",
-      borderRadius: "25px",
-      border: `2px solid ${colors.lightTan}`, // Use defined color
-      background: colors.offWhite, // Use defined color
-      color: colors.mediumBrown, // Use defined color
+      padding: "0.625rem 1.25rem",
+      borderRadius: "20px",
+      border: `2px solid ${colors.lightTan}`,
+      background: colors.offWhite,
+      color: colors.mediumBrown,
       cursor: "pointer",
       transition: "all 0.3s ease",
-      fontSize: "0.9rem",
+      fontSize: "0.85rem",
       fontWeight: "600",
       display: "flex",
       alignItems: "center",
-      gap: "0.5rem",
+      gap: "0.375rem",
+      whiteSpace: "nowrap",
     },
     filterBtnActive: {
-      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`, // Use defined colors
-      color: colors.lightText, // Use defined color
-      borderColor: colors.accentGold, // Use defined color
-      boxShadow: `0 4px 12px ${colors.accentGold}30`, // Use defined color
+      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
+      color: colors.lightText,
+      borderColor: colors.accentGold,
+      boxShadow: `0 4px 12px ${colors.accentGold}30`,
     },
     filterCount: {
-      background: "rgba(255, 255, 255, 0.2)", // Keep for active state
-      padding: "0.25rem 0.5rem",
-      borderRadius: "12px",
-      fontSize: "0.75rem",
+      background: "rgba(255, 255, 255, 0.2)",
+      padding: "0.125rem 0.375rem",
+      borderRadius: "10px",
+      fontSize: "0.7rem",
       fontWeight: "700",
     },
     toolsSection: {
-      marginBottom: "3rem",
+      marginBottom: "2.5rem",
+      width: "100%",
     },
     toolsGrid: {
       display: "grid",
-      gridTemplateColumns: "repeat(auto-fill, minmax(400px, 1fr))",
-      gap: "2rem",
+      gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))",
+      gap: "1.5rem",
+      width: "100%",
     },
     toolCard: {
-      background: colors.offWhite, // Use defined color
-      borderRadius: "20px",
-      padding: "2rem",
-      boxShadow: `0 8px 24px ${colors.darkBrown}10`, // Use defined color
-      border: `2px solid ${colors.lightTan}`, // Use defined color
+      background: colors.offWhite,
+      borderRadius: "18px",
+      padding: "1.75rem",
+      boxShadow: `0 8px 24px ${colors.darkBrown}10`,
+      border: `2px solid ${colors.lightTan}`,
       transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
       position: "relative",
       overflow: "hidden",
+      width: "100%",
     },
     toolCardHeader: {
       display: "flex",
       justifyContent: "space-between",
       alignItems: "flex-start",
-      marginBottom: "1.5rem",
+      marginBottom: "1.25rem",
+      width: "100%",
     },
     toolIconContainer: {
-      width: "4rem",
-      height: "4rem",
-      background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`, // Use defined colors
-      borderRadius: "16px",
+      width: "3.5rem",
+      height: "3.5rem",
+      background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
+      borderRadius: "14px",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      color: colors.accentGold, // Use defined color
-      border: `2px solid ${colors.lightTan}`, // Use defined color
+      color: colors.accentGold,
+      border: `2px solid ${colors.lightTan}`,
     },
     toolStatus: {
       display: "flex",
       alignItems: "center",
     },
     statusBadge: {
-      padding: "0.5rem 1rem",
-      borderRadius: "20px",
-      fontSize: "0.75rem",
+      padding: "0.375rem 0.875rem",
+      borderRadius: "18px",
+      fontSize: "0.7rem",
       fontWeight: "700",
       textTransform: "uppercase",
       letterSpacing: "0.5px",
       display: "flex",
       alignItems: "center",
-      gap: "0.5rem",
-      background: "linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%)", // Green for delivered
-      color: "#15803d", // Dark green text
-      border: "1px solid #86efac", // Green border
+      gap: "0.375rem",
+    },
+    statusDelivered: {
+      background: "linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%)",
+      color: "#15803d",
+      border: "1px solid #86efac",
+    },
+    statusProcessing: {
+      background: "linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)",
+      color: "#92400E",
+      border: "1px solid #FCD34D",
     },
     statusIcon: {
-      width: "1rem",
-      height: "1rem",
+      width: "0.875rem",
+      height: "0.875rem",
     },
     toolCardBody: {
-      marginBottom: "2rem",
+      marginBottom: "1.75rem",
+      width: "100%",
     },
     toolTitle: {
-      fontSize: "1.5rem",
+      fontSize: "1.375rem",
       fontWeight: "700",
-      color: colors.darkBrown, // Use defined color
-      margin: "0 0 0.5rem 0",
+      color: colors.darkBrown,
+      margin: "0 0 0.375rem 0",
       lineHeight: "1.3",
     },
     toolPackage: {
-      color: colors.accentGold, // Use defined color
-      fontSize: "1rem",
+      color: colors.accentGold,
+      fontSize: "0.95rem",
       fontWeight: "600",
-      marginBottom: "1rem",
+      marginBottom: "0.875rem",
     },
     toolDescription: {
-      color: colors.mediumBrown, // Use defined color
-      lineHeight: "1.6",
-      marginBottom: "1.5rem",
-      fontSize: "0.95rem",
+      color: colors.mediumBrown,
+      lineHeight: "1.5",
+      marginBottom: "1.25rem",
+      fontSize: "0.9rem",
     },
     toolFeatures: {
-      marginBottom: "1.5rem",
+      marginBottom: "1.25rem",
     },
     featuresTitle: {
-      fontSize: "1rem",
+      fontSize: "0.95rem",
       fontWeight: "700",
-      color: colors.darkBrown, // Use defined color
-      marginBottom: "0.75rem",
+      color: colors.darkBrown,
+      marginBottom: "0.625rem",
     },
     featuresList: {
       listStyle: "none",
@@ -301,215 +321,283 @@ const MyToolsPage = () => {
     featureItem: {
       display: "flex",
       alignItems: "flex-start",
-      gap: "0.5rem",
-      marginBottom: "0.5rem",
-      fontSize: "0.9rem",
-      color: colors.mediumBrown, // Use defined color
-      lineHeight: "1.5",
+      gap: "0.375rem",
+      marginBottom: "0.375rem",
+      fontSize: "0.85rem",
+      color: colors.mediumBrown,
+      lineHeight: "1.4",
     },
     featureCheck: {
-      width: "1rem",
-      height: "1rem",
-      color: colors.accentGold, // Use defined color
+      width: "0.875rem",
+      height: "0.875rem",
+      color: colors.accentGold,
       flexShrink: 0,
       marginTop: "0.125rem",
     },
     featureItemMore: {
       fontStyle: "italic",
-      color: colors.accentGold, // Use defined color
+      color: colors.accentGold,
       fontWeight: "600",
     },
+    // NEW: Specifications section
+    toolSpecifications: {
+      marginBottom: "1.25rem",
+      padding: "1rem",
+      background: `${colors.accentGold}10`,
+      border: `2px solid ${colors.accentGold}30`,
+      borderRadius: "10px",
+    },
+    specsTitle: {
+      fontSize: "0.95rem",
+      fontWeight: "700",
+      color: colors.darkBrown,
+      marginBottom: "0.625rem",
+      display: "flex",
+      alignItems: "center",
+      gap: "0.5rem",
+    },
+    specsText: {
+      fontSize: "0.85rem",
+      color: colors.mediumBrown,
+      lineHeight: "1.5",
+      marginBottom: "0.75rem",
+      whiteSpace: "pre-wrap",
+    },
+    specsFiles: {
+      display: "flex",
+      flexDirection: "column",
+      gap: "0.375rem",
+    },
+    specFileItem: {
+      display: "flex",
+      alignItems: "center",
+      gap: "0.5rem",
+      padding: "0.5rem",
+      background: colors.cream,
+      borderRadius: "6px",
+      fontSize: "0.8rem",
+      color: colors.darkBrown,
+      cursor: "pointer",
+      transition: "all 0.2s ease",
+    },
     toolDeliverables: {
-      marginBottom: "1.5rem",
+      marginBottom: "1.25rem",
     },
     deliverablesTitle: {
-      fontSize: "1rem",
+      fontSize: "0.95rem",
       fontWeight: "700",
-      color: colors.darkBrown, // Use defined color
-      marginBottom: "0.75rem",
+      color: colors.darkBrown,
+      marginBottom: "0.625rem",
     },
     deliverablesList: {
       display: "flex",
       flexDirection: "column",
-      gap: "0.5rem",
+      gap: "0.375rem",
     },
     deliverableItem: {
       display: "flex",
       alignItems: "center",
-      gap: "0.75rem",
-      padding: "0.5rem",
-      background: colors.cream, // Use defined color
+      gap: "0.625rem",
+      padding: "0.625rem",
+      background: colors.cream,
       borderRadius: "8px",
-      border: `1px solid ${colors.lightTan}`, // Use defined color
+      border: `1px solid ${colors.lightTan}`,
+      cursor: "pointer",
+      transition: "all 0.3s ease",
     },
     deliverableIcon: {
-      width: "1.25rem",
-      height: "1.25rem",
-      color: colors.accentGold, // Use defined color
+      width: "1.125rem",
+      height: "1.125rem",
+      color: colors.accentGold,
       flexShrink: 0,
     },
     deliverableInfo: {
       flex: "1",
     },
     deliverableName: {
-      fontSize: "0.9rem",
+      fontSize: "0.85rem",
       fontWeight: "600",
-      color: colors.darkBrown, // Use defined color
+      color: colors.darkBrown,
       display: "block",
     },
     deliverableMeta: {
-      fontSize: "0.75rem",
-      color: colors.mediumBrown, // Use defined color
+      fontSize: "0.7rem",
+      color: colors.mediumBrown,
+    },
+    downloadLink: {
+      color: colors.accentGold,
+      textDecoration: "none",
+      display: "flex",
+      alignItems: "center",
+      gap: "0.375rem",
+      fontWeight: "600",
+      fontSize: "0.8rem",
     },
     toolCardFooter: {
-      borderTop: `1px solid ${colors.lightTan}`, // Use defined color
-      paddingTop: "1.5rem",
+      borderTop: `1px solid ${colors.lightTan}`,
+      paddingTop: "1.25rem",
+      width: "100%",
     },
     toolMeta: {
       display: "flex",
       justifyContent: "space-between",
       alignItems: "center",
-      marginBottom: "1rem",
+      marginBottom: "0.875rem",
       flexWrap: "wrap",
-      gap: "1rem",
+      gap: "0.875rem",
+      width: "100%",
     },
     purchaseInfo: {
       display: "flex",
       alignItems: "center",
-      gap: "0.5rem",
-      color: colors.mediumBrown, // Use defined color
-      fontSize: "0.9rem",
+      gap: "0.375rem",
+      color: colors.mediumBrown,
+      fontSize: "0.85rem",
     },
     metaIcon: {
-      width: "1rem",
-      height: "1rem",
+      width: "0.875rem",
+      height: "0.875rem",
     },
     amountInfo: {
-      fontSize: "1.25rem",
+      fontSize: "1.125rem",
       fontWeight: "700",
-      color: colors.accentGold, // Use defined color
+      color: colors.accentGold,
     },
     toolActions: {
       display: "flex",
-      gap: "1rem",
+      gap: "0.875rem",
     },
     actionBtn: {
       flex: "1",
-      padding: "0.875rem 1.5rem",
-      borderRadius: "10px",
+      padding: "0.75rem 1.25rem",
+      borderRadius: "8px",
       fontWeight: "600",
-      fontSize: "0.9rem",
+      fontSize: "0.85rem",
       cursor: "pointer",
       transition: "all 0.3s ease",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      gap: "0.5rem",
+      gap: "0.375rem",
       textTransform: "uppercase",
       letterSpacing: "0.5px",
     },
     actionBtnSecondary: {
-      background: colors.cream, // Use defined color
-      color: colors.mediumBrown, // Use defined color
-      border: `2px solid ${colors.lightTan}`, // Use defined color
+      background: colors.cream,
+      color: colors.mediumBrown,
+      border: `2px solid ${colors.lightTan}`,
     },
     actionBtnPrimary: {
-      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`, // Use defined colors
-      color: colors.lightText, // Use defined color
+      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
+      color: colors.lightText,
       border: "none",
-      boxShadow: `0 4px 12px ${colors.accentGold}30`, // Use defined color
+      boxShadow: `0 4px 12px ${colors.accentGold}30`,
     },
     actionIcon: {
-      width: "1rem",
-      height: "1rem",
+      width: "0.875rem",
+      height: "0.875rem",
     },
     emptyState: {
       textAlign: "center",
-      padding: "4rem 2rem",
-      background: colors.offWhite, // Use defined color
-      borderRadius: "20px",
-      border: `2px dashed ${colors.lightTan}`, // Use defined color
-      color: colors.mediumBrown, // Use defined color
+      padding: "3rem 1.5rem",
+      background: colors.offWhite,
+      borderRadius: "18px",
+      border: `2px dashed ${colors.lightTan}`,
+      color: colors.mediumBrown,
+      width: "100%",
     },
     emptyIcon: {
-      width: "4rem",
-      height: "4rem",
-      color: colors.lightBrown, // Use defined color
-      marginBottom: "1.5rem",
+      width: "3.5rem",
+      height: "3.5rem",
+      color: colors.lightBrown,
+      marginBottom: "1.25rem",
     },
     emptyTitle: {
-      fontSize: "1.5rem",
+      fontSize: "1.375rem",
       fontWeight: "700",
-      color: colors.darkBrown, // Use defined color
-      marginBottom: "1rem",
+      color: colors.darkBrown,
+      marginBottom: "0.875rem",
     },
     emptyDescription: {
-      fontSize: "1rem",
-      lineHeight: "1.6",
-      marginBottom: "2rem",
+      fontSize: "0.95rem",
+      lineHeight: "1.5",
+      marginBottom: "1.5rem",
       maxWidth: "500px",
-      margin: "0 auto 2rem auto",
+      margin: "0 auto 1.5rem auto",
     },
     emptyCtaBtn: {
-      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`, // Use defined colors
-      color: colors.lightText, // Use defined color
+      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
+      color: colors.lightText,
       border: "none",
-      padding: "1rem 2rem",
-      borderRadius: "12px",
+      padding: "0.875rem 1.75rem",
+      borderRadius: "10px",
       fontWeight: "700",
-      fontSize: "1rem",
+      fontSize: "0.95rem",
       cursor: "pointer",
       transition: "all 0.3s ease",
       display: "inline-flex",
       alignItems: "center",
-      gap: "0.5rem",
+      gap: "0.375rem",
       textTransform: "uppercase",
       letterSpacing: "0.5px",
-      boxShadow: `0 4px 16px ${colors.accentGold}30`, // Use defined color
+      boxShadow: `0 4px 16px ${colors.accentGold}30`,
     },
     summarySection: {
-      marginTop: "3rem",
+      marginTop: "2.5rem",
+      width: "100%",
     },
     summaryCard: {
-      background: `linear-gradient(135deg, ${colors.offWhite} 0%, ${colors.cream} 100%)`, // Use defined colors
-      borderRadius: "20px",
-      padding: "2.5rem",
-      boxShadow: `0 8px 32px ${colors.darkBrown}15`, // Use defined color
-      border: `1px solid ${colors.lightTan}`, // Use defined color
+      background: `linear-gradient(135deg, ${colors.offWhite} 0%, ${colors.cream} 100%)`,
+      borderRadius: "18px",
+      padding: "2rem",
+      boxShadow: `0 8px 32px ${colors.darkBrown}15`,
+      border: `1px solid ${colors.lightTan}`,
+      width: "100%",
     },
     summaryTitle: {
-      fontSize: "1.75rem",
+      fontSize: "1.5rem",
       fontWeight: "700",
-      color: colors.darkBrown, // Use defined color
+      color: colors.darkBrown,
       textAlign: "center",
-      marginBottom: "2rem",
+      marginBottom: "1.75rem",
     },
     summaryStats: {
       display: "grid",
-      gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-      gap: "2rem",
+      gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+      gap: "1.5rem",
+      width: "100%",
     },
     statItem: {
       textAlign: "center",
-      padding: "1.5rem",
-      background: colors.offWhite, // Use defined color
-      borderRadius: "16px",
-      border: `1px solid ${colors.lightTan}`, // Use defined color
-      boxShadow: `0 4px 12px ${colors.darkBrown}08`, // Use defined color
+      padding: "1.25rem",
+      background: colors.offWhite,
+      borderRadius: "14px",
+      border: `1px solid ${colors.lightTan}`,
+      boxShadow: `0 4px 12px ${colors.darkBrown}08`,
     },
     statNumber: {
-      fontSize: "2.5rem",
+      fontSize: "2rem",
       fontWeight: "800",
-      color: colors.accentGold, // Use defined color
-      marginBottom: "0.5rem",
+      color: colors.accentGold,
+      marginBottom: "0.375rem",
       lineHeight: "1",
     },
     statLabel: {
-      fontSize: "0.9rem",
+      fontSize: "0.8rem",
       fontWeight: "600",
-      color: colors.mediumBrown, // Use defined color
+      color: colors.mediumBrown,
       textTransform: "uppercase",
       letterSpacing: "0.5px",
+    },
+    noFilesMessage: {
+      padding: "0.875rem",
+      background: "#FEF3C7",
+      border: "2px solid #FCD34D",
+      borderRadius: "8px",
+      color: "#92400E",
+      fontSize: "0.85rem",
+      textAlign: "center",
+      marginTop: "0.875rem",
     },
   }
 
@@ -533,19 +621,22 @@ const MyToolsPage = () => {
               data.type === "template" ? "Templates" : data.type === "bundle" ? "Bundle Package" : "Growth Tools",
             tier: data.tier || "Standard",
             icon: getToolIcon(data.category || data.type),
-            status: "delivered",
+            status: data.deliveryStatus || "processing",
             purchaseDate: data.createdAt?.toDate?.() || new Date(data.createdAt),
             description: getToolDescription(data),
             features: getToolFeatures(data),
-            deliverables: getToolDeliverables(data),
+            deliverables: data.deliverables || [],
+            specifications: data.customerSpecifications || null,
+            specificationFiles: data.specificationFiles || [],
             category: data.category || getCategoryFromType(data.type),
-            amount: data.amount || 0,
+            subcategory: data.subcategory || null,
+            amount: data.totalAmount || 0,
             transactionRef: data.transactionRef,
-            deliveryStatus: data.deliveryStatus || "delivered",
+            deliveryStatus: data.deliveryStatus || "processing",
+            deliveredAt: data.deliveredAt?.toDate?.(),
           }
           tools.push(tool)
         })
-        // Sort by purchase date (newest first)
         tools.sort((a, b) => new Date(b.purchaseDate) - new Date(a.purchaseDate))
         setPurchasedTools(tools)
       } catch (error) {
@@ -557,28 +648,29 @@ const MyToolsPage = () => {
     loadPurchasedTools()
   }, [user, db])
 
-  // Helper functions updated for real data
   const getToolIcon = (category) => {
     const iconMap = {
-      compliance: <Shield className="w-8 h-8" />,
       legitimacy: <Award className="w-8 h-8" />,
-      fundability: <Target className="w-8 h-8" />,
+      capital_appeal: <Target className="w-8 h-8" />,
+      fundability: <Target className="w-8 h-8" />, // Keep for backwards compatibility
       governance: <Users className="w-8 h-8" />,
       templates: <FileText className="w-8 h-8" />,
-      bundles: <Package className="w-8 h-8" />,
       growth_tool: <Zap className="w-8 h-8" />,
     }
     return iconMap[category?.toLowerCase()] || <Package className="w-8 h-8" />
   }
+
   const getToolDescription = (data) => {
+    const subcategoryInfo = data.subcategory ? ` - ${data.subcategory}` : ""
     if (data.type === "template") {
-      return `${data.packageName} - Professional template ready for immediate use with comprehensive documentation and implementation guides.`
+      return `${data.packageName}${subcategoryInfo} - Professional template ready for immediate use with comprehensive documentation and implementation guides.`
     }
     if (data.type === "bundle") {
       return `${data.packageName} - Complete bundle package with multiple resources, templates, and tools for comprehensive business growth.`
     }
-    return `${data.packageName} - ${data.tier} tier package with comprehensive tools, resources, and expert guidance for business development.`
+    return `${data.packageName}${subcategoryInfo} - ${data.tier} tier package with comprehensive tools, resources, and expert guidance for business development.`
   }
+
   const getToolFeatures = (data) => {
     const baseFeatures = [
       "Digital delivery within 24-48 hours",
@@ -586,15 +678,6 @@ const MyToolsPage = () => {
       "Email support included",
       "Updates and revisions as needed",
     ]
-    if (data.category === "compliance" || data.packageName?.toLowerCase().includes("compliance")) {
-      return [
-        "Policy templates and documentation",
-        "Compliance checklists and guides",
-        "Legal framework alignment",
-        "Implementation roadmap",
-        ...baseFeatures,
-      ]
-    }
     if (data.category === "legitimacy" || data.packageName?.toLowerCase().includes("legitimacy")) {
       return [
         "Brand identity and design assets",
@@ -604,7 +687,12 @@ const MyToolsPage = () => {
         ...baseFeatures,
       ]
     }
-    if (data.category === "fundability" || data.packageName?.toLowerCase().includes("fundability")) {
+    if (
+      data.category === "capital_appeal" ||
+      data.category === "fundability" ||
+      data.packageName?.toLowerCase().includes("fundability") ||
+      data.packageName?.toLowerCase().includes("capital appeal")
+    ) {
       return [
         "Business plan templates",
         "Financial modeling tools",
@@ -624,39 +712,7 @@ const MyToolsPage = () => {
     }
     return baseFeatures
   }
-  const getToolDeliverables = (data) => {
-    const baseDeliverables = [
-      { name: "Purchase Confirmation", type: "document", size: "1 MB" },
-      { name: "Access Instructions", type: "document", size: "500 KB" },
-    ]
-    if (data.type === "growth_tool") {
-      return [
-        { name: `${data.packageName} Package`, type: "design", size: "25 MB" },
-        { name: "Implementation Guide", type: "document", size: "5 MB" },
-        { name: "Templates & Resources", type: "template", size: "15 MB" },
-        { name: "Video Tutorials", type: "video", size: "100 MB" },
-        ...baseDeliverables,
-      ]
-    }
-    if (data.type === "template") {
-      return [
-        { name: `${data.packageName}`, type: "template", size: "5 MB" },
-        { name: "Usage Guide", type: "document", size: "2 MB" },
-        { name: "Customization Instructions", type: "document", size: "1 MB" },
-        ...baseDeliverables,
-      ]
-    }
-    if (data.type === "bundle") {
-      return [
-        { name: `${data.packageName} Bundle`, type: "bundle", size: "50 MB" },
-        { name: "Bundle Guide", type: "document", size: "8 MB" },
-        { name: "Individual Templates", type: "template", size: "30 MB" },
-        { name: "Implementation Roadmap", type: "document", size: "3 MB" },
-        ...baseDeliverables,
-      ]
-    }
-    return baseDeliverables
-  }
+
   const getCategoryFromType = (type) => {
     const typeMap = {
       growth_tool: "tools",
@@ -668,22 +724,24 @@ const MyToolsPage = () => {
 
   const filterOptions = [
     { id: "all", label: "All Tools", count: purchasedTools.length },
-    { id: "compliance", label: "Compliance", count: purchasedTools.filter((t) => t.category === "compliance").length },
     { id: "legitimacy", label: "Legitimacy", count: purchasedTools.filter((t) => t.category === "legitimacy").length },
     {
-      id: "fundability",
-      label: "Fundability",
-      count: purchasedTools.filter((t) => t.category === "fundability").length,
+      id: "capital_appeal",
+      label: "Capital Appeal",
+      count: purchasedTools.filter((t) => t.category === "capital_appeal" || t.category === "fundability").length,
     },
     { id: "governance", label: "Governance", count: purchasedTools.filter((t) => t.category === "governance").length },
     { id: "templates", label: "Templates", count: purchasedTools.filter((t) => t.category === "templates").length },
-    { id: "bundles", label: "Bundles", count: purchasedTools.filter((t) => t.category === "bundles").length },
   ]
 
   const filteredTools = useMemo(() => {
     let filtered = purchasedTools
     if (activeFilter !== "all") {
-      filtered = filtered.filter((tool) => tool.category === activeFilter)
+      if (activeFilter === "capital_appeal") {
+        filtered = filtered.filter((tool) => tool.category === "capital_appeal" || tool.category === "fundability")
+      } else {
+        filtered = filtered.filter((tool) => tool.category === activeFilter)
+      }
     }
     if (searchQuery) {
       filtered = filtered.filter(
@@ -695,69 +753,40 @@ const MyToolsPage = () => {
     return filtered
   }, [purchasedTools, activeFilter, searchQuery])
 
-  const handleDownload = (tool) => {
-    console.log("Downloading tool:", tool.title)
-    // Implement download logic
-    alert(`Downloading ${tool.title}...`)
-  }
-
-  const handlePreview = (tool) => {
-    console.log("Previewing tool:", tool.title)
-    // Implement preview logic
-    alert(`Opening preview for ${tool.title}...`)
+  const handleDownload = (url, filename) => {
+    window.open(url, "_blank")
   }
 
   const handleShopMore = () => {
     window.location.href = "/growth/shop-tools"
   }
 
-  if (isLoading) {
-    return (
-      <div style={styles.container}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            minHeight: "400px",
-            flexDirection: "column",
-            gap: "1.5rem",
-          }}
-        >
-          <div
-            style={{
-              width: "80px",
-              height: "80px",
-              border: `4px solid ${colors.lightTan}`, // Use defined color
-              borderTop: `4px solid ${colors.accentGold}`, // Use defined color
-              borderRadius: "50%",
-              animation: "spin 1s linear infinite",
-            }}
-          ></div>
-          <p style={{ color: colors.mediumBrown, fontSize: "1.25rem", fontWeight: "600" }}>Loading your tools...</p>
-          <style jsx>{`
-            @keyframes spin {
-              0% {
-                transform: rotate(0deg);
-              }
-              100% {
-                transform: rotate(360deg);
-              }
-            }
-          `}</style>
+  const getStatusBadge = (deliveryStatus) => {
+    if (deliveryStatus === "delivered") {
+      return (
+        <div style={{ ...styles.statusBadge, ...styles.statusDelivered }}>
+          <CheckCircle style={styles.statusIcon} />
+          Delivered
         </div>
-      </div>
-    )
+      )
+    } else {
+      return (
+        <div style={{ ...styles.statusBadge, ...styles.statusProcessing }}>
+          <Clock style={styles.statusIcon} />
+          Processing
+        </div>
+      )
+    }
   }
 
   return (
     <div style={styles.container}>
-      {/* Beta Testing Notice */}
+      {/* Beta Notice */}
       <div style={styles.betaNotice}>
-        <Settings className="w-6 h-6" style={{ color: "#856404" }} />
+        <CheckCircle className="w-6 h-6" style={{ color: "#065F46" }} />
         <span>
-          <strong>Beta Testing Phase:</strong> Tool delivery and download features are currently unavailable in beta
-          testing. This page shows your purchase history and will be fully functional at launch.
+          <strong>✅ Files Delivered:</strong> Download your growth tools directly from this page once they've been
+          processed and delivered by our team.
         </span>
       </div>
 
@@ -774,11 +803,11 @@ const MyToolsPage = () => {
               onClick={handleShopMore}
               onMouseEnter={(e) => {
                 e.currentTarget.style.transform = "translateY(-2px)"
-                e.currentTarget.style.boxShadow = `0 8px 24px ${colors.accentGold}40` // Use defined color
+                e.currentTarget.style.boxShadow = `0 8px 24px ${colors.accentGold}40`
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.transform = "translateY(0)"
-                e.currentTarget.style.boxShadow = `0 4px 16px ${colors.accentGold}30` // Use defined color
+                e.currentTarget.style.boxShadow = `0 4px 16px ${colors.accentGold}30`
               }}
             >
               <ShoppingCart className="w-5 h-5" />
@@ -799,11 +828,11 @@ const MyToolsPage = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
             style={styles.searchInput}
             onFocus={(e) => {
-              e.currentTarget.style.borderColor = colors.accentGold // Use defined color
-              e.currentTarget.style.boxShadow = `0 0 0 3px ${colors.accentGold}1A` // Use defined color
+              e.currentTarget.style.borderColor = colors.accentGold
+              e.currentTarget.style.boxShadow = `0 0 0 3px ${colors.accentGold}1A`
             }}
             onBlur={(e) => {
-              e.currentTarget.style.borderColor = colors.lightTan // Use defined color
+              e.currentTarget.style.borderColor = colors.lightTan
               e.currentTarget.style.boxShadow = "none"
             }}
           />
@@ -821,14 +850,14 @@ const MyToolsPage = () => {
                 }}
                 onMouseEnter={(e) => {
                   if (activeFilter !== option.id) {
-                    e.currentTarget.style.borderColor = colors.lightTan // Use defined color
-                    e.currentTarget.style.background = colors.cream // Use defined color
+                    e.currentTarget.style.borderColor = colors.lightTan
+                    e.currentTarget.style.background = colors.cream
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (activeFilter !== option.id) {
-                    e.currentTarget.style.borderColor = colors.lightTan // Use defined color
-                    e.currentTarget.style.background = colors.offWhite // Use defined color
+                    e.currentTarget.style.borderColor = colors.lightTan
+                    e.currentTarget.style.background = colors.offWhite
                   }
                 }}
               >
@@ -867,11 +896,11 @@ const MyToolsPage = () => {
               onClick={handleShopMore}
               onMouseEnter={(e) => {
                 e.currentTarget.style.transform = "translateY(-2px)"
-                e.currentTarget.style.boxShadow = `0 8px 24px ${colors.accentGold}40` // Use defined color
+                e.currentTarget.style.boxShadow = `0 8px 24px ${colors.accentGold}40`
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.transform = "translateY(0)"
-                e.currentTarget.style.boxShadow = `0 4px 16px ${colors.accentGold}30` // Use defined color
+                e.currentTarget.style.boxShadow = `0 4px 16px ${colors.accentGold}30`
               }}
             >
               <ShoppingCart className="w-5 h-5" />
@@ -885,29 +914,25 @@ const MyToolsPage = () => {
                 key={tool.id}
                 style={styles.toolCard}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-8px)"
-                  e.currentTarget.style.boxShadow = `0 16px 40px ${colors.darkBrown}26` // Use defined color
-                  e.currentTarget.style.borderColor = colors.lightBrown // Use defined color
+                  e.currentTarget.style.transform = "translateY(-6px)"
+                  e.currentTarget.style.boxShadow = `0 16px 40px ${colors.darkBrown}26`
+                  e.currentTarget.style.borderColor = colors.lightBrown
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.transform = "translateY(0)"
-                  e.currentTarget.style.boxShadow = `0 8px 24px ${colors.darkBrown}10` // Use defined color
-                  e.currentTarget.style.borderColor = colors.lightTan // Use defined color
+                  e.currentTarget.style.boxShadow = `0 8px 24px ${colors.darkBrown}10`
+                  e.currentTarget.style.borderColor = colors.lightTan
                 }}
               >
                 <div style={styles.toolCardHeader}>
                   <div style={styles.toolIconContainer}>{tool.icon}</div>
-                  <div style={styles.toolStatus}>
-                    <div style={styles.statusBadge}>
-                      <Check style={styles.statusIcon} />
-                      {tool.deliveryStatus === "delivered" ? "Delivered" : "Processing"}
-                    </div>
-                  </div>
+                  <div style={styles.toolStatus}>{getStatusBadge(tool.deliveryStatus)}</div>
                 </div>
                 <div style={styles.toolCardBody}>
                   <h3 style={styles.toolTitle}>{tool.title}</h3>
                   <p style={styles.toolPackage}>
                     {tool.package} • {tool.tier}
+                    {tool.subcategory && ` • ${tool.subcategory}`}
                   </p>
                   <p style={styles.toolDescription}>{tool.description}</p>
                   <div style={styles.toolFeatures}>
@@ -926,31 +951,89 @@ const MyToolsPage = () => {
                       )}
                     </ul>
                   </div>
-                  <div style={styles.toolDeliverables}>
-                    <h4 style={styles.deliverablesTitle}>Deliverables:</h4>
-                    <div style={styles.deliverablesList}>
-                      {tool.deliverables.slice(0, 3).map((deliverable, index) => (
-                        <div key={index} style={styles.deliverableItem}>
-                          <FileText style={styles.deliverableIcon} />
-                          <div style={styles.deliverableInfo}>
-                            <span style={styles.deliverableName}>{deliverable.name}</span>
-                            <span style={styles.deliverableMeta}>
-                              {deliverable.type} • {deliverable.size}
-                            </span>
+
+                  {/* Show Customer Specifications */}
+                  {(tool.specifications || (tool.specificationFiles && tool.specificationFiles.length > 0)) && (
+                    <div style={styles.toolSpecifications}>
+                      <h4 style={styles.specsTitle}>
+                        <MessageSquare size={16} />
+                        Your Specifications
+                      </h4>
+                      {tool.specifications && <div style={styles.specsText}>{tool.specifications}</div>}
+                      {tool.specificationFiles && tool.specificationFiles.length > 0 && (
+                        <div style={styles.specsFiles}>
+                          <div
+                            style={{
+                              fontSize: "0.8rem",
+                              fontWeight: "600",
+                              color: colors.darkBrown,
+                              marginBottom: "0.5rem",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.3rem",
+                            }}
+                          >
+                            <Paperclip size={14} />
+                            Reference Files ({tool.specificationFiles.length})
                           </div>
-                        </div>
-                      ))}
-                      {tool.deliverables.length > 3 && (
-                        <div style={styles.deliverableItem}>
-                          <Package style={styles.deliverableIcon} />
-                          <div style={styles.deliverableInfo}>
-                            <span style={styles.deliverableName}>+{tool.deliverables.length - 3} more files</span>
-                            <span style={styles.deliverableMeta}>Additional resources included</span>
-                          </div>
+                          {tool.specificationFiles.map((file, idx) => (
+                            <div
+                              key={idx}
+                              style={styles.specFileItem}
+                              onClick={() => handleDownload(file.url, file.name)}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = colors.lightTan
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = colors.cream
+                              }}
+                            >
+                              <FileText size={14} color={colors.accentGold} />
+                              <span style={{ flex: 1 }}>{file.name}</span>
+                              <Download size={12} color={colors.accentGold} />
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
-                  </div>
+                  )}
+
+                  {/* Show Deliverables if Delivered */}
+                  {tool.deliveryStatus === "delivered" && tool.deliverables && tool.deliverables.length > 0 ? (
+                    <div style={styles.toolDeliverables}>
+                      <h4 style={styles.deliverablesTitle}>📥 Your Files (Ready to Download):</h4>
+                      <div style={styles.deliverablesList}>
+                        {tool.deliverables.map((deliverable, index) => (
+                          <div
+                            key={index}
+                            style={styles.deliverableItem}
+                            onClick={() => handleDownload(deliverable.url, deliverable.name)}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = colors.lightTan
+                              e.currentTarget.style.transform = "translateX(5px)"
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = colors.cream
+                              e.currentTarget.style.transform = "translateX(0)"
+                            }}
+                          >
+                            <Download style={styles.deliverableIcon} />
+                            <div style={styles.deliverableInfo}>
+                              <span style={styles.deliverableName}>{deliverable.name}</span>
+                              <span style={styles.deliverableMeta}>{deliverable.size} • Click to download</span>
+                            </div>
+                            <ExternalLink size={16} color={colors.accentGold} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : tool.deliveryStatus === "processing" ? (
+                    <div style={styles.noFilesMessage}>
+                      <Clock size={16} style={{ display: "inline", marginRight: "0.5rem" }} />
+                      <strong>Files are being prepared...</strong> You'll receive an email when they're ready to
+                      download.
+                    </div>
+                  ) : null}
                 </div>
                 <div style={styles.toolCardFooter}>
                   <div style={styles.toolMeta}>
@@ -960,42 +1043,22 @@ const MyToolsPage = () => {
                     </div>
                     {tool.amount > 0 && (
                       <div style={styles.amountInfo}>
-                        <span>ZAR {tool.amount.toLocaleString()}</span>
+                        <span>R{tool.amount.toLocaleString()}</span>
                       </div>
                     )}
                   </div>
-                  <div style={styles.toolActions}>
-                    <button
-                      style={{ ...styles.actionBtn, ...styles.actionBtnSecondary }}
-                      onClick={() => handlePreview(tool)}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = colors.lightTan // Use defined color
-                        e.currentTarget.style.transform = "translateY(-2px)"
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = colors.cream // Use defined color
-                        e.currentTarget.style.transform = "translateY(0)"
+                  {tool.deliveryStatus === "delivered" && tool.deliveredAt && (
+                    <div
+                      style={{
+                        fontSize: "0.8rem",
+                        color: colors.mediumBrown,
+                        marginTop: "0.5rem",
+                        textAlign: "center",
                       }}
                     >
-                      <Eye style={styles.actionIcon} />
-                      Preview
-                    </button>
-                    <button
-                      style={{ ...styles.actionBtn, ...styles.actionBtnPrimary }}
-                      onClick={() => handleDownload(tool)}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = "translateY(-2px)"
-                        e.currentTarget.style.boxShadow = `0 8px 20px ${colors.accentGold}40` // Use defined color
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = "translateY(0)"
-                        e.currentTarget.style.boxShadow = `0 4px 12px ${colors.accentGold}30` // Use defined color
-                      }}
-                    >
-                      <Download style={styles.actionIcon} />
-                      Download
-                    </button>
-                  </div>
+                      ✅ Delivered on {new Date(tool.deliveredAt).toLocaleDateString()}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -1015,21 +1078,19 @@ const MyToolsPage = () => {
               </div>
               <div style={styles.statItem}>
                 <div style={styles.statNumber}>
-                  {purchasedTools.reduce((sum, tool) => sum + (tool.amount || 0), 0).toLocaleString()}
+                  {purchasedTools.filter((t) => t.deliveryStatus === "delivered").length}
                 </div>
-                <div style={styles.statLabel}>Total Investment (ZAR)</div>
+                <div style={styles.statLabel}>Tools Delivered</div>
+              </div>
+              <div style={styles.statItem}>
+                <div style={styles.statNumber}>
+                  R{purchasedTools.reduce((sum, tool) => sum + (tool.amount || 0), 0).toLocaleString()}
+                </div>
+                <div style={styles.statLabel}>Total Investment</div>
               </div>
               <div style={styles.statItem}>
                 <div style={styles.statNumber}>{new Set(purchasedTools.map((tool) => tool.category)).size}</div>
                 <div style={styles.statLabel}>Categories Covered</div>
-              </div>
-              <div style={styles.statItem}>
-                <div style={styles.statNumber}>
-                  {Math.round(
-                    purchasedTools.reduce((sum, tool) => sum + (tool.amount || 0), 0) / purchasedTools.length,
-                  ).toLocaleString()}
-                </div>
-                <div style={styles.statLabel}>Average Investment</div>
               </div>
             </div>
           </div>

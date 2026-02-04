@@ -5,7 +5,7 @@ import { Loader } from 'lucide-react';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebaseConfig';
 
-// Styles for InsightsAIRecommendations
+// Styles for InsightsAIRecommendations 
 const styles = `
 .insights-ai {
   width: 100%;

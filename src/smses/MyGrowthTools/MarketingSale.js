@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Bar, Pie, Line, Scatter } from "react-chartjs-2"
-import { doc, getDoc, setDoc, collection, query, where, getDocs } from "firebase/firestore"
+import { Bar, Pie, Line } from "react-chartjs-2"
+import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, deleteDoc } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
 import { onAuthStateChanged } from "firebase/auth"
 import Sidebar from "smses/Sidebar/Sidebar"
@@ -20,257 +20,364 @@ import {
   Legend,
 } from "chart.js"
 
+// Icons for actions
+import { FaTrashAlt, FaEdit, FaPlus, FaChevronDown, FaChevronUp, FaStickyNote, FaChartBar } from "react-icons/fa"
+
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, PointElement, LineElement, Title, Tooltip, Legend)
 
-// Helper function to get financial year months
-const getFinancialYearMonths = (financialYearStartMonth) => {
-  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-  const startMonthIndex = financialYearStartMonth - 1 // Convert to 0-indexed
-  const months = []
-  
-  for (let i = 0; i < 12; i++) {
-    const monthIndex = (startMonthIndex + i) % 12
-    months.push(monthNames[monthIndex])
-  }
-  
-  return months
+const PIPELINE_SECTIONS = {
+  "pipeline-visibility": {
+    name: "Pipeline Visibility",
+    notes: {
+      keyQuestion: "Do we have enough quality demand, at the right risk, to hit revenue?",
+      keySignals: "Forecast clarity",
+      keyDecisions: "Formalise sales",
+    },
+    kpis: [
+      "New Leads (#)",
+      "Funnel conversion rates (Visitor → Lead → MQL → SQL → Opportunity → Customer)",
+      "Sales velocity (Average days to close)",
+      "Total pipeline value (ZAR) & Risk Adjusted Pipeline value (= Total Pipeline value * probability)",
+      "Pipeline coverage ratio = Pipeline Value ÷ Target(budget) Revenue",
+      "Lead volume trends",
+    ],
+  },
+  "pipeline-sufficiency": {
+    name: "Pipeline Sufficiency",
+    notes: {
+      keyQuestion: "Is pipeline big enough?",
+      keySignals: "Coverage risk",
+      keyDecisions: "Adjust targets",
+    },
+    kpis: [
+      "Total pipeline value (ZAR) & Risk Adjusted Pipeline value (= Total Pipeline value * probability)",
+      "Pipeline coverage ratio = Pipeline Value ÷ Target(budget) Revenue",
+      "Lead volume trends",
+      "Conversion rates",
+      "Pipeline coverage (not a trend chart, just a single number)",
+    ],
+  },
+  "pipeline-quality": {
+    name: "Pipeline Quality",
+    notes: {
+      keyQuestion: "How real is this pipeline? Will it convert?",
+      keySignals: "Credibility",
+      keyDecisions: "Improve sales discipline",
+    },
+    kpis: [
+      "Cost per lead (by channel)",
+      "CAC vs LTV trend",
+      "SQL → Opportunity conversion",
+      "Opportunity → Customer conversion",
+      "Repeat customers vs churn (excellent inclusion)",
+    ],
+  },
+  "revenue-concentration": {
+    name: "Revenue Concentration",
+    notes: {
+      keyQuestion: "Where does revenue actually come from? Are we over-dependent?",
+      keySignals: "Client/channel risk",
+      keyDecisions: "Diversify clients",
+    },
+    kpis: [
+      "Revenue by channel (bubble chart) or by customer segment",
+      "Revenue per channel vs spend",
+      "Top 3 channels as % of revenue",
+    ],
+  },
+  "demand-sustainability": {
+    name: "Demand Sustainability",
+    notes: {
+      keyQuestion: "Is demand repeatable? Will demand persist without constant spend",
+      keySignals: "Founder or single client reliance",
+      keyDecisions: "Build Demand Engine",
+    },
+    kpis: [
+      "Referral rate trend",
+      "Repeat customer & churn rate",
+      "Cost per Lead by campaign (change to campaign cost contribution), Campaign ROI Analysis",
+      "Declining CAC with rising LTV (this is key)",
+    ],
+  },
+  "pipeline-table": {
+    name: "Pipeline Table",
+    notes: {
+      keyQuestion: "",
+      keySignals: "",
+      keyDecisions: "",
+    },
+    kpis: [
+      "Client / Deal",
+      "Segment",
+      "Stage",
+      "Probability %",
+      "Expected Close",
+      "Deal Value (ZAR)",
+      "Risk Adjusted Pipeline value (ZAR)",
+      "Source",
+      "Owner",
+    ],
+  },
 }
 
-// Download functionality
-const downloadData = (data, filename, selectedSections) => {
-  const filteredData = {}
-  selectedSections.forEach((section) => {
-    if (data[section]) {
-      filteredData[section] = data[section]
-    }
-  })
+// NotesSection Component with See More functionality
 
-  const dataStr = JSON.stringify(filteredData, null, 2)
-  const dataUri = "data:application/json;charset=utf-8," + encodeURIComponent(dataStr)
-
-  const exportFileDefaultName = `${filename}_${new Date().toISOString().split("T")[0]}.json`
-
-  const linkElement = document.createElement("a")
-  linkElement.setAttribute("href", dataUri)
-  linkElement.setAttribute("download", exportFileDefaultName)
-  linkElement.click()
-}
-
-// Download Modal Component
-const DownloadModal = ({ isOpen, onClose, onDownload, availableSections, sectionTitle }) => {
-  const [selectedSections, setSelectedSections] = useState([])
-
-  const toggleSection = (section) => {
-    setSelectedSections((prev) => (prev.includes(section) ? prev.filter((s) => s !== section) : [...prev, section]))
-  }
-
-  const handleDownload = () => {
-    if (selectedSections.length > 0) {
-      onDownload(selectedSections)
-      onClose()
-      setSelectedSections([])
-    }
-  }
-
-  if (!isOpen) return null
-
+// Updated NotesSection Component with "See More/See Less" functionality
+const NotesSection = ({ sectionKey, isExpanded, onToggle }) => {
+  const notes = PIPELINE_SECTIONS[sectionKey].notes
+  
+  // Get first sentence for collapsed view
+  const getFirstSentence = (text) => {
+    if (!text) return "";
+    const match = text.match(/^[^.!?]+[.!?]/);
+    return match ? match[0] : text.split('.')[0] + '.';
+  };
+  
+  const firstSentence = getFirstSentence(notes.keyQuestion);
+  const showSeeMore = !isExpanded && (
+    notes.keyQuestion.length > firstSentence.length || 
+    notes.keySignals || 
+    notes.keyDecisions
+  );
+  
   return (
     <div
       style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: "rgba(0,0,0,0.5)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
+        backgroundColor: "#DCDCDC",
+        padding: "15px 20px",
+        borderRadius: "8px",
+        marginBottom: "20px",
+        border: "1px solid	#5d4037",
       }}
     >
-      <div
+      <div style={{ display: "flex", alignItems: "flex-start", marginBottom: "8px" }}>
+        <strong style={{ color: "#5d4037", fontSize: "14px", minWidth: "100px" }}>Key Question:</strong>
+        <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px", flex: 1 }}>
+          {isExpanded ? notes.keyQuestion : firstSentence}
+        </span>
+        {showSeeMore && (
+          <button
+            onClick={onToggle}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#5d4037",
+              fontWeight: "600",
+              cursor: "pointer",
+              marginLeft: "10px",
+              textDecoration: "underline",
+              whiteSpace: "nowrap",
+              fontSize: "14px",
+            }}
+          >
+            See more
+          </button>
+        )}
+      </div>
+      
+      {isExpanded && (
+        <>
+          {notes.keySignals && (
+            <div style={{ display: "flex", alignItems: "flex-start", marginBottom: "8px" }}>
+              <strong style={{ color: "#5d4037", fontSize: "14px", minWidth: "100px" }}>Key Signals:</strong>
+              <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px", flex: 1 }}>{notes.keySignals}</span>
+            </div>
+          )}
+          {notes.keyDecisions && (
+            <div style={{ display: "flex", alignItems: "flex-start", marginBottom: "8px" }}>
+              <strong style={{ color: "#5d4037", fontSize: "14px", minWidth: "100px" }}>Key Decisions:</strong>
+              <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px", flex: 1 }}>{notes.keyDecisions}</span>
+            </div>
+          )}
+          <button
+            onClick={onToggle}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#5d4037",
+              fontWeight: "600",
+              cursor: "pointer",
+              marginTop: "10px",
+              textDecoration: "underline",
+              fontSize: "14px",
+            }}
+          >
+            See less
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+// ChartActions Component for Add Notes and View Analysis buttons
+const ChartActions = ({ onAddNotes, onViewAnalysis }) => {
+  return (
+    <div style={{ display: "flex", gap: "10px", marginTop: "15px", justifyContent: "flex-end" }}>
+      <button
+        onClick={onAddNotes}
         style={{
-          backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "8px",
-          maxWidth: "400px",
-          width: "90%",
+          padding: "8px 16px",
+          backgroundColor: "#7d5a50",
+          color: "#fdfcfb",
+          border: "none",
+          borderRadius: "4px",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          gap: "5px",
+          fontSize: "14px",
         }}
       >
-        <h3 style={{ color: "#5d4037", marginTop: 0 }}>Download {sectionTitle} Data</h3>
-        <p style={{ color: "#72542b" }}>Select which sections to include in your download:</p>
-
-        <div style={{ marginBottom: "20px" }}>
-          {availableSections.map((section) => (
-            <label
-              key={section.id}
-              style={{
-                display: "block",
-                marginBottom: "10px",
-                color: "#5d4037",
-                cursor: "pointer",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={selectedSections.includes(section.id)}
-                onChange={() => toggleSection(section.id)}
-                style={{ marginRight: "8px" }}
-              />
-              {section.label}
-            </label>
-          ))}
-        </div>
-
-        <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
-          <button
-            onClick={onClose}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#e8ddd4",
-              color: "#5d4037",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleDownload}
-            disabled={selectedSections.length === 0}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: selectedSections.length > 0 ? "#5d4037" : "#ccc",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "4px",
-              cursor: selectedSections.length > 0 ? "pointer" : "not-allowed",
-            }}
-          >
-            Download
-          </button>
-        </div>
-      </div>
+        <FaStickyNote /> Add Notes
+      </button>
+      <button
+        onClick={onViewAnalysis}
+        style={{
+          padding: "8px 16px",
+          backgroundColor: "#5d4037",
+          color: "#fdfcfb",
+          border: "none",
+          borderRadius: "4px",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          gap: "5px",
+          fontSize: "14px",
+        }}
+      >
+        <FaChartBar /> View Analysis
+      </button>
     </div>
   )
 }
 
-// NewLeads Component - HAS MONTHLY X-AXIS
-const NewLeads = ({ activeSection, currentUser, isInvestorView, financialYearStartMonth }) => {
-  const [leadData, setLeadData] = useState(Array(12).fill(0))
-  const [qualifiedData, setQualifiedData] = useState(Array(12).fill(0))
+// Pipeline Visibility Component
+// Pipeline Visibility Component
+const PipelineVisibility = ({ activeSection, currentUser, isInvestorView }) => {
+  const [newLeadsData, setNewLeadsData] = useState(Array(12).fill(0))
+  const [funnelData, setFunnelData] = useState({
+    visitors: 0,
+    leads: 0,
+    mql: 0,
+    sql: 0,
+    opportunity: 0,
+    customer: 0,
+  })
+  const [salesVelocityData, setSalesVelocityData] = useState(Array(12).fill(0))
   const [showEditForm, setShowEditForm] = useState(false)
-  const [showDownloadModal, setShowDownloadModal] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-  const [financialYearMonths, setFinancialYearMonths] = useState([])
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [notesExpanded, setNotesExpanded] = useState(false)
+
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
   useEffect(() => {
-    if (financialYearStartMonth) {
-      const months = getFinancialYearMonths(financialYearStartMonth)
-      setFinancialYearMonths(months)
+    if (currentUser && activeSection === "pipeline-visibility") {
+      loadData()
     }
-  }, [financialYearStartMonth])
+  }, [currentUser, activeSection, selectedYear])
 
-  const saveLeadsData = async () => {
-    if (!currentUser) {
-      alert("Please log in to save data.")
-      return
-    }
-    try {
-      await setDoc(doc(db, "new-leads", currentUser.uid), { 
-        leadData, 
-        qualifiedData,
-        lastUpdated: new Date().toISOString()
-      })
-      setShowEditForm(false)
-      alert("Leads data saved successfully!")
-    } catch (error) {
-      console.error("Error saving leads data:", error)
-      alert("Error saving data")
-    }
-  }
-
-  const loadLeadsData = async () => {
+  const loadData = async () => {
     if (!currentUser) return
     try {
       setIsLoading(true)
-      const docRef = doc(db, "new-leads", currentUser.uid)
+      const docRef = doc(db, "pipeline-visibility", `${currentUser.uid}_${selectedYear}`)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         const data = docSnap.data()
-        setLeadData(data.leadData || Array(12).fill(0))
-        setQualifiedData(data.qualifiedData || Array(12).fill(0))
+        setNewLeadsData(data.newLeadsData || Array(12).fill(0))
+        setFunnelData(data.funnelData || {
+          visitors: 0,
+          leads: 0,
+          mql: 0,
+          sql: 0,
+          opportunity: 0,
+          customer: 0,
+        })
+        setSalesVelocityData(data.salesVelocityData || Array(12).fill(0))
       } else {
-        // Initialize with empty data if no document exists
+        // Set all zeros as default instead of unrealistic values
         await setDoc(docRef, {
-          leadData: Array(12).fill(0),
-          qualifiedData: Array(12).fill(0),
-          lastUpdated: new Date().toISOString()
+          newLeadsData: Array(12).fill(0),
+          funnelData: {
+            visitors: 0,
+            leads: 0,
+            mql: 0,
+            sql: 0,
+            opportunity: 0,
+            customer: 0,
+          },
+          salesVelocityData: Array(12).fill(0),
+          lastUpdated: new Date().toISOString(),
         })
       }
     } catch (error) {
-      console.error("Error loading leads data:", error)
+      console.error("Error loading pipeline visibility data:", error)
     } finally {
       setIsLoading(false)
     }
   }
 
-  useEffect(() => {
-    if (currentUser) {
-      loadLeadsData()
+  const saveData = async () => {
+    if (!currentUser || isInvestorView) {
+      alert("You cannot save data in this mode.")
+      return
     }
-  }, [currentUser])
-
-  const updateLeadValue = (index, value) => {
-    const newData = [...leadData]
-    newData[index] = Number.parseFloat(value) || 0
-    setLeadData(newData)
-  }
-
-  const updateQualifiedValue = (index, value) => {
-    const newData = [...qualifiedData]
-    newData[index] = Number.parseFloat(value) || 0
-    setQualifiedData(newData)
-  }
-
-  const handleDownload = (selectedSections) => {
-    const data = {
-      "new-leads": leadData,
-      "qualified-leads": qualifiedData,
-      summary: {
-        totalNewLeads: leadData.reduce((sum, val) => sum + val, 0),
-        totalQualifiedLeads: qualifiedData.reduce((sum, val) => sum + val, 0),
-        conversionRate:
-          leadData.reduce((sum, val) => sum + val, 0) > 0
-            ? (
-                (qualifiedData.reduce((sum, val) => sum + val, 0) / leadData.reduce((sum, val) => sum + val, 0)) *
-                100
-              ).toFixed(2)
-            : 0,
-      },
+    try {
+      await setDoc(doc(db, "pipeline-visibility", `${currentUser.uid}_${selectedYear}`), {
+        newLeadsData,
+        funnelData,
+        salesVelocityData,
+        lastUpdated: new Date().toISOString(),
+      })
+      setShowEditForm(false)
+      alert("Pipeline visibility data saved successfully!")
+    } catch (error) {
+      console.error("Error saving data:", error)
+      alert("Error saving data")
     }
-    downloadData(data, "new_leads", selectedSections)
   }
 
-  if (activeSection !== "new-leads") return null
+  const handleAddNotes = (chartName) => {
+    alert(`Add Notes functionality for ${chartName}`)
+  }
+
+  const handleViewAnalysis = (chartName) => {
+    alert(`View Analysis functionality for ${chartName}`)
+  }
+
+  if (activeSection !== "pipeline-visibility") return null
 
   if (isLoading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '200px',
-        backgroundColor: '#fdfcfb',
-        borderRadius: '8px'
-      }}>
-        <div>Loading leads data...</div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "200px",
+          backgroundColor: "#fdfcfb",
+          borderRadius: "8px",
+        }}
+      >
+        <div>Loading data...</div>
       </div>
     )
   }
+
+  // Calculate conversion rates
+  const conversionRates = {
+    visitorToLead: funnelData.visitors > 0 ? ((funnelData.leads / funnelData.visitors) * 100).toFixed(1) : 0,
+    leadToMQL: funnelData.leads > 0 ? ((funnelData.mql / funnelData.leads) * 100).toFixed(1) : 0,
+    mqlToSQL: funnelData.mql > 0 ? ((funnelData.sql / funnelData.mql) * 100).toFixed(1) : 0,
+    sqlToOpportunity: funnelData.sql > 0 ? ((funnelData.opportunity / funnelData.sql) * 100).toFixed(1) : 0,
+    opportunityToCustomer: funnelData.opportunity > 0 ? ((funnelData.customer / funnelData.opportunity) * 100).toFixed(1) : 0,
+  }
+
+  // Calculate overall metrics
+  const totalNewLeads = newLeadsData.reduce((sum, val) => sum + val, 0)
+  const avgSalesVelocity = salesVelocityData.reduce((sum, val) => sum + val, 0) / (salesVelocityData.filter(val => val > 0).length || 1)
 
   return (
     <div
@@ -282,44 +389,66 @@ const NewLeads = ({ activeSection, currentUser, isInvestorView, financialYearSta
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
     >
+      <NotesSection 
+        sectionKey="pipeline-visibility" 
+        isExpanded={notesExpanded}
+        onToggle={() => setNotesExpanded(!notesExpanded)}
+      />
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <div>
-          <h2 style={{ color: "#5d4037", marginTop: 0 }}>New Leads & Qualified Leads</h2>
-          {financialYearStartMonth && (
-            <p style={{ color: "#7d5a50", fontSize: "14px", margin: "5px 0 0 0" }}>
-              Financial Year starts in {financialYearMonths[0]}
-            </p>
-          )}
-        </div>
-        <div style={{ display: "flex", gap: "10px" }}>
-          {!isInvestorView && (
-            <button
-              onClick={() => setShowEditForm(!showEditForm)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              {showEditForm ? "Cancel" : "Edit Data"}
-            </button>
-          )}
-          <button
-            onClick={() => setShowDownloadModal(true)}
+        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Pipeline Visibility</h2>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
             style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
+              padding: "8px 12px",
+              border: "1px solid #d4c4b0",
               borderRadius: "4px",
-              cursor: "pointer",
+              backgroundColor: "#fdfcfb",
+              color: "#5d4037",
             }}
           >
-            Download
-          </button>
+            {[2023, 2024, 2025, 2026].map(year => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
+          {!isInvestorView && (
+            <>
+              <button
+                onClick={() => setShowEditForm(!showEditForm)}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <FaPlus /> Add Data
+              </button>
+              <button
+                onClick={() => alert("Add KPI functionality")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#7d5a50",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <FaPlus /> Add KPI
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -332,49 +461,146 @@ const NewLeads = ({ activeSection, currentUser, isInvestorView, financialYearSta
             marginBottom: "20px",
           }}
         >
-          <h3 style={{ color: "#72542b", marginTop: 0 }}>Edit Leads Data</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+          <h3 style={{ color: "#72542b", marginTop: 0 }}>Add Pipeline Visibility Data</h3>
+          
+          <h4 style={{ color: "#72542b" }}>New Leads Data (Monthly)</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: "20px" }}>
+            {monthNames.map((month, index) => (
+              <div key={month}>
+                <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>{month}</label>
+                <input
+                  type="number"
+                  value={newLeadsData[index]}
+                  onChange={(e) => {
+                    const newData = [...newLeadsData]
+                    newData[index] = Number(e.target.value)
+                    setNewLeadsData(newData)
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "6px",
+                    border: "1px solid #d4c4b0",
+                    borderRadius: "4px",
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+
+          <h4 style={{ color: "#72542b" }}>Funnel Conversion Data</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px", marginBottom: "20px" }}>
             <div>
-              <h4 style={{ color: "#72542b" }}>New Leads</h4>
-              {financialYearMonths.map((month, index) => (
-                <div key={month} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                  <span style={{ minWidth: "40px", color: "#72542b" }}>{month}:</span>
-                  <input
-                    type="number"
-                    value={leadData[index]}
-                    onChange={(e) => updateLeadValue(index, e.target.value)}
-                    style={{
-                      padding: "6px",
-                      border: "1px solid #d4c4b0",
-                      borderRadius: "4px",
-                      width: "80px",
-                    }}
-                  />
-                </div>
-              ))}
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Visitors</label>
+              <input
+                type="number"
+                value={funnelData.visitors}
+                onChange={(e) => setFunnelData({ ...funnelData, visitors: Number(e.target.value) })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
             </div>
             <div>
-              <h4 style={{ color: "#72542b" }}>Qualified Leads</h4>
-              {financialYearMonths.map((month, index) => (
-                <div key={month} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                  <span style={{ minWidth: "40px", color: "#72542b" }}>{month}:</span>
-                  <input
-                    type="number"
-                    value={qualifiedData[index]}
-                    onChange={(e) => updateQualifiedValue(index, e.target.value)}
-                    style={{
-                      padding: "6px",
-                      border: "1px solid #d4c4b0",
-                      borderRadius: "4px",
-                      width: "80px",
-                    }}
-                  />
-                </div>
-              ))}
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Leads</label>
+              <input
+                type="number"
+                value={funnelData.leads}
+                onChange={(e) => setFunnelData({ ...funnelData, leads: Number(e.target.value) })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>MQL</label>
+              <input
+                type="number"
+                value={funnelData.mql}
+                onChange={(e) => setFunnelData({ ...funnelData, mql: Number(e.target.value) })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>SQL</label>
+              <input
+                type="number"
+                value={funnelData.sql}
+                onChange={(e) => setFunnelData({ ...funnelData, sql: Number(e.target.value) })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Opportunity</label>
+              <input
+                type="number"
+                value={funnelData.opportunity}
+                onChange={(e) => setFunnelData({ ...funnelData, opportunity: Number(e.target.value) })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Customer</label>
+              <input
+                type="number"
+                value={funnelData.customer}
+                onChange={(e) => setFunnelData({ ...funnelData, customer: Number(e.target.value) })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
             </div>
           </div>
+
+          <h4 style={{ color: "#72542b" }}>Sales Velocity (Monthly Average Days)</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: "20px" }}>
+            {monthNames.map((month, index) => (
+              <div key={month}>
+                <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>{month}</label>
+                <input
+                  type="number"
+                  value={salesVelocityData[index]}
+                  onChange={(e) => {
+                    const newData = [...salesVelocityData]
+                    newData[index] = Number(e.target.value)
+                    setSalesVelocityData(newData)
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "6px",
+                    border: "1px solid #d4c4b0",
+                    borderRadius: "4px",
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+
           <button
-            onClick={saveLeadsData}
+            onClick={saveData}
             style={{
               padding: "8px 16px",
               backgroundColor: "#16a34a",
@@ -390,169 +616,481 @@ const NewLeads = ({ activeSection, currentUser, isInvestorView, financialYearSta
         </div>
       )}
 
-      <div style={{ height: "400px" }}>
-        <Bar
-          data={{
-            labels: financialYearMonths,
-            datasets: [
-              {
-                label: "New Leads",
-                data: leadData,
-                backgroundColor: "#9c7c5f",
-                borderColor: "#5d4037",
-                borderWidth: 1,
-              },
-              {
-                label: "Qualified Leads",
-                data: qualifiedData,
-                backgroundColor: "#e8ddd4",
-                borderColor: "#d4c4b0",
-                borderWidth: 1,
-              },
-            ],
+      {/* Overall Metrics on Top */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "15px", marginBottom: "30px" }}>
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "6px",
+            textAlign: "center",
+            borderTop: "4px solid #9c7c5f",
           }}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                position: "top",
-              },
-            },
-            scales: {
-              y: {
-                beginAtZero: true,
-                title: {
-                  display: true,
-                  text: "Number of Leads",
-                },
-              },
-              x: {
-                title: {
-                  display: false,
-                },
-              },
-            },
+        >
+          <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "8px", fontWeight: "600" }}>Total New Leads</div>
+          <div style={{ fontSize: "32px", color: "#5d4037", fontWeight: "bold" }}>{totalNewLeads.toLocaleString()}</div>
+          <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>Year {selectedYear}</div>
+        </div>
+        
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "6px",
+            textAlign: "center",
+            borderTop: "4px solid #7d5a50",
           }}
-        />
+        >
+          <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "8px", fontWeight: "600" }}>Overall Conversion Rate</div>
+          <div style={{ fontSize: "32px", color: "#5d4037", fontWeight: "bold" }}>
+            {funnelData.visitors > 0 ? ((funnelData.customer / funnelData.visitors) * 100).toFixed(1) : 0}%
+          </div>
+          <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>Visitor → Customer</div>
+        </div>
+        
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "6px",
+            textAlign: "center",
+            borderTop: "4px solid #5d4037",
+          }}
+        >
+          <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "8px", fontWeight: "600" }}>Avg Sales Velocity</div>
+          <div style={{ fontSize: "32px", color: "#5d4037", fontWeight: "bold" }}>{avgSalesVelocity.toFixed(1)} days</div>
+          <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>Average to close</div>
+        </div>
       </div>
 
-      <DownloadModal
-        isOpen={showDownloadModal}
-        onClose={() => setShowDownloadModal(false)}
-        onDownload={handleDownload}
-        availableSections={[
-          { id: "new-leads", label: "New Leads Data" },
-          { id: "qualified-leads", label: "Qualified Leads Data" },
-          { id: "summary", label: "Summary Statistics" },
-        ]}
-        sectionTitle="New Leads"
-      />
+      {/* Three Charts Side by Side */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px", marginBottom: "30px" }}>
+        
+        {/* New Leads Chart */}
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          }}
+        >
+          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>New Leads (#)</h3>
+          <div style={{ height: "250px", marginBottom: "15px" }}>
+            <Bar
+              data={{
+                labels: monthNames,
+                datasets: [
+                  {
+                    label: "New Leads",
+                    data: newLeadsData,
+                    backgroundColor: "#9c7c5f",
+                    borderColor: "#5d4037",
+                    borderWidth: 1,
+                    borderRadius: 4,
+                  },
+                ],
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    display: false,
+                  },
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    title: {
+                      display: true,
+                      text: "Number of Leads",
+                      color: "#72542b",
+                    },
+                    grid: {
+                      color: "rgba(125, 90, 80, 0.1)",
+                    },
+                    ticks: {
+                      color: "#72542b",
+                    },
+                  },
+                  x: {
+                    ticks: {
+                      color: "#72542b",
+                      maxRotation: 45,
+                    },
+                    grid: {
+                      color: "rgba(125, 90, 80, 0.1)",
+                    },
+                  },
+                },
+              }}
+            />
+          </div>
+          <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+            <button
+              onClick={() => handleAddNotes("New Leads")}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#7d5a50",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                fontSize: "12px",
+              }}
+            >
+              <FaStickyNote size={12} /> Add Notes
+            </button>
+            <button
+              onClick={() => handleViewAnalysis("New Leads")}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                fontSize: "12px",
+              }}
+            >
+              <FaChartBar size={12} /> View Analysis
+            </button>
+          </div>
+        </div>
+
+        {/* Funnel Conversion Rates Chart */}
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          }}
+        >
+          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
+            Funnel Conversion Rates
+          </h3>
+          <div style={{ height: "250px", marginBottom: "15px" }}>
+            <Bar
+              data={{
+                labels: ["Vis→Lead", "Lead→MQL", "MQL→SQL", "SQL→Opp", "Opp→Cust"],
+                datasets: [
+                  {
+                    label: "Conversion Rate (%)",
+                    data: [
+                      conversionRates.visitorToLead,
+                      conversionRates.leadToMQL,
+                      conversionRates.mqlToSQL,
+                      conversionRates.sqlToOpportunity,
+                      conversionRates.opportunityToCustomer,
+                    ],
+                    backgroundColor: "#7d5a50",
+                    borderColor: "#5d4037",
+                    borderWidth: 1,
+                    borderRadius: 4,
+                  },
+                ],
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    display: false,
+                  },
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: {
+                      display: true,
+                      text: "Conversion Rate (%)",
+                      color: "#72542b",
+                    },
+                    grid: {
+                      color: "rgba(125, 90, 80, 0.1)",
+                    },
+                    ticks: {
+                      color: "#72542b",
+                    },
+                  },
+                  x: {
+                    ticks: {
+                      color: "#72542b",
+                      maxRotation: 45,
+                    },
+                    grid: {
+                      color: "rgba(125, 90, 80, 0.1)",
+                    },
+                  },
+                },
+              }}
+            />
+          </div>
+          <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+            <button
+              onClick={() => handleAddNotes("Funnel Conversion Rates")}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#7d5a50",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                fontSize: "12px",
+              }}
+            >
+              <FaStickyNote size={12} /> Add Notes
+            </button>
+            <button
+              onClick={() => handleViewAnalysis("Funnel Conversion Rates")}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                fontSize: "12px",
+              }}
+            >
+              <FaChartBar size={12} /> View Analysis
+            </button>
+          </div>
+        </div>
+
+        {/* Sales Velocity Chart */}
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          }}
+        >
+          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
+            Sales Velocity (Days to Close)
+          </h3>
+          <div style={{ height: "250px", marginBottom: "15px" }}>
+            <Line
+              data={{
+                labels: monthNames,
+                datasets: [
+                  {
+                    label: "Days to Close",
+                    data: salesVelocityData,
+                    borderColor: "#5d4037",
+                    backgroundColor: "rgba(93, 64, 55, 0.1)",
+                    borderWidth: 2,
+                    tension: 0.3,
+                    fill: true,
+                  },
+                ],
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    display: false,
+                  },
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    title: {
+                      display: true,
+                      text: "Days to Close",
+                      color: "#72542b",
+                    },
+                    grid: {
+                      color: "rgba(125, 90, 80, 0.1)",
+                    },
+                    ticks: {
+                      color: "#72542b",
+                    },
+                  },
+                  x: {
+                    ticks: {
+                      color: "#72542b",
+                      maxRotation: 45,
+                    },
+                    grid: {
+                      color: "rgba(125, 90, 80, 0.1)",
+                    },
+                  },
+                },
+              }}
+            />
+          </div>
+          <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+            <button
+              onClick={() => handleAddNotes("Sales Velocity")}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#7d5a50",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                fontSize: "12px",
+              }}
+            >
+              <FaStickyNote size={12} /> Add Notes
+            </button>
+            <button
+              onClick={() => handleViewAnalysis("Sales Velocity")}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                fontSize: "12px",
+              }}
+            >
+              <FaChartBar size={12} /> View Analysis
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
-
-// LeadSourceAnalysis Component - NO MONTHLY X-AXIS (Pie Chart)
-const LeadSourceAnalysis = ({ activeSection, currentUser, isInvestorView }) => {
-  const [sources, setSources] = useState([])
+// Pipeline Sufficiency Component
+// Pipeline Sufficiency Component
+const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView }) => {
+  const [totalPipelineValue, setTotalPipelineValue] = useState(0)
+  const [probability, setProbability] = useState(0) // Overall probability percentage
+  const [targetRevenue, setTargetRevenue] = useState(0)
+  const [leadVolumeTrends, setLeadVolumeTrends] = useState(Array(12).fill(0))
+  const [conversionRates, setConversionRates] = useState(Array(12).fill(0))
   const [showEditForm, setShowEditForm] = useState(false)
-  const [showDownloadModal, setShowDownloadModal] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [notesExpanded, setNotesExpanded] = useState(false)
 
-  const saveSourceData = async () => {
-    if (!currentUser) {
-      alert("Please log in to save data.")
-      return
-    }
-    try {
-      await setDoc(doc(db, "lead-source", currentUser.uid), { 
-        sources,
-        lastUpdated: new Date().toISOString()
-      })
-      setShowEditForm(false)
-      alert("Lead source data saved successfully!")
-    } catch (error) {
-      console.error("Error saving lead source data:", error)
-      alert("Error saving data")
-    }
-  }
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-  const loadSourceData = async () => {
+  useEffect(() => {
+    if (currentUser && activeSection === "pipeline-sufficiency") {
+      loadData()
+    }
+  }, [currentUser, activeSection, selectedYear])
+
+  const loadData = async () => {
     if (!currentUser) return
     try {
       setIsLoading(true)
-      const docRef = doc(db, "lead-source", currentUser.uid)
+      const docRef = doc(db, "pipeline-sufficiency", `${currentUser.uid}_${selectedYear}`)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
-        setSources(docSnap.data().sources || [])
+        const data = docSnap.data()
+        setTotalPipelineValue(data.totalPipelineValue || 0)
+        setProbability(data.probability || 0)
+        setTargetRevenue(data.targetRevenue || 0)
+        setLeadVolumeTrends(data.leadVolumeTrends || Array(12).fill(0))
+        setConversionRates(data.conversionRates || Array(12).fill(0))
       } else {
-        // Initialize with empty data if no document exists
         await setDoc(docRef, {
-          sources: [],
-          lastUpdated: new Date().toISOString()
+          totalPipelineValue: 0,
+          probability: 0,
+          targetRevenue: 0,
+          leadVolumeTrends: Array(12).fill(0),
+          conversionRates: Array(12).fill(0),
+          lastUpdated: new Date().toISOString(),
         })
       }
     } catch (error) {
-      console.error("Error loading lead source data:", error)
+      console.error("Error loading pipeline sufficiency data:", error)
     } finally {
       setIsLoading(false)
     }
   }
 
-  useEffect(() => {
-    if (currentUser) {
-      loadSourceData()
+  const saveData = async () => {
+    if (!currentUser || isInvestorView) {
+      alert("You cannot save data in this mode.")
+      return
     }
-  }, [currentUser])
-
-  const updateSource = (index, field, value) => {
-    const newSources = [...sources]
-    newSources[index][field] = field === "name" ? value : Number.parseFloat(value) || 0
-    setSources(newSources)
-  }
-
-  const addSource = () => {
-    setSources([...sources, { name: "New Source", percentage: 0 }])
-  }
-
-  const removeSource = (index) => {
-    const newSources = sources.filter((_, i) => i !== index)
-    setSources(newSources)
-  }
-
-  const handleDownload = (selectedSections) => {
-    const data = {
-      sources: sources,
-      summary: {
-        totalSources: sources.length,
-        topSource:
-          sources.length > 0
-            ? sources.reduce((prev, current) => (prev.percentage > current.percentage ? prev : current))
-            : null,
-      },
+    try {
+      await setDoc(doc(db, "pipeline-sufficiency", `${currentUser.uid}_${selectedYear}`), {
+        totalPipelineValue,
+        probability,
+        targetRevenue,
+        leadVolumeTrends,
+        conversionRates,
+        lastUpdated: new Date().toISOString(),
+      })
+      setShowEditForm(false)
+      alert("Pipeline sufficiency data saved successfully!")
+    } catch (error) {
+      console.error("Error saving data:", error)
+      alert("Error saving data")
     }
-    downloadData(data, "lead_sources", selectedSections)
   }
 
-  if (activeSection !== "lead-source-analysis") return null
+  const handleAddNotes = (chartName) => {
+    alert(`Add Notes functionality for ${chartName}`)
+  }
+
+  const handleViewAnalysis = (chartName) => {
+    alert(`View Analysis functionality for ${chartName}`)
+  }
+
+  if (activeSection !== "pipeline-sufficiency") return null
 
   if (isLoading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '200px',
-        backgroundColor: '#fdfcfb',
-        borderRadius: '8px'
-      }}>
-        <div>Loading lead source data...</div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "200px",
+          backgroundColor: "#fdfcfb",
+          borderRadius: "8px",
+        }}
+      >
+        <div>Loading data...</div>
       </div>
     )
   }
 
-  const sourceNames = sources.map((s) => s.name)
-  const sourceData = sources.map((s) => s.percentage)
+  // CALCULATIONS BASED ON YOUR SPECIFICATIONS:
+  
+  // 1. Risk Adjusted Pipeline Value = Total Pipeline value * probability
+  const riskAdjustedValue = (totalPipelineValue * probability) / 100
+  
+  // 2. Pipeline Coverage Ratio = Pipeline Value ÷ Target Revenue (as percentage)
+  const pipelineCoverageRatio = targetRevenue > 0 ? ((totalPipelineValue / targetRevenue) * 100).toFixed(2) : 0
+  
+  // 3. Average Lead Volume (for summary)
+  const avgLeadVolume = leadVolumeTrends.reduce((sum, val) => sum + val, 0) / 12
+  
+  // 4. Average Conversion Rate (for summary)
+  const avgConversionRate = conversionRates.reduce((sum, val) => sum + val, 0) / 12
 
   return (
     <div
@@ -564,37 +1102,66 @@ const LeadSourceAnalysis = ({ activeSection, currentUser, isInvestorView }) => {
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
     >
+      <NotesSection 
+        sectionKey="pipeline-sufficiency" 
+        isExpanded={notesExpanded}
+        onToggle={() => setNotesExpanded(!notesExpanded)}
+      />
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Lead Source Analysis</h2>
-        <div style={{ display: "flex", gap: "10px" }}>
-          {!isInvestorView && (
-            <button
-              onClick={() => setShowEditForm(!showEditForm)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              {showEditForm ? "Cancel" : "Edit Data"}
-            </button>
-          )}
-          <button
-            onClick={() => setShowDownloadModal(true)}
+        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Pipeline Sufficiency</h2>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
             style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
+              padding: "8px 12px",
+              border: "1px solid #d4c4b0",
               borderRadius: "4px",
-              cursor: "pointer",
+              backgroundColor: "#fdfcfb",
+              color: "#5d4037",
             }}
           >
-            Download
-          </button>
+            {[2023, 2024, 2025, 2026].map(year => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
+          {!isInvestorView && (
+            <>
+              <button
+                onClick={() => setShowEditForm(!showEditForm)}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <FaPlus /> Add Data
+              </button>
+              <button
+                onClick={() => alert("Add KPI functionality")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#7d5a50",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <FaPlus /> Add KPI
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -607,8 +1174,910 @@ const LeadSourceAnalysis = ({ activeSection, currentUser, isInvestorView }) => {
             marginBottom: "20px",
           }}
         >
-          <h3 style={{ color: "#72542b", marginTop: 0 }}>Edit Lead Source Data</h3>
-          {sources.map((source, index) => (
+          <h3 style={{ color: "#72542b", marginTop: 0 }}>Add Pipeline Sufficiency Data</h3>
+          
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px", marginBottom: "20px" }}>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>
+                Total Pipeline Value (ZAR)
+              </label>
+              <input
+                type="number"
+                value={totalPipelineValue}
+                onChange={(e) => setTotalPipelineValue(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>
+                Overall Probability (%)
+              </label>
+              <input
+                type="number"
+                value={probability}
+                onChange={(e) => setProbability(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+                min="0"
+                max="100"
+              />
+              <small style={{ color: "#7d5a50", fontSize: "11px" }}>
+                Overall probability percentage (0-100%)
+              </small>
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>
+                Target/Budget Revenue (ZAR)
+              </label>
+              <input
+                type="number"
+                value={targetRevenue}
+                onChange={(e) => setTargetRevenue(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+          </div>
+
+          <h4 style={{ color: "#72542b" }}>Lead Volume Trends (Monthly)</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: "20px" }}>
+            {monthNames.map((month, index) => (
+              <div key={month}>
+                <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>{month}</label>
+                <input
+                  type="number"
+                  value={leadVolumeTrends[index]}
+                  onChange={(e) => {
+                    const newData = [...leadVolumeTrends]
+                    newData[index] = Number(e.target.value)
+                    setLeadVolumeTrends(newData)
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "6px",
+                    border: "1px solid #d4c4b0",
+                    borderRadius: "4px",
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+
+          <h4 style={{ color: "#72542b" }}>Conversion Rates (Monthly %)</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: "20px" }}>
+            {monthNames.map((month, index) => (
+              <div key={month}>
+                <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>{month}</label>
+                <input
+                  type="number"
+                  value={conversionRates[index]}
+                  onChange={(e) => {
+                    const newData = [...conversionRates]
+                    newData[index] = Number(e.target.value)
+                    setConversionRates(newData)
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "6px",
+                    border: "1px solid #d4c4b0",
+                    borderRadius: "4px",
+                  }}
+                  min="0"
+                  max="100"
+                />
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={saveData}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#16a34a",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              marginTop: "15px",
+            }}
+          >
+            Save Data
+          </button>
+        </div>
+      )}
+
+      {/* KEY METRICS - Top Section */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "15px", marginBottom: "30px" }}>
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "6px",
+            textAlign: "center",
+            borderTop: "4px solid #9c7c5f",
+          }}
+        >
+          <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "8px", fontWeight: "600" }}>
+            Total Pipeline Value
+          </div>
+          <div style={{ fontSize: "20px", color: "#5d4037", fontWeight: "bold" }}>
+            R {totalPipelineValue.toLocaleString()}
+          </div>
+          <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
+            Probability: {probability}%
+          </div>
+        </div>
+        
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "6px",
+            textAlign: "center",
+            borderTop: "4px solid #7d5a50",
+          }}
+        >
+          <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "8px", fontWeight: "600" }}>
+            Risk Adjusted Value
+          </div>
+          <div style={{ fontSize: "20px", color: "#5d4037", fontWeight: "bold" }}>
+            R {riskAdjustedValue.toLocaleString()}
+          </div>
+          <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
+            Formula: Total Value × {probability}%
+          </div>
+        </div>
+        
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "6px",
+            textAlign: "center",
+            borderTop: "4px solid #5d4037",
+          }}
+        >
+          <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "8px", fontWeight: "600" }}>
+            Pipeline Coverage
+          </div>
+          <div style={{ fontSize: "20px", color: "#5d4037", fontWeight: "bold" }}>
+            {pipelineCoverageRatio}%
+          </div>
+          <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
+            Target Revenue: R {targetRevenue.toLocaleString()}
+          </div>
+        </div>
+        
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "6px",
+            textAlign: "center",
+            borderTop: "4px solid #4a352f",
+          }}
+        >
+          <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "8px", fontWeight: "600" }}>
+            Avg Conversion Rate
+          </div>
+          <div style={{ fontSize: "20px", color: "#5d4037", fontWeight: "bold" }}>
+            {avgConversionRate.toFixed(1)}%
+          </div>
+          <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
+            Monthly Average
+          </div>
+        </div>
+      </div>
+
+      {/* CHARTS SECTION - Four Charts (2x2 grid) */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px", marginBottom: "30px" }}>
+        
+        {/* Lead Volume Trends Chart */}
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          }}
+        >
+          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
+            Lead Volume Trends
+          </h3>
+          <div style={{ height: "250px", marginBottom: "15px" }}>
+            <Bar
+              data={{
+                labels: monthNames,
+                datasets: [
+                  {
+                    label: "Lead Volume",
+                    data: leadVolumeTrends,
+                    backgroundColor: "#9c7c5f",
+                    borderColor: "#5d4037",
+                    borderWidth: 1,
+                    borderRadius: 4,
+                  },
+                ],
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    display: false,
+                  },
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    title: {
+                      display: true,
+                      text: "Number of Leads",
+                      color: "#72542b",
+                    },
+                    grid: {
+                      color: "rgba(125, 90, 80, 0.1)",
+                    },
+                    ticks: {
+                      color: "#72542b",
+                    },
+                  },
+                  x: {
+                    ticks: {
+                      color: "#72542b",
+                      maxRotation: 45,
+                    },
+                    grid: {
+                      color: "rgba(125, 90, 80, 0.1)",
+                    },
+                  },
+                },
+              }}
+            />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
+              Avg: {avgLeadVolume.toFixed(1)} leads/month
+            </div>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                onClick={() => handleAddNotes("Lead Volume Trends")}
+                style={{
+                  padding: "6px 12px",
+                  backgroundColor: "#7d5a50",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "12px",
+                }}
+              >
+                <FaStickyNote size={12} /> Add Notes
+              </button>
+              <button
+                onClick={() => handleViewAnalysis("Lead Volume Trends")}
+                style={{
+                  padding: "6px 12px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "12px",
+                }}
+              >
+                <FaChartBar size={12} /> View Analysis
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Conversion Rates Chart */}
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          }}
+        >
+          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
+            Conversion Rates Trend
+          </h3>
+          <div style={{ height: "250px", marginBottom: "15px" }}>
+            <Line
+              data={{
+                labels: monthNames,
+                datasets: [
+                  {
+                    label: "Conversion Rate (%)",
+                    data: conversionRates,
+                    borderColor: "#7d5a50",
+                    backgroundColor: "rgba(125, 90, 80, 0.1)",
+                    borderWidth: 2,
+                    tension: 0.3,
+                    fill: true,
+                  },
+                ],
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    display: false,
+                  },
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: {
+                      display: true,
+                      text: "Conversion Rate (%)",
+                      color: "#72542b",
+                    },
+                    grid: {
+                      color: "rgba(125, 90, 80, 0.1)",
+                    },
+                    ticks: {
+                      color: "#72542b",
+                      callback: function(value) {
+                        return value + '%';
+                      }
+                    },
+                  },
+                  x: {
+                    ticks: {
+                      color: "#72542b",
+                      maxRotation: 45,
+                    },
+                    grid: {
+                      color: "rgba(125, 90, 80, 0.1)",
+                    },
+                  },
+                },
+              }}
+            />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
+              Range: {Math.min(...conversionRates).toFixed(1)}% - {Math.max(...conversionRates).toFixed(1)}%
+            </div>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                onClick={() => handleAddNotes("Conversion Rates")}
+                style={{
+                  padding: "6px 12px",
+                  backgroundColor: "#7d5a50",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "12px",
+                }}
+              >
+                <FaStickyNote size={12} /> Add Notes
+              </button>
+              <button
+                onClick={() => handleViewAnalysis("Conversion Rates")}
+                style={{
+                  padding: "6px 12px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "12px",
+                }}
+              >
+                <FaChartBar size={12} /> View Analysis
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Pipeline Value vs Risk Adjusted Value Chart */}
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          }}
+        >
+          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
+            Pipeline Value Comparison
+          </h3>
+          <div style={{ height: "250px", marginBottom: "15px" }}>
+            <Bar
+              data={{
+                labels: ["Total vs Risk Adjusted"],
+                datasets: [
+                  {
+                    label: "Total Pipeline Value",
+                    data: [totalPipelineValue],
+                    backgroundColor: "#9c7c5f",
+                    borderColor: "#5d4037",
+                    borderWidth: 1,
+                    borderRadius: 4,
+                  },
+                  {
+                    label: "Risk Adjusted Value",
+                    data: [riskAdjustedValue],
+                    backgroundColor: "#7d5a50",
+                    borderColor: "#4a352f",
+                    borderWidth: 1,
+                    borderRadius: 4,
+                  },
+                ],
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: 'top',
+                    labels: {
+                      color: "#72542b",
+                    }
+                  },
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    title: {
+                      display: true,
+                      text: "Value (ZAR)",
+                      color: "#72542b",
+                    },
+                    grid: {
+                      color: "rgba(125, 90, 80, 0.1)",
+                    },
+                    ticks: {
+                      color: "#72542b",
+                      callback: function(value) {
+                        if (value >= 1000000) {
+                          return 'R' + (value / 1000000).toFixed(1) + 'M';
+                        } else if (value >= 1000) {
+                          return 'R' + (value / 1000).toFixed(0) + 'K';
+                        }
+                        return 'R' + value;
+                      }
+                    },
+                  },
+                  x: {
+                    ticks: {
+                      color: "#72542b",
+                    },
+                    grid: {
+                      color: "rgba(125, 90, 80, 0.1)",
+                    },
+                  },
+                },
+              }}
+            />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
+              Risk Adjustment: {probability}% probability
+            </div>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                onClick={() => handleAddNotes("Pipeline Value Comparison")}
+                style={{
+                  padding: "6px 12px",
+                  backgroundColor: "#7d5a50",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "12px",
+                }}
+              >
+                <FaStickyNote size={12} /> Add Notes
+              </button>
+              <button
+                onClick={() => handleViewAnalysis("Pipeline Value Comparison")}
+                style={{
+                  padding: "6px 12px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "12px",
+                }}
+              >
+                <FaChartBar size={12} /> View Analysis
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Pipeline Coverage Explanation */}
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
+            Pipeline Coverage Analysis
+          </h3>
+          <div style={{ 
+            flex: 1, 
+            display: "flex", 
+            flexDirection: "column", 
+            justifyContent: "center",
+            alignItems: "center",
+            textAlign: "center"
+          }}>
+            <div style={{ 
+              fontSize: "48px", 
+              color: pipelineCoverageRatio >= 100 ? "#16a34a" : 
+                     pipelineCoverageRatio >= 80 ? "#f59e0b" : "#dc2626",
+              fontWeight: "bold",
+              marginBottom: "10px"
+            }}>
+              {pipelineCoverageRatio}%
+            </div>
+            <div style={{ fontSize: "16px", color: "#5d4037", marginBottom: "5px", fontWeight: "600" }}>
+              Pipeline Coverage Ratio
+            </div>
+            <div style={{ fontSize: "14px", color: "#7d5a50", marginBottom: "15px" }}>
+              Pipeline Value ÷ Target Revenue
+            </div>
+            
+            <div style={{ 
+              width: "100%", 
+              backgroundColor: "#e8ddd4", 
+              height: "20px", 
+              borderRadius: "10px",
+              marginBottom: "15px",
+              overflow: "hidden"
+            }}>
+              <div 
+                style={{ 
+                  width: `${Math.min(pipelineCoverageRatio, 100)}%`, 
+                  height: "100%", 
+                  backgroundColor: pipelineCoverageRatio >= 100 ? "#16a34a" : 
+                                 pipelineCoverageRatio >= 80 ? "#f59e0b" : "#dc2626",
+                  transition: "width 0.5s ease"
+                }} 
+              />
+            </div>
+            
+            <div style={{ fontSize: "13px", color: "#72542b", textAlign: "left", width: "100%" }}>
+              <div style={{ marginBottom: "8px", display: "flex", justifyContent: "space-between" }}>
+                <span>Target Revenue:</span>
+                <span style={{ fontWeight: "600" }}>R {targetRevenue.toLocaleString()}</span>
+              </div>
+              <div style={{ marginBottom: "8px", display: "flex", justifyContent: "space-between" }}>
+                <span>Pipeline Value:</span>
+                <span style={{ fontWeight: "600" }}>R {totalPipelineValue.toLocaleString()}</span>
+              </div>
+              <div style={{ marginBottom: "8px", display: "flex", justifyContent: "space-between" }}>
+                <span>Risk Adjusted:</span>
+                <span style={{ fontWeight: "600" }}>R {riskAdjustedValue.toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "15px" }}>
+            <button
+              onClick={() => handleAddNotes("Pipeline Coverage")}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#7d5a50",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                fontSize: "12px",
+              }}
+            >
+              <FaStickyNote size={12} /> Add Notes
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* CALCULATION SUMMARY */}
+      <div style={{ 
+        backgroundColor: "#f7f3f0", 
+        padding: "15px", 
+        borderRadius: "6px",
+        marginTop: "20px"
+      }}>
+        <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px" }}>Calculation Formulas</h4>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+          <div>
+            <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
+              Risk Adjusted Pipeline Value
+            </div>
+            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
+              = Total Pipeline Value × Probability %
+            </div>
+            <div style={{ fontSize: "12px", color: "#5d4037", marginTop: "5px" }}>
+              R {totalPipelineValue.toLocaleString()} × {probability}% = R {riskAdjustedValue.toLocaleString()}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
+              Pipeline Coverage Ratio
+            </div>
+            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
+              = (Pipeline Value ÷ Target Revenue) × 100%
+            </div>
+            <div style={{ fontSize: "12px", color: "#5d4037", marginTop: "5px" }}>
+              (R {totalPipelineValue.toLocaleString()} ÷ R {targetRevenue.toLocaleString()}) × 100% = {pipelineCoverageRatio}%
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Pipeline Quality Component
+// Pipeline Quality Component
+const PipelineQuality = ({ activeSection, currentUser, isInvestorView }) => {
+  const [costPerLeadChannels, setCostPerLeadChannels] = useState([])
+  const [cacLtvData, setCacLtvData] = useState(Array(12).fill({ cac: 0, ltv: 0 }))
+  const [sqlToOpportunity, setSqlToOpportunity] = useState(0)
+  const [opportunityToCustomer, setOpportunityToCustomer] = useState(0)
+  const [repeatCustomers, setRepeatCustomers] = useState(0)
+  const [churnRate, setChurnRate] = useState(0)
+  const [showEditForm, setShowEditForm] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [notesExpanded, setNotesExpanded] = useState(false)
+
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+  useEffect(() => {
+    if (currentUser && activeSection === "pipeline-quality") {
+      loadData()
+    }
+  }, [currentUser, activeSection, selectedYear])
+
+  const loadData = async () => {
+    if (!currentUser) return
+    try {
+      setIsLoading(true)
+      const docRef = doc(db, "pipeline-quality", `${currentUser.uid}_${selectedYear}`)
+      const docSnap = await getDoc(docRef)
+      if (docSnap.exists()) {
+        const data = docSnap.data()
+        setCostPerLeadChannels(data.costPerLeadChannels || [])
+        setCacLtvData(data.cacLtvData || Array(12).fill({ cac: 0, ltv: 0 }))
+        setSqlToOpportunity(data.sqlToOpportunity || 0)
+        setOpportunityToCustomer(data.opportunityToCustomer || 0)
+        setRepeatCustomers(data.repeatCustomers || 0)
+        setChurnRate(data.churnRate || 0)
+      } else {
+        await setDoc(docRef, {
+          costPerLeadChannels: [
+            { name: "Social Media", cost: 0 },
+            { name: "Email", cost: 0 },
+            { name: "PPC", cost: 0 },
+            { name: "SEO", cost: 0 },
+            { name: "Referral", cost: 0 }
+          ],
+          cacLtvData: Array(12).fill({ cac: 0, ltv: 0 }),
+          sqlToOpportunity: 0,
+          opportunityToCustomer: 0,
+          repeatCustomers: 0,
+          churnRate: 0,
+          lastUpdated: new Date().toISOString(),
+        })
+      }
+    } catch (error) {
+      console.error("Error loading pipeline quality data:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const saveData = async () => {
+    if (!currentUser || isInvestorView) {
+      alert("You cannot save data in this mode.")
+      return
+    }
+    try {
+      await setDoc(doc(db, "pipeline-quality", `${currentUser.uid}_${selectedYear}`), {
+        costPerLeadChannels,
+        cacLtvData,
+        sqlToOpportunity,
+        opportunityToCustomer,
+        repeatCustomers,
+        churnRate,
+        lastUpdated: new Date().toISOString(),
+      })
+      setShowEditForm(false)
+      alert("Pipeline quality data saved successfully!")
+    } catch (error) {
+      console.error("Error saving data:", error)
+      alert("Error saving data")
+    }
+  }
+
+  const addChannel = () => {
+    setCostPerLeadChannels([...costPerLeadChannels, { name: "New Channel", cost: 0 }])
+  }
+
+  const removeChannel = (index) => {
+    const newChannels = costPerLeadChannels.filter((_, i) => i !== index)
+    setCostPerLeadChannels(newChannels)
+  }
+
+  const updateChannel = (index, field, value) => {
+    const newChannels = [...costPerLeadChannels]
+    newChannels[index][field] = field === "name" ? value : Number(value)
+    setCostPerLeadChannels(newChannels)
+  }
+
+  const handleAddNotes = (chartName) => {
+    alert(`Add Notes functionality for ${chartName}`)
+  }
+
+  const handleViewAnalysis = (chartName) => {
+    alert(`View Analysis functionality for ${chartName}`)
+  }
+
+  if (activeSection !== "pipeline-quality") return null
+
+  if (isLoading) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "200px",
+          backgroundColor: "#fdfcfb",
+          borderRadius: "8px",
+        }}
+      >
+        <div>Loading data...</div>
+      </div>
+    )
+  }
+
+  // Calculate averages and totals
+  const totalCac = cacLtvData.reduce((sum, month) => sum + month.cac, 0) / (cacLtvData.filter(m => m.cac > 0).length || 1)
+  const totalLtv = cacLtvData.reduce((sum, month) => sum + month.ltv, 0) / (cacLtvData.filter(m => m.ltv > 0).length || 1)
+  const ltvCacRatio = totalCac > 0 ? (totalLtv / totalCac).toFixed(1) : 0
+  
+  // Calculate average cost per lead across all channels
+  const avgCostPerLead = costPerLeadChannels.length > 0 
+    ? costPerLeadChannels.reduce((sum, channel) => sum + channel.cost, 0) / costPerLeadChannels.length
+    : 0
+
+  return (
+    <div
+      style={{
+        backgroundColor: "#fdfcfb",
+        padding: "20px",
+        margin: "20px 0",
+        borderRadius: "8px",
+        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+      }}
+    >
+      <NotesSection 
+        sectionKey="pipeline-quality" 
+        isExpanded={notesExpanded}
+        onToggle={() => setNotesExpanded(!notesExpanded)}
+      />
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Pipeline Quality</h2>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+            style={{
+              padding: "8px 12px",
+              border: "1px solid #d4c4b0",
+              borderRadius: "4px",
+              backgroundColor: "#fdfcfb",
+              color: "#5d4037",
+            }}
+          >
+            {[2023, 2024, 2025, 2026].map(year => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
+          {!isInvestorView && (
+            <>
+              <button
+                onClick={() => setShowEditForm(!showEditForm)}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <FaPlus /> Add Data
+              </button>
+              <button
+                onClick={() => alert("Add KPI functionality")}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#7d5a50",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <FaPlus /> Add KPI
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {!isInvestorView && showEditForm && (
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "6px",
+            marginBottom: "20px",
+          }}
+        >
+          <h3 style={{ color: "#72542b", marginTop: 0 }}>Add Pipeline Quality Data</h3>
+
+          <h4 style={{ color: "#72542b" }}>Cost Per Lead by Channel (ZAR)</h4>
+          {costPerLeadChannels.map((channel, index) => (
             <div
               key={index}
               style={{
@@ -624,28 +2093,28 @@ const LeadSourceAnalysis = ({ activeSection, currentUser, isInvestorView }) => {
             >
               <input
                 type="text"
-                value={source.name}
-                onChange={(e) => updateSource(index, "name", e.target.value)}
+                value={channel.name}
+                onChange={(e) => updateChannel(index, "name", e.target.value)}
                 style={{
                   padding: "8px",
                   border: "1px solid #d4c4b0",
                   borderRadius: "4px",
                 }}
-                placeholder="Source Name"
+                placeholder="Channel Name"
               />
               <input
                 type="number"
-                value={source.percentage}
-                onChange={(e) => updateSource(index, "percentage", e.target.value)}
+                value={channel.cost}
+                onChange={(e) => updateChannel(index, "cost", e.target.value)}
                 style={{
                   padding: "8px",
                   border: "1px solid #d4c4b0",
                   borderRadius: "4px",
                 }}
-                placeholder="Percentage"
+                placeholder="Cost (ZAR)"
               />
               <button
-                onClick={() => removeSource(index)}
+                onClick={() => removeChannel(index)}
                 style={{
                   padding: "8px",
                   backgroundColor: "#dc2626",
@@ -655,71 +2124,298 @@ const LeadSourceAnalysis = ({ activeSection, currentUser, isInvestorView }) => {
                   cursor: "pointer",
                 }}
               >
-                Remove
+                <FaTrashAlt />
               </button>
             </div>
           ))}
-          <div style={{ marginTop: "15px" }}>
-            <button
-              onClick={addSource}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#72542b",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                marginRight: "10px",
-              }}
-            >
-              Add Source
-            </button>
-            <button
-              onClick={saveSourceData}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#16a34a",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Save Data
-            </button>
+          <button
+            onClick={addChannel}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#5d4037",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              marginBottom: "20px",
+              display: "flex",
+              alignItems: "center",
+              gap: "5px",
+            }}
+          >
+            <FaPlus /> Add Channel
+          </button>
+
+          <h4 style={{ color: "#72542b" }}>CAC vs LTV Trend (Monthly)</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px", marginBottom: "20px" }}>
+            {monthNames.map((month, index) => (
+              <div key={month} style={{ backgroundColor: "#fdfcfb", padding: "10px", borderRadius: "4px" }}>
+                <label style={{ display: "block", color: "#72542b", marginBottom: "5px", fontWeight: "bold" }}>
+                  {month}
+                </label>
+                <div style={{ display: "flex", gap: "5px" }}>
+                  <input
+                    type="number"
+                    value={cacLtvData[index]?.cac || 0}
+                    onChange={(e) => {
+                      const newData = [...cacLtvData]
+                      newData[index] = { ...newData[index], cac: Number(e.target.value) }
+                      setCacLtvData(newData)
+                    }}
+                    style={{
+                      width: "50%",
+                      padding: "6px",
+                      border: "1px solid #d4c4b0",
+                      borderRadius: "4px",
+                    }}
+                    placeholder="CAC"
+                  />
+                  <input
+                    type="number"
+                    value={cacLtvData[index]?.ltv || 0}
+                    onChange={(e) => {
+                      const newData = [...cacLtvData]
+                      newData[index] = { ...newData[index], ltv: Number(e.target.value) }
+                      setCacLtvData(newData)
+                    }}
+                    style={{
+                      width: "50%",
+                      padding: "6px",
+                      border: "1px solid #d4c4b0",
+                      borderRadius: "4px",
+                    }}
+                    placeholder="LTV"
+                  />
+                </div>
+              </div>
+            ))}
           </div>
+
+          <h4 style={{ color: "#72542b" }}>Conversion Metrics</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "15px", marginBottom: "20px" }}>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>
+                SQL → Opportunity Conversion (%)
+              </label>
+              <input
+                type="number"
+                value={sqlToOpportunity}
+                onChange={(e) => setSqlToOpportunity(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+                min="0"
+                max="100"
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>
+                Opportunity → Customer Conversion (%)
+              </label>
+              <input
+                type="number"
+                value={opportunityToCustomer}
+                onChange={(e) => setOpportunityToCustomer(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+                min="0"
+                max="100"
+              />
+            </div>
+          </div>
+
+          <h4 style={{ color: "#72542b" }}>Customer Retention Metrics</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "15px", marginBottom: "20px" }}>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Repeat Customers (%)</label>
+              <input
+                type="number"
+                value={repeatCustomers}
+                onChange={(e) => setRepeatCustomers(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+                min="0"
+                max="100"
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Churn Rate (%)</label>
+              <input
+                type="number"
+                value={churnRate}
+                onChange={(e) => setChurnRate(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+                min="0"
+                max="100"
+              />
+            </div>
+          </div>
+
+          <button
+            onClick={saveData}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#16a34a",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              marginTop: "15px",
+            }}
+          >
+            Save Data
+          </button>
         </div>
       )}
 
-      {sources.length === 0 ? (
+      {/* KEY METRICS - Top Section */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "10px", marginBottom: "30px" }}>
         <div
           style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
             textAlign: "center",
-            padding: "40px",
-            color: "#72542b",
+            borderTop: "4px solid #9c7c5f",
           }}
         >
-          <p>No lead source data available. {!isInvestorView && 'Click "Edit Data" to add your first source.'}</p>
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
+            Avg Cost Per Lead
+          </div>
+          <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>
+            R {avgCostPerLead.toFixed(0)}
+          </div>
+          <div style={{ fontSize: "10px", color: "#7d5a50", marginTop: "3px" }}>
+            {costPerLeadChannels.length} channels
+          </div>
         </div>
-      ) : (
+        
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "20px",
-            alignItems: "center",
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
+            borderTop: "4px solid #7d5a50",
           }}
         >
-          <div style={{ height: "300px" }}>
-            <Pie
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
+            SQL → Opportunity
+          </div>
+          <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>{sqlToOpportunity}%</div>
+          <div style={{ fontSize: "10px", color: "#7d5a50", marginTop: "3px" }}>Conversion Rate</div>
+        </div>
+        
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
+            borderTop: "4px solid #5d4037",
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
+            Opp → Customer
+          </div>
+          <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>{opportunityToCustomer}%</div>
+          <div style={{ fontSize: "10px", color: "#7d5a50", marginTop: "3px" }}>Conversion Rate</div>
+        </div>
+        
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
+            borderTop: "4px solid #4a352f",
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
+            Repeat Customers
+          </div>
+          <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>{repeatCustomers}%</div>
+          <div style={{ fontSize: "10px", color: "#7d5a50", marginTop: "3px" }}>Retention Rate</div>
+        </div>
+        
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
+            borderTop: "4px solid #dc2626",
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
+            Churn Rate
+          </div>
+          <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>{churnRate}%</div>
+          <div style={{ fontSize: "10px", color: "#7d5a50", marginTop: "3px" }}>Customer Loss</div>
+        </div>
+        
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
+            borderTop: "4px solid #16a34a",
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
+            LTV:CAC Ratio
+          </div>
+          <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>{ltvCacRatio}x</div>
+          <div style={{ fontSize: "10px", color: "#7d5a50", marginTop: "3px" }}>
+            Avg: R{totalLtv.toFixed(0)}:R{totalCac.toFixed(0)}
+          </div>
+        </div>
+      </div>
+
+      {/* CHARTS SECTION - 3 charts */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px", marginBottom: "30px" }}>
+        
+        {/* Cost Per Lead by Channel Chart */}
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          }}
+        >
+          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
+            Cost Per Lead by Channel
+          </h3>
+          <div style={{ height: "250px", marginBottom: "15px" }}>
+            <Bar
               data={{
-                labels: sourceNames,
+                labels: costPerLeadChannels.map((c) => c.name),
                 datasets: [
                   {
-                    data: sourceData,
-                    backgroundColor: ["#9c7c5f", "#e8ddd4", "#d4c4b0", "#b8a38d", "#a58f7a", "#8a7865"],
+                    label: "Cost (ZAR)",
+                    data: costPerLeadChannels.map((c) => c.cost),
+                    backgroundColor: "#9c7c5f",
                     borderColor: "#5d4037",
                     borderWidth: 1,
+                    borderRadius: 4,
                   },
                 ],
               }}
@@ -728,168 +2424,676 @@ const LeadSourceAnalysis = ({ activeSection, currentUser, isInvestorView }) => {
                 maintainAspectRatio: false,
                 plugins: {
                   legend: {
-                    position: "right",
+                    display: false,
+                  },
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    title: {
+                      display: true,
+                      text: "Cost (ZAR)",
+                      color: "#72542b",
+                    },
+                    grid: {
+                      color: "rgba(125, 90, 80, 0.1)",
+                    },
+                    ticks: {
+                      color: "#72542b",
+                    },
+                  },
+                  x: {
+                    ticks: {
+                      color: "#72542b",
+                      maxRotation: 45,
+                    },
+                    grid: {
+                      color: "rgba(125, 90, 80, 0.1)",
+                    },
                   },
                 },
               }}
             />
           </div>
-          <div>
-            <div
-              style={{
-                backgroundColor: "#f7f3f0",
-                padding: "20px",
-                borderRadius: "6px",
-              }}
-            >
-              <h3 style={{ color: "#72542b" }}>Top Performing Sources</h3>
-              <ol
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
+              Avg: R{avgCostPerLead.toFixed(0)}
+            </div>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                onClick={() => handleAddNotes("Cost Per Lead")}
                 style={{
-                  listStyle: "none",
-                  padding: 0,
-                  color: "#5d4037",
+                  padding: "6px 12px",
+                  backgroundColor: "#7d5a50",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "12px",
                 }}
               >
-                {sources
-                  .sort((a, b) => b.percentage - a.percentage)
-                  .slice(0, 3)
-                  .map((source, index) => (
-                    <li key={index} style={{ marginBottom: "10px", display: "flex", justifyContent: "space-between" }}>
-                      <span>
-                        {index + 1}. {source.name}
-                      </span>
-                      <span style={{ fontWeight: "bold" }}>{source.percentage}%</span>
-                    </li>
-                  ))}
-              </ol>
+                <FaStickyNote size={12} /> Add Notes
+              </button>
+              <button
+                onClick={() => handleViewAnalysis("Cost Per Lead")}
+                style={{
+                  padding: "6px 12px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "12px",
+                }}
+              >
+                <FaChartBar size={12} /> View Analysis
+              </button>
             </div>
           </div>
         </div>
-      )}
 
-      <DownloadModal
-        isOpen={showDownloadModal}
-        onClose={() => setShowDownloadModal(false)}
-        onDownload={handleDownload}
-        availableSections={[
-          { id: "sources", label: "Lead Sources Data" },
-          { id: "summary", label: "Summary Statistics" },
-        ]}
-        sectionTitle="Lead Source Analysis"
-      />
+        {/* CAC vs LTV Trend Chart */}
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          }}
+        >
+          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
+            CAC vs LTV Trend
+          </h3>
+          <div style={{ height: "250px", marginBottom: "15px" }}>
+            <Line
+              data={{
+                labels: monthNames,
+                datasets: [
+                  {
+                    label: "CAC (ZAR)",
+                    data: cacLtvData.map((d) => d.cac),
+                    borderColor: "#dc2626",
+                    backgroundColor: "rgba(220, 38, 38, 0.1)",
+                    borderWidth: 2,
+                    tension: 0.3,
+                    fill: false,
+                  },
+                  {
+                    label: "LTV (ZAR)",
+                    data: cacLtvData.map((d) => d.ltv),
+                    borderColor: "#16a34a",
+                    backgroundColor: "rgba(22, 163, 74, 0.1)",
+                    borderWidth: 2,
+                    tension: 0.3,
+                    fill: false,
+                  },
+                ],
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: 'top',
+                    labels: {
+                      color: "#72542b",
+                    }
+                  },
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    title: {
+                      display: true,
+                      text: "Value (ZAR)",
+                      color: "#72542b",
+                    },
+                    grid: {
+                      color: "rgba(125, 90, 80, 0.1)",
+                    },
+                    ticks: {
+                      color: "#72542b",
+                    },
+                  },
+                  x: {
+                    ticks: {
+                      color: "#72542b",
+                      maxRotation: 45,
+                    },
+                    grid: {
+                      color: "rgba(125, 90, 80, 0.1)",
+                    },
+                  },
+                },
+              }}
+            />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
+              LTV:CAC = {ltvCacRatio}x
+            </div>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                onClick={() => handleAddNotes("CAC vs LTV")}
+                style={{
+                  padding: "6px 12px",
+                  backgroundColor: "#7d5a50",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "12px",
+                }}
+              >
+                <FaStickyNote size={12} /> Add Notes
+              </button>
+              <button
+                onClick={() => handleViewAnalysis("CAC vs LTV")}
+                style={{
+                  padding: "6px 12px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "12px",
+                }}
+              >
+                <FaChartBar size={12} /> View Analysis
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Repeat Customers vs Churn Chart */}
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          }}
+        >
+          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
+            Repeat Customers vs Churn
+          </h3>
+          <div style={{ height: "250px", marginBottom: "15px" }}>
+            <Bar
+              data={{
+                labels: ["Retention vs Churn"],
+                datasets: [
+                  {
+                    label: "Repeat Customers",
+                    data: [repeatCustomers],
+                    backgroundColor: "#16a34a",
+                    borderColor: "#15803d",
+                    borderWidth: 1,
+                    borderRadius: 4,
+                  },
+                  {
+                    label: "Churn Rate",
+                    data: [churnRate],
+                    backgroundColor: "#dc2626",
+                    borderColor: "#b91c1c",
+                    borderWidth: 1,
+                    borderRadius: 4,
+                  },
+                ],
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: 'top',
+                    labels: {
+                      color: "#72542b",
+                    }
+                  },
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: {
+                      display: true,
+                      text: "Percentage (%)",
+                      color: "#72542b",
+                    },
+                    grid: {
+                      color: "rgba(125, 90, 80, 0.1)",
+                    },
+                    ticks: {
+                      color: "#72542b",
+                      callback: function(value) {
+                        return value + '%';
+                      }
+                    },
+                  },
+                  x: {
+                    ticks: {
+                      color: "#72542b",
+                    },
+                    grid: {
+                      color: "rgba(125, 90, 80, 0.1)",
+                    },
+                  },
+                },
+              }}
+            />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
+              Net Retention: {repeatCustomers - churnRate}%
+            </div>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                onClick={() => handleAddNotes("Retention vs Churn")}
+                style={{
+                  padding: "6px 12px",
+                  backgroundColor: "#7d5a50",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "12px",
+                }}
+              >
+                <FaStickyNote size={12} /> Add Notes
+              </button>
+              <button
+                onClick={() => handleViewAnalysis("Retention vs Churn")}
+                style={{
+                  padding: "6px 12px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "12px",
+                }}
+              >
+                <FaChartBar size={12} /> View Analysis
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* CONVERSION FUNNEL VISUALIZATION */}
+      <div
+        style={{
+          backgroundColor: "#f7f3f0",
+          padding: "20px",
+          borderRadius: "8px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          marginBottom: "30px",
+        }}
+      >
+        <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
+          Conversion Funnel Analysis
+        </h3>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-around" }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ 
+              backgroundColor: "#fdfcfb", 
+              padding: "15px 25px", 
+              borderRadius: "8px",
+              border: "2px solid #d4c4b0",
+              marginBottom: "10px"
+            }}>
+              <div style={{ fontSize: "14px", color: "#72542b", fontWeight: "600" }}>SQL</div>
+              <div style={{ fontSize: "12px", color: "#7d5a50" }}>Starting Point</div>
+            </div>
+            <div style={{ 
+              backgroundColor: sqlToOpportunity >= 50 ? "#16a34a" : 
+                             sqlToOpportunity >= 30 ? "#f59e0b" : "#dc2626",
+              color: "white",
+              padding: "5px 10px",
+              borderRadius: "15px",
+              fontSize: "12px",
+              fontWeight: "600",
+              marginTop: "10px"
+            }}>
+              {sqlToOpportunity}% Convert
+            </div>
+          </div>
+          
+          <div style={{ fontSize: "24px", color: "#7d5a50", margin: "0 10px" }}>→</div>
+          
+          <div style={{ textAlign: "center" }}>
+            <div style={{ 
+              backgroundColor: "#fdfcfb", 
+              padding: "15px 25px", 
+              borderRadius: "8px",
+              border: "2px solid #d4c4b0",
+              marginBottom: "10px"
+            }}>
+              <div style={{ fontSize: "14px", color: "#72542b", fontWeight: "600" }}>Opportunity</div>
+              <div style={{ fontSize: "12px", color: "#7d5a50" }}>Qualified Leads</div>
+            </div>
+            <div style={{ 
+              backgroundColor: opportunityToCustomer >= 50 ? "#16a34a" : 
+                             opportunityToCustomer >= 30 ? "#f59e0b" : "#dc2626",
+              color: "white",
+              padding: "5px 10px",
+              borderRadius: "15px",
+              fontSize: "12px",
+              fontWeight: "600",
+              marginTop: "10px"
+            }}>
+              {opportunityToCustomer}% Convert
+            </div>
+          </div>
+          
+          <div style={{ fontSize: "24px", color: "#7d5a50", margin: "0 10px" }}>→</div>
+          
+          <div style={{ textAlign: "center" }}>
+            <div style={{ 
+              backgroundColor: "#fdfcfb", 
+              padding: "15px 25px", 
+              borderRadius: "8px",
+              border: "2px solid #d4c4b0",
+              marginBottom: "10px"
+            }}>
+              <div style={{ fontSize: "14px", color: "#72542b", fontWeight: "600" }}>Customer</div>
+              <div style={{ fontSize: "12px", color: "#7d5a50" }}>Closed Deals</div>
+            </div>
+            <div style={{ 
+              backgroundColor: repeatCustomers >= 70 ? "#16a34a" : 
+                             repeatCustomers >= 50 ? "#f59e0b" : "#dc2626",
+              color: "white",
+              padding: "5px 10px",
+              borderRadius: "15px",
+              fontSize: "12px",
+              fontWeight: "600",
+              marginTop: "10px"
+            }}>
+              {repeatCustomers}% Repeat
+            </div>
+          </div>
+        </div>
+        
+        <div style={{ 
+          display: "flex", 
+          justifyContent: "space-between", 
+          marginTop: "20px",
+          paddingTop: "15px",
+          borderTop: "1px solid #e8ddd4"
+        }}>
+          <div style={{ fontSize: "12px", color: "#7d5a50" }}>
+            <strong>Overall Efficiency:</strong> {(sqlToOpportunity * opportunityToCustomer / 100).toFixed(1)}% SQL to Customer
+          </div>
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button
+              onClick={() => handleAddNotes("Conversion Funnel")}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#7d5a50",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                fontSize: "12px",
+              }}
+            >
+              <FaStickyNote size={12} /> Add Notes
+            </button>
+            <button
+              onClick={() => handleViewAnalysis("Conversion Funnel")}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                fontSize: "12px",
+              }}
+            >
+              <FaChartBar size={12} /> View Analysis
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* CAC vs LTV RATIO ANALYSIS */}
+      <div style={{ 
+        backgroundColor: "#f7f3f0", 
+        padding: "15px", 
+        borderRadius: "6px",
+        marginTop: "20px"
+      }}>
+        <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px" }}>LTV:CAC Ratio Analysis</h4>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "15px" }}>
+          <div>
+            <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
+              Current LTV:CAC Ratio
+            </div>
+            <div style={{ 
+              fontSize: "24px", 
+              color: ltvCacRatio >= 3 ? "#16a34a" : 
+                     ltvCacRatio >= 1.5 ? "#f59e0b" : "#dc2626",
+              fontWeight: "bold" 
+            }}>
+              {ltvCacRatio}x
+            </div>
+            <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
+              {ltvCacRatio >= 3 ? "Excellent" : 
+               ltvCacRatio >= 1.5 ? "Good" : "Needs Improvement"}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
+              Average Customer Acquisition Cost
+            </div>
+            <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>
+              R {totalCac.toFixed(0)}
+            </div>
+            <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
+              Monthly Average CAC
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
+              Average Lifetime Value
+            </div>
+            <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>
+              R {totalLtv.toFixed(0)}
+            </div>
+            <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
+              Monthly Average LTV
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
 
-// CostPerLead Component - NO MONTHLY X-AXIS (Bar chart with campaign names)
-const CostPerLead = ({ activeSection, currentUser, isInvestorView }) => {
-  const [campaigns, setCampaigns] = useState([])
-  const [industryAvg, setIndustryAvg] = useState(0)
+// Revenue Concentration Component
+// Revenue Concentration Component
+const RevenueConcentration = ({ activeSection, currentUser, isInvestorView }) => {
+  const [revenueChannels, setRevenueChannels] = useState([])
+  const [customerSegments, setCustomerSegments] = useState([])
   const [showEditForm, setShowEditForm] = useState(false)
-  const [showDownloadModal, setShowDownloadModal] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [notesExpanded, setNotesExpanded] = useState(false)
+  const [chartType, setChartType] = useState("channel") // "channel" or "segment"
 
-  const saveCostPerLeadData = async () => {
-    if (!currentUser) {
-      alert("Please log in to save data.")
-      return
+  useEffect(() => {
+    if (currentUser && activeSection === "revenue-concentration") {
+      loadData()
     }
-    try {
-      await setDoc(doc(db, "cost-per-lead", currentUser.uid), { 
-        campaigns, 
-        industryAvg,
-        lastUpdated: new Date().toISOString()
-      })
-      setShowEditForm(false)
-      alert("Cost per lead data saved successfully!")
-    } catch (error) {
-      console.error("Error saving cost per lead data:", error)
-      alert("Error saving data")
-    }
-  }
+  }, [currentUser, activeSection, selectedYear])
 
-  const loadCostPerLeadData = async () => {
+  const loadData = async () => {
     if (!currentUser) return
     try {
       setIsLoading(true)
-      const docRef = doc(db, "cost-per-lead", currentUser.uid)
+      const docRef = doc(db, "revenue-concentration", `${currentUser.uid}_${selectedYear}`)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         const data = docSnap.data()
-        setCampaigns(data.campaigns || [])
-        setIndustryAvg(data.industryAvg || 0)
+        setRevenueChannels(data.revenueChannels || [])
+        setCustomerSegments(data.customerSegments || [])
       } else {
-        // Initialize with empty data if no document exists
         await setDoc(docRef, {
-          campaigns: [],
-          industryAvg: 0,
-          lastUpdated: new Date().toISOString()
+          revenueChannels: [
+            { name: "Social Media", revenue: 0, spend: 0 },
+            { name: "Email", revenue: 0, spend: 0 },
+            { name: "PPC", revenue: 0, spend: 0 },
+            { name: "SEO", revenue: 0, spend: 0 },
+            { name: "Referral", revenue: 0, spend: 0 },
+            { name: "Direct", revenue: 0, spend: 0 }
+          ],
+          customerSegments: [
+            { name: "Enterprise", revenue: 0, customerCount: 0 },
+            { name: "SMB", revenue: 0, customerCount: 0 },
+            { name: "Startup", revenue: 0, customerCount: 0 },
+            { name: "Non-Profit", revenue: 0, customerCount: 0 },
+            { name: "Education", revenue: 0, customerCount: 0 }
+          ],
+          lastUpdated: new Date().toISOString(),
         })
       }
     } catch (error) {
-      console.error("Error loading cost per lead data:", error)
+      console.error("Error loading revenue concentration data:", error)
     } finally {
       setIsLoading(false)
     }
   }
 
-  useEffect(() => {
-    if (currentUser) {
-      loadCostPerLeadData()
+  const saveData = async () => {
+    if (!currentUser || isInvestorView) {
+      alert("You cannot save data in this mode.")
+      return
     }
-  }, [currentUser])
-
-  const updateCampaign = (index, field, value) => {
-    const newCampaigns = [...campaigns]
-    newCampaigns[index][field] = field === "name" ? value : Number.parseFloat(value) || 0
-    setCampaigns(newCampaigns)
-  }
-
-  const addCampaign = () => {
-    setCampaigns([...campaigns, { name: "New Campaign", cost: 0 }])
-  }
-
-  const removeCampaign = (index) => {
-    const newCampaigns = campaigns.filter((_, i) => i !== index)
-    setCampaigns(newCampaigns)
-  }
-
-  const handleDownload = (selectedSections) => {
-    const data = {
-      campaigns: campaigns,
-      "industry-average": industryAvg,
-      summary: {
-        totalCampaigns: campaigns.length,
-        averageCost:
-          campaigns.length > 0 ? (campaigns.reduce((sum, c) => sum + c.cost, 0) / campaigns.length).toFixed(2) : 0,
-        bestPerforming:
-          campaigns.length > 0
-            ? campaigns.reduce((prev, current) => (prev.cost < current.cost ? prev : current))
-            : null,
-      },
+    try {
+      await setDoc(doc(db, "revenue-concentration", `${currentUser.uid}_${selectedYear}`), {
+        revenueChannels,
+        customerSegments,
+        lastUpdated: new Date().toISOString(),
+      })
+      setShowEditForm(false)
+      alert("Revenue concentration data saved successfully!")
+    } catch (error) {
+      console.error("Error saving data:", error)
+      alert("Error saving data")
     }
-    downloadData(data, "cost_per_lead", selectedSections)
   }
 
-  if (activeSection !== "cost-per-lead") return null
+  const addRevenueChannel = () => {
+    setRevenueChannels([...revenueChannels, { name: "New Channel", revenue: 0, spend: 0 }])
+  }
+
+  const removeRevenueChannel = (index) => {
+    const newChannels = revenueChannels.filter((_, i) => i !== index)
+    setRevenueChannels(newChannels)
+  }
+
+  const updateRevenueChannel = (index, field, value) => {
+    const newChannels = [...revenueChannels]
+    newChannels[index][field] = field === "name" ? value : Number(value)
+    setRevenueChannels(newChannels)
+  }
+
+  const addCustomerSegment = () => {
+    setCustomerSegments([...customerSegments, { name: "New Segment", revenue: 0, customerCount: 0 }])
+  }
+
+  const removeCustomerSegment = (index) => {
+    const newSegments = customerSegments.filter((_, i) => i !== index)
+    setCustomerSegments(newSegments)
+  }
+
+  const updateCustomerSegment = (index, field, value) => {
+    const newSegments = [...customerSegments]
+    newSegments[index][field] = field === "name" ? value : Number(value)
+    setCustomerSegments(newSegments)
+  }
+
+  const handleAddNotes = (chartName) => {
+    alert(`Add Notes functionality for ${chartName}`)
+  }
+
+  const handleViewAnalysis = (chartName) => {
+    alert(`View Analysis functionality for ${chartName}`)
+  }
+
+  if (activeSection !== "revenue-concentration") return null
 
   if (isLoading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '200px',
-        backgroundColor: '#fdfcfb',
-        borderRadius: '8px'
-      }}>
-        <div>Loading cost per lead data...</div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "200px",
+          backgroundColor: "#fdfcfb",
+          borderRadius: "8px",
+        }}
+      >
+        <div>Loading data...</div>
       </div>
     )
   }
 
-  const campaignNames = campaigns.map((c) => c.name)
-  const costData = campaigns.map((c) => c.cost)
+  // Calculate totals and analytics
+  const totalRevenue = revenueChannels.reduce((sum, channel) => sum + channel.revenue, 0)
+  const totalSpend = revenueChannels.reduce((sum, channel) => sum + channel.spend, 0)
+  const totalROI = totalSpend > 0 ? ((totalRevenue - totalSpend) / totalSpend * 100).toFixed(1) : 0
+  
+  // Sort channels by revenue to get top 3
+  const sortedChannels = [...revenueChannels].sort((a, b) => b.revenue - a.revenue)
+  const top3Channels = sortedChannels.slice(0, 3)
+  const top3Revenue = top3Channels.reduce((sum, c) => sum + c.revenue, 0)
+  const top3Percentage = totalRevenue > 0 ? ((top3Revenue / totalRevenue) * 100).toFixed(1) : 0
+  
+  // Sort segments by revenue to get top 3
+  const sortedSegments = [...customerSegments].sort((a, b) => b.revenue - a.revenue)
+  const top3Segments = sortedSegments.slice(0, 3)
+  const top3SegmentRevenue = top3Segments.reduce((sum, s) => sum + s.revenue, 0)
+  const top3SegmentPercentage = totalRevenue > 0 ? ((top3SegmentRevenue / totalRevenue) * 100).toFixed(1) : 0
+
+  // Calculate ROI per channel
+  const channelsWithROI = revenueChannels.map(channel => ({
+    ...channel,
+    roi: channel.spend > 0 ? ((channel.revenue - channel.spend) / channel.spend * 100).toFixed(1) : 0,
+    roiValue: channel.spend > 0 ? (channel.revenue - channel.spend) : 0
+  }))
+
+  // Calculate revenue per customer for segments
+  const segmentsWithMetrics = customerSegments.map(segment => ({
+    ...segment,
+    avgRevenuePerCustomer: segment.customerCount > 0 ? (segment.revenue / segment.customerCount).toFixed(0) : 0
+  }))
 
   return (
     <div
@@ -901,37 +3105,50 @@ const CostPerLead = ({ activeSection, currentUser, isInvestorView }) => {
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
     >
+      <NotesSection 
+        sectionKey="revenue-concentration" 
+        isExpanded={notesExpanded}
+        onToggle={() => setNotesExpanded(!notesExpanded)}
+      />
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Cost Per Lead by Campaign</h2>
-        <div style={{ display: "flex", gap: "10px" }}>
-          {!isInvestorView && (
-            <button
-              onClick={() => setShowEditForm(!showEditForm)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              {showEditForm ? "Cancel" : "Edit Data"}
-            </button>
-          )}
-          <button
-            onClick={() => setShowDownloadModal(true)}
+        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Revenue Concentration</h2>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
             style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
+              padding: "8px 12px",
+              border: "1px solid #d4c4b0",
               borderRadius: "4px",
-              cursor: "pointer",
+              backgroundColor: "#fdfcfb",
+              color: "#5d4037",
             }}
           >
-            Download
-          </button>
+            {[2023, 2024, 2025, 2026].map(year => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
+          {!isInvestorView && (
+            <>
+              <button
+                onClick={() => setShowEditForm(!showEditForm)}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <FaPlus /> Add Data
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -944,28 +3161,1176 @@ const CostPerLead = ({ activeSection, currentUser, isInvestorView }) => {
             marginBottom: "20px",
           }}
         >
-          <h3 style={{ color: "#72542b", marginTop: 0 }}>Edit Cost Per Lead Data</h3>
-          <div style={{ marginBottom: "20px" }}>
-            <label style={{ color: "#72542b", display: "block", marginBottom: "5px" }}>Industry Average:</label>
-            <input
-              type="number"
-              value={industryAvg}
-              onChange={(e) => setIndustryAvg(Number.parseFloat(e.target.value) || 0)}
-              style={{
-                padding: "8px",
-                border: "1px solid #d4c4b0",
-                borderRadius: "4px",
-                width: "120px",
+          <h3 style={{ color: "#72542b", marginTop: 0 }}>Add Revenue Concentration Data</h3>
+          
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "30px" }}>
+            {/* Revenue Channels Section */}
+            <div>
+              <h4 style={{ color: "#72542b", marginBottom: "15px" }}>Revenue Channels</h4>
+              {revenueChannels.map((channel, index) => (
+                <div
+                  key={index}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "2fr 1fr 1fr auto",
+                    gap: "10px",
+                    alignItems: "center",
+                    marginBottom: "10px",
+                    padding: "10px",
+                    backgroundColor: "#fdfcfb",
+                    borderRadius: "4px",
+                  }}
+                >
+                  <input
+                    type="text"
+                    value={channel.name}
+                    onChange={(e) => updateRevenueChannel(index, "name", e.target.value)}
+                    style={{
+                      padding: "8px",
+                      border: "1px solid #d4c4b0",
+                      borderRadius: "4px",
+                    }}
+                    placeholder="Channel Name"
+                  />
+                  <input
+                    type="number"
+                    value={channel.revenue}
+                    onChange={(e) => updateRevenueChannel(index, "revenue", e.target.value)}
+                    style={{
+                      padding: "8px",
+                      border: "1px solid #d4c4b0",
+                      borderRadius: "4px",
+                    }}
+                    placeholder="Revenue (ZAR)"
+                  />
+                  <input
+                    type="number"
+                    value={channel.spend}
+                    onChange={(e) => updateRevenueChannel(index, "spend", e.target.value)}
+                    style={{
+                      padding: "8px",
+                      border: "1px solid #d4c4b0",
+                      borderRadius: "4px",
+                    }}
+                    placeholder="Spend (ZAR)"
+                  />
+                  <button
+                    onClick={() => removeRevenueChannel(index)}
+                    style={{
+                      padding: "8px",
+                      backgroundColor: "#dc2626",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <FaTrashAlt />
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={addRevenueChannel}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#5d4037",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  marginBottom: "20px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  width: "100%",
+                  justifyContent: "center",
+                }}
+              >
+                <FaPlus /> Add Channel
+              </button>
+            </div>
+
+            {/* Customer Segments Section */}
+            <div>
+              <h4 style={{ color: "#72542b", marginBottom: "15px" }}>Customer Segments</h4>
+              {customerSegments.map((segment, index) => (
+                <div
+                  key={index}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "2fr 1fr 1fr auto",
+                    gap: "10px",
+                    alignItems: "center",
+                    marginBottom: "10px",
+                    padding: "10px",
+                    backgroundColor: "#fdfcfb",
+                    borderRadius: "4px",
+                  }}
+                >
+                  <input
+                    type="text"
+                    value={segment.name}
+                    onChange={(e) => updateCustomerSegment(index, "name", e.target.value)}
+                    style={{
+                      padding: "8px",
+                      border: "1px solid #d4c4b0",
+                      borderRadius: "4px",
+                    }}
+                    placeholder="Segment Name"
+                  />
+                  <input
+                    type="number"
+                    value={segment.revenue}
+                    onChange={(e) => updateCustomerSegment(index, "revenue", e.target.value)}
+                    style={{
+                      padding: "8px",
+                      border: "1px solid #d4c4b0",
+                      borderRadius: "4px",
+                    }}
+                    placeholder="Revenue (ZAR)"
+                  />
+                  <input
+                    type="number"
+                    value={segment.customerCount}
+                    onChange={(e) => updateCustomerSegment(index, "customerCount", e.target.value)}
+                    style={{
+                      padding: "8px",
+                      border: "1px solid #d4c4b0",
+                      borderRadius: "4px",
+                    }}
+                    placeholder="Customers"
+                  />
+                  <button
+                    onClick={() => removeCustomerSegment(index)}
+                    style={{
+                      padding: "8px",
+                      backgroundColor: "#dc2626",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <FaTrashAlt />
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={addCustomerSegment}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#5d4037",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  marginBottom: "20px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  width: "100%",
+                  justifyContent: "center",
+                }}
+              >
+                <FaPlus /> Add Segment
+              </button>
+            </div>
+          </div>
+
+          <button
+            onClick={saveData}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#16a34a",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              marginTop: "15px",
+              width: "100%",
+            }}
+          >
+            Save Data
+          </button>
+        </div>
+      )}
+
+      {/* KEY METRICS - Top Section */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "15px", marginBottom: "30px" }}>
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "6px",
+            textAlign: "center",
+            borderTop: "4px solid #9c7c5f",
+          }}
+        >
+          <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "8px", fontWeight: "600" }}>
+            Total Revenue
+          </div>
+          <div style={{ fontSize: "20px", color: "#5d4037", fontWeight: "bold" }}>
+            R {totalRevenue.toLocaleString()}
+          </div>
+          <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
+            Year {selectedYear}
+          </div>
+        </div>
+        
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "6px",
+            textAlign: "center",
+            borderTop: "4px solid #7d5a50",
+          }}
+        >
+          <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "8px", fontWeight: "600" }}>
+            Total Spend
+          </div>
+          <div style={{ fontSize: "20px", color: "#5d4037", fontWeight: "bold" }}>
+            R {totalSpend.toLocaleString()}
+          </div>
+          <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
+            Across all channels
+          </div>
+        </div>
+        
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "6px",
+            textAlign: "center",
+            borderTop: "4px solid #5d4037",
+          }}
+        >
+          <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "8px", fontWeight: "600" }}>
+            Overall ROI
+          </div>
+          <div style={{ fontSize: "20px", color: totalROI > 0 ? "#16a34a" : "#dc2626", fontWeight: "bold" }}>
+            {totalROI}%
+          </div>
+          <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
+            Return on Investment
+          </div>
+        </div>
+        
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "6px",
+            textAlign: "center",
+            borderTop: "4px solid #4a352f",
+          }}
+        >
+          <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "8px", fontWeight: "600" }}>
+            Top 3 Concentration
+          </div>
+          <div style={{ 
+            fontSize: "20px", 
+            color: top3Percentage > 70 ? "#dc2626" : 
+                   top3Percentage > 50 ? "#f59e0b" : "#16a34a", 
+            fontWeight: "bold" 
+          }}>
+            {top3Percentage}%
+          </div>
+          <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
+            {chartType === "channel" ? "Channels" : "Segments"}
+          </div>
+        </div>
+      </div>
+
+      {/* CHART TYPE SELECTOR */}
+      <div style={{ marginBottom: "20px", display: "flex", gap: "10px" }}>
+        <button
+          onClick={() => setChartType("channel")}
+          style={{
+            padding: "8px 16px",
+            backgroundColor: chartType === "channel" ? "#5d4037" : "#e8ddd4",
+            color: chartType === "channel" ? "#fdfcfb" : "#5d4037",
+            border: "none",
+            borderRadius: "4px",
+            cursor: "pointer",
+            fontWeight: "600",
+            fontSize: "14px",
+          }}
+        >
+          View by Channel
+        </button>
+        <button
+          onClick={() => setChartType("segment")}
+          style={{
+            padding: "8px 16px",
+            backgroundColor: chartType === "segment" ? "#5d4037" : "#e8ddd4",
+            color: chartType === "segment" ? "#fdfcfb" : "#5d4037",
+            border: "none",
+            borderRadius: "4px",
+            cursor: "pointer",
+            fontWeight: "600",
+            fontSize: "14px",
+          }}
+        >
+          View by Customer Segment
+        </button>
+      </div>
+
+      {/* CHARTS SECTION - 3 charts in grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px", marginBottom: "30px" }}>
+        
+        {/* Revenue Distribution Pie Chart */}
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          }}
+        >
+          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
+            {chartType === "channel" ? "Revenue by Channel" : "Revenue by Customer Segment"}
+          </h3>
+          <div style={{ height: "250px", marginBottom: "15px" }}>
+            {chartType === "channel" ? (
+              <Pie
+                data={{
+                  labels: revenueChannels.map((c) => c.name),
+                  datasets: [
+                    {
+                      label: "Revenue (ZAR)",
+                      data: revenueChannels.map((c) => c.revenue),
+                      backgroundColor: [
+                        "#9c7c5f",
+                        "#7d5a50",
+                        "#e8ddd4",
+                        "#d4c4b0",
+                        "#5d4037",
+                        "#f7f3f0",
+                        "#72542b",
+                        "#4a352f",
+                      ],
+                      borderColor: "#fdfcfb",
+                      borderWidth: 2,
+                    },
+                  ],
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: {
+                      position: 'right',
+                      labels: {
+                        color: "#72542b",
+                        padding: 15,
+                      }
+                    },
+                  },
+                }}
+              />
+            ) : (
+              <Pie
+                data={{
+                  labels: customerSegments.map((s) => s.name),
+                  datasets: [
+                    {
+                      label: "Revenue (ZAR)",
+                      data: customerSegments.map((s) => s.revenue),
+                      backgroundColor: [
+                        "#16a34a",
+                        "#f59e0b",
+                        "#dc2626",
+                        "#3b82f6",
+                        "#8b5cf6",
+                        "#06b6d4",
+                        "#f97316",
+                      ],
+                      borderColor: "#fdfcfb",
+                      borderWidth: 2,
+                    },
+                  ],
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: {
+                      position: 'right',
+                      labels: {
+                        color: "#72542b",
+                        padding: 15,
+                      }
+                    },
+                  },
+                }}
+              />
+            )}
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
+              Total: R{totalRevenue.toLocaleString()}
+            </div>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                onClick={() => handleAddNotes(chartType === "channel" ? "Revenue by Channel" : "Revenue by Segment")}
+                style={{
+                  padding: "6px 12px",
+                  backgroundColor: "#7d5a50",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "12px",
+                }}
+              >
+                <FaStickyNote size={12} /> Add Notes
+              </button>
+              <button
+                onClick={() => handleViewAnalysis(chartType === "channel" ? "Revenue by Channel" : "Revenue by Segment")}
+                style={{
+                  padding: "6px 12px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "12px",
+                }}
+              >
+                <FaChartBar size={12} /> View Analysis
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Revenue vs Spend Bar Chart */}
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          }}
+        >
+          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
+            Revenue per Channel vs Spend
+          </h3>
+          <div style={{ height: "250px", marginBottom: "15px" }}>
+            <Bar
+              data={{
+                labels: revenueChannels.map((c) => c.name),
+                datasets: [
+                  {
+                    label: "Revenue (ZAR)",
+                    data: revenueChannels.map((c) => c.revenue),
+                    backgroundColor: "#16a34a",
+                    borderColor: "#15803d",
+                    borderWidth: 1,
+                    borderRadius: 4,
+                  },
+                  {
+                    label: "Spend (ZAR)",
+                    data: revenueChannels.map((c) => c.spend),
+                    backgroundColor: "#dc2626",
+                    borderColor: "#b91c1c",
+                    borderWidth: 1,
+                    borderRadius: 4,
+                  },
+                ],
               }}
-              placeholder="Industry Avg"
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: 'top',
+                    labels: {
+                      color: "#72542b",
+                    }
+                  },
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    title: {
+                      display: true,
+                      text: "Amount (ZAR)",
+                      color: "#72542b",
+                    },
+                    grid: {
+                      color: "rgba(125, 90, 80, 0.1)",
+                    },
+                    ticks: {
+                      color: "#72542b",
+                    },
+                  },
+                  x: {
+                    ticks: {
+                      color: "#72542b",
+                      maxRotation: 45,
+                    },
+                    grid: {
+                      color: "rgba(125, 90, 80, 0.1)",
+                    },
+                  },
+                },
+              }}
             />
           </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
+              ROI: {totalROI}%
+            </div>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                onClick={() => handleAddNotes("Revenue vs Spend")}
+                style={{
+                  padding: "6px 12px",
+                  backgroundColor: "#7d5a50",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "12px",
+                }}
+              >
+                <FaStickyNote size={12} /> Add Notes
+              </button>
+              <button
+                onClick={() => handleViewAnalysis("Revenue vs Spend")}
+                style={{
+                  padding: "6px 12px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "12px",
+                }}
+              >
+                <FaChartBar size={12} /> View Analysis
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Top 3 Concentration Pie Chart */}
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          }}
+        >
+          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
+            {chartType === "channel" ? "Top 3 Channels" : "Top 3 Customer Segments"}
+          </h3>
+          <div style={{ height: "250px", marginBottom: "15px" }}>
+            <Pie
+              data={{
+                labels: chartType === "channel" 
+                  ? top3Channels.map((c) => c.name)
+                  : top3Segments.map((s) => s.name),
+                datasets: [
+                  {
+                    label: "Revenue (ZAR)",
+                    data: chartType === "channel"
+                      ? top3Channels.map((c) => c.revenue)
+                      : top3Segments.map((s) => s.revenue),
+                    backgroundColor: [
+                      "#16a34a",
+                      "#f59e0b",
+                      "#dc2626",
+                    ],
+                    borderColor: "#fdfcfb",
+                    borderWidth: 2,
+                  },
+                ],
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: 'right',
+                    labels: {
+                      color: "#72542b",
+                      padding: 15,
+                    }
+                  },
+                },
+              }}
+            />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
+              {top3Percentage}% of total revenue
+            </div>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                onClick={() => handleAddNotes(chartType === "channel" ? "Top 3 Channels" : "Top 3 Segments")}
+                style={{
+                  padding: "6px 12px",
+                  backgroundColor: "#7d5a50",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "12px",
+                }}
+              >
+                <FaStickyNote size={12} /> Add Notes
+              </button>
+              <button
+                onClick={() => handleViewAnalysis(chartType === "channel" ? "Top 3 Channels" : "Top 3 Segments")}
+                style={{
+                  padding: "6px 12px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "12px",
+                }}
+              >
+                <FaChartBar size={12} /> View Analysis
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* CHANNEL PERFORMANCE ANALYSIS */}
+      <div
+        style={{
+          backgroundColor: "#f7f3f0",
+          padding: "20px",
+          borderRadius: "8px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          marginBottom: "30px",
+        }}
+      >
+        <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
+          Channel Performance & ROI Analysis
+        </h3>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ backgroundColor: "#5d4037", color: "#fdfcfb" }}>
+                <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Channel</th>
+                <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Revenue (ZAR)</th>
+                <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Spend (ZAR)</th>
+                <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Net Profit</th>
+                <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>ROI %</th>
+                <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>% of Revenue</th>
+              </tr>
+            </thead>
+            <tbody>
+              {channelsWithROI.sort((a, b) => b.revenue - a.revenue).map((channel, index) => (
+                <tr
+                  key={index}
+                  style={{
+                    borderBottom: "1px solid #e8ddd4",
+                    backgroundColor: index % 2 === 0 ? "#fdfcfb" : "#f7f3f0",
+                  }}
+                >
+                  <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037", fontWeight: "600" }}>
+                    {channel.name}
+                  </td>
+                  <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
+                    R {channel.revenue.toLocaleString()}
+                  </td>
+                  <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
+                    R {channel.spend.toLocaleString()}
+                  </td>
+                  <td style={{ 
+                    padding: "10px", 
+                    fontSize: "13px", 
+                    color: channel.roiValue >= 0 ? "#16a34a" : "#dc2626", 
+                    textAlign: "right",
+                    fontWeight: "600"
+                  }}>
+                    R {Math.abs(channel.roiValue).toLocaleString()} {channel.roiValue >= 0 ? "Profit" : "Loss"}
+                  </td>
+                  <td style={{ 
+                    padding: "10px", 
+                    fontSize: "13px", 
+                    color: channel.roi >= 0 ? "#16a34a" : "#dc2626", 
+                    textAlign: "right",
+                    fontWeight: "600"
+                  }}>
+                    {channel.roi}%
+                  </td>
+                  <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
+                    {totalRevenue > 0 ? ((channel.revenue / totalRevenue) * 100).toFixed(1) : 0}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{ backgroundColor: "#e8ddd4", fontWeight: "600" }}>
+                <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>TOTAL</td>
+                <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
+                  R {totalRevenue.toLocaleString()}
+                </td>
+                <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
+                  R {totalSpend.toLocaleString()}
+                </td>
+                <td style={{ 
+                  padding: "12px", 
+                  fontSize: "13px", 
+                  color: totalRevenue - totalSpend >= 0 ? "#16a34a" : "#dc2626", 
+                  textAlign: "right"
+                }}>
+                  R {Math.abs(totalRevenue - totalSpend).toLocaleString()} {totalRevenue - totalSpend >= 0 ? "Profit" : "Loss"}
+                </td>
+                <td style={{ 
+                  padding: "12px", 
+                  fontSize: "13px", 
+                  color: totalROI >= 0 ? "#16a34a" : "#dc2626", 
+                  textAlign: "right"
+                }}>
+                  {totalROI}%
+                </td>
+                <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
+                  100%
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "15px" }}>
+          <button
+            onClick={() => handleAddNotes("Channel Performance")}
+            style={{
+              padding: "6px 12px",
+              backgroundColor: "#7d5a50",
+              color: "#fdfcfb",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "5px",
+              fontSize: "12px",
+            }}
+          >
+            <FaStickyNote size={12} /> Add Notes
+          </button>
+        </div>
+      </div>
+
+      {/* CONCENTRATION RISK ANALYSIS */}
+      <div style={{ 
+        backgroundColor: "#f7f3f0", 
+        padding: "15px", 
+        borderRadius: "6px",
+      }}>
+        <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px" }}>Concentration Risk Analysis</h4>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+          <div>
+            <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
+              Channel Concentration Risk
+            </div>
+            <div style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              marginBottom: "10px"
+            }}>
+              <div style={{ 
+                width: "100%", 
+                backgroundColor: "#e8ddd4", 
+                height: "20px", 
+                borderRadius: "10px",
+                overflow: "hidden"
+              }}>
+                <div 
+                  style={{ 
+                    width: `${top3Percentage}%`, 
+                    height: "100%", 
+                    backgroundColor: top3Percentage > 70 ? "#dc2626" : 
+                                   top3Percentage > 50 ? "#f59e0b" : "#16a34a",
+                  }} 
+                />
+              </div>
+              <div style={{ 
+                marginLeft: "10px", 
+                fontSize: "14px", 
+                color: "#5d4037",
+                fontWeight: "600",
+                minWidth: "40px"
+              }}>
+                {top3Percentage}%
+              </div>
+            </div>
+            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
+              Top 3 channels generate {top3Percentage}% of total revenue
+              {top3Percentage > 70 && " - High risk: Over-dependent on few channels"}
+              {top3Percentage <= 70 && top3Percentage > 50 && " - Moderate risk"}
+              {top3Percentage <= 50 && " - Low risk: Well diversified"}
+            </div>
+          </div>
+          
+          <div>
+            <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
+              Customer Segment Concentration
+            </div>
+            <div style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              marginBottom: "10px"
+            }}>
+              <div style={{ 
+                width: "100%", 
+                backgroundColor: "#e8ddd4", 
+                height: "20px", 
+                borderRadius: "10px",
+                overflow: "hidden"
+              }}>
+                <div 
+                  style={{ 
+                    width: `${top3SegmentPercentage}%`, 
+                    height: "100%", 
+                    backgroundColor: top3SegmentPercentage > 70 ? "#dc2626" : 
+                                   top3SegmentPercentage > 50 ? "#f59e0b" : "#16a34a",
+                  }} 
+                />
+              </div>
+              <div style={{ 
+                marginLeft: "10px", 
+                fontSize: "14px", 
+                color: "#5d4037",
+                fontWeight: "600",
+                minWidth: "40px"
+              }}>
+                {top3SegmentPercentage}%
+              </div>
+            </div>
+            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
+              Top 3 customer segments generate {top3SegmentPercentage}% of total revenue
+              {top3SegmentPercentage > 70 && " - High risk: Over-dependent on few segments"}
+              {top3SegmentPercentage <= 70 && top3SegmentPercentage > 50 && " - Moderate risk"}
+              {top3SegmentPercentage <= 50 && " - Low risk: Well diversified"}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Demand Sustainability Component
+// Demand Sustainability Component
+const DemandSustainability = ({ activeSection, currentUser, isInvestorView }) => {
+  const [referralRateTrend, setReferralRateTrend] = useState(Array(12).fill(0))
+  const [repeatCustomerRate, setRepeatCustomerRate] = useState(0)
+  const [churnRate, setChurnRate] = useState(0)
+  const [campaigns, setCampaigns] = useState([])
+  const [cacLtvData, setCacLtvData] = useState(Array(12).fill({ cac: 0, ltv: 0 }))
+  const [showEditForm, setShowEditForm] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [notesExpanded, setNotesExpanded] = useState(false)
+
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+  useEffect(() => {
+    if (currentUser && activeSection === "demand-sustainability") {
+      loadData()
+    }
+  }, [currentUser, activeSection, selectedYear])
+
+  const loadData = async () => {
+    if (!currentUser) return
+    try {
+      setIsLoading(true)
+      const docRef = doc(db, "demand-sustainability", `${currentUser.uid}_${selectedYear}`)
+      const docSnap = await getDoc(docRef)
+      if (docSnap.exists()) {
+        const data = docSnap.data()
+        setReferralRateTrend(data.referralRateTrend || Array(12).fill(0))
+        setRepeatCustomerRate(data.repeatCustomerRate || 0)
+        setChurnRate(data.churnRate || 0)
+        setCampaigns(data.campaigns || [])
+        setCacLtvData(data.cacLtvData || Array(12).fill({ cac: 0, ltv: 0 }))
+      } else {
+        await setDoc(docRef, {
+          referralRateTrend: Array(12).fill(0),
+          repeatCustomerRate: 0,
+          churnRate: 0,
+          campaigns: [
+            { name: "Q1 Campaign", cost: 0, revenue: 0 },
+            { name: "Q2 Campaign", cost: 0, revenue: 0 },
+            { name: "Summer Sale", cost: 0, revenue: 0 },
+            { name: "Holiday Campaign", cost: 0, revenue: 0 }
+          ],
+          cacLtvData: Array(12).fill({ cac: 0, ltv: 0 }),
+          lastUpdated: new Date().toISOString(),
+        })
+      }
+    } catch (error) {
+      console.error("Error loading demand sustainability data:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const saveData = async () => {
+    if (!currentUser || isInvestorView) {
+      alert("You cannot save data in this mode.")
+      return
+    }
+    try {
+      await setDoc(doc(db, "demand-sustainability", `${currentUser.uid}_${selectedYear}`), {
+        referralRateTrend,
+        repeatCustomerRate,
+        churnRate,
+        campaigns,
+        cacLtvData,
+        lastUpdated: new Date().toISOString(),
+      })
+      setShowEditForm(false)
+      alert("Demand sustainability data saved successfully!")
+    } catch (error) {
+      console.error("Error saving data:", error)
+      alert("Error saving data")
+    }
+  }
+
+  const addCampaign = () => {
+    setCampaigns([...campaigns, { name: "New Campaign", cost: 0, revenue: 0 }])
+  }
+
+  const removeCampaign = (index) => {
+    const newCampaigns = campaigns.filter((_, i) => i !== index)
+    setCampaigns(newCampaigns)
+  }
+
+  const updateCampaign = (index, field, value) => {
+    const newCampaigns = [...campaigns]
+    newCampaigns[index][field] = field === "name" ? value : Number(value)
+    setCampaigns(newCampaigns)
+  }
+
+  const handleAddNotes = (chartName) => {
+    alert(`Add Notes functionality for ${chartName}`)
+  }
+
+  const handleViewAnalysis = (chartName) => {
+    alert(`View Analysis functionality for ${chartName}`)
+  }
+
+  if (activeSection !== "demand-sustainability") return null
+
+  if (isLoading) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "200px",
+          backgroundColor: "#fdfcfb",
+          borderRadius: "8px",
+        }}
+      >
+        <div>Loading data...</div>
+      </div>
+    )
+  }
+
+  // Calculate campaign metrics
+  const totalCampaignCost = campaigns.reduce((sum, campaign) => sum + campaign.cost, 0)
+  const totalCampaignRevenue = campaigns.reduce((sum, campaign) => sum + campaign.revenue, 0)
+  const totalCampaignROI = totalCampaignCost > 0 ? ((totalCampaignRevenue - totalCampaignCost) / totalCampaignCost * 100).toFixed(1) : 0
+  const campaignsWithROI = campaigns.map(campaign => ({
+    ...campaign,
+    roi: campaign.cost > 0 ? ((campaign.revenue - campaign.cost) / campaign.cost * 100).toFixed(1) : 0,
+    roiValue: campaign.revenue - campaign.cost,
+    contribution: totalCampaignCost > 0 ? ((campaign.cost / totalCampaignCost) * 100).toFixed(1) : 0
+  }))
+
+  // Calculate CAC vs LTV trends
+  const avgCac = cacLtvData.reduce((sum, month) => sum + month.cac, 0) / (cacLtvData.filter(m => m.cac > 0).length || 1)
+  const avgLtv = cacLtvData.reduce((sum, month) => sum + month.ltv, 0) / (cacLtvData.filter(m => m.ltv > 0).length || 1)
+  const ltvCacRatio = avgCac > 0 ? (avgLtv / avgCac).toFixed(1) : 0
+  
+  // Calculate CAC trend (is it declining?)
+  const firstHalfAvgCac = cacLtvData.slice(0, 6).reduce((sum, month) => sum + month.cac, 0) / 6
+  const secondHalfAvgCac = cacLtvData.slice(6, 12).reduce((sum, month) => sum + month.cac, 0) / 6
+  const cacDeclineRate = firstHalfAvgCac > 0 ? ((firstHalfAvgCac - secondHalfAvgCac) / firstHalfAvgCac * 100).toFixed(1) : 0
+  
+  // Calculate LTV trend (is it rising?)
+  const firstHalfAvgLtv = cacLtvData.slice(0, 6).reduce((sum, month) => sum + month.ltv, 0) / 6
+  const secondHalfAvgLtv = cacLtvData.slice(6, 12).reduce((sum, month) => sum + month.ltv, 0) / 6
+  const ltvGrowthRate = firstHalfAvgLtv > 0 ? ((secondHalfAvgLtv - firstHalfAvgLtv) / firstHalfAvgLtv * 100).toFixed(1) : 0
+
+  // Calculate referral rate average
+  const avgReferralRate = referralRateTrend.reduce((sum, rate) => sum + rate, 0) / 12
+
+  // Net retention rate (Repeat - Churn)
+  const netRetentionRate = repeatCustomerRate - churnRate
+
+  return (
+    <div
+      style={{
+        backgroundColor: "#fdfcfb",
+        padding: "20px",
+        margin: "20px 0",
+        borderRadius: "8px",
+        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+      }}
+    >
+      <NotesSection 
+        sectionKey="demand-sustainability" 
+        isExpanded={notesExpanded}
+        onToggle={() => setNotesExpanded(!notesExpanded)}
+      />
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Demand Sustainability</h2>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+            style={{
+              padding: "8px 12px",
+              border: "1px solid #d4c4b0",
+              borderRadius: "4px",
+              backgroundColor: "#fdfcfb",
+              color: "#5d4037",
+            }}
+          >
+            {[2023, 2024, 2025, 2026].map(year => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
+          {!isInvestorView && (
+            <>
+              <button
+                onClick={() => setShowEditForm(!showEditForm)}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <FaPlus /> Add Data
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {!isInvestorView && showEditForm && (
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "6px",
+            marginBottom: "20px",
+          }}
+        >
+          <h3 style={{ color: "#72542b", marginTop: 0 }}>Add Demand Sustainability Data</h3>
+
+          <h4 style={{ color: "#72542b" }}>Referral Rate Trend (Monthly %)</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: "20px" }}>
+            {monthNames.map((month, index) => (
+              <div key={month}>
+                <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>{month}</label>
+                <input
+                  type="number"
+                  value={referralRateTrend[index]}
+                  onChange={(e) => {
+                    const newData = [...referralRateTrend]
+                    newData[index] = Number(e.target.value)
+                    setReferralRateTrend(newData)
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "6px",
+                    border: "1px solid #d4c4b0",
+                    borderRadius: "4px",
+                  }}
+                  min="0"
+                  max="100"
+                />
+              </div>
+            ))}
+          </div>
+
+          <h4 style={{ color: "#72542b" }}>Customer Retention Metrics</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "15px", marginBottom: "20px" }}>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>
+                Repeat Customer Rate (%)
+              </label>
+              <input
+                type="number"
+                value={repeatCustomerRate}
+                onChange={(e) => setRepeatCustomerRate(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+                min="0"
+                max="100"
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Churn Rate (%)</label>
+              <input
+                type="number"
+                value={churnRate}
+                onChange={(e) => setChurnRate(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+                min="0"
+                max="100"
+              />
+            </div>
+          </div>
+
+          <h4 style={{ color: "#72542b" }}>Campaign Cost & Revenue</h4>
           {campaigns.map((campaign, index) => (
             <div
               key={index}
               style={{
                 display: "grid",
-                gridTemplateColumns: "2fr 1fr auto",
+                gridTemplateColumns: "2fr 1fr 1fr auto",
                 gap: "10px",
                 alignItems: "center",
                 marginBottom: "10px",
@@ -996,638 +4361,6 @@ const CostPerLead = ({ activeSection, currentUser, isInvestorView }) => {
                 }}
                 placeholder="Cost (ZAR)"
               />
-              <button
-                onClick={() => removeCampaign(index)}
-                style={{
-                  padding: "8px",
-                  backgroundColor: "#dc2626",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                }}
-              >
-                Remove
-              </button>
-            </div>
-          ))}
-          <div style={{ marginTop: "15px" }}>
-            <button
-              onClick={addCampaign}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#72542b",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                marginRight: "10px",
-              }}
-            >
-              Add Campaign
-            </button>
-            <button
-              onClick={saveCostPerLeadData}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#16a34a",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Save Data
-            </button>
-          </div>
-        </div>
-      )}
-
-      {campaigns.length === 0 ? (
-        <div
-          style={{
-            textAlign: "center",
-            padding: "40px",
-            color: "#72542b",
-          }}
-        >
-          <p>No campaign data available. {!isInvestorView && 'Click "Edit Data" to add your first campaign.'}</p>
-        </div>
-      ) : (
-        <div style={{ height: "400px" }}>
-          <Bar
-            data={{
-              labels: campaignNames,
-              datasets: [
-                {
-                  label: "Cost Per Lead (ZAR)",
-                  data: costData,
-                  backgroundColor: "#9c7c5f",
-                  borderColor: "#5d4037",
-                  borderWidth: 1,
-                },
-                {
-                  label: "Industry Average",
-                  data: Array(campaigns.length).fill(industryAvg),
-                  borderColor: "#F44336",
-                  borderWidth: 2,
-                  borderDash: [5, 5],
-                  backgroundColor: "transparent",
-                  type: "line",
-                  pointRadius: 0,
-                },
-              ],
-            }}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: {
-                  position: "top",
-                },
-              },
-              scales: {
-                y: {
-                  beginAtZero: true,
-                  title: {
-                    display: true,
-                    text: "Cost (ZAR)",
-                  },
-                },
-                x: {
-                  title: {
-                    display: false,
-                  },
-                },
-              },
-            }}
-          />
-        </div>
-      )}
-
-      <DownloadModal
-        isOpen={showDownloadModal}
-        onClose={() => setShowDownloadModal(false)}
-        onDownload={handleDownload}
-        availableSections={[
-          { id: "campaigns", label: "Campaign Data" },
-          { id: "industry-average", label: "Industry Average" },
-          { id: "summary", label: "Summary Statistics" },
-        ]}
-        sectionTitle="Cost Per Lead"
-      />
-    </div>
-  )
-}
-
-// CustomerAcquisitionCost Component - HAS MONTHLY X-AXIS (Line chart)
-const CustomerAcquisitionCost = ({ activeSection, currentUser, isInvestorView, financialYearStartMonth }) => {
-  const [cacData, setCacData] = useState(Array(12).fill(0))
-  const [ltvData, setLtvData] = useState(Array(12).fill(0))
-  const [showEditForm, setShowEditForm] = useState(false)
-  const [showDownloadModal, setShowDownloadModal] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-  const [financialYearMonths, setFinancialYearMonths] = useState([])
-
-  useEffect(() => {
-    if (financialYearStartMonth) {
-      const months = getFinancialYearMonths(financialYearStartMonth)
-      setFinancialYearMonths(months)
-    }
-  }, [financialYearStartMonth])
-
-  const saveCacData = async () => {
-    if (!currentUser) {
-      alert("Please log in to save data.")
-      return
-    }
-    try {
-      await setDoc(doc(db, "customer-acquisition-cost", currentUser.uid), { 
-        cacData, 
-        ltvData,
-        lastUpdated: new Date().toISOString()
-      })
-      setShowEditForm(false)
-      alert("CAC data saved successfully!")
-    } catch (error) {
-      console.error("Error saving CAC data:", error)
-      alert("Error saving data")
-    }
-  }
-
-  const loadCacData = async () => {
-    if (!currentUser) return
-    try {
-      setIsLoading(true)
-      const docRef = doc(db, "customer-acquisition-cost", currentUser.uid)
-      const docSnap = await getDoc(docRef)
-      if (docSnap.exists()) {
-        const data = docSnap.data()
-        setCacData(data.cacData || Array(12).fill(0))
-        setLtvData(data.ltvData || Array(12).fill(0))
-      } else {
-        // Initialize with empty data if no document exists
-        await setDoc(docRef, {
-          cacData: Array(12).fill(0),
-          ltvData: Array(12).fill(0),
-          lastUpdated: new Date().toISOString()
-        })
-      }
-    } catch (error) {
-      console.error("Error loading CAC data:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (currentUser) {
-      loadCacData()
-    }
-  }, [currentUser])
-
-  const updateCacValue = (index, value) => {
-    const newData = [...cacData]
-    newData[index] = Number.parseFloat(value) || 0
-    setCacData(newData)
-  }
-
-  const updateLtvValue = (index, value) => {
-    const newData = [...ltvData]
-    newData[index] = Number.parseFloat(value) || 0
-    setLtvData(newData)
-  }
-
-  const handleDownload = (selectedSections) => {
-    const currentCac = cacData[cacData.length - 1] || 0
-    const currentLtv = ltvData[ltvData.length - 1] || 0
-    const ratio = currentCac > 0 ? (currentLtv / currentCac).toFixed(1) : 0
-
-    const data = {
-      "cac-data": cacData,
-      "ltv-data": ltvData,
-      summary: {
-        currentCAC: currentCac,
-        currentLTV: currentLtv,
-        ratio: ratio,
-        months: financialYearMonths,
-      },
-    }
-    downloadData(data, "customer_acquisition_cost", selectedSections)
-  }
-
-  if (activeSection !== "customer-acquisition-cost") return null
-
-  if (isLoading) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '200px',
-        backgroundColor: '#fdfcfb',
-        borderRadius: '8px'
-      }}>
-        <div>Loading CAC data...</div>
-      </div>
-    )
-  }
-
-  const currentCac = cacData[cacData.length - 1] || 0
-  const currentLtv = ltvData[ltvData.length - 1] || 0
-  const ratio = currentCac > 0 ? (currentLtv / currentCac).toFixed(1) : 0
-
-  return (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "20px",
-        margin: "20px 0",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <div>
-          <h2 style={{ color: "#5d4037", marginTop: 0 }}>Customer Acquisition Cost (CAC) vs LTV</h2>
-          {financialYearStartMonth && (
-            <p style={{ color: "#7d5a50", fontSize: "14px", margin: "5px 0 0 0" }}>
-              Financial Year starts in {financialYearMonths[0]}
-            </p>
-          )}
-        </div>
-        <div style={{ display: "flex", gap: "10px" }}>
-          {!isInvestorView && (
-            <button
-              onClick={() => setShowEditForm(!showEditForm)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              {showEditForm ? "Cancel" : "Edit Data"}
-            </button>
-          )}
-          <button
-            onClick={() => setShowDownloadModal(true)}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            Download
-          </button>
-        </div>
-      </div>
-
-      {!isInvestorView && showEditForm && (
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#72542b", marginTop: 0 }}>Edit CAC & LTV Data</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-            <div>
-              <h4 style={{ color: "#72542b" }}>CAC (ZAR)</h4>
-              {financialYearMonths.map((month, index) => (
-                <div key={month} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                  <span style={{ minWidth: "60px", color: "#72542b" }}>{month}:</span>
-                  <input
-                    type="number"
-                    value={cacData[index]}
-                    onChange={(e) => updateCacValue(index, e.target.value)}
-                    style={{
-                      padding: "6px",
-                      border: "1px solid #d4c4b0",
-                      borderRadius: "4px",
-                      width: "100px",
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-            <div>
-              <h4 style={{ color: "#72542b" }}>LTV (ZAR)</h4>
-              {financialYearMonths.map((month, index) => (
-                <div key={month} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                  <span style={{ minWidth: "60px", color: "#72542b" }}>{month}:</span>
-                  <input
-                    type="number"
-                    value={ltvData[index]}
-                    onChange={(e) => updateLtvValue(index, e.target.value)}
-                    style={{
-                      padding: "6px",
-                      border: "1px solid #d4c4b0",
-                      borderRadius: "4px",
-                      width: "100px",
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-          <button
-            onClick={saveCacData}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              marginTop: "15px",
-            }}
-          >
-            Save Data
-          </button>
-        </div>
-      )}
-
-      <div style={{ height: "400px" }}>
-        <Line
-          data={{
-            labels: financialYearMonths,
-            datasets: [
-              {
-                label: "CAC (ZAR)",
-                data: cacData,
-                borderColor: "#9c7c5f",
-                backgroundColor: "rgba(156, 124, 95, 0.1)",
-                borderWidth: 2,
-                tension: 0.1,
-                fill: true,
-              },
-              {
-                label: "LTV (ZAR)",
-                data: ltvData,
-                borderColor: "#4CAF50",
-                backgroundColor: "rgba(76, 175, 80, 0.1)",
-                borderWidth: 2,
-                tension: 0.1,
-                fill: true,
-              },
-            ],
-          }}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                position: "top",
-              },
-            },
-            scales: {
-              y: {
-                beginAtZero: true,
-                title: {
-                  display: true,
-                  text: "Amount (ZAR)",
-                },
-              },
-              x: {
-                title: {
-                  display: false,
-                },
-              },
-            },
-          }}
-        />
-      </div>
-      <div
-        style={{
-          backgroundColor: "#f7f3f0",
-          padding: "15px",
-          borderRadius: "6px",
-          marginTop: "20px",
-        }}
-      >
-        <h3 style={{ color: "#72542b", marginTop: 0 }}>CAC:LTV Ratio</h3>
-        <p style={{ color: "#5d4037" }}>
-          Current ratio: <strong>1:{ratio}</strong> (Healthy benchmark is 1:3 or better)
-        </p>
-      </div>
-
-      <DownloadModal
-        isOpen={showDownloadModal}
-        onClose={() => setShowDownloadModal(false)}
-        onDownload={handleDownload}
-        availableSections={[
-          { id: "cac-data", label: "CAC Data" },
-          { id: "ltv-data", label: "LTV Data" },
-          { id: "summary", label: "Summary & Ratios" },
-        ]}
-        sectionTitle="Customer Acquisition Cost"
-      />
-    </div>
-  )
-}
-
-// CampaignROI Component - NO MONTHLY X-AXIS (Scatter chart)
-const CampaignROI = ({ activeSection, currentUser, isInvestorView }) => {
-  const [campaigns, setCampaigns] = useState([])
-  const [showEditForm, setShowEditForm] = useState(false)
-  const [showDownloadModal, setShowDownloadModal] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-
-  const saveCampaignROIData = async () => {
-    if (!currentUser) {
-      alert("Please log in to save data.")
-      return
-    }
-    try {
-      await setDoc(doc(db, "campaign-roi", currentUser.uid), { 
-        campaigns,
-        lastUpdated: new Date().toISOString()
-      })
-      setShowEditForm(false)
-      alert("Campaign ROI data saved successfully!")
-    } catch (error) {
-      console.error("Error saving campaign ROI data:", error)
-      alert("Error saving data")
-    }
-  }
-
-  const loadCampaignROIData = async () => {
-    if (!currentUser) return
-    try {
-      setIsLoading(true)
-      const docRef = doc(db, "campaign-roi", currentUser.uid)
-      const docSnap = await getDoc(docRef)
-      if (docSnap.exists()) {
-        setCampaigns(docSnap.data().campaigns || [])
-      } else {
-        // Initialize with empty data if no document exists
-        await setDoc(docRef, {
-          campaigns: [],
-          lastUpdated: new Date().toISOString()
-        })
-      }
-    } catch (error) {
-      console.error("Error loading campaign ROI data:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (currentUser) {
-      loadCampaignROIData()
-    }
-  }, [currentUser])
-
-  const updateCampaign = (index, field, value) => {
-    const newCampaigns = [...campaigns]
-    newCampaigns[index][field] = field === "name" ? value : Number.parseFloat(value) || 0
-    setCampaigns(newCampaigns)
-  }
-
-  const addCampaign = () => {
-    setCampaigns([...campaigns, { name: "New Campaign", spend: 0, revenue: 0 }])
-  }
-
-  const removeCampaign = (index) => {
-    const newCampaigns = campaigns.filter((_, i) => i !== index)
-    setCampaigns(newCampaigns)
-  }
-
-  const handleDownload = (selectedSections) => {
-    const data = {
-      campaigns: campaigns,
-      summary: {
-        totalCampaigns: campaigns.length,
-        totalSpend: campaigns.reduce((sum, c) => sum + c.spend, 0),
-        totalRevenue: campaigns.reduce((sum, c) => sum + c.revenue, 0),
-        averageROI:
-          campaigns.length > 0
-            ? (
-                campaigns.reduce((sum, c) => sum + (c.spend > 0 ? ((c.revenue - c.spend) / c.spend) * 100 : 0), 0) /
-                campaigns.length
-              ).toFixed(2)
-            : 0,
-      },
-    }
-    downloadData(data, "campaign_roi", selectedSections)
-  }
-
-  if (activeSection !== "campaign-roi") return null
-
-  if (isLoading) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '200px',
-        backgroundColor: '#fdfcfb',
-        borderRadius: '8px'
-      }}>
-        <div>Loading campaign ROI data...</div>
-      </div>
-    )
-  }
-
-  return (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "20px",
-        margin: "20px 0",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Campaign ROI Analysis</h2>
-        <div style={{ display: "flex", gap: "10px" }}>
-          {!isInvestorView && (
-            <button
-              onClick={() => setShowEditForm(!showEditForm)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              {showEditForm ? "Cancel" : "Edit Data"}
-            </button>
-          )}
-          <button
-            onClick={() => setShowDownloadModal(true)}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            Download
-          </button>
-        </div>
-      </div>
-
-      {!isInvestorView && showEditForm && (
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#72542b", marginTop: 0 }}>Edit Campaign ROI Data</h3>
-          {campaigns.map((campaign, index) => (
-            <div
-              key={index}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "2fr 1fr 1fr auto",
-                gap: "10px",
-                alignItems: "center",
-                marginBottom: "10px",
-                padding: "10px",
-                backgroundColor: "#fdfcfb",
-                borderRadius: "4px",
-              }}
-            >
-              <input
-                type="text"
-                value={campaign.name}
-                onChange={(e) => updateCampaign(index, "name", e.target.value)}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-                placeholder="Campaign Name"
-              />
-              <input
-                type="number"
-                value={campaign.spend}
-                onChange={(e) => updateCampaign(index, "spend", e.target.value)}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-                placeholder="Spend (ZAR)"
-              />
               <input
                 type="number"
                 value={campaign.revenue}
@@ -1650,295 +4383,1100 @@ const CampaignROI = ({ activeSection, currentUser, isInvestorView }) => {
                   cursor: "pointer",
                 }}
               >
-                Remove
+                <FaTrashAlt />
               </button>
             </div>
           ))}
-          <div style={{ marginTop: "15px" }}>
-            <button
-              onClick={addCampaign}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#72542b",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                marginRight: "10px",
-              }}
-            >
-              Add Campaign
-            </button>
-            <button
-              onClick={saveCampaignROIData}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#16a34a",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Save Data
-            </button>
+          <button
+            onClick={addCampaign}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#5d4037",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              marginBottom: "20px",
+              display: "flex",
+              alignItems: "center",
+              gap: "5px",
+            }}
+          >
+            <FaPlus /> Add Campaign
+          </button>
+
+          <h4 style={{ color: "#72542b" }}>CAC vs LTV (Monthly)</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px", marginBottom: "20px" }}>
+            {monthNames.map((month, index) => (
+              <div key={month} style={{ backgroundColor: "#fdfcfb", padding: "10px", borderRadius: "4px" }}>
+                <label style={{ display: "block", color: "#72542b", marginBottom: "5px", fontWeight: "bold" }}>
+                  {month}
+                </label>
+                <div style={{ display: "flex", gap: "5px" }}>
+                  <input
+                    type="number"
+                    value={cacLtvData[index]?.cac || 0}
+                    onChange={(e) => {
+                      const newData = [...cacLtvData]
+                      newData[index] = { ...newData[index], cac: Number(e.target.value) }
+                      setCacLtvData(newData)
+                    }}
+                    style={{
+                      width: "50%",
+                      padding: "6px",
+                      border: "1px solid #d4c4b0",
+                      borderRadius: "4px",
+                    }}
+                    placeholder="CAC"
+                  />
+                  <input
+                    type="number"
+                    value={cacLtvData[index]?.ltv || 0}
+                    onChange={(e) => {
+                      const newData = [...cacLtvData]
+                      newData[index] = { ...newData[index], ltv: Number(e.target.value) }
+                      setCacLtvData(newData)
+                    }}
+                    style={{
+                      width: "50%",
+                      padding: "6px",
+                      border: "1px solid #d4c4b0",
+                      borderRadius: "4px",
+                    }}
+                    placeholder="LTV"
+                  />
+                </div>
+              </div>
+            ))}
           </div>
+
+          <button
+            onClick={saveData}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#16a34a",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              marginTop: "15px",
+            }}
+          >
+            Save Data
+          </button>
         </div>
       )}
 
-      {campaigns.length === 0 ? (
+      {/* KEY METRICS - Top Section */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "10px", marginBottom: "30px" }}>
         <div
           style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
             textAlign: "center",
-            padding: "40px",
-            color: "#72542b",
+            borderTop: "4px solid #9c7c5f",
           }}
         >
-          <p>No campaign data available. {!isInvestorView && 'Click "Edit Data" to add your first campaign.'}</p>
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
+            Avg Referral Rate
+          </div>
+          <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>{avgReferralRate.toFixed(1)}%</div>
+          <div style={{ fontSize: "10px", color: "#7d5a50", marginTop: "3px" }}>Organic Growth</div>
         </div>
-      ) : (
-        <>
-          <div style={{ height: "400px" }}>
-            <Scatter
+        
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
+            borderTop: "4px solid #7d5a50",
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
+            Repeat Customers
+          </div>
+          <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>{repeatCustomerRate}%</div>
+          <div style={{ fontSize: "10px", color: "#7d5a50", marginTop: "3px" }}>Retention Rate</div>
+        </div>
+        
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
+            borderTop: "4px solid #5d4037",
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
+            Churn Rate
+          </div>
+          <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>{churnRate}%</div>
+          <div style={{ fontSize: "10px", color: "#7d5a50", marginTop: "3px" }}>Customer Loss</div>
+        </div>
+        
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
+            borderTop: "4px solid #4a352f",
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
+            Net Retention
+          </div>
+          <div style={{ 
+            fontSize: "18px", 
+            color: netRetentionRate >= 0 ? "#16a34a" : "#dc2626", 
+            fontWeight: "bold" 
+          }}>
+            {netRetentionRate}%
+          </div>
+          <div style={{ fontSize: "10px", color: "#7d5a50", marginTop: "3px" }}>Repeat - Churn</div>
+        </div>
+        
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
+            borderTop: "4px solid #dc2626",
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
+            Campaign ROI
+          </div>
+          <div style={{ 
+            fontSize: "18px", 
+            color: totalCampaignROI >= 0 ? "#16a34a" : "#dc2626", 
+            fontWeight: "bold" 
+          }}>
+            {totalCampaignROI}%
+          </div>
+          <div style={{ fontSize: "10px", color: "#7d5a50", marginTop: "3px" }}>Overall ROI</div>
+        </div>
+        
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
+            borderTop: "4px solid #16a34a",
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
+            LTV:CAC Trend
+          </div>
+          <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>
+            {cacDeclineRate > 0 && ltvGrowthRate > 0 ? "✓ Healthy" : "⚠ Needs Work"}
+          </div>
+          <div style={{ fontSize: "10px", color: "#7d5a50", marginTop: "3px" }}>
+            {cacDeclineRate}%↓ CAC, {ltvGrowthRate}%↑ LTV
+          </div>
+        </div>
+      </div>
+
+      {/* CHARTS SECTION - 3 charts in grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px", marginBottom: "30px" }}>
+        
+        {/* Referral Rate Trend Chart */}
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          }}
+        >
+          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
+            Referral Rate Trend
+          </h3>
+          <div style={{ height: "250px", marginBottom: "15px" }}>
+            <Line
               data={{
-                datasets: campaigns.map((campaign) => ({
-                  label: campaign.name,
-                  data: [
-                    {
-                      x: campaign.spend / 1000,
-                      y: campaign.revenue / 1000,
-                    },
-                  ],
-                  backgroundColor:
-                    campaign.spend > 0 && campaign.revenue / campaign.spend >= 3
-                      ? "#4CAF50"
-                      : campaign.spend > 0 && campaign.revenue / campaign.spend >= 2
-                        ? "#FFC107"
-                        : "#F44336",
-                  radius: 15,
-                })),
+                labels: monthNames,
+                datasets: [
+                  {
+                    label: "Referral Rate (%)",
+                    data: referralRateTrend,
+                    borderColor: "#9c7c5f",
+                    backgroundColor: "rgba(156, 124, 95, 0.1)",
+                    borderWidth: 2,
+                    tension: 0.3,
+                    fill: true,
+                  },
+                ],
               }}
               options={{
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
                   legend: {
-                    position: "top",
-                  },
-                  tooltip: {
-                    callbacks: {
-                      label: (context) => {
-                        const campaign = campaigns.find((c) => c.name === context.dataset.label)
-                        const roi =
-                          campaign.spend > 0
-                            ? (((campaign.revenue - campaign.spend) / campaign.spend) * 100).toFixed(0)
-                            : 0
-                        return [
-                          `Campaign: ${campaign.name}`,
-                          `Spend: ZAR ${(campaign.spend / 1000).toFixed(0)}k`,
-                          `Revenue: ZAR ${(campaign.revenue / 1000).toFixed(0)}k`,
-                          `ROI: ${roi}%`,
-                        ]
-                      },
-                    },
+                    display: false,
                   },
                 },
                 scales: {
-                  x: {
-                    title: {
-                      display: true,
-                      text: "Spend (ZAR thousands)",
-                    },
-                    beginAtZero: true,
-                  },
                   y: {
+                    beginAtZero: true,
+                    max: 100,
                     title: {
                       display: true,
-                      text: "Revenue (ZAR thousands)",
+                      text: "Referral Rate (%)",
+                      color: "#72542b",
                     },
-                    beginAtZero: true,
+                    grid: {
+                      color: "rgba(125, 90, 80, 0.1)",
+                    },
+                    ticks: {
+                      color: "#72542b",
+                      callback: function(value) {
+                        return value + '%';
+                      }
+                    },
+                  },
+                  x: {
+                    ticks: {
+                      color: "#72542b",
+                      maxRotation: 45,
+                    },
+                    grid: {
+                      color: "rgba(125, 90, 80, 0.1)",
+                    },
                   },
                 },
               }}
             />
           </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-              gap: "15px",
-              marginTop: "20px",
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
+              Avg: {avgReferralRate.toFixed(1)}%
+            </div>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                onClick={() => handleAddNotes("Referral Rate Trend")}
+                style={{
+                  padding: "6px 12px",
+                  backgroundColor: "#7d5a50",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "12px",
+                }}
+              >
+                <FaStickyNote size={12} /> Add Notes
+              </button>
+              <button
+                onClick={() => handleViewAnalysis("Referral Rate Trend")}
+                style={{
+                  padding: "6px 12px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "12px",
+                }}
+              >
+                <FaChartBar size={12} /> View Analysis
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Campaign Cost Contribution & ROI Chart */}
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          }}
+        >
+          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
+            Campaign Cost Contribution & ROI
+          </h3>
+          <div style={{ height: "250px", marginBottom: "15px" }}>
+            <Bar
+              data={{
+                labels: campaignsWithROI.map((c) => c.name),
+                datasets: [
+                  {
+                    label: "Cost Contribution (%)",
+                    data: campaignsWithROI.map((c) => c.contribution),
+                    backgroundColor: "#dc2626",
+                    borderColor: "#b91c1c",
+                    borderWidth: 1,
+                    borderRadius: 4,
+                    yAxisID: 'y',
+                  },
+                  {
+                    label: "ROI (%)",
+                    data: campaignsWithROI.map((c) => c.roi),
+                    backgroundColor: "#16a34a",
+                    borderColor: "#15803d",
+                    borderWidth: 1,
+                    borderRadius: 4,
+                    yAxisID: 'y1',
+                  },
+                ],
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: 'top',
+                    labels: {
+                      color: "#72542b",
+                    }
+                  },
+                },
+                scales: {
+                  y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    title: {
+                      display: true,
+                      text: "Cost Contribution (%)",
+                      color: "#72542b",
+                    },
+                    grid: {
+                      color: "rgba(125, 90, 80, 0.1)",
+                    },
+                    ticks: {
+                      color: "#72542b",
+                      callback: function(value) {
+                        return value + '%';
+                      }
+                    },
+                  },
+                  y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    title: {
+                      display: true,
+                      text: "ROI (%)",
+                      color: "#72542b",
+                    },
+                    grid: {
+                      drawOnChartArea: false,
+                    },
+                    ticks: {
+                      color: "#72542b",
+                      callback: function(value) {
+                        return value + '%';
+                      }
+                    },
+                  },
+                  x: {
+                    ticks: {
+                      color: "#72542b",
+                      maxRotation: 45,
+                    },
+                    grid: {
+                      color: "rgba(125, 90, 80, 0.1)",
+                    },
+                  },
+                },
+              }}
+            />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
+              Total Cost: R{totalCampaignCost.toLocaleString()}
+            </div>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                onClick={() => handleAddNotes("Campaign Analysis")}
+                style={{
+                  padding: "6px 12px",
+                  backgroundColor: "#7d5a50",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "12px",
+                }}
+              >
+                <FaStickyNote size={12} /> Add Notes
+              </button>
+              <button
+                onClick={() => handleViewAnalysis("Campaign Analysis")}
+                style={{
+                  padding: "6px 12px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "12px",
+                }}
+              >
+                <FaChartBar size={12} /> View Analysis
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Repeat Customers vs Churn Chart */}
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          }}
+        >
+          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
+            Customer Retention Analysis
+          </h3>
+          <div style={{ height: "250px", marginBottom: "15px" }}>
+            <Bar
+              data={{
+                labels: ["Retention vs Churn"],
+                datasets: [
+                  {
+                    label: "Repeat Customers",
+                    data: [repeatCustomerRate],
+                    backgroundColor: "#16a34a",
+                    borderColor: "#15803d",
+                    borderWidth: 1,
+                    borderRadius: 4,
+                  },
+                  {
+                    label: "Churn Rate",
+                    data: [churnRate],
+                    backgroundColor: "#dc2626",
+                    borderColor: "#b91c1c",
+                    borderWidth: 1,
+                    borderRadius: 4,
+                  },
+                ],
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: 'top',
+                    labels: {
+                      color: "#72542b",
+                    }
+                  },
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: {
+                      display: true,
+                      text: "Percentage (%)",
+                      color: "#72542b",
+                    },
+                    grid: {
+                      color: "rgba(125, 90, 80, 0.1)",
+                    },
+                    ticks: {
+                      color: "#72542b",
+                      callback: function(value) {
+                        return value + '%';
+                      }
+                    },
+                  },
+                  x: {
+                    ticks: {
+                      color: "#72542b",
+                    },
+                    grid: {
+                      color: "rgba(125, 90, 80, 0.1)",
+                    },
+                  },
+                },
+              }}
+            />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
+              Net Retention: {netRetentionRate}%
+            </div>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                onClick={() => handleAddNotes("Retention Analysis")}
+                style={{
+                  padding: "6px 12px",
+                  backgroundColor: "#7d5a50",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "12px",
+                }}
+              >
+                <FaStickyNote size={12} /> Add Notes
+              </button>
+              <button
+                onClick={() => handleViewAnalysis("Retention Analysis")}
+                style={{
+                  padding: "6px 12px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "12px",
+                }}
+              >
+                <FaChartBar size={12} /> View Analysis
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* DECLINING CAC WITH RISING LTV - KEY METRIC */}
+      <div
+        style={{
+          backgroundColor: "#f7f3f0",
+          padding: "20px",
+          borderRadius: "8px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          marginBottom: "30px",
+        }}
+      >
+        <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
+          Declining CAC with Rising LTV (Key Health Indicator)
+        </h3>
+        <div style={{ height: "300px", marginBottom: "15px" }}>
+          <Line
+            data={{
+              labels: monthNames,
+              datasets: [
+                {
+                  label: "CAC (Customer Acquisition Cost)",
+                  data: cacLtvData.map((d) => d.cac),
+                  borderColor: "#dc2626",
+                  backgroundColor: "rgba(220, 38, 38, 0.1)",
+                  borderWidth: 3,
+                  tension: 0.4,
+                  fill: false,
+                },
+                {
+                  label: "LTV (Lifetime Value)",
+                  data: cacLtvData.map((d) => d.ltv),
+                  borderColor: "#16a34a",
+                  backgroundColor: "rgba(22, 163, 74, 0.1)",
+                  borderWidth: 3,
+                  tension: 0.4,
+                  fill: false,
+                },
+              ],
             }}
-          >
-            {campaigns.map((campaign, index) => {
-              const roi =
-                campaign.spend > 0 ? (((campaign.revenue - campaign.spend) / campaign.spend) * 100).toFixed(0) : 0
-              return (
-                <div
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  position: 'top',
+                  labels: {
+                    color: "#72542b",
+                  }
+                },
+              },
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  title: {
+                    display: true,
+                    text: "Value (ZAR)",
+                    color: "#72542b",
+                  },
+                  grid: {
+                    color: "rgba(125, 90, 80, 0.1)",
+                  },
+                  ticks: {
+                    color: "#72542b",
+                  },
+                },
+                x: {
+                  ticks: {
+                    color: "#72542b",
+                    maxRotation: 45,
+                  },
+                  grid: {
+                    color: "rgba(125, 90, 80, 0.1)",
+                  },
+                },
+              },
+            }}
+          />
+        </div>
+        
+        <div style={{ 
+          display: "grid", 
+          gridTemplateColumns: "repeat(4, 1fr)", 
+          gap: "15px",
+          marginTop: "20px"
+        }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
+              Avg CAC
+            </div>
+            <div style={{ fontSize: "20px", color: "#dc2626", fontWeight: "bold" }}>
+              R {avgCac.toFixed(0)}
+            </div>
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
+              Avg LTV
+            </div>
+            <div style={{ fontSize: "20px", color: "#16a34a", fontWeight: "bold" }}>
+              R {avgLtv.toFixed(0)}
+            </div>
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
+              LTV:CAC Ratio
+            </div>
+            <div style={{ 
+              fontSize: "20px", 
+              color: ltvCacRatio >= 3 ? "#16a34a" : 
+                     ltvCacRatio >= 1.5 ? "#f59e0b" : "#dc2626",
+              fontWeight: "bold" 
+            }}>
+              {ltvCacRatio}x
+            </div>
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
+              Trend Health
+            </div>
+            <div style={{ 
+              fontSize: "20px", 
+              color: cacDeclineRate > 0 && ltvGrowthRate > 0 ? "#16a34a" : 
+                     cacDeclineRate > 0 || ltvGrowthRate > 0 ? "#f59e0b" : "#dc2626",
+              fontWeight: "bold" 
+            }}>
+              {cacDeclineRate > 0 && ltvGrowthRate > 0 ? "✓ Healthy" : 
+               cacDeclineRate > 0 || ltvGrowthRate > 0 ? "⚠ Mixed" : "✗ At Risk"}
+            </div>
+          </div>
+        </div>
+        
+        <div style={{ 
+          display: "flex", 
+          justifyContent: "space-between", 
+          marginTop: "20px",
+          paddingTop: "15px",
+          borderTop: "1px solid #e8ddd4"
+        }}>
+          <div style={{ fontSize: "12px", color: "#7d5a50" }}>
+            <strong>Trend Analysis:</strong> CAC {cacDeclineRate >= 0 ? `declined by ${cacDeclineRate}%` : `increased by ${Math.abs(cacDeclineRate)}%`}, 
+            LTV {ltvGrowthRate >= 0 ? `grew by ${ltvGrowthRate}%` : `declined by ${Math.abs(ltvGrowthRate)}%`}
+          </div>
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button
+              onClick={() => handleAddNotes("CAC vs LTV Trend")}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#7d5a50",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                fontSize: "12px",
+              }}
+            >
+              <FaStickyNote size={12} /> Add Notes
+            </button>
+            <button
+              onClick={() => handleViewAnalysis("CAC vs LTV Trend")}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                fontSize: "12px",
+              }}
+            >
+              <FaChartBar size={12} /> View Analysis
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* CAMPAIGN PERFORMANCE DETAILS */}
+      <div style={{ 
+        backgroundColor: "#f7f3f0", 
+        padding: "15px", 
+        borderRadius: "6px",
+        marginBottom: "30px"
+      }}>
+        <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px" }}>Campaign Performance Details</h4>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ backgroundColor: "#5d4037", color: "#fdfcfb" }}>
+                <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Campaign</th>
+                <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Cost (ZAR)</th>
+                <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Revenue (ZAR)</th>
+                <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Net Profit</th>
+                <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>ROI %</th>
+                <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Cost Contribution</th>
+              </tr>
+            </thead>
+            <tbody>
+              {campaignsWithROI.sort((a, b) => b.cost - a.cost).map((campaign, index) => (
+                <tr
                   key={index}
                   style={{
-                    backgroundColor: "#f7f3f0",
-                    padding: "15px",
-                    borderRadius: "6px",
+                    borderBottom: "1px solid #e8ddd4",
+                    backgroundColor: index % 2 === 0 ? "#fdfcfb" : "#f7f3f0",
                   }}
                 >
-                  <h3 style={{ color: "#72542b", marginTop: 0 }}>{campaign.name}</h3>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      marginBottom: "8px",
-                    }}
-                  >
-                    <span>Spend:</span>
-                    <span style={{ fontWeight: "bold" }}>ZAR {campaign.spend.toLocaleString()}</span>
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      marginBottom: "8px",
-                    }}
-                  >
-                    <span>Revenue:</span>
-                    <span style={{ fontWeight: "bold" }}>ZAR {campaign.revenue.toLocaleString()}</span>
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      marginBottom: "8px",
-                    }}
-                  >
-                    <span>ROI:</span>
-                    <span
-                      style={{
-                        fontWeight: "bold",
-                        color: roi >= 200 ? "#4CAF50" : roi >= 100 ? "#FFC107" : "#F44336",
-                      }}
-                    >
-                      {roi}%
-                    </span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </>
-      )}
+                  <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037", fontWeight: "600" }}>
+                    {campaign.name}
+                  </td>
+                  <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
+                    R {campaign.cost.toLocaleString()}
+                  </td>
+                  <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
+                    R {campaign.revenue.toLocaleString()}
+                  </td>
+                  <td style={{ 
+                    padding: "10px", 
+                    fontSize: "13px", 
+                    color: campaign.roiValue >= 0 ? "#16a34a" : "#dc2626", 
+                    textAlign: "right",
+                    fontWeight: "600"
+                  }}>
+                    R {Math.abs(campaign.roiValue).toLocaleString()} {campaign.roiValue >= 0 ? "Profit" : "Loss"}
+                  </td>
+                  <td style={{ 
+                    padding: "10px", 
+                    fontSize: "13px", 
+                    color: campaign.roi >= 0 ? "#16a34a" : "#dc2626", 
+                    textAlign: "right",
+                    fontWeight: "600"
+                  }}>
+                    {campaign.roi}%
+                  </td>
+                  <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
+                    {campaign.contribution}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{ backgroundColor: "#e8ddd4", fontWeight: "600" }}>
+                <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>TOTAL</td>
+                <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
+                  R {totalCampaignCost.toLocaleString()}
+                </td>
+                <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
+                  R {totalCampaignRevenue.toLocaleString()}
+                </td>
+                <td style={{ 
+                  padding: "12px", 
+                  fontSize: "13px", 
+                  color: totalCampaignRevenue - totalCampaignCost >= 0 ? "#16a34a" : "#dc2626", 
+                  textAlign: "right"
+                }}>
+                  R {Math.abs(totalCampaignRevenue - totalCampaignCost).toLocaleString()} {totalCampaignRevenue - totalCampaignCost >= 0 ? "Profit" : "Loss"}
+                </td>
+                <td style={{ 
+                  padding: "12px", 
+                  fontSize: "13px", 
+                  color: totalCampaignROI >= 0 ? "#16a34a" : "#dc2626", 
+                  textAlign: "right"
+                }}>
+                  {totalCampaignROI}%
+                </td>
+                <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
+                  100%
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
 
-      <DownloadModal
-        isOpen={showDownloadModal}
-        onClose={() => setShowDownloadModal(false)}
-        onDownload={handleDownload}
-        availableSections={[
-          { id: "campaigns", label: "Campaign Data" },
-          { id: "summary", label: "Summary Statistics" },
-        ]}
-        sectionTitle="Campaign ROI"
-      />
+      {/* SUSTAINABILITY HEALTH CHECK */}
+      <div style={{ 
+        backgroundColor: "#f7f3f0", 
+        padding: "15px", 
+        borderRadius: "6px",
+      }}>
+        <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px" }}>Demand Sustainability Health Check</h4>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "15px" }}>
+          <div>
+            <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
+              Organic Growth Health
+            </div>
+            <div style={{ 
+              fontSize: "24px", 
+              color: avgReferralRate >= 10 ? "#16a34a" : 
+                     avgReferralRate >= 5 ? "#f59e0b" : "#dc2626",
+              fontWeight: "bold" 
+            }}>
+              {avgReferralRate >= 10 ? "Strong" : 
+               avgReferralRate >= 5 ? "Moderate" : "Weak"}
+            </div>
+            <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
+              Avg Referral: {avgReferralRate.toFixed(1)}%
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
+              Customer Retention Health
+            </div>
+            <div style={{ 
+              fontSize: "24px", 
+              color: netRetentionRate >= 20 ? "#16a34a" : 
+                     netRetentionRate >= 0 ? "#f59e0b" : "#dc2626",
+              fontWeight: "bold" 
+            }}>
+              {netRetentionRate >= 20 ? "Excellent" : 
+               netRetentionRate >= 0 ? "Stable" : "At Risk"}
+            </div>
+            <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
+              Net Retention: {netRetentionRate}%
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
+              Campaign Efficiency
+            </div>
+            <div style={{ 
+              fontSize: "24px", 
+              color: totalCampaignROI >= 100 ? "#16a34a" : 
+                     totalCampaignROI >= 50 ? "#f59e0b" : "#dc2626",
+              fontWeight: "bold" 
+            }}>
+              {totalCampaignROI >= 100 ? "High ROI" : 
+               totalCampaignROI >= 50 ? "Moderate ROI" : "Low ROI"}
+            </div>
+            <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
+              Overall ROI: {totalCampaignROI}%
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
+              LTV:CAC Health
+            </div>
+            <div style={{ 
+              fontSize: "24px", 
+              color: ltvCacRatio >= 3 ? "#16a34a" : 
+                     ltvCacRatio >= 1.5 ? "#f59e0b" : "#dc2626",
+              fontWeight: "bold" 
+            }}>
+              {ltvCacRatio >= 3 ? "Healthy" : 
+               ltvCacRatio >= 1.5 ? "Acceptable" : "Poor"}
+            </div>
+            <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
+              Ratio: {ltvCacRatio}x
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
 
-// ConversionRate Component - NO MONTHLY X-AXIS (Progress bars)
-const ConversionRate = ({ activeSection, currentUser, isInvestorView }) => {
-  const [stages, setStages] = useState([])
-  const [showEditForm, setShowEditForm] = useState(false)
-  const [showDownloadModal, setShowDownloadModal] = useState(false)
+// Pipeline Table Component
+// Pipeline Table Component
+const PipelineTable = ({ activeSection, currentUser, isInvestorView }) => {
+  const [deals, setDeals] = useState([])
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [confirmDialog, setConfirmDialog] = useState({ show: false, dealId: null })
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [isLoading, setIsLoading] = useState(true)
 
-  const saveConversionData = async () => {
-    if (!currentUser) {
-      alert("Please log in to save data.")
-      return
-    }
-    try {
-      await setDoc(doc(db, "conversion-rate", currentUser.uid), { 
-        stages,
-        lastUpdated: new Date().toISOString()
-      })
-      setShowEditForm(false)
-      alert("Conversion rate data saved successfully!")
-    } catch (error) {
-      console.error("Error saving conversion rate data:", error)
-      alert("Error saving data")
-    }
-  }
+  const [newDeal, setNewDeal] = useState({
+    clientName: "",
+    segment: "",
+    stage: "initial-contact",
+    probability: 0,
+    expectedClose: "",
+    dealValue: 0,
+    source: "",
+    owner: "",
+    establishedStartDate: "",
+    expectedOnboardingDate: "",
+    signedDate: "",
+  })
 
-  const loadConversionData = async () => {
+  const stageOptions = [
+    { value: "initial-contact", label: "Initial Contact" },
+    { value: "qualification", label: "Qualification" },
+    { value: "proposal", label: "Proposal" },
+    { value: "negotiation", label: "Negotiation" },
+    { value: "closed-won", label: "Closed Won" },
+    { value: "closed-lost", label: "Closed Lost" },
+  ]
+
+  useEffect(() => {
+    if (currentUser && activeSection === "pipeline-table") {
+      loadDeals()
+    }
+  }, [currentUser, activeSection, selectedYear])
+
+  const loadDeals = async () => {
     if (!currentUser) return
     try {
       setIsLoading(true)
-      const docRef = doc(db, "conversion-rate", currentUser.uid)
-      const docSnap = await getDoc(docRef)
-      if (docSnap.exists()) {
-        setStages(docSnap.data().stages || [])
-      } else {
-        // Initialize with empty data if no document exists
-        await setDoc(docRef, {
-          stages: [],
-          lastUpdated: new Date().toISOString()
-        })
-      }
+      const q = query(
+        collection(db, "pipeline-deals"), 
+        where("userId", "==", currentUser.uid),
+        where("year", "==", selectedYear)
+      )
+      const querySnapshot = await getDocs(q)
+      const dealsData = []
+      querySnapshot.forEach((doc) => {
+        dealsData.push({ id: doc.id, ...doc.data() })
+      })
+      setDeals(dealsData)
     } catch (error) {
-      console.error("Error loading conversion rate data:", error)
+      console.error("Error loading deals:", error)
     } finally {
       setIsLoading(false)
     }
   }
 
-  useEffect(() => {
-    if (currentUser) {
-      loadConversionData()
+  const addDeal = async () => {
+    if (!currentUser || isInvestorView) {
+      alert("You cannot add deals in this mode.")
+      return
     }
-  }, [currentUser])
-
-  const updateStage = (index, field, value) => {
-    const newStages = [...stages]
-    newStages[index][field] = field === "name" ? value : Number.parseFloat(value) || 0
-    setStages(newStages)
-  }
-
-  const addStage = () => {
-    setStages([...stages, { name: "New Stage", rate: 0 }])
-  }
-
-  const removeStage = (index) => {
-    const newStages = stages.filter((_, i) => i !== index)
-    setStages(newStages)
-  }
-
-  const handleDownload = (selectedSections) => {
-    const data = {
-      stages: stages,
-      summary: {
-        totalStages: stages.length,
-        averageConversion:
-          stages.length > 0 ? (stages.reduce((sum, s) => sum + s.rate, 0) / stages.length).toFixed(2) : 0,
-        bestPerforming:
-          stages.length > 0 ? stages.reduce((prev, current) => (prev.rate > current.rate ? prev : current)) : null,
-      },
+    try {
+      const riskAdjustedValue = (newDeal.dealValue * newDeal.probability) / 100
+      await addDoc(collection(db, "pipeline-deals"), {
+        clientName: newDeal.clientName,
+        segment: newDeal.segment,
+        stage: newDeal.stage,
+        probability: newDeal.probability,
+        expectedClose: newDeal.expectedClose,
+        dealValue: newDeal.dealValue,
+        riskAdjustedValue,
+        source: newDeal.source,
+        owner: newDeal.owner,
+        establishedStartDate: newDeal.establishedStartDate,
+        expectedOnboardingDate: newDeal.expectedOnboardingDate,
+        signedDate: newDeal.signedDate,
+        userId: currentUser.uid,
+        year: selectedYear,
+        createdAt: new Date().toISOString(),
+      })
+      setNewDeal({
+        clientName: "",
+        segment: "",
+        stage: "initial-contact",
+        probability: 0,
+        expectedClose: "",
+        dealValue: 0,
+        source: "",
+        owner: "",
+        establishedStartDate: "",
+        expectedOnboardingDate: "",
+        signedDate: "",
+      })
+      setShowAddForm(false)
+      loadDeals()
+      alert("Deal added successfully!")
+    } catch (error) {
+      console.error("Error adding deal:", error)
+      alert("Error adding deal")
     }
-    downloadData(data, "conversion_rates", selectedSections)
   }
 
-  if (activeSection !== "conversion-rate") return null
+  const deleteDeal = async (dealId) => {
+    if (!currentUser || isInvestorView) {
+      alert("You cannot delete deals in this mode.")
+      return
+    }
+    setConfirmDialog({ show: true, dealId })
+  }
+
+  const handleConfirmDelete = async () => {
+    try {
+      await deleteDoc(doc(db, "pipeline-deals", confirmDialog.dealId))
+      loadDeals()
+      alert("Deal deleted successfully!")
+    } catch (error) {
+      console.error("Error deleting deal:", error)
+      alert("Error deleting deal")
+    } finally {
+      setConfirmDialog({ show: false, dealId: null })
+    }
+  }
+
+  const handleCancelDelete = () => {
+    setConfirmDialog({ show: false, dealId: null })
+  }
+
+  const handleStageDistributionAddNotes = () => {
+    alert("Add Notes functionality for Pipeline Stage Distribution")
+  }
+
+  const handleStageDistributionViewAnalysis = () => {
+    alert("View Analysis functionality for Pipeline Stage Distribution")
+  }
+
+  if (activeSection !== "pipeline-table") return null
 
   if (isLoading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '200px',
-        backgroundColor: '#fdfcfb',
-        borderRadius: '8px'
-      }}>
-        <div>Loading conversion rate data...</div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "200px",
+          backgroundColor: "#fdfcfb",
+          borderRadius: "8px",
+        }}
+      >
+        <div>Loading deals...</div>
       </div>
     )
   }
+
+  const totalPipelineValue = deals.reduce((sum, deal) => sum + deal.dealValue, 0)
+  const totalRiskAdjustedValue = deals.reduce((sum, deal) => sum + deal.riskAdjustedValue, 0)
 
   return (
     <div
@@ -1950,90 +5488,52 @@ const ConversionRate = ({ activeSection, currentUser, isInvestorView }) => {
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Conversion Rates</h2>
-        <div style={{ display: "flex", gap: "10px" }}>
-          {!isInvestorView && (
-            <button
-              onClick={() => setShowEditForm(!showEditForm)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              {showEditForm ? "Cancel" : "Edit Data"}
-            </button>
-          )}
-          <button
-            onClick={() => setShowDownloadModal(true)}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            Download
-          </button>
-        </div>
-      </div>
-
-      {!isInvestorView && showEditForm && (
+      {confirmDialog.show && (
         <div
           style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000,
           }}
         >
-          <h3 style={{ color: "#72542b", marginTop: 0 }}>Edit Conversion Rate Data</h3>
-          {stages.map((stage, index) => (
-            <div
-              key={index}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "2fr 1fr auto",
-                gap: "10px",
-                alignItems: "center",
-                marginBottom: "10px",
-                padding: "10px",
-                backgroundColor: "#fdfcfb",
-                borderRadius: "4px",
-              }}
-            >
-              <input
-                type="text"
-                value={stage.name}
-                onChange={(e) => updateStage(index, "name", e.target.value)}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-                placeholder="Stage Name"
-              />
-              <input
-                type="number"
-                value={stage.rate}
-                onChange={(e) => updateStage(index, "rate", e.target.value)}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-                placeholder="Rate %"
-              />
+          <div
+            style={{
+              backgroundColor: "#fdfcfb",
+              padding: "30px",
+              borderRadius: "8px",
+              maxWidth: "400px",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            }}
+          >
+            <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px" }}>Confirm Deletion</h3>
+            <p style={{ color: "#72542b", marginBottom: "25px" }}>
+              Are you sure you want to delete this deal? This action cannot be undone.
+            </p>
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
               <button
-                onClick={() => removeStage(index)}
+                onClick={handleCancelDelete}
                 style={{
-                  padding: "8px",
+                  padding: "8px 16px",
+                  backgroundColor: "#d4c4b0",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                style={{
+                  padding: "8px 16px",
                   backgroundColor: "#dc2626",
                   color: "white",
                   border: "none",
@@ -2041,340 +5541,268 @@ const ConversionRate = ({ activeSection, currentUser, isInvestorView }) => {
                   cursor: "pointer",
                 }}
               >
-                Remove
+                Delete
               </button>
             </div>
-          ))}
-          <div style={{ marginTop: "15px" }}>
-            <button
-              onClick={addStage}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#72542b",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                marginRight: "10px",
-              }}
-            >
-              Add Stage
-            </button>
-            <button
-              onClick={saveConversionData}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#16a34a",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Save Data
-            </button>
           </div>
         </div>
       )}
 
-      {stages.length === 0 ? (
-        <div
-          style={{
-            textAlign: "center",
-            padding: "40px",
-            color: "#72542b",
-          }}
-        >
-          <p>No conversion stage data available. {!isInvestorView && 'Click "Edit Data" to add your first stage.'}</p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Pipeline Table</h2>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+            style={{
+              padding: "8px 12px",
+              border: "1px solid #d4c4b0",
+              borderRadius: "4px",
+              backgroundColor: "#fdfcfb",
+              color: "#5d4037",
+            }}
+          >
+            {[2023, 2024, 2025, 2026].map(year => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
+          {!isInvestorView && (
+            <>
+              <button
+                onClick={() => setShowAddForm(!showAddForm)}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <FaPlus /> Add Data
+              </button>
+            </>
+          )}
         </div>
-      ) : (
+      </div>
+
+      {/* Summary */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "15px", marginBottom: "20px" }}>
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-            gap: "20px",
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
           }}
         >
-          {stages.map((stage, index) => (
-            <div
-              key={index}
-              style={{
-                backgroundColor: "#f7f3f0",
-                padding: "20px",
-                borderRadius: "6px",
-              }}
-            >
-              <h3 style={{ color: "#72542b", marginTop: 0 }}>{stage.name}</h3>
-              <div
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px" }}>Total Deals</div>
+          <div style={{ fontSize: "24px", color: "#5d4037", fontWeight: "bold" }}>{deals.length}</div>
+        </div>
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px" }}>Total Pipeline Value</div>
+          <div style={{ fontSize: "24px", color: "#5d4037", fontWeight: "bold" }}>
+            R {totalPipelineValue.toLocaleString()}
+          </div>
+        </div>
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "15px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px" }}>Risk Adjustment</div>
+          <div style={{ fontSize: "24px", color: "#5d4037", fontWeight: "bold" }}>
+            R {totalRiskAdjustedValue.toLocaleString()}
+          </div>
+        </div>
+      </div>
+
+      {!isInvestorView && showAddForm && (
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "6px",
+            marginBottom: "20px",
+          }}
+        >
+          <h3 style={{ color: "#72542b", marginTop: 0 }}>Add New Deal</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Client / Deal</label>
+              <input
+                type="text"
+                value={newDeal.clientName}
+                onChange={(e) => setNewDeal({ ...newDeal, clientName: e.target.value })}
                 style={{
                   width: "100%",
-                  height: "20px",
-                  backgroundColor: "#e8ddd4",
-                  borderRadius: "10px",
-                  margin: "15px 0",
-                  overflow: "hidden",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
                 }}
-              >
-                <div
-                  style={{
-                    width: `${stage.rate}%`,
-                    height: "100%",
-                    backgroundColor: "#9c7c5f",
-                    borderRadius: "10px",
-                  }}
-                ></div>
-              </div>
-              <div
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Customer Segment</label>
+              <input
+                type="text"
+                value={newDeal.segment}
+                onChange={(e) => setNewDeal({ ...newDeal, segment: e.target.value })}
                 style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  color: "#5d4037",
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Stage</label>
+              <select
+                value={newDeal.stage}
+                onChange={(e) => setNewDeal({ ...newDeal, stage: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
                 }}
               >
-                <span>Current:</span>
-                <span style={{ fontWeight: "bold" }}>{stage.rate}%</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <DownloadModal
-        isOpen={showDownloadModal}
-        onClose={() => setShowDownloadModal(false)}
-        onDownload={handleDownload}
-        availableSections={[
-          { id: "stages", label: "Conversion Stages" },
-          { id: "summary", label: "Summary Statistics" },
-        ]}
-        sectionTitle="Conversion Rates"
-      />
-    </div>
-  )
-}
-
-// RetentionLTV Component - NO MONTHLY X-AXIS (Has years, not months)
-const RetentionLTV = ({ activeSection, currentUser, isInvestorView }) => {
-  const [retentionRates, setRetentionRates] = useState([0, 0, 0, 0, 0, 0])
-  const [ltvValues, setLtvValues] = useState([0, 0, 0, 0, 0, 0])
-  const [churnRate, setChurnRate] = useState(0)
-  const [showEditForm, setShowEditForm] = useState(false)
-  const [showDownloadModal, setShowDownloadModal] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-  const cohorts = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
-
-  const saveRetentionLTVData = async () => {
-    if (!currentUser) {
-      alert("Please log in to save data.")
-      return
-    }
-    try {
-      await setDoc(doc(db, "retention-ltv", currentUser.uid), { 
-        retentionRates, 
-        ltvValues, 
-        churnRate,
-        lastUpdated: new Date().toISOString()
-      })
-      setShowEditForm(false)
-      alert("Retention & LTV data saved successfully!")
-    } catch (error) {
-      console.error("Error saving retention & LTV data:", error)
-      alert("Error saving data")
-    }
-  }
-
-  const loadRetentionLTVData = async () => {
-    if (!currentUser) return
-    try {
-      setIsLoading(true)
-      const docRef = doc(db, "retention-ltv", currentUser.uid)
-      const docSnap = await getDoc(docRef)
-      if (docSnap.exists()) {
-        const data = docSnap.data()
-        setRetentionRates(data.retentionRates || [0, 0, 0, 0, 0, 0])
-        setLtvValues(data.ltvValues || [0, 0, 0, 0, 0, 0])
-        setChurnRate(data.churnRate || 0)
-      } else {
-        // Initialize with empty data if no document exists
-        await setDoc(docRef, {
-          retentionRates: [0, 0, 0, 0, 0, 0],
-          ltvValues: [0, 0, 0, 0, 0, 0],
-          churnRate: 0,
-          lastUpdated: new Date().toISOString()
-        })
-      }
-    } catch (error) {
-      console.error("Error loading retention & LTV data:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (currentUser) {
-      loadRetentionLTVData()
-    }
-  }, [currentUser])
-
-  const updateRetentionValue = (index, value) => {
-    const newData = [...retentionRates]
-    newData[index] = Number.parseFloat(value) || 0
-    setRetentionRates(newData)
-  }
-
-  const updateLtvValue = (index, value) => {
-    const newData = [...ltvValues]
-    newData[index] = Number.parseFloat(value) || 0
-    setLtvValues(newData)
-  }
-
-  const handleDownload = (selectedSections) => {
-    const data = {
-      "retention-rates": retentionRates,
-      "ltv-values": ltvValues,
-      "churn-rate": churnRate,
-      summary: {
-        averageRetention:
-          retentionRates.length > 0
-            ? (retentionRates.reduce((sum, val) => sum + val, 0) / retentionRates.length).toFixed(2)
-            : 0,
-        averageLTV:
-          ltvValues.length > 0 ? (ltvValues.reduce((sum, val) => sum + val, 0) / ltvValues.length).toFixed(2) : 0,
-        churnRate: churnRate,
-        cohorts: cohorts,
-      },
-    }
-    downloadData(data, "retention_ltv", selectedSections)
-  }
-
-  if (activeSection !== "retention-ltv") return null
-
-  if (isLoading) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '200px',
-        backgroundColor: '#fdfcfb',
-        borderRadius: '8px'
-      }}>
-        <div>Loading retention & LTV data...</div>
-      </div>
-    )
-  }
-
-  return (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "20px",
-        margin: "20px 0",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Retention & Lifetime Value (LTV)</h2>
-        <div style={{ display: "flex", gap: "10px" }}>
-          {!isInvestorView && (
-            <button
-              onClick={() => setShowEditForm(!showEditForm)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              {showEditForm ? "Cancel" : "Edit Data"}
-            </button>
-          )}
-          <button
-            onClick={() => setShowDownloadModal(true)}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            Download
-          </button>
-        </div>
-      </div>
-
-      {!isInvestorView && showEditForm && (
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#72542b", marginTop: 0 }}>Edit Retention & LTV Data</h3>
-          <div style={{ marginBottom: "20px" }}>
-            <label style={{ color: "#72542b", display: "block", marginBottom: "5px" }}>Churn Rate (%):</label>
-            <input
-              type="number"
-              value={churnRate}
-              onChange={(e) => setChurnRate(Number.parseFloat(e.target.value) || 0)}
-              style={{
-                padding: "8px",
-                border: "1px solid #d4c4b0",
-                borderRadius: "4px",
-                width: "120px",
-              }}
-              placeholder="Churn Rate"
-            />
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-            <div>
-              <h4 style={{ color: "#72542b" }}>Retention Rate (%)</h4>
-              {cohorts.map((cohort, index) => (
-                <div key={cohort} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                  <span style={{ minWidth: "40px", color: "#72542b" }}>{cohort}:</span>
-                  <input
-                    type="number"
-                    value={retentionRates[index]}
-                    onChange={(e) => updateRetentionValue(index, e.target.value)}
-                    style={{
-                      padding: "6px",
-                      border: "1px solid #d4c4b0",
-                      borderRadius: "4px",
-                      width: "80px",
-                    }}
-                  />
-                </div>
-              ))}
+                {stageOptions.map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
             </div>
             <div>
-              <h4 style={{ color: "#72542b" }}>LTV (ZAR)</h4>
-              {cohorts.map((cohort, index) => (
-                <div key={cohort} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                  <span style={{ minWidth: "40px", color: "#72542b" }}>{cohort}:</span>
-                  <input
-                    type="number"
-                    value={ltvValues[index]}
-                    onChange={(e) => updateLtvValue(index, e.target.value)}
-                    style={{
-                      padding: "6px",
-                      border: "1px solid #d4c4b0",
-                      borderRadius: "4px",
-                      width: "80px",
-                    }}
-                  />
-                </div>
-              ))}
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Probability %</label>
+              <input
+                type="number"
+                value={newDeal.probability}
+                onChange={(e) => setNewDeal({ ...newDeal, probability: Number(e.target.value) })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+                min="0"
+                max="100"
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Established Start Date</label>
+              <input
+                type="date"
+                value={newDeal.establishedStartDate}
+                onChange={(e) => setNewDeal({ ...newDeal, establishedStartDate: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Expected Onboarding Date</label>
+              <input
+                type="date"
+                value={newDeal.expectedOnboardingDate}
+                onChange={(e) => setNewDeal({ ...newDeal, expectedOnboardingDate: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Signed Date</label>
+              <input
+                type="date"
+                value={newDeal.signedDate}
+                onChange={(e) => setNewDeal({ ...newDeal, signedDate: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Expected Close</label>
+              <input
+                type="date"
+                value={newDeal.expectedClose}
+                onChange={(e) => setNewDeal({ ...newDeal, expectedClose: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Deal Value (ZAR)</label>
+              <input
+                type="number"
+                value={newDeal.dealValue}
+                onChange={(e) => setNewDeal({ ...newDeal, dealValue: Number(e.target.value) })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Source</label>
+              <input
+                type="text"
+                value={newDeal.source}
+                onChange={(e) => setNewDeal({ ...newDeal, source: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Owner</label>
+              <input
+                type="text"
+                value={newDeal.owner}
+                onChange={(e) => setNewDeal({ ...newDeal, owner: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                }}
+              />
             </div>
           </div>
           <button
-            onClick={saveRetentionLTVData}
+            onClick={addDeal}
             style={{
               padding: "8px 16px",
               backgroundColor: "#16a34a",
@@ -2385,955 +5813,289 @@ const RetentionLTV = ({ activeSection, currentUser, isInvestorView }) => {
               marginTop: "15px",
             }}
           >
-            Save Data
+            Add Deal
           </button>
         </div>
       )}
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "20px",
-        }}
-      >
-        <div style={{ height: "300px" }}>
-          <Line
-            data={{
-              labels: cohorts,
-              datasets: [
-                {
-                  label: "Retention Rate (%)",
-                  data: retentionRates,
-                  borderColor: "#9c7c5f",
-                  backgroundColor: "rgba(156, 124, 95, 0.1)",
-                  borderWidth: 2,
-                  tension: 0.1,
-                  fill: true,
-                },
-              ],
-            }}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: {
-                  position: "top",
-                },
-              },
-              scales: {
-                y: {
-                  beginAtZero: true,
-                  max: 100,
-                  title: {
-                    display: true,
-                    text: "Retention Rate (%)",
-                  },
-                },
-                x: {
-                  title: {
-                    display: false,
-                  },
-                },
-              },
-            }}
-          />
-        </div>
-        <div style={{ height: "300px" }}>
-          <Bar
-            data={{
-              labels: cohorts,
-              datasets: [
-                {
-                  label: "LTV (ZAR)",
-                  data: ltvValues,
-                  backgroundColor: "#e8ddd4",
-                  borderColor: "#d4c4b0",
-                  borderWidth: 1,
-                },
-              ],
-            }}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: {
-                  display: false,
-                },
-              },
-              scales: {
-                y: {
-                  beginAtZero: true,
-                  title: {
-                    display: true,
-                    text: "LTV (ZAR)",
-                  },
-                },
-                x: {
-                  title: {
-                    display: false,
-                  },
-                },
-              },
-            }}
-          />
-        </div>
-      </div>
-      <div
-        style={{
-          backgroundColor: "#f7f3f0",
-          padding: "15px",
-          borderRadius: "6px",
-          marginTop: "20px",
-        }}
-      >
-        <h3 style={{ color: "#72542b", marginTop: 0 }}>Churn Analysis</h3>
-        <p style={{ color: "#5d4037" }}>
-          Current churn rate: <strong>{churnRate}%</strong> (Industry average: 12%)
-        </p>
-      </div>
-
-      <DownloadModal
-        isOpen={showDownloadModal}
-        onClose={() => setShowDownloadModal(false)}
-        onDownload={handleDownload}
-        availableSections={[
-          { id: "retention-rates", label: "Retention Rates" },
-          { id: "ltv-values", label: "LTV Values" },
-          { id: "churn-rate", label: "Churn Rate" },
-          { id: "summary", label: "Summary Statistics" },
-        ]}
-        sectionTitle="Retention & LTV"
-      />
-    </div>
-  )
-}
-
-// SalesVelocity Component - HAS MONTHLY X-AXIS (Line chart)
-const SalesVelocity = ({ activeSection, currentUser, isInvestorView, financialYearStartMonth }) => {
-  const [velocityData, setVelocityData] = useState(Array(12).fill(0))
-  const [showEditForm, setShowEditForm] = useState(false)
-  const [showDownloadModal, setShowDownloadModal] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-  const [financialYearMonths, setFinancialYearMonths] = useState([])
-
-  useEffect(() => {
-    if (financialYearStartMonth) {
-      const months = getFinancialYearMonths(financialYearStartMonth)
-      setFinancialYearMonths(months)
-    }
-  }, [financialYearStartMonth])
-
-  const saveSalesVelocityData = async () => {
-    if (!currentUser) {
-      alert("Please log in to save data.")
-      return
-    }
-    try {
-      await setDoc(doc(db, "sales-velocity", currentUser.uid), { 
-        velocityData,
-        lastUpdated: new Date().toISOString()
-      })
-      setShowEditForm(false)
-      alert("Sales velocity data saved successfully!")
-    } catch (error) {
-      console.error("Error saving sales velocity data:", error)
-      alert("Error saving data")
-    }
-  }
-
-  const loadSalesVelocityData = async () => {
-    if (!currentUser) return
-    try {
-      setIsLoading(true)
-      const docRef = doc(db, "sales-velocity", currentUser.uid)
-      const docSnap = await getDoc(docRef)
-      if (docSnap.exists()) {
-        setVelocityData(docSnap.data().velocityData || Array(12).fill(0))
-      } else {
-        // Initialize with empty data if no document exists
-        await setDoc(docRef, {
-          velocityData: Array(12).fill(0),
-          lastUpdated: new Date().toISOString()
-        })
-      }
-    } catch (error) {
-      console.error("Error loading sales velocity data:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (currentUser) {
-      loadSalesVelocityData()
-    }
-  }, [currentUser])
-
-  const updateVelocityValue = (index, value) => {
-    const newData = [...velocityData]
-    newData[index] = Number.parseFloat(value) || 0
-    setVelocityData(newData)
-  }
-
-  const handleDownload = (selectedSections) => {
-    const currentVelocity = velocityData[velocityData.length - 1] || 0
-    const firstVelocity = velocityData[0] || 0
-    const improvement = firstVelocity > 0 ? firstVelocity - currentVelocity : 0
-
-    const data = {
-      "velocity-data": velocityData,
-      summary: {
-        currentVelocity: currentVelocity,
-        improvement: improvement,
-        averageVelocity:
-          velocityData.length > 0
-            ? (velocityData.reduce((sum, val) => sum + val, 0) / velocityData.length).toFixed(2)
-            : 0,
-        months: financialYearMonths,
-      },
-    }
-    downloadData(data, "sales_velocity", selectedSections)
-  }
-
-  if (activeSection !== "sales-velocity") return null
-
-  if (isLoading) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '200px',
-        backgroundColor: '#fdfcfb',
-        borderRadius: '8px'
-      }}>
-        <div>Loading sales velocity data...</div>
-      </div>
-    )
-  }
-
-  const currentVelocity = velocityData[velocityData.length - 1] || 0
-  const firstVelocity = velocityData[0] || 0
-  const improvement = firstVelocity > 0 ? firstVelocity - currentVelocity : 0
-
-  return (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "20px",
-        margin: "20px 0",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <div>
-          <h2 style={{ color: "#5d4037", marginTop: 0 }}>Sales Velocity (Days to Close)</h2>
-          {financialYearStartMonth && (
-            <p style={{ color: "#7d5a50", fontSize: "14px", margin: "5px 0 0 0" }}>
-              Financial Year starts in {financialYearMonths[0]}
-            </p>
-          )}
-        </div>
-        <div style={{ display: "flex", gap: "10px" }}>
-          {!isInvestorView && (
-            <button
-              onClick={() => setShowEditForm(!showEditForm)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              {showEditForm ? "Cancel" : "Edit Data"}
-            </button>
-          )}
-          <button
-            onClick={() => setShowDownloadModal(true)}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            Download
-          </button>
-        </div>
-      </div>
-
-      {!isInvestorView && showEditForm && (
-        <div
+      {/* Deals Table */}
+      <div style={{ overflowX: "auto" }}>
+        <table
           style={{
+            width: "100%",
+            borderCollapse: "collapse",
             backgroundColor: "#f7f3f0",
-            padding: "20px",
             borderRadius: "6px",
-            marginBottom: "20px",
+            overflow: "hidden",
           }}
         >
-          <h3 style={{ color: "#72542b", marginTop: 0 }}>Edit Sales Velocity Data</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "15px" }}>
-            {financialYearMonths.map((month, index) => (
-              <div key={month} style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
-                <label style={{ color: "#72542b", fontSize: "14px" }}>{month}:</label>
-                <input
-                  type="number"
-                  value={velocityData[index]}
-                  onChange={(e) => updateVelocityValue(index, e.target.value)}
+          <thead>
+            <tr style={{ backgroundColor: "#5d4037", color: "#fdfcfb" }}>
+              <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Client / Deal</th>
+              <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Customer Segment</th>
+              <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Stage</th>
+              <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Probability %</th>
+              <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Established Start</th>
+              <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Expected Onboarding</th>
+              <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Signed Date</th>
+              <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Expected Close</th>
+              <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Deal Value (ZAR)</th>
+              <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Risk Adjustment (ZAR)</th>
+              <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Source</th>
+              <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Owner</th>
+              {!isInvestorView && <th style={{ padding: "12px", textAlign: "center", fontSize: "13px" }}>Actions</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {deals.map((deal, index) => {
+              const stageLabel = stageOptions.find(option => option.value === deal.stage)?.label || deal.stage
+              return (
+                <tr
+                  key={deal.id}
                   style={{
-                    padding: "6px",
-                    border: "1px solid #d4c4b0",
-                    borderRadius: "4px",
+                    borderBottom: "1px solid #e8ddd4",
+                    backgroundColor: index % 2 === 0 ? "#fdfcfb" : "#f7f3f0",
                   }}
-                  placeholder="Days"
-                />
-              </div>
-            ))}
-          </div>
-          <button
-            onClick={saveSalesVelocityData}
+                >
+                  <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>{deal.clientName}</td>
+                  <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>{deal.segment}</td>
+                  <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>
+                    <span style={{
+                      display: "inline-block",
+                      padding: "3px 8px",
+                      borderRadius: "12px",
+                      fontSize: "11px",
+                      fontWeight: "600",
+                      backgroundColor: 
+                        deal.stage === "initial-contact" ? "#e8ddd4" :
+                        deal.stage === "qualification" ? "#d4c4b0" :
+                        deal.stage === "proposal" ? "#9c7c5f" :
+                        deal.stage === "negotiation" ? "#7d5a50" :
+                        deal.stage === "closed-won" ? "#16a34a" :
+                        deal.stage === "closed-lost" ? "#dc2626" : "#e8ddd4",
+                      color: 
+                        deal.stage === "initial-contact" ? "#5d4037" :
+                        deal.stage === "closed-won" || deal.stage === "closed-lost" ? "white" : "#5d4037"
+                    }}>
+                      {stageLabel}
+                    </span>
+                  </td>
+                  <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>{deal.probability}%</td>
+                  <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>
+                    {deal.establishedStartDate ? new Date(deal.establishedStartDate).toLocaleDateString() : "-"}
+                  </td>
+                  <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>
+                    {deal.expectedOnboardingDate ? new Date(deal.expectedOnboardingDate).toLocaleDateString() : "-"}
+                  </td>
+                  <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>
+                    {deal.signedDate ? new Date(deal.signedDate).toLocaleDateString() : "-"}
+                  </td>
+                  <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>{deal.expectedClose}</td>
+                  <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
+                    R {deal.dealValue.toLocaleString()}
+                  </td>
+                  <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
+                    R {deal.riskAdjustedValue.toLocaleString()}
+                  </td>
+                  <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>{deal.source}</td>
+                  <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>{deal.owner}</td>
+                  {!isInvestorView && (
+                    <td style={{ padding: "12px", textAlign: "center" }}>
+                      <div style={{ display: "flex", gap: "5px", justifyContent: "center" }}>
+                        <button
+                          onClick={() => deleteDeal(deal.id)}
+                          style={{
+                            padding: "6px",
+                            backgroundColor: "#dc2626",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                          title="Delete"
+                        >
+                          <FaTrashAlt size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+        {deals.length === 0 && (
+          <div
             style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              marginTop: "15px",
+              textAlign: "center",
+              padding: "40px",
+              color: "#72542b",
+              backgroundColor: "#f7f3f0",
+              borderRadius: "6px",
+              marginTop: "10px",
             }}
           >
-            Save Data
-          </button>
-        </div>
-      )}
+            No deals in pipeline. Click "Add Data" to get started.
+          </div>
+        )}
+      </div>
 
-      <div style={{ height: "400px" }}>
-        <Line
-          data={{
-            labels: financialYearMonths,
-            datasets: [
-              {
-                label: "Average Days to Close",
-                data: velocityData,
-                borderColor: "#9c7c5f",
-                backgroundColor: "rgba(156, 124, 95, 0.1)",
-                borderWidth: 2,
-                tension: 0.1,
-                fill: true,
-              },
-            ],
-          }}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                position: "top",
-              },
-            },
-            scales: {
-              y: {
-                beginAtZero: true,
-                title: {
-                  display: true,
-                  text: "Days",
+      {/* Stage Distribution Chart */}
+      {deals.length > 0 && (
+        <div style={{ marginTop: "30px" }}>
+          <h3 style={{ color: "#5d4037" }}>Pipeline Stage Distribution</h3>
+          <div style={{ height: "300px" }}>
+            <Pie
+              data={{
+                labels: stageOptions.map(option => option.label),
+                datasets: [
+                  {
+                    label: "Deals by Stage",
+                    data: stageOptions.map(option => 
+                      deals.filter((d) => d.stage === option.value).length
+                    ),
+                    backgroundColor: [
+                      "#e8ddd4", // Initial Contact
+                      "#d4c4b0", // Qualification
+                      "#9c7c5f", // Proposal
+                      "#7d5a50", // Negotiation
+                      "#16a34a", // Closed Won
+                      "#dc2626", // Closed Lost
+                    ],
+                    borderColor: "#fdfcfb",
+                    borderWidth: 2,
+                  },
+                ],
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: "right",
+                    labels: {
+                      color: "#72542b",
+                      padding: 15,
+                    }
+                  },
                 },
-              },
-              x: {
-                title: {
-                  display: false,
-                },
-              },
-            },
-          }}
-        />
-      </div>
-      <div
-        style={{
-          backgroundColor: "#f7f3f0",
-          padding: "15px",
-          borderRadius: "6px",
-          marginTop: "20px",
-        }}
-      >
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-            gap: "15px",
-          }}
-        >
-          <div>
-            <h3 style={{ color: "#72542b", marginTop: 0 }}>Current Velocity</h3>
-            <p
-              style={{
-                color: "#5d4037",
-                fontSize: "24px",
-                fontWeight: "bold",
-                margin: "5px 0",
               }}
-            >
-              {currentVelocity} days
-            </p>
+            />
           </div>
-          <div>
-            <h3 style={{ color: "#72542b", marginTop: 0 }}>Improvement</h3>
-            <p
-              style={{
-                color: improvement > 0 ? "#4CAF50" : "#5d4037",
-                fontSize: "24px",
-                fontWeight: "bold",
-                margin: "5px 0",
-              }}
-            >
-              {improvement > 0 ? "↓" : ""} {Math.abs(improvement)} days
-            </p>
-          </div>
-          <div>
-            <h3 style={{ color: "#72542b", marginTop: 0 }}>Industry Avg</h3>
-            <p
-              style={{
-                color: "#5d4037",
-                fontSize: "24px",
-                fontWeight: "bold",
-                margin: "5px 0",
-              }}
-            >
-              45 days
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <DownloadModal
-        isOpen={showDownloadModal}
-        onClose={() => setShowDownloadModal(false)}
-        onDownload={handleDownload}
-        availableSections={[
-          { id: "velocity-data", label: "Sales Velocity Data" },
-          { id: "summary", label: "Summary Statistics" },
-        ]}
-        sectionTitle="Sales Velocity"
-      />
-    </div>
-  )
-}
-
-// RepeatCustomers Component - NO MONTHLY X-AXIS (Has years, not months)
-const RepeatCustomers = ({ activeSection, currentUser, isInvestorView }) => {
-  const [repeatData, setRepeatData] = useState([0, 0, 0, 0, 0])
-  const [churnData, setChurnData] = useState([0, 0, 0, 0, 0])
-  const [loyaltyImpact, setLoyaltyImpact] = useState(0)
-  const [showEditForm, setShowEditForm] = useState(false)
-  const [showDownloadModal, setShowDownloadModal] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-  const years = ["2019", "2020", "2021", "2022", "2023"]
-
-  const saveRepeatCustomersData = async () => {
-    if (!currentUser) {
-      alert("Please log in to save data.")
-      return
-    }
-    try {
-      await setDoc(doc(db, "repeat-customers", currentUser.uid), { 
-        repeatData, 
-        churnData, 
-        loyaltyImpact,
-        lastUpdated: new Date().toISOString()
-      })
-      setShowEditForm(false)
-      alert("Repeat customers data saved successfully!")
-    } catch (error) {
-      console.error("Error saving repeat customers data:", error)
-      alert("Error saving data")
-    }
-  }
-
-  const loadRepeatCustomersData = async () => {
-    if (!currentUser) return
-    try {
-      setIsLoading(true)
-      const docRef = doc(db, "repeat-customers", currentUser.uid)
-      const docSnap = await getDoc(docRef)
-      if (docSnap.exists()) {
-        const data = docSnap.data()
-        setRepeatData(data.repeatData || [0, 0, 0, 0, 0])
-        setChurnData(data.churnData || [0, 0, 0, 0, 0])
-        setLoyaltyImpact(data.loyaltyImpact || 0)
-      } else {
-        // Initialize with empty data if no document exists
-        await setDoc(docRef, {
-          repeatData: [0, 0, 0, 0, 0],
-          churnData: [0, 0, 0, 0, 0],
-          loyaltyImpact: 0,
-          lastUpdated: new Date().toISOString()
-        })
-      }
-    } catch (error) {
-      console.error("Error loading repeat customers data:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (currentUser) {
-      loadRepeatCustomersData()
-    }
-  }, [currentUser])
-
-  const updateRepeatValue = (index, value) => {
-    const newData = [...repeatData]
-    newData[index] = Number.parseFloat(value) || 0
-    setRepeatData(newData)
-  }
-
-  const updateChurnValue = (index, value) => {
-    const newData = [...churnData]
-    newData[index] = Number.parseFloat(value) || 0
-    setChurnData(newData)
-  }
-
-  const handleDownload = (selectedSections) => {
-    const currentRepeatRate = repeatData[repeatData.length - 1] || 0
-    const currentChurnRate = churnData[churnData.length - 1] || 0
-
-    const data = {
-      "repeat-data": repeatData,
-      "churn-data": churnData,
-      "loyalty-impact": loyaltyImpact,
-      summary: {
-        currentRepeatRate: currentRepeatRate,
-        currentChurnRate: currentChurnRate,
-        loyaltyImpact: loyaltyImpact,
-        years: years,
-      },
-    }
-    downloadData(data, "repeat_customers", selectedSections)
-  }
-
-  if (activeSection !== "repeat-customers") return null
-
-  if (isLoading) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '200px',
-        backgroundColor: '#fdfcfb',
-        borderRadius: '8px'
-      }}>
-        <div>Loading repeat customers data...</div>
-      </div>
-    )
-  }
-
-  const currentRepeatRate = repeatData[repeatData.length - 1] || 0
-  const currentChurnRate = churnData[churnData.length - 1] || 0
-
-  return (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "20px",
-        margin: "20px 0",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Repeat Customers & Churn Rate</h2>
-        <div style={{ display: "flex", gap: "10px" }}>
-          {!isInvestorView && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "15px" }}>
             <button
-              onClick={() => setShowEditForm(!showEditForm)}
+              onClick={handleStageDistributionAddNotes}
               style={{
-                padding: "8px 16px",
+                padding: "6px 12px",
+                backgroundColor: "#7d5a50",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                fontSize: "12px",
+              }}
+            >
+              <FaStickyNote size={12} /> Add Notes
+            </button>
+            <button
+              onClick={handleStageDistributionViewAnalysis}
+              style={{
+                padding: "6px 12px",
                 backgroundColor: "#5d4037",
                 color: "#fdfcfb",
                 border: "none",
                 borderRadius: "4px",
                 cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                fontSize: "12px",
+                marginLeft: "10px"
               }}
             >
-              {showEditForm ? "Cancel" : "Edit Data"}
+              <FaChartBar size={12} /> View Analysis
             </button>
-          )}
-          <button
-            onClick={() => setShowDownloadModal(true)}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            Download
-          </button>
-        </div>
-      </div>
-
-      {!isInvestorView && showEditForm && (
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#72542b", marginTop: 0 }}>Edit Repeat Customers Data</h3>
-          <div style={{ marginBottom: "20px" }}>
-            <label style={{ color: "#72542b", display: "block", marginBottom: "5px" }}>
-              Loyalty Program Impact (%):
-            </label>
-            <input
-              type="number"
-              value={loyaltyImpact}
-              onChange={(e) => setLoyaltyImpact(Number.parseFloat(e.target.value) || 0)}
-              style={{
-                padding: "8px",
-                border: "1px solid #d4c4b0",
-                borderRadius: "4px",
-                width: "120px",
-              }}
-              placeholder="Impact %"
-            />
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-            <div>
-              <h4 style={{ color: "#72542b" }}>Repeat Customers (%)</h4>
-              {years.map((year, index) => (
-                <div key={year} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                  <span style={{ minWidth: "50px", color: "#72542b" }}>{year}:</span>
-                  <input
-                    type="number"
-                    value={repeatData[index]}
-                    onChange={(e) => updateRepeatValue(index, e.target.value)}
-                    style={{
-                      padding: "6px",
-                      border: "1px solid #d4c4b0",
-                      borderRadius: "4px",
-                      width: "80px",
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-            <div>
-              <h4 style={{ color: "#72542b" }}>Churn Rate (%)</h4>
-              {years.map((year, index) => (
-                <div key={year} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                  <span style={{ minWidth: "50px", color: "#72542b" }}>{year}:</span>
-                  <input
-                    type="number"
-                    value={churnData[index]}
-                    onChange={(e) => updateChurnValue(index, e.target.value)}
-                    style={{
-                      padding: "6px",
-                      border: "1px solid #d4c4b0",
-                      borderRadius: "4px",
-                      width: "80px",
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-          <button
-            onClick={saveRepeatCustomersData}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              marginTop: "15px",
-            }}
-          >
-            Save Data
-          </button>
         </div>
       )}
 
-      <div style={{ height: "400px" }}>
-        <Bar
-          data={{
-            labels: years,
-            datasets: [
-              {
-                label: "% Repeat Customers",
-                data: repeatData,
-                backgroundColor: "#9c7c5f",
-                borderColor: "#5d4037",
-                borderWidth: 1,
-              },
-              {
-                label: "% Churn Rate",
-                data: churnData,
-                backgroundColor: "#F44336",
-                borderColor: "#D32F2F",
-                borderWidth: 1,
-              },
-            ],
-          }}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                position: "top",
-              },
-            },
-            scales: {
-              y: {
-                beginAtZero: true,
-                title: {
-                  display: true,
-                  text: "Percentage (%)",
-                },
-              },
-              x: {
-                title: {
-                  display: false,
-                },
-              },
-            },
-          }}
-        />
-      </div>
-      <div
-        style={{
-          backgroundColor: "#f7f3f0",
-          padding: "15px",
+      {/* Key Deal Metrics */}
+      {deals.length > 0 && (
+        <div style={{ 
+          backgroundColor: "#f7f3f0", 
+          padding: "15px", 
           borderRadius: "6px",
-          marginTop: "20px",
-        }}
-      >
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-            gap: "15px",
-          }}
-        >
-          <div>
-            <h3 style={{ color: "#72542b", marginTop: 0 }}>Current Repeat Rate</h3>
-            <p
-              style={{
-                color: "#5d4037",
-                fontSize: "24px",
-                fontWeight: "bold",
-                margin: "5px 0",
-              }}
-            >
-              {currentRepeatRate}%
-            </p>
-          </div>
-          <div>
-            <h3 style={{ color: "#72542b", marginTop: 0 }}>Current Churn Rate</h3>
-            <p
-              style={{
-                color: "#F44336",
-                fontSize: "24px",
-                fontWeight: "bold",
-                margin: "5px 0",
-              }}
-            >
-              {currentChurnRate}%
-            </p>
-          </div>
-          <div>
-            <h3 style={{ color: "#72542b", marginTop: 0 }}>Loyalty Program Impact</h3>
-            <p
-              style={{
-                color: "#4CAF50",
-                fontSize: "24px",
-                fontWeight: "bold",
-                margin: "5px 0",
-              }}
-            >
-              +{loyaltyImpact}%
-            </p>
+          marginTop: "30px"
+        }}>
+          <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px" }}>Deal Pipeline Insights</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "15px" }}>
+            <div>
+              <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
+                Average Deal Value
+              </div>
+              <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>
+                R {(totalPipelineValue / deals.length).toFixed(0).toLocaleString()}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
+                Win Rate Potential
+              </div>
+              <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>
+                {deals.length > 0 ? (deals.reduce((sum, d) => sum + d.probability, 0) / deals.length).toFixed(1) : 0}%
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
+                Risk Adjustment %
+              </div>
+              <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>
+                {totalPipelineValue > 0 ? ((totalRiskAdjustedValue / totalPipelineValue) * 100).toFixed(1) : 0}%
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
+                Active Deals
+              </div>
+              <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>
+                {deals.filter(d => !["closed-won", "closed-lost"].includes(d.stage)).length}
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-
-      <DownloadModal
-        isOpen={showDownloadModal}
-        onClose={() => setShowDownloadModal(false)}
-        onDownload={handleDownload}
-        availableSections={[
-          { id: "repeat-data", label: "Repeat Customer Data" },
-          { id: "churn-data", label: "Churn Rate Data" },
-          { id: "loyalty-impact", label: "Loyalty Program Impact" },
-          { id: "summary", label: "Summary Statistics" },
-        ]}
-        sectionTitle="Repeat Customers"
-      />
+      )}
     </div>
   )
 }
 
-// Main MarketingSales Component
-const MarketingSales = () => {
-  const [activeSection, setActiveSection] = useState("new-leads")
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
-
-  const [isInvestorView, setIsInvestorView] = useState(false)
-  const [viewingSMEId, setViewingSMEId] = useState(null)
-  const [viewingSMEName, setViewingSMEName] = useState("")
+// Main Component
+export default function MarketingSales() {
+  const [activeSection, setActiveSection] = useState("pipeline-visibility")
   const [currentUser, setCurrentUser] = useState(null)
-  const [financialYearStartMonth, setFinancialYearStartMonth] = useState(1) // Default to January (1)
-  const [loadingFinancialYear, setLoadingFinancialYear] = useState(true)
-
-  // Fetch financial year start month from user profile
-  useEffect(() => {
-    const fetchFinancialYearStart = async (userId) => {
-      try {
-        setLoadingFinancialYear(true)
-        
-        // Get from universalProfiles collection - query for the logged in user's profile
-        const profilesQuery = query(
-          collection(db, "universalProfiles"),
-          where("userId", "==", userId)
-        )
-        
-        const querySnapshot = await getDocs(profilesQuery)
-        
-        if (!querySnapshot.empty) {
-          // Get the first matching document
-          const profileDoc = querySnapshot.docs[0]
-          const profileData = profileDoc.data()
-          
-          console.log("Profile data found:", profileData)
-          
-          if (profileData.entityOverview?.financialYearEnd) {
-            // financialYearEnd is in format "2025-02" where 02 is February
-            // The month number is the financial year start month
-            const financialYearEndStr = profileData.entityOverview.financialYearEnd
-            console.log("Financial Year End string:", financialYearEndStr)
-
-            // Split by "-" and get the month part
-            const parts = financialYearEndStr.split("-")
-            if (parts.length === 2) {
-              const month = parseInt(parts[1])
-              console.log("Parsed month:", month)
-              
-              if (!isNaN(month) && month >= 1 && month <= 12) {
-                setFinancialYearStartMonth(month)
-                console.log("Financial year start month set to:", month)
-              } else {
-                console.log("Invalid month parsed:", month)
-                setFinancialYearStartMonth(1) // Default to January
-              }
-            
-            } else {
-              console.log("Invalid financialYearEnd format:", financialYearEndStr)
-              setFinancialYearStartMonth(1) // Default to January
-            }
-          } else {
-            console.log("No financialYearEnd found in entityOverview")
-            setFinancialYearStartMonth(1) // Default to January
-          }
-        } else {
-          console.log("No universalProfiles document found for user:", userId)
-          
-          // Fallback: Try to get from user document
-          try {
-            const userDoc = await getDoc(doc(db, "universalProfiles", userId))
-            if (userDoc.exists()) {
-              const userData = userDoc.data()
-              console.log("User data found:", userData)
-              
-              if (userData.entityOverview?.financialYearEnd) {
-                const financialYearEndStr = userData.entityOverview.financialYearEnd
-                console.log("Financial Year End from user doc:", financialYearEndStr)
-                
-                const parts = financialYearEndStr.split("-")
-                if (parts.length === 2) {
-                  const month = parseInt(parts[1])
-                  if (!isNaN(month) && month >= 1 && month <= 12) {
-                    setFinancialYearStartMonth(month)
-                    console.log("Financial year start month set to:", month)
-                  }
-                }
-              }
-            }
-          } catch (fallbackError) {
-            console.error("Error in fallback fetch:", fallbackError)
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching financial year start:", error)
-        setFinancialYearStartMonth(1) // Default to January
-      } finally {
-        setLoadingFinancialYear(false)
-      }
-    }
-
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        if (isInvestorView && viewingSMEId) {
-          // If in investor view, fetch the SME's financial year
-          await fetchFinancialYearStart(viewingSMEId)
-        } else {
-          // If not in investor view, fetch the logged in user's financial year
-          await fetchFinancialYearStart(user.uid)
-        }
-      } else {
-        setLoadingFinancialYear(false)
-      }
-    })
-
-    return () => unsubscribe()
-  }, [isInvestorView, viewingSMEId])
-
-  useEffect(() => {
-    const investorViewMode = sessionStorage.getItem("investorViewMode")
-    const smeId = sessionStorage.getItem("viewingSMEId")
-    const smeName = sessionStorage.getItem("viewingSMEName")
-
-    if (investorViewMode === "true" && smeId) {
-      setIsInvestorView(true)
-      setViewingSMEId(smeId)
-      setViewingSMEName(smeName || "SME")
-      console.log("Investor view mode activated for SME:", smeId)
-    }
-  }, [])
+  const [isInvestorView, setIsInvestorView] = useState(false)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [showFullDescription, setShowFullDescription] = useState(false)
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (isInvestorView && viewingSMEId) {
-        setCurrentUser({ uid: viewingSMEId })
-      } else {
-        setCurrentUser(user)
-      }
+      setCurrentUser(user)
     })
-
     return () => unsubscribe()
-  }, [isInvestorView, viewingSMEId])
-
-  const handleExitInvestorView = () => {
-    sessionStorage.removeItem("viewingSMEId")
-    sessionStorage.removeItem("viewingSMEName")
-    sessionStorage.removeItem("investorViewMode")
-    window.location.href = "/my-cohorts"
-  }
+  }, [])
 
   useEffect(() => {
     const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
+      const sidebar = document.querySelector("[data-sidebar]")
+      if (sidebar) {
+        const isCollapsed = sidebar.classList.contains("collapsed")
+        setIsSidebarCollapsed(isCollapsed)
+      }
     }
 
     checkSidebarState()
@@ -3358,15 +6120,12 @@ const MarketingSales = () => {
   })
 
   const sectionButtons = [
-    { id: "new-leads", label: "New Leads" },
-    { id: "lead-source-analysis", label: "Lead Source" },
-    { id: "cost-per-lead", label: "Cost/Lead" },
-    { id: "customer-acquisition-cost", label: "CAC" },
-    { id: "campaign-roi", label: "Campaign ROI" },
-    { id: "conversion-rate", label: "Conversion" },
-    { id: "retention-ltv", label: "Retention/LTV" },
-    { id: "sales-velocity", label: "Sales Velocity" },
-    { id: "repeat-customers", label: "Repeat/Churn" },
+    { id: "pipeline-visibility", label: "Pipeline Visibility" },
+    { id: "pipeline-sufficiency", label: "Pipeline Sufficiency" },
+    { id: "pipeline-quality", label: "Pipeline Quality" },
+    { id: "revenue-concentration", label: "Revenue Concentration" },
+    { id: "demand-sustainability", label: "Demand Sustainability" },
+    { id: "pipeline-table", label: "Pipeline Table" },
   ]
 
   return (
@@ -3379,24 +6138,19 @@ const MarketingSales = () => {
         {isInvestorView && (
           <div
             style={{
-              backgroundColor: "#e8f5e9",
-              padding: "16px 20px",
-              margin: "50px 0 20px 0",
-              borderRadius: "8px",
-              border: "2px solid #4caf50",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
+              backgroundColor: "#fff3cd",
+              border: "1px solid #ffeaa7",
+              padding: "15px",
+              borderRadius: "6px",
+              marginBottom: "20px",
+              textAlign: "center",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <span style={{ fontSize: "20px" }}>👁️</span>
-              <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
-                Investor View: Viewing {viewingSMEName}'s Marketing & Sales
-              </span>
-            </div>
+            <p style={{ color: "#856404", margin: "0 0 10px 0" }}>
+              You are viewing this dashboard in read-only investor mode.
+            </p>
             <button
-              onClick={handleExitInvestorView}
+              onClick={() => setIsInvestorView(false)}
               style={{
                 padding: "8px 16px",
                 backgroundColor: "#4caf50",
@@ -3420,12 +6174,122 @@ const MarketingSales = () => {
           </div>
         )}
 
-        <div style={{ padding: "20px" }}>
+        <div style={{ padding: "20px", paddingTop: "40px", marginLeft: "20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+            <h1 style={{ color: "#5d4037", fontSize: "32px", fontWeight: "700", margin: 0 }}>
+              Marketing & Pipeline Performance
+            </h1>
+            
+            <button
+              onClick={() => setShowFullDescription(!showFullDescription)}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#7d5a50",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "13px",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {showFullDescription ? "See less" : "See more"}
+            </button>
+          </div>
+
+          {/* Marketing & Pipeline Performance Description */}
+          {showFullDescription && (
+            <div
+              style={{
+                backgroundColor: "#fdfcfb",
+                padding: "20px",
+                borderRadius: "8px",
+                boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+                marginBottom: "30px",
+              }}
+            >
+              <div style={{ padding: "50px", paddingTop: "100px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginTop: "-80px" }}>
+                  <div>
+                    <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
+                      What this dashboard DOES
+                    </h3>
+                    <ul style={{ color: "#4a352f", fontSize: "14px", lineHeight: "1.7", margin: 0, paddingLeft: "20px" }}>
+                      <li>Assesses pipeline visibility, quality, and concentration</li>
+                      <li>Evaluates demand risk and market exposure</li>
+                      <li>Monitors lead generation effectiveness and conversion rates</li>
+                      <li>Measures customer acquisition cost and marketing ROI</li>
+                      <li>Tracks sales cycle efficiency and pipeline velocity</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
+                      What this dashboard does NOT do
+                    </h3>
+                    <ul style={{ color: "#4a352f", fontSize: "14px", lineHeight: "1.7", margin: 0, paddingLeft: "20px" }}>
+                      <li>Run marketing campaigns or ad management</li>
+                      <li>Manage CRM or customer relationship tracking</li>
+                      <li>Track social media engagement or content scheduling</li>
+                      <li>Email marketing automation or lead nurturing</li>
+                      <li>SEO optimization or website analytics management</li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: "30px", paddingTop: "20px", borderTop: "1px solid #e8ddd4" }}>
+                  <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
+                    Key Performance Dimensions
+                  </h3>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+                    <div>
+                      <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
+                        Pipeline Visibility & Quality
+                      </h4>
+                      <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
+                        Monitor lead quality, pipeline coverage, and deal health metrics
+                      </p>
+                    </div>
+                    <div>
+                      <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
+                        Demand Risk & Concentration
+                      </h4>
+                      <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
+                        Assess customer concentration, market dependence, and revenue predictability
+                      </p>
+                    </div>
+                    <div>
+                      <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
+                        Conversion Efficiency
+                      </h4>
+                      <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
+                        Track lead-to-opportunity and opportunity-to-close conversion rates
+                      </p>
+                    </div>
+                    <div>
+                      <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
+                        Marketing Effectiveness
+                      </h4>
+                      <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
+                        Measure channel performance, cost per acquisition, and marketing ROI
+                      </p>
+                    </div>
+                  </div>
+                  <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", marginTop: "15px" }}>
+                    This dashboard provides strategic insights into your marketing funnel and sales pipeline to identify growth opportunities and mitigate revenue risks.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Section Buttons */}
           <div
             style={{
               display: "flex",
               gap: "10px",
-              margin: "50px 0 20px 0",
+              margin: "20px 0",
               padding: "15px",
               backgroundColor: "#fdfcfb",
               borderRadius: "8px",
@@ -3448,7 +6312,7 @@ const MarketingSales = () => {
                   fontWeight: "600",
                   fontSize: "14px",
                   transition: "all 0.3s ease",
-                  minWidth: "100px",
+                  minWidth: "150px",
                   textAlign: "center",
                   flexShrink: 0,
                 }}
@@ -3458,58 +6322,26 @@ const MarketingSales = () => {
             ))}
           </div>
 
-          <NewLeads 
-            activeSection={activeSection} 
-            currentUser={currentUser} 
-            isInvestorView={isInvestorView} 
-            financialYearStartMonth={financialYearStartMonth}
+          <PipelineVisibility activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
+          <PipelineSufficiency
+            activeSection={activeSection}
+            currentUser={currentUser}
+            isInvestorView={isInvestorView}
           />
-          <LeadSourceAnalysis 
-            activeSection={activeSection} 
-            currentUser={currentUser} 
-            isInvestorView={isInvestorView} 
+          <PipelineQuality activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
+          <RevenueConcentration
+            activeSection={activeSection}
+            currentUser={currentUser}
+            isInvestorView={isInvestorView}
           />
-          <CostPerLead 
-            activeSection={activeSection} 
-            currentUser={currentUser} 
-            isInvestorView={isInvestorView} 
+          <DemandSustainability
+            activeSection={activeSection}
+            currentUser={currentUser}
+            isInvestorView={isInvestorView}
           />
-          <CustomerAcquisitionCost 
-            activeSection={activeSection} 
-            currentUser={currentUser} 
-            isInvestorView={isInvestorView} 
-            financialYearStartMonth={financialYearStartMonth}
-          />
-          <CampaignROI 
-            activeSection={activeSection} 
-            currentUser={currentUser} 
-            isInvestorView={isInvestorView} 
-          />
-          <ConversionRate 
-            activeSection={activeSection} 
-            currentUser={currentUser} 
-            isInvestorView={isInvestorView} 
-          />
-          <RetentionLTV 
-            activeSection={activeSection} 
-            currentUser={currentUser} 
-            isInvestorView={isInvestorView} 
-          />
-          <SalesVelocity 
-            activeSection={activeSection} 
-            currentUser={currentUser} 
-            isInvestorView={isInvestorView} 
-            financialYearStartMonth={financialYearStartMonth}
-          />
-          <RepeatCustomers 
-            activeSection={activeSection} 
-            currentUser={currentUser} 
-            isInvestorView={isInvestorView} 
-          />
+          <PipelineTable activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
         </div>
       </div>
     </div>
   )
 }
-
-export default MarketingSales

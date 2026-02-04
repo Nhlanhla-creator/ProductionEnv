@@ -1,10 +1,10 @@
 // tabs/PortfolioOverview.js
 import React, { useState, useEffect } from 'react';
 import { Bar, Pie, Doughnut, Line } from 'react-chartjs-2';
-import { FiEye, FiArrowUp, FiArrowDown, FiEdit, FiGrid, FiCheck } from 'react-icons/fi';
+import { FiEye, FiArrowUp, FiArrowDown, FiEdit } from 'react-icons/fi';
 import { db, auth } from '../../firebaseConfig'; 
-import { collection, query, where, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
-import {
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { 
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
@@ -36,153 +36,11 @@ const styles = `
   width: 100%;
 }
 
-.controls-row {
-  margin-bottom: 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 10px;
-}
-
 .time-view-controls {
+  margin-bottom: 20px;
   display: flex;
   justify-content: flex-end;
-}
-
-.chart-selection-controls {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  position: relative;
-}
-
-.chart-selector-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: #f5f5f5;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #666;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.chart-selector-btn:hover {
-  background: #e0e0e0;
-}
-
-.chart-selector-btn.active {
-  background-color: #7d5a36;
-  color: white;
-}
-
-.chart-selector-popup {
-  position: absolute;
-  top: 40px;
-  left: 0;
-  background: white;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
-  z-index: 1000;
-  min-width: 300px;
-  border: 1px solid #e0e0e0;
-}
-
-.chart-selector-popup h4 {
-  margin: 0 0 15px 0;
-  color: #5e3f26;
-  font-size: 16px;
-  font-weight: 600;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #ede4d8;
-}
-
-.chart-selection-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.chart-selection-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: #f8f9fa;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.chart-selection-item:hover {
-  background: #e9ecef;
-}
-
-.chart-selection-item.selected {
-  background: #e8f5e8;
-  border: 1px solid #4CAF50;
-}
-
-.chart-selection-checkbox {
-  width: 18px;
-  height: 18px;
-  border: 2px solid #7d5a36;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.chart-selection-checkbox.checked {
-  background: #7d5a36;
-  color: white;
-}
-
-.chart-selection-label {
-  font-size: 13px;
-  color: #333;
-  font-weight: 500;
-}
-
-.chart-selection-actions {
-  display: flex;
-  gap: 10px;
-  justify-content: space-between;
-}
-
-.chart-selection-btn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  flex: 1;
-}
-
-.chart-selection-btn.primary {
-  background-color: #7d5a36;
-  color: white;
-}
-
-.chart-selection-btn.primary:hover {
-  background-color: #5e3f26;
-}
-
-.chart-selection-btn.secondary {
-  background-color: #f5f5f5;
-  color: #666;
-}
-
-.chart-selection-btn.secondary:hover {
-  background-color: #e0e0e0;
+  padding: 0 10px;
 }
 
 .time-view-selector {
@@ -232,31 +90,6 @@ const styles = `
   gap: 20px;
   padding: 0 10px;
 }
-
-/* Dynamic grid classes for chart selection */
-.charts-grid-dynamic {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  padding: 0 10px;
-}
-
-.charts-top-row,
-.charts-bottom-row {
-  display: grid;
-  gap: 20px;
-}
-
-/* Dynamic grid classes based on number of charts */
-.charts-top-row-4 { grid-template-columns: repeat(4, 1fr); }
-.charts-top-row-3 { grid-template-columns: repeat(3, 1fr); }
-.charts-top-row-2 { grid-template-columns: repeat(2, 1fr); }
-.charts-top-row-1 { grid-template-columns: 1fr; }
-
-.charts-bottom-row-4 { grid-template-columns: repeat(4, 1fr); }
-.charts-bottom-row-3 { grid-template-columns: repeat(3, 1fr); }
-.charts-bottom-row-2 { grid-template-columns: repeat(2, 1fr); }
-.charts-bottom-row-1 { grid-template-columns: 1fr; }
 
 .top-row,
 .bottom-row {
@@ -802,9 +635,7 @@ const styles = `
 /* Responsive Design */
 @media (max-width: 1200px) {
   .top-row,
-  .bottom-row,
-  .charts-top-row-4,
-  .charts-bottom-row-4 {
+  .bottom-row {
     grid-template-columns: repeat(2, 1fr);
   }
   
@@ -821,13 +652,7 @@ const styles = `
 
 @media (max-width: 768px) {
   .top-row,
-  .bottom-row,
-  .charts-top-row-4,
-  .charts-top-row-3,
-  .charts-top-row-2,
-  .charts-bottom-row-4,
-  .charts-bottom-row-3,
-  .charts-bottom-row-2 {
+  .bottom-row {
     grid-template-columns: 1fr;
   }
   
@@ -867,25 +692,6 @@ const styles = `
   .form-row {
     grid-template-columns: 1fr;
   }
-  
-  .controls-row {
-    flex-direction: column;
-    gap: 15px;
-    align-items: stretch;
-  }
-  
-  .chart-selection-controls {
-    justify-content: space-between;
-  }
-  
-  .chart-selector-popup {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 90%;
-    max-width: 400px;
-  }
 }
 
 @media (max-width: 576px) {
@@ -895,8 +701,7 @@ const styles = `
   }
   
   .time-view-controls,
-  .charts-grid-4x4,
-  .charts-grid-dynamic {
+  .charts-grid-4x4 {
     padding: 0 5px;
   }
   
@@ -911,10 +716,6 @@ const styles = `
   .big-score-value-simple,
   .readiness-value-simple {
     font-size: 32px;
-  }
-  
-  .chart-selection-grid {
-    grid-template-columns: 1fr;
   }
 }
 `;
@@ -1106,40 +907,6 @@ const parseAmountToNumber = (amountString) => {
   } catch (error) {
     console.error('❌ Error parsing amount:', amountString, error);
     return 0;
-  }
-};
-
-// Save user preferences to Firebase
-const saveUserChartPreferences = async (userId, preferences) => {
-  try {
-    const userPrefsRef = doc(db, "userPreferences", userId);
-    await setDoc(userPrefsRef, {
-      portfolioChartPreferences: preferences,
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
-    console.log('✅ Chart preferences saved to Firebase');
-  } catch (error) {
-    console.error('❌ Error saving chart preferences:', error);
-  }
-};
-
-// Load user preferences from Firebase
-const loadUserChartPreferences = async (userId) => {
-  try {
-    const userPrefsRef = doc(db, "userPreferences", userId);
-    const userPrefsSnap = await getDoc(userPrefsRef);
-    
-    if (userPrefsSnap.exists()) {
-      const preferences = userPrefsSnap.data().portfolioChartPreferences;
-      console.log('✅ Chart preferences loaded from Firebase:', preferences);
-      return preferences;
-    } else {
-      console.log('⚠️ No chart preferences found, using defaults');
-      return null;
-    }
-  } catch (error) {
-    console.error('❌ Error loading chart preferences:', error);
-    return null;
   }
 };
 
@@ -2285,18 +2052,6 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
   const [timeToFundView, setTimeToFundView] = useState('Quarterly');
   const [fundingFacilitatedData, setFundingFacilitatedData] = useState([15, 18, 22, 20, 25, 28]);
   const [showFundingInput, setShowFundingInput] = useState(false);
-  const [showChartSelector, setShowChartSelector] = useState(false);
-  const [selectedCharts, setSelectedCharts] = useState({
-    portfolioValue: true,
-    activeSMEs: true,
-    bigScore: true,
-    fundingReady: true,
-    fundingFacilitated: true,
-    timeToFund: true,
-    followOnFunding: true,
-    exitRepayment: true
-  });
-  
   const [portfolioData, setPortfolioData] = useState({
     activeSMEs: { 'Micro': 0, 'Small': 0, 'Medium': 0, 'Large': 0 },
     averageBIGScore: { averageScore: 0, individualScores: [], totalSMEs: 0 },
@@ -2332,39 +2087,6 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
     loading: true,
     usingFallback: false
   });
-
-  // Load chart preferences on component mount
-  useEffect(() => {
-    const loadPreferences = async () => {
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        const savedPreferences = await loadUserChartPreferences(currentUser.uid);
-        if (savedPreferences) {
-          setSelectedCharts(savedPreferences.selectedCharts || selectedCharts);
-        }
-      }
-    };
-    
-    loadPreferences();
-  }, []);
-
-  // Save preferences when they change
-  useEffect(() => {
-    const savePreferences = async () => {
-      const currentUser = auth.currentUser;
-      if (currentUser && !portfolioData.loading) {
-        const preferences = {
-          selectedCharts,
-          updatedAt: new Date().toISOString()
-        };
-        await saveUserChartPreferences(currentUser.uid, preferences);
-      }
-    };
-
-    // Debounce the save to prevent too many writes
-    const timeoutId = setTimeout(savePreferences, 1000);
-    return () => clearTimeout(timeoutId);
-  }, [selectedCharts]);
 
   // Fetch portfolio data when component mounts
   useEffect(() => {
@@ -2552,80 +2274,6 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
       ))}
     </div>
   );
-
-  // Chart Selection Component
-  const ChartSelectionPopup = () => {
-    const chartOptions = [
-      { id: 'portfolioValue', label: 'Portfolio Value' },
-      { id: 'activeSMEs', label: 'Active SMEs' },
-      { id: 'bigScore', label: 'BIG Score' },
-      { id: 'fundingReady', label: 'Funding Ready %' },
-      { id: 'fundingFacilitated', label: 'Funding Facilitated' },
-      { id: 'timeToFund', label: 'Time to Fund' },
-      { id: 'followOnFunding', label: 'Follow-on Funding' },
-      { id: 'exitRepayment', label: 'Exit/Repayment' }
-    ];
-
-    const handleToggleChart = (chartId) => {
-      setSelectedCharts(prev => ({
-        ...prev,
-        [chartId]: !prev[chartId]
-      }));
-    };
-
-    const handleSelectAll = () => {
-      const allSelected = {};
-      chartOptions.forEach(option => {
-        allSelected[option.id] = true;
-      });
-      setSelectedCharts(allSelected);
-    };
-
-    const handleDeselectAll = () => {
-      const noneSelected = {};
-      chartOptions.forEach(option => {
-        noneSelected[option.id] = false;
-      });
-      setSelectedCharts(noneSelected);
-    };
-
-    const handleSaveSelection = () => {
-      setShowChartSelector(false);
-    };
-
-    const selectedCount = Object.values(selectedCharts).filter(Boolean).length;
-
-    return (
-      <div className="chart-selector-popup">
-        <h4>Select Charts to Display ({selectedCount} selected)</h4>
-        <div className="chart-selection-grid">
-          {chartOptions.map(option => (
-            <div
-              key={option.id}
-              className={`chart-selection-item ${selectedCharts[option.id] ? 'selected' : ''}`}
-              onClick={() => handleToggleChart(option.id)}
-            >
-              <div className={`chart-selection-checkbox ${selectedCharts[option.id] ? 'checked' : ''}`}>
-                {selectedCharts[option.id] && <FiCheck size={12} />}
-              </div>
-              <span className="chart-selection-label">{option.label}</span>
-            </div>
-          ))}
-        </div>
-        <div className="chart-selection-actions">
-          <button className="chart-selection-btn secondary" onClick={handleDeselectAll}>
-            Deselect All
-          </button>
-          <button className="chart-selection-btn secondary" onClick={handleSelectAll}>
-            Select All
-          </button>
-          <button className="chart-selection-btn primary" onClick={handleSaveSelection}>
-            Apply
-          </button>
-        </div>
-      </div>
-    );
-  };
 
   // Data generation functions
   const generateBarData = (labels, data, label, colorIndex) => ({
@@ -3710,203 +3358,75 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
     );
   };
 
-  // Get selected charts in the correct order
-  const selectedChartComponents = [];
-  
-  // Add portfolio value chart if selected
-  if (selectedCharts.portfolioValue) {
-    selectedChartComponents.push({
-      id: 'portfolioValue',
-      component: (
-        <BarChartWithTitle
-          key="portfolioValue"
-          data={generateBarData(
-            getTimeLabels(timeToFundView, portfolioData.portfolioValue.financialYearStartMonth),
-            getTimeData(timeToFundView, portfolioValueData),
-            'Portfolio Value (R millions)',
-            0
-          )}
-          title="Your Successful Deals Portfolio Value"
-          chartTitle={`Investment values from successful deals (${timeToFundView.toLowerCase()} view in R millions)`}
-          chartId="total-portfolio-value"
-        />
-      )
-    });
-  }
-
-  // Add active SMEs chart if selected
-  if (selectedCharts.activeSMEs) {
-    selectedChartComponents.push({
-      id: 'activeSMEs',
-      component: (
-        <ActiveSMEsPieChart
-          key="activeSMEs"
-          title="SMEs in Successful Deals"
-        />
-      )
-    });
-  }
-
-  // Add BIG score chart if selected
-  if (selectedCharts.bigScore) {
-    selectedChartComponents.push({
-      id: 'bigScore',
-      component: (
-        <BIGScoreInfographic 
-          key="bigScore"
-          value={portfolioData.averageBIGScore.averageScore} 
-          target={80} 
-          title="Avg. BIG Score - Successful Deals"
-        />
-      )
-    });
-  }
-
-  // Add funding ready chart if selected
-  if (selectedCharts.fundingReady) {
-    selectedChartComponents.push({
-      id: 'fundingReady',
-      component: (
-        <FundingReadyCircular 
-          key="fundingReady"
-          value={portfolioData.fundingReadyPercentage.fundingReadyPercentage} 
-          target={75} 
-          title='% Portfolio "Funding Ready"'
-        />
-      )
-    });
-  }
-
-  // Add funding facilitated chart if selected
-  if (selectedCharts.fundingFacilitated) {
-    selectedChartComponents.push({
-      id: 'fundingFacilitated',
-      component: (
-        <FundingFacilitatedChart
-          key="fundingFacilitated"
-          title="Funding Facilitated - Successful Deals"
-        />
-      )
-    });
-  }
-
-  // Add time to fund chart if selected
-  if (selectedCharts.timeToFund) {
-    selectedChartComponents.push({
-      id: 'timeToFund',
-      component: (
-        <TimeToFundChart
-          key="timeToFund"
-          value={portfolioData.timeToFund.averageDays}
-          target={30}
-          data={getTimeData(timeToFundView, timeToFundData)}
-          title="Avg. Time-to-Fund - Successful Deals"
-        />
-      )
-    });
-  }
-
-  // Add follow-on funding chart if selected
-  if (selectedCharts.followOnFunding) {
-    selectedChartComponents.push({
-      id: 'followOnFunding',
-      component: (
-        <EnhancedFollowOnFundingChart
-          key="followOnFunding"
-          value={27}
-          target={30}
-          data={[22, 24, 25, 27]}
-          title="Follow-on Funding Rate - Successful Deals"
-        />
-      )
-    });
-  }
-
-  // Add exit repayment chart if selected
-  if (selectedCharts.exitRepayment) {
-    selectedChartComponents.push({
-      id: 'exitRepayment',
-      component: (
-        <ExitRepaymentChart
-          key="exitRepayment"
-          value={12}
-          target={15}
-          data={[10, 11, 12, 12]}
-          title="Exit / Repayment Ratio - Successful Deals"
-        />
-      )
-    });
-  }
-
-  // Split charts into top and bottom rows
-  const selectedCount = selectedChartComponents.length;
-  const topRowCharts = selectedChartComponents.slice(0, Math.min(4, selectedCount));
-  const bottomRowCharts = selectedChartComponents.slice(4);
-
-  // Determine grid class based on number of charts
-  const getGridClass = (count, prefix) => {
-    if (count === 0) return '';
-    if (count === 1) return `${prefix}-1`;
-    if (count === 2) return `${prefix}-2`;
-    if (count === 3) return `${prefix}-3`;
-    return `${prefix}-4`;
-  };
-
-  const topRowClass = getGridClass(topRowCharts.length, 'charts-top-row');
-  const bottomRowClass = getGridClass(bottomRowCharts.length, 'charts-bottom-row');
-
   return (
     <div className="portfolio-overview">
-      <div className="controls-row">
-        <div className="chart-selection-controls">
-          <div style={{ position: 'relative' }}>
-            <button 
-              className={`chart-selector-btn ${showChartSelector ? 'active' : ''}`}
-              onClick={() => setShowChartSelector(!showChartSelector)}
-              title="Select charts to display"
-            >
-              <FiGrid />
-              Select Charts ({Object.values(selectedCharts).filter(Boolean).length} selected)
-            </button>
-            {showChartSelector && <ChartSelectionPopup />}
-          </div>
+      <div className="time-view-controls">
+        <TimeViewSelector 
+          currentView={timeToFundView} 
+          onViewChange={setTimeToFundView}
+        />
+      </div>
+      
+      {/* TOP ROW - 4 charts */}
+      <div className="charts-grid-4x4">
+        <div className="top-row">
+          <BarChartWithTitle
+            data={generateBarData(
+              getTimeLabels(timeToFundView, portfolioData.portfolioValue.financialYearStartMonth),
+              getTimeData(timeToFundView, portfolioValueData),
+              'Portfolio Value (R millions)',
+              0
+            )}
+            title="Your Successful Deals Portfolio Value"
+            chartTitle={`Investment values from successful deals (${timeToFundView.toLowerCase()} view in R millions)`}
+            chartId="total-portfolio-value"
+          />
+
+          <ActiveSMEsPieChart
+            title="SMEs in Successful Deals"
+          />
+
+          <BIGScoreInfographic 
+            value={portfolioData.averageBIGScore.averageScore} 
+            target={80} 
+            title="Avg. BIG Score - Successful Deals"
+          />
+
+          <FundingReadyCircular 
+            value={portfolioData.fundingReadyPercentage.fundingReadyPercentage} 
+            target={75} 
+            title='% Portfolio "Funding Ready"'
+          />
         </div>
-        
-        <div className="time-view-controls">
-          <TimeViewSelector 
-            currentView={timeToFundView} 
-            onViewChange={setTimeToFundView}
+
+        {/* BOTTOM ROW - 4 charts */}
+        <div className="bottom-row">
+          <FundingFacilitatedChart
+            title="Funding Facilitated - Successful Deals"
+          />
+
+          <TimeToFundChart
+            value={portfolioData.timeToFund.averageDays}
+            target={30}
+            data={getTimeData(timeToFundView, timeToFundData)}
+            title="Avg. Time-to-Fund - Successful Deals"
+          />
+
+          <EnhancedFollowOnFundingChart
+            value={27}
+            target={30}
+            data={[22, 24, 25, 27]}
+            title="Follow-on Funding Rate - Successful Deals"
+          />
+
+          <ExitRepaymentChart
+            value={12}
+            target={15}
+            data={[10, 11, 12, 12]}
+            title="Exit / Repayment Ratio - Successful Deals"
           />
         </div>
       </div>
-      
-      {selectedCount === 0 ? (
-        <div style={{
-          textAlign: 'center',
-          padding: '60px 20px',
-          color: '#666',
-          fontSize: '16px',
-          background: '#f8f9fa',
-          borderRadius: '8px',
-          margin: '20px 10px'
-        }}>
-          <p>No charts selected. Please select charts to display using the "Select Charts" button above.</p>
-        </div>
-      ) : (
-        <div className="charts-grid-dynamic">
-          {topRowCharts.length > 0 && (
-            <div className={`charts-top-row ${topRowClass}`}>
-              {topRowCharts.map(chart => chart.component)}
-            </div>
-          )}
-          
-          {bottomRowCharts.length > 0 && (
-            <div className={`charts-bottom-row ${bottomRowClass}`}>
-              {bottomRowCharts.map(chart => chart.component)}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 };

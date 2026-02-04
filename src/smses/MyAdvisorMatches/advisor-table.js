@@ -437,25 +437,13 @@ export function AdvisorTable({ filters, onConnectionRequested, onCountChange }) 
 
   const [matchBreakdownModal, setMatchBreakdownModal] = useState(null)
 
-  // Add this useEffect to listen for status updates
-  useEffect(() => {
-    const user = auth.currentUser
-    if (!user) return
+  // Company member states
+const [companyOwnerId, setCompanyOwnerId] = useState(null)
+const [isCompanyMember, setIsCompanyMember] = useState(false)
+const [effectiveUserId, setEffectiveUserId] = useState(null)
+const [userRole, setUserRole] = useState(null)
 
-    const unsubscribe = onSnapshot(
-      query(collection(db, "SmeAdvisorApplications"), where("smeId", "==", user.uid)),
-      (snapshot) => {
-        const statusUpdates = {}
-        snapshot.forEach((doc) => {
-          const data = doc.data()
-          statusUpdates[data.advisorId] = data.status
-        })
-        setStatuses(statusUpdates)
-      },
-    )
-
-    return () => unsubscribe()
-  }, [])
+ 
 
   const mapFirestoreAdvisorToTable = (data, id) => {
     const formData = data.formData || {}
@@ -494,6 +482,75 @@ export function AdvisorTable({ filters, onConnectionRequested, onCountChange }) 
     setMounted(true)
     return () => setMounted(false)
   }, [])
+
+  // Check company membership on mount
+useEffect(() => {
+  const checkCompanyMembership = async () => {
+    const user = auth.currentUser
+    if (!user) return
+
+    try {
+      const userDocRef = doc(db, "users", user.uid)
+      const userDocSnap = await getDoc(userDocRef)
+      
+      if (userDocSnap.exists()) {
+        const userData = userDocSnap.data()
+        const userCompanyId = userData.companyId
+        const userCompanyRole = userData.userRole
+        
+        if (userCompanyId) {
+          const companyDocRef = doc(db, "companies", userCompanyId)
+          const companyDocSnap = await getDoc(companyDocRef)
+          
+          if (companyDocSnap.exists()) {
+            const companyData = companyDocSnap.data()
+            const ownerId = companyData.createdBy
+            
+            setUserRole(userCompanyRole || 'viewer')
+            
+            if (ownerId === user.uid) {
+              setIsCompanyMember(false)
+              setEffectiveUserId(user.uid)
+            } else {
+              setIsCompanyMember(true)
+              setCompanyOwnerId(ownerId)
+              setEffectiveUserId(ownerId)
+            }
+          }
+        } else {
+          setIsCompanyMember(false)
+          setEffectiveUserId(user.uid)
+          setUserRole('owner')
+        }
+      }
+    } catch (error) {
+      console.error("Error checking company membership:", error)
+      setEffectiveUserId(user.uid)
+      setUserRole('owner')
+    }
+  }
+
+  checkCompanyMembership()
+}, [])
+
+ // Add this useEffect to listen for status updates
+useEffect(() => {
+  if (!effectiveUserId) return
+
+  const unsubscribe = onSnapshot(
+    query(collection(db, "SmeAdvisorApplications"), where("smeId", "==", effectiveUserId)),
+      (snapshot) => {
+        const statusUpdates = {}
+        snapshot.forEach((doc) => {
+          const data = doc.data()
+          statusUpdates[data.advisorId] = data.status
+        })
+        setStatuses(statusUpdates)
+      },
+    )
+
+    return () => unsubscribe()
+}, [effectiveUserId])
 
   // ---- Functional-Expertise helpers ----
 const toArr = (v) => (Array.isArray(v) ? v : v ? [v] : []);
@@ -641,16 +698,18 @@ const advisorFE = [
     }
   }
 
-  useEffect(() => {
+ useEffect(() => {
   const fetchAdvisors = async () => {
+    if (!effectiveUserId) return
+    
     setLoading(true)
     try {
       const snapshot = await getDocs(collection(db, "advisorProfiles"))
       const user = auth.currentUser
       if (!user) return
 
-      const smeDoc = await getDoc(doc(db, "universalProfiles", user.uid))
-      const advisoryApp = await getDoc(doc(db, "advisoryApplications", user.uid))
+      const smeDoc = await getDoc(doc(db, "universalProfiles", effectiveUserId))
+      const advisoryApp = await getDoc(doc(db, "advisoryApplications", effectiveUserId))
 
       const profileData = {
         ...(smeDoc.exists() ? smeDoc.data() : {}),
@@ -684,19 +743,30 @@ const advisorFE = [
   }
 
   fetchAdvisors()
-}, [onCountChange])
+}, [onCountChange, effectiveUserId])
 
-  const handleConnectClick = async (advisor) => {
-    const user = auth.currentUser
-    if (!user) return
+const handleConnectClick = async (advisor) => {
+  const user = auth.currentUser
+  if (!user) return
 
-    const smeUserId = user.uid
-    const advisorUserId = advisor.id
+  // Check permissions for company members
+  if (isCompanyMember && !['owner', 'admin'].includes(userRole)) {
+    setNotification({
+      type: "warning",
+      message: "Only company owners and admins can connect with advisors.",
+    })
+    return
+  }
+
+  const smeUserId = effectiveUserId
+  const advisorUserId = advisor.id
 
     // Initialize matchData first
     const matchData = {
       advisorId: advisorUserId,
       smeId: smeUserId,
+      submittedBy: user.uid,              // ADD THIS
+  submittedByRole: userRole,  
       createdAt: serverTimestamp(),
       status: "Contacted",
       matchPercentage: advisor.matchPercentage || 0,
@@ -895,13 +965,12 @@ Best regards,\nBIG Marketplace Africa Team`;
     }
   }
 
-  useEffect(() => {
-    const fetchAdvisorApplications = async () => {
-      const user = auth.currentUser
-      if (!user) return
+useEffect(() => {
+  const fetchAdvisorApplications = async () => {
+    if (!effectiveUserId) return
 
-      const snapshot = await getDocs(collection(db, "SmeAdvisorApplications"))
-      const matches = snapshot.docs.filter((doc) => doc.data().smeId === user.uid).map((doc) => doc.data())
+    const snapshot = await getDocs(collection(db, "SmeAdvisorApplications"))
+    const matches = snapshot.docs.filter((doc) => doc.data().smeId === effectiveUserId).map((doc) => doc.data())
 
       const updatedStatuses = {}
       matches.forEach((match) => {
@@ -911,7 +980,7 @@ Best regards,\nBIG Marketplace Africa Team`;
     }
 
     fetchAdvisorApplications()
-  }, [])
+}, [effectiveUserId])
 
   const handleViewClick = (advisor) => {
     setModalAdvisor(advisor)
@@ -979,8 +1048,8 @@ const hasTooManyMissingFields = (advisor) => {
   const uniqueStatuses = [...new Set(advisors.map((adv) => statuses[adv.id] || adv.status).filter(Boolean))]
 
   const filteredAdvisors = advisors.filter((advisor) => {
-      const user = auth.currentUser;
-  if (user && advisor.id === user.uid) {
+  const user = auth.currentUser;
+  if ((user && advisor.id === user.uid) || (effectiveUserId && advisor.id === effectiveUserId)) {
     return false;
   }
     const currentStatus = statuses[advisor.id] || advisor.status
@@ -1048,6 +1117,47 @@ const hasTooManyMissingFields = (advisor) => {
           transition: "filter 0.2s ease",
         }}
       >
+
+        {/* Company Member Banner */}
+{isCompanyMember && (
+  <div style={{
+    backgroundColor: userRole === 'viewer' ? '#fef3c7' : '#e0f2fe',
+    border: `2px solid ${userRole === 'viewer' ? '#f59e0b' : '#0369a1'}`,
+    borderRadius: '12px',
+    padding: '16px 24px',
+    marginBottom: '24px',
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+  }}>
+    <div style={{ 
+      display: 'flex', 
+      alignItems: 'center', 
+      gap: '12px', 
+      marginBottom: '8px' 
+    }}>
+      <span style={{ fontSize: '24px' }}>🤝</span>
+      <h3 style={{ 
+        margin: 0, 
+        color: userRole === 'viewer' ? '#f59e0b' : '#0369a1', 
+        fontWeight: '700',
+        fontSize: '1.1rem'
+      }}>
+        Company Advisor Connections - Role: {userRole?.toUpperCase()}
+      </h3>
+    </div>
+    <p style={{ 
+      margin: 0, 
+      color: '#4a5568', 
+      fontSize: '0.95rem',
+      lineHeight: '1.5'
+    }}>
+      {userRole === 'owner' && 'You can view and manage all company advisor connections.'}
+      {userRole === 'admin' && 'You can view and connect with advisors for the company.'}
+      {userRole === 'manager' && 'You can view advisor connections and track their progress.'}
+      {userRole === 'employee' && 'You can view company advisor connections.'}
+      {userRole === 'viewer' && 'You have read-only access to company advisor connections.'}
+    </p>
+  </div>
+)}
         {/* Notification area */}
         {notification && (
           <div

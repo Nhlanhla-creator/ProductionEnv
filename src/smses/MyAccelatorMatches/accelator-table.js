@@ -374,6 +374,13 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
   const [nextStageFilter, setNextStageFilter] = useState("")
   const [minMatchFilter, setMinMatchFilter] = useState(0)
 
+  // Company member states
+const [companyOwnerId, setCompanyOwnerId] = useState(null)
+const [isCompanyMember, setIsCompanyMember] = useState(false)
+const [effectiveUserId, setEffectiveUserId] = useState(null)
+const [userRole, setUserRole] = useState(null)
+
+
   const hasApplication = (acceleratorId) => {
     return statuses[acceleratorId] || (pipelineStages[acceleratorId] && pipelineStages[acceleratorId] !== "Match")
   }
@@ -384,6 +391,57 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
     setMounted(true)
     return () => setMounted(false)
   }, [])
+// Check company membership on mount
+useEffect(() => {
+  const checkCompanyMembership = async () => {
+    const user = auth.currentUser
+    if (!user) return
+
+    try {
+      const userDocRef = doc(db, "users", user.uid)
+      const userDocSnap = await getDoc(userDocRef)
+      
+      if (userDocSnap.exists()) {
+        const userData = userDocSnap.data()
+        const userCompanyId = userData.companyId
+        const userCompanyRole = userData.userRole
+        
+        if (userCompanyId) {
+          const companyDocRef = doc(db, "companies", userCompanyId)
+          const companyDocSnap = await getDoc(companyDocRef)
+          
+          if (companyDocSnap.exists()) {
+            const companyData = companyDocSnap.data()
+            const ownerId = companyData.createdBy
+            
+            setUserRole(userCompanyRole || 'viewer')
+            
+            if (ownerId === user.uid) {
+              setIsCompanyMember(false)
+              setEffectiveUserId(user.uid)
+            } else {
+              setIsCompanyMember(true)
+              setCompanyOwnerId(ownerId)
+              setEffectiveUserId(ownerId)
+            }
+          }
+        } else {
+          setIsCompanyMember(false)
+          setEffectiveUserId(user.uid)
+          setUserRole('owner')
+        }
+      }
+    } catch (error) {
+      console.error("Error checking company membership:", error)
+      setEffectiveUserId(user.uid)
+      setUserRole('owner')
+    }
+  }
+
+  checkCompanyMembership()
+}, [])
+
+
 
   const hasTooManyMissingFields = (accelerator) => {
     const fieldsToCheck = [
@@ -518,17 +576,16 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
     }
   }
 
-  const fetchAccelerators = async () => {
-    if (!isMountedRef.current) return
+ const fetchAccelerators = async () => {
+  if (!isMountedRef.current || !effectiveUserId) return
 
     setLoading(true)
     try {
       const user = auth.currentUser
       if (!user) return
 
-      const smeId = user.uid
-      const currentUserId = user.uid
-      const smeDoc = await getDoc(doc(db, "universalProfiles", smeId))
+      // Use effectiveUserId for SME profile
+const smeDoc = await getDoc(doc(db, "universalProfiles", effectiveUserId))
       const smeData = smeDoc.exists() ? smeDoc.data() : {}
 
       // Get fresh data from Firebase
@@ -538,9 +595,10 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
         snapshot.docs.flatMap(async (docSnap) => {
           const catalystId = docSnap.id
           
-          if (catalystId === currentUserId) {
-            return []
-          }
+          // Skip current user's own profile
+if (catalystId === user.uid || catalystId === effectiveUserId) {
+  return []
+}
           
           const data = docSnap.data()
           const formData = data.formData || {}
@@ -550,7 +608,7 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
 
           // If no programs, create one entry with default values
           if (programs.length === 0) {
-            const applicationId = `${catalystId}_${smeId}`
+            const applicationId = `${catalystId}_${effectiveUserId}`
             const appDocRef = doc(db, "catalystApplications", applicationId)
             const appDocSnap = await getDoc(appDocRef)
             const appData = appDocSnap.exists() ? appDocSnap.data() : null
@@ -580,7 +638,7 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
           // Create an entry for each program
           return await Promise.all(
             programs.map(async (program, index) => {
-              const applicationId = `${catalystId}_${smeId}_${index}`
+              const applicationId = `${catalystId}_${effectiveUserId}_${index}`
               const appDocRef = doc(db, "catalystApplications", applicationId)
               const appDocSnap = await getDoc(appDocRef)
               const appData = appDocSnap.exists() ? appDocSnap.data() : null
@@ -623,27 +681,29 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
     }
   }
 
-  useEffect(() => {
-    isMountedRef.current = true
+useEffect(() => {
+  isMountedRef.current = true
+  if (effectiveUserId) {
     fetchAccelerators()
+  }
 
-    return () => {
-      isMountedRef.current = false
-    }
-  }, [filters])
+  return () => {
+    isMountedRef.current = false
+  }
+}, [filters, effectiveUserId])
 
-  useEffect(() => {
-    const user = auth.currentUser
-    if (!user) return
 
-    const loadStatusFromFirestore = async () => {
-      const snapshot = await getDocs(collection(db, "smeCatalystApplications"))
-      const statusMap = {}
-      const stageMap = {}
+useEffect(() => {
+  if (!effectiveUserId) return
+  
+  const loadStatusFromFirestore = async () => {
+    const snapshot = await getDocs(collection(db, "smeCatalystApplications"))
+    const statusMap = {}
+    const stageMap = {}
 
-      snapshot.docs.forEach((docSnap) => {
-        const data = docSnap.data()
-        if (data.smeId === user.uid) {
+    snapshot.docs.forEach((docSnap) => {
+      const data = docSnap.data()
+      if (data.smeId === effectiveUserId) {
           const acceleratorId = `${data.catalystId}_${data.programIndex || 0}`
           statusMap[acceleratorId] = "Sent"
           stageMap[acceleratorId] = data.pipelineStage || "Application Sent"
@@ -655,20 +715,19 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
     }
 
     loadStatusFromFirestore()
-  }, [accelerators])
+  }, [accelerators, effectiveUserId])
 
-  useEffect(() => {
-    const user = auth.currentUser
-    if (!user) return
+ useEffect(() => {
+  if (!effectiveUserId) return
+  
+  const loadStatusFromFirestore = async () => {
+    const snapshot = await getDocs(collection(db, "smeCatalystApplications"))
+    const statusMap = {}
+    const stageMap = {}
 
-    const loadStatusFromFirestore = async () => {
-      const snapshot = await getDocs(collection(db, "smeCatalystApplications"))
-      const statusMap = {}
-      const stageMap = {}
-
-      snapshot.docs.forEach((docSnap) => {
-        const data = docSnap.data()
-        if (data.smeId === user.uid) {
+    snapshot.docs.forEach((docSnap) => {
+      const data = docSnap.data()
+      if (data.smeId === effectiveUserId) {
           statusMap[data.catalystId] = "Sent"
           stageMap[data.catalystId] = data.pipelineStage || "Application Sent"
         }
@@ -679,7 +738,7 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
     }
 
     loadStatusFromFirestore()
-  }, [])
+ }, [effectiveUserId])
 
   const calculateMatchScore = (smeData, acceleratorData, program = null) => {
     const totalFields = 8
@@ -1002,10 +1061,19 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
   }
 
   const handleApplyClick = async (accelerator) => {
-    const user = auth.currentUser
-    if (!user) return
+  const user = auth.currentUser
+  if (!user) return
 
-    const smeUserId = user.uid
+  // Check permissions for company members
+  if (isCompanyMember && !['owner', 'admin'].includes(userRole)) {
+    setNotification({
+      type: "warning",
+      message: "Only company owners and admins can submit applications.",
+    })
+    return
+  }
+
+  const smeUserId = effectiveUserId
     const catalystId = accelerator.originalCatalystId || accelerator.id
     const programIndex = accelerator.programIndex || 0
 
@@ -1077,6 +1145,8 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
         catalystId: catalystId,
         programIndex: programIndex,
         smeId: smeUserId,
+          submittedBy: user.uid,              // ADD THIS
+  submittedByRole: userRole,      
         acceleratorName: accelerator.name,
         location: entity.location || "-",
         sector: (entity.economicSectors || []).join(", ") || "-",
@@ -1244,6 +1314,47 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
           transition: "filter 0.2s ease",
         }}
       >
+
+        {/* Company Member Banner */}
+{isCompanyMember && (
+  <div style={{
+    backgroundColor: userRole === 'viewer' ? '#fef3c7' : '#e0f2fe',
+    border: `2px solid ${userRole === 'viewer' ? '#f59e0b' : '#0369a1'}`,
+    borderRadius: '12px',
+    padding: '16px 24px',
+    marginBottom: '24px',
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+  }}>
+    <div style={{ 
+      display: 'flex', 
+      alignItems: 'center', 
+      gap: '12px', 
+      marginBottom: '8px' 
+    }}>
+      <span style={{ fontSize: '24px' }}>🤝</span>
+      <h3 style={{ 
+        margin: 0, 
+        color: userRole === 'viewer' ? '#f59e0b' : '#0369a1', 
+        fontWeight: '700',
+        fontSize: '1.1rem'
+      }}>
+        Company Catalyst Applications - Role: {userRole?.toUpperCase()}
+      </h3>
+    </div>
+    <p style={{ 
+      margin: 0, 
+      color: '#4a5568', 
+      fontSize: '0.95rem',
+      lineHeight: '1.5'
+    }}>
+      {userRole === 'owner' && 'You can view and manage all company catalyst applications.'}
+      {userRole === 'admin' && 'You can view and submit catalyst applications for the company.'}
+      {userRole === 'manager' && 'You can view catalyst applications and track their progress.'}
+      {userRole === 'employee' && 'You can view company catalyst applications.'}
+      {userRole === 'viewer' && 'You have read-only access to company catalyst applications.'}
+    </p>
+  </div>
+)}
         {/* Notification area */}
         {notification && (
           <div

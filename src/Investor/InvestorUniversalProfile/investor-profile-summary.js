@@ -224,7 +224,6 @@ const renderDocsStatus = () => {
         style={{
           fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
           minHeight: '100vh',
-          background: 'linear-gradient(135deg, #faf7f2 0%, #f5f0e1 50%, #f0e6d9 100%)',
           padding: "24px 24px 24px max(24px, calc(280px + 24px))",
           marginTop: "60px",
           transition: 'all 0.3s ease'

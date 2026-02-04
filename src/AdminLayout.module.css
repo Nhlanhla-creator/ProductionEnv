@@ -1,0 +1,12 @@
+.mainContent {
+    margin-top: 80px;
+    transition: margin-left 0.3s ease;
+}
+
+.mainContent.sidebarExpanded {
+    margin-left: 280px;
+}
+
+.mainContent.sidebarCollapsed {
+    margin-left: 80px;
+}

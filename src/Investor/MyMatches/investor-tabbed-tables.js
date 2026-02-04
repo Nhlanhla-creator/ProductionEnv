@@ -6,7 +6,7 @@ import styles from "./investor-funding.module.css"
 import { collection, query, where, getDocs, onSnapshot, doc, getDoc } from "firebase/firestore"
 import { db } from "../../firebaseConfig"
 
-const formatLabel = (value) => {
+const formatLabel = (value) => { 
   if (!value) return ""
 
   return value

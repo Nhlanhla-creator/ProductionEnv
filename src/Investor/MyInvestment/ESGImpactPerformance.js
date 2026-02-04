@@ -11,7 +11,7 @@ import {
   ArcElement,
   Title,
   Tooltip,
-  Legend
+  Legend 
 } from 'chart.js';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebaseConfig';
