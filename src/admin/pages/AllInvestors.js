@@ -32,9 +32,19 @@ import {
   Shield,
 } from "lucide-react"
 import styles from "./all-investors.module.css"
+import { collection, query, where, getDocs, doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore"
+import databaseService from "../../services/databaseService"
+import * as XLSX from 'xlsx';
 
 function AllInvestors() {
   const navigate = useNavigate()
+
+    // ADD this state to track current database
+    const [currentDatabase, setCurrentDatabase] = useState(
+      databaseService.getCurrentDatabase()
+    )
+
+
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
@@ -43,6 +53,11 @@ function AllInvestors() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [editFormData, setEditFormData] = useState({})
+    const [activeTab, setActiveTab] = useState("profile")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(10)
+
+  const [investorData, setInvestorData] = useState([]);
   const [addFormData, setAddFormData] = useState({
     username: "",
     email: "",
@@ -59,115 +74,156 @@ function AllInvestors() {
       website: "",
     }
   })
-  const [activeTab, setActiveTab] = useState("profile")
-  const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage] = useState(10)
 
-  // Mock Investor data - replace with real API calls
-  const [investorData, setInvestorData] = useState([
-    {
-      id: 1,
-      username: "capitalventures",
-      email: "info@capitalventures.com",
-      companyName: "Capital Ventures",
-      created: "2024-01-20",
-      lastEdited: "2024-06-22",
-      status: "active",
-      profileImage: null,
-      profile: {
-        firmName: "Capital Ventures Investment Fund",
-        investorType: "Venture Capital",
-        investmentFocus: "Technology, Healthcare",
-        minInvestment: "$100,000",
-        maxInvestment: "$5,000,000",
-        location: "Cape Town, South Africa",
-        phone: "+27 21 555 0123",
-        website: "www.capitalventures.com",
-      },
-      documents: {
-        nda: { signed: true, date: "2024-01-25" },
-        compliance: { status: "approved", documents: 12 },
-        uploads: 18,
-      },
-      payments: {
-        subscription: "Premium",
-        status: "paid",
-        amount: "$499/month",
-        nextBilling: "2024-07-20",
-      },
-    },
-    {
-      id: 2,
-      username: "innovatefund",
-      email: "contact@innovatefund.co.za",
-      companyName: "Innovate Fund",
-      created: "2024-03-15",
-      lastEdited: "2024-06-18",
-      status: "active",
-      profileImage: null,
-      profile: {
-        firmName: "Innovate Fund Management",
-        investorType: "Private Equity",
-        investmentFocus: "Fintech, Manufacturing",
-        minInvestment: "$500,000",
-        maxInvestment: "$10,000,000",
-        location: "Johannesburg, South Africa",
-        phone: "+27 11 444 0987",
-        website: "www.innovatefund.co.za",
-      },
-      documents: {
-        nda: { signed: true, date: "2024-03-20" },
-        compliance: { status: "approved", documents: 15 },
-        uploads: 25,
-      },
-      payments: {
-        subscription: "Enterprise",
-        status: "paid",
-        amount: "$899/month",
-        nextBilling: "2024-08-15",
-      },
-    },
-    {
-      id: 3,
-      username: "futureangels",
-      email: "team@futureangels.com",
-      companyName: "Future Angels",
-      created: "2024-05-10",
-      lastEdited: "2024-06-20",
-      status: "pending",
-      profileImage: null,
-      profile: {
-        firmName: "Future Angels Network",
-        investorType: "Angel Network",
-        investmentFocus: "Early Stage, AI, CleanTech",
-        minInvestment: "$25,000",
-        maxInvestment: "$500,000",
-        location: "Durban, South Africa",
-        phone: "+27 31 333 1234",
-        website: "www.futureangels.com",
-      },
-      documents: {
-        nda: { signed: false, date: null },
-        compliance: { status: "pending", documents: 5 },
-        uploads: 8,
-      },
-      payments: {
-        subscription: "Basic",
-        status: "pending",
-        amount: "$199/month",
-        nextBilling: "2024-07-10",
-      },
-    },
-  ])
+    // ADD this function to get the current database instance
+    const getCurrentDb = () => {
+      return databaseService.getFirestore();
+    }
+  
+    // ADD this effect to listen for database changes
+    useEffect(() => {
+      const handleDatabaseChange = () => {
+        const newDatabase = databaseService.getCurrentDatabase();
+        setCurrentDatabase(newDatabase);
+        // Refresh data when database changes
+        fetchInvestors();
+      };
+  
+      // Listen for storage changes
+      window.addEventListener('storage', handleDatabaseChange);
+      
+      // Listen for custom event
+      window.addEventListener('databaseChanged', handleDatabaseChange);
+  
+      return () => {
+        window.removeEventListener('storage', handleDatabaseChange);
+        window.removeEventListener('databaseChanged', handleDatabaseChange);
+      };
+    }, []);
 
+  const fetchInvestors = async () => {
+
+    try {
+      setLoading(true);
+      
+      // Get the correct database instance
+    const db = getCurrentDb();
+
+      // Fetch from Firestore collection (likely 'investorProfiles' or 'investors')
+      const investorsRef = collection(db, 'MyuniversalProfiles'); // Adjust collection name as needed
+      const querySnapshot = await getDocs(investorsRef);
+      
+      const fetchedInvestors = querySnapshot.docs.map((doc, index) => {
+        const data = doc.data();
+        const formData = data.formData || {};
+        
+        // Get nested data from Firestore structure
+        const contactDetails = formData.contactDetails || {};
+        const fundManageOverview = formData.fundManageOverview || {};
+        const generalInvestmentPreference = formData.generalInvestmentPreference || {};
+        const fundDetails = formData.fundDetails || {};
+
+        // Format the date from Firestore
+        const formatFirestoreDate = (timestamp) => {
+          if (timestamp && timestamp.toDate) {
+            return timestamp.toDate().toISOString().split('T')[0];
+          }
+          return timestamp || "2024-01-01";
+        };
+        
+        const createdAt = formatFirestoreDate(data.createdAt);
+        const username = contactDetails.primaryContactName || `investor_${index + 1}`;
+        
+        return {
+          id: index + 1,
+          firestoreId: doc.id, // Store for editing
+          username: username,
+          email: contactDetails.businessEmail || 'N/A',
+          companyName: fundManageOverview.registeredName || "N/A",
+          created: createdAt,
+          lastEdited: formatFirestoreDate(data.updatedAt) || createdAt,
+          status: data.status || "active",
+          profileImage: null,
+          profile: {
+            firmName: fundManageOverview.registeredName || "Not Provided",
+            investorType: fundManageOverview.firmSubtype || "Not Provided",
+            investmentFocus: generalInvestmentPreference.investmentFocus || "Not Provided",
+            minInvestment: fundDetails?.funds?.[0]?.minimumTicket ?? "Not Provided",
+            maxInvestment: fundDetails?.funds?.[0]?.maximumTicket ?? "Not Provided",
+            location: contactDetails.location || "South Africa",
+            phone: contactDetails.primaryContactMobile || "+27 xxx xxx xxx",
+            website: contactDetails.website || "Not Provided",
+          },
+          documents: {
+            nda: { 
+              signed: data.ndaSigned || false, 
+              date: formatFirestoreDate(data.ndaDate) 
+            },
+            compliance: { 
+              status: data.complianceStatus || "pending", 
+              documents: data.complianceDocuments || 0 
+            },
+            uploads: data.totalUploads || 0,
+          },
+          payments: {
+            subscription: data.subscriptionPlan || "Basic",
+            status: data.paymentStatus || "pending",
+            amount: data.subscriptionAmount || "$0/month",
+            nextBilling: data.nextBillingDate || "2024-01-01",
+          },
+        };
+      });
+      
+      setInvestorData(fetchedInvestors);
+    } catch (error) {
+      console.error("Error fetching investor data:", error);
+      setInvestorData([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+    // UPDATE your useEffect
   useEffect(() => {
-    // Simulate loading
-    const timer = setTimeout(() => {
-      setLoading(false)
-    }, 1000)
+    fetchInvestors();
+  }, []); // Keep empty dependencies
 
-    return () => clearTimeout(timer)
-  }, [])
+
+// Update the loading simulation
+useEffect(() => {
+  if (!loading) return;
+  
+  const timer = setTimeout(() => {
+    if (investorData.length === 0) {
+      setLoading(false);
+    }
+  }, 3000);
+
+  return () => clearTimeout(timer);
+}, [loading, investorData.length]);
+
+// ADD this toggle function
+  const toggleDatabase = () => {
+    // Get the new database
+    const newDatabase = databaseService.toggleDatabase();
+    
+    // Update local state
+    setCurrentDatabase(newDatabase);
+    
+    // Dispatch event for other components
+    window.dispatchEvent(new CustomEvent('databaseChanged', {
+      detail: { database: newDatabase }
+    }));
+    
+    // Refresh data
+    fetchInvestors();
+    
+    // Show alert for production mode
+    if (newDatabase === 'production') {
+      alert('⚠️ WARNING: Switched to PRODUCTION database. All data is LIVE.');
+    }
+  };
+
 
   // Helper functions for documents
   const getInvestorDocuments = (investorId) => {
@@ -455,6 +511,44 @@ function AllInvestors() {
     })
   }
 
+   const exportToExcel = () => {
+    try {
+      // Use whatever data is currently filtered/shown
+      const dataToExport = filteredInvestors;
+      
+      if (dataToExport.length === 0) {
+        alert("No data to export!");
+        return;
+      }
+      
+      // Simple format - just basic data
+      const excelData = dataToExport.map(investor => ({
+        Username: investor.username,
+        Email: investor.email,
+        "Company Name": investor.companyName,
+        Created: investor.created,
+        Status: investor.status,
+        Employees: investor.profile.investorType,
+        Revenue: investor.profile.investorFocus,
+      }));
+      
+      // Create worksheet
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Investors");
+      
+      // Download
+      const fileName = `Investors_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+      
+      alert(`Exported ${dataToExport.length} records!`);
+      
+    } catch (error) {
+      console.error("Export error:", error);
+      alert("Export failed: " + error.message);
+    }
+  };
+
   const getStatusBadge = (status) => {
     const statusStyles = {
       active: styles.statusActive,
@@ -687,11 +781,11 @@ function AllInvestors() {
           <h1 className={styles.title}>All Investors</h1>
           <p className={styles.subtitle}>Manage and monitor all investor accounts</p>
         </div>
-        <div className={styles.headerActions}>
-          <button className={styles.actionButton} onClick={() => alert("Export functionality coming soon!")}>
-            <Download size={16} />
-            Export
-          </button>
+          <div className={styles.headerActions}>
+                  <button className={styles.actionButton} onClick={exportToExcel}>
+                  <Download size={16} />
+                  Export to Excel
+                </button>
           <button className={styles.primaryButton} onClick={() => setShowAddModal(true)}>
             <Plus size={16} />
             Add Investor
@@ -727,6 +821,21 @@ function AllInvestors() {
       </div>
 
       <div className={styles.tableContainer}>
+         <div style={{
+                    position: 'fixed',
+                    top: '20px',
+                    right: '80px',
+                    backgroundColor: currentDatabase === 'testing' ? '#4CAF50' : '#f44336',
+                    color: 'white',
+                    padding: '8px 12px',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    zIndex: 1000,
+                    cursor: 'pointer'
+                  }} onClick={toggleDatabase}>
+                    {currentDatabase === 'testing' ? '🟢 TESTING' : '🔴 PRODUCTION'}
+                  </div>
         <table className={styles.table}>
           <thead>
             <tr>
