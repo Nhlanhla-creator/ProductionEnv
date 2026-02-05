@@ -1,13 +1,13 @@
 import { initializeApp } from "firebase/app";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBeidLheVERNRY4ZCzzw4NiQVjj9y2nIUU",
-  authDomain: "production-environment-cf7da.firebaseapp.com",
-  projectId: "production-environment-cf7da",
-  storageBucket: "production-environment-cf7da.firebasestorage.app",
-  messagingSenderId: "231695604224",
-  appId: "1:231695604224:web:3bc3f9ef8acd92a5f8d6e5",
-  measurementId: "G-QR0VH648XY"
+ apiKey: "AIzaSyDuGP9j_51M32Z0_D0qFuSESHKNYZysp2Q",
+  authDomain: "testing-a7872.firebaseapp.com",
+  projectId: "testing-a7872",
+  storageBucket: "testing-a7872.firebasestorage.app",
+  messagingSenderId: "303661331014",
+  appId: "1:303661331014:web:4e94dd6c70ddbfa2fc5047",
+  measurementId: "G-7ZB2SW4S1T"
 };
 // Initialize Firebase with a different name to avoid conflicts
 export const productionApp = initializeApp(firebaseConfig, 'production-app');

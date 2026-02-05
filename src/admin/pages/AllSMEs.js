@@ -477,7 +477,6 @@ ${document.validatedAt ? `Validated At: ${formatDate(document.validatedAt)}\n` :
 
   const exportToExcel = () => {
   try {
-    // Use whatever data is currently filtered/shown
     const dataToExport = filteredSMEs;
     
     if (dataToExport.length === 0) {
@@ -485,24 +484,57 @@ ${document.validatedAt ? `Validated At: ${formatDate(document.validatedAt)}\n` :
       return;
     }
     
-    // Simple format - just basic data
     const excelData = dataToExport.map(sme => ({
-      Username: sme.username,
       Email: sme.email,
       "Company Name": sme.companyName,
       Created: sme.created,
       Status: sme.status,
-      Industry: sme.profile.industry,
-      Employees: sme.profile.employees,
-      Revenue: sme.profile.revenue,
+      Industry: sme.profile.industry || "",
     }));
     
-    // Create worksheet
     const worksheet = XLSX.utils.json_to_sheet(excelData);
+    
+    // Calculate dynamic column widths based on content
+    const calculateColumnWidths = (data) => {
+      const widths = [];
+      const keys = Object.keys(data[0] || {});
+      
+      keys.forEach((key, colIndex) => {
+        // Start with header width
+        let maxLength = key.length;
+        
+        // Check all rows for this column
+        data.forEach(row => {
+          const cellValue = String(row[key] || '');
+          if (cellValue.length > maxLength) {
+            maxLength = cellValue.length;
+          }
+        });
+        
+        // Add some padding and set a reasonable max
+        const width = Math.min(Math.max(maxLength + 2, 10), 50);
+        widths.push({ wch: width });
+      });
+      
+      return widths;
+    };
+    
+    worksheet['!cols'] = calculateColumnWidths(excelData);
+    
+    // Optional: Format headers with bold text
+    const range = XLSX.utils.decode_range(worksheet['!ref']);
+    for (let C = range.s.c; C <= range.e.c; ++C) {
+      const headerCell = XLSX.utils.encode_cell({ r: 0, c: C });
+      if (!worksheet[headerCell]) continue;
+      worksheet[headerCell].s = {
+        font: { bold: true },
+        fill: { fgColor: { rgb: "E0E0E0" } } // Light gray background
+      };
+    }
+    
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "SMEs");
     
-    // Download
     const fileName = `SMEs_${new Date().toISOString().split('T')[0]}.xlsx`;
     XLSX.writeFile(workbook, fileName);
     

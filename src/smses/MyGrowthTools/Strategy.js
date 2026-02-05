@@ -57,6 +57,12 @@ const KeyQuestionBox = ({ question, signals, decisions }) => {
         borderRadius: "8px",
         marginBottom: "20px",
         border: "1px solid #f9a825",
+
+        backgroundColor: "	#DCDCDC",
+        padding: "15px 20px",
+        borderRadius: "8px",
+        marginBottom: "20px",
+        border: "1px solid 	#5d4037",
       }}
     >
       <div style={{ display: "flex", alignItems: "flex-start", marginBottom: "8px" }}>

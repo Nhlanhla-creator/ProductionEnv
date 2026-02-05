@@ -4017,6 +4017,7 @@ const ConfirmationModal = () => {
                     Overall Match Score
                   </p>
                 </div>
+                
 
                 <div
                   style={{
@@ -4847,6 +4848,7 @@ const statusBadgeStyle = {
   fontWeight: "500",
   display: "inline-block",
 }
+
 
 const tableHeaderStyle = {
   background: "linear-gradient(135deg, #4e2106 0%, #37271f 100%)",

@@ -37,6 +37,7 @@ import {
 import styles from "./all-advisors.module.css"
 import { collection, query, where, getDocs, doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore"
 import { auth } from "../../firebaseConfig"
+import * as XLSX from 'xlsx';
 import databaseService from "../../services/databaseService"
 
 function AllAdvisors() {
@@ -56,7 +57,7 @@ function AllAdvisors() {
   const [addFormData, setAddFormData] = useState({
     username: "",
     email: "",
-    companyName: "",
+    Employer: "",
     status: "pending",
     profile: {
       fullName: "",
@@ -130,6 +131,7 @@ const [advisorData, setAdvisorData] = useState([]);
         };
         
         const createdAt = formatFirestoreDate(data.createdAt);
+        const personalProfessionalOverview = formData?.personalProfessionalOverview
         
         return {
           id: index + 1,
@@ -138,23 +140,23 @@ const [advisorData, setAdvisorData] = useState([]);
                     contactDetails.email?.split('@')[0] || 
                     `advisor_${index + 1}`,
           email: contactDetails.email || '',
-          companyName: contactDetails.company || "Not Provided",
+          Employer: formData?.personalProfessionalOverview?.currentEmployer || "Not Provided",
           created: createdAt,
           lastEdited: formatFirestoreDate(data.updatedAt) || createdAt,
           status: data.status || "active",
           profileImage: null,
 
           profile: {
-            fullName: contactDetails.primaryContactName || "Not Provided",
-            jobTitle: contactDetails.jobTitle || "Not Provided",
-            company: contactDetails.company || "Not Provided",
+            fullName: (formData?.contactDetails?.name || "") + " " + (formData?.contactDetails?.surname || ""),
+            jobTitle: contactDetails.position || "Not Provided",
+            company: personalProfessionalOverview?.currentEmployer || "Not Provided",
             expertiseAreas: formData.expertiseAreas || "Not Provided",
-            industries: formData.industries || "Not Provided",
-            experienceLevel: formData.experienceLevel || "Not Provided",
-            advisoryServices: formData.advisoryServices || "Not Provided",
-            location: contactDetails.location || "South Africa",
-            phone: contactDetails.primaryContactMobile || "+27 xxx xxx xxx",
-            website: contactDetails.website || "Not Provided",
+            industries: personalProfessionalOverview?.industryExperience?.join(", ") || "",
+            experienceLevel: personalProfessionalOverview?.mentorshipExperience || "Not Provided",
+            advisoryServices: formData?.selectionCriteria?.advisorySupportType|| "Not Provided",
+            location: (formData?.contactDetails?.country || "") + ", " + (formData?.contactDetails?.city || "") || "South Africa",
+            phone: contactDetails.mobile || "+27 XXX XXX XXX",
+            linkedIn: contactDetails.linkedinProfile || "Not Provided",
           },
           documents: {
             nda: { signed: data.ndaSigned || false, date: formatFirestoreDate(data.ndaDate) },
@@ -412,7 +414,7 @@ const toggleDatabase = () => {
     const matchesSearch = 
       advisor.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
       advisor.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      advisor.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      advisor.Employer.toLowerCase().includes(searchTerm.toLowerCase()) ||
       advisor.profile.fullName.toLowerCase().includes(searchTerm.toLowerCase())
     
     const matchesStatus = statusFilter === "all" || advisor.status === statusFilter
@@ -437,19 +439,19 @@ const toggleDatabase = () => {
         setEditFormData({
           username: advisor.username,
           email: advisor.email,
-          companyName: advisor.companyName,
+          Employer: advisor.Employer,
           status: advisor.status,
           profile: { ...advisor.profile }
         })
         setShowEditModal(true)
         break
       case "delete":
-        if (window.confirm(`Are you sure you want to delete ${advisor.companyName}?`)) {
+        if (window.confirm(`Are you sure you want to delete ${advisor.Employer}?`)) {
           setAdvisorData(advisorData.filter(a => a.id !== advisor.id))
         }
         break
       case "block":
-        if (window.confirm(`Are you sure you want to block ${advisor.companyName}?`)) {
+        if (window.confirm(`Are you sure you want to block ${advisor.Employer}?`)) {
           setAdvisorData(advisorData.map(a => 
             a.id === advisor.id ? { ...a, status: "blocked" } : a
           ))
@@ -494,7 +496,7 @@ const toggleDatabase = () => {
     setAddFormData({
       username: "",
       email: "",
-      companyName: "",
+      Employer: "",
       status: "pending",
       profile: {
         fullName: "",
@@ -510,6 +512,45 @@ const toggleDatabase = () => {
       }
     })
   }
+
+   const exportToExcel = () => {
+    try {
+      // Use whatever data is currently filtered/shown
+      const dataToExport = filteredAdvisors;
+      
+      if (dataToExport.length === 0) {
+        alert("No data to export!");
+        return;
+      }
+      
+      // Simple format - just basic data
+      const excelData = dataToExport.map(advisor => ({
+        Username: advisor.username,
+        Email: advisor.email,
+        "Company Name": advisor.Employer,
+        Created: advisor.created,
+        Status: advisor.status,
+        Industry: advisor.profile.industry,
+        Employees: advisor.profile.employees,
+        Revenue: advisor.profile.revenue,
+      }));
+      
+      // Create worksheet
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Advisors");
+      
+      // Download
+      const fileName = `SMEs_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+      
+      alert(`Exported ${dataToExport.length} records!`);
+      
+    } catch (error) {
+      console.error("Export error:", error);
+      alert("Export failed: " + error.message);
+    }
+  };
 
   const getStatusBadge = (status) => {
     const statusStyles = {
@@ -589,10 +630,17 @@ const toggleDatabase = () => {
                   <span>Phone:</span>
                   <span>{advisor.profile.phone}</span>
                 </div>
-                <div className={styles.profileItem}>
+               <div className={styles.profileItem}>
                   <Mail size={16} />
-                  <span>Website:</span>
-                  <span>{advisor.profile.website}</span>
+                  <span>LinkedIn:</span>
+                  <a 
+                    href={advisor.profile.linkedIn} 
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline"
+                  >
+                    {advisor.profile.linkedIn}
+                  </a>
                 </div>
               </div>
             </div>
@@ -735,11 +783,11 @@ const toggleDatabase = () => {
           <h1 className={styles.title}>All Advisors</h1>
           <p className={styles.subtitle}>Manage and monitor all business advisors</p>
         </div>
-        <div className={styles.headerActions}>
-          <button className={styles.actionButton} onClick={() => alert("Export functionality coming soon!")}>
-            <Download size={16} />
-            Export
-          </button>
+         <div className={styles.headerActions}>
+                 <button className={styles.actionButton} onClick={exportToExcel}>
+                 <Download size={16} />
+                 Export to Excel
+               </button>
           <button className={styles.primaryButton} onClick={() => setShowAddModal(true)}>
             <Plus size={16} />
             Add Advisor
@@ -818,7 +866,7 @@ const toggleDatabase = () => {
                   </div>
                 </td>
                 <td>{advisor.email}</td>
-                <td className={styles.companyName}>{advisor.companyName}</td>
+                <td>{advisor.Employer}</td>
                 <td>{formatDate(advisor.created)}</td>
                 <td>{formatDate(advisor.lastEdited)}</td>
                 <td>{getStatusBadge(advisor.status)}</td>
@@ -894,7 +942,7 @@ const toggleDatabase = () => {
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <div className={styles.modalTitle}>
-                <h2>{selectedAdvisor.companyName}</h2>
+                <h2>{selectedAdvisor.Employer}</h2>
                 <p>{selectedAdvisor.profile.fullName} • {selectedAdvisor.email}</p>
               </div>
               <button
@@ -935,7 +983,7 @@ const toggleDatabase = () => {
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <div className={styles.modalTitle}>
-                <h2>Edit Advisor: {selectedAdvisor.companyName}</h2>
+                <h2>Edit Advisor: {selectedAdvisor.Employer}</h2>
                 <p>Update advisor information</p>
               </div>
               <button
@@ -973,8 +1021,8 @@ const toggleDatabase = () => {
                       <label>Company Name</label>
                       <input
                         type="text"
-                        value={editFormData.companyName || ""}
-                        onChange={(e) => setEditFormData({...editFormData, companyName: e.target.value})}
+                        value={editFormData.Employer || ""}
+                        onChange={(e) => setEditFormData({...editFormData, Employer: e.target.value})}
                         className={styles.formInput}
                       />
                     </div>
@@ -1196,8 +1244,8 @@ const toggleDatabase = () => {
                       <label>Company Name *</label>
                       <input
                         type="text"
-                        value={addFormData.companyName}
-                        onChange={(e) => setAddFormData({...addFormData, companyName: e.target.value})}
+                        value={addFormData.Employer}
+                        onChange={(e) => setAddFormData({...addFormData, Employer: e.target.value})}
                         className={styles.formInput}
                         placeholder="Enter company/practice name"
                       />
@@ -1369,7 +1417,7 @@ const toggleDatabase = () => {
                   <button
                     className={styles.saveButton}
                     onClick={handleAddAdvisor}
-                    disabled={!addFormData.username || !addFormData.email || !addFormData.companyName}
+                    disabled={!addFormData.username || !addFormData.email || !addFormData.Employer}
                   >
                     <Check size={16} />
                     Create Advisor
