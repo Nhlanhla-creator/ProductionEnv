@@ -1,4 +1,5 @@
 .mainContent {
+    min-width: calc(100% - 300px);
     margin-top: 80px;
     transition: margin-left 0.3s ease;
 }
