@@ -43,7 +43,7 @@ const createSubscriptionCheckout = async (
     // ✅ NEW: Check for new user eligibility for trial period
     const isTrialEligible = actionType === "subscription" || actionType === "upgrade"
 
-    const response = await fetch(`${process.env.REACT_APP_API_URL}/api/payments/create-subscription`, {
+    const response = await fetch(`${"http://localhost:8000"}/api/payments/create-subscription`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
