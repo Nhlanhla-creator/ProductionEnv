@@ -1157,4 +1157,5 @@ const formatRequirementName = (key) => {
     );
 };
 
+
 export default FundabilityScoreCard;
