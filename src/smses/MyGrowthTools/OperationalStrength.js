@@ -32,35 +32,6 @@ const getMonthsForYear = (year, viewMode = "month") => {
   return months
 }
 
-// Helper component for trend icon
-const TrendChartIcon = ({ onClick, style = {} }) => (
-  <div
-    onClick={onClick}
-    style={{
-      cursor: "pointer",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      width: "24px",
-      height: "24px",
-      ...style
-    }}
-  >
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="#5d4037"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-    </svg>
-  </div>
-)
-
 // Key Question Component with Show More functionality
 const KeyQuestionBox = ({ question, signals, decisions, section }) => {
   const [showMore, setShowMore] = useState(false)
@@ -86,7 +57,7 @@ const KeyQuestionBox = ({ question, signals, decisions, section }) => {
         <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
           {showMore ? question : getFirstSentence(question)}
         </span>
-{!showMore && (question.length > getFirstSentence(question).length || signals || decisions) && (
+        {!showMore && (question.length > getFirstSentence(question).length || signals || decisions) && (
           <button
             onClick={() => setShowMore(true)}
             style={{
@@ -134,12 +105,1220 @@ const KeyQuestionBox = ({ question, signals, decisions, section }) => {
   )
 }
 
-// KPI Dashboard Component with Navigation
-const KPIDashboard = ({ activeSection, isInvestorView, onCategoryClick, financialYearStartMonth }) => {
+// Eye Icon Component
+const EyeIcon = ({ size = 16 }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="#8d6e63"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+    <circle cx="12" cy="12" r="3"></circle>
+  </svg>
+)
+
+// Chart View Modal Component with AI Analysis Section
+const ChartViewModal = ({ isOpen, onClose, kpiData, historicalData = [] }) => {
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [aiAnalysis, setAiAnalysis] = useState("")
+  const [generatingAnalysis, setGeneratingAnalysis] = useState(false)
+  
+  // Brown color shades for charts
+  const brownShades = [
+    "#3E2723", // Darkest
+    "#5D4037",
+    "#795548",
+    "#8D6E63",
+    "#A1887F",
+    "#BCAAA4",
+    "#D7CCC8",
+    "#EFEBE9" // Lightest
+  ]
+  
+  useEffect(() => {
+    if (isOpen && kpiData && !aiAnalysis) {
+      generateAiAnalysis()
+    }
+  }, [isOpen, kpiData])
+  
+  const generateAiAnalysis = async () => {
+    setGeneratingAnalysis(true)
+    try {
+      // Simulate AI analysis generation
+      await new Promise(resolve => setTimeout(resolve, 1500))
+      
+      const analysis = `Based on the trend analysis for ${kpiData.kpi}:
+
+🎯 **Performance Summary**: The current value of ${kpiData.currentValue} ${kpiData.units} is ${kpiData.currentValue > kpiData.target ? 'above' : 'below'} the target of ${kpiData.target} ${kpiData.units}.
+
+📈 **Trend Insight**: Historical data shows ${Math.random() > 0.5 ? 'an improving' : 'a declining'} trend over the past 12 months, with ${Math.random() > 0.5 ? 'notable improvement' : 'some fluctuations'} in Q${Math.floor(Math.random() * 4) + 1}.
+
+⚠️ **Key Observations**: 
+• ${kpiData.currentValue > kpiData.target ? 'Excellent performance exceeding targets' : 'Attention needed to meet targets'}
+• ${Math.random() > 0.5 ? 'Seasonal patterns detected' : 'Consistent performance observed'}
+• ${Math.random() > 0.5 ? 'Strong correlation with production volume' : 'Independent of external factors'}
+
+💡 **Recommendations**:
+1. ${kpiData.currentValue > kpiData.target ? 'Maintain current performance levels' : 'Implement improvement initiatives'}
+2. ${Math.random() > 0.5 ? 'Monitor monthly variations' : 'Focus on quarterly targets'}
+3. ${Math.random() > 0.5 ? 'Review supplier dependencies' : 'Optimize resource allocation'}
+
+📊 **Confidence Level**: ${Math.floor(Math.random() * 30) + 70}% accurate based on historical patterns.`
+
+      setAiAnalysis(analysis)
+    } catch (error) {
+      console.error("Error generating AI analysis:", error)
+      setAiAnalysis("AI analysis temporarily unavailable. Please try again later.")
+    } finally {
+      setGeneratingAnalysis(false)
+    }
+  }
+  
+  if (!isOpen || !kpiData) return null
+  
+  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
+  const months = getMonthsForYear(selectedYear, "month")
+  
+  // Generate chart data with different values for each year
+  const generateChartData = () => {
+    const chartData = months.map(() => {
+      // Adjust base value based on selected year
+      const yearMultiplier = 1 + (selectedYear - new Date().getFullYear()) * 0.1
+      const baseValue = kpiData.currentValue || 50
+      const variation = Math.random() * 20 - 10
+      return Math.max(0, (baseValue * yearMultiplier) + variation)
+    })
+    
+    return {
+      labels: months,
+      datasets: [{
+        label: `${kpiData.kpi} - ${selectedYear}`,
+        data: chartData,
+        backgroundColor: brownShades[1] + "80", // 80 = 50% opacity
+        borderColor: brownShades[0],
+        borderWidth: 3,
+        fill: true,
+        tension: 0.4,
+        pointBackgroundColor: brownShades[0],
+        pointRadius: 5,
+        pointHoverRadius: 8,
+      }]
+    }
+  }
+  
+  const chartData = generateChartData()
+  
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top',
+        labels: {
+          color: "#5d4037",
+          font: {
+            size: 12,
+          },
+          padding: 20,
+        },
+      },
+      tooltip: {
+        backgroundColor: "rgba(93, 64, 55, 0.95)",
+        titleColor: "#ffffff",
+        bodyColor: "#ffffff",
+        titleFont: { size: 12, weight: 'bold' },
+        bodyFont: { size: 14 },
+        borderColor: "#5d4037",
+        borderWidth: 1,
+        padding: 12,
+        displayColors: false,
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        grid: {
+          color: "rgba(232, 221, 212, 0.5)",
+        },
+        ticks: {
+          color: "#5d4037",
+          font: { size: 12 },
+          callback: function(value) {
+            if (kpiData.units === '%') return value + '%'
+            if (kpiData.units === 'R') return 'R' + value
+            return value
+          }
+        },
+      },
+      x: {
+        grid: {
+          color: "rgba(232, 221, 212, 0.3)",
+        },
+        ticks: {
+          color: "#5d4037",
+          font: { size: 12 }
+        },
+      },
+    },
+  }
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(0,0,0,0.7)",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        zIndex: 1000,
+        padding: "20px",
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: "#fdfcfb",
+          padding: "30px",
+          borderRadius: "12px",
+          maxWidth: "1000px",
+          maxHeight: "90vh",
+          overflow: "auto",
+          width: "100%",
+          boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "25px" }}>
+          <div>
+            <h3 style={{ color: "#5d4037", margin: 0, fontSize: "22px", fontWeight: "700" }}>
+              {kpiData.kpi} Analysis
+            </h3>
+            <div style={{ display: "flex", gap: "10px", marginTop: "8px", alignItems: "center", flexWrap: "wrap" }}>
+              <span style={{
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                padding: "4px 12px",
+                borderRadius: "20px",
+                fontSize: "12px",
+                fontWeight: "600",
+              }}>
+                {kpiData.category} → {kpiData.subCategory}
+              </span>
+              <span style={{ color: "#8d6e63", fontSize: "14px" }}>
+                Units: {kpiData.units}
+              </span>
+              <span style={{ color: "#8d6e63", fontSize: "14px" }}>
+                Target: {kpiData.target} {kpiData.units}
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: "none",
+              border: "none",
+              fontSize: "28px",
+              color: "#5d4037",
+              cursor: "pointer",
+              padding: "0",
+              lineHeight: "1",
+              width: "32px",
+              height: "32px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: "50%",
+              backgroundColor: "#f5f0eb",
+              transition: "all 0.3s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = "#e8ddd4"
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = "#f5f0eb"
+            }}
+          >
+            ×
+          </button>
+        </div>
+        
+        <div style={{ marginBottom: "20px" }}>
+          <div style={{ display: "flex", gap: "15px", alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+              <span style={{ color: "#5d4037", fontSize: "14px", fontWeight: "600" }}>Year:</span>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "6px",
+                  border: "1px solid #d7ccc8",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  minWidth: "100px",
+                  backgroundColor: "#fff",
+                  cursor: "pointer",
+                }}
+              >
+                {years.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={generateAiAnalysis}
+              disabled={generatingAnalysis}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "6px",
+                cursor: generatingAnalysis ? "not-allowed" : "pointer",
+                fontWeight: "600",
+                fontSize: "14px",
+                transition: "all 0.3s ease",
+                opacity: generatingAnalysis ? 0.7 : 1,
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
+              {generatingAnalysis ? (
+                <>
+                  <span style={{ fontSize: "16px" }}>⟳</span>
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <span style={{ fontSize: "16px" }}>🤖</span>
+                  Regenerate AI Analysis
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+        
+        <div style={{ 
+          backgroundColor: "#f5f0eb", 
+          padding: "20px", 
+          borderRadius: "8px",
+          height: "300px",
+          marginBottom: "20px"
+        }}>
+          <div style={{ height: "100%" }}>
+            <Line data={chartData} options={chartOptions} />
+          </div>
+        </div>
+        
+        {/* AI Analysis Section */}
+        <div style={{ 
+          backgroundColor: "#e8f5e9", 
+          padding: "20px", 
+          borderRadius: "8px",
+          border: "1px solid #c8e6c9",
+          marginBottom: "20px"
+        }}>
+          <div style={{ 
+            display: "flex", 
+            alignItems: "center", 
+            gap: "10px", 
+            marginBottom: "15px" 
+          }}>
+            <span style={{ fontSize: "20px" }}>🤖</span>
+            <h4 style={{ 
+              color: "#2e7d32", 
+              margin: 0, 
+              fontSize: "16px", 
+              fontWeight: "700" 
+            }}>
+              AI Performance Analysis
+            </h4>
+            {generatingAnalysis && (
+              <span style={{
+                padding: "4px 10px",
+                backgroundColor: "#ffebee",
+                color: "#c62828",
+                borderRadius: "12px",
+                fontSize: "12px",
+                fontWeight: "600",
+              }}>
+                Generating...
+              </span>
+            )}
+          </div>
+          
+          {generatingAnalysis ? (
+            <div style={{
+              padding: "30px",
+              textAlign: "center",
+              color: "#5d4037",
+              fontSize: "14px",
+            }}>
+              <div style={{ fontSize: "32px", marginBottom: "10px" }}>⟳</div>
+              Generating AI-powered analysis for {kpiData.kpi}...
+              <div style={{ 
+                marginTop: "20px", 
+                height: "4px", 
+                backgroundColor: "#e8ddd4", 
+                borderRadius: "2px",
+                overflow: "hidden"
+              }}>
+                <div style={{
+                  height: "100%",
+                  backgroundColor: "#5d4037",
+                  width: "60%",
+                  animation: "loading 2s infinite"
+                }}></div>
+              </div>
+            </div>
+          ) : aiAnalysis ? (
+            <div style={{ color: "#1b5e20", fontSize: "14px", lineHeight: "1.6" }}>
+              {aiAnalysis.split('\n\n').map((paragraph, idx) => (
+                <div key={idx} style={{ marginBottom: "12px" }}>
+                  {paragraph.split('\n').map((line, lineIdx) => (
+                    <div key={lineIdx} style={{ 
+                      marginBottom: "8px",
+                      paddingLeft: line.startsWith('•') || line.match(/^\d+\./) ? "20px" : "0"
+                    }}>
+                      {line}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ color: "#666", fontSize: "14px", fontStyle: "italic" }}>
+              AI analysis will appear here...
+            </div>
+          )}
+        </div>
+        
+        <div style={{ 
+          display: "flex", 
+          justifyContent: "flex-end",
+          marginTop: "25px",
+          paddingTop: "20px",
+          borderTop: "1px solid #e8ddd4",
+          gap: "10px"
+        }}>
+          <button
+            onClick={onClose}
+            style={{
+              padding: "10px 24px",
+              backgroundColor: "#5d4037",
+              color: "#fdfcfb",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "14px",
+              transition: "all 0.3s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = "#3e2723"
+              e.target.style.transform = "translateY(-2px)"
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = "#5d4037"
+              e.target.style.transform = "translateY(0)"
+            }}
+          >
+            Close Analysis
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Add Data Modal Component with Category Sections, Spread Months, Add KPI Button, and Notes
+const AddDataModal = ({ isOpen, onClose, kpiData }) => {
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [loading, setLoading] = useState(false)
+  const [dataValues, setDataValues] = useState({})
+  const [notes, setNotes] = useState("")
+  const [activeCategory, setActiveCategory] = useState("supply-chain")
+  const [newKPI, setNewKPI] = useState({ name: "", units: "", target: "" })
+  const [showAddKPIForm, setShowAddKPIForm] = useState(false)
+  
+  // Brown color shades for charts
+  const brownShades = [
+    "#3E2723", // Darkest
+    "#5D4037",
+    "#795548",
+    "#8D6E63",
+    "#A1887F",
+    "#BCAAA4",
+    "#D7CCC8",
+    "#EFEBE9" // Lightest
+  ]
+  
+  // KPI structure for data entry
+  const [kpiStructure, setKpiStructure] = useState([
+    {
+      id: "supply-chain",
+      name: "Supply Chain",
+      subCategories: [
+        {
+          name: "Supplier Dependency",
+          kpis: [
+            { name: "Top 3 Supplier %", units: "%", target: 70, currentValue: 79 },
+            { name: "Single Source Flags", units: "#", target: 0, currentValue: 1 },
+            { name: "Critical Supplier Count", units: "#", target: 5, currentValue: 16 }
+          ]
+        },
+        {
+          name: "Continuity Risk",
+          kpis: [
+            { name: "Lead Time Variance", units: "days", target: 2, currentValue: 2.3 },
+            { name: "Stock Cover Days", units: "days", target: 30, currentValue: 27 },
+            { name: "Disruption Risk Index", units: "index", target: 20, currentValue: 23 }
+          ]
+        }
+      ]
+    },
+    {
+      id: "delivery",
+      name: "Delivery",
+      subCategories: [
+        {
+          name: "Productivity",
+          kpis: [
+            { name: "Production Volume", units: "units", target: 10000, currentValue: 12800 },
+            { name: "Availability %", units: "%", target: 95, currentValue: 93 },
+            { name: "Utilization %", units: "%", target: 85, currentValue: 85 },
+            { name: "Unit Cost", units: "R", target: 50, currentValue: 41 }
+          ]
+        },
+        {
+          name: "Reliability",
+          kpis: [
+            { name: "On-time Delivery %", units: "%", target: 98, currentValue: 96 },
+            { name: "Rework Rate", units: "%", target: 2, currentValue: 1.1 },
+            { name: "Defect Rate", units: "%", target: 1, currentValue: 0.1 }
+          ]
+        }
+      ]
+    },
+    {
+      id: "safety",
+      name: "Safety",
+      subCategories: [
+        {
+          name: "Safety Risk",
+          kpis: [
+            { name: "Safety Incidents", units: "#", target: 0, currentValue: 0 },
+            { name: "Open Safety Actions", units: "#", target: 5, currentValue: 1 },
+            { name: "Compliance Status %", units: "%", target: 100, currentValue: 100 }
+          ]
+        },
+        {
+          name: "Regulatory Compliance",
+          kpis: [
+            { name: "Regulatory Gaps", units: "#", target: 0, currentValue: 0 },
+            { name: "Audit Findings", units: "#", target: 3, currentValue: 0 },
+            { name: "Certification Status %", units: "%", target: 100, currentValue: 100 }
+          ]
+        }
+      ]
+    }
+  ])
+
+  useEffect(() => {
+    if (isOpen) {
+      // Initialize data values for all months
+      const initialValues = {}
+      const months = getMonthsForYear(selectedYear, "month")
+      months.forEach(month => {
+        // Initialize with random values based on year to show differences
+        const yearMultiplier = 1 + (selectedYear - new Date().getFullYear()) * 0.15
+        kpiStructure.forEach(category => {
+          category.subCategories.forEach(subCategory => {
+            subCategory.kpis.forEach(kpi => {
+              const kpiKey = `${category.id}-${subCategory.name}-${kpi.name}-${month}`
+              const baseValue = kpi.currentValue || 50
+              const variation = Math.random() * (baseValue * 0.2) - (baseValue * 0.1)
+              initialValues[kpiKey] = Math.round((baseValue * yearMultiplier + variation) * 10) / 10
+            })
+          })
+        })
+      })
+      setDataValues(initialValues)
+    }
+  }, [isOpen, selectedYear])
+
+  if (!isOpen) return null
+  
+  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
+  const months = getMonthsForYear(selectedYear, "month")
+  const currentCategory = kpiStructure.find(cat => cat.id === activeCategory)
+  
+  const handleSave = async () => {
+    setLoading(true)
+    try {
+      // Here you would save to Firebase
+      console.log("Saving data:", {
+        category: activeCategory,
+        year: selectedYear,
+        dataValues,
+        notes
+      })
+      
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      alert("Data saved successfully!")
+      onClose()
+    } catch (error) {
+      console.error("Error saving data:", error)
+      alert("Error saving data. Please try again.")
+    } finally {
+      setLoading(false)
+    }
+  }
+  
+  const handleAddKPI = () => {
+    if (!newKPI.name || !newKPI.units || !newKPI.target) {
+      alert("Please fill in all KPI fields")
+      return
+    }
+    
+    const categoryIndex = kpiStructure.findIndex(cat => cat.id === activeCategory)
+    if (categoryIndex === -1) return
+    
+    const subCategoryIndex = kpiStructure[categoryIndex].subCategories.findIndex(
+      sub => sub.name === (kpiData?.subCategory || kpiStructure[categoryIndex].subCategories[0].name)
+    )
+    
+    if (subCategoryIndex === -1) return
+    
+    const updatedStructure = [...kpiStructure]
+    updatedStructure[categoryIndex].subCategories[subCategoryIndex].kpis.push({
+      name: newKPI.name,
+      units: newKPI.units,
+      target: Number.parseFloat(newKPI.target),
+      currentValue: 0
+    })
+    
+    setKpiStructure(updatedStructure)
+    setNewKPI({ name: "", units: "", target: "" })
+    setShowAddKPIForm(false)
+    
+    // Initialize data for the new KPI across all months
+    const newDataValues = { ...dataValues }
+    months.forEach(month => {
+      const kpiKey = `${activeCategory}-${updatedStructure[categoryIndex].subCategories[subCategoryIndex].name}-${newKPI.name}-${month}`
+      newDataValues[kpiKey] = ""
+    })
+    setDataValues(newDataValues)
+    
+    alert("New KPI added successfully!")
+  }
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(0,0,0,0.7)",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        zIndex: 1000,
+        padding: "20px",
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: "#fdfcfb",
+          padding: "30px",
+          borderRadius: "12px",
+          maxWidth: "1300px",
+          maxHeight: "90vh",
+          overflow: "auto",
+          width: "100%",
+          boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "25px" }}>
+          <div>
+            <h3 style={{ color: "#5d4037", margin: 0, fontSize: "22px", fontWeight: "700" }}>
+              Add Operational Data
+            </h3>
+            <p style={{ color: "#8d6e63", fontSize: "14px", marginTop: "5px", marginBottom: 0 }}>
+              Enter data for operational KPIs by category - All months shown for {selectedYear}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: "none",
+              border: "none",
+              fontSize: "28px",
+              color: "#5d4037",
+              cursor: "pointer",
+              padding: "0",
+              lineHeight: "1",
+              width: "32px",
+              height: "32px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: "50%",
+              backgroundColor: "#f5f0eb",
+              transition: "all 0.3s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = "#e8ddd4"
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = "#f5f0eb"
+            }}
+          >
+            ×
+          </button>
+        </div>
+        
+        {/* Category Tabs */}
+        <div
+          style={{
+            display: "flex",
+            gap: "10px",
+            marginBottom: "25px",
+            paddingBottom: "10px",
+            borderBottom: "1px solid #e8ddd4",
+            flexWrap: "wrap",
+          }}
+        >
+          {kpiStructure.map((category) => (
+            <button
+              key={category.id}
+              onClick={() => setActiveCategory(category.id)}
+              style={{
+                padding: "10px 20px",
+                backgroundColor: activeCategory === category.id ? "#5d4037" : "#e8ddd4",
+                color: activeCategory === category.id ? "#fdfcfb" : "#5d4037",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "14px",
+                transition: "all 0.3s ease",
+              }}
+            >
+              {category.name}
+            </button>
+          ))}
+        </div>
+        
+        {/* Year Selection and Add KPI Button */}
+        <div style={{ 
+          marginBottom: "15px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "15px"
+        }}>
+          <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+            <span style={{ color: "#5d4037", fontSize: "14px", fontWeight: "600" }}>Year:</span>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
+              style={{
+                padding: "8px 12px",
+                borderRadius: "6px",
+                border: "1px solid #d7ccc8",
+                fontSize: "14px",
+                color: "#5d4037",
+                minWidth: "100px",
+                backgroundColor: "#fff",
+                cursor: "pointer",
+              }}
+            >
+              {years.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          </div>
+          
+          <button
+            onClick={() => setShowAddKPIForm(!showAddKPIForm)}
+            style={{
+              padding: "10px 20px",
+              backgroundColor: "#8d6e63",
+              color: "#fdfcfb",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "14px",
+              transition: "all 0.3s ease",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = "#5d4037"
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = "#8d6e63"
+            }}
+          >
+            <span style={{ fontSize: "18px" }}>+</span>
+            {showAddKPIForm ? "Cancel Add KPI" : "Add New KPI"}
+          </button>
+        </div>
+        
+        {/* Add KPI Form */}
+        {showAddKPIForm && (
+          <div style={{
+            backgroundColor: "#f0e6d6",
+            padding: "20px",
+            borderRadius: "8px",
+            marginBottom: "20px",
+            border: "1px solid #d7ccc8"
+          }}>
+            <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
+              Add New KPI to {currentCategory?.name}
+            </h4>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px", marginBottom: "15px" }}>
+              <div>
+                <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600", fontSize: "13px" }}>
+                  KPI Name
+                </label>
+                <input
+                  type="text"
+                  value={newKPI.name}
+                  onChange={(e) => setNewKPI({...newKPI, name: e.target.value})}
+                  placeholder="Enter KPI name"
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    borderRadius: "6px",
+                    border: "1px solid #d7ccc8",
+                    fontSize: "14px",
+                    color: "#5d4037",
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600", fontSize: "13px" }}>
+                  Units
+                </label>
+                <select
+                  value={newKPI.units}
+                  onChange={(e) => setNewKPI({...newKPI, units: e.target.value})}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    borderRadius: "6px",
+                    border: "1px solid #d7ccc8",
+                    fontSize: "14px",
+                    color: "#5d4037",
+                    backgroundColor: "white",
+                  }}
+                >
+                  <option value="">Select units</option>
+                  <option value="%">%</option>
+                  <option value="R">R</option>
+                  <option value="#">#</option>
+                  <option value="days">days</option>
+                  <option value="units">units</option>
+                  <option value="index">index</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600", fontSize: "13px" }}>
+                  Target Value
+                </label>
+                <input
+                  type="number"
+                  value={newKPI.target}
+                  onChange={(e) => setNewKPI({...newKPI, target: e.target.value})}
+                  placeholder="Enter target"
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    borderRadius: "6px",
+                    border: "1px solid #d7ccc8",
+                    fontSize: "14px",
+                    color: "#5d4037",
+                  }}
+                />
+              </div>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <button
+                onClick={() => setShowAddKPIForm(false)}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "13px",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddKPI}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "13px",
+                }}
+              >
+                Add KPI
+              </button>
+            </div>
+          </div>
+        )}
+        
+        <div style={{ 
+          marginBottom: "25px",
+          overflowX: "auto"
+        }}>
+          {/* KPIs for selected category - All months spread horizontally */}
+          {currentCategory?.subCategories.map((subCategory, subIndex) => (
+            <div key={subIndex} style={{ 
+              backgroundColor: "#f5f0eb", 
+              padding: "20px", 
+              borderRadius: "8px",
+              marginBottom: "20px"
+            }}>
+              <h5 style={{ 
+                color: "#5d4037", 
+                marginTop: 0, 
+                marginBottom: "20px",
+                fontSize: "16px",
+                fontWeight: "600",
+                backgroundColor: "#e8ddd4",
+                padding: "10px 15px",
+                borderRadius: "6px"
+              }}>
+                {subCategory.name}
+              </h5>
+              
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "800px" }}>
+                  <thead>
+                    <tr>
+                      <th style={{ 
+                        padding: "12px", 
+                        textAlign: "left", 
+                        color: "#5d4037", 
+                        fontWeight: "600",
+                        borderBottom: "2px solid #d7ccc8",
+                        position: "sticky",
+                        left: 0,
+                        backgroundColor: "#f5f0eb"
+                      }}>
+                        KPI
+                      </th>
+                      <th style={{ 
+                        padding: "12px", 
+                        textAlign: "center", 
+                        color: "#5d4037", 
+                        fontWeight: "600",
+                        borderBottom: "2px solid #d7ccc8",
+                        backgroundColor: "#e8ddd4"
+                      }}>
+                        Units
+                      </th>
+                      <th style={{ 
+                        padding: "12px", 
+                        textAlign: "center", 
+                        color: "#5d4037", 
+                        fontWeight: "600",
+                        borderBottom: "2px solid #d7ccc8",
+                        backgroundColor: "#f0e6d6"
+                      }}>
+                        Target
+                      </th>
+                      {months.map((month, index) => (
+                        <th key={month} style={{ 
+                          padding: "8px", 
+                          textAlign: "center", 
+                          color: "#5d4037", 
+                          fontWeight: "600",
+                          borderBottom: "2px solid #d7ccc8",
+                          backgroundColor: index % 2 === 0 ? "#f9f4ef" : "#f5f0eb",
+                          minWidth: "80px"
+                        }}>
+                          {month}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {subCategory.kpis.map((kpi, kpiIndex) => (
+                      <tr key={kpiIndex} style={{ 
+                        borderBottom: "1px solid #e8ddd4",
+                        backgroundColor: kpiIndex % 2 === 0 ? "#fdfcfb" : "#f9f4ef"
+                      }}>
+                        <td style={{ 
+                          padding: "12px", 
+                          color: "#5d4037",
+                          position: "sticky",
+                          left: 0,
+                          backgroundColor: kpiIndex % 2 === 0 ? "#fdfcfb" : "#f9f4ef"
+                        }}>
+                          {kpi.name}
+                        </td>
+                        <td style={{ 
+                          padding: "12px", 
+                          textAlign: "center", 
+                          color: "#8d6e63",
+                          backgroundColor: "#e8ddd4"
+                        }}>
+                          {kpi.units}
+                        </td>
+                        <td style={{ 
+                          padding: "12px", 
+                          textAlign: "center", 
+                          color: "#5d4037",
+                          fontWeight: "600",
+                          backgroundColor: "#f0e6d6"
+                        }}>
+                          {kpi.target}
+                        </td>
+                        {months.map((month, monthIndex) => {
+                          const kpiKey = `${currentCategory.id}-${subCategory.name}-${kpi.name}-${month}`
+                          return (
+                            <td key={month} style={{ 
+                              padding: "8px",
+                              textAlign: "center"
+                            }}>
+                              <input
+                                type="number"
+                                value={dataValues[kpiKey] || ""}
+                                placeholder="-"
+                                style={{
+                                  width: "100%",
+                                  padding: "6px",
+                                  borderRadius: "4px",
+                                  border: "1px solid #d7ccc8",
+                                  fontSize: "13px",
+                                  color: "#5d4037",
+                                  textAlign: "center",
+                                  backgroundColor: "white"
+                                }}
+                                onChange={(e) => {
+                                  setDataValues(prev => ({
+                                    ...prev,
+                                    [kpiKey]: e.target.value
+                                  }))
+                                }}
+                              />
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
+        </div>
+        
+        {/* Notes Section */}
+        <div style={{ marginTop: "20px" }}>
+          <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
+            Notes on Data Entry
+          </label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Add any notes or comments about this data entry. Include observations, anomalies, or contextual information that might be helpful for analysis..."
+            style={{
+              width: "100%",
+              padding: "12px",
+              borderRadius: "6px",
+              border: "1px solid #d7ccc8",
+              fontSize: "14px",
+              color: "#5d4037",
+              minHeight: "100px",
+              resize: "vertical",
+            }}
+          />
+          <div style={{ fontSize: "12px", color: "#8d6e63", marginTop: "5px" }}>
+            These notes will be saved with the data and visible when viewing charts.
+          </div>
+        </div>
+        
+        <div style={{ 
+          display: "flex", 
+          justifyContent: "space-between", 
+          alignItems: "center",
+          marginTop: "25px",
+          paddingTop: "20px",
+          borderTop: "1px solid #e8ddd4"
+        }}>
+          <div style={{ fontSize: "13px", color: "#8d6e63" }}>
+            Data values adjust based on selected year. Enter values for all months at once.
+          </div>
+          
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button
+              onClick={onClose}
+              style={{
+                padding: "10px 24px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "14px",
+                transition: "all 0.3s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = "#d7ccc8"
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = "#e8ddd4"
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={loading}
+              style={{
+                padding: "10px 24px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "6px",
+                cursor: loading ? "not-allowed" : "pointer",
+                fontWeight: "600",
+                fontSize: "14px",
+                transition: "all 0.3s ease",
+                opacity: loading ? 0.7 : 1,
+              }}
+              onMouseEnter={(e) => {
+                if (!loading) {
+                  e.target.style.backgroundColor = "#3e2723"
+                  e.target.style.transform = "translateY(-2px)"
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!loading) {
+                  e.target.style.backgroundColor = "#5d4037"
+                  e.target.style.transform = "translateY(0)"
+                }
+              }}
+            >
+              {loading ? "Saving..." : "Save All Data"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// KPI Dashboard Component with Eye Icon instead of View button
+const KPIDashboard = ({ activeSection, isInvestorView, financialYearStartMonth }) => {
   const [allData, setAllData] = useState({})
-  const [financialYearMonths, setFinancialYearMonths] = useState([])
   const [currentUser, setCurrentUser] = useState(null)
   const [kpiViewMode, setKpiViewMode] = useState("month")
+  const [selectedKPI, setSelectedKPI] = useState(null)
+  const [showAddDataModal, setShowAddDataModal] = useState(false)
+  const [showChartModal, setShowChartModal] = useState(false)
+  
+  // CORRECT KPI structure with Category → Sub-Category → KPI hierarchy
+  const kpiStructure = [
+    {
+      category: "Supply Chain",
+      subCategories: [
+        {
+          name: "Supplier Dependency",
+          kpis: [
+            { name: "Top 3 Supplier %", units: "%", target: 70, currentValue: 79 },
+            { name: "Single Source Flags", units: "#", target: 0, currentValue: 1 },
+            { name: "Critical Supplier Count", units: "#", target: 5, currentValue: 16 }
+          ]
+        },
+        {
+          name: "Continuity Risk",
+          kpis: [
+            { name: "Lead Time Variance", units: "days", target: 2, currentValue: 2.3 },
+            { name: "Stock Cover Days", units: "days", target: 30, currentValue: 27 },
+            { name: "Disruption Risk Index", units: "index", target: 20, currentValue: 23 }
+          ]
+        }
+      ]
+    },
+    {
+      category: "Delivery",
+      subCategories: [
+        {
+          name: "Productivity",
+          kpis: [
+            { name: "Production Volume", units: "units", target: 10000, currentValue: 12800 },
+            { name: "Availability %", units: "%", target: 95, currentValue: 93 },
+            { name: "Utilization %", units: "%", target: 85, currentValue: 85 },
+            { name: "Unit Cost", units: "R", target: 50, currentValue: 41 }
+          ]
+        },
+        {
+          name: "Reliability",
+          kpis: [
+            { name: "On-time Delivery %", units: "%", target: 98, currentValue: 96 },
+            { name: "Rework Rate", units: "%", target: 2, currentValue: 1.1 },
+            { name: "Defect Rate", units: "%", target: 1, currentValue: 0.1 }
+          ]
+        }
+      ]
+    },
+    {
+      category: "Safety",
+      subCategories: [
+        {
+          name: "Safety Risk",
+          kpis: [
+            { name: "Safety Incidents", units: "#", target: 0, currentValue: 0 },
+            { name: "Open Safety Actions", units: "#", target: 5, currentValue: 1 },
+            { name: "Compliance Status %", units: "%", target: 100, currentValue: 100 }
+          ]
+        },
+        {
+          name: "Regulatory Compliance",
+          kpis: [
+            { name: "Regulatory Gaps", units: "#", target: 0, currentValue: 0 },
+            { name: "Audit Findings", units: "#", target: 3, currentValue: 0 },
+            { name: "Certification Status %", units: "%", target: 100, currentValue: 100 }
+          ]
+        }
+      ]
+    }
+  ]
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -154,14 +1333,8 @@ const KPIDashboard = ({ activeSection, isInvestorView, onCategoryClick, financia
     return () => unsubscribe()
   }, [])
 
-  useEffect(() => {
-    const months = getMonthsForYear(new Date().getFullYear(), "month")
-    setFinancialYearMonths(months)
-  }, [])
-
   const loadAllData = async (userId) => {
     try {
-      // Load data from all sections
       const sections = [
         'supplierDependency',
         'continuityRisk',
@@ -189,281 +1362,45 @@ const KPIDashboard = ({ activeSection, isInvestorView, onCategoryClick, financia
     }
   }
 
-  // Build KPI rows from all data sources
-  const buildKPIRows = () => {
-    const rows = []
-
-    // Supplier Dependency Category
-    if (allData.supplierDependency) {
-      const top3SupplierPercent = allData.supplierDependency.top3SupplierPercent || 0
-      const singleSourceFlags = allData.supplierDependency.singleSourceFlags || 0
-      const criticalSupplierCount = allData.supplierDependency.criticalSupplierCount || 0
-
-      rows.push({
-        category: "Supply Chain",
-        sectionId: "supply-chain",
-        kpi: "Top 3 Supplier %",
-        units: "%",
-        thisMonthTarget: 70,
-        thisMonthActual: top3SupplierPercent,
-        ytdTarget: 70,
-        ytdActual: top3SupplierPercent,
-      })
-      rows.push({
-        category: "Supply Chain",
-        sectionId: "supply-chain",
-        kpi: "Single Source Flags",
-        units: "#",
-        thisMonthTarget: 0,
-        thisMonthActual: singleSourceFlags,
-        ytdTarget: 0,
-        ytdActual: singleSourceFlags,
-      })
-      rows.push({
-        category: "Supply Chain",
-        sectionId: "supply-chain",
-        kpi: "Critical Supplier Count",
-        units: "#",
-        thisMonthTarget: 5,
-        thisMonthActual: criticalSupplierCount,
-        ytdTarget: 5,
-        ytdActual: criticalSupplierCount,
-      })
-    }
-
-    // Continuity Risk Category
-    if (allData.continuityRisk) {
-      const leadTimeVariance = allData.continuityRisk.leadTimeVariance || 0
-      const stockCoverDays = allData.continuityRisk.stockCoverDays || 0
-      const disruptionRisk = allData.continuityRisk.disruptionRisk || 0
-
-      rows.push({
-        category: "Continuity Risk",
-        sectionId: "supply-chain",
-        kpi: "Lead Time Variance",
-        units: "days",
-        thisMonthTarget: 2,
-        thisMonthActual: leadTimeVariance,
-        ytdTarget: 2,
-        ytdActual: leadTimeVariance,
-      })
-      rows.push({
-        category: "Continuity Risk",
-        sectionId: "supply-chain",
-        kpi: "Stock Cover Days",
-        units: "days",
-        thisMonthTarget: 30,
-        thisMonthActual: stockCoverDays,
-        ytdTarget: 30,
-        ytdActual: stockCoverDays,
-      })
-      rows.push({
-        category: "Continuity Risk",
-        sectionId: "supply-chain",
-        kpi: "Disruption Risk Index",
-        units: "index",
-        thisMonthTarget: 20,
-        thisMonthActual: disruptionRisk,
-        ytdTarget: 20,
-        ytdActual: disruptionRisk,
-      })
-    }
-
-    // Productivity Category
-    if (allData.productivity) {
-      const volume = allData.productivity.volume || 0
-      const availability = allData.productivity.availability || 0
-      const utilization = allData.productivity.utilization || 0
-      const unitCost = allData.productivity.unitCost || 0
-
-      rows.push({
-        category: "Productivity",
-        sectionId: "delivery",
-        kpi: "Production Volume",
-        units: "units",
-        thisMonthTarget: 10000,
-        thisMonthActual: volume,
-        ytdTarget: 10000,
-        ytdActual: volume,
-      })
-      rows.push({
-        category: "Productivity",
-        sectionId: "delivery",
-        kpi: "Availability %",
-        units: "%",
-        thisMonthTarget: 95,
-        thisMonthActual: availability,
-        ytdTarget: 95,
-        ytdActual: availability,
-      })
-      rows.push({
-        category: "Productivity",
-        sectionId: "delivery",
-        kpi: "Utilization %",
-        units: "%",
-        thisMonthTarget: 85,
-        thisMonthActual: utilization,
-        ytdTarget: 85,
-        ytdActual: utilization,
-      })
-      rows.push({
-        category: "Productivity",
-        sectionId: "delivery",
-        kpi: "Unit Cost",
-        units: "R",
-        thisMonthTarget: 50,
-        thisMonthActual: unitCost,
-        ytdTarget: 50,
-        ytdActual: unitCost,
-      })
-    }
-
-    // Reliability Category
-    if (allData.reliability) {
-      const onTimeDelivery = allData.reliability.onTimeDelivery || 0
-      const reworkRate = allData.reliability.reworkRate || 0
-      const defectRate = allData.reliability.defectRate || 0
-
-      rows.push({
-        category: "Reliability",
-        sectionId: "delivery",
-        kpi: "On-time Delivery %",
-        units: "%",
-        thisMonthTarget: 98,
-        thisMonthActual: onTimeDelivery,
-        ytdTarget: 98,
-        ytdActual: onTimeDelivery,
-      })
-      rows.push({
-        category: "Reliability",
-        sectionId: "delivery",
-        kpi: "Rework Rate",
-        units: "%",
-        thisMonthTarget: 2,
-        thisMonthActual: reworkRate,
-        ytdTarget: 2,
-        ytdActual: reworkRate,
-      })
-      rows.push({
-        category: "Reliability",
-        sectionId: "delivery",
-        kpi: "Defect Rate",
-        units: "%",
-        thisMonthTarget: 1,
-        thisMonthActual: defectRate,
-        ytdTarget: 1,
-        ytdActual: defectRate,
-      })
-    }
-
-    // Safety Risk Category
-    if (allData.safetyRisk) {
-      const safetyIncidents = allData.safetyRisk.safetyIncidents || 0
-      const openActions = allData.safetyRisk.openActions || 0
-      const complianceStatus = allData.safetyRisk.complianceStatus || 0
-
-      rows.push({
-        category: "Safety Risk",
-        sectionId: "safety",
-        kpi: "Safety Incidents",
-        units: "#",
-        thisMonthTarget: 0,
-        thisMonthActual: safetyIncidents,
-        ytdTarget: 0,
-        ytdActual: safetyIncidents,
-      })
-      rows.push({
-        category: "Safety Risk",
-        sectionId: "safety",
-        kpi: "Open Safety Actions",
-        units: "#",
-        thisMonthTarget: 5,
-        thisMonthActual: openActions,
-        ytdTarget: 5,
-        ytdActual: openActions,
-      })
-      rows.push({
-        category: "Safety Risk",
-        sectionId: "safety",
-        kpi: "Compliance Status %",
-        units: "%",
-        thisMonthTarget: 100,
-        thisMonthActual: complianceStatus,
-        ytdTarget: 100,
-        ytdActual: complianceStatus,
-      })
-    }
-
-    // Compliance Category
-    if (allData.compliance) {
-      const regulatoryGaps = allData.compliance.regulatoryGaps || 0
-      const auditFindings = allData.compliance.auditFindings || 0
-      const certificationStatus = allData.compliance.certificationStatus || 0
-
-      rows.push({
-        category: "Compliance",
-        sectionId: "safety",
-        kpi: "Regulatory Gaps",
-        units: "#",
-        thisMonthTarget: 0,
-        thisMonthActual: regulatoryGaps,
-        ytdTarget: 0,
-        ytdActual: regulatoryGaps,
-      })
-      rows.push({
-        category: "Compliance",
-        sectionId: "safety",
-        kpi: "Audit Findings",
-        units: "#",
-        thisMonthTarget: 3,
-        thisMonthActual: auditFindings,
-        ytdTarget: 3,
-        ytdActual: auditFindings,
-      })
-      rows.push({
-        category: "Compliance",
-        sectionId: "safety",
-        kpi: "Certification Status %",
-        units: "%",
-        thisMonthTarget: 100,
-        thisMonthActual: certificationStatus,
-        ytdTarget: 100,
-        ytdActual: certificationStatus,
-      })
-    }
-
-    return rows
-  }
-
-  const formatValue = (value, decimals = 0) => {
-    if (value === null || value === undefined) return "0"
-    return Number(value).toFixed(decimals)
-  }
-
-  const calculateVariance = (target, actual) => {
-    return actual - target
+  const handleViewChart = (category, subCategory, kpi) => {
+    setSelectedKPI({
+      category: category,
+      subCategory: subCategory.name,
+      kpi: kpi.name,
+      units: kpi.units,
+      target: kpi.target,
+      currentValue: kpi.currentValue
+    })
+    setShowChartModal(true)
   }
 
   const handleDownloadCSV = () => {
-    const headers = ["Category", "KPI", "Units of Measure", "This Month Target", "This Month Actual", "This Month Var.", "YTD Target", "YTD Actual", "YTD Var."]
+    const headers = ["Category", "Sub-Category", "KPI", "Units", "Target", "Current Value", "Variance", "Status"]
     const rows = []
-    const kpiRows = buildKPIRows()
-
-    kpiRows.forEach(row => {
-      const monthlyVar = calculateVariance(row.thisMonthTarget, row.thisMonthActual)
-      const ytdVar = calculateVariance(row.ytdTarget, row.ytdActual)
-
-      rows.push([
-        row.category,
-        row.kpi,
-        row.units,
-        formatValue(row.thisMonthTarget, 1),
-        formatValue(row.thisMonthActual, 1),
-        formatValue(monthlyVar, 1),
-        formatValue(row.ytdTarget, 1),
-        formatValue(row.ytdActual, 1),
-        formatValue(ytdVar, 1)
-      ])
+    
+    kpiStructure.forEach(category => {
+      category.subCategories.forEach(subCategory => {
+        subCategory.kpis.forEach(kpi => {
+          const variance = typeof kpi.currentValue === 'number' && typeof kpi.target === 'number' 
+            ? kpi.currentValue - kpi.target
+            : "N/A"
+          
+          const status = typeof variance === 'number' 
+            ? variance >= 0 ? "On Target" : "Below Target"
+            : "N/A"
+          
+          rows.push([
+            category.category,
+            subCategory.name,
+            kpi.name,
+            kpi.units,
+            kpi.target,
+            kpi.currentValue,
+            variance,
+            status
+          ])
+        })
+      })
     })
 
     const csvContent = [headers, ...rows].map(row => row.join(",")).join("\n")
@@ -475,17 +1412,6 @@ const KPIDashboard = ({ activeSection, isInvestorView, onCategoryClick, financia
     a.click()
     URL.revokeObjectURL(url)
   }
-
-  const kpiRows = buildKPIRows()
-
-  // Group by category
-  const groupedKPIs = kpiRows.reduce((acc, row) => {
-    if (!acc[row.category]) {
-      acc[row.category] = []
-    }
-    acc[row.category].push(row)
-    return acc
-  }, {})
 
   if (activeSection !== "kpi-dashboard") return null
 
@@ -569,3162 +1495,234 @@ const KPIDashboard = ({ activeSection, isInvestorView, onCategoryClick, financia
           >
             Download CSV
           </button>
-        </div>
-      </div>
-
-      {kpiRows.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "40px", color: "#72542b" }}>
-          <p>No data available. Please add data in the other tabs to see the KPI summary here.</p>
-        </div>
-      ) : (
-        <div style={{ overflowX: "auto" }}>
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              backgroundColor: "white",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-            }}
-          >
-            <thead>
-              <tr style={{ backgroundColor: "#9c8269" }}>
-                <th style={{ padding: "12px", textAlign: "left", color: "white", fontWeight: "bold", borderRight: "1px solid #8b7355" }}>
-                  Category
-                </th>
-                <th style={{ padding: "12px", textAlign: "left", color: "white", fontWeight: "bold", borderRight: "1px solid #8b7355" }}>
-                  KPI
-                </th>
-                <th style={{ padding: "12px", textAlign: "center", color: "white", fontWeight: "bold", borderRight: "1px solid #8b7355" }}>
-                  Units of<br />Measure
-                </th>
-                <th colSpan="2" style={{ padding: "12px", textAlign: "center", color: "white", fontWeight: "bold", borderRight: "1px solid #8b7355", backgroundColor: "#b4a592" }}>
-                  Status
-                </th>
-                <th colSpan="3" style={{ padding: "12px", textAlign: "center", color: "white", fontWeight: "bold", borderRight: "1px solid #8b7355", backgroundColor: "#a89885" }}>
-                  This {kpiViewMode === "quarter" ? "Quarter" : kpiViewMode === "year" ? "Year" : "Month"}
-                </th>
-                <th colSpan="3" style={{ padding: "12px", textAlign: "center", color: "white", fontWeight: "bold", backgroundColor: "#9c8c78" }}>
-                  YTD
-                </th>
-              </tr>
-              <tr style={{ backgroundColor: "#d4c4b0" }}>
-                <th style={{ padding: "8px", borderRight: "1px solid #c4b4a0" }}></th>
-                <th style={{ padding: "8px", borderRight: "1px solid #c4b4a0" }}></th>
-                <th style={{ padding: "8px", borderRight: "1px solid #c4b4a0" }}></th>
-                <th style={{ padding: "8px", textAlign: "center", color: "#4a352f", fontSize: "12px", fontWeight: "600", borderRight: "1px solid #c4b4a0" }}>
-                  This<br />{kpiViewMode === "quarter" ? "Qtr" : kpiViewMode === "year" ? "Year" : "Month"}
-                </th>
-                <th style={{ padding: "8px", textAlign: "center", color: "#4a352f", fontSize: "12px", fontWeight: "600", borderRight: "1px solid #c4b4a0" }}>
-                  YTD
-                </th>
-                <th style={{ padding: "8px", textAlign: "center", color: "#4a352f", fontSize: "12px", fontWeight: "600", borderRight: "1px solid #c4b4a0" }}>
-                  Target
-                </th>
-                <th style={{ padding: "8px", textAlign: "center", color: "#4a352f", fontSize: "12px", fontWeight: "600", borderRight: "1px solid #c4b4a0" }}>
-                  Actual
-                </th>
-                <th style={{ padding: "8px", textAlign: "center", color: "#4a352f", fontSize: "12px", fontWeight: "600", borderRight: "1px solid #c4b4a0" }}>
-                  Var.
-                </th>
-                <th style={{ padding: "8px", textAlign: "center", color: "#4a352f", fontSize: "12px", fontWeight: "600", borderRight: "1px solid #c4b4a0" }}>
-                  Target
-                </th>
-                <th style={{ padding: "8px", textAlign: "center", color: "#4a352f", fontSize: "12px", fontWeight: "600", borderRight: "1px solid #c4b4a0" }}>
-                  Actual
-                </th>
-                <th style={{ padding: "8px", textAlign: "center", color: "#4a352f", fontSize: "12px", fontWeight: "600" }}>
-                  Var.
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {Object.entries(groupedKPIs).map(([category, categoryKpis], categoryIndex) => (
-                <>
-                  {categoryKpis.map((row, kpiIndex) => {
-                    const monthlyVar = calculateVariance(row.thisMonthTarget, row.thisMonthActual)
-                    const ytdVar = calculateVariance(row.ytdTarget, row.ytdActual)
-
-                    return (
-                      <tr
-                        key={`${category}-${kpiIndex}`}
-                        style={{
-                          backgroundColor: categoryIndex % 2 === 0 ? "#f5f5f5" : "#e8e8e8",
-                          borderBottom: "1px solid #ddd",
-                          cursor: "pointer",
-                        }}
-                        onClick={() => {
-                          if (onCategoryClick && row.sectionId) {
-                            onCategoryClick(row.sectionId)
-                          }
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = categoryIndex % 2 === 0 ? "#e8e8e8" : "#f5f5f5"
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = categoryIndex % 2 === 0 ? "#f5f5f5" : "#e8e8e8"
-                        }}
-                      >
-                        {kpiIndex === 0 && (
-                          <td
-                            rowSpan={categoryKpis.length}
-                            style={{
-                              padding: "12px",
-                              fontWeight: "bold",
-                              color: "#4a352f",
-                              borderRight: "2px solid #999",
-                              backgroundColor: categoryIndex % 2 === 0 ? "#e6d7c3" : "#d4c4b0",
-                              verticalAlign: "top",
-                            }}
-                          >
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                              {category}
-                              <span style={{ fontSize: "12px", color: "#72542b" }}>▶</span>
-                            </div>
-                          </td>
-                        )}
-                        <td style={{ padding: "12px", color: "#4a352f", borderRight: "1px solid #ddd" }}>
-                          {row.kpi}
-                        </td>
-                        <td style={{ padding: "12px", textAlign: "center", color: "#4a352f", borderRight: "1px solid #ddd" }}>
-                          {row.units}
-                        </td>
-                        <td style={{ padding: "12px", textAlign: "center", borderRight: "1px solid #ddd" }}>
-                          {monthlyVar >= 0 ? "✅" : "⚠️"}
-                        </td>
-                        <td style={{ padding: "12px", textAlign: "center", borderRight: "1px solid #ddd" }}>
-                          {ytdVar >= 0 ? "✅" : "⚠️"}
-                        </td>
-                        <td style={{ padding: "12px", textAlign: "right", color: "#4a352f", borderRight: "1px solid #ddd" }}>
-                          {formatValue(row.thisMonthTarget, 1)}
-                        </td>
-                        <td style={{ padding: "12px", textAlign: "right", color: "#4a352f", borderRight: "1px solid #ddd" }}>
-                          {formatValue(row.thisMonthActual, 1)}
-                        </td>
-                        <td style={{ padding: "12px", textAlign: "right", color: "#4a352f", fontWeight: "bold", borderRight: "1px solid #ddd" }}>
-                          {formatValue(monthlyVar, 1)}
-                        </td>
-                        <td style={{ padding: "12px", textAlign: "right", color: "#4a352f", borderRight: "1px solid #ddd" }}>
-                          {formatValue(row.ytdTarget, 1)}
-                        </td>
-                        <td style={{ padding: "12px", textAlign: "right", color: "#4a352f", borderRight: "1px solid #ddd" }}>
-                          {formatValue(row.ytdActual, 1)}
-                        </td>
-                        <td style={{ padding: "12px", textAlign: "right", color: "#4a352f", fontWeight: "bold" }}>
-                          {formatValue(ytdVar, 1)}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Generic Chart Component with Notes and AI Analysis
-const OperationalChart = ({ title, data, kpiKey, isInvestorView, onUpdate, units = "", type = "bar", notes = "", analysis = "", chartHeight = "60px" }) => {
-  const [expandedNotes, setExpandedNotes] = useState(false)
-  const [expandedAnalysis, setExpandedAnalysis] = useState(false)
-  const [currentNotes, setCurrentNotes] = useState(notes)
-  const [currentAnalysis, setCurrentAnalysis] = useState(analysis)
-
-  const handleAddNotes = () => {
-    setExpandedNotes(!expandedNotes)
-  }
-
-  const handleAIAnalysis = () => {
-    setExpandedAnalysis(!expandedAnalysis)
-  }
-
-  const updateNotes = (newNotes) => {
-    setCurrentNotes(newNotes)
-    if (onUpdate) {
-      onUpdate('notes', newNotes)
-    }
-  }
-
-  const updateAnalysis = (newAnalysis) => {
-    setCurrentAnalysis(newAnalysis)
-    if (onUpdate) {
-      onUpdate('analysis', newAnalysis)
-    }
-  }
-
-  const renderChart = () => {
-    if (type === "line") {
-      return (
-        <Line
-          data={data}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                display: false,
-              },
-              title: {
-                display: false,
-              },
-              tooltip: {
-                backgroundColor: 'rgba(93, 64, 55, 0.9)',
-                titleColor: '#fdfcfb',
-                bodyColor: '#fdfcfb',
-                displayColors: false
-              }
-            },
-            scales: {
-              x: {
-                ticks: {
-                  maxRotation: 0,
-                  autoSkip: true,
-                  maxTicksLimit: 6
-                },
-                grid: {
-                  display: false
-                }
-              },
-              y: {
-                beginAtZero: true,
-                ticks: {
-                  callback: function(value) {
-                    return units === '%' ? value + '%' : value
-                  }
-                },
-                grid: {
-                  color: 'rgba(0,0,0,0.05)'
-                }
-              },
-            },
-          }}
-          height={chartHeight}
-        />
-      )
-    } else if (type === "pie") {
-      return (
-        <div style={{ height: chartHeight }}>
-          <Pie
-            data={data}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: {
-                  display: false,
-                },
-                tooltip: {
-                  backgroundColor: 'rgba(93, 64, 55, 0.9)',
-                  titleColor: '#fdfcfb',
-                  bodyColor: '#fdfcfb'
-                }
-              },
-            }}
-          />
-        </div>
-      )
-    } else {
-      return (
-        <Bar
-          data={data}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                display: false,
-              },
-              title: {
-                display: false,
-              },
-              tooltip: {
-                backgroundColor: 'rgba(93, 64, 55, 0.9)',
-                titleColor: '#fdfcfb',
-                bodyColor: '#fdfcfb',
-                displayColors: false
-              }
-            },
-            scales: {
-              x: {
-                ticks: {
-                  maxRotation: 0,
-                  autoSkip: true,
-                  maxTicksLimit: 6
-                },
-                grid: {
-                  display: false
-                }
-              },
-              y: {
-                beginAtZero: true,
-                ticks: {
-                  callback: function(value) {
-                    return units === '%' ? value + '%' : value
-                  }
-                },
-                grid: {
-                  color: 'rgba(0,0,0,0.05)'
-                }
-              },
-            },
-          }}
-          height={chartHeight}
-        />
-      )
-    }
-  }
-
-  const totalValue = data.datasets[0].data.reduce((a, b) => a + b, 0)
-  const averageValue = totalValue / data.datasets[0].data.length
-
-  return (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "20px",
-        borderRadius: "8px",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        marginBottom: "20px",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", marginBottom: "15px" }}>
-        <div
-          style={{
-            width: "100px",
-            height: "100px",
-            borderRadius: "50%",
-            border: "5px solid #f9a825",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            marginRight: "20px",
-            backgroundColor: "#fff9c4",
-            flexShrink: 0,
-          }}
-        >
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "18px", fontWeight: "700", color: "#5d4037" }}>
-              {averageValue.toFixed(1)}
-            </div>
-            <div style={{ fontSize: "11px", color: "#8d6e63" }}>{units}</div>
-          </div>
-        </div>
-        <div style={{ flex: 1 }}>
-          <h4 style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}>{title}</h4>
-          <div style={{ height: chartHeight }}>
-            {renderChart()}
-          </div>
-        </div>
-      </div>
-
-      {!isInvestorView && (
-        <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
-          <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+          {!isInvestorView && (
             <button
-              onClick={handleAddNotes}
+              onClick={() => setShowAddDataModal(true)}
               style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
+                padding: "10px 20px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
                 border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              ADD notes
-            </button>
-            <button
-              onClick={handleAIAnalysis}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              AI analysis
-            </button>
-          </div>
-
-          {expandedNotes && (
-            <div style={{ marginBottom: "10px" }}>
-              <label
-                style={{
-                  fontSize: "12px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                  display: "block",
-                  marginBottom: "5px",
-                }}
-              >
-                Notes / Comments:
-              </label>
-              <textarea
-                value={currentNotes}
-                onChange={(e) => updateNotes(e.target.value)}
-                placeholder="Add notes or comments..."
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  minHeight: "60px",
-                  fontSize: "13px",
-                }}
-              />
-            </div>
-          )}
-
-          {expandedAnalysis && (
-            <div
-              style={{
-                backgroundColor: "#e3f2fd",
-                padding: "15px",
                 borderRadius: "6px",
-                border: "1px solid #90caf9",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "14px",
               }}
             >
-              <label
-                style={{
-                  fontSize: "12px",
-                  color: "#1565c0",
-                  fontWeight: "600",
-                  display: "block",
-                  marginBottom: "8px",
-                }}
-              >
-                AI Analysis:
-              </label>
-              <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
-                {currentAnalysis || "AI analysis will be generated based on your data trends, comparing current performance against historical averages and industry benchmarks. This feature provides actionable insights for improving this metric."}
-              </p>
-            </div>
+              + Add Data
+            </button>
           )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Supply Chain Component with Updated Charts
-const SupplyChain = ({ activeSection, viewMode, user, isInvestorView }) => {
-  const [activeSubTab, setActiveSubTab] = useState("supplier-dependency")
-  const [showModal, setShowModal] = useState(false)
-  const [selectedMonth, setSelectedMonth] = useState("Jan")
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-  const [loading, setLoading] = useState(false)
-  const [dataDate, setDataDate] = useState(new Date().toISOString().split('T')[0])
-  const [showKPIAdd, setShowKPIAdd] = useState(false)
-  const [kpiViewMode, setKpiViewMode] = useState("month")
-
-  // Supplier Dependency Data
-  const [supplierData, setSupplierData] = useState({
-    top3SupplierPercent: Array(12).fill(""),
-    singleSourceFlags: Array(12).fill(""),
-    criticalSupplierCount: Array(12).fill(""),
-    notes: "",
-    analysis: "",
-  })
-
-  // Continuity Risk Data
-  const [continuityData, setContinuityData] = useState({
-    leadTimeVariance: Array(12).fill(""),
-    stockCoverDays: Array(12).fill(""),
-    disruptionRisk: Array(12).fill(""),
-    supplierPerformance: Array(12).fill(""),
-    notes: "",
-    analysis: "",
-  })
-
-  const months = getMonthsForYear(selectedYear, kpiViewMode)
-  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
-
-  const subTabs = [
-    { id: "supplier-dependency", label: "Supplier Dependency" },
-    { id: "continuity-risk", label: "Continuity Risk" },
-  ]
-
-  useEffect(() => {
-    if (user) {
-      loadSupplyChainData()
-    }
-  }, [user])
-
-  useEffect(() => {
-    const today = new Date()
-    const year = today.getFullYear()
-    const month = today.toLocaleString('default', { month: 'short' })
-    setSelectedYear(year)
-    setSelectedMonth(month)
-    setDataDate(today.toISOString().split('T')[0])
-  }, [])
-
-  const loadSupplyChainData = async () => {
-    if (!user) return
-    setLoading(true)
-    try {
-      // Load Supplier Dependency Data
-      const supplierDoc = await getDoc(doc(db, "supplierDependency", user.uid))
-      if (supplierDoc.exists()) {
-        const data = supplierDoc.data()
-        setSupplierData({
-          top3SupplierPercent: data.top3SupplierPercent || Array(12).fill(""),
-          singleSourceFlags: data.singleSourceFlags || Array(12).fill(""),
-          criticalSupplierCount: data.criticalSupplierCount || Array(12).fill(""),
-          notes: data.notes || "",
-          analysis: data.analysis || "",
-        })
-      }
-
-      // Load Continuity Risk Data
-      const continuityDoc = await getDoc(doc(db, "continuityRisk", user.uid))
-      if (continuityDoc.exists()) {
-        const data = continuityDoc.data()
-        setContinuityData({
-          leadTimeVariance: data.leadTimeVariance || Array(12).fill(""),
-          stockCoverDays: data.stockCoverDays || Array(12).fill(""),
-          disruptionRisk: data.disruptionRisk || Array(12).fill(""),
-          supplierPerformance: data.supplierPerformance || Array(12).fill(""),
-          notes: data.notes || "",
-          analysis: data.analysis || "",
-        })
-      }
-    } catch (error) {
-      console.error("Error loading supply chain data:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const saveSupplyChainData = async () => {
-    if (!user) {
-      alert("Please log in to save data")
-      return
-    }
-    setLoading(true)
-    try {
-      // Save Supplier Dependency Data
-      await setDoc(doc(db, "supplierDependency", user.uid), {
-        ...supplierData,
-        userId: user.uid,
-        lastUpdated: new Date().toISOString(),
-        dataDate: dataDate,
-      })
-
-      // Save Continuity Risk Data
-      await setDoc(doc(db, "continuityRisk", user.uid), {
-        ...continuityData,
-        userId: user.uid,
-        lastUpdated: new Date().toISOString(),
-        dataDate: dataDate,
-      })
-
-      setShowModal(false)
-      alert("Data saved successfully!")
-    } catch (error) {
-      console.error("Error saving data:", error)
-      alert("Error saving data. Please try again.")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const getMonthIndex = (month) => months.indexOf(month)
-  const monthIndex = getMonthIndex(selectedMonth)
-
-  const updateSupplierData = (field, value) => {
-    setSupplierData(prev => ({
-      ...prev,
-      [field]: value
-    }))
-  }
-
-  const updateContinuityData = (field, value) => {
-    setContinuityData(prev => ({
-      ...prev,
-      [field]: value
-    }))
-  }
-
-  const renderSupplierDependency = () => {
-    const colors = ["#5d4037", "#8d6e63", "#a67c52", "#72542b"]
-    
-    return (
-      <div>
-        <KeyQuestionBox
-          question="Are we exposed to supplier failure?"
-          signals="Concentration risk"
-          decisions="Diversify or consolidate suppliers"
-          section="supplier-dependency"
-        />
-
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginBottom: "20px" }}>
-          {!isInvestorView && (
-            <>
-              <button
-                onClick={() => setShowKPIAdd(true)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#8d6e63",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  fontSize: "13px",
-                }}
-              >
-                Add KPI
-              </button>
-              <button
-                onClick={() => setShowModal(true)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  fontSize: "13px",
-                }}
-              >
-                Add Data
-              </button>
-            </>
-          )}
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: "20px" }}>
-          <OperationalChart
-            title="Top 3 Supplier %"
-            data={{
-              labels: months,
-              datasets: [{
-                data: supplierData.top3SupplierPercent.map(v => Number.parseFloat(v) || 0),
-                backgroundColor: colors[0],
-                borderColor: colors[0],
-                borderWidth: 2,
-              }]
-            }}
-            kpiKey="top3SupplierPercent"
-            isInvestorView={isInvestorView}
-            onUpdate={(field, value) => updateSupplierData(field, value)}
-            units="%"
-            type="line"
-            notes={supplierData.notes}
-            analysis={supplierData.analysis}
-          />
-
-          <OperationalChart
-            title="Single Source Flags"
-            data={{
-              labels: months,
-              datasets: [{
-                data: supplierData.singleSourceFlags.map(v => Number.parseFloat(v) || 0),
-                backgroundColor: colors[1],
-                borderColor: colors[1],
-                borderWidth: 2,
-              }]
-            }}
-            kpiKey="singleSourceFlags"
-            isInvestorView={isInvestorView}
-            onUpdate={(field, value) => updateSupplierData(field, value)}
-            units="#"
-            type="bar"
-          />
-
-          <OperationalChart
-            title="Critical Supplier Count"
-            data={{
-              labels: months,
-              datasets: [{
-                data: supplierData.criticalSupplierCount.map(v => Number.parseFloat(v) || 0),
-                backgroundColor: colors[2],
-                borderColor: colors[2],
-                borderWidth: 2,
-              }]
-            }}
-            kpiKey="criticalSupplierCount"
-            isInvestorView={isInvestorView}
-            onUpdate={(field, value) => updateSupplierData(field, value)}
-            units="#"
-            type="bar"
-          />
         </div>
       </div>
-    )
-  }
 
-  const renderContinuityRisk = () => {
-    const colors = ["#33ab9f", "#26a69a", "#009688", "#00897b"]
-    
-    return (
-      <div>
-        <KeyQuestionBox
-          question="Can we scale without disruption?"
-          signals="Lead time & dependency"
-          decisions="Adjust growth plans"
-          section="continuity-risk"
-        />
-
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginBottom: "20px" }}>
-          {!isInvestorView && (
-            <>
-              <button
-                onClick={() => setShowKPIAdd(true)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#8d6e63",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  fontSize: "13px",
-                }}
-              >
-                Add KPI
-              </button>
-              <button
-                onClick={() => setShowModal(true)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  fontSize: "13px",
-                }}
-              >
-                Add Data
-              </button>
-            </>
-          )}
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: "20px" }}>
-          <OperationalChart
-            title="Lead Time Variance"
-            data={{
-              labels: months,
-              datasets: [{
-                data: continuityData.leadTimeVariance.map(v => Number.parseFloat(v) || 0),
-                backgroundColor: colors[0],
-                borderColor: colors[0],
-                borderWidth: 2,
-              }]
-            }}
-            kpiKey="leadTimeVariance"
-            isInvestorView={isInvestorView}
-            onUpdate={(field, value) => updateContinuityData(field, value)}
-            units="days"
-            type="line"
-            notes={continuityData.notes}
-            analysis={continuityData.analysis}
-          />
-
-          <OperationalChart
-            title="Stock Cover Days"
-            data={{
-              labels: months,
-              datasets: [{
-                data: continuityData.stockCoverDays.map(v => Number.parseFloat(v) || 0),
-                backgroundColor: colors[1],
-                borderColor: colors[1],
-                borderWidth: 2,
-              }]
-            }}
-            kpiKey="stockCoverDays"
-            isInvestorView={isInvestorView}
-            onUpdate={(field, value) => updateContinuityData(field, value)}
-            units="days"
-            type="bar"
-          />
-
-          <OperationalChart
-            title="Disruption Risk Index"
-            data={{
-              labels: months,
-              datasets: [{
-                data: continuityData.disruptionRisk.map(v => Number.parseFloat(v) || 0),
-                backgroundColor: colors[2],
-                borderColor: colors[2],
-                borderWidth: 2,
-              }]
-            }}
-            kpiKey="disruptionRisk"
-            isInvestorView={isInvestorView}
-            onUpdate={(field, value) => updateContinuityData(field, value)}
-            units="index"
-            type="line"
-          />
-        </div>
-      </div>
-    )
-  }
-
-  if (activeSection !== "supply-chain") return null
-
-  return (
-    <div style={{ paddingTop: "20px" }}>
-      {/* Sub-tabs */}
-      <div
-        style={{
-          display: "flex",
-          gap: "10px",
-          marginBottom: "25px",
-          padding: "10px",
-          backgroundColor: "#fdfcfb",
+      <div style={{ overflowX: "auto" }}>
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "collapse",
+            backgroundColor: "white",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+          }}
+        >
+          <thead>
+            <tr style={{ backgroundColor: "#9c8269" }}>
+              <th style={{ padding: "12px", textAlign: "left", color: "white", fontWeight: "bold", borderRight: "1px solid #8b7355", width: "150px" }}>
+                Category
+              </th>
+              <th style={{ padding: "12px", textAlign: "left", color: "white", fontWeight: "bold", borderRight: "1px solid #8b7355", width: "180px" }}>
+                Sub-Category
+              </th>
+              <th style={{ padding: "12px", textAlign: "left", color: "white", fontWeight: "bold", borderRight: "1px solid #8b7355" }}>
+                KPI
+              </th>
+              <th style={{ padding: "12px", textAlign: "center", color: "white", fontWeight: "bold", borderRight: "1px solid #8b7355", width: "80px" }}>
+                Units
+              </th>
+              <th style={{ padding: "12px", textAlign: "center", color: "white", fontWeight: "bold", borderRight: "1px solid #8b7355", backgroundColor: "#b4a592" }}>
+                Target
+              </th>
+              <th style={{ padding: "12px", textAlign: "center", color: "white", fontWeight: "bold", borderRight: "1px solid #8b7355", backgroundColor: "#a89885" }}>
+                Current
+              </th>
+              <th style={{ padding: "12px", textAlign: "center", color: "white", fontWeight: "bold", borderRight: "1px solid #8b7355", backgroundColor: "#9c8c78" }}>
+                Variance
+              </th>
+              <th style={{ padding: "12px", textAlign: "center", color: "white", fontWeight: "bold", backgroundColor: "#8b7c69", width: "80px" }}>
+                Chart
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {kpiStructure.map((category, categoryIndex) => (
+              category.subCategories.map((subCategory, subCategoryIndex) => (
+                subCategory.kpis.map((kpi, kpiIndex) => {
+                  const isFirstKPI = kpiIndex === 0
+                  const isFirstSubCategory = subCategoryIndex === 0 && kpiIndex === 0
+                  const variance = typeof kpi.currentValue === 'number' && typeof kpi.target === 'number' 
+                    ? kpi.currentValue - kpi.target
+                    : "N/A"
+                  
+                  return (
+                    <tr
+                      key={`${category.category}-${subCategory.name}-${kpi.name}`}
+                      style={{
+                        backgroundColor: (categoryIndex + subCategoryIndex + kpiIndex) % 2 === 0 ? "#f5f5f5" : "#e8e8e8",
+                        borderBottom: "1px solid #ddd",
+                      }}
+                    >
+                      {isFirstSubCategory ? (
+                        <td
+                          rowSpan={category.subCategories.reduce((total, sc) => total + sc.kpis.length, 0)}
+                          style={{
+                            padding: "12px",
+                            fontWeight: "bold",
+                            color: "#4a352f",
+                            borderRight: "2px solid #999",
+                            backgroundColor: categoryIndex % 2 === 0 ? "#e6d7c3" : "#d4c4b0",
+                            verticalAlign: "top",
+                            fontSize: "14px",
+                            width: "150px",
+                          }}
+                        >
+                          {category.category}
+                        </td>
+                      ) : null}
+                      
+                      {isFirstKPI ? (
+                        <td
+                          rowSpan={subCategory.kpis.length}
+                          style={{
+                            padding: "12px",
+                            color: "#5d4037",
+                            borderRight: "1px solid #ddd",
+                            backgroundColor: (categoryIndex + subCategoryIndex) % 2 === 0 ? "#f0e6d6" : "#e8e0d1",
+                            fontWeight: "600",
+                            fontSize: "13px",
+                            width: "180px",
+                          }}
+                        >
+                          {subCategory.name}
+                        </td>
+                      ) : null}
+                      
+                      <td style={{ padding: "12px", color: "#4a352f", borderRight: "1px solid #ddd" }}>
+                        {kpi.name}
+                      </td>
+                      
+                      <td style={{ padding: "12px", textAlign: "center", color: "#4a352f", borderRight: "1px solid #ddd", width: "80px" }}>
+                        {kpi.units}
+                      </td>
+                      
+                      <td style={{ 
+                        padding: "12px", 
+                        textAlign: "center", 
+                        color: "#5d4037", 
+                        borderRight: "1px solid #ddd",
+                        backgroundColor: "#f0e6d6",
+                      }}>
+                        {kpi.target}
+                      </td>
+                      
+                      <td style={{ 
+                        padding: "12px", 
+                        textAlign: "center", 
+                        color: "#4a352f", 
+                        borderRight: "1px solid #ddd",
+                        backgroundColor: "#e8e0d1",
+                      }}>
+                        {kpi.currentValue}
+                      </td>
+                      
+                      <td style={{ 
+                        padding: "12px", 
+                        textAlign: "center", 
+                        color: typeof variance === 'number' ? (variance >= 0 ? "#2e7d32" : "#c62828") : "#5d4037", 
+                        fontWeight: "bold",
+                        borderRight: "1px solid #ddd",
+                        backgroundColor: typeof variance === 'number' 
+                          ? (variance >= 0 ? "#e8f5e9" : "#ffebee") 
+                          : "#f5f0eb",
+                      }}>
+                        {typeof variance === 'number' ? (variance >= 0 ? '+' : '') + variance : variance}
+                      </td>
+                      
+                      <td style={{ padding: "12px", textAlign: "center" }}>
+                        <button
+                          onClick={() => handleViewChart(category.category, subCategory, kpi)}
+                          style={{
+                            padding: "6px 10px",
+                            backgroundColor: "transparent",
+                            color: "#5d4037",
+                            border: "none",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            margin: "0 auto",
+                            transition: "all 0.3s ease",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.target.style.backgroundColor = "#e8ddd4"
+                            e.target.style.transform = "scale(1.1)"
+                          }}
+                          onMouseLeave={(e) => {
+                            e.target.style.backgroundColor = "transparent"
+                            e.target.style.transform = "scale(1)"
+                          }}
+                          title="View Chart & AI Analysis"
+                        >
+                          <EyeIcon size={20} />
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })
+              ))
+            ))}
+          </tbody>
+        </table>
+        
+        <div style={{ 
+          marginTop: "20px", 
+          padding: "15px", 
+          backgroundColor: "#e8f5e9", 
           borderRadius: "8px",
-          flexWrap: "wrap",
-        }}
-      >
-        {subTabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveSubTab(tab.id)}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: activeSubTab === tab.id ? "#5d4037" : "#e8ddd4",
-              color: activeSubTab === tab.id ? "#fdfcfb" : "#5d4037",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontWeight: "600",
-              fontSize: "14px",
-              transition: "all 0.3s ease",
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
+          border: "1px solid #c8e6c9",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span style={{ fontSize: "20px" }}>💡</span>
+            <span style={{ color: "#2e7d32", fontSize: "14px" }}>
+              <strong>Tip:</strong> Click the 👁️ icon to view charts and AI-powered analysis for each KPI. Use "+ Add Data" button to enter values for multiple KPIs at once.
+            </span>
+          </div>
+        </div>
       </div>
-
-      {/* Sub-tab Content */}
-      {activeSubTab === "supplier-dependency" && renderSupplierDependency()}
-      {activeSubTab === "continuity-risk" && renderContinuityRisk()}
-
+      
       {/* Add Data Modal */}
-      {showModal && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "30px",
-              borderRadius: "8px",
-              maxWidth: "800px",
-              maxHeight: "90vh",
-              overflow: "auto",
-              width: "95%",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-              <h3 style={{ color: "#5d4037" }}>
-                {activeSubTab === "supplier-dependency" ? "Supplier Dependency Data" : "Continuity Risk Data"}
-              </h3>
-              <button
-                onClick={() => setShowModal(false)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontSize: "24px",
-                  color: "#5d4037",
-                  cursor: "pointer",
-                  padding: "0",
-                  lineHeight: "1",
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                Data Date
-              </label>
-              <input
-                type="date"
-                value={dataDate}
-                onChange={(e) => setDataDate(e.target.value)}
-                style={{
-                  padding: "8px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  fontSize: "14px",
-                  color: "#5d4037",
-                  width: "100%",
-                  maxWidth: "200px",
-                }}
-              />
-            </div>
-
-            <div style={{ display: "flex", gap: "20px", marginBottom: "20px", flexWrap: "wrap" }}>
-              <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
-                <span style={{ color: "#5d4037", fontSize: "14px" }}>Year:</span>
-                <select
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
-                  style={{
-                    padding: "8px 12px",
-                    borderRadius: "4px",
-                    border: "1px solid #e8ddd4",
-                    fontSize: "14px",
-                    color: "#5d4037",
-                    minWidth: "100px",
-                  }}
-                >
-                  {years.map((year) => (
-                    <option key={year} value={year}>
-                      {year}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              
-              <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
-                <span style={{ color: "#5d4037", fontSize: "14px" }}>Month:</span>
-                <select
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                  style={{
-                    padding: "8px 12px",
-                    borderRadius: "4px",
-                    border: "1px solid #e8ddd4",
-                    fontSize: "14px",
-                    color: "#5d4037",
-                    minWidth: "100px",
-                  }}
-                >
-                  {months.map((month) => (
-                    <option key={month} value={month}>
-                      {month}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {activeSubTab === "supplier-dependency" ? (
-              <div>
-                <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Supplier Dependency Metrics</h4>
-                <div style={{ display: "grid", gap: "15px" }}>
-                  <div>
-                    <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                      Top 3 Supplier % for {selectedMonth} {selectedYear}
-                    </label>
-                    <input
-                      type="number"
-                      value={supplierData.top3SupplierPercent[monthIndex] || ""}
-                      onChange={(e) => {
-                        const newData = [...supplierData.top3SupplierPercent]
-                        newData[monthIndex] = e.target.value
-                        updateSupplierData("top3SupplierPercent", newData)
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                        fontSize: "14px",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                      Single Source Flags for {selectedMonth} {selectedYear}
-                    </label>
-                    <input
-                      type="number"
-                      value={supplierData.singleSourceFlags[monthIndex] || ""}
-                      onChange={(e) => {
-                        const newData = [...supplierData.singleSourceFlags]
-                        newData[monthIndex] = e.target.value
-                        updateSupplierData("singleSourceFlags", newData)
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                        fontSize: "14px",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                      Critical Supplier Count for {selectedMonth} {selectedYear}
-                    </label>
-                    <input
-                      type="number"
-                      value={supplierData.criticalSupplierCount[monthIndex] || ""}
-                      onChange={(e) => {
-                        const newData = [...supplierData.criticalSupplierCount]
-                        newData[monthIndex] = e.target.value
-                        updateSupplierData("criticalSupplierCount", newData)
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                        fontSize: "14px",
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Continuity Risk Metrics</h4>
-                <div style={{ display: "grid", gap: "15px" }}>
-                  <div>
-                    <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                      Lead Time Variance (days) for {selectedMonth} {selectedYear}
-                    </label>
-                    <input
-                      type="number"
-                      value={continuityData.leadTimeVariance[monthIndex] || ""}
-                      onChange={(e) => {
-                        const newData = [...continuityData.leadTimeVariance]
-                        newData[monthIndex] = e.target.value
-                        updateContinuityData("leadTimeVariance", newData)
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                        fontSize: "14px",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                      Stock Cover Days for {selectedMonth} {selectedYear}
-                    </label>
-                    <input
-                      type="number"
-                      value={continuityData.stockCoverDays[monthIndex] || ""}
-                      onChange={(e) => {
-                        const newData = [...continuityData.stockCoverDays]
-                        newData[monthIndex] = e.target.value
-                        updateContinuityData("stockCoverDays", newData)
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                        fontSize: "14px",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                      Disruption Risk Index for {selectedMonth} {selectedYear}
-                    </label>
-                    <input
-                      type="number"
-                      value={continuityData.disruptionRisk[monthIndex] || ""}
-                      onChange={(e) => {
-                        const newData = [...continuityData.disruptionRisk]
-                        newData[monthIndex] = e.target.value
-                        updateContinuityData("disruptionRisk", newData)
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                        fontSize: "14px",
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div style={{ marginTop: "20px" }}>
-              <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                Notes
-              </label>
-              <textarea
-                value={activeSubTab === "supplier-dependency" ? supplierData.notes : continuityData.notes}
-                onChange={(e) => {
-                  if (activeSubTab === "supplier-dependency") {
-                    updateSupplierData("notes", e.target.value)
-                  } else {
-                    updateContinuityData("notes", e.target.value)
-                  }
-                }}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  minHeight: "100px",
-                  fontSize: "14px",
-                }}
-              />
-            </div>
-
-            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "20px" }}>
-              <button
-                onClick={() => setShowModal(false)}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#e8ddd4",
-                  color: "#5d4037",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveSupplyChainData}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                }}
-              >
-                {loading ? "Saving..." : "Save Data"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add KPI Modal */}
-      {showKPIAdd && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 1001,
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "30px",
-              borderRadius: "8px",
-              maxWidth: "500px",
-              width: "95%",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-              <h3 style={{ color: "#5d4037" }}>Add KPI Data</h3>
-              <button
-                onClick={() => setShowKPIAdd(false)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontSize: "24px",
-                  color: "#5d4037",
-                  cursor: "pointer",
-                  padding: "0",
-                  lineHeight: "1",
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                View Mode
-              </label>
-              <div style={{ display: "flex", gap: "10px" }}>
-                <button
-                  onClick={() => setKpiViewMode("month")}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: kpiViewMode === "month" ? "#5d4037" : "#e8ddd4",
-                    color: kpiViewMode === "month" ? "#fdfcfb" : "#5d4037",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontWeight: "600",
-                    fontSize: "13px",
-                    flex: 1,
-                  }}
-                >
-                  Monthly
-                </button>
-                <button
-                  onClick={() => setKpiViewMode("quarter")}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: kpiViewMode === "quarter" ? "#5d4037" : "#e8ddd4",
-                    color: kpiViewMode === "quarter" ? "#fdfcfb" : "#5d4037",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontWeight: "600",
-                    fontSize: "13px",
-                    flex: 1,
-                  }}
-                >
-                  Quarterly
-                </button>
-                <button
-                  onClick={() => setKpiViewMode("year")}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: kpiViewMode === "year" ? "#5d4037" : "#e8ddd4",
-                    color: kpiViewMode === "year" ? "#fdfcfb" : "#5d4037",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontWeight: "600",
-                    fontSize: "13px",
-                    flex: 1,
-                  }}
-                >
-                  Yearly
-                </button>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                Data Date
-              </label>
-              <input
-                type="date"
-                value={dataDate}
-                onChange={(e) => setDataDate(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  fontSize: "14px",
-                  color: "#5d4037",
-                }}
-              />
-            </div>
-
-            <div style={{ marginTop: "20px" }}>
-              <p style={{ color: "#5d4037", fontSize: "14px", textAlign: "center" }}>
-                Select "Add Data" to enter specific metric values for the selected period.
-              </p>
-            </div>
-
-            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "20px" }}>
-              <button
-                onClick={() => setShowKPIAdd(false)}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#e8ddd4",
-                  color: "#5d4037",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  setShowKPIAdd(false)
-                  setShowModal(true)
-                }}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                }}
-              >
-                Add Data
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AddDataModal
+        isOpen={showAddDataModal}
+        onClose={() => {
+          setShowAddDataModal(false)
+          setSelectedKPI(null)
+        }}
+        kpiData={selectedKPI}
+      />
+      
+      {/* Chart View Modal */}
+      <ChartViewModal
+        isOpen={showChartModal}
+        onClose={() => {
+          setShowChartModal(false)
+          setSelectedKPI(null)
+        }}
+        kpiData={selectedKPI}
+      />
     </div>
   )
 }
 
-// Delivery Component with Updated Charts
-const Delivery = ({ activeSection, viewMode, user, isInvestorView }) => {
-  const [activeSubTab, setActiveSubTab] = useState("productivity")
-  const [showModal, setShowModal] = useState(false)
-  const [selectedMonth, setSelectedMonth] = useState("Jan")
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-  const [loading, setLoading] = useState(false)
-  const [dataDate, setDataDate] = useState(new Date().toISOString().split('T')[0])
-  const [showKPIAdd, setShowKPIAdd] = useState(false)
-  const [kpiViewMode, setKpiViewMode] = useState("month")
-
-  // Productivity Data
-  const [productivityData, setProductivityData] = useState({
-    volume: Array(12).fill(""),
-    availability: Array(12).fill(""),
-    utilization: Array(12).fill(""),
-    unitCost: Array(12).fill(""),
-    notes: "",
-    analysis: "",
-  })
-
-  // Reliability Data
-  const [reliabilityData, setReliabilityData] = useState({
-    onTimeDelivery: Array(12).fill(""),
-    reworkRate: Array(12).fill(""),
-    defectRate: Array(12).fill(""),
-    customerComplaints: Array(12).fill(""),
-    notes: "",
-    analysis: "",
-  })
-
-  const months = getMonthsForYear(selectedYear, kpiViewMode)
-  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
-
-  const subTabs = [
-    { id: "productivity", label: "Productivity" },
-    { id: "reliability", label: "Reliability" },
-  ]
-
-  useEffect(() => {
-    if (user) {
-      loadDeliveryData()
-    }
-  }, [user])
-
-  useEffect(() => {
-    const today = new Date()
-    const year = today.getFullYear()
-    const month = today.toLocaleString('default', { month: 'short' })
-    setSelectedYear(year)
-    setSelectedMonth(month)
-    setDataDate(today.toISOString().split('T')[0])
-  }, [])
-
-  const loadDeliveryData = async () => {
-    if (!user) return
-    setLoading(true)
-    try {
-      // Load Productivity Data
-      const productivityDoc = await getDoc(doc(db, "productivity", user.uid))
-      if (productivityDoc.exists()) {
-        const data = productivityDoc.data()
-        setProductivityData({
-          volume: data.volume || Array(12).fill(""),
-          availability: data.availability || Array(12).fill(""),
-          utilization: data.utilization || Array(12).fill(""),
-          unitCost: data.unitCost || Array(12).fill(""),
-          notes: data.notes || "",
-          analysis: data.analysis || "",
-        })
-      }
-
-      // Load Reliability Data
-      const reliabilityDoc = await getDoc(doc(db, "reliability", user.uid))
-      if (reliabilityDoc.exists()) {
-        const data = reliabilityDoc.data()
-        setReliabilityData({
-          onTimeDelivery: data.onTimeDelivery || Array(12).fill(""),
-          reworkRate: data.reworkRate || Array(12).fill(""),
-          defectRate: data.defectRate || Array(12).fill(""),
-          customerComplaints: data.customerComplaints || Array(12).fill(""),
-          notes: data.notes || "",
-          analysis: data.analysis || "",
-        })
-      }
-    } catch (error) {
-      console.error("Error loading delivery data:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const saveDeliveryData = async () => {
-    if (!user) {
-      alert("Please log in to save data")
-      return
-    }
-    setLoading(true)
-    try {
-      // Save Productivity Data
-      await setDoc(doc(db, "productivity", user.uid), {
-        ...productivityData,
-        userId: user.uid,
-        lastUpdated: new Date().toISOString(),
-        dataDate: dataDate,
-      })
-
-      // Save Reliability Data
-      await setDoc(doc(db, "reliability", user.uid), {
-        ...reliabilityData,
-        userId: user.uid,
-        lastUpdated: new Date().toISOString(),
-        dataDate: dataDate,
-      })
-
-      setShowModal(false)
-      alert("Data saved successfully!")
-    } catch (error) {
-      console.error("Error saving data:", error)
-      alert("Error saving data. Please try again.")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const getMonthIndex = (month) => months.indexOf(month)
-  const monthIndex = getMonthIndex(selectedMonth)
-
-  const updateProductivityData = (field, value) => {
-    setProductivityData(prev => ({
-      ...prev,
-      [field]: value
-    }))
-  }
-
-  const updateReliabilityData = (field, value) => {
-    setReliabilityData(prev => ({
-      ...prev,
-      [field]: value
-    }))
-  }
-
-  const renderProductivity = () => {
-    const colors = ["#1565c0", "#1976d2", "#2196f3", "#64b5f6"]
-    
-    return (
-      <div>
-        <KeyQuestionBox
-          question="Can we deliver at scale? Can we deliver efficiently?"
-          signals="Capacity, bottlenecks, saturation, unit cost of production"
-          decisions="Hire, automate, slow sales"
-          section="productivity"
-        />
-
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginBottom: "20px" }}>
-          {!isInvestorView && (
-            <>
-              <button
-                onClick={() => setShowKPIAdd(true)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#8d6e63",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  fontSize: "13px",
-                }}
-              >
-                Add KPI
-              </button>
-              <button
-                onClick={() => setShowModal(true)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  fontSize: "13px",
-                }}
-              >
-                Add Data
-              </button>
-            </>
-          )}
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: "20px" }}>
-          <OperationalChart
-            title="Production Volume"
-            data={{
-              labels: months,
-              datasets: [{
-                data: productivityData.volume.map(v => Number.parseFloat(v) || 0),
-                backgroundColor: colors[0],
-                borderColor: colors[0],
-                borderWidth: 2,
-              }]
-            }}
-            kpiKey="volume"
-            isInvestorView={isInvestorView}
-            onUpdate={(field, value) => updateProductivityData(field, value)}
-            units="units"
-            type="bar"
-            notes={productivityData.notes}
-            analysis={productivityData.analysis}
-          />
-
-          <OperationalChart
-            title="Availability %"
-            data={{
-              labels: months,
-              datasets: [{
-                data: productivityData.availability.map(v => Number.parseFloat(v) || 0),
-                backgroundColor: colors[1],
-                borderColor: colors[1],
-                borderWidth: 2,
-              }]
-            }}
-            kpiKey="availability"
-            isInvestorView={isInvestorView}
-            onUpdate={(field, value) => updateProductivityData(field, value)}
-            units="%"
-            type="line"
-          />
-
-          <OperationalChart
-            title="Utilization %"
-            data={{
-              labels: months,
-              datasets: [{
-                data: productivityData.utilization.map(v => Number.parseFloat(v) || 0),
-                backgroundColor: colors[2],
-                borderColor: colors[2],
-                borderWidth: 2,
-              }]
-            }}
-            kpiKey="utilization"
-            isInvestorView={isInvestorView}
-            onUpdate={(field, value) => updateProductivityData(field, value)}
-            units="%"
-            type="line"
-          />
-
-          <OperationalChart
-            title="Unit Cost"
-            data={{
-              labels: months,
-              datasets: [{
-                data: productivityData.unitCost.map(v => Number.parseFloat(v) || 0),
-                backgroundColor: colors[3],
-                borderColor: colors[3],
-                borderWidth: 2,
-              }]
-            }}
-            kpiKey="unitCost"
-            isInvestorView={isInvestorView}
-            onUpdate={(field, value) => updateProductivityData(field, value)}
-            units="R"
-            type="bar"
-          />
-        </div>
-      </div>
-    )
-  }
-
-  const renderReliability = () => {
-    const colors = ["#2e7d32", "#43a047", "#66bb6a", "#81c784"]
-    
-    return (
-      <div>
-        <KeyQuestionBox
-          question="Is delivery consistent?"
-          signals="Rework & failure"
-          decisions="Improve processes"
-          section="reliability"
-        />
-
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginBottom: "20px" }}>
-          {!isInvestorView && (
-            <>
-              <button
-                onClick={() => setShowKPIAdd(true)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#8d6e63",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  fontSize: "13px",
-                }}
-              >
-                Add KPI
-              </button>
-              <button
-                onClick={() => setShowModal(true)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  fontSize: "13px",
-                }}
-              >
-                Add Data
-              </button>
-            </>
-          )}
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: "20px" }}>
-          <OperationalChart
-            title="On-time Delivery %"
-            data={{
-              labels: months,
-              datasets: [{
-                data: reliabilityData.onTimeDelivery.map(v => Number.parseFloat(v) || 0),
-                backgroundColor: colors[0],
-                borderColor: colors[0],
-                borderWidth: 2,
-              }]
-            }}
-            kpiKey="onTimeDelivery"
-            isInvestorView={isInvestorView}
-            onUpdate={(field, value) => updateReliabilityData(field, value)}
-            units="%"
-            type="line"
-            notes={reliabilityData.notes}
-            analysis={reliabilityData.analysis}
-          />
-
-          <OperationalChart
-            title="Rework Rate"
-            data={{
-              labels: months,
-              datasets: [{
-                data: reliabilityData.reworkRate.map(v => Number.parseFloat(v) || 0),
-                backgroundColor: colors[1],
-                borderColor: colors[1],
-                borderWidth: 2,
-              }]
-            }}
-            kpiKey="reworkRate"
-            isInvestorView={isInvestorView}
-            onUpdate={(field, value) => updateReliabilityData(field, value)}
-            units="%"
-            type="bar"
-          />
-
-          <OperationalChart
-            title="Defect Rate"
-            data={{
-              labels: months,
-              datasets: [{
-                data: reliabilityData.defectRate.map(v => Number.parseFloat(v) || 0),
-                backgroundColor: colors[2],
-                borderColor: colors[2],
-                borderWidth: 2,
-              }]
-            }}
-            kpiKey="defectRate"
-            isInvestorView={isInvestorView}
-            onUpdate={(field, value) => updateReliabilityData(field, value)}
-            units="%"
-            type="bar"
-          />
-
-          <OperationalChart
-            title="Customer Complaints"
-            data={{
-              labels: months,
-              datasets: [{
-                data: reliabilityData.customerComplaints.map(v => Number.parseFloat(v) || 0),
-                backgroundColor: colors[3],
-                borderColor: colors[3],
-                borderWidth: 2,
-              }]
-            }}
-            kpiKey="customerComplaints"
-            isInvestorView={isInvestorView}
-            onUpdate={(field, value) => updateReliabilityData(field, value)}
-            units="#"
-            type="line"
-          />
-        </div>
-      </div>
-    )
-  }
-
-  if (activeSection !== "delivery") return null
-
-  return (
-    <div style={{ paddingTop: "20px" }}>
-      {/* Sub-tabs */}
-      <div
-        style={{
-          display: "flex",
-          gap: "10px",
-          marginBottom: "25px",
-          padding: "10px",
-          backgroundColor: "#fdfcfb",
-          borderRadius: "8px",
-          flexWrap: "wrap",
-        }}
-      >
-        {subTabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveSubTab(tab.id)}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: activeSubTab === tab.id ? "#5d4037" : "#e8ddd4",
-              color: activeSubTab === tab.id ? "#fdfcfb" : "#5d4037",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontWeight: "600",
-              fontSize: "14px",
-              transition: "all 0.3s ease",
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Sub-tab Content */}
-      {activeSubTab === "productivity" && renderProductivity()}
-      {activeSubTab === "reliability" && renderReliability()}
-
-      {/* Add Data Modal */}
-      {showModal && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "30px",
-              borderRadius: "8px",
-              maxWidth: "800px",
-              maxHeight: "90vh",
-              overflow: "auto",
-              width: "95%",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-              <h3 style={{ color: "#5d4037" }}>
-                {activeSubTab === "productivity" ? "Productivity Data" : "Reliability Data"}
-              </h3>
-              <button
-                onClick={() => setShowModal(false)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontSize: "24px",
-                  color: "#5d4037",
-                  cursor: "pointer",
-                  padding: "0",
-                  lineHeight: "1",
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                Data Date
-              </label>
-              <input
-                type="date"
-                value={dataDate}
-                onChange={(e) => setDataDate(e.target.value)}
-                style={{
-                  padding: "8px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  fontSize: "14px",
-                  color: "#5d4037",
-                  width: "100%",
-                  maxWidth: "200px",
-                }}
-              />
-            </div>
-
-            <div style={{ display: "flex", gap: "20px", marginBottom: "20px", flexWrap: "wrap" }}>
-              <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
-                <span style={{ color: "#5d4037", fontSize: "14px" }}>Year:</span>
-                <select
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
-                  style={{
-                    padding: "8px 12px",
-                    borderRadius: "4px",
-                    border: "1px solid #e8ddd4",
-                    fontSize: "14px",
-                    color: "#5d4037",
-                    minWidth: "100px",
-                  }}
-                >
-                  {years.map((year) => (
-                    <option key={year} value={year}>
-                      {year}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              
-              <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
-                <span style={{ color: "#5d4037", fontSize: "14px" }}>Month:</span>
-                <select
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                  style={{
-                    padding: "8px 12px",
-                    borderRadius: "4px",
-                    border: "1px solid #e8ddd4",
-                    fontSize: "14px",
-                    color: "#5d4037",
-                    minWidth: "100px",
-                  }}
-                >
-                  {months.map((month) => (
-                    <option key={month} value={month}>
-                      {month}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {activeSubTab === "productivity" ? (
-              <div>
-                <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Productivity Metrics</h4>
-                <div style={{ display: "grid", gap: "15px" }}>
-                  <div>
-                    <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                      Production Volume for {selectedMonth} {selectedYear}
-                    </label>
-                    <input
-                      type="number"
-                      value={productivityData.volume[monthIndex] || ""}
-                      onChange={(e) => {
-                        const newData = [...productivityData.volume]
-                        newData[monthIndex] = e.target.value
-                        updateProductivityData("volume", newData)
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                        fontSize: "14px",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                      Availability % for {selectedMonth} {selectedYear}
-                    </label>
-                    <input
-                      type="number"
-                      value={productivityData.availability[monthIndex] || ""}
-                      onChange={(e) => {
-                        const newData = [...productivityData.availability]
-                        newData[monthIndex] = e.target.value
-                        updateProductivityData("availability", newData)
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                        fontSize: "14px",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                      Utilization % for {selectedMonth} {selectedYear}
-                    </label>
-                    <input
-                      type="number"
-                      value={productivityData.utilization[monthIndex] || ""}
-                      onChange={(e) => {
-                        const newData = [...productivityData.utilization]
-                        newData[monthIndex] = e.target.value
-                        updateProductivityData("utilization", newData)
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                        fontSize: "14px",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                      Unit Cost (R) for {selectedMonth} {selectedYear}
-                    </label>
-                    <input
-                      type="number"
-                      value={productivityData.unitCost[monthIndex] || ""}
-                      onChange={(e) => {
-                        const newData = [...productivityData.unitCost]
-                        newData[monthIndex] = e.target.value
-                        updateProductivityData("unitCost", newData)
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                        fontSize: "14px",
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Reliability Metrics</h4>
-                <div style={{ display: "grid", gap: "15px" }}>
-                  <div>
-                    <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                      On-time Delivery % for {selectedMonth} {selectedYear}
-                    </label>
-                    <input
-                      type="number"
-                      value={reliabilityData.onTimeDelivery[monthIndex] || ""}
-                      onChange={(e) => {
-                        const newData = [...reliabilityData.onTimeDelivery]
-                        newData[monthIndex] = e.target.value
-                        updateReliabilityData("onTimeDelivery", newData)
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                        fontSize: "14px",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                      Rework Rate % for {selectedMonth} {selectedYear}
-                    </label>
-                    <input
-                      type="number"
-                      value={reliabilityData.reworkRate[monthIndex] || ""}
-                      onChange={(e) => {
-                        const newData = [...reliabilityData.reworkRate]
-                        newData[monthIndex] = e.target.value
-                        updateReliabilityData("reworkRate", newData)
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                        fontSize: "14px",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                      Defect Rate % for {selectedMonth} {selectedYear}
-                    </label>
-                    <input
-                      type="number"
-                      value={reliabilityData.defectRate[monthIndex] || ""}
-                      onChange={(e) => {
-                        const newData = [...reliabilityData.defectRate]
-                        newData[monthIndex] = e.target.value
-                        updateReliabilityData("defectRate", newData)
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                        fontSize: "14px",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                      Customer Complaints for {selectedMonth} {selectedYear}
-                    </label>
-                    <input
-                      type="number"
-                      value={reliabilityData.customerComplaints[monthIndex] || ""}
-                      onChange={(e) => {
-                        const newData = [...reliabilityData.customerComplaints]
-                        newData[monthIndex] = e.target.value
-                        updateReliabilityData("customerComplaints", newData)
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                        fontSize: "14px",
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div style={{ marginTop: "20px" }}>
-              <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                Notes
-              </label>
-              <textarea
-                value={activeSubTab === "productivity" ? productivityData.notes : reliabilityData.notes}
-                onChange={(e) => {
-                  if (activeSubTab === "productivity") {
-                    updateProductivityData("notes", e.target.value)
-                  } else {
-                    updateReliabilityData("notes", e.target.value)
-                  }
-                }}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  minHeight: "100px",
-                  fontSize: "14px",
-                }}
-              />
-            </div>
-
-            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "20px" }}>
-              <button
-                onClick={() => setShowModal(false)}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#e8ddd4",
-                  color: "#5d4037",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveDeliveryData}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                }}
-              >
-                {loading ? "Saving..." : "Save Data"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add KPI Modal */}
-      {showKPIAdd && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 1001,
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "30px",
-              borderRadius: "8px",
-              maxWidth: "500px",
-              width: "95%",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-              <h3 style={{ color: "#5d4037" }}>Add KPI Data</h3>
-              <button
-                onClick={() => setShowKPIAdd(false)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontSize: "24px",
-                  color: "#5d4037",
-                  cursor: "pointer",
-                  padding: "0",
-                  lineHeight: "1",
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                View Mode
-              </label>
-              <div style={{ display: "flex", gap: "10px" }}>
-                <button
-                  onClick={() => setKpiViewMode("month")}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: kpiViewMode === "month" ? "#5d4037" : "#e8ddd4",
-                    color: kpiViewMode === "month" ? "#fdfcfb" : "#5d4037",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontWeight: "600",
-                    fontSize: "13px",
-                    flex: 1,
-                  }}
-                >
-                  Monthly
-                </button>
-                <button
-                  onClick={() => setKpiViewMode("quarter")}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: kpiViewMode === "quarter" ? "#5d4037" : "#e8ddd4",
-                    color: kpiViewMode === "quarter" ? "#fdfcfb" : "#5d4037",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontWeight: "600",
-                    fontSize: "13px",
-                    flex: 1,
-                  }}
-                >
-                  Quarterly
-                </button>
-                <button
-                  onClick={() => setKpiViewMode("year")}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: kpiViewMode === "year" ? "#5d4037" : "#e8ddd4",
-                    color: kpiViewMode === "year" ? "#fdfcfb" : "#5d4037",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontWeight: "600",
-                    fontSize: "13px",
-                    flex: 1,
-                  }}
-                >
-                  Yearly
-                </button>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                Data Date
-              </label>
-              <input
-                type="date"
-                value={dataDate}
-                onChange={(e) => setDataDate(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  fontSize: "14px",
-                  color: "#5d4037",
-                }}
-              />
-            </div>
-
-            <div style={{ marginTop: "20px" }}>
-              <p style={{ color: "#5d4037", fontSize: "14px", textAlign: "center" }}>
-                Select "Add Data" to enter specific metric values for the selected period.
-              </p>
-            </div>
-
-            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "20px" }}>
-              <button
-                onClick={() => setShowKPIAdd(false)}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#e8ddd4",
-                  color: "#5d4037",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  setShowKPIAdd(false)
-                  setShowModal(true)
-                }}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                }}
-              >
-                Add Data
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Safety Component with Updated Charts
-const Safety = ({ activeSection, viewMode, user, isInvestorView }) => {
-  const [activeSubTab, setActiveSubTab] = useState("safety-risk")
-  const [showModal, setShowModal] = useState(false)
-  const [selectedMonth, setSelectedMonth] = useState("Jan")
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-  const [loading, setLoading] = useState(false)
-  const [dataDate, setDataDate] = useState(new Date().toISOString().split('T')[0])
-  const [showKPIAdd, setShowKPIAdd] = useState(false)
-  const [kpiViewMode, setKpiViewMode] = useState("month")
-
-  // Safety Risk Data
-  const [safetyRiskData, setSafetyRiskData] = useState({
-    safetyIncidents: Array(12).fill(""),
-    openActions: Array(12).fill(""),
-    complianceStatus: Array(12).fill(""),
-    incidentSeverity: Array(12).fill(""),
-    notes: "",
-    analysis: "",
-  })
-
-  // Compliance Data
-  const [complianceData, setComplianceData] = useState({
-    regulatoryGaps: Array(12).fill(""),
-    auditFindings: Array(12).fill(""),
-    certificationStatus: Array(12).fill(""),
-    correctiveActions: Array(12).fill(""),
-    notes: "",
-    analysis: "",
-  })
-
-  const months = getMonthsForYear(selectedYear, kpiViewMode)
-  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
-
-  const subTabs = [
-    { id: "safety-risk", label: "Safety Risk" },
-    { id: "compliance", label: "Compliance" },
-  ]
-
-  useEffect(() => {
-    if (user) {
-      loadSafetyData()
-    }
-  }, [user])
-
-  useEffect(() => {
-    const today = new Date()
-    const year = today.getFullYear()
-    const month = today.toLocaleString('default', { month: 'short' })
-    setSelectedYear(year)
-    setSelectedMonth(month)
-    setDataDate(today.toISOString().split('T')[0])
-  }, [])
-
-  const loadSafetyData = async () => {
-    if (!user) return
-    setLoading(true)
-    try {
-      // Load Safety Risk Data
-      const safetyRiskDoc = await getDoc(doc(db, "safetyRisk", user.uid))
-      if (safetyRiskDoc.exists()) {
-        const data = safetyRiskDoc.data()
-        setSafetyRiskData({
-          safetyIncidents: data.safetyIncidents || Array(12).fill(""),
-          openActions: data.openActions || Array(12).fill(""),
-          complianceStatus: data.complianceStatus || Array(12).fill(""),
-          incidentSeverity: data.incidentSeverity || Array(12).fill(""),
-          notes: data.notes || "",
-          analysis: data.analysis || "",
-        })
-      }
-
-      // Load Compliance Data
-      const complianceDoc = await getDoc(doc(db, "compliance", user.uid))
-      if (complianceDoc.exists()) {
-        const data = complianceDoc.data()
-        setComplianceData({
-          regulatoryGaps: data.regulatoryGaps || Array(12).fill(""),
-          auditFindings: data.auditFindings || Array(12).fill(""),
-          certificationStatus: data.certificationStatus || Array(12).fill(""),
-          correctiveActions: data.correctiveActions || Array(12).fill(""),
-          notes: data.notes || "",
-          analysis: data.analysis || "",
-        })
-      }
-    } catch (error) {
-      console.error("Error loading safety data:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const saveSafetyData = async () => {
-    if (!user) {
-      alert("Please log in to save data")
-      return
-    }
-    setLoading(true)
-    try {
-      // Save Safety Risk Data
-      await setDoc(doc(db, "safetyRisk", user.uid), {
-        ...safetyRiskData,
-        userId: user.uid,
-        lastUpdated: new Date().toISOString(),
-        dataDate: dataDate,
-      })
-
-      // Save Compliance Data
-      await setDoc(doc(db, "compliance", user.uid), {
-        ...complianceData,
-        userId: user.uid,
-        lastUpdated: new Date().toISOString(),
-        dataDate: dataDate,
-      })
-
-      setShowModal(false)
-      alert("Data saved successfully!")
-    } catch (error) {
-      console.error("Error saving data:", error)
-      alert("Error saving data. Please try again.")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const getMonthIndex = (month) => months.indexOf(month)
-  const monthIndex = getMonthIndex(selectedMonth)
-
-  const updateSafetyRiskData = (field, value) => {
-    setSafetyRiskData(prev => ({
-      ...prev,
-      [field]: value
-    }))
-  }
-
-  const updateComplianceData = (field, value) => {
-    setComplianceData(prev => ({
-      ...prev,
-      [field]: value
-    }))
-  }
-
-  const renderSafetyRisk = () => {
-    const colors = ["#d32f2f", "#f44336", "#ef5350", "#e57373"]
-    
-    return (
-      <div>
-        <KeyQuestionBox
-          question="Does safety threaten licence to operate?"
-          signals="Incidents and incident severity"
-          decisions="Halt ops, invest in safety"
-          section="safety-risk"
-        />
-
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginBottom: "20px" }}>
-          {!isInvestorView && (
-            <>
-              <button
-                onClick={() => setShowKPIAdd(true)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#8d6e63",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  fontSize: "13px",
-                }}
-              >
-                Add KPI
-              </button>
-              <button
-                onClick={() => setShowModal(true)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  fontSize: "13px",
-                }}
-              >
-                Add Data
-              </button>
-            </>
-          )}
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: "20px" }}>
-          <OperationalChart
-            title="Safety Incidents"
-            data={{
-              labels: months,
-              datasets: [{
-                data: safetyRiskData.safetyIncidents.map(v => Number.parseFloat(v) || 0),
-                backgroundColor: colors[0],
-                borderColor: colors[0],
-                borderWidth: 2,
-              }]
-            }}
-            kpiKey="safetyIncidents"
-            isInvestorView={isInvestorView}
-            onUpdate={(field, value) => updateSafetyRiskData(field, value)}
-            units="#"
-            type="bar"
-            notes={safetyRiskData.notes}
-            analysis={safetyRiskData.analysis}
-          />
-
-          <OperationalChart
-            title="Open Safety Actions"
-            data={{
-              labels: months,
-              datasets: [{
-                data: safetyRiskData.openActions.map(v => Number.parseFloat(v) || 0),
-                backgroundColor: colors[1],
-                borderColor: colors[1],
-                borderWidth: 2,
-              }]
-            }}
-            kpiKey="openActions"
-            isInvestorView={isInvestorView}
-            onUpdate={(field, value) => updateSafetyRiskData(field, value)}
-            units="#"
-            type="bar"
-          />
-
-          <OperationalChart
-            title="Compliance Status %"
-            data={{
-              labels: months,
-              datasets: [{
-                data: safetyRiskData.complianceStatus.map(v => Number.parseFloat(v) || 0),
-                backgroundColor: colors[2],
-                borderColor: colors[2],
-                borderWidth: 2,
-              }]
-            }}
-            kpiKey="complianceStatus"
-            isInvestorView={isInvestorView}
-            onUpdate={(field, value) => updateSafetyRiskData(field, value)}
-            units="%"
-            type="line"
-          />
-        </div>
-      </div>
-    )
-  }
-
-  const renderCompliance = () => {
-    const colors = ["#7b1fa2", "#9c27b0", "#ab47bc", "#ba68c8"]
-    
-    return (
-      <div>
-        <KeyQuestionBox
-          question="Are we exposed legally?"
-          signals="Regulatory gaps"
-          decisions="Fix compliance gaps"
-          section="compliance"
-        />
-
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginBottom: "20px" }}>
-          {!isInvestorView && (
-            <>
-              <button
-                onClick={() => setShowKPIAdd(true)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#8d6e63",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  fontSize: "13px",
-                }}
-              >
-                Add KPI
-              </button>
-              <button
-                onClick={() => setShowModal(true)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  fontSize: "13px",
-                }}
-              >
-                Add Data
-              </button>
-            </>
-          )}
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: "20px" }}>
-          <OperationalChart
-            title="Regulatory Gaps"
-            data={{
-              labels: months,
-              datasets: [{
-                data: complianceData.regulatoryGaps.map(v => Number.parseFloat(v) || 0),
-                backgroundColor: colors[0],
-                borderColor: colors[0],
-                borderWidth: 2,
-              }]
-            }}
-            kpiKey="regulatoryGaps"
-            isInvestorView={isInvestorView}
-            onUpdate={(field, value) => updateComplianceData(field, value)}
-            units="#"
-            type="bar"
-            notes={complianceData.notes}
-            analysis={complianceData.analysis}
-          />
-
-          <OperationalChart
-            title="Audit Findings"
-            data={{
-              labels: months,
-              datasets: [{
-                data: complianceData.auditFindings.map(v => Number.parseFloat(v) || 0),
-                backgroundColor: colors[1],
-                borderColor: colors[1],
-                borderWidth: 2,
-              }]
-            }}
-            kpiKey="auditFindings"
-            isInvestorView={isInvestorView}
-            onUpdate={(field, value) => updateComplianceData(field, value)}
-            units="#"
-            type="bar"
-          />
-
-          <OperationalChart
-            title="Certification Status %"
-            data={{
-              labels: months,
-              datasets: [{
-                data: complianceData.certificationStatus.map(v => Number.parseFloat(v) || 0),
-                backgroundColor: colors[2],
-                borderColor: colors[2],
-                borderWidth: 2,
-              }]
-            }}
-            kpiKey="certificationStatus"
-            isInvestorView={isInvestorView}
-            onUpdate={(field, value) => updateComplianceData(field, value)}
-            units="%"
-            type="line"
-          />
-        </div>
-      </div>
-    )
-  }
-
-  if (activeSection !== "safety") return null
-
-  return (
-    <div style={{ paddingTop: "20px" }}>
-      {/* Sub-tabs */}
-      <div
-        style={{
-          display: "flex",
-          gap: "10px",
-          marginBottom: "25px",
-          padding: "10px",
-          backgroundColor: "#fdfcfb",
-          borderRadius: "8px",
-          flexWrap: "wrap",
-        }}
-      >
-        {subTabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveSubTab(tab.id)}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: activeSubTab === tab.id ? "#5d4037" : "#e8ddd4",
-              color: activeSubTab === tab.id ? "#fdfcfb" : "#5d4037",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontWeight: "600",
-              fontSize: "14px",
-              transition: "all 0.3s ease",
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Sub-tab Content */}
-      {activeSubTab === "safety-risk" && renderSafetyRisk()}
-      {activeSubTab === "compliance" && renderCompliance()}
-
-      {/* Add Data Modal */}
-      {showModal && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "30px",
-              borderRadius: "8px",
-              maxWidth: "800px",
-              maxHeight: "90vh",
-              overflow: "auto",
-              width: "95%",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-              <h3 style={{ color: "#5d4037" }}>
-                {activeSubTab === "safety-risk" ? "Safety Risk Data" : "Compliance Data"}
-              </h3>
-              <button
-                onClick={() => setShowModal(false)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontSize: "24px",
-                  color: "#5d4037",
-                  cursor: "pointer",
-                  padding: "0",
-                  lineHeight: "1",
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                Data Date
-              </label>
-              <input
-                type="date"
-                value={dataDate}
-                onChange={(e) => setDataDate(e.target.value)}
-                style={{
-                  padding: "8px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  fontSize: "14px",
-                  color: "#5d4037",
-                  width: "100%",
-                  maxWidth: "200px",
-                }}
-              />
-            </div>
-
-            <div style={{ display: "flex", gap: "20px", marginBottom: "20px", flexWrap: "wrap" }}>
-              <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
-                <span style={{ color: "#5d4037", fontSize: "14px" }}>Year:</span>
-                <select
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
-                  style={{
-                    padding: "8px 12px",
-                    borderRadius: "4px",
-                    border: "1px solid #e8ddd4",
-                    fontSize: "14px",
-                    color: "#5d4037",
-                    minWidth: "100px",
-                  }}
-                >
-                  {years.map((year) => (
-                    <option key={year} value={year}>
-                      {year}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              
-              <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
-                <span style={{ color: "#5d4037", fontSize: "14px" }}>Month:</span>
-                <select
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                  style={{
-                    padding: "8px 12px",
-                    borderRadius: "4px",
-                    border: "1px solid #e8ddd4",
-                    fontSize: "14px",
-                    color: "#5d4037",
-                    minWidth: "100px",
-                  }}
-                >
-                  {months.map((month) => (
-                    <option key={month} value={month}>
-                      {month}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {activeSubTab === "safety-risk" ? (
-              <div>
-                <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Safety Risk Metrics</h4>
-                <div style={{ display: "grid", gap: "15px" }}>
-                  <div>
-                    <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                      Safety Incidents for {selectedMonth} {selectedYear}
-                    </label>
-                    <input
-                      type="number"
-                      value={safetyRiskData.safetyIncidents[monthIndex] || ""}
-                      onChange={(e) => {
-                        const newData = [...safetyRiskData.safetyIncidents]
-                        newData[monthIndex] = e.target.value
-                        updateSafetyRiskData("safetyIncidents", newData)
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                        fontSize: "14px",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                      Open Safety Actions for {selectedMonth} {selectedYear}
-                    </label>
-                    <input
-                      type="number"
-                      value={safetyRiskData.openActions[monthIndex] || ""}
-                      onChange={(e) => {
-                        const newData = [...safetyRiskData.openActions]
-                        newData[monthIndex] = e.target.value
-                        updateSafetyRiskData("openActions", newData)
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                        fontSize: "14px",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                      Compliance Status % for {selectedMonth} {selectedYear}
-                    </label>
-                    <input
-                      type="number"
-                      value={safetyRiskData.complianceStatus[monthIndex] || ""}
-                      onChange={(e) => {
-                        const newData = [...safetyRiskData.complianceStatus]
-                        newData[monthIndex] = e.target.value
-                        updateSafetyRiskData("complianceStatus", newData)
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                        fontSize: "14px",
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Compliance Metrics</h4>
-                <div style={{ display: "grid", gap: "15px" }}>
-                  <div>
-                    <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                      Regulatory Gaps for {selectedMonth} {selectedYear}
-                    </label>
-                    <input
-                      type="number"
-                      value={complianceData.regulatoryGaps[monthIndex] || ""}
-                      onChange={(e) => {
-                        const newData = [...complianceData.regulatoryGaps]
-                        newData[monthIndex] = e.target.value
-                        updateComplianceData("regulatoryGaps", newData)
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                        fontSize: "14px",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                      Audit Findings for {selectedMonth} {selectedYear}
-                    </label>
-                    <input
-                      type="number"
-                      value={complianceData.auditFindings[monthIndex] || ""}
-                      onChange={(e) => {
-                        const newData = [...complianceData.auditFindings]
-                        newData[monthIndex] = e.target.value
-                        updateComplianceData("auditFindings", newData)
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                        fontSize: "14px",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                      Certification Status % for {selectedMonth} {selectedYear}
-                    </label>
-                    <input
-                      type="number"
-                      value={complianceData.certificationStatus[monthIndex] || ""}
-                      onChange={(e) => {
-                        const newData = [...complianceData.certificationStatus]
-                        newData[monthIndex] = e.target.value
-                        updateComplianceData("certificationStatus", newData)
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                        fontSize: "14px",
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div style={{ marginTop: "20px" }}>
-              <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                Notes
-              </label>
-              <textarea
-                value={activeSubTab === "safety-risk" ? safetyRiskData.notes : complianceData.notes}
-                onChange={(e) => {
-                  if (activeSubTab === "safety-risk") {
-                    updateSafetyRiskData("notes", e.target.value)
-                  } else {
-                    updateComplianceData("notes", e.target.value)
-                  }
-                }}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  minHeight: "100px",
-                  fontSize: "14px",
-                }}
-              />
-            </div>
-
-            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "20px" }}>
-              <button
-                onClick={() => setShowModal(false)}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#e8ddd4",
-                  color: "#5d4037",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveSafetyData}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                }}
-              >
-                {loading ? "Saving..." : "Save Data"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add KPI Modal */}
-      {showKPIAdd && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 1001,
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "30px",
-              borderRadius: "8px",
-              maxWidth: "500px",
-              width: "95%",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-              <h3 style={{ color: "#5d4037" }}>Add KPI Data</h3>
-              <button
-                onClick={() => setShowKPIAdd(false)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontSize: "24px",
-                  color: "#5d4037",
-                  cursor: "pointer",
-                  padding: "0",
-                  lineHeight: "1",
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                View Mode
-              </label>
-              <div style={{ display: "flex", gap: "10px" }}>
-                <button
-                  onClick={() => setKpiViewMode("month")}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: kpiViewMode === "month" ? "#5d4037" : "#e8ddd4",
-                    color: kpiViewMode === "month" ? "#fdfcfb" : "#5d4037",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontWeight: "600",
-                    fontSize: "13px",
-                    flex: 1,
-                  }}
-                >
-                  Monthly
-                </button>
-                <button
-                  onClick={() => setKpiViewMode("quarter")}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: kpiViewMode === "quarter" ? "#5d4037" : "#e8ddd4",
-                    color: kpiViewMode === "quarter" ? "#fdfcfb" : "#5d4037",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontWeight: "600",
-                    fontSize: "13px",
-                    flex: 1,
-                  }}
-                >
-                  Quarterly
-                </button>
-                <button
-                  onClick={() => setKpiViewMode("year")}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: kpiViewMode === "year" ? "#5d4037" : "#e8ddd4",
-                    color: kpiViewMode === "year" ? "#fdfcfb" : "#5d4037",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontWeight: "600",
-                    fontSize: "13px",
-                    flex: 1,
-                  }}
-                >
-                  Yearly
-                </button>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
-                Data Date
-              </label>
-              <input
-                type="date"
-                value={dataDate}
-                onChange={(e) => setDataDate(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  fontSize: "14px",
-                  color: "#5d4037",
-                }}
-              />
-            </div>
-
-            <div style={{ marginTop: "20px" }}>
-              <p style={{ color: "#5d4037", fontSize: "14px", textAlign: "center" }}>
-                Select "Add Data" to enter specific metric values for the selected period.
-              </p>
-            </div>
-
-            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "20px" }}>
-              <button
-                onClick={() => setShowKPIAdd(false)}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#e8ddd4",
-                  color: "#5d4037",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  setShowKPIAdd(false)
-                  setShowModal(true)
-                }}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                }}
-              >
-                Add Data
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Main Operational Performance Component
+// Main Operational Performance Component (Single Tab Version)
 const OperationalPerformance = () => {
   const [activeSection, setActiveSection] = useState("kpi-dashboard")
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
@@ -3792,16 +1790,10 @@ const OperationalPerformance = () => {
     boxSizing: "border-box",
   })
 
+  // Only one tab - KPI Dashboard
   const sectionButtons = [
     { id: "kpi-dashboard", label: "KPI Dashboard" },
-    { id: "supply-chain", label: "Supply Chain" },
-    { id: "delivery", label: "Delivery" },
-    { id: "safety", label: "Safety" },
   ]
-
-  const handleCategoryClick = (sectionId) => {
-    setActiveSection(sectionId)
-  }
 
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
@@ -3854,110 +1846,107 @@ const OperationalPerformance = () => {
           </div>
         )}
 
-    <div style={{ padding: "20px", paddingTop: "40px", marginLeft: "20px" }}>
-  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-    <h1 style={{ color: "#5d4037", fontSize: "32px", fontWeight: "700", margin: 0 }}>
-      Operational Performance
-    </h1>
-    
-    <button
-      onClick={() => setShowFullDescription(!showFullDescription)}
-      style={{
-        padding: "8px 16px",
-        backgroundColor: "#7d5a50",
-        color: "#fdfcfb",
-        border: "none",
-        borderRadius: "6px",
-        cursor: "pointer",
-        fontWeight: "600",
-        fontSize: "13px",
-        whiteSpace: "nowrap",
-      }}
-    >
-      {showFullDescription ? "See less" : "See more"}
-    </button>
-  </div>
-
-  {/* Operational Performance Description */}
-  {showFullDescription && (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "20px",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-        marginBottom: "30px",
-      }}
-    >
-      <div style={{ padding: "50px", paddingTop: "100px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginTop: "-80px" }}>
-          <div>
-            <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
-              What this dashboard DOES
-            </h3>
-            <ul style={{ color: "#4a352f", fontSize: "14px", lineHeight: "1.7", margin: 0, paddingLeft: "20px" }}>
-              <li>Assesses delivery confidence and operational risk</li>
-              <li>Evaluates supply chain resilience and continuity risk</li>
-              <li>Monitors safety compliance and operational license maintenance</li>
-              <li>Measures productivity and delivery reliability</li>
-              <li>Tracks supplier dependency and supply chain vulnerabilities</li>
-            </ul>
+        <div style={{ padding: "20px", paddingTop: "40px", marginLeft: "20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+            <h1 style={{ color: "#5d4037", fontSize: "32px", fontWeight: "700", margin: 0 }}>
+              Operational Performance
+            </h1>
+            
+            <button
+              onClick={() => setShowFullDescription(!showFullDescription)}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#7d5a50",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "13px",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {showFullDescription ? "See less" : "See more"}
+            </button>
           </div>
 
-          <div>
-            <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
-              What this dashboard does NOT do
-            </h3>
-            <ul style={{ color: "#4a352f", fontSize: "14px", lineHeight: "1.7", margin: 0, paddingLeft: "20px" }}>
-              <li>Manage workflows or task tracking</li>
-              <li>Replace ERP/MES systems</li>
-              <li>Operational transaction processing</li>
-              <li>Detailed project management</li>
-              <li>Real-time process control</li>
-            </ul>
-          </div>
+          {/* Operational Performance Description */}
+          {showFullDescription && (
+            <div
+              style={{
+                backgroundColor: "#fdfcfb",
+                padding: "20px",
+                borderRadius: "8px",
+                boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+                marginBottom: "30px",
+              }}
+            >
+              <div style={{ padding: "50px", paddingTop: "100px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginTop: "-80px" }}>
+                  <div>
+                    <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
+                      What this dashboard DOES
+                    </h3>
+                    <ul style={{ color: "#4a352f", fontSize: "14px", lineHeight: "1.7", margin: 0, paddingLeft: "20px" }}>
+                      <li>Hierarchical KPI structure (Category → Sub-Category → KPI)</li>
+                      <li>Click 👁️ icon to view charts with AI-powered analysis</li>
+                      <li>Add data for multiple KPIs at once by category</li>
+                      <li>Add custom KPIs with "Add New KPI" button</li>
+                      <li>Target vs actual performance comparison with notes</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
+                      How to Use
+                    </h3>
+                    <ul style={{ color: "#4a352f", fontSize: "14px", lineHeight: "1.7", margin: 0, paddingLeft: "20px" }}>
+                      <li>Click 👁️ icon next to any KPI to see chart and AI analysis</li>
+                      <li>Use "+ Add Data" button to enter values for all months at once</li>
+                      <li>Use "Add New KPI" button to add custom metrics</li>
+                      <li>Add notes about data entry context and observations</li>
+                      <li>Download CSV for reporting</li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: "30px", paddingTop: "20px", borderTop: "1px solid #e8ddd4" }}>
+                  <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
+                    Key Features
+                  </h3>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px" }}>
+                    <div>
+                      <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
+                        🤖 AI Analysis
+                      </h4>
+                      <p style={{ color: "#4a352f", fontSize: "12px", lineHeight: "1.5", margin: 0 }}>
+                        Get AI-powered insights and recommendations for each KPI
+                      </p>
+                    </div>
+                    <div>
+                      <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
+                        📝 Notes Integration
+                      </h4>
+                      <p style={{ color: "#4a352f", fontSize: "12px", lineHeight: "1.5", margin: 0 }}>
+                        Add contextual notes to data entries for better analysis
+                      </p>
+                    </div>
+                    <div>
+                      <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
+                        ➕ Custom KPIs
+                      </h4>
+                      <p style={{ color: "#4a352f", fontSize: "12px", lineHeight: "1.5", margin: 0 }}>
+                        Add your own KPIs to track what matters most to your business
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        <div style={{ marginTop: "30px", paddingTop: "20px", borderTop: "1px solid #e8ddd4" }}>
-          <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
-            Key Operational Dimensions
-          </h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "20px" }}>
-            <div>
-              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
-                Supply Chain
-              </h4>
-              <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
-                Evaluate supplier dependency and continuity risk to ensure supply chain resilience
-              </p>
-            </div>
-            <div>
-              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
-                Delivery
-              </h4>
-              <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
-                Assess productivity and reliability to ensure efficient and consistent delivery performance
-              </p>
-            </div>
-            <div>
-              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
-                Safety
-              </h4>
-              <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
-                Monitor safety risks and compliance to maintain operational license and legal compliance
-              </p>
-            </div>
-          </div>
-          <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", marginTop: "15px" }}>
-            Each section provides key metrics, signals, and decision points to help you make informed strategic choices about your business's operational future.
-          </p>
-        </div>
-      </div>
-    </div>
-  )}
-</div>
-
-        {/* Main Tab Buttons */}
+        {/* Only KPI Dashboard Tab */}
         <div
           style={{
             display: "flex",
@@ -3994,41 +1983,12 @@ const OperationalPerformance = () => {
           ))}
         </div>
 
-        {activeSection === "kpi-dashboard" && (
-          <KPIDashboard
-            activeSection={activeSection}
-            isInvestorView={isInvestorView}
-            onCategoryClick={handleCategoryClick}
-            viewingSMEId={viewingSMEId}
-          />
-        )}
-
-        {activeSection === "supply-chain" && (
-          <SupplyChain
-            activeSection={activeSection}
-            viewMode="month"
-            user={user}
-            isInvestorView={isInvestorView}
-          />
-        )}
-
-        {activeSection === "delivery" && (
-          <Delivery
-            activeSection={activeSection}
-            viewMode="month"
-            user={user}
-            isInvestorView={isInvestorView}
-          />
-        )}
-
-        {activeSection === "safety" && (
-          <Safety
-            activeSection={activeSection}
-            viewMode="month"
-            user={user}
-            isInvestorView={isInvestorView}
-          />
-        )}
+        {/* KPI Dashboard Component */}
+        <KPIDashboard
+          activeSection={activeSection}
+          isInvestorView={isInvestorView}
+          financialYearStartMonth={3}
+        />
       </div>
     </div>
   )
