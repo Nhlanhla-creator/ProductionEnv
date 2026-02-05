@@ -32,10 +32,16 @@ import {
 } from "lucide-react"
 import styles from "./all-interns.module.css"
 import { collection, query, where, getDocs, doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore"
-import { db, auth } from "../../firebaseConfig"
+// import { db, auth } from "../../firebaseConfig"
+import databaseService from "../../services/databaseService"
+import * as XLSX from 'xlsx';
+
 
 function AllInterns() {
   const navigate = useNavigate()
+
+    const [currentDatabase, setCurrentDatabase] = useState(
+      databaseService.getCurrentDatabase())
   const [loading, setLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("")
@@ -73,11 +79,38 @@ function AllInterns() {
   const [itemsPerPage] = useState(10)
 const [internData, setInternData] = useState([]);
 
-useEffect(() => {
+  const getCurrentDb = () => {
+    return databaseService.getFirestore();
+  }
+
+  // ADD this effect to listen for database changes
+  useEffect(() => {
+    const handleDatabaseChange = () => {
+      const newDatabase = databaseService.getCurrentDatabase();
+      setCurrentDatabase(newDatabase);
+      // Refresh data when database changes
+      fetchInterns();
+    };
+
+    // Listen for storage changes
+    window.addEventListener('storage', handleDatabaseChange);
+    
+    // Listen for custom event
+    window.addEventListener('databaseChanged', handleDatabaseChange);
+
+    return () => {
+      window.removeEventListener('storage', handleDatabaseChange);
+      window.removeEventListener('databaseChanged', handleDatabaseChange);
+    };
+  }, []);
+
+
   const fetchInterns = async () => {
     try {
       setLoading(true);
-      
+    
+      const db = getCurrentDb();
+
       const internsRef = collection(db, 'internProfiles');
       const querySnapshot = await getDocs(internsRef);
       
@@ -188,9 +221,13 @@ useEffect(() => {
       setLoading(false);
     }
   };
-  
-  fetchInterns();
-}, []);
+
+    // UPDATE your useEffect
+    useEffect(() => {
+      fetchInterns();
+    }, []); // Keep empty dependencies
+
+
 // Your existing useEffect for loading simulation (remove or modify):
 useEffect(() => {
   if (!loading) return; // Only run if still loading
@@ -202,6 +239,27 @@ useEffect(() => {
 
   return () => clearTimeout(timer);
 }, [loading]);
+
+  const toggleDatabase = () => {
+    // Get the new database
+    const newDatabase = databaseService.toggleDatabase();
+    
+    // Update local state
+    setCurrentDatabase(newDatabase);
+    
+    // Dispatch event for other components
+    window.dispatchEvent(new CustomEvent('databaseChanged', {
+      detail: { database: newDatabase }
+    }));
+    
+    // Refresh data
+    fetchInterns();
+    
+    // Show alert for production mode
+    if (newDatabase === 'production') {
+      alert('⚠️ WARNING: Switched to PRODUCTION database. All data is LIVE.');
+    }
+  };
 
   const getInternDocuments = (internId) => {
     return [
@@ -434,6 +492,7 @@ useEffect(() => {
     setIsSaving(true);
     
     // Update in Firestore
+    const db = getCurrentDb();
     const internRef = doc(db, 'internProfiles', selectedIntern.firestoreId);
     await updateDoc(internRef, updateData);
     
@@ -517,6 +576,7 @@ const handleDelete = async (intern) => {
   if (window.confirm(`Are you sure you want to delete ${intern.fullName}? This action cannot be undone.`)) {
     try {
       // Remove from Firestore
+      const db = getCurrentDb();
       const docRef = doc(db, 'internProfiles', intern.firestoreId);
       await deleteDoc(docRef);
       
@@ -537,6 +597,7 @@ const handleBlock = async (intern) => {
       const newStatus = intern.status === 'blocked' ? 'active' : 'blocked';
       
       // Update in Firestore
+      const db = getCurrentDb();
       const docRef = doc(db, 'internProfiles', intern.firestoreId);
       await updateDoc(docRef, {
         status: newStatus,
@@ -607,6 +668,45 @@ const handleBlock = async (intern) => {
       }
     })
   }
+
+   const exportToExcel = () => {
+    try {
+      // Use whatever data is currently filtered/shown
+      const dataToExport = filteredInterns;
+      
+      if (dataToExport.length === 0) {
+        alert("No data to export!");
+        return;
+      }
+      
+      // Simple format - just basic data
+      const excelData = dataToExport.map(intern => ({
+        Username: intern.username,
+        Email: intern.email,
+        "Company Name": intern.companyName,
+        Created: intern.created,
+        Status: intern.status,
+        Industry: intern.profile.industry,
+        Employees: intern.profile.employees,
+        Revenue: intern.profile.revenue,
+      }));
+      
+      // Create worksheet
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "SMEs");
+      
+      // Download
+      const fileName = `SMEs_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+      
+      alert(`Exported ${dataToExport.length} records!`);
+      
+    } catch (error) {
+      console.error("Export error:", error);
+      alert("Export failed: " + error.message);
+    }
+  };
 
   const getStatusBadge = (status) => {
     const statusStyles = {
@@ -784,6 +884,7 @@ const handleBlock = async (intern) => {
               </div>
               
               <div className={styles.documentsTableContainer}>
+
                 <table className={styles.documentsTable}>
                   <thead>
                     <tr>
@@ -865,11 +966,11 @@ const handleBlock = async (intern) => {
           <h1 className={styles.title}>All Interns</h1>
           <p className={styles.subtitle}>Manage and monitor all intern accounts</p>
         </div>
-        <div className={styles.headerActions}>
-          <button className={styles.actionButton} onClick={() => alert("Export functionality coming soon!")}>
-            <Download size={16} />
-            Export
-          </button>
+         <div className={styles.headerActions}>
+                 <button className={styles.actionButton} onClick={exportToExcel}>
+                 <Download size={16} />
+                 Export to Excel
+               </button>
           <button className={styles.primaryButton} onClick={() => setShowAddModal(true)}>
             <Plus size={16} />
             Add Intern
@@ -905,6 +1006,21 @@ const handleBlock = async (intern) => {
       </div>
 
       <div className={styles.tableContainer}>
+         <div style={{
+                    position: 'fixed',
+                    top: '20px',
+                    right: '80px',
+                    backgroundColor: currentDatabase === 'testing' ? '#4CAF50' : '#f44336',
+                    color: 'white',
+                    padding: '8px 12px',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    zIndex: 1000,
+                    cursor: 'pointer'
+                  }} onClick={toggleDatabase}>
+                    {currentDatabase === 'testing' ? '🟢 TESTING' : '🔴 PRODUCTION'}
+                  </div>
         <table className={styles.table}>
           <thead>
             <tr>

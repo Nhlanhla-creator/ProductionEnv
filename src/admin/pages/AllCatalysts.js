@@ -35,6 +35,7 @@ import {
 } from "lucide-react"
 import styles from "./all-catalysts.module.css"
 import { collection, query, where, getDocs, doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore"
+import * as XLSX from 'xlsx';
 import databaseService from "../../services/databaseService"
 
 
@@ -114,7 +115,7 @@ function AllCatalysts() {
       const fetchedCatalysts = querySnapshot.docs.map((doc, index) => {
         const data = doc.data();
         const formData = data.formData || {};
-        
+      
         // Format the date from Firestore
         const formatFirestoreDate = (timestamp) => {
           if (timestamp && timestamp.toDate) {
@@ -131,7 +132,7 @@ function AllCatalysts() {
         const email = formData?.contactDetails?.businessEmail || 'Not Provided';
         
         // Create username from company name if not exists
-        const username = companyName.toLowerCase().replace(/[^a-z0-9]/g, '_') || `catalyst_${index + 1}`;
+        const username = formData?.contactDetails?.primaryContactName || companyName.toLowerCase().replace(/[^a-z0-9]/g, '_') || `catalyst_${index + 1}`;
         
         return {
           id: index + 1,
@@ -139,18 +140,18 @@ function AllCatalysts() {
           username: username,
           email: email,
           companyName: companyName,
-          created: formatFirestoreDate(data.createdAt) || "2024-01-01",
-          lastEdited: formatFirestoreDate(data.lastEdited) || formatFirestoreDate(data.createdAt) || "2024-01-01",
+          created: formatFirestoreDate(data.submittedAt) || "N/A",
+          lastEdited: formatFirestoreDate(data.lastUpdated) || formatFirestoreDate(data.createdAt) || "N/A",
           status: data.status || formData.status || "active",
           profileImage: null,
           profile: {
-            organizationName: formData.organizationName || companyName || "Not Provided",
+            organizationName: formData?.entityOverview?.registeredName || "Not Provided",
             programType: formData.programType || "Not Specified",
             focusAreas: formData.focusAreas || formData.industry || "Not Specified",
             programDuration: formData.programDuration || "Not Specified",
             supportOffered: formData.supportOffered || "Not Specified",
             location: formData.location || formData.city || "South Africa",
-            phone: formData.phone || formData.phoneNumber || "+27 XX XXX XXXX",
+            phone: formData?.contactDetails?.primaryContactMobile || "+27 XX XXX XXXX",
             website: formData.website || formData.websiteUrl || "Not Provided",
           },
           documents: {
@@ -508,6 +509,43 @@ useEffect(() => {
     })
   }
 
+
+   const exportToExcel = () => {
+    try {
+      const dataToExport = filteredCatalysts;
+      
+      if (dataToExport.length === 0) {
+        alert("No data to export!");
+        return;
+      }
+      
+      const excelData = dataToExport.map(catalyst => ({
+        Username: catalyst.username,
+        Email: catalyst.email,
+        "Company Name": catalyst.companyName,
+        Created: catalyst.created,
+        Status: catalyst.status,
+        Industry: catalyst.profile.industry,
+        Employees: catalyst.profile.employees,
+        Revenue: catalyst.profile.revenue,
+      }));
+      
+      // Create worksheet
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Catalysts");
+      
+      // Download
+      const fileName = `Catalysts_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+      
+      alert(`Exported ${dataToExport.length} records!`);
+      
+    } catch (error) {
+      console.error("Export error:", error);
+      alert("Export failed: " + error.message);
+    }
+  };
   const getStatusBadge = (status) => {
     const statusStyles = {
       active: styles.statusActive,
@@ -723,10 +761,10 @@ useEffect(() => {
           <p className={styles.subtitle}>Manage and monitor all catalyst organizations</p>
         </div>
         <div className={styles.headerActions}>
-          <button className={styles.actionButton} onClick={() => alert("Export functionality coming soon!")}>
-            <Download size={16} />
-            Export
-          </button>
+                <button className={styles.actionButton} onClick={exportToExcel}>
+                <Download size={16} />
+                Export to Excel
+              </button>
           <button className={styles.primaryButton} onClick={() => setShowAddModal(true)}>
             <Plus size={16} />
             Add Catalyst

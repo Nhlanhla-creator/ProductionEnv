@@ -70,11 +70,11 @@ const KeyQuestionBox = ({ question, signals, decisions, section }) => {
   return (
     <div
       style={{
-        backgroundColor: "#fff9c4",
+        backgroundColor: "	#DCDCDC",
         padding: "15px 20px",
         borderRadius: "8px",
         marginBottom: "20px",
-        border: "1px solid #f9a825",
+        border: "1px solid 	#5d4037",
       }}
     >
       <div style={{ marginBottom: "8px" }}>

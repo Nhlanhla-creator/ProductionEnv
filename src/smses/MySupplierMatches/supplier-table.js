@@ -720,10 +720,67 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
   const [secondaryBreakdownData, setSecondaryBreakdownData] = useState(null)
   const [aiAnalysisError, setAiAnalysisError] = useState("")
 
+  const [companyOwnerId, setCompanyOwnerId] = useState(null);
+const [isCompanyMember, setIsCompanyMember] = useState(false);
+const [effectiveUserId, setEffectiveUserId] = useState(null);
+const [userRole, setUserRole] = useState(null);
+
   const navigate = useNavigate()
   const location = useLocation()
 
 
+  // Add this useEffect to check company membership (place near the top, after other useEffects)
+useEffect(() => {
+  const checkCompanyMembership = async () => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      const userDocRef = doc(db, "users", user.uid);
+      const userDocSnap = await getDoc(userDocRef);
+      
+      if (userDocSnap.exists()) {
+        const userData = userDocSnap.data();
+        const userCompanyId = userData.companyId;
+        const userCompanyRole = userData.userRole;
+        
+        if (userCompanyId) {
+          const companyDocRef = doc(db, "companies", userCompanyId);
+          const companyDocSnap = await getDoc(companyDocRef);
+          
+          if (companyDocSnap.exists()) {
+            const companyData = companyDocSnap.data();
+            const ownerId = companyData.createdBy;
+            
+            setUserRole(userCompanyRole || 'viewer');
+            
+            if (ownerId === user.uid) {
+              setIsCompanyMember(false);
+              setEffectiveUserId(user.uid);
+            } else {
+              setIsCompanyMember(true);
+              setCompanyOwnerId(ownerId);
+              setEffectiveUserId(ownerId);
+            }
+          }
+        } else {
+          setIsCompanyMember(false);
+          setEffectiveUserId(user.uid);
+          setUserRole('owner');
+        }
+      }
+    } catch (error) {
+      console.error("Error checking company membership:", error);
+      setEffectiveUserId(user.uid);
+      setUserRole('owner');
+    }
+  };
+
+  if (currentUser) {
+    checkCompanyMembership();
+  }
+}, [currentUser]);
   // NEW: Load cached secondary matches
   // Replace the current useEffect for loading cached secondary matches with this:
 
@@ -1109,109 +1166,105 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
     return Math.round(combinedScore);
   }
 
-  useEffect(() => {
-    const loadContactedApplications = async () => {
-      try {
-        const user = getAuth().currentUser
-        if (!user) return
+// Update loadContactedApplications useEffect
+useEffect(() => {
+  const loadContactedApplications = async () => {
+    if (!effectiveUserId) return;
 
-        const userDocRef = doc(db, "userApplications", user.uid)
-        const userDoc = await getDoc(userDocRef)
+    try {
+      const userDocRef = doc(db, "userApplications", effectiveUserId);
+      const userDoc = await getDoc(userDocRef);
 
-        if (userDoc.exists()) {
-          const data = userDoc.data()
-          const contactedApps = data.contactedApplications || []
-          setContactedApplications(contactedApps)
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        const contactedApps = data.contactedApplications || [];
+        setContactedApplications(contactedApps);
 
-          // Populate applicationsWithContacts set
-          const contactedIds = new Set(contactedApps.map(app => app.id))
-          setApplicationsWithContacts(contactedIds)
+        const contactedIds = new Set(contactedApps.map(app => app.id));
+        setApplicationsWithContacts(contactedIds);
+      }
+    } catch (error) {
+      console.error("Error loading contacted applications:", error);
+    }
+  };
+
+  if (effectiveUserId) {
+    loadContactedApplications();
+  }
+}, [effectiveUserId]);
+
+ const saveContactedAppToFirestore = async (contactedApp) => {
+  try {
+    if (!effectiveUserId) return;
+
+    const userDocRef = doc(db, "userApplications", effectiveUserId);
+    const userDoc = await getDoc(userDocRef);
+
+    if (userDoc.exists()) {
+      await updateDoc(userDocRef, {
+        contactedApplications: arrayUnion(contactedApp),
+        updatedAt: serverTimestamp()
+      });
+    } else {
+      await setDoc(userDocRef, {
+        userId: effectiveUserId,
+        contactedApplications: [contactedApp],
+        createdAt: serverTimestamp()
+      });
+    }
+  } catch (error) {
+    console.error("Error saving contacted application:", error);
+  }
+};
+
+  // Update updateContactedApplication
+const updateContactedApplication = async (applicationId, newSupplierId) => {
+  try {
+    // Update in local state
+    setContactedApplications(prev =>
+      prev.map(app => {
+        if (app.id === applicationId) {
+          const updatedSuppliers = [...(app.contactedSuppliers || []), newSupplierId];
+          return {
+            ...app,
+            contactedSuppliers: updatedSuppliers,
+            contactedCount: updatedSuppliers.length,
+            lastContacted: new Date().toISOString()
+          };
         }
-      } catch (error) {
-        console.error("Error loading contacted applications:", error)
-      }
+        return app;
+      })
+    );
+
+    // Update in Firestore
+    if (!effectiveUserId) return;
+
+    const userDocRef = doc(db, "userApplications", effectiveUserId);
+    const userDoc = await getDoc(userDocRef);
+
+    if (userDoc.exists()) {
+      const data = userDoc.data();
+      const updatedContactedApps = data.contactedApplications.map(app => {
+        if (app.id === applicationId) {
+          const updatedSuppliers = [...(app.contactedSuppliers || []), newSupplierId];
+          return {
+            ...app,
+            contactedSuppliers: updatedSuppliers,
+            contactedCount: updatedSuppliers.length,
+            lastContacted: new Date().toISOString()
+          };
+        }
+        return app;
+      });
+
+      await updateDoc(userDocRef, {
+        contactedApplications: updatedContactedApps
+      });
     }
-
-    if (currentUser) {
-      loadContactedApplications()
-    }
-  }, [currentUser])
-
-  const saveContactedAppToFirestore = async (contactedApp) => {
-    try {
-      const user = getAuth().currentUser
-      if (!user) return
-
-      const userDocRef = doc(db, "userApplications", user.uid)
-      const userDoc = await getDoc(userDocRef)
-
-      if (userDoc.exists()) {
-        // Update existing document
-        await updateDoc(userDocRef, {
-          contactedApplications: arrayUnion(contactedApp),
-          updatedAt: serverTimestamp()
-        })
-      } else {
-        // Create new document
-        await setDoc(userDocRef, {
-          userId: user.uid,
-          contactedApplications: [contactedApp],
-          createdAt: serverTimestamp()
-        })
-      }
-    } catch (error) {
-      console.error("Error saving contacted application:", error)
-    }
+  } catch (error) {
+    console.error("Error updating contacted application:", error);
   }
-
-  const updateContactedApplication = async (applicationId, newSupplierId) => {
-    try {
-      // Update in local state
-      setContactedApplications(prev =>
-        prev.map(app => {
-          if (app.id === applicationId) {
-            const updatedSuppliers = [...(app.contactedSuppliers || []), newSupplierId]
-            return {
-              ...app,
-              contactedSuppliers: updatedSuppliers,
-              contactedCount: updatedSuppliers.length,
-              lastContacted: new Date().toISOString()
-            }
-          }
-          return app
-        })
-      )
-
-      // Update in Firestore
-      const user = getAuth().currentUser
-      if (!user) return
-
-      const userDocRef = doc(db, "userApplications", user.uid)
-      const userDoc = await getDoc(userDocRef)
-
-      if (userDoc.exists()) {
-        const data = userDoc.data()
-        const updatedContactedApps = data.contactedApplications.map(app => {
-          if (app.id === applicationId) {
-            const updatedSuppliers = [...(app.contactedSuppliers || []), newSupplierId]
-            return {
-              ...app,
-              contactedSuppliers: updatedSuppliers,
-              contactedCount: updatedSuppliers.length,
-              lastContacted: new Date().toISOString()
-            }
-          }
-          return app
-        })
-
-        await updateDoc(userDocRef, {
-          contactedApplications: updatedContactedApps
-        })
-      }
-    } catch (error) {
-      console.error("Error updating contacted application:", error)
-    }
-  }
+};
 
   const handleNewRequest = () => {
     console.log("New request triggered from SupplierTable");
@@ -1260,9 +1313,10 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
 
   useEffect(() => {
     const loadDataWithHistory = async () => {
-      if (!currentUser || !currentUserApplication) return;
+  if (!effectiveUserId || !currentUserApplication) return;
 
-      setIsLoadingHistory(true);
+  setIsLoadingHistory(true);
+
       try {
         // 1. Calculate new matches (existing logic)
         const profilesSnapshot = await getDocs(collection(db, "universalProfiles"));
@@ -1317,7 +1371,7 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
           .sort((a, b) => b.matchPercentage - a.matchPercentage);
 
         // 2. Fetch contacted history
-        const contactedHistory = await fetchContactedHistory(currentUser.uid);
+        const contactedHistory = await fetchContactedHistory(effectiveUserId);
 
         // 3. Merge with new matches
         const mergedSuppliers = mergeSupplierHistory(relevantSuppliers, contactedHistory);
@@ -1822,41 +1876,43 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
     }
   }, [])
 
-  // Check if user has a product application
-  useEffect(() => {
-    const checkApplicationExists = async () => {
-      if (!currentUser) return
+ // Update the checkApplicationExists useEffect
+useEffect(() => {
+  const checkApplicationExists = async () => {
+    if (!effectiveUserId) return; // Wait for effectiveUserId
 
-      try {
-        const applicationDoc = await getDoc(doc(db, "productApplications", currentUser.uid))
-        if (!applicationDoc.exists()) {
-          setSuppliers([])
-          setFilteredSuppliers([])
-          setError("Please complete a product application first to see matching suppliers")
-          setLoading(false)
-          return
-        }
-
-        const applicationData = applicationDoc.data()
-        console.log("Loaded application data:", {
-          id: applicationDoc.id,
-          hasRequestOverview: !!applicationData.requestOverview,
-          hasPurpose: !!applicationData.requestOverview?.purpose
-        })
-
-        setCurrentUserApplication({
-          id: applicationDoc.id, // Make sure we have the ID
-          ...applicationData
-        })
-      } catch (error) {
-        console.error("Error checking application:", error)
-        setError("Failed to verify product application")
-        setLoading(false)
+    try {
+      const applicationDoc = await getDoc(doc(db, "productApplications", effectiveUserId));
+      if (!applicationDoc.exists()) {
+        setSuppliers([]);
+        setFilteredSuppliers([]);
+        setError("Please complete a product application first to see matching suppliers");
+        setLoading(false);
+        return;
       }
-    }
 
-    checkApplicationExists()
-  }, [currentUser])
+      const applicationData = applicationDoc.data();
+      console.log("Loaded application data:", {
+        id: applicationDoc.id,
+        hasRequestOverview: !!applicationData.requestOverview,
+        hasPurpose: !!applicationData.requestOverview?.purpose
+      });
+
+      setCurrentUserApplication({
+        id: applicationDoc.id,
+        ...applicationData
+      });
+    } catch (error) {
+      console.error("Error checking application:", error);
+      setError("Failed to verify product application");
+      setLoading(false);
+    }
+  };
+
+  if (effectiveUserId) {
+    checkApplicationExists();
+  }
+}, [effectiveUserId]);
 
   // Fetch data only when application exists
   useEffect(() => {
@@ -2073,16 +2129,15 @@ BIG Marketplace Africa Team`;
       // Don't throw error here - we don't want to block the application process if email fails
     }
   }
-
-  const handleConnectClick = async (supplier) => {
-    if (supplier.id === currentUser?.uid) {
-      setNotification({
-        type: "error",
-        message: "You cannot contact yourself"
-      })
-      setTimeout(() => setNotification(null), 3000)
-      return
-    }
+const handleConnectClick = async (supplier) => {
+  if (supplier.id === effectiveUserId) {
+    setNotification({
+      type: "error",
+      message: "You cannot contact yourself"
+    });
+    setTimeout(() => setNotification(null), 3000);
+    return;
+  }
 
     try {
       const auth = getAuth()
@@ -2189,7 +2244,9 @@ BIG Marketplace Africa Team`;
 
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        supplierId: currentUser.uid,
+         supplierId: effectiveUserId, // Use effectiveUserId
+      submittedBy: currentUser.uid, // Track who submitted
+      submittedByRole: userRole, // Track their role
         supplierName:
           getSafeValue(supplierData, "entityOverview.tradingName") ||
           getSafeValue(supplierData, "entityOverview.registeredName") ||
@@ -2412,6 +2469,48 @@ BIG Marketplace Africa Team`;
           transition: "filter 0.2s ease",
         }}
       >
+
+        {/* Company Member Banner */}
+      {isCompanyMember && (
+        <div style={{
+          backgroundColor: userRole === 'viewer' ? '#fef3c7' : '#e0f2fe',
+          border: `2px solid ${userRole === 'viewer' ? '#f59e0b' : '#0369a1'}`,
+          borderRadius: '12px',
+          padding: '16px 24px',
+          marginBottom: '24px',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+        }}>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '12px', 
+            marginBottom: '8px' 
+          }}>
+            <Users size={24} color={userRole === 'viewer' ? '#f59e0b' : '#0369a1'} />
+            <h3 style={{ 
+              margin: 0, 
+              color: userRole === 'viewer' ? '#f59e0b' : '#0369a1', 
+              fontWeight: '700',
+              fontSize: '1.1rem'
+            }}>
+              Company Supplier Matches - Role: {userRole?.toUpperCase()}
+            </h3>
+          </div>
+          <p style={{ 
+            margin: 0, 
+            color: '#4a5568', 
+            fontSize: '0.95rem',
+            lineHeight: '1.5'
+          }}>
+            {userRole === 'owner' && 'You can view and contact all company supplier matches.'}
+            {userRole === 'admin' && 'You can view and contact suppliers for the company.'}
+            {userRole === 'manager' && 'You can view supplier matches and track progress.'}
+            {userRole === 'employee' && 'You can view company supplier matches.'}
+            {userRole === 'viewer' && 'You have read-only access to company supplier matches.'}
+          </p>
+        </div>
+      )}
+      
         {/* Notification area */}
         {notification && (
           <div

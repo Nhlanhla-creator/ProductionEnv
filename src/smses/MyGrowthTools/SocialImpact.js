@@ -57,11 +57,11 @@ const KeyQuestionBox = ({ question, signals, decisions, section }) => {
   return (
     <div
       style={{
-        backgroundColor: "#fff9c4",
+        backgroundColor: "	#DCDCDC",
         padding: "15px 20px",
         borderRadius: "8px",
         marginBottom: "20px",
-        border: "1px solid #f9a825",
+        border: "1px solid	#5d4037",
       }}
     >
       <div style={{ marginBottom: "8px" }}>
@@ -69,7 +69,7 @@ const KeyQuestionBox = ({ question, signals, decisions, section }) => {
         <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
           {showMore ? question : getFirstSentence(question)}
         </span>
-        {!showMore && question.length > getFirstSentence(question).length && (
+       {!showMore && (question.length > getFirstSentence(question).length || signals || decisions) && (
           <button
             onClick={() => setShowMore(true)}
             style={{
@@ -1347,14 +1347,15 @@ const ESGChartCard = ({ title, chartType, data, options, kpiKey, unit = "", onAd
   )
 }
 
-// Environmental Tab Components
-const EnvironmentalTab = ({ activeSubTab, setActiveSubTab, userData, onOpenModal, isInvestorView }) => {
-  const environmentalSubTabs = [
-    { id: "exposure-compliance", label: "Environmental Exposure & Compliance" },
-    { id: "incidents-controls", label: "Environmental Incidents & Controls" },
-  ]
+// Environmental Tab Components - SIMPLIFIED WITH DROPDOWNS
+const EnvironmentalTab = ({ userData, onSave, isInvestorView }) => {
+  // Handle dropdown changes
+  const handleDropdownChange = (field, value) => {
+    const updatedData = { ...userData, [field]: value };
+    onSave(updatedData);
+  };
 
-  const renderExposureCompliance = () => (
+  return (
     <div>
       <KeyQuestionBox
         question="Are environmental risks identified, tracked and managed where relevant? This includes assessing sector exposure (direct vs indirect), regulatory requirements, and licence-to-operate risk."
@@ -1363,252 +1364,233 @@ const EnvironmentalTab = ({ activeSubTab, setActiveSubTab, userData, onOpenModal
         section="environmental-exposure"
       />
 
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
-        {!isInvestorView && (
-          <button
-            onClick={() => onOpenModal("environmental-exposure")}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: "#5d4037",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontWeight: "600",
-            }}
-          >
-            Enter Data
-          </button>
-        )}
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
-        {/* Environmental Exposure Type */}
-        <div
-          style={{
-            backgroundColor: "#fdfcfb",
-            padding: "20px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          }}
-        >
-          <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>Environmental Exposure Type</h4>
-          <div style={{ textAlign: "center", padding: "20px" }}>
-            <div
-              style={{
-                fontSize: "32px",
-                fontWeight: "bold",
-                color: userData?.exposureType === "direct" ? "#c62828" : 
-                       userData?.exposureType === "indirect" ? "#f57c00" : "#2e7d32",
-                marginBottom: "10px",
-              }}
-            >
-              {userData?.exposureType?.toUpperCase() || "NONE"}
-            </div>
-            <div style={{ color: "#8d6e63", fontSize: "14px" }}>
-              {userData?.exposureType === "direct" ? "High Risk - Direct Environmental Impact" :
-               userData?.exposureType === "indirect" ? "Medium Risk - Indirect Impact" :
-               "Low Risk - Minimal Environmental Impact"}
-            </div>
-          </div>
-        </div>
-
-        {/* Environmental Compliance */}
-        <div
-          style={{
-            backgroundColor: "#fdfcfb",
-            padding: "20px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          }}
-        >
-          <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>Environmental Compliance Required</h4>
-          <div style={{ textAlign: "center", padding: "20px" }}>
-            <div
-              style={{
-                fontSize: "32px",
-                fontWeight: "bold",
-                color: userData?.complianceRequired === "yes" ? "#2e7d32" : "#c62828",
-                marginBottom: "10px",
-              }}
-            >
-              {userData?.complianceRequired?.toUpperCase() || "NO"}
-            </div>
-            <div style={{ color: "#8d6e63", fontSize: "14px" }}>
-              {userData?.complianceRequired === "yes" ? "Regulatory Compliance Required" : "No Specific Compliance Required"}
-            </div>
-          </div>
-        </div>
-
-        {/* Environmental Permits */}
-        <div
-          style={{
-            backgroundColor: "#fdfcfb",
-            padding: "20px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          }}
-        >
-          <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>Environmental Permits in Place</h4>
-          <div style={{ textAlign: "center", padding: "20px" }}>
-            <div
-              style={{
-                fontSize: "32px",
-                fontWeight: "bold",
-                color: userData?.permitsInPlace === "yes" ? "#2e7d32" : 
-                       userData?.permitsInPlace === "partial" ? "#f57c00" : "#c62828",
-                marginBottom: "10px",
-              }}
-            >
-              {userData?.permitsInPlace?.toUpperCase() || "NO"}
-            </div>
-            <div style={{ color: "#8d6e63", fontSize: "14px" }}>
-              {userData?.permitsInPlace === "yes" ? "All Permits Secured" :
-               userData?.permitsInPlace === "partial" ? "Partial Permits" :
-               "No Permits Required/Secured"}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-
-  const renderIncidentsControls = () => (
-    <div>
-      <KeyQuestionBox
-        question="Are environmental incidents monitored and managed transparently? and are controls in place to prevent recurrence? This involves tracking incident history logs and ensuring proper controls are documented."
-        signals="Incident history logs, Controls Documented"
-        decisions="Escalate risk to funders or insurers, Remediation before engagement"
-        section="environmental-incidents"
-      />
-
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
-        {!isInvestorView && (
-          <button
-            onClick={() => onOpenModal("environmental-exposure")}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: "#5d4037",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontWeight: "600",
-            }}
-          >
-            Enter Data
-          </button>
-        )}
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
-        {/* Environmental Incidents */}
-        <div
-          style={{
-            backgroundColor: "#fdfcfb",
-            padding: "20px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          }}
-        >
-          <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>Environmental Incidents</h4>
-          <div style={{ textAlign: "center", padding: "20px" }}>
-            <div
-              style={{
-                fontSize: "32px",
-                fontWeight: "bold",
-                color: userData?.incidents === "major" ? "#c62828" : 
-                       userData?.incidents === "minor" ? "#f57c00" : "#2e7d32",
-                marginBottom: "10px",
-              }}
-            >
-              {userData?.incidents?.toUpperCase() || "NONE"}
-            </div>
-            <div style={{ color: "#8d6e63", fontSize: "14px" }}>
-              {userData?.incidents === "major" ? "Major Incidents Reported" :
-               userData?.incidents === "minor" ? "Minor Incidents Only" :
-               "No Incidents Reported"}
-            </div>
-          </div>
-        </div>
-
-        {/* Environmental Controls */}
-        <div
-          style={{
-            backgroundColor: "#fdfcfb",
-            padding: "20px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          }}
-        >
-          <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>Environmental Controls</h4>
-          <div style={{ textAlign: "center", padding: "20px" }}>
-            <div
-              style={{
-                fontSize: "32px",
-                fontWeight: "bold",
-                color: userData?.controls === "formal" ? "#2e7d32" : 
-                       userData?.controls === "basic" ? "#f57c00" : "#c62828",
-                marginBottom: "10px",
-              }}
-            >
-              {userData?.controls?.toUpperCase() || "NONE"}
-            </div>
-            <div style={{ color: "#8d6e63", fontSize: "14px" }}>
-              {userData?.controls === "formal" ? "Formal Control Systems" :
-               userData?.controls === "basic" ? "Basic Control Measures" :
-               "No Specific Controls"}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-
-  return (
-    <div>
-      {/* Environmental Sub Tabs */}
+      {/* Environmental Exposure & Compliance Section */}
       <div
         style={{
-          display: "flex",
-          gap: "10px",
-          marginBottom: "25px",
-          padding: "10px",
           backgroundColor: "#fdfcfb",
+          padding: "25px",
           borderRadius: "8px",
-          flexWrap: "wrap",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          marginBottom: "30px",
         }}
       >
-        {environmentalSubTabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveSubTab(tab.id)}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: activeSubTab === tab.id ? "#5d4037" : "#e8ddd4",
-              color: activeSubTab === tab.id ? "#fdfcfb" : "#5d4037",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontWeight: "600",
-              fontSize: "14px",
-              transition: "all 0.3s ease",
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
+        <h3
+          style={{
+            color: "#5d4037",
+            marginTop: 0,
+            marginBottom: "25px",
+            fontSize: "18px",
+            fontWeight: "600",
+            borderBottom: "2px solid #e8ddd4",
+            paddingBottom: "10px",
+          }}
+        >
+          Environmental Exposure & Compliance
+        </h3>
+
+        <div style={{ display: "grid", gap: "20px" }}>
+          {/* Environmental Exposure Type */}
+          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+            <label
+              style={{
+                minWidth: "220px",
+                color: "#5d4037",
+                fontWeight: "600",
+                fontSize: "14px",
+              }}
+            >
+              Environmental Exposure Type:
+            </label>
+            <select
+              value={userData?.exposureType || "none"}
+              onChange={(e) => handleDropdownChange("exposureType", e.target.value)}
+              style={{
+                flex: 1,
+                padding: "10px 15px",
+                borderRadius: "6px",
+                border: "2px solid #e8ddd4",
+                fontSize: "14px",
+                color: "#5d4037",
+                backgroundColor: "#fdfcfb",
+                cursor: isInvestorView ? "not-allowed" : "pointer",
+                opacity: isInvestorView ? 0.7 : 1,
+              }}
+              disabled={isInvestorView}
+            >
+              <option value="none">None</option>
+              <option value="indirect">Indirect</option>
+              <option value="direct">Direct</option>
+            </select>
+          </div>
+
+          {/* Environmental Compliance Required */}
+          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+            <label
+              style={{
+                minWidth: "220px",
+                color: "#5d4037",
+                fontWeight: "600",
+                fontSize: "14px",
+              }}
+            >
+              Environmental Compliance Required:
+            </label>
+            <select
+              value={userData?.complianceRequired || "no"}
+              onChange={(e) => handleDropdownChange("complianceRequired", e.target.value)}
+              style={{
+                flex: 1,
+                padding: "10px 15px",
+                borderRadius: "6px",
+                border: "2px solid #e8ddd4",
+                fontSize: "14px",
+                color: "#5d4037",
+                backgroundColor: "#fdfcfb",
+                cursor: isInvestorView ? "not-allowed" : "pointer",
+                opacity: isInvestorView ? 0.7 : 1,
+              }}
+              disabled={isInvestorView}
+            >
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+
+          {/* Environmental Permits in Place */}
+          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+            <label
+              style={{
+                minWidth: "220px",
+                color: "#5d4037",
+                fontWeight: "600",
+                fontSize: "14px",
+              }}
+            >
+              Environmental Permits in Place:
+            </label>
+            <select
+              value={userData?.permitsInPlace || "no"}
+              onChange={(e) => handleDropdownChange("permitsInPlace", e.target.value)}
+              style={{
+                flex: 1,
+                padding: "10px 15px",
+                borderRadius: "6px",
+                border: "2px solid #e8ddd4",
+                fontSize: "14px",
+                color: "#5d4037",
+                backgroundColor: "#fdfcfb",
+                cursor: isInvestorView ? "not-allowed" : "pointer",
+                opacity: isInvestorView ? 0.7 : 1,
+              }}
+              disabled={isInvestorView}
+            >
+              <option value="no">No</option>
+              <option value="partial">Partial</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+        </div>
       </div>
 
-      {/* Sub Tab Content */}
-      {activeSubTab === "exposure-compliance" && renderExposureCompliance()}
-      {activeSubTab === "incidents-controls" && renderIncidentsControls()}
+      {/* Environmental Incidents & Controls Section */}
+      <div
+        style={{
+          backgroundColor: "#fdfcfb",
+          padding: "25px",
+          borderRadius: "8px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        }}
+      >
+        <h3
+          style={{
+            color: "#5d4037",
+            marginTop: 0,
+            marginBottom: "25px",
+            fontSize: "18px",
+            fontWeight: "600",
+            borderBottom: "2px solid #e8ddd4",
+            paddingBottom: "10px",
+          }}
+        >
+          Environmental Incidents & Controls
+        </h3>
+
+        <div style={{ display: "grid", gap: "20px" }}>
+          {/* Environmental Incidents */}
+          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+            <label
+              style={{
+                minWidth: "220px",
+                color: "#5d4037",
+                fontWeight: "600",
+                fontSize: "14px",
+              }}
+            >
+              Environmental Incidents:
+            </label>
+            <select
+              value={userData?.incidents || "none"}
+              onChange={(e) => handleDropdownChange("incidents", e.target.value)}
+              style={{
+                flex: 1,
+                padding: "10px 15px",
+                borderRadius: "6px",
+                border: "2px solid #e8ddd4",
+                fontSize: "14px",
+                color: "#5d4037",
+                backgroundColor: "#fdfcfb",
+                cursor: isInvestorView ? "not-allowed" : "pointer",
+                opacity: isInvestorView ? 0.7 : 1,
+              }}
+              disabled={isInvestorView}
+            >
+              <option value="none">None</option>
+              <option value="minor">Minor</option>
+              <option value="major">Major</option>
+            </select>
+          </div>
+
+          {/* Environmental Controls */}
+          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+            <label
+              style={{
+                minWidth: "220px",
+                color: "#5d4037",
+                fontWeight: "600",
+                fontSize: "14px",
+              }}
+            >
+              Environmental Controls:
+            </label>
+            <select
+              value={userData?.controls || "none"}
+              onChange={(e) => handleDropdownChange("controls", e.target.value)}
+              style={{
+                flex: 1,
+                padding: "10px 15px",
+                borderRadius: "6px",
+                border: "2px solid #e8ddd4",
+                fontSize: "14px",
+                color: "#5d4037",
+                backgroundColor: "#fdfcfb",
+                cursor: isInvestorView ? "not-allowed" : "pointer",
+                opacity: isInvestorView ? 0.7 : 1,
+              }}
+              disabled={isInvestorView}
+            >
+              <option value="none">None</option>
+              <option value="basic">Basic</option>
+              <option value="formal">Formal</option>
+            </select>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
 
-// Social Tab Components
-const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onOpenModal, isInvestorView }) => {
+// Social Tab Components - WITH PIE CHARTS
+const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestorView }) => {
   const [selectedViewMode, setSelectedViewMode] = useState("month")
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
 
@@ -1648,6 +1630,12 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onOpenModal, isInv
     }
   })
 
+  // Handle dropdown changes for social data
+  const handleDropdownChange = (field, value) => {
+    const updatedData = { ...userData, [field]: value };
+    onSave(updatedData);
+  };
+
   const renderWorkforceDemographics = () => {
     // Data from userData with fallbacks
     const workforceData = {
@@ -1669,189 +1657,237 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onOpenModal, isInv
           section="workforce-demographics"
         />
 
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
-          {!isInvestorView && (
-            <button
-              onClick={() => onOpenModal("workforce-demographics")}
-              style={{
-                padding: "10px 20px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontWeight: "600",
-              }}
-            >
-              Enter Data
-            </button>
-          )}
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
-          {/* Locality Chart */}
-          <ESGChartCard
-            title="Locality"
-            chartType="doughnut"
-            data={{
-              labels: ["Local", "Non-Local"],
-              datasets: [
-                {
-                  data: [workforceData.locality, 100 - workforceData.locality],
-                  backgroundColor: ["#5d4037", "#e8ddd4"],
-                  borderColor: "#ffffff",
-                  borderWidth: 3,
-                },
-              ],
-            }}
-            options={getPieChartOptions("Locality")}
-            kpiKey="locality"
-            unit="%"
-            isInvestorView={isInvestorView}
-          />
-
-          {/* Gender Chart */}
-          <ESGChartCard
-            title="Gender"
-            chartType="doughnut"
-            data={{
-              labels: ["Female", "Male"],
-              datasets: [
-                {
-                  data: [workforceData.gender, 100 - workforceData.gender],
-                  backgroundColor: ["#8d6e63", "#5d4037"],
-                  borderColor: "#ffffff",
-                  borderWidth: 3,
-                },
-              ],
-            }}
-            options={getPieChartOptions("Gender")}
-            kpiKey="gender"
-            unit="%"
-            isInvestorView={isInvestorView}
-          />
-
-          {/* EAP Chart */}
-          <ESGChartCard
-            title="EAP"
-            chartType="doughnut"
-            data={{
-              labels: ["EAP", "Non-EAP"],
-              datasets: [
-                {
-                  data: [workforceData.eap, 100 - workforceData.eap],
-                  backgroundColor: ["#3e2723", "#8d6e63"],
-                  borderColor: "#ffffff",
-                  borderWidth: 3,
-                },
-              ],
-            }}
-            options={getPieChartOptions("EAP")}
-            kpiKey="eap"
-            unit="%"
-            isInvestorView={isInvestorView}
-          />
-
-          {/* Female Leadership */}
-          <ESGChartCard
-            title="Female Leadership"
-            chartType="doughnut"
-            data={{
-              labels: ["Female Leaders", "Other"],
-              datasets: [
-                {
-                  data: [workforceData.femaleLeadership, 100 - workforceData.femaleLeadership],
-                  backgroundColor: ["#795548", "#d7ccc8"],
-                  borderColor: "#ffffff",
-                  borderWidth: 3,
-                },
-              ],
-            }}
-            options={getPieChartOptions("Female Leadership")}
-            kpiKey="femaleLeadership"
-            unit="%"
-            isInvestorView={isInvestorView}
-          />
-
-          {/* Youth Leadership */}
-          <ESGChartCard
-            title="Youth Leadership"
-            chartType="doughnut"
-            data={{
-              labels: ["Youth Leaders", "Other"],
-              datasets: [
-                {
-                  data: [workforceData.youthLeadership, 100 - workforceData.youthLeadership],
-                  backgroundColor: ["#6d4c41", "#d7ccc8"],
-                  borderColor: "#ffffff",
-                  borderWidth: 3,
-                },
-              ],
-            }}
-            options={getPieChartOptions("Youth Leadership")}
-            kpiKey="youthLeadership"
-            unit="%"
-            isInvestorView={isInvestorView}
-          />
-        </div>
-
-        {/* B-BBEE Level and Jobs Created */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginTop: "20px" }}>
-          <div
+        {/* B-BBEE Level Dropdown */}
+        <div
+          style={{
+            backgroundColor: "#fdfcfb",
+            padding: "25px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+            marginBottom: "30px",
+          }}
+        >
+          <h3
             style={{
-              backgroundColor: "#fdfcfb",
-              padding: "20px",
-              borderRadius: "8px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+              color: "#5d4037",
+              marginTop: 0,
+              marginBottom: "25px",
+              fontSize: "18px",
+              fontWeight: "600",
+              borderBottom: "2px solid #e8ddd4",
+              paddingBottom: "10px",
             }}
           >
-            <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>B-BBEE Level</h4>
-            <div style={{ textAlign: "center", padding: "20px" }}>
-              <div
+            Workforce Demographics
+          </h3>
+
+          <div style={{ display: "grid", gap: "20px", marginBottom: "30px" }}>
+            {/* B-BBEE Level */}
+            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+              <label
                 style={{
-                  width: "100px",
-                  height: "100px",
-                  borderRadius: "50%",
-                  backgroundColor: "#5d4037",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#fdfcfb",
-                  fontSize: "36px",
-                  fontWeight: "bold",
-                  margin: "0 auto 15px auto",
+                  minWidth: "220px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  fontSize: "14px",
                 }}
               >
-                {workforceData.bbbeeLevel}
-              </div>
-              <div style={{ color: "#8d6e63", fontSize: "14px" }}>
-                Current B-BBEE Level
-              </div>
+                B-BBEE Level:
+              </label>
+              <select
+                value={userData?.bbbeeLevel || "8"}
+                onChange={(e) => handleDropdownChange("bbbeeLevel", e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: "10px 15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  backgroundColor: "#fdfcfb",
+                  cursor: isInvestorView ? "not-allowed" : "pointer",
+                  opacity: isInvestorView ? 0.7 : 1,
+                }}
+                disabled={isInvestorView}
+              >
+                <option value="1">Level 1</option>
+                <option value="2">Level 2</option>
+                <option value="3">Level 3</option>
+                <option value="4">Level 4</option>
+                <option value="5">Level 5</option>
+                <option value="6">Level 6</option>
+                <option value="7">Level 7</option>
+                <option value="8">Level 8</option>
+                <option value="non-compliant">Non-Compliant</option>
+              </select>
             </div>
           </div>
 
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "20px",
-              borderRadius: "8px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            }}
-          >
-            <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>Jobs Created (Net)</h4>
-            <div style={{ textAlign: "center", padding: "20px" }}>
-              <div
-                style={{
-                  fontSize: "48px",
-                  fontWeight: "bold",
-                  color: "#5d4037",
-                  marginBottom: "10px",
-                }}
-              >
-                {workforceData.jobsCreated}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
+            {/* Locality Chart */}
+            <ESGChartCard
+              title="Locality"
+              chartType="doughnut"
+              data={{
+                labels: ["Local", "Non-Local"],
+                datasets: [
+                  {
+                    data: [workforceData.locality, 100 - workforceData.locality],
+                    backgroundColor: ["#5d4037", "#e8ddd4"],
+                    borderColor: "#ffffff",
+                    borderWidth: 3,
+                  },
+                ],
+              }}
+              options={getPieChartOptions("Locality")}
+              kpiKey="locality"
+              unit="%"
+              isInvestorView={isInvestorView}
+            />
+
+            {/* Gender Chart */}
+            <ESGChartCard
+              title="Gender"
+              chartType="doughnut"
+              data={{
+                labels: ["Female", "Male"],
+                datasets: [
+                  {
+                    data: [workforceData.gender, 100 - workforceData.gender],
+                    backgroundColor: ["#8d6e63", "#5d4037"],
+                    borderColor: "#ffffff",
+                    borderWidth: 3,
+                  },
+                ],
+              }}
+              options={getPieChartOptions("Gender")}
+              kpiKey="gender"
+              unit="%"
+              isInvestorView={isInvestorView}
+            />
+
+            {/* EAP Chart */}
+            <ESGChartCard
+              title="EAP"
+              chartType="doughnut"
+              data={{
+                labels: ["EAP", "Non-EAP"],
+                datasets: [
+                  {
+                    data: [workforceData.eap, 100 - workforceData.eap],
+                    backgroundColor: ["#3e2723", "#8d6e63"],
+                    borderColor: "#ffffff",
+                    borderWidth: 3,
+                  },
+                ],
+              }}
+              options={getPieChartOptions("EAP")}
+              kpiKey="eap"
+              unit="%"
+              isInvestorView={isInvestorView}
+            />
+
+            {/* Female Leadership */}
+            <ESGChartCard
+              title="Female Leadership"
+              chartType="doughnut"
+              data={{
+                labels: ["Female Leaders", "Other"],
+                datasets: [
+                  {
+                    data: [workforceData.femaleLeadership, 100 - workforceData.femaleLeadership],
+                    backgroundColor: ["#795548", "#d7ccc8"],
+                    borderColor: "#ffffff",
+                    borderWidth: 3,
+                  },
+                ],
+              }}
+              options={getPieChartOptions("Female Leadership")}
+              kpiKey="femaleLeadership"
+              unit="%"
+              isInvestorView={isInvestorView}
+            />
+
+            {/* Youth Leadership */}
+            <ESGChartCard
+              title="Youth Leadership"
+              chartType="doughnut"
+              data={{
+                labels: ["Youth Leaders", "Other"],
+                datasets: [
+                  {
+                    data: [workforceData.youthLeadership, 100 - workforceData.youthLeadership],
+                    backgroundColor: ["#6d4c41", "#d7ccc8"],
+                    borderColor: "#ffffff",
+                    borderWidth: 3,
+                  },
+                ],
+              }}
+              options={getPieChartOptions("Youth Leadership")}
+              kpiKey="youthLeadership"
+              unit="%"
+              isInvestorView={isInvestorView}
+            />
+          </div>
+
+          {/* B-BBEE Level and Jobs Created */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginTop: "20px" }}>
+            <div
+              style={{
+                backgroundColor: "#fdfcfb",
+                padding: "20px",
+                borderRadius: "8px",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+              }}
+            >
+              <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>B-BBEE Level</h4>
+              <div style={{ textAlign: "center", padding: "20px" }}>
+                <div
+                  style={{
+                    width: "100px",
+                    height: "100px",
+                    borderRadius: "50%",
+                    backgroundColor: "#5d4037",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#fdfcfb",
+                    fontSize: "36px",
+                    fontWeight: "bold",
+                    margin: "0 auto 15px auto",
+                  }}
+                >
+                  {workforceData.bbbeeLevel}
+                </div>
+                <div style={{ color: "#8d6e63", fontSize: "14px" }}>
+                  Current B-BBEE Level
+                </div>
               </div>
-              <div style={{ color: "#8d6e63", fontSize: "14px" }}>
-                Total Jobs Created (Permanent + Contract)
+            </div>
+
+            <div
+              style={{
+                backgroundColor: "#fdfcfb",
+                padding: "20px",
+                borderRadius: "8px",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+              }}
+            >
+              <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>Jobs Created (Net)</h4>
+              <div style={{ textAlign: "center", padding: "20px" }}>
+                <div
+                  style={{
+                    fontSize: "48px",
+                    fontWeight: "bold",
+                    color: "#5d4037",
+                    marginBottom: "10px",
+                  }}
+                >
+                  {workforceData.jobsCreated}
+                </div>
+                <div style={{ color: "#8d6e63", fontSize: "14px" }}>
+                  Total Jobs Created (Permanent + Contract)
+                </div>
               </div>
             </div>
           </div>
@@ -1880,130 +1916,173 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onOpenModal, isInv
           section="ownership-inclusion"
         />
 
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
-          {!isInvestorView && (
-            <button
-              onClick={() => onOpenModal("ownership-inclusion")}
-              style={{
-                padding: "10px 20px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontWeight: "600",
+        {/* Ownership Dropdowns */}
+        <div
+          style={{
+            backgroundColor: "#fdfcfb",
+            padding: "25px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+            marginBottom: "30px",
+          }}
+        >
+          <h3
+            style={{
+              color: "#5d4037",
+              marginTop: 0,
+              marginBottom: "25px",
+              fontSize: "18px",
+              fontWeight: "600",
+              borderBottom: "2px solid #e8ddd4",
+              paddingBottom: "10px",
+            }}
+          >
+            Ownership & Inclusion
+          </h3>
+
+          <div style={{ display: "grid", gap: "20px", marginBottom: "30px" }}>
+            {/* HDI Ownership */}
+            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+              <label
+                style={{
+                  minWidth: "220px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                }}
+              >
+                HDI Ownership (%):
+              </label>
+              <select
+                value={userData?.hdiOwnership || "0-25"}
+                onChange={(e) => handleDropdownChange("hdiOwnership", e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: "10px 15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  backgroundColor: "#fdfcfb",
+                  cursor: isInvestorView ? "not-allowed" : "pointer",
+                  opacity: isInvestorView ? 0.7 : 1,
+                }}
+                disabled={isInvestorView}
+              >
+                <option value="0-25">0-25%</option>
+                <option value="26-50">26-50%</option>
+                <option value="51-75">51-75%</option>
+                <option value="76-100">76-100%</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
+            {/* HDI Ownership Chart */}
+            <ESGChartCard
+              title="HDI Ownership"
+              chartType="doughnut"
+              data={{
+                labels: ["HDI-Owned", "Non-HDI"],
+                datasets: [
+                  {
+                    data: [ownershipData.hdiOwnership, 100 - ownershipData.hdiOwnership],
+                    backgroundColor: ["#5d4037", "#e8ddd4"],
+                    borderColor: "#ffffff",
+                    borderWidth: 3,
+                  },
+                ],
               }}
-            >
-              Enter Data
-            </button>
-          )}
-        </div>
+              options={getPieChartOptions("HDI Ownership")}
+              kpiKey="hdiOwnership"
+              unit="%"
+              isInvestorView={isInvestorView}
+            />
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
-          {/* HDI Ownership Chart */}
-          <ESGChartCard
-            title="HDI Ownership"
-            chartType="doughnut"
-            data={{
-              labels: ["HDI-Owned", "Non-HDI"],
-              datasets: [
-                {
-                  data: [ownershipData.hdiOwnership, 100 - ownershipData.hdiOwnership],
-                  backgroundColor: ["#5d4037", "#e8ddd4"],
-                  borderColor: "#ffffff",
-                  borderWidth: 3,
-                },
-              ],
-            }}
-            options={getPieChartOptions("HDI Ownership")}
-            kpiKey="hdiOwnership"
-            unit="%"
-            isInvestorView={isInvestorView}
-          />
+            {/* Shareholder Demographics - Gender */}
+            <ESGChartCard
+              title="Shareholder Gender"
+              chartType="pie"
+              data={{
+                labels: ["Male", "Female", "Other"],
+                datasets: [
+                  {
+                    data: [ownershipData.shareholderGenderMale, ownershipData.shareholderGenderFemale, 5],
+                    backgroundColor: ["#3e2723", "#8d6e63", "#d7ccc8"],
+                    borderColor: "#ffffff",
+                    borderWidth: 3,
+                  },
+                ],
+              }}
+              options={getPieChartOptions("Shareholder Gender")}
+              kpiKey="shareholderGender"
+              unit="%"
+              isInvestorView={isInvestorView}
+            />
 
-          {/* Shareholder Demographics - Gender */}
-          <ESGChartCard
-            title="Shareholder Gender"
-            chartType="pie"
-            data={{
-              labels: ["Male", "Female", "Other"],
-              datasets: [
-                {
-                  data: [ownershipData.shareholderGenderMale, ownershipData.shareholderGenderFemale, 5],
-                  backgroundColor: ["#3e2723", "#8d6e63", "#d7ccc8"],
-                  borderColor: "#ffffff",
-                  borderWidth: 3,
-                },
-              ],
-            }}
-            options={getPieChartOptions("Shareholder Gender")}
-            kpiKey="shareholderGender"
-            unit="%"
-            isInvestorView={isInvestorView}
-          />
+            {/* Shareholder Demographics - Race */}
+            <ESGChartCard
+              title="Shareholder Race"
+              chartType="pie"
+              data={{
+                labels: ["Black", "White", "Colored", "Indian/Asian", "Other"],
+                datasets: [
+                  {
+                    data: [ownershipData.shareholderRaceBlack, 30, 15, 10, 5],
+                    backgroundColor: ["#3e2723", "#5d4037", "#8d6e63", "#a1887f", "#d7ccc8"],
+                    borderColor: "#ffffff",
+                    borderWidth: 3,
+                  },
+                ],
+              }}
+              options={getPieChartOptions("Shareholder Race")}
+              kpiKey="shareholderRace"
+              unit="%"
+              isInvestorView={isInvestorView}
+            />
 
-          {/* Shareholder Demographics - Race */}
-          <ESGChartCard
-            title="Shareholder Race"
-            chartType="pie"
-            data={{
-              labels: ["Black", "White", "Colored", "Indian/Asian", "Other"],
-              datasets: [
-                {
-                  data: [ownershipData.shareholderRaceBlack, 30, 15, 10, 5],
-                  backgroundColor: ["#3e2723", "#5d4037", "#8d6e63", "#a1887f", "#d7ccc8"],
-                  borderColor: "#ffffff",
-                  borderWidth: 3,
-                },
-              ],
-            }}
-            options={getPieChartOptions("Shareholder Race")}
-            kpiKey="shareholderRace"
-            unit="%"
-            isInvestorView={isInvestorView}
-          />
-
-          {/* Total Jobs Created Chart */}
-          <ESGChartCard
-            title="Total Jobs Created"
-            chartType="bar"
-            data={{
-              labels: ["Permanent", "Contract", "Temporary", "Internship"],
-              datasets: [
-                {
-                  label: "Jobs",
-                  data: [ownershipData.permanentJobs, ownershipData.contractJobs, 30, 20],
-                  backgroundColor: "#5d4037",
-                  borderColor: "#5d4037",
-                  borderWidth: 2,
-                },
-              ],
-            }}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              scales: {
-                y: {
-                  beginAtZero: true,
-                  title: {
-                    display: true,
-                    text: "Number of Jobs",
+            {/* Total Jobs Created Chart */}
+            <ESGChartCard
+              title="Total Jobs Created"
+              chartType="bar"
+              data={{
+                labels: ["Permanent", "Contract", "Temporary", "Internship"],
+                datasets: [
+                  {
+                    label: "Jobs",
+                    data: [ownershipData.permanentJobs, ownershipData.contractJobs, 30, 20],
+                    backgroundColor: "#5d4037",
+                    borderColor: "#5d4037",
+                    borderWidth: 2,
+                  },
+                ],
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    title: {
+                      display: true,
+                      text: "Number of Jobs",
+                    },
                   },
                 },
-              },
-              plugins: {
-                tooltip: {
-                  enabled: true
-                },
-                datalabels: {
-                  display: false
+                plugins: {
+                  tooltip: {
+                    enabled: true
+                  },
+                  datalabels: {
+                    display: false
+                  }
                 }
-              }
-            }}
-            kpiKey="totalJobs"
-            unit="jobs"
-            isInvestorView={isInvestorView}
-          />
+              }}
+              kpiKey="totalJobs"
+              unit="jobs"
+              isInvestorView={isInvestorView}
+            />
+          </div>
         </div>
       </div>
     )
@@ -2026,237 +2105,282 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onOpenModal, isInv
           section="community-esd"
         />
 
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-          <div style={{ display: "flex", gap: "10px" }}>
-            <select
-              value={selectedViewMode}
-              onChange={(e) => setSelectedViewMode(e.target.value)}
-              style={{
-                padding: "8px 12px",
-                borderRadius: "4px",
-                border: "1px solid #e8ddd4",
-                fontSize: "14px",
-                color: "#5d4037",
-              }}
-            >
-              <option value="month">Monthly</option>
-              <option value="quarter">Quarterly</option>
-              <option value="year">Yearly</option>
-            </select>
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
-              style={{
-                padding: "8px 12px",
-                borderRadius: "4px",
-                border: "1px solid #e8ddd4",
-                fontSize: "14px",
-                color: "#5d4037",
-              }}
-            >
-              {[selectedYear - 2, selectedYear - 1, selectedYear, selectedYear + 1, selectedYear + 2].map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
-          </div>
-          
-          {!isInvestorView && (
-            <button
-              onClick={() => onOpenModal("csi-spend")}
-              style={{
-                padding: "10px 20px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontWeight: "600",
-              }}
-            >
-              Enter Data
-            </button>
-          )}
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
-          {/* CSI/CSR Spend Chart */}
-          <ESGChartCard
-            title="CSI/CSR Spend (R)"
-            chartType="bar"
-            data={{
-              labels: getMonthsForYear(selectedYear, selectedViewMode),
-              datasets: [
-                {
-                  label: "Spend",
-                  data: Array(getMonthsForYear(selectedYear, selectedViewMode).length)
-                    .fill(0)
-                    .map(() => Math.random() * 100000 + 50000),
-                  backgroundColor: "#5d4037",
-                  borderColor: "#5d4037",
-                  borderWidth: 2,
-                },
-              ],
-            }}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              scales: {
-                y: {
-                  beginAtZero: true,
-                  title: {
-                    display: true,
-                    text: "Amount (R)",
-                  },
-                },
-              },
-              plugins: {
-                tooltip: {
-                  enabled: true
-                },
-                datalabels: {
-                  display: false
-                }
-              }
-            }}
-            kpiKey="csiSpend"
-            unit="R"
-            isInvestorView={isInvestorView}
-          />
-
-          {/* CSI Spend as % of Revenue */}
-          <ESGChartCard
-            title="CSI Spend as % of Revenue"
-            chartType="line"
-            data={{
-              labels: getMonthsForYear(selectedYear, selectedViewMode),
-              datasets: [
-                {
-                  label: "Percentage",
-                  data: Array(getMonthsForYear(selectedYear, selectedViewMode).length)
-                    .fill(0)
-                    .map(() => Math.random() * 5),
-                  borderColor: "#5d4037",
-                  backgroundColor: "rgba(93, 64, 55, 0.1)",
-                  borderWidth: 2,
-                  tension: 0.1,
-                  fill: true,
-                },
-              ],
-            }}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              scales: {
-                y: {
-                  beginAtZero: true,
-                  title: {
-                    display: true,
-                    text: "Percentage (%)",
-                  },
-                },
-              },
-              plugins: {
-                tooltip: {
-                  enabled: true
-                },
-                datalabels: {
-                  display: false
-                }
-              }
-            }}
-            kpiKey="csiPercentage"
-            unit="%"
-            isInvestorView={isInvestorView}
-          />
-
-          {/* HDI Vendor Spend */}
-          <ESGChartCard
-            title="HDI Vendor Spend (R)"
-            chartType="bar"
-            data={{
-              labels: getMonthsForYear(selectedYear, selectedViewMode),
-              datasets: [
-                {
-                  label: "Spend",
-                  data: Array(getMonthsForYear(selectedYear, selectedViewMode).length)
-                    .fill(0)
-                    .map(() => Math.random() * 500000 + 250000),
-                  backgroundColor: "#8d6e63",
-                  borderColor: "#8d6e63",
-                  borderWidth: 2,
-                },
-              ],
-            }}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              scales: {
-                y: {
-                  beginAtZero: true,
-                  title: {
-                    display: true,
-                    text: "Amount (R)",
-                  },
-                },
-              },
-              plugins: {
-                tooltip: {
-                  enabled: true
-                },
-                datalabels: {
-                  display: false
-                }
-              }
-            }}
-            kpiKey="hdiVendorSpend"
-            unit="R"
-            isInvestorView={isInvestorView}
-          />
-        </div>
-
-        {/* CSI/CSR Projects Table */}
-        <div style={{ marginTop: "30px" }}>
-          <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>CSI/CSR Projects</h4>
-          <div
+        {/* Community & ESD Dropdowns */}
+        <div
+          style={{
+            backgroundColor: "#fdfcfb",
+            padding: "25px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+            marginBottom: "30px",
+          }}
+        >
+          <h3
             style={{
-              backgroundColor: "#fdfcfb",
-              padding: "20px",
-              borderRadius: "8px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+              color: "#5d4037",
+              marginTop: 0,
+              marginBottom: "25px",
+              fontSize: "18px",
+              fontWeight: "600",
+              borderBottom: "2px solid #e8ddd4",
+              paddingBottom: "10px",
             }}
           >
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ backgroundColor: "#e8ddd4" }}>
-                  <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Project Name</th>
-                  <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Focus Area</th>
-                  <th style={{ padding: "12px", textAlign: "right", color: "#5d4037", fontSize: "14px" }}>Budget (R)</th>
-                  <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr style={{ borderBottom: "1px solid #e8ddd4" }}>
-                  <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Youth Skills Development</td>
-                  <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Education</td>
-                  <td style={{ padding: "12px", textAlign: "right", color: "#5d4037", fontSize: "14px" }}>250,000</td>
-                  <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Active</td>
-                </tr>
-                <tr style={{ borderBottom: "1px solid #e8ddd4" }}>
-                  <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Community Health Initiative</td>
-                  <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Healthcare</td>
-                  <td style={{ padding: "12px", textAlign: "right", color: "#5d4037", fontSize: "14px" }}>150,000</td>
-                  <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Planning</td>
-                </tr>
-                <tr>
-                  <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Environmental Cleanup</td>
-                  <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Environment</td>
-                  <td style={{ padding: "12px", textAlign: "right", color: "#5d4037", fontSize: "14px" }}>75,000</td>
-                  <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Completed</td>
-                </tr>
-              </tbody>
-            </table>
+            Community & ESD Participation
+          </h3>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <select
+                value={selectedViewMode}
+                onChange={(e) => setSelectedViewMode(e.target.value)}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                }}
+              >
+                <option value="month">Monthly</option>
+                <option value="quarter">Quarterly</option>
+                <option value="year">Yearly</option>
+              </select>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                }}
+              >
+                {[selectedYear - 2, selectedYear - 1, selectedYear, selectedYear + 1, selectedYear + 2].map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gap: "20px", marginBottom: "30px" }}>
+            {/* CSI/CSR Spend */}
+            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+              <label
+                style={{
+                  minWidth: "220px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                }}
+              >
+                CSI/CSR Spend Level:
+              </label>
+              <select
+                value={userData?.csiSpend || "none"}
+                onChange={(e) => handleDropdownChange("csiSpend", e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: "10px 15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  backgroundColor: "#fdfcfb",
+                  cursor: isInvestorView ? "not-allowed" : "pointer",
+                  opacity: isInvestorView ? 0.7 : 1,
+                }}
+                disabled={isInvestorView}
+              >
+                <option value="none">None</option>
+                <option value="minimal">Minimal (&lt;1% of revenue)</option>
+                <option value="moderate">Moderate (1-3% of revenue)</option>
+                <option value="substantial">Substantial (&gt;3% of revenue)</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
+            {/* CSI/CSR Spend Chart */}
+            <ESGChartCard
+              title="CSI/CSR Spend (R)"
+              chartType="bar"
+              data={{
+                labels: getMonthsForYear(selectedYear, selectedViewMode),
+                datasets: [
+                  {
+                    label: "Spend",
+                    data: Array(getMonthsForYear(selectedYear, selectedViewMode).length)
+                      .fill(0)
+                      .map(() => Math.random() * 100000 + 50000),
+                    backgroundColor: "#5d4037",
+                    borderColor: "#5d4037",
+                    borderWidth: 2,
+                  },
+                ],
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    title: {
+                      display: true,
+                      text: "Amount (R)",
+                    },
+                  },
+                },
+                plugins: {
+                  tooltip: {
+                    enabled: true
+                  },
+                  datalabels: {
+                    display: false
+                  }
+                }
+              }}
+              kpiKey="csiSpend"
+              unit="R"
+              isInvestorView={isInvestorView}
+            />
+
+            {/* CSI Spend as % of Revenue */}
+            <ESGChartCard
+              title="CSI Spend as % of Revenue"
+              chartType="line"
+              data={{
+                labels: getMonthsForYear(selectedYear, selectedViewMode),
+                datasets: [
+                  {
+                    label: "Percentage",
+                    data: Array(getMonthsForYear(selectedYear, selectedViewMode).length)
+                      .fill(0)
+                      .map(() => Math.random() * 5),
+                    borderColor: "#5d4037",
+                    backgroundColor: "rgba(93, 64, 55, 0.1)",
+                    borderWidth: 2,
+                    tension: 0.1,
+                    fill: true,
+                  },
+                ],
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    title: {
+                      display: true,
+                      text: "Percentage (%)",
+                    },
+                  },
+                },
+                plugins: {
+                  tooltip: {
+                    enabled: true
+                  },
+                  datalabels: {
+                    display: false
+                  }
+                }
+              }}
+              kpiKey="csiPercentage"
+              unit="%"
+              isInvestorView={isInvestorView}
+            />
+
+            {/* HDI Vendor Spend */}
+            <ESGChartCard
+              title="HDI Vendor Spend (R)"
+              chartType="bar"
+              data={{
+                labels: getMonthsForYear(selectedYear, selectedViewMode),
+                datasets: [
+                  {
+                    label: "Spend",
+                    data: Array(getMonthsForYear(selectedYear, selectedViewMode).length)
+                      .fill(0)
+                      .map(() => Math.random() * 500000 + 250000),
+                    backgroundColor: "#8d6e63",
+                    borderColor: "#8d6e63",
+                    borderWidth: 2,
+                  },
+                ],
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    title: {
+                      display: true,
+                      text: "Amount (R)",
+                    },
+                  },
+                },
+                plugins: {
+                  tooltip: {
+                    enabled: true
+                  },
+                  datalabels: {
+                    display: false
+                  }
+                }
+              }}
+              kpiKey="hdiVendorSpend"
+              unit="R"
+              isInvestorView={isInvestorView}
+            />
+          </div>
+
+          {/* CSI/CSR Projects Table */}
+          <div style={{ marginTop: "30px" }}>
+            <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>CSI/CSR Projects</h4>
+            <div
+              style={{
+                backgroundColor: "#fdfcfb",
+                padding: "20px",
+                borderRadius: "8px",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+              }}
+            >
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ backgroundColor: "#e8ddd4" }}>
+                    <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Project Name</th>
+                    <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Focus Area</th>
+                    <th style={{ padding: "12px", textAlign: "right", color: "#5d4037", fontSize: "14px" }}>Budget (R)</th>
+                    <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style={{ borderBottom: "1px solid #e8ddd4" }}>
+                    <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Youth Skills Development</td>
+                    <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Education</td>
+                    <td style={{ padding: "12px", textAlign: "right", color: "#5d4037", fontSize: "14px" }}>250,000</td>
+                    <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Active</td>
+                  </tr>
+                  <tr style={{ borderBottom: "1px solid #e8ddd4" }}>
+                    <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Community Health Initiative</td>
+                    <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Healthcare</td>
+                    <td style={{ padding: "12px", textAlign: "right", color: "#5d4037", fontSize: "14px" }}>150,000</td>
+                    <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Planning</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Environmental Cleanup</td>
+                    <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Environment</td>
+                    <td style={{ padding: "12px", textAlign: "right", color: "#5d4037", fontSize: "14px" }}>75,000</td>
+                    <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Completed</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -2306,627 +2430,398 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onOpenModal, isInv
   )
 }
 
-// Governance Tab Components
-const GovernanceTab = ({ activeSubTab, setActiveSubTab, userData, onOpenModal, isInvestorView }) => {
-  const governanceSubTabs = [
-    { id: "ownership-control", label: "Ownership & Control" },
-    { id: "oversight-accountability", label: "Oversight & Accountability" },
-    { id: "policies-sops", label: "Policies and SOPs" },
-    { id: "risk-controls", label: "Risk, Controls & Reporting" },
-  ]
-
-  const renderOwnershipControl = () => {
-    const ownershipData = {
-      shareholderRegister: userData?.shareholderRegister || "no",
-      votingRights: userData?.votingRights || "no",
-    }
-
-    return (
-      <div>
-        <KeyQuestionBox
-          question="Are ownership and control structures clearly documented and transparent? This involves assessing control concentration and founder dominance risk."
-          signals="Control concentration, Founder dominance risk"
-          decisions="Governance uplift requirements before funding, minority protection sufficiency"
-          section="ownership-control"
-        />
-
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
-          {!isInvestorView && (
-            <button
-              onClick={() => onOpenModal("governance-ownership")}
-              style={{
-                padding: "10px 20px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontWeight: "600",
-              }}
-            >
-              Enter Data
-            </button>
-          )}
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
-          {/* Shareholder Register */}
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "20px",
-              borderRadius: "8px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              textAlign: "center",
-            }}
-          >
-            <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>Shareholder Register Maintained</h4>
-            <div
-              style={{
-                fontSize: "32px",
-                fontWeight: "bold",
-                color: ownershipData.shareholderRegister === "yes" ? "#2e7d32" : "#c62828",
-                marginBottom: "10px",
-              }}
-            >
-              {ownershipData.shareholderRegister?.toUpperCase() || "NO"}
-            </div>
-            <div style={{ color: "#8d6e63", fontSize: "14px" }}>
-              Formal shareholder register documentation
-            </div>
-          </div>
-
-          {/* Voting Rights */}
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "20px",
-              borderRadius: "8px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              textAlign: "center",
-            }}
-          >
-            <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>Voting Rights Documented</h4>
-            <div
-              style={{
-                fontSize: "32px",
-                fontWeight: "bold",
-                color: ownershipData.votingRights === "yes" ? "#2e7d32" : "#c62828",
-                marginBottom: "10px",
-              }}
-            >
-              {ownershipData.votingRights?.toUpperCase() || "NO"}
-            </div>
-            <div style={{ color: "#8d6e63", fontSize: "14px" }}>
-              Clear voting rights and procedures documented
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  const renderOversightAccountability = () => {
-    const oversightData = {
-      oversightStructure: userData?.oversightStructure || "none",
-      independentOversight: userData?.independentOversight || "no",
-      meetingCadence: userData?.meetingCadence || "ad-hoc",
-      femaleDirectors: userData?.femaleDirectors || 2,
-      maleDirectors: userData?.maleDirectors || 3,
-    }
-
-    return (
-      <div>
-        <KeyQuestionBox
-          question="Is there effective oversight over management decisions? This involves assessing board or advisory presence and independence of oversight."
-          signals="Board or advisory presence, Independence of oversight"
-          decisions="Advisory board requirement, Board composition optimisation"
-          section="oversight-accountability"
-        />
-
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
-          {!isInvestorView && (
-            <button
-              onClick={() => onOpenModal("governance-oversight")}
-              style={{
-                padding: "10px 20px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontWeight: "600",
-              }}
-            >
-              Enter Data
-            </button>
-          )}
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
-          {/* Oversight Structure */}
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "20px",
-              borderRadius: "8px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              textAlign: "center",
-            }}
-          >
-            <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>Oversight Structure</h4>
-            <div
-              style={{
-                fontSize: "24px",
-                fontWeight: "bold",
-                color: "#5d4037",
-                marginBottom: "10px",
-              }}
-            >
-              {oversightData.oversightStructure?.toUpperCase() || "NONE"}
-            </div>
-            <div style={{ color: "#8d6e63", fontSize: "14px" }}>
-              Current governance oversight mechanism
-            </div>
-          </div>
-
-          {/* Independent Oversight */}
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "20px",
-              borderRadius: "8px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              textAlign: "center",
-            }}
-          >
-            <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>Independent Oversight</h4>
-            <div
-              style={{
-                fontSize: "32px",
-                fontWeight: "bold",
-                color: oversightData.independentOversight === "yes" ? "#2e7d32" : "#c62828",
-                marginBottom: "10px",
-              }}
-            >
-              {oversightData.independentOversight?.toUpperCase() || "NO"}
-            </div>
-            <div style={{ color: "#8d6e63", fontSize: "14px" }}>
-              Presence of independent directors/advisors
-            </div>
-          </div>
-
-          {/* Meeting Cadence */}
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "20px",
-              borderRadius: "8px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              textAlign: "center",
-            }}
-          >
-            <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>Meeting Cadence</h4>
-            <div
-              style={{
-                fontSize: "24px",
-                fontWeight: "bold",
-                color: "#5d4037",
-                marginBottom: "10px",
-              }}
-            >
-              {oversightData.meetingCadence?.toUpperCase() || "AD HOC"}
-            </div>
-            <div style={{ color: "#8d6e63", fontSize: "14px" }}>
-              Regularity of governance meetings
-            </div>
-          </div>
-        </div>
-
-        {/* Board Demographic Chart */}
-        <div style={{ marginTop: "30px" }}>
-          <ESGChartCard
-            title="Board Demographics"
-            chartType="bar"
-            data={{
-              labels: ["Female", "Male", "Independent", "Executive", "Non-Executive"],
-              datasets: [
-                {
-                  label: "Count",
-                  data: [oversightData.femaleDirectors, oversightData.maleDirectors, 1, 2, 3],
-                  backgroundColor: "#5d4037",
-                  borderColor: "#5d4037",
-                  borderWidth: 2,
-                },
-              ],
-            }}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              scales: {
-                y: {
-                  beginAtZero: true,
-                  title: {
-                    display: true,
-                    text: "Number of Directors",
-                  },
-                },
-              },
-              plugins: {
-                tooltip: {
-                  enabled: true
-                },
-                datalabels: {
-                  display: false
-                }
-              }
-            }}
-            kpiKey="boardDemographics"
-            unit="directors"
-            isInvestorView={isInvestorView}
-          />
-        </div>
-      </div>
-    )
-  }
-
-  const renderPoliciesSOPs = () => {
-    const policyData = {
-      corePolicies: userData?.corePolicies || "no",
-      conditionalPolicies: userData?.conditionalPolicies || "no",
-      criticalSOPs: userData?.criticalSOPs || "no",
-      policyOwner: userData?.policyOwner || "no",
-      reviewCycle: userData?.reviewCycle || "no",
-    }
-
-    return (
-      <div>
-        <KeyQuestionBox
-          question="Are essential policies and procedures documented, owned, and maintained to support transparent and accountable operations? This involves assessing existence, relevance, ownership, and review discipline."
-          signals="Existence, Relevance, Ownership, Review discipline"
-          decisions="Is the business institution-ready? Is governance uplift required before funding? Can disclosures be relied on?"
-          section="policies-sops"
-        />
-
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
-          {!isInvestorView && (
-            <button
-              onClick={() => onOpenModal("governance-policies")}
-              style={{
-                padding: "10px 20px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontWeight: "600",
-              }}
-            >
-              Enter Data
-            </button>
-          )}
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
-          {/* Core Governance Policies */}
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "20px",
-              borderRadius: "8px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              textAlign: "center",
-            }}
-          >
-            <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>Core Governance Policies in Place</h4>
-            <div
-              style={{
-                fontSize: "32px",
-                fontWeight: "bold",
-                color: policyData.corePolicies === "yes" ? "#2e7d32" : 
-                       policyData.corePolicies === "partial" ? "#f57c00" : "#c62828",
-                marginBottom: "10px",
-              }}
-            >
-              {policyData.corePolicies === "partial" ? "PARTIAL" : (policyData.corePolicies?.toUpperCase() || "NO")}
-            </div>
-            <div style={{ color: "#8d6e63", fontSize: "14px" }}>
-              Essential governance policies implemented
-            </div>
-          </div>
-
-          {/* Conditional Policies */}
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "20px",
-              borderRadius: "8px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              textAlign: "center",
-            }}
-          >
-            <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>Conditional Policies Identified & In Place</h4>
-            <div
-              style={{
-                fontSize: "32px",
-                fontWeight: "bold",
-                color: policyData.conditionalPolicies === "yes" ? "#2e7d32" : "#c62828",
-                marginBottom: "10px",
-              }}
-            >
-              {policyData.conditionalPolicies?.toUpperCase() || "NO"}
-            </div>
-            <div style={{ color: "#8d6e63", fontSize: "14px" }}>
-              Risk-based conditional policies established
-            </div>
-          </div>
-
-          {/* Critical SOPs */}
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "20px",
-              borderRadius: "8px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              textAlign: "center",
-            }}
-          >
-            <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>Critical SOPs Documented</h4>
-            <div
-              style={{
-                fontSize: "32px",
-                fontWeight: "bold",
-                color: policyData.criticalSOPs === "yes" ? "#2e7d32" : "#c62828",
-                marginBottom: "10px",
-              }}
-            >
-              {policyData.criticalSOPs?.toUpperCase() || "NO"}
-            </div>
-            <div style={{ color: "#8d6e63", fontSize: "14px" }}>
-              Standard Operating Procedures documented
-            </div>
-          </div>
-
-          {/* Policy/SOP Owner */}
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "20px",
-              borderRadius: "8px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              textAlign: "center",
-            }}
-          >
-            <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>Policy / SOP Owner Assigned</h4>
-            <div
-              style={{
-                fontSize: "32px",
-                fontWeight: "bold",
-                color: policyData.policyOwner === "yes" ? "#2e7d32" : "#c62828",
-                marginBottom: "10px",
-              }}
-            >
-              {policyData.policyOwner?.toUpperCase() || "NO"}
-            </div>
-            <div style={{ color: "#8d6e63", fontSize: "14px" }}>
-              Clear ownership and accountability assigned
-            </div>
-          </div>
-
-          {/* Review Cycle */}
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "20px",
-              borderRadius: "8px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              textAlign: "center",
-            }}
-          >
-            <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>Review Cycle Defined</h4>
-            <div
-              style={{
-                fontSize: "32px",
-                fontWeight: "bold",
-                color: policyData.reviewCycle === "yes" ? "#2e7d32" : "#c62828",
-                marginBottom: "10px",
-              }}
-            >
-              {policyData.reviewCycle?.toUpperCase() || "NO"}
-            </div>
-            <div style={{ color: "#8d6e63", fontSize: "14px" }}>
-              Regular review and update process established
-            </div>
-          </div>
-        </div>
-
-        {/* Policy Checklist Table */}
-        <div style={{ marginTop: "30px" }}>
-          <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>Policy Checklist</h4>
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "20px",
-              borderRadius: "8px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            }}
-          >
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ backgroundColor: "#e8ddd4" }}>
-                  <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Policy</th>
-                  <th style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>Status</th>
-                  <th style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>Owner</th>
-                  <th style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>Last Review</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  { policy: "Code of Conduct", status: "Implemented", owner: "CEO", review: "Jan 2024" },
-                  { policy: "Anti-Bribery & Corruption", status: "Implemented", owner: "Legal", review: "Mar 2024" },
-                  { policy: "Whistleblower Policy", status: policyData.criticalSOPs === "yes" ? "Implemented" : "In Progress", owner: "HR", review: policyData.criticalSOPs === "yes" ? "Mar 2024" : "Draft" },
-                  { policy: "Conflict of Interest", status: "Implemented", owner: "Board", review: "Dec 2023" },
-                  { policy: "Risk Management", status: policyData.conditionalPolicies === "yes" ? "Implemented" : "Planned", owner: "CFO", review: policyData.conditionalPolicies === "yes" ? "Q2 2024" : "Q3 2024" },
-                ].map((item, index) => (
-                  <tr key={index} style={{ borderBottom: "1px solid #e8ddd4" }}>
-                    <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{item.policy}</td>
-                    <td style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>
-                      <span
-                        style={{
-                          backgroundColor: item.status === "Implemented" ? "#2e7d32" : 
-                                         item.status === "In Progress" ? "#f57c00" : "#c62828",
-                          color: "#fff",
-                          padding: "4px 8px",
-                          borderRadius: "4px",
-                          fontSize: "12px",
-                        }}
-                      >
-                        {item.status}
-                      </span>
-                    </td>
-                    <td style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>{item.owner}</td>
-                    <td style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>{item.review}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  const renderRiskControls = () => {
-    const riskData = {
-      riskRegister: userData?.riskRegister || "no",
-      reportingResponsibility: userData?.reportingResponsibility || "no",
-    }
-
-    return (
-      <div>
-        <KeyQuestionBox
-          question="Are risks, decisions, and reporting responsibilities clearly governed? This involves assessing risk discipline, policy enforcement, and reporting maturity."
-          signals="Risk discipline, policy enforcement, Reporting maturity"
-          decisions="Governance-readiness for institutional engagement, Reporting upgrades requirement"
-          section="risk-controls"
-        />
-
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
-          {!isInvestorView && (
-            <button
-              onClick={() => onOpenModal("governance-risk")}
-              style={{
-                padding: "10px 20px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontWeight: "600",
-              }}
-            >
-              Enter Data
-            </button>
-          )}
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
-          {/* Risk Register */}
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "20px",
-              borderRadius: "8px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              textAlign: "center",
-            }}
-          >
-            <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>Risk Register Maintained</h4>
-            <div
-              style={{
-                fontSize: "32px",
-                fontWeight: "bold",
-                color: riskData.riskRegister === "yes" ? "#2e7d32" : "#c62828",
-                marginBottom: "10px",
-              }}
-            >
-              {riskData.riskRegister?.toUpperCase() || "NO"}
-            </div>
-            <div style={{ color: "#8d6e63", fontSize: "14px" }}>
-              Formal risk identification and tracking
-            </div>
-          </div>
-
-          {/* Reporting Responsibility */}
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "20px",
-              borderRadius: "8px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              textAlign: "center",
-            }}
-          >
-            <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>Reporting Responsibility Assigned</h4>
-            <div
-              style={{
-                fontSize: "32px",
-                fontWeight: "bold",
-                color: riskData.reportingResponsibility === "yes" ? "#2e7d32" : "#c62828",
-                marginBottom: "10px",
-              }}
-            >
-              {riskData.reportingResponsibility?.toUpperCase() || "NO"}
-            </div>
-            <div style={{ color: "#8d6e63", fontSize: "14px" }}>
-              Clear reporting lines and accountability
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
+// Governance Tab Components - SIMPLIFIED WITH DROPDOWNS
+const GovernanceTab = ({ userData, onSave, isInvestorView }) => {
+  // Handle dropdown changes for governance data
+  const handleDropdownChange = (field, value) => {
+    const updatedData = { ...userData, [field]: value };
+    onSave(updatedData);
+  };
 
   return (
     <div>
-      {/* Governance Sub Tabs */}
+      <KeyQuestionBox
+        question="Are ownership and control structures clearly documented and transparent? This involves assessing control concentration and founder dominance risk."
+        signals="Control concentration, Founder dominance risk"
+        decisions="Governance uplift requirements before funding, minority protection sufficiency"
+        section="governance-ownership"
+      />
+
+      {/* Ownership & Control Section */}
       <div
         style={{
-          display: "flex",
-          gap: "10px",
-          marginBottom: "25px",
-          padding: "10px",
           backgroundColor: "#fdfcfb",
+          padding: "25px",
           borderRadius: "8px",
-          flexWrap: "wrap",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          marginBottom: "30px",
         }}
       >
-        {governanceSubTabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveSubTab(tab.id)}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: activeSubTab === tab.id ? "#5d4037" : "#e8ddd4",
-              color: activeSubTab === tab.id ? "#fdfcfb" : "#5d4037",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontWeight: "600",
-              fontSize: "14px",
-              transition: "all 0.3s ease",
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
+        <h3
+          style={{
+            color: "#5d4037",
+            marginTop: 0,
+            marginBottom: "25px",
+            fontSize: "18px",
+            fontWeight: "600",
+            borderBottom: "2px solid #e8ddd4",
+            paddingBottom: "10px",
+          }}
+        >
+          Ownership & Control
+        </h3>
+
+        <div style={{ display: "grid", gap: "20px" }}>
+          {/* Shareholder Register */}
+          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+            <label
+              style={{
+                minWidth: "220px",
+                color: "#5d4037",
+                fontWeight: "600",
+                fontSize: "14px",
+              }}
+            >
+              Shareholder Register Maintained:
+            </label>
+            <select
+              value={userData?.shareholderRegister || "no"}
+              onChange={(e) => handleDropdownChange("shareholderRegister", e.target.value)}
+              style={{
+                flex: 1,
+                padding: "10px 15px",
+                borderRadius: "6px",
+                border: "2px solid #e8ddd4",
+                fontSize: "14px",
+                color: "#5d4037",
+                backgroundColor: "#fdfcfb",
+                cursor: isInvestorView ? "not-allowed" : "pointer",
+                opacity: isInvestorView ? 0.7 : 1,
+              }}
+              disabled={isInvestorView}
+            >
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+
+          {/* Voting Rights */}
+          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+            <label
+              style={{
+                minWidth: "220px",
+                color: "#5d4037",
+                fontWeight: "600",
+                fontSize: "14px",
+              }}
+            >
+              Voting Rights Documented:
+            </label>
+            <select
+              value={userData?.votingRights || "no"}
+              onChange={(e) => handleDropdownChange("votingRights", e.target.value)}
+              style={{
+                flex: 1,
+                padding: "10px 15px",
+                borderRadius: "6px",
+                border: "2px solid #e8ddd4",
+                fontSize: "14px",
+                color: "#5d4037",
+                backgroundColor: "#fdfcfb",
+                cursor: isInvestorView ? "not-allowed" : "pointer",
+                opacity: isInvestorView ? 0.7 : 1,
+              }}
+              disabled={isInvestorView}
+            >
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+        </div>
       </div>
 
-      {/* Sub Tab Content */}
-      {activeSubTab === "ownership-control" && renderOwnershipControl()}
-      {activeSubTab === "oversight-accountability" && renderOversightAccountability()}
-      {activeSubTab === "policies-sops" && renderPoliciesSOPs()}
-      {activeSubTab === "risk-controls" && renderRiskControls()}
+      {/* Oversight & Accountability Section */}
+      <div
+        style={{
+          backgroundColor: "#fdfcfb",
+          padding: "25px",
+          borderRadius: "8px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          marginBottom: "30px",
+        }}
+      >
+        <h3
+          style={{
+            color: "#5d4037",
+            marginTop: 0,
+            marginBottom: "25px",
+            fontSize: "18px",
+            fontWeight: "600",
+            borderBottom: "2px solid #e8ddd4",
+            paddingBottom: "10px",
+          }}
+        >
+          Oversight & Accountability
+        </h3>
+
+        <div style={{ display: "grid", gap: "20px" }}>
+          {/* Oversight Structure */}
+          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+            <label
+              style={{
+                minWidth: "220px",
+                color: "#5d4037",
+                fontWeight: "600",
+                fontSize: "14px",
+              }}
+            >
+              Oversight Structure:
+            </label>
+            <select
+              value={userData?.oversightStructure || "none"}
+              onChange={(e) => handleDropdownChange("oversightStructure", e.target.value)}
+              style={{
+                flex: 1,
+                padding: "10px 15px",
+                borderRadius: "6px",
+                border: "2px solid #e8ddd4",
+                fontSize: "14px",
+                color: "#5d4037",
+                backgroundColor: "#fdfcfb",
+                cursor: isInvestorView ? "not-allowed" : "pointer",
+                opacity: isInvestorView ? 0.7 : 1,
+              }}
+              disabled={isInvestorView}
+            >
+              <option value="none">None</option>
+              <option value="founder-only">Founder Only</option>
+              <option value="advisory-board">Advisory Board</option>
+              <option value="formal-board">Formal Board</option>
+            </select>
+          </div>
+
+          {/* Meeting Cadence */}
+          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+            <label
+              style={{
+                minWidth: "220px",
+                color: "#5d4037",
+                fontWeight: "600",
+                fontSize: "14px",
+              }}
+            >
+              Meeting Cadence:
+            </label>
+            <select
+              value={userData?.meetingCadence || "ad-hoc"}
+              onChange={(e) => handleDropdownChange("meetingCadence", e.target.value)}
+              style={{
+                flex: 1,
+                padding: "10px 15px",
+                borderRadius: "6px",
+                border: "2px solid #e8ddd4",
+                fontSize: "14px",
+                color: "#5d4037",
+                backgroundColor: "#fdfcfb",
+                cursor: isInvestorView ? "not-allowed" : "pointer",
+                opacity: isInvestorView ? 0.7 : 1,
+              }}
+              disabled={isInvestorView}
+            >
+              <option value="ad-hoc">Ad Hoc</option>
+              <option value="quarterly">Quarterly</option>
+              <option value="monthly">Monthly</option>
+              <option value="regular">Regular</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Policies and SOPs Section */}
+      <div
+        style={{
+          backgroundColor: "#fdfcfb",
+          padding: "25px",
+          borderRadius: "8px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          marginBottom: "30px",
+        }}
+      >
+        <h3
+          style={{
+            color: "#5d4037",
+            marginTop: 0,
+            marginBottom: "25px",
+            fontSize: "18px",
+            fontWeight: "600",
+            borderBottom: "2px solid #e8ddd4",
+            paddingBottom: "10px",
+          }}
+        >
+          Policies and SOPs
+        </h3>
+
+        <div style={{ display: "grid", gap: "20px" }}>
+          {/* Core Governance Policies */}
+          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+            <label
+              style={{
+                minWidth: "220px",
+                color: "#5d4037",
+                fontWeight: "600",
+                fontSize: "14px",
+              }}
+            >
+              Core Governance Policies:
+            </label>
+            <select
+              value={userData?.corePolicies || "no"}
+              onChange={(e) => handleDropdownChange("corePolicies", e.target.value)}
+              style={{
+                flex: 1,
+                padding: "10px 15px",
+                borderRadius: "6px",
+                border: "2px solid #e8ddd4",
+                fontSize: "14px",
+                color: "#5d4037",
+                backgroundColor: "#fdfcfb",
+                cursor: isInvestorView ? "not-allowed" : "pointer",
+                opacity: isInvestorView ? 0.7 : 1,
+              }}
+              disabled={isInvestorView}
+            >
+              <option value="no">No</option>
+              <option value="partial">Partial</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+
+          {/* Critical SOPs */}
+          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+            <label
+              style={{
+                minWidth: "220px",
+                color: "#5d4037",
+                fontWeight: "600",
+                fontSize: "14px",
+              }}
+            >
+              Critical SOPs Documented:
+            </label>
+            <select
+              value={userData?.criticalSOPs || "no"}
+              onChange={(e) => handleDropdownChange("criticalSOPs", e.target.value)}
+              style={{
+                flex: 1,
+                padding: "10px 15px",
+                borderRadius: "6px",
+                border: "2px solid #e8ddd4",
+                fontSize: "14px",
+                color: "#5d4037",
+                backgroundColor: "#fdfcfb",
+                cursor: isInvestorView ? "not-allowed" : "pointer",
+                opacity: isInvestorView ? 0.7 : 1,
+              }}
+              disabled={isInvestorView}
+            >
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Risk, Controls & Reporting Section */}
+      <div
+        style={{
+          backgroundColor: "#fdfcfb",
+          padding: "25px",
+          borderRadius: "8px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        }}
+      >
+        <h3
+          style={{
+            color: "#5d4037",
+            marginTop: 0,
+            marginBottom: "25px",
+            fontSize: "18px",
+            fontWeight: "600",
+            borderBottom: "2px solid #e8ddd4",
+            paddingBottom: "10px",
+          }}
+        >
+          Risk, Controls & Reporting
+        </h3>
+
+        <div style={{ display: "grid", gap: "20px" }}>
+          {/* Risk Register */}
+          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+            <label
+              style={{
+                minWidth: "220px",
+                color: "#5d4037",
+                fontWeight: "600",
+                fontSize: "14px",
+              }}
+            >
+              Risk Register Maintained:
+            </label>
+            <select
+              value={userData?.riskRegister || "no"}
+              onChange={(e) => handleDropdownChange("riskRegister", e.target.value)}
+              style={{
+                flex: 1,
+                padding: "10px 15px",
+                borderRadius: "6px",
+                border: "2px solid #e8ddd4",
+                fontSize: "14px",
+                color: "#5d4037",
+                backgroundColor: "#fdfcfb",
+                cursor: isInvestorView ? "not-allowed" : "pointer",
+                opacity: isInvestorView ? 0.7 : 1,
+              }}
+              disabled={isInvestorView}
+            >
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+
+          {/* Reporting Responsibility */}
+          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+            <label
+              style={{
+                minWidth: "220px",
+                color: "#5d4037",
+                fontWeight: "600",
+                fontSize: "14px",
+              }}
+            >
+              Reporting Responsibility Assigned:
+            </label>
+            <select
+              value={userData?.reportingResponsibility || "no"}
+              onChange={(e) => handleDropdownChange("reportingResponsibility", e.target.value)}
+              style={{
+                flex: 1,
+                padding: "10px 15px",
+                borderRadius: "6px",
+                border: "2px solid #e8ddd4",
+                fontSize: "14px",
+                color: "#5d4037",
+                backgroundColor: "#fdfcfb",
+                cursor: isInvestorView ? "not-allowed" : "pointer",
+                opacity: isInvestorView ? 0.7 : 1,
+              }}
+              disabled={isInvestorView}
+            >
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -2934,7 +2829,7 @@ const GovernanceTab = ({ activeSubTab, setActiveSubTab, userData, onOpenModal, i
 // Main ESG Component
 const ESG = () => {
   const [activeMainTab, setActiveMainTab] = useState("environmental")
-  const [activeSubTab, setActiveSubTab] = useState("exposure-compliance")
+  const [activeSubTab, setActiveSubTab] = useState("workforce-demographics")
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [currentUser, setCurrentUser] = useState(null)
   const [isInvestorView, setIsInvestorView] = useState(false)
@@ -3097,172 +2992,176 @@ const ESG = () => {
           </div>
         )}
 
-        <div style={{ padding: "20px" }}>
-          <h1 style={{ color: "#5d4037", fontSize: "32px", fontWeight: "700", marginBottom: "20px" }}>
-            ESG Impact
-          </h1>
+       <div style={{ padding: "20px", paddingTop: "40px", marginLeft: "20px" }}>
+  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+    <h1 style={{ color: "#5d4037", fontSize: "32px", fontWeight: "700", margin: 0 }}>
+      ESG Impact
+    </h1>
+    
+    <button
+      onClick={() => setShowFullDescription(!showFullDescription)}
+      style={{
+        padding: "8px 16px",
+        backgroundColor: "#7d5a50",
+        color: "#fdfcfb",
+        border: "none",
+        borderRadius: "6px",
+        cursor: "pointer",
+        fontWeight: "600",
+        fontSize: "13px",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {showFullDescription ? "See less" : "See more"}
+    </button>
+  </div>
 
-          {/* ESG Description */}
-          <div
-            style={{
-              backgroundColor: "#fdfcfb",
-              padding: "20px",
-              borderRadius: "8px",
-              boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-                marginBottom: "15px",
-              }}
-            >
-              <div>
-                <strong style={{ color: "#5d4037", fontSize: "16px", display: "block", marginBottom: "5px" }}>
-                  What this dashboard DOES
-                </strong>
-                <span style={{ color: "#5d4037", fontSize: "15px" }}>
-                  Confirms whether ESG factors are tracked and governed
-                </span>
-              </div>
-
-              <button
-                onClick={() => setShowFullDescription(!showFullDescription)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  fontSize: "13px",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {showFullDescription ? "See Less" : "See More"}
-              </button>
-            </div>
-
-            <div style={{ marginBottom: "15px" }}>
-              <strong style={{ color: "#5d4037", fontSize: "16px", display: "block", marginBottom: "5px" }}>
-                What this dashboard, do
-              </strong>
-              <span style={{ color: "#5d4037", fontSize: "15px" }}>
-                Measure internal execution (People dashboard does that), Provide sustainability reporting or SDG mapping, calculate carbon footprints or ESG narratives, optimise impact or performance, replace audits, certifications, or statutory disclosures
-              </span>
-            </div>
-
-            {showFullDescription && (
-              <div style={{ marginTop: "20px", paddingTop: "20px", borderTop: "1px solid #e8ddd4" }}>
-                <p style={{ color: "#5d4037", fontSize: "14px", lineHeight: "1.6", marginBottom: "12px" }}>
-                  Dashboards show the data. ESG confirms it exists, is governed, and is credible.
-                </p>
-                <ul style={{ color: "#5d4037", fontSize: "14px", lineHeight: "1.8", paddingLeft: "20px" }}>
-                  <li>
-                    <strong>Signals readiness for disclosure to funders, corporates, DFIs</strong>
-                  </li>
-                  <li>
-                    <strong>Assesses external trustworthiness, not internal performance</strong>
-                  </li>
-                  <li>
-                    <strong>Feeds into BIG Score (Governance, Compliance, Capital Appeal)</strong>
-                  </li>
-                </ul>
-                <p style={{ color: "#5d4037", fontSize: "14px", lineHeight: "1.6", marginTop: "12px" }}>
-                  This dashboard provides a comprehensive view of your business's Environmental, Social, and Governance (ESG) impact across three key dimensions:
-                </p>
-                <ul style={{ color: "#5d4037", fontSize: "14px", lineHeight: "1.8", paddingLeft: "20px" }}>
-                  <li>
-                    <strong>Environmental:</strong> Track exposure, compliance, incidents, and controls to manage environmental risks
-                  </li>
-                  <li>
-                    <strong>Social:</strong> Monitor workforce demographics, ownership inclusion, and community development contributions
-                  </li>
-                  <li>
-                    <strong>Governance:</strong> Assess ownership structures, oversight mechanisms, policies, and risk management frameworks
-                  </li>
-                </ul>
-              </div>
-            )}
+  {/* ESG Description */}
+  {showFullDescription && (
+    <div
+      style={{
+        backgroundColor: "#fdfcfb",
+        padding: "20px",
+        borderRadius: "8px",
+        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+        marginBottom: "30px",
+      }}
+    >
+      <div style={{ padding: "50px", paddingTop: "100px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginTop: "-80px" }}>
+          <div>
+            <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
+              What this dashboard DOES
+            </h3>
+            <ul style={{ color: "#4a352f", fontSize: "14px", lineHeight: "1.7", margin: 0, paddingLeft: "20px" }}>
+              <li>Confirms ESG factors are tracked and governed</li>
+              <li>Signals readiness for disclosure to funders, corporates, DFIs</li>
+              <li>Assesses external trustworthiness and credibility</li>
+              <li>Feeds into BIG Score (Governance, Compliance, Capital Appeal)</li>
+              <li>Monitors ESG framework implementation and oversight</li>
+            </ul>
           </div>
 
-          {/* Main Tab Buttons */}
-          <div
-            style={{
-              display: "flex",
-              gap: "15px",
-              margin: "30px 0",
-              padding: "15px",
-              backgroundColor: "#fdfcfb",
-              borderRadius: "8px",
-              boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-              flexWrap: "wrap",
-            }}
-          >
-            {mainTabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setActiveMainTab(tab.id)
-                  // Reset sub tab when main tab changes
-                  if (tab.id === "environmental") setActiveSubTab("exposure-compliance")
-                  if (tab.id === "social") setActiveSubTab("workforce-demographics")
-                  if (tab.id === "governance") setActiveSubTab("ownership-control")
-                }}
-                style={{
-                  padding: "12px 24px",
-                  backgroundColor: activeMainTab === tab.id ? "#5d4037" : "#e8ddd4",
-                  color: activeMainTab === tab.id ? "#fdfcfb" : "#5d4037",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  fontSize: "15px",
-                  transition: "all 0.3s ease",
-                  boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                  minWidth: "150px",
-                  textAlign: "center",
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
+          <div>
+            <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
+              What this dashboard does NOT do
+            </h3>
+            <ul style={{ color: "#4a352f", fontSize: "14px", lineHeight: "1.7", margin: 0, paddingLeft: "20px" }}>
+              <li>Measure internal execution performance</li>
+              <li>Provide sustainability reporting or SDG mapping</li>
+              <li>Calculate carbon footprints or create ESG narratives</li>
+              <li>Optimize impact or operational performance</li>
+              <li>Replace audits, certifications, or statutory disclosures</li>
+            </ul>
           </div>
-
-          {/* Tab Content */}
-          {activeMainTab === "environmental" && (
-            <EnvironmentalTab 
-              activeSubTab={activeSubTab}
-              setActiveSubTab={setActiveSubTab}
-              userData={userData}
-              onOpenModal={openModal}
-              isInvestorView={isInvestorView}
-            />
-          )}
-
-          {activeMainTab === "social" && (
-            <SocialTab 
-              activeSubTab={activeSubTab}
-              setActiveSubTab={setActiveSubTab}
-              userData={userData}
-              onOpenModal={openModal}
-              isInvestorView={isInvestorView}
-            />
-          )}
-
-          {activeMainTab === "governance" && (
-            <GovernanceTab 
-              activeSubTab={activeSubTab}
-              setActiveSubTab={setActiveSubTab}
-              userData={userData}
-              onOpenModal={openModal}
-              isInvestorView={isInvestorView}
-            />
-          )}
         </div>
+
+        <div style={{ marginTop: "30px", paddingTop: "20px", borderTop: "1px solid #e8ddd4" }}>
+          <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
+            Key ESG Impact Dimensions
+          </h3>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "20px" }}>
+            <div>
+              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
+                Environmental
+              </h4>
+              <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
+                Track exposure, compliance, incidents, and controls to manage environmental risks
+              </p>
+            </div>
+            <div>
+              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
+                Social
+              </h4>
+              <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
+                Monitor workforce demographics, ownership inclusion, and community development
+              </p>
+            </div>
+            <div>
+              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
+                Governance
+              </h4>
+              <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
+                Assess ownership structures, oversight mechanisms, policies, and risk management
+              </p>
+            </div>
+          </div>
+          <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", marginTop: "15px" }}>
+            Dashboards show the data. ESG confirms it exists, is governed, and is credible for external stakeholders.
+          </p>
+        </div>
+      </div>
+    </div>
+  )}
+
+  {/* Main Tab Buttons */}
+  <div
+    style={{
+      display: "flex",
+      gap: "15px",
+      margin: "30px 0",
+      padding: "15px",
+      backgroundColor: "#fdfcfb",
+      borderRadius: "8px",
+      boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+      flexWrap: "wrap",
+    }}
+  >
+    {mainTabs.map((tab) => (
+      <button
+        key={tab.id}
+        onClick={() => {
+          setActiveMainTab(tab.id)
+          // Reset sub tab when main tab changes
+          if (tab.id === "social") setActiveSubTab("workforce-demographics")
+        }}
+        style={{
+          padding: "12px 24px",
+          backgroundColor: activeMainTab === tab.id ? "#5d4037" : "#e8ddd4",
+          color: activeMainTab === tab.id ? "#fdfcfb" : "#5d4037",
+          border: "none",
+          borderRadius: "6px",
+          cursor: "pointer",
+          fontWeight: "600",
+          fontSize: "15px",
+          transition: "all 0.3s ease",
+          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+          minWidth: "150px",
+          textAlign: "center",
+        }}
+      >
+        {tab.label}
+      </button>
+    ))}
+  </div>
+
+  {/* Tab Content */}
+  {activeMainTab === "environmental" && (
+    <EnvironmentalTab 
+      userData={userData}
+      onSave={handleSaveData}
+      isInvestorView={isInvestorView}
+    />
+  )}
+
+  {activeMainTab === "social" && (
+    <SocialTab 
+      activeSubTab={activeSubTab}
+      setActiveSubTab={setActiveSubTab}
+      userData={userData}
+      onSave={handleSaveData}
+      isInvestorView={isInvestorView}
+    />
+  )}
+
+  {activeMainTab === "governance" && (
+    <GovernanceTab 
+      userData={userData}
+      onSave={handleSaveData}
+      isInvestorView={isInvestorView}
+    />
+  )}
+</div>
       </div>
 
       <DataEntryModal
