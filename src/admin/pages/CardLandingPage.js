@@ -35,6 +35,8 @@ function CardLandingPage() {
         if (cardDocSnap.exists()) {
           const cardData = cardDocSnap.data()
           console.log('Card found in Firestore:', cardData)
+          console.log('Picture URL:', cardData.pictureUrl || cardData.design?.pictureUrl)
+          console.log('Logo URL:', cardData.logoUrl || cardData.design?.logoUrl)
           setCard(cardData)
         } else {
           console.error('Card not found in Firestore')
@@ -109,20 +111,30 @@ END:VCARD`
 
   return (
     <div className={styles.pageContainer}>
-      {/* Header with Logo, Name, Title */}
+      {/* Header with Profile Picture, Logo, Name, Title */}
       <div 
         className={styles.header}
         style={{ backgroundColor: card.design.backgroundColor }}
       >
-        <div className={styles.logoContainer}>
-          {card.design.logoUrl ? (
-            <img src={card.design.logoUrl} alt="Logo" className={styles.logo} />
-          ) : (
-            <div 
-              className={styles.logoPlaceholder}
-              style={{ backgroundColor: 'white', color: card.design.backgroundColor }}
-            >
-              {card.firstName.charAt(0)}{card.lastName.charAt(0)}
+        <div className={styles.headerImages}>
+          {(card.pictureUrl || card.design?.pictureUrl) && (
+            <div className={styles.profilePictureContainer}>
+              <img src={card.pictureUrl || card.design?.pictureUrl} alt="Profile" className={styles.profilePicture} />
+            </div>
+          )}
+          {(card.logoUrl || card.design?.logoUrl) && (
+            <div className={styles.logoContainer}>
+              <img src={card.logoUrl || card.design?.logoUrl} alt="Logo" className={styles.logo} />
+            </div>
+          )}
+          {!card.pictureUrl && !card.design?.pictureUrl && !card.logoUrl && !card.design?.logoUrl && (
+            <div className={styles.logoContainer}>
+              <div 
+                className={styles.logoPlaceholder}
+                style={{ backgroundColor: 'white', color: card.design.backgroundColor }}
+              >
+                {card.firstName.charAt(0)}{card.lastName.charAt(0)}
+              </div>
             </div>
           )}
         </div>
