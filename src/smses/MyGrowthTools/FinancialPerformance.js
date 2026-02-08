@@ -3,7 +3,8 @@ import { Bar, Line } from "react-chartjs-2"
 import Sidebar from "smses/Sidebar/Sidebar"
 import Header from "../DashboardHeader/DashboardHeader"
 import { db, auth } from "../../firebaseConfig"
-import { collection, getDocs, doc, getDoc, query, where, setDoc } from "firebase/firestore"
+
+import { collection, getDocs, doc, getDoc, query, where, setDoc, addDoc, deleteDoc, orderBy } from "firebase/firestore"
 import { onAuthStateChanged } from "firebase/auth"
 import {
   Chart as ChartJS,
@@ -142,8 +143,18 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
   const [expandedNotes, setExpandedNotes] = useState({})
   const [kpiNotes, setKpiNotes] = useState({})
   const [kpiAnalysis, setKpiAnalysis] = useState({})
-const [navData, setNavData] = useState(Array(12).fill("0"))
+  const [navData, setNavData] = useState(Array(12).fill("0"))
   const [financialYear, setFinancialYear] = useState("FY")
+  
+  // Dividend History State
+  const [dividendHistory, setDividendHistory] = useState([])
+  const [showDividendModal, setShowDividendModal] = useState(false)
+  const [newDividend, setNewDividend] = useState({
+    date: "",
+    amount: "",
+    type: "Interim",
+    declaredBy: ""
+  })
   
   // Balance Sheet Data Structure - FIXED with correct hierarchy
   const [balanceSheetData, setBalanceSheetData] = useState({
@@ -156,25 +167,29 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
         accountsReceivable: Array(12).fill(""),
         deposits: Array(12).fill(""),
         cash: Array(12).fill(""),
-        callAccounts: Array(12).fill(""), // Added this missing property
+        callAccounts: Array(12).fill(""),
         tradeReceivables: Array(12).fill(""),
       },
       fixedAssets: {
-        // These are all items under Fixed Assets category
         computerEquipment: Array(12).fill(""),
         lessDepreciationComputer: Array(12).fill(""),
         vehicles: Array(12).fill(""),
         lessDepreciationVehicles: Array(12).fill(""),
         otherPropertyPlantEquipment: Array(12).fill(""),
         lessDepreciationOther: Array(12).fill(""),
-        totalFixedAssets: Array(12).fill(""), // This is an item, not a category
+        totalFixedAssets: Array(12).fill(""),
       },
       nonCurrentAssets: {
-        // FIXED: Loans moved from currentAssets to nonCurrentAssets
         loans: Array(12).fill(""),
         loanAccount: Array(12).fill(""),
         intangibleAssets: Array(12).fill(""),
       },
+      additionalMetrics: {
+        trainingSpend: Array(12).fill(""),
+        hdiSpent: Array(12).fill(""),
+        labourCost: Array(12).fill(""),
+        revenuePerEmployee: Array(12).fill(""),
+      }
     },
     liabilities: {
       currentLiabilities: {
@@ -189,11 +204,10 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
         vatLiability: Array(12).fill(""),
       },
       nonCurrentLiabilities: {
-        // This is a category
         thirdPartyLoans: Array(12).fill(""),
         intercompanyLoans: Array(12).fill(""),
         directorsLoans: Array(12).fill(""),
-        totalNonCurrentLiabilities: Array(12).fill(""), // This is an item
+        totalNonCurrentLiabilities: Array(12).fill(""),
       },
     },
     equity: {
@@ -203,24 +217,23 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
       retainedEarnings: Array(12).fill(""),
     },
   })
-// In the CapitalStructure component, update the initial state for KPI data:
 
-  // Solvency KPIs - Pull data from balance sheet (Nav moved here from balance sheet)
+  // Solvency KPIs
   const [solvencyData, setSolvencyData] = useState({
     debtToEquity: Array(12).fill("0"),
     interestCoverage: Array(12).fill("0"),
     debtServiceCoverage: Array(12).fill("0"),
-    nav: Array(12).fill("0"), // NAV moved to solvency tab
+    nav: Array(12).fill("0"),
   })
 
-  // Leverage KPIs - Pull data from balance sheet
+  // Leverage KPIs
   const [leverageData, setLeverageData] = useState({
     totalDebtRatio: Array(12).fill("0"),
     longTermDebtRatio: Array(12).fill("0"),
     equityMultiplier: Array(12).fill("0"),
   })
 
-  // Equity KPIs - Pull data from balance sheet
+  // Equity KPIs
   const [equityData, setEquityData] = useState({
     returnOnEquity: Array(12).fill("0"),
     equityRatio: Array(12).fill("0"),
@@ -231,50 +244,39 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
   const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
 
   const subTabs = [
-  { id: "balance-sheet", label: "Balance Sheet" },
-  { id: "solvency", label: "Solvency" },
-  { id: "leverage", label: "Leverage" },
-  { id: "equity", label: "Equity Structure & Capital Discipline" },
-]
-
+    { id: "balance-sheet", label: "Balance Sheet" },
+    { id: "solvency", label: "Solvency" },
+    { id: "leverage", label: "Leverage" },
+    { id: "equity", label: "Equity Structure & Capital Discipline" },
+  ]
+    
   useEffect(() => {
     if (user) {
       loadCapitalStructureData()
+      loadDividendHistory()
     }
   }, [user])
 
   useEffect(() => {
-    // Calculate KPIs from balance sheet data
     calculateKPIsFromBalanceSheet()
   }, [balanceSheetData, selectedMonth, selectedYear])
 
-    const calculateKPIsFromBalanceSheet = () => {
+  const calculateKPIsFromBalanceSheet = () => {
     const monthIndex = getMonthIndex(selectedMonth)
     
-    // Ensure monthIndex is valid
     if (monthIndex < 0 || monthIndex >= 12) return
     
-    // Get values from balance sheet with safe defaults
     const totalEquity = calculateTotal(balanceSheetData.equity, monthIndex) || 0
     const totalLiabilities = (calculateTotal(balanceSheetData.liabilities.currentLiabilities, monthIndex) || 0) + 
                            (calculateTotal(balanceSheetData.liabilities.nonCurrentLiabilities, monthIndex) || 0)
     const totalAssets = calculateTotalAssets(monthIndex) || 0
     
-    // Calculate Debt to Equity Ratio
     const debtToEquity = totalEquity !== 0 ? (totalLiabilities / totalEquity) : 0
-    
-    // Calculate Equity Ratio
-    const equityRatio = totalAssets !== 0 ? (totalEquity / totalAssets) : 0
-    
-    // Calculate Total Debt Ratio
+    const equityRatio = totalAssets !== 0 ? (totalEquity / totalAssets) * 100 : 0
     const totalDebtRatio = totalAssets !== 0 ? (totalLiabilities / totalAssets) : 0
-    
-    // Calculate Net Assets (NAV)
     const netAssets = totalAssets - totalLiabilities
     
-    // Update KPI data - ensure arrays exist
     const newSolvencyData = { ...solvencyData }
-    // Ensure arrays are initialized
     if (!newSolvencyData.debtToEquity) newSolvencyData.debtToEquity = Array(12).fill("0")
     if (!newSolvencyData.interestCoverage) newSolvencyData.interestCoverage = Array(12).fill("0")
     if (!newSolvencyData.debtServiceCoverage) newSolvencyData.debtServiceCoverage = Array(12).fill("0")
@@ -284,7 +286,6 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
     newSolvencyData.nav[monthIndex] = netAssets.toFixed(2)
     
     const newLeverageData = { ...leverageData }
-    // Ensure arrays are initialized
     if (!newLeverageData.totalDebtRatio) newLeverageData.totalDebtRatio = Array(12).fill("0")
     if (!newLeverageData.longTermDebtRatio) newLeverageData.longTermDebtRatio = Array(12).fill("0")
     if (!newLeverageData.equityMultiplier) newLeverageData.equityMultiplier = Array(12).fill("0")
@@ -292,12 +293,11 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
     newLeverageData.totalDebtRatio[monthIndex] = totalDebtRatio.toFixed(2)
     
     const newEquityData = { ...equityData }
-    // Ensure arrays are initialized
     if (!newEquityData.returnOnEquity) newEquityData.returnOnEquity = Array(12).fill("0")
     if (!newEquityData.equityRatio) newEquityData.equityRatio = Array(12).fill("0")
     if (!newEquityData.bookValuePerShare) newEquityData.bookValuePerShare = Array(12).fill("0")
     
-    newEquityData.equityRatio[monthIndex] = (equityRatio * 100).toFixed(2) // Convert to percentage
+    newEquityData.equityRatio[monthIndex] = equityRatio.toFixed(2)
     
     setSolvencyData(newSolvencyData)
     setLeverageData(newLeverageData)
@@ -322,6 +322,24 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
       console.error("Error loading capital structure data:", error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadDividendHistory = async () => {
+    if (!user) return
+    try {
+      const dividendQuery = query(
+        collection(db, "financialData", `${user.uid}_dividends`, "dividendHistory"),
+        orderBy("date", "desc")
+      )
+      const snapshot = await getDocs(dividendQuery)
+      const dividends = []
+      snapshot.forEach(doc => {
+        dividends.push({ id: doc.id, ...doc.data() })
+      })
+      setDividendHistory(dividends)
+    } catch (error) {
+      console.error("Error loading dividend history:", error)
     }
   }
 
@@ -352,6 +370,57 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
     }
   }
 
+  const saveDividend = async () => {
+    if (!user) {
+      alert("Please log in to add dividend")
+      return
+    }
+    if (!newDividend.date || !newDividend.amount) {
+      alert("Please fill in all required fields")
+      return
+    }
+    
+    setLoading(true)
+    try {
+      const dividendData = {
+        ...newDividend,
+        amount: Number.parseFloat(newDividend.amount),
+        userId: user.uid,
+        createdAt: new Date().toISOString()
+      }
+      
+      await addDoc(
+        collection(db, "financialData", `${user.uid}_dividends`, "dividendHistory"),
+        dividendData
+      )
+      
+      setDividendHistory([dividendData, ...dividendHistory])
+      setNewDividend({ date: "", amount: "", type: "Interim", declaredBy: "" })
+      setShowDividendModal(false)
+      alert("Dividend added successfully!")
+    } catch (error) {
+      console.error("Error saving dividend:", error)
+      alert("Error saving dividend. Please try again.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const deleteDividend = async (dividendId) => {
+    if (!user || !window.confirm("Are you sure you want to delete this dividend record?")) return
+    
+    try {
+      await deleteDoc(
+        doc(db, "financialData", `${user.uid}_dividends`, "dividendHistory", dividendId)
+      )
+      setDividendHistory(dividendHistory.filter(d => d.id !== dividendId))
+      alert("Dividend deleted successfully!")
+    } catch (error) {
+      console.error("Error deleting dividend:", error)
+      alert("Error deleting dividend. Please try again.")
+    }
+  }
+
   const getMonthIndex = (month) => months.indexOf(month)
 
   const calculateTotal = (items, monthIndex) => {
@@ -364,7 +433,7 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
     }, 0)
   }
 
-   const calculateTotalAssets = (monthIndex) => {
+  const calculateTotalAssets = (monthIndex) => {
     if (monthIndex < 0 || monthIndex >= 12) return 0
     
     const totalBank =
@@ -380,7 +449,7 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
 
   const monthIndex = getMonthIndex(selectedMonth)
 
-  // Calculate totals with optional chaining
+  // Calculate totals
   const totalBank =
     (Number.parseFloat(balanceSheetData?.assets?.bank?.callAccounts?.[monthIndex]) || 0) +
     (Number.parseFloat(balanceSheetData?.assets?.bank?.currentAccount?.[monthIndex]) || 0)
@@ -397,25 +466,6 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
   const totalEquity = calculateTotal(balanceSheetData?.equity || {}, monthIndex)
   const netAssets = totalAssets - totalLiabilities
   const totalLiabilitiesAndCapital = totalLiabilities + totalEquity
-
-  // Update NAV data in solvency KPI
-   // Update NAV data in solvency KPI
-  useEffect(() => {
-    const monthIndex = getMonthIndex(selectedMonth)
-    if (monthIndex < 0 || monthIndex >= 12) return
-    
-    const newSolvencyData = { ...solvencyData }
-    if (!newSolvencyData.nav) newSolvencyData.nav = Array(12).fill("0")
-    
-    // Ensure netAssets is calculated properly
-    const totalAssets = calculateTotalAssets(monthIndex) || 0
-    const totalLiabilities = (calculateTotal(balanceSheetData?.liabilities?.currentLiabilities || {}, monthIndex) || 0) + 
-                           (calculateTotal(balanceSheetData?.liabilities?.nonCurrentLiabilities || {}, monthIndex) || 0)
-    const netAssets = totalAssets - totalLiabilities
-    
-    newSolvencyData.nav[monthIndex] = netAssets.toString()
-    setSolvencyData(newSolvencyData)
-  }, [netAssets, monthIndex])
 
   const toggleNotes = (kpiKey) => {
     setExpandedNotes((prev) => ({ ...prev, [kpiKey]: !prev[kpiKey] }))
@@ -482,13 +532,37 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
             } else if (item.includes("call")) {
               newBalanceSheetData.assets.currentAssets.callAccounts = monthValues
             }
+          } else if (category.includes("fixed assets")) {
+            if (item.includes("computer equipment")) {
+              newBalanceSheetData.assets.fixedAssets.computerEquipment = monthValues
+            } else if (item.includes("depreciation on computer")) {
+              newBalanceSheetData.assets.fixedAssets.lessDepreciationComputer = monthValues
+            } else if (item.includes("vehicles")) {
+              newBalanceSheetData.assets.fixedAssets.vehicles = monthValues
+            } else if (item.includes("depreciation on vehicles")) {
+              newBalanceSheetData.assets.fixedAssets.lessDepreciationVehicles = monthValues
+            } else if (item.includes("other property")) {
+              newBalanceSheetData.assets.fixedAssets.otherPropertyPlantEquipment = monthValues
+            } else if (item.includes("total fixed assets")) {
+              newBalanceSheetData.assets.fixedAssets.totalFixedAssets = monthValues
+            }
           } else if (category.includes("non-current assets")) {
-            if (item.includes("loan")) {
+            if (item.includes("loan") && !item.includes("account")) {
               newBalanceSheetData.assets.nonCurrentAssets.loans = monthValues
             } else if (item.includes("loan account")) {
               newBalanceSheetData.assets.nonCurrentAssets.loanAccount = monthValues
             } else if (item.includes("intangible")) {
               newBalanceSheetData.assets.nonCurrentAssets.intangibleAssets = monthValues
+            }
+          } else if (category.includes("additional metrics")) {
+            if (item.includes("training spend")) {
+              newBalanceSheetData.assets.additionalMetrics.trainingSpend = monthValues
+            } else if (item.includes("hdi spent")) {
+              newBalanceSheetData.assets.additionalMetrics.hdiSpent = monthValues
+            } else if (item.includes("labour cost")) {
+              newBalanceSheetData.assets.additionalMetrics.labourCost = monthValues
+            } else if (item.includes("revenue per employee")) {
+              newBalanceSheetData.assets.additionalMetrics.revenuePerEmployee = monthValues
             }
           }
         }
@@ -533,95 +607,41 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
     rows.push(["Current Assets", "Call Accounts", ...balanceSheetData?.assets?.currentAssets?.callAccounts || Array(12).fill("")])
     rows.push(["Current Assets", "Trade Receivables", ...balanceSheetData?.assets?.currentAssets?.tradeReceivables || Array(12).fill("")])
 
-    // Assets - Fixed Assets (all as items under Fixed Assets category)
+    // Assets - Fixed Assets
     rows.push(["Fixed Assets", "Computer Equipment", ...balanceSheetData?.assets?.fixedAssets?.computerEquipment || Array(12).fill("")])
-    rows.push([
-      "Fixed Assets",
-      "Less Depreciation on Computer Equipment",
-      ...balanceSheetData?.assets?.fixedAssets?.lessDepreciationComputer || Array(12).fill(""),
-    ])
+    rows.push(["Fixed Assets", "Less Depreciation on Computer Equipment", ...balanceSheetData?.assets?.fixedAssets?.lessDepreciationComputer || Array(12).fill("")])
     rows.push(["Fixed Assets", "Vehicles", ...balanceSheetData?.assets?.fixedAssets?.vehicles || Array(12).fill("")])
-    rows.push([
-      "Fixed Assets",
-      "Less Depreciation on Vehicles",
-      ...balanceSheetData?.assets?.fixedAssets?.lessDepreciationVehicles || Array(12).fill(""),
-    ])
-    rows.push([
-      "Fixed Assets",
-      "Other Property, Plant & Equipment",
-      ...balanceSheetData?.assets?.fixedAssets?.otherPropertyPlantEquipment || Array(12).fill(""),
-    ])
+    rows.push(["Fixed Assets", "Less Depreciation on Vehicles", ...balanceSheetData?.assets?.fixedAssets?.lessDepreciationVehicles || Array(12).fill("")])
+    rows.push(["Fixed Assets", "Other Property, Plant & Equipment", ...balanceSheetData?.assets?.fixedAssets?.otherPropertyPlantEquipment || Array(12).fill("")])
     rows.push(["Fixed Assets", "Total Fixed Assets", ...balanceSheetData?.assets?.fixedAssets?.totalFixedAssets || Array(12).fill("")])
 
-    // Assets - Non-Current Assets (FIXED: Loans, Loan Account, Intangible Assets moved here)
+    // Assets - Non-Current Assets
     rows.push(["Non-Current Assets", "Loans", ...balanceSheetData?.assets?.nonCurrentAssets?.loans || Array(12).fill("")])
     rows.push(["Non-Current Assets", "Loan Account", ...balanceSheetData?.assets?.nonCurrentAssets?.loanAccount || Array(12).fill("")])
     rows.push(["Non-Current Assets", "Intangible Assets", ...balanceSheetData?.assets?.nonCurrentAssets?.intangibleAssets || Array(12).fill("")])
 
+    // Additional Metrics
+    rows.push(["Additional Metrics", "Training Spend", ...balanceSheetData?.assets?.additionalMetrics?.trainingSpend || Array(12).fill("")])
+    rows.push(["Additional Metrics", "HDI Spent", ...balanceSheetData?.assets?.additionalMetrics?.hdiSpent || Array(12).fill("")])
+    rows.push(["Additional Metrics", "Labour Cost", ...balanceSheetData?.assets?.additionalMetrics?.labourCost || Array(12).fill("")])
+    rows.push(["Additional Metrics", "Revenue per Employee", ...balanceSheetData?.assets?.additionalMetrics?.revenuePerEmployee || Array(12).fill("")])
+
     // Liabilities - Current
-    rows.push([
-      "Current Liabilities",
-      "Accounts Payable",
-      ...balanceSheetData?.liabilities?.currentLiabilities?.accountsPayable || Array(12).fill(""),
-    ])
-    rows.push([
-      "Current Liabilities",
-      "Income Received In Advance",
-      ...balanceSheetData?.liabilities?.currentLiabilities?.incomeReceivedInAdvance || Array(12).fill(""),
-    ])
-    rows.push([
-      "Current Liabilities",
-      "Provision Intercompany",
-      ...balanceSheetData?.liabilities?.currentLiabilities?.provisionIntercompany || Array(12).fill(""),
-    ])
-    rows.push([
-      "Current Liabilities",
-      "Provision For Leave Pay",
-      ...balanceSheetData?.liabilities?.currentLiabilities?.provisionForLeavePay || Array(12).fill(""),
-    ])
-    rows.push([
-      "Current Liabilities",
-      "Salary Control Medical Fund",
-      ...balanceSheetData?.liabilities?.currentLiabilities?.salaryControlMedicalFund || Array(12).fill(""),
-    ])
-    rows.push([
-      "Current Liabilities",
-      "Salary Control PAYE",
-      ...balanceSheetData?.liabilities?.currentLiabilities?.salaryControlPAYE || Array(12).fill(""),
-    ])
-    rows.push([
-      "Current Liabilities",
-      "Salary Control Pension Fund",
-      ...balanceSheetData?.liabilities?.currentLiabilities?.salaryControlPensionFund || Array(12).fill(""),
-    ])
-    rows.push([
-      "Current Liabilities",
-      "Salary Control Salaries",
-      ...balanceSheetData?.liabilities?.currentLiabilities?.salaryControlSalaries || Array(12).fill(""),
-    ])
+    rows.push(["Current Liabilities", "Accounts Payable", ...balanceSheetData?.liabilities?.currentLiabilities?.accountsPayable || Array(12).fill("")])
+    rows.push(["Current Liabilities", "Income Received In Advance", ...balanceSheetData?.liabilities?.currentLiabilities?.incomeReceivedInAdvance || Array(12).fill("")])
+    rows.push(["Current Liabilities", "Provision Intercompany", ...balanceSheetData?.liabilities?.currentLiabilities?.provisionIntercompany || Array(12).fill("")])
+    rows.push(["Current Liabilities", "Provision For Leave Pay", ...balanceSheetData?.liabilities?.currentLiabilities?.provisionForLeavePay || Array(12).fill("")])
+    rows.push(["Current Liabilities", "Salary Control Medical Fund", ...balanceSheetData?.liabilities?.currentLiabilities?.salaryControlMedicalFund || Array(12).fill("")])
+    rows.push(["Current Liabilities", "Salary Control PAYE", ...balanceSheetData?.liabilities?.currentLiabilities?.salaryControlPAYE || Array(12).fill("")])
+    rows.push(["Current Liabilities", "Salary Control Pension Fund", ...balanceSheetData?.liabilities?.currentLiabilities?.salaryControlPensionFund || Array(12).fill("")])
+    rows.push(["Current Liabilities", "Salary Control Salaries", ...balanceSheetData?.liabilities?.currentLiabilities?.salaryControlSalaries || Array(12).fill("")])
     rows.push(["Current Liabilities", "VAT Liability", ...balanceSheetData?.liabilities?.currentLiabilities?.vatLiability || Array(12).fill("")])
 
-    // Liabilities - Non-Current (FIXED: Third Party Loans, Intercompany Loans, Directors Loans, Total Non-Current Liabilities)
-    rows.push([
-      "Non-Current Liabilities",
-      "Third Party Loans",
-      ...balanceSheetData?.liabilities?.nonCurrentLiabilities?.thirdPartyLoans || Array(12).fill(""),
-    ])
-    rows.push([
-      "Non-Current Liabilities",
-      "Intercompany Loans",
-      ...balanceSheetData?.liabilities?.nonCurrentLiabilities?.intercompanyLoans || Array(12).fill(""),
-    ])
-    rows.push([
-      "Non-Current Liabilities",
-      "Directors Loans",
-      ...balanceSheetData?.liabilities?.nonCurrentLiabilities?.directorsLoans || Array(12).fill(""),
-    ])
-    rows.push([
-      "Non-Current Liabilities",
-      "Total Non-Current Liabilities",
-      ...balanceSheetData?.liabilities?.nonCurrentLiabilities?.totalNonCurrentLiabilities || Array(12).fill(""),
-    ])
+    // Liabilities - Non-Current
+    rows.push(["Non-Current Liabilities", "Third Party Loans", ...balanceSheetData?.liabilities?.nonCurrentLiabilities?.thirdPartyLoans || Array(12).fill("")])
+    rows.push(["Non-Current Liabilities", "Intercompany Loans", ...balanceSheetData?.liabilities?.nonCurrentLiabilities?.intercompanyLoans || Array(12).fill("")])
+    rows.push(["Non-Current Liabilities", "Directors Loans", ...balanceSheetData?.liabilities?.nonCurrentLiabilities?.directorsLoans || Array(12).fill("")])
+    rows.push(["Non-Current Liabilities", "Total Non-Current Liabilities", ...balanceSheetData?.liabilities?.nonCurrentLiabilities?.totalNonCurrentLiabilities || Array(12).fill("")])
 
     // Equity
     rows.push(["Equity", "Current Year Earnings", ...balanceSheetData?.equity?.currentYearEarnings || Array(12).fill("")])
@@ -634,7 +654,7 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
     const link = document.createElement("a")
     const url = URL.createObjectURL(blob)
     link.setAttribute("href", url)
-    link.setAttribute("download", `balance_sheet_${new Date().toISOString().split("T")[0]}.csv`)
+    link.setAttribute("download", `balance_sheet_template_${new Date().toISOString().split("T")[0]}.csv`)
     link.style.visibility = "hidden"
     document.body.appendChild(link)
     link.click()
@@ -644,18 +664,6 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
   const renderKPICard = (title, data, kpiKey, unit = "ZAR") => {
     const monthIndex = getMonthIndex(selectedMonth)
     const currentValue = Number.parseFloat(data[monthIndex]) || 0
-    const chartData = {
-      labels: months,
-      datasets: [
-        {
-          label: title,
-          data: data.map((v) => Number.parseFloat(v) || 0),
-          backgroundColor: "rgba(93, 64, 55, 0.6)",
-          borderColor: "rgb(93, 64, 55)",
-          borderWidth: 2,
-        },
-      ],
-    }
 
     return (
       <div
@@ -690,111 +698,324 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
           </div>
           <div style={{ flex: 1 }}>
             <h4 style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}>{title}</h4>
-            <Bar
-              data={chartData}
-              options={{
-                responsive: true,
-                plugins: { legend: { display: false }, title: { display: false } },
-                scales: { y: { beginAtZero: true }, x: { display: true } },
-                maintainAspectRatio: true,
-              }}
-              height={60}
-            />
+            <div style={{ height: "60px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {/* Chart is hidden by default */}
+            </div>
           </div>
         </div>
 
-        {!isInvestorView && (
-          <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
-            <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
-              <button
-                onClick={() => handleAddNotes(kpiKey)}
+        <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
+          <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+            <button
+              onClick={() => handleAddNotes(kpiKey)}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "12px",
+              }}
+            >
+              Add notes
+            </button>
+            <button
+              onClick={() => handleAIAnalysis(kpiKey)}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "12px",
+              }}
+            >
+              AI analysis
+            </button>
+            <button
+              onClick={() => openTrendModal(title, data)}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "12px",
+              }}
+            >
+              View trend
+            </button>
+          </div>
+
+          {expandedNotes[kpiKey] && (
+            <div style={{ marginBottom: "10px" }}>
+              <label
                 style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#e8ddd4",
-                  color: "#5d4037",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "600",
                   fontSize: "12px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "5px",
                 }}
               >
-                ADD notes
-              </button>
-              <button
-                onClick={() => handleAIAnalysis(kpiKey)}
+                Notes / Comments:
+              </label>
+              <textarea
+                value={kpiNotes[kpiKey] || ""}
+                onChange={(e) => updateKpiNote(kpiKey, e.target.value)}
+                placeholder="Add notes or comments..."
                 style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#e8ddd4",
-                  color: "#5d4037",
-                  border: "none",
+                  width: "100%",
+                  padding: "10px",
                   borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  fontSize: "12px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "60px",
+                  fontSize: "13px",
                 }}
-              >
-                AI analysis
-              </button>
+              />
             </div>
+          )}
 
-            {expandedNotes[kpiKey] && (
-              <div style={{ marginBottom: "10px" }}>
-                <label
-                  style={{
-                    fontSize: "12px",
-                    color: "#5d4037",
-                    fontWeight: "600",
-                    display: "block",
-                    marginBottom: "5px",
-                  }}
-                >
-                  Notes / Comments:
-                </label>
-                <textarea
-                  value={kpiNotes[kpiKey] || ""}
-                  onChange={(e) => updateKpiNote(kpiKey, e.target.value)}
-                  placeholder="Add notes or comments..."
-                  style={{
-                    width: "100%",
-                    padding: "10px",
-                    borderRadius: "4px",
-                    border: "1px solid #e8ddd4",
-                    minHeight: "60px",
-                    fontSize: "13px",
-                  }}
-                />
-              </div>
-            )}
-
-            {expandedNotes[`${kpiKey}_analysis`] && (
-              <div
+          {expandedNotes[`${kpiKey}_analysis`] && (
+            <div
+              style={{
+                backgroundColor: "#e3f2fd",
+                padding: "15px",
+                borderRadius: "6px",
+                border: "1px solid #90caf9",
+              }}
+            >
+              <label
                 style={{
-                  backgroundColor: "#e3f2fd",
-                  padding: "15px",
-                  borderRadius: "6px",
-                  border: "1px solid #90caf9",
+                  fontSize: "12px",
+                  color: "#1565c0",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "8px",
                 }}
               >
-                <label
-                  style={{
-                    fontSize: "12px",
-                    color: "#1565c0",
-                    fontWeight: "600",
-                    display: "block",
-                    marginBottom: "8px",
-                  }}
-                >
-                  AI Analysis:
-                </label>
-                <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
-                  {kpiAnalysis[kpiKey] ||
-                    "AI analysis will be generated based on your data trends, comparing current performance against historical averages and industry benchmarks. This feature provides actionable insights for improving this metric."}
-                </p>
-              </div>
+                AI Analysis:
+              </label>
+              <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
+                {kpiAnalysis[kpiKey] ||
+                  "AI analysis will be generated based on your data trends, comparing current performance against historical averages and industry benchmarks. This feature provides actionable insights for improving this metric."}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const renderSolvency = () => (
+    <div>
+      <KeyQuestionBox
+        question="Can the business meet its long-term financial obligations? Is the business financially stable?"
+        signals="Debt levels, interest coverage, net asset value"
+        decisions="Manage debt levels, improve asset base"
+        section="solvency"
+      />
+      
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px" }}>
+        {renderKPICard("Net Asset Value", solvencyData.nav || Array(12).fill("0"), "nav", "ZAR")}
+        {renderKPICard("Equity Ratio", equityData.equityRatio || Array(12).fill("0"), "equityRatio", "%")}
+        {renderKPICard("Liabilities:Assets Ratio", leverageData.totalDebtRatio || Array(12).fill("0"), "liabilitiesAssetsRatio", "ratio")}
+      </div>
+    </div>
+  )
+
+  const renderLeverage = () => (
+    <div>
+      <KeyQuestionBox
+        question="How effectively is the business using debt to finance its operations? What is the risk profile?"
+        signals="Debt ratios, equity multiplier"
+        decisions="Optimize capital structure, manage risk"
+        section="leverage"
+      />
+      
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px" }}>
+        {renderKPICard("Debt:Equity Ratio", solvencyData.debtToEquity || Array(12).fill("0"), "debtToEquity", "ratio")}
+        {renderKPICard("Debt:Assets Ratio", leverageData.totalDebtRatio || Array(12).fill("0"), "debtAssetsRatio", "ratio")}
+      </div>
+    </div>
+  )
+
+  const renderEquityTab = () => {
+    const monthIndex = getMonthIndex(selectedMonth)
+    
+    // Calculate dividend statistics
+    const last12MonthsDividends = dividendHistory
+      .filter(d => {
+        const dividendDate = new Date(d.date)
+        const oneYearAgo = new Date()
+        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+        return dividendDate >= oneYearAgo
+      })
+      .reduce((sum, d) => sum + (d.amount || 0), 0)
+
+    const totalEquity = calculateTotal(balanceSheetData?.equity || {}, monthIndex) || 0
+    const dividendYield = totalEquity > 0 ? (last12MonthsDividends / totalEquity) * 100 : 0
+    const currentYearEarnings = Number.parseFloat(balanceSheetData?.equity?.currentYearEarnings?.[monthIndex]) || 0
+    const payoutRatio = currentYearEarnings > 0 ? (last12MonthsDividends / currentYearEarnings) * 100 : 0
+
+    return (
+      <div>
+        <KeyQuestionBox
+          question="How effectively is equity being utilized? What is the return on shareholder investment?"
+          signals="ROE, equity ratio, book value per share"
+          decisions="Improve profitability, optimize equity structure"
+          section="equity"
+        />
+        
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px", marginBottom: "30px" }}>
+          {renderKPICard("Ownership % (Equity)", equityData.equityRatio || Array(12).fill("0"), "ownershipPercentage", "%")}
+        </div>
+        
+        {/* Dividend Policy / Capital Retention Behaviour */}
+        <div style={{ backgroundColor: "#fdfcfb", padding: "20px", borderRadius: "8px", marginBottom: "30px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+            <h4 style={{ color: "#5d4037" }}>Dividend Policy / Capital Retention Behaviour</h4>
+            {!isInvestorView && (
+              <button
+                onClick={() => setShowDividendModal(true)}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "13px",
+                }}
+              >
+                Add Data
+              </button>
             )}
           </div>
-        )}
+          
+          <p style={{ color: "#8d6e63", fontSize: "14px", marginBottom: "20px", lineHeight: "1.5" }}>
+            Dividend policy analysis and capital retention behaviour shows how the company balances returning capital to shareholders 
+            versus reinvesting for growth. A consistent dividend policy signals financial stability and commitment to shareholders.
+          </p>
+          
+          {/* Dividend History Table */}
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ backgroundColor: "#e8ddd4" }}>
+                  <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "13px", fontWeight: "600" }}>Date</th>
+                  <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "13px", fontWeight: "600" }}>Amount (ZAR)</th>
+                  <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "13px", fontWeight: "600" }}>Type</th>
+                  <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "13px", fontWeight: "600" }}>Declared By</th>
+                  {!isInvestorView && (
+                    <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "13px", fontWeight: "600" }}>Actions</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {dividendHistory.length === 0 ? (
+                  <tr>
+                    <td colSpan={!isInvestorView ? 5 : 4} style={{ padding: "20px", textAlign: "center", color: "#8d6e63" }}>
+                      No dividend records found. Add your first dividend record.
+                    </td>
+                  </tr>
+                ) : (
+                  dividendHistory.map((dividend, index) => (
+                    <tr key={dividend.id} style={{ borderBottom: "1px solid #e8ddd4", backgroundColor: index % 2 === 0 ? "#fdfcfb" : "#f7f3f0" }}>
+                      <td style={{ padding: "12px", color: "#5d4037", fontSize: "13px" }}>{dividend.date}</td>
+                      <td style={{ padding: "12px", color: "#5d4037", fontSize: "13px", fontWeight: "600" }}>
+                        {dividend.amount.toLocaleString()}
+                      </td>
+                      <td style={{ padding: "12px", color: "#5d4037", fontSize: "13px" }}>{dividend.type}</td>
+                      <td style={{ padding: "12px", color: "#5d4037", fontSize: "13px" }}>{dividend.declaredBy}</td>
+                      {!isInvestorView && (
+                        <td style={{ padding: "12px" }}>
+                          <button
+                            onClick={() => {
+                              setNewDividend({
+                                date: dividend.date,
+                                amount: dividend.amount.toString(),
+                                type: dividend.type,
+                                declaredBy: dividend.declaredBy
+                              })
+                              setShowDividendModal(true)
+                            }}
+                            style={{
+                              padding: "6px 12px",
+                              backgroundColor: "#e8ddd4",
+                              color: "#5d4037",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              fontSize: "12px",
+                              marginRight: "8px",
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => deleteDividend(dividend.id)}
+                            style={{
+                              padding: "6px 12px",
+                              backgroundColor: "#ffebee",
+                              color: "#c62828",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              fontSize: "12px",
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          
+          {/* Summary Statistics */}
+          <div style={{ 
+            display: "grid", 
+            gridTemplateColumns: "repeat(3, 1fr)", 
+            gap: "20px", 
+            marginTop: "25px",
+            paddingTop: "20px",
+            borderTop: "2px solid #e8ddd4"
+          }}>
+            <div>
+              <div style={{ fontSize: "12px", color: "#8d6e63", marginBottom: "5px" }}>Total Dividends (Last 12 Months)</div>
+              <div style={{ fontSize: "18px", fontWeight: "700", color: "#5d4037" }}>
+                {last12MonthsDividends.toLocaleString()} ZAR
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: "12px", color: "#8d6e63", marginBottom: "5px" }}>Dividend Yield*</div>
+              <div style={{ fontSize: "18px", fontWeight: "700", color: "#5d4037" }}>
+                {dividendYield.toFixed(2)}%
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: "12px", color: "#8d6e63", marginBottom: "5px" }}>Payout Ratio*</div>
+              <div style={{ fontSize: "18px", fontWeight: "700", color: "#5d4037" }}>
+                {payoutRatio.toFixed(2)}%
+              </div>
+            </div>
+          </div>
+          
+          <div style={{ fontSize: "11px", color: "#9c7c5f", marginTop: "10px", fontStyle: "italic" }}>
+            *Calculated based on latest available data. For accurate calculations, ensure all financial data is up to date.
+          </div>
+        </div>
       </div>
     )
   }
@@ -924,7 +1145,7 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
                 whiteSpace: "nowrap",
               }}
             >
-              Download CSV
+              Download CSV Template
             </button>
           </div>
         )}
@@ -1289,7 +1510,7 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4" }}></td>
               </tr>
 
-              {/* Fixed Assets - Proper structure: Fixed Assets is a category, items underneath */}
+              {/* Fixed Assets */}
               <tr>
                 <td
                   rowSpan={7}
@@ -1524,8 +1745,45 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
                   />
                 </td>
               </tr>
+              <tr style={{ backgroundColor: "#f5f0eb" }}>
+                <td
+                  style={{
+                    padding: "8px",
+                    borderBottom: "1px solid #e8ddd4",
+                    color: "#5d4037",
+                    fontSize: "13px",
+                    fontWeight: "600",
+                  }}
+                >
+                  Total Fixed Assets (calculated)
+                </td>
+                <td
+                  style={{
+                    padding: "8px",
+                    borderBottom: "1px solid #e8ddd4",
+                    textAlign: "right",
+                    color: "#5d4037",
+                    fontSize: "13px",
+                  }}
+                >
+                  ZAR
+                </td>
+                <td
+                  style={{
+                    padding: "8px",
+                    borderBottom: "1px solid #e8ddd4",
+                    textAlign: "right",
+                    color: "#5d4037",
+                    fontSize: "13px",
+                    fontWeight: "600",
+                  }}
+                >
+                  {totalFixedAssets.toLocaleString()}
+                </td>
+                <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4" }}></td>
+              </tr>
 
-              {/* Non-Current Assets - FIXED: Loans, Loan Account, Intangible Assets moved here */}
+              {/* Non-Current Assets */}
               <tr>
                 <td
                   rowSpan={4}
@@ -1679,6 +1937,165 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
                   {totalNonCurrentAssets.toLocaleString()}
                 </td>
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4" }}></td>
+              </tr>
+
+              {/* Additional Metrics */}
+              <tr>
+                <td
+                  rowSpan={5}
+                  style={{
+                    padding: "8px",
+                    borderBottom: "1px solid #e8ddd4",
+                    color: "#5d4037",
+                    fontWeight: "600",
+                    fontSize: "13px",
+                    verticalAlign: "top",
+                  }}
+                >
+                  Additional Metrics
+                </td>
+                <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", color: "#5d4037", fontSize: "13px" }}>
+                  Training Spend
+                </td>
+                <td
+                  style={{
+                    padding: "8px",
+                    borderBottom: "1px solid #e8ddd4",
+                    textAlign: "right",
+                    color: "#5d4037",
+                    fontSize: "13px",
+                  }}
+                >
+                  ZAR
+                </td>
+                <td
+                  style={{
+                    padding: "8px",
+                    borderBottom: "1px solid #e8ddd4",
+                    textAlign: "right",
+                    color: "#5d4037",
+                    fontSize: "13px",
+                  }}
+                >
+                  {(
+                    Number.parseFloat(balanceSheetData?.assets?.additionalMetrics?.trainingSpend?.[monthIndex]) || 0
+                  ).toLocaleString()}
+                </td>
+                <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
+                  <TrendChartIcon
+                    onClick={() =>
+                      openTrendModal("Training Spend", balanceSheetData?.assets?.additionalMetrics?.trainingSpend || [])
+                    }
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", color: "#5d4037", fontSize: "13px" }}>
+                  HDI Spent
+                </td>
+                <td
+                  style={{
+                    padding: "8px",
+                    borderBottom: "1px solid #e8ddd4",
+                    textAlign: "right",
+                    color: "#5d4037",
+                    fontSize: "13px",
+                  }}
+                >
+                  ZAR
+                </td>
+                <td
+                  style={{
+                    padding: "8px",
+                    borderBottom: "1px solid #e8ddd4",
+                    textAlign: "right",
+                    color: "#5d4037",
+                    fontSize: "13px",
+                  }}
+                >
+                  {(
+                    Number.parseFloat(balanceSheetData?.assets?.additionalMetrics?.hdiSpent?.[monthIndex]) || 0
+                  ).toLocaleString()}
+                </td>
+                <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
+                  <TrendChartIcon
+                    onClick={() =>
+                      openTrendModal("HDI Spent", balanceSheetData?.assets?.additionalMetrics?.hdiSpent || [])
+                    }
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", color: "#5d4037", fontSize: "13px" }}>
+                  Labour Cost
+                </td>
+                <td
+                  style={{
+                    padding: "8px",
+                    borderBottom: "1px solid #e8ddd4",
+                    textAlign: "right",
+                    color: "#5d4037",
+                    fontSize: "13px",
+                  }}
+                >
+                  ZAR
+                </td>
+                <td
+                  style={{
+                    padding: "8px",
+                    borderBottom: "1px solid #e8ddd4",
+                    textAlign: "right",
+                    color: "#5d4037",
+                    fontSize: "13px",
+                  }}
+                >
+                  {(
+                    Number.parseFloat(balanceSheetData?.assets?.additionalMetrics?.labourCost?.[monthIndex]) || 0
+                  ).toLocaleString()}
+                </td>
+                <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
+                  <TrendChartIcon
+                    onClick={() =>
+                      openTrendModal("Labour Cost", balanceSheetData?.assets?.additionalMetrics?.labourCost || [])
+                    }
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", color: "#5d4037", fontSize: "13px" }}>
+                  Revenue per Employee
+                </td>
+                <td
+                  style={{
+                    padding: "8px",
+                    borderBottom: "1px solid #e8ddd4",
+                    textAlign: "right",
+                    color: "#5d4037",
+                    fontSize: "13px",
+                  }}
+                >
+                  ZAR
+                </td>
+                <td
+                  style={{
+                    padding: "8px",
+                    borderBottom: "1px solid #e8ddd4",
+                    textAlign: "right",
+                    color: "#5d4037",
+                    fontSize: "13px",
+                  }}
+                >
+                  {(
+                    Number.parseFloat(balanceSheetData?.assets?.additionalMetrics?.revenuePerEmployee?.[monthIndex]) || 0
+                  ).toLocaleString()}
+                </td>
+                <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
+                  <TrendChartIcon
+                    onClick={() =>
+                      openTrendModal("Revenue per Employee", balanceSheetData?.assets?.additionalMetrics?.revenuePerEmployee || [])
+                    }
+                  />
+                </td>
               </tr>
 
               {/* Total Assets */}
@@ -1980,6 +2397,47 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
               </tr>
               <tr>
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", color: "#5d4037", fontSize: "13px" }}>
+                  Salary control: Pension Fund
+                </td>
+                <td
+                  style={{
+                    padding: "8px",
+                    borderBottom: "1px solid #e8ddd4",
+                    textAlign: "right",
+                    color: "#5d4037",
+                    fontSize: "13px",
+                  }}
+                >
+                  ZAR
+                </td>
+                <td
+                  style={{
+                    padding: "8px",
+                    borderBottom: "1px solid #e8ddd4",
+                    textAlign: "right",
+                    color: "#5d4037",
+                    fontSize: "13px",
+                  }}
+                >
+                  {(
+                    Number.parseFloat(
+                      balanceSheetData?.liabilities?.currentLiabilities?.salaryControlPensionFund?.[monthIndex],
+                    ) || 0
+                  ).toLocaleString()}
+                </td>
+                <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", textAlign: "center" }}>
+                  <TrendChartIcon
+                    onClick={() =>
+                      openTrendModal(
+                        "Salary Control Pension Fund",
+                        balanceSheetData?.liabilities?.currentLiabilities?.salaryControlPensionFund || [],
+                      )
+                    }
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4", color: "#5d4037", fontSize: "13px" }}>
                   Salary control: Salaries
                 </td>
                 <td
@@ -2093,7 +2551,7 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
                 <td style={{ padding: "8px", borderBottom: "1px solid #e8ddd4" }}></td>
               </tr>
 
-              {/* Non-Current Liabilities - Proper structure: Non-Current Liabilities is a category, items underneath */}
+              {/* Non-Current Liabilities */}
               <tr>
                 <td
                   rowSpan={5}
@@ -2322,20 +2780,6 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
                 <td style={{ padding: "10px" }}></td>
               </tr>
 
-              {/* Net Assets */}
-              <tr style={{ backgroundColor: "#f5f0eb" }}>
-                <td colSpan={2} style={{ padding: "10px", color: "#5d4037", fontSize: "13px", fontWeight: "600" }}>
-                  Net Assets (=Total assets - Total Liabilities)
-                </td>
-                <td style={{ padding: "10px", textAlign: "right", color: "#5d4037", fontSize: "13px" }}>ZAR</td>
-                <td
-                  style={{ padding: "10px", textAlign: "right", color: "#5d4037", fontSize: "13px", fontWeight: "600" }}
-                >
-                  {netAssets.toLocaleString()}
-                </td>
-                <td style={{ padding: "10px" }}></td>
-              </tr>
-
               {/* Equity Section */}
               <tr>
                 <td
@@ -2534,116 +2978,145 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
     </div>
   )
 
- const renderSolvency = () => (
-  <div>
-    <KeyQuestionBox
-      question="Is the business financially solvent and appropriately structured for its current stage? Is the business structurally investable by institutional capital?"
-      signals="Leverage, balance sheet strength"
-      decisions="Raise equity vs debt, restructure balance sheet"
-      section="solvency"
-    />
-    
-    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
-      {!isInvestorView && (
-        <button
-          onClick={() => {}}
-          style={{
-            padding: "8px 16px",
-            backgroundColor: "#5d4037",
-            color: "#fdfcfb",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-            fontWeight: "600",
-            fontSize: "13px",
-          }}
-        >
-          Add KPI
-        </button>
-      )}
-    </div>
-    
-    {/* CHANGED: 2 charts per row for Solvency */}
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px" }}>
-      {renderKPICard("NAV", navData, "nav", "ZAR")}
-      {renderKPICard("Equity Ratio", equityData.equityRatio, "equityRatio", "%")}
-      {renderKPICard("Liabilities:Assets Ratio", leverageData.totalDebtRatio, "liabilitiesAssetsRatio", "ratio")}
-    </div>
-  </div>
-)
- const renderLeverage = () => (
-  <div>
-    <KeyQuestionBox
-      question="Is the business financially solvent and appropriately structured for its current stage? Is the business structurally investable by institutional capital?"
-      signals="Leverage, balance sheet strength"
-      decisions="Raise equity vs debt, restructure balance sheet"
-      section="leverage"
-    />
-    
-    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
-      {!isInvestorView && (
-        <button
-          onClick={() => {}}
-          style={{
-            padding: "8px 16px",
-            backgroundColor: "#5d4037",
-            color: "#fdfcfb",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-            fontWeight: "600",
-            fontSize: "13px",
-          }}
-        >
-          Add KPI
-        </button>
-      )}
-    </div>
-    
-    {/* NEW: Leverage charts */}
-   <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px" }}>
-      {renderKPICard("Debt:Equity", solvencyData.debtToEquity, "debtToEquity", "ratio")}
-      {renderKPICard("Debt:Assets", leverageData.totalDebtRatio, "debtToAssets", "ratio")}
-    </div>
-  </div>
-)
+  const renderDividendModal = () => (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(0,0,0,0.5)",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        zIndex: 1001,
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: "#fdfcfb",
+          padding: "30px",
+          borderRadius: "8px",
+          maxWidth: "500px",
+          width: "90%",
+        }}
+      >
+        <h3 style={{ color: "#5d4037", marginBottom: "20px" }}>Add Dividend Record</h3>
+        
+        <div style={{ marginBottom: "15px" }}>
+          <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px", fontWeight: "600" }}>
+            Date
+          </label>
+          <input
+            type="date"
+            value={newDividend.date}
+            onChange={(e) => setNewDividend({...newDividend, date: e.target.value})}
+            style={{
+              width: "100%",
+              padding: "8px",
+              borderRadius: "4px",
+              border: "1px solid #e8ddd4",
+              fontSize: "13px",
+            }}
+          />
+        </div>
 
- const renderEquityTab = () => (
-  <div>
-    <KeyQuestionBox
-      question="Is the business financially solvent and appropriately structured for its current stage? Is the business structurally investable by institutional capital?"
-      signals="Leverage, balance sheet strength"
-      decisions="Raise equity vs debt, restructure balance sheet"
-      section="equity"
-    />
-    
-    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
-      {!isInvestorView && (
-        <button
-          onClick={() => {}}
-          style={{
-            padding: "8px 16px",
-            backgroundColor: "#5d4037",
-            color: "#fdfcfb",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-            fontWeight: "600",
-            fontSize: "13px",
-          }}
-        >
-          Add KPI
-        </button>
-      )}
+        <div style={{ marginBottom: "15px" }}>
+          <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px", fontWeight: "600" }}>
+            Amount (ZAR)
+          </label>
+          <input
+            type="number"
+            value={newDividend.amount}
+            onChange={(e) => setNewDividend({...newDividend, amount: e.target.value})}
+            placeholder="Enter amount"
+            style={{
+              width: "100%",
+              padding: "8px",
+              borderRadius: "4px",
+              border: "1px solid #e8ddd4",
+              fontSize: "13px",
+            }}
+          />
+        </div>
+
+        <div style={{ marginBottom: "15px" }}>
+          <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px", fontWeight: "600" }}>
+            Type
+          </label>
+          <select
+            value={newDividend.type}
+            onChange={(e) => setNewDividend({...newDividend, type: e.target.value})}
+            style={{
+              width: "100%",
+              padding: "8px",
+              borderRadius: "4px",
+              border: "1px solid #e8ddd4",
+              fontSize: "13px",
+            }}
+          >
+            <option value="Interim">Interim</option>
+            <option value="Final">Final</option>
+            <option value="Special">Special</option>
+          </select>
+        </div>
+
+        <div style={{ marginBottom: "20px" }}>
+          <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px", fontWeight: "600" }}>
+            Declared By
+          </label>
+          <input
+            type="text"
+            value={newDividend.declaredBy}
+            onChange={(e) => setNewDividend({...newDividend, declaredBy: e.target.value})}
+            placeholder="e.g., Board Resolution #123"
+            style={{
+              width: "100%",
+              padding: "8px",
+              borderRadius: "4px",
+              border: "1px solid #e8ddd4",
+              fontSize: "13px",
+            }}
+          />
+        </div>
+
+        <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+          <button
+            onClick={() => {
+              setShowDividendModal(false)
+              setNewDividend({ date: "", amount: "", type: "Interim", declaredBy: "" })
+            }}
+            style={{
+              padding: "10px 20px",
+              backgroundColor: "#e8ddd4",
+              color: "#5d4037",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontWeight: "600",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={saveDividend}
+            style={{
+              padding: "10px 20px",
+              backgroundColor: "#5d4037",
+              color: "#fdfcfb",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontWeight: "600",
+            }}
+          >
+            {loading ? "Saving..." : "Save Dividend"}
+          </button>
+        </div>
+      </div>
     </div>
-    
-    {/* NEW: Equity Structure & Capital Discipline charts */}
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px" }}>
-      {renderKPICard("Ownership % (Equity)", equityData.returnOnEquity, "ownershipEquity", "%")}
-      {renderKPICard("Dividend Policy / Capital Retention Behaviour", equityData.bookValuePerShare, "dividendPolicy", "ZAR")}
-    </div>
-  </div>
-)
+  )
 
   if (activeSection !== "capital-structure") return null
 
@@ -2687,6 +3160,9 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
       {activeSubTab === "solvency" && renderSolvency()}
       {activeSubTab === "leverage" && renderLeverage()}
       {activeSubTab === "equity" && renderEquityTab()}
+
+      {/* Dividend Modal */}
+      {showDividendModal && renderDividendModal()}
 
       {/* Trend Modal */}
       {showTrendModal && selectedTrendItem && (
@@ -3077,6 +3553,58 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
               ))}
             </div>
 
+            {/* Additional Metrics Section */}
+            <div style={{ marginBottom: "30px", padding: "15px", backgroundColor: "#f5f0eb", borderRadius: "8px" }}>
+              <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Additional Metrics</h4>
+              {Object.keys(balanceSheetData?.assets?.additionalMetrics || {}).map((field) => (
+                <div key={field} style={{ marginBottom: "15px" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      color: "#5d4037",
+                      fontWeight: "600",
+                      marginBottom: "8px",
+                      fontSize: "13px",
+                    }}
+                  >
+                    {field === "trainingSpend" ? "Training Spend" :
+                     field === "hdiSpent" ? "HDI Spent" :
+                     field === "labourCost" ? "Labour Cost" :
+                     field === "revenuePerEmployee" ? "Revenue per Employee" :
+                     field.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase())}
+                  </label>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: "5px" }}>
+                    {months.map((month, idx) => (
+                      <div key={month}>
+                        <label style={{ fontSize: "10px", color: "#8d6e63", display: "block", marginBottom: "2px" }}>
+                          {month}
+                        </label>
+                        <input
+                          type="number"
+                          value={balanceSheetData?.assets?.additionalMetrics?.[field]?.[idx] || ""}
+                          onChange={(e) => {
+                            const newData = { ...balanceSheetData }
+                            if (!newData.assets.additionalMetrics[field]) {
+                              newData.assets.additionalMetrics[field] = Array(12).fill("")
+                            }
+                            newData.assets.additionalMetrics[field][idx] = e.target.value
+                            setBalanceSheetData(newData)
+                          }}
+                          style={{
+                            width: "100%",
+                            padding: "6px",
+                            borderRadius: "4px",
+                            border: "1px solid #e8ddd4",
+                            fontSize: "12px",
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
             {/* Non-Current Liabilities Section */}
             <div style={{ marginBottom: "30px", padding: "15px", backgroundColor: "#f5f0eb", borderRadius: "8px" }}>
               <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Non-Current Liabilities</h4>
@@ -3213,6 +3741,8 @@ const [navData, setNavData] = useState(Array(12).fill("0"))
     </div>
   )
 }
+
+
 
 // Performance Engine Component
 const PerformanceEngine = ({
