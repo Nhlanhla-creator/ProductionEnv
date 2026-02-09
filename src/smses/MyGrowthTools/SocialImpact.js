@@ -1590,15 +1590,12 @@ const EnvironmentalTab = ({ userData, onSave, isInvestorView }) => {
 }
 
 // Social Tab Components - WITH PIE CHARTS
+// Social Tab Components - WITH PIE CHARTS
 const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestorView }) => {
   const [selectedViewMode, setSelectedViewMode] = useState("month")
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-
-  const socialSubTabs = [
-    { id: "workforce-demographics", label: "Workforce Demographics" },
-    { id: "ownership-inclusion", label: "Ownership & Inclusion" },
-    { id: "community-esd", label: "Community & ESD Participation" },
-  ]
+  const [activeSpendTab, setActiveSpendTab] = useState("csi") // "csi" or "hdi"
+  const [activeProcurementTab, setActiveProcurementTab] = useState("amount") // "amount" or "percentage"
 
   // Chart options for pie/doughnut charts with values on top
   const getPieChartOptions = (title, showLegend = true) => ({
@@ -1657,7 +1654,7 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
           section="workforce-demographics"
         />
 
-        {/* B-BBEE Level Dropdown */}
+        {/* Workforce Demographics - REMOVED B-BBEE dropdown from top */}
         <div
           style={{
             backgroundColor: "#fdfcfb",
@@ -1680,48 +1677,6 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
           >
             Workforce Demographics
           </h3>
-
-          <div style={{ display: "grid", gap: "20px", marginBottom: "30px" }}>
-            {/* B-BBEE Level */}
-            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-              <label
-                style={{
-                  minWidth: "220px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                  fontSize: "14px",
-                }}
-              >
-                B-BBEE Level:
-              </label>
-              <select
-                value={userData?.bbbeeLevel || "8"}
-                onChange={(e) => handleDropdownChange("bbbeeLevel", e.target.value)}
-                style={{
-                  flex: 1,
-                  padding: "10px 15px",
-                  borderRadius: "6px",
-                  border: "2px solid #e8ddd4",
-                  fontSize: "14px",
-                  color: "#5d4037",
-                  backgroundColor: "#fdfcfb",
-                  cursor: isInvestorView ? "not-allowed" : "pointer",
-                  opacity: isInvestorView ? 0.7 : 1,
-                }}
-                disabled={isInvestorView}
-              >
-                <option value="1">Level 1</option>
-                <option value="2">Level 2</option>
-                <option value="3">Level 3</option>
-                <option value="4">Level 4</option>
-                <option value="5">Level 5</option>
-                <option value="6">Level 6</option>
-                <option value="7">Level 7</option>
-                <option value="8">Level 8</option>
-                <option value="non-compliant">Non-Compliant</option>
-              </select>
-            </div>
-          </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
             {/* Locality Chart */}
@@ -1829,68 +1784,6 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
               isInvestorView={isInvestorView}
             />
           </div>
-
-          {/* B-BBEE Level and Jobs Created */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginTop: "20px" }}>
-            <div
-              style={{
-                backgroundColor: "#fdfcfb",
-                padding: "20px",
-                borderRadius: "8px",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              }}
-            >
-              <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>B-BBEE Level</h4>
-              <div style={{ textAlign: "center", padding: "20px" }}>
-                <div
-                  style={{
-                    width: "100px",
-                    height: "100px",
-                    borderRadius: "50%",
-                    backgroundColor: "#5d4037",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "#fdfcfb",
-                    fontSize: "36px",
-                    fontWeight: "bold",
-                    margin: "0 auto 15px auto",
-                  }}
-                >
-                  {workforceData.bbbeeLevel}
-                </div>
-                <div style={{ color: "#8d6e63", fontSize: "14px" }}>
-                  Current B-BBEE Level
-                </div>
-              </div>
-            </div>
-
-            <div
-              style={{
-                backgroundColor: "#fdfcfb",
-                padding: "20px",
-                borderRadius: "8px",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              }}
-            >
-              <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>Jobs Created (Net)</h4>
-              <div style={{ textAlign: "center", padding: "20px" }}>
-                <div
-                  style={{
-                    fontSize: "48px",
-                    fontWeight: "bold",
-                    color: "#5d4037",
-                    marginBottom: "10px",
-                  }}
-                >
-                  {workforceData.jobsCreated}
-                </div>
-                <div style={{ color: "#8d6e63", fontSize: "14px" }}>
-                  Total Jobs Created (Permanent + Contract)
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     )
@@ -1905,6 +1798,7 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
       shareholderRaceBlack: userData?.shareholderRaceBlack || 40,
       permanentJobs: userData?.permanentJobs || 120,
       contractJobs: userData?.contractJobs || 80,
+      bbbeeLevel: userData?.bbbeeLevel || 4,
     }
 
     return (
@@ -1916,7 +1810,7 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
           section="ownership-inclusion"
         />
 
-        {/* Ownership Dropdowns */}
+        {/* Ownership Dropdowns - REMOVED B-BBEE dropdown from here */}
         <div
           style={{
             backgroundColor: "#fdfcfb",
@@ -1940,42 +1834,7 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
             Ownership & Inclusion
           </h3>
 
-          <div style={{ display: "grid", gap: "20px", marginBottom: "30px" }}>
-            {/* HDI Ownership */}
-            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-              <label
-                style={{
-                  minWidth: "220px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                  fontSize: "14px",
-                }}
-              >
-                HDI Ownership (%):
-              </label>
-              <select
-                value={userData?.hdiOwnership || "0-25"}
-                onChange={(e) => handleDropdownChange("hdiOwnership", e.target.value)}
-                style={{
-                  flex: 1,
-                  padding: "10px 15px",
-                  borderRadius: "6px",
-                  border: "2px solid #e8ddd4",
-                  fontSize: "14px",
-                  color: "#5d4037",
-                  backgroundColor: "#fdfcfb",
-                  cursor: isInvestorView ? "not-allowed" : "pointer",
-                  opacity: isInvestorView ? 0.7 : 1,
-                }}
-                disabled={isInvestorView}
-              >
-                <option value="0-25">0-25%</option>
-                <option value="26-50">26-50%</option>
-                <option value="51-75">51-75%</option>
-                <option value="76-100">76-100%</option>
-              </select>
-            </div>
-          </div>
+          {/* REMOVED the entire dropdown grid section */}
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
             {/* HDI Ownership Chart */}
@@ -2041,59 +1900,117 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
               isInvestorView={isInvestorView}
             />
 
-            {/* Total Jobs Created Chart */}
-            <ESGChartCard
-              title="Total Jobs Created"
-              chartType="bar"
-              data={{
-                labels: ["Permanent", "Contract", "Temporary", "Internship"],
-                datasets: [
-                  {
-                    label: "Jobs",
-                    data: [ownershipData.permanentJobs, ownershipData.contractJobs, 30, 20],
-                    backgroundColor: "#5d4037",
-                    borderColor: "#5d4037",
-                    borderWidth: 2,
-                  },
-                ],
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    title: {
-                      display: true,
-                      text: "Number of Jobs",
-                    },
-                  },
-                },
-                plugins: {
-                  tooltip: {
-                    enabled: true
-                  },
-                  datalabels: {
-                    display: false
-                  }
-                }
-              }}
-              kpiKey="totalJobs"
-              unit="jobs"
-              isInvestorView={isInvestorView}
-            />
+            {/* Total Jobs Created Chart with B-BBEE Level circle NEXT TO IT */}
+            <div style={{ 
+              display: "flex", 
+              flexDirection: "column",
+              gap: "20px",
+              gridColumn: "span 2" // Make this take 2 columns
+            }}>
+              <div style={{ 
+                display: "grid", 
+                gridTemplateColumns: "2fr 1fr", 
+                gap: "20px",
+                alignItems: "center"
+              }}>
+                {/* Jobs Created Chart - 2/3 width */}
+                <div>
+                  <ESGChartCard
+                    title="Total Jobs Created"
+                    chartType="bar"
+                    data={{
+                      labels: ["Permanent", "Contract", "Temporary", "Internship"],
+                      datasets: [
+                        {
+                          label: "Jobs",
+                          data: [ownershipData.permanentJobs, ownershipData.contractJobs, 30, 20],
+                          backgroundColor: "#5d4037",
+                          borderColor: "#5d4037",
+                          borderWidth: 2,
+                        },
+                      ],
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      scales: {
+                        y: {
+                          beginAtZero: true,
+                          title: {
+                            display: true,
+                            text: "Number of Jobs",
+                          },
+                        },
+                      },
+                      plugins: {
+                        tooltip: {
+                          enabled: true
+                        },
+                        datalabels: {
+                          display: false
+                        }
+                      }
+                    }}
+                    kpiKey="totalJobs"
+                    unit="jobs"
+                    isInvestorView={isInvestorView}
+                  />
+                </div>
+
+                {/* B-BBEE Level Circle - 1/3 width */}
+                <div
+                  style={{
+                    backgroundColor: "#fdfcfb",
+                    padding: "20px",
+                    borderRadius: "8px",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                    textAlign: "center",
+                    height: "100%",
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "center",
+                  }}
+                >
+                  <h4 style={{ color: "#5d4037", marginBottom: "20px", fontSize: "16px" }}>B-BBEE Level</h4>
+                  <div
+                    style={{
+                      width: "120px",
+                      height: "120px",
+                      borderRadius: "50%",
+                      backgroundColor: "#5d4037",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#fdfcfb",
+                      fontSize: "42px",
+                      fontWeight: "bold",
+                      margin: "0 auto 15px auto",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                    }}
+                  >
+                    {ownershipData.bbbeeLevel === "non-compliant" ? "NC" : ownershipData.bbbeeLevel}
+                  </div>
+                  <div style={{ color: "#8d6e63", fontSize: "15px", fontWeight: "600" }}>
+                    {ownershipData.bbbeeLevel === "non-compliant" ? "Non-Compliant" : `Level ${ownershipData.bbbeeLevel}`}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     )
   }
 
-  const renderCommunityESD = () => {
+const renderCommunityESD = () => {
     // Data from userData with fallbacks
     const csiData = {
       csiSpend: userData?.csiSpend || 500000,
       csiPercentage: userData?.csiPercentage || 2.5,
       hdiVendorSpend: userData?.hdiVendorSpend || 750000,
+      hdiPercentage: userData?.hdiPercentage || 35,
+      totalProcurementSpend: userData?.totalProcurementSpend || 2000000,
+      procurementPercentage: userData?.procurementPercentage || 65,
     }
 
     return (
@@ -2105,7 +2022,7 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
           section="community-esd"
         />
 
-        {/* Community & ESD Dropdowns */}
+        {/* Community & ESD Section */}
         <div
           style={{
             backgroundColor: "#fdfcfb",
@@ -2129,6 +2046,7 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
             Community & ESD Participation
           </h3>
 
+          {/* View Mode Selectors */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
             <div style={{ display: "flex", gap: "10px" }}>
               <select
@@ -2166,58 +2084,73 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
             </div>
           </div>
 
-          <div style={{ display: "grid", gap: "20px", marginBottom: "30px" }}>
-            {/* CSI/CSR Spend */}
-            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-              <label
+          {/* CSI/HDI Spend Selection */}
+          <div style={{ marginBottom: "20px" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: "10px",
+                marginBottom: "15px",
+                backgroundColor: "#e8ddd4",
+                padding: "10px",
+                borderRadius: "6px",
+              }}
+            >
+              <button
+                onClick={() => setActiveSpendTab("csi")}
                 style={{
-                  minWidth: "220px",
-                  color: "#5d4037",
+                  padding: "8px 16px",
+                  backgroundColor: activeSpendTab === "csi" ? "#5d4037" : "transparent",
+                  color: activeSpendTab === "csi" ? "#fdfcfb" : "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
                   fontWeight: "600",
                   fontSize: "14px",
+                  transition: "all 0.3s ease",
                 }}
               >
-                CSI/CSR Spend Level:
-              </label>
-              <select
-                value={userData?.csiSpend || "none"}
-                onChange={(e) => handleDropdownChange("csiSpend", e.target.value)}
+                CSI/CSR Spend
+              </button>
+              <button
+                onClick={() => setActiveSpendTab("hdi")}
                 style={{
-                  flex: 1,
-                  padding: "10px 15px",
-                  borderRadius: "6px",
-                  border: "2px solid #e8ddd4",
+                  padding: "8px 16px",
+                  backgroundColor: activeSpendTab === "hdi" ? "#5d4037" : "transparent",
+                  color: activeSpendTab === "hdi" ? "#fdfcfb" : "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "600",
                   fontSize: "14px",
-                  color: "#5d4037",
-                  backgroundColor: "#fdfcfb",
-                  cursor: isInvestorView ? "not-allowed" : "pointer",
-                  opacity: isInvestorView ? 0.7 : 1,
+                  transition: "all 0.3s ease",
                 }}
-                disabled={isInvestorView}
               >
-                <option value="none">None</option>
-                <option value="minimal">Minimal (&lt;1% of revenue)</option>
-                <option value="moderate">Moderate (1-3% of revenue)</option>
-                <option value="substantial">Substantial (&gt;3% of revenue)</option>
-              </select>
+                HDI Spend
+              </button>
             </div>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
-            {/* CSI/CSR Spend Chart */}
+            {/* CSI/CSR Spend OR HDI Spend Chart (based on active tab) */}
             <ESGChartCard
-              title="CSI/CSR Spend (R)"
+              title={activeSpendTab === "csi" ? "CSI/CSR Spend (R)" : "HDI Spend (R)"}
               chartType="bar"
               data={{
                 labels: getMonthsForYear(selectedYear, selectedViewMode),
                 datasets: [
                   {
-                    label: "Spend",
+                    label: activeSpendTab === "csi" ? "CSI Spend" : "HDI Spend",
                     data: Array(getMonthsForYear(selectedYear, selectedViewMode).length)
                       .fill(0)
-                      .map(() => Math.random() * 100000 + 50000),
-                    backgroundColor: "#5d4037",
-                    borderColor: "#5d4037",
+                      .map(() => {
+                        const base = activeSpendTab === "csi" ? 
+                          (Math.random() * 100000 + 50000) : 
+                          (Math.random() * 500000 + 250000);
+                        return base;
+                      }),
+                    backgroundColor: activeSpendTab === "csi" ? "#5d4037" : "#8d6e63",
+                    borderColor: activeSpendTab === "csi" ? "#5d4037" : "#8d6e63",
                     borderWidth: 2,
                   },
                 ],
@@ -2243,25 +2176,30 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
                   }
                 }
               }}
-              kpiKey="csiSpend"
+              kpiKey={activeSpendTab === "csi" ? "csiSpend" : "hdiVendorSpend"}
               unit="R"
               isInvestorView={isInvestorView}
             />
 
-            {/* CSI Spend as % of Revenue */}
+            {/* CSI/CSR Spend % OR HDI Spend % Chart (based on active tab) */}
             <ESGChartCard
-              title="CSI Spend as % of Revenue"
+              title={activeSpendTab === "csi" ? "CSI Spend as % of Revenue" : "HDI Spend as % of Revenue"}
               chartType="line"
               data={{
                 labels: getMonthsForYear(selectedYear, selectedViewMode),
                 datasets: [
                   {
-                    label: "Percentage",
+                    label: activeSpendTab === "csi" ? "CSI %" : "HDI %",
                     data: Array(getMonthsForYear(selectedYear, selectedViewMode).length)
                       .fill(0)
-                      .map(() => Math.random() * 5),
-                    borderColor: "#5d4037",
-                    backgroundColor: "rgba(93, 64, 55, 0.1)",
+                      .map(() => {
+                        const base = activeSpendTab === "csi" ? 
+                          (Math.random() * 5) : 
+                          (Math.random() * 50 + 10);
+                        return base;
+                      }),
+                    borderColor: activeSpendTab === "csi" ? "#5d4037" : "#8d6e63",
+                    backgroundColor: activeSpendTab === "csi" ? "rgba(93, 64, 55, 0.1)" : "rgba(141, 110, 99, 0.1)",
                     borderWidth: 2,
                     tension: 0.1,
                     fill: true,
@@ -2289,59 +2227,126 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
                   }
                 }
               }}
-              kpiKey="csiPercentage"
+              kpiKey={activeSpendTab === "csi" ? "csiPercentage" : "hdiPercentage"}
               unit="%"
               isInvestorView={isInvestorView}
             />
 
-            {/* HDI Vendor Spend */}
-            <ESGChartCard
-              title="HDI Vendor Spend (R)"
-              chartType="bar"
-              data={{
-                labels: getMonthsForYear(selectedYear, selectedViewMode),
-                datasets: [
-                  {
-                    label: "Spend",
-                    data: Array(getMonthsForYear(selectedYear, selectedViewMode).length)
-                      .fill(0)
-                      .map(() => Math.random() * 500000 + 250000),
-                    backgroundColor: "#8d6e63",
-                    borderColor: "#8d6e63",
-                    borderWidth: 2,
-                  },
-                ],
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    title: {
-                      display: true,
-                      text: "Amount (R)",
+            {/* Total Procurement Spend Chart - IN THE SAME LINE AS OTHERS */}
+            <div>
+              {/* Procurement Tabs */}
+              <div style={{ 
+                display: "flex", 
+                gap: "10px", 
+                marginBottom: "15px"
+              }}>
+                <button
+                  onClick={() => setActiveProcurementTab("amount")}
+                  style={{
+                    padding: "8px 12px",
+                    backgroundColor: activeProcurementTab === "amount" ? "#5d4037" : "#e8ddd4",
+                    color: activeProcurementTab === "amount" ? "#fdfcfb" : "#5d4037",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontWeight: "600",
+                    fontSize: "13px",
+                    transition: "all 0.3s ease",
+                    flex: 1
+                  }}
+                >
+                  Total Procurement Spend
+                </button>
+                <button
+                  onClick={() => setActiveProcurementTab("percentage")}
+                  style={{
+                    padding: "8px 12px",
+                    backgroundColor: activeProcurementTab === "percentage" ? "#5d4037" : "#e8ddd4",
+                    color: activeProcurementTab === "percentage" ? "#fdfcfb" : "#5d4037",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontWeight: "600",
+                    fontSize: "13px",
+                    transition: "all 0.3s ease",
+                    flex: 1
+                  }}
+                >
+                  Procurement % Spent
+                </button>
+              </div>
+
+              {/* Total Procurement Spend Chart */}
+              <ESGChartCard
+                title="Procurement Spend"
+                chartType={activeProcurementTab === "amount" ? "bar" : "line"}
+                data={{
+                  labels: getMonthsForYear(selectedYear, selectedViewMode),
+                  datasets: [
+                    {
+                      label: activeProcurementTab === "amount" ? "Procurement Spend" : "Procurement %",
+                      data: Array(getMonthsForYear(selectedYear, selectedViewMode).length)
+                        .fill(0)
+                        .map(() => {
+                          const base = activeProcurementTab === "amount" ? 
+                            (Math.random() * 1000000 + 500000) : 
+                            (Math.random() * 30 + 50);
+                          return base;
+                        }),
+                      backgroundColor: activeProcurementTab === "amount" ? "#3e2723" : "rgba(62, 39, 35, 0.1)",
+                      borderColor: "#3e2723",
+                      borderWidth: 2,
+                      fill: activeProcurementTab === "percentage",
+                    },
+                  ],
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  scales: {
+                    y: {
+                      beginAtZero: true,
+                      title: {
+                        display: true,
+                        text: activeProcurementTab === "amount" ? "Amount (R)" : "Percentage (%)",
+                      },
                     },
                   },
-                },
-                plugins: {
-                  tooltip: {
-                    enabled: true
-                  },
-                  datalabels: {
-                    display: false
+                  plugins: {
+                    tooltip: {
+                      enabled: true
+                    },
+                    datalabels: {
+                      display: false
+                    }
                   }
-                }
-              }}
-              kpiKey="hdiVendorSpend"
-              unit="R"
-              isInvestorView={isInvestorView}
-            />
+                }}
+                kpiKey={activeProcurementTab === "amount" ? "totalProcurementSpend" : "procurementPercentage"}
+                unit={activeProcurementTab === "amount" ? "R" : "%"}
+                isInvestorView={isInvestorView}
+              />
+            </div>
           </div>
 
           {/* CSI/CSR Projects Table */}
           <div style={{ marginTop: "30px" }}>
-            <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>CSI/CSR Projects</h4>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+              <h4 style={{ color: "#5d4037", fontSize: "16px" }}>CSI/CSR Projects</h4>
+              <button
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "13px",
+                }}
+              >
+                + Add Project
+              </button>
+            </div>
             <div
               style={{
                 backgroundColor: "#fdfcfb",
@@ -2357,6 +2362,7 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
                     <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Focus Area</th>
                     <th style={{ padding: "12px", textAlign: "right", color: "#5d4037", fontSize: "14px" }}>Budget (R)</th>
                     <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Status</th>
+                    <th style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2365,18 +2371,30 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
                     <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Education</td>
                     <td style={{ padding: "12px", textAlign: "right", color: "#5d4037", fontSize: "14px" }}>250,000</td>
                     <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Active</td>
+                    <td style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>
+                      <button style={{ background: "none", border: "none", color: "#5d4037", cursor: "pointer", margin: "0 5px" }}>Edit</button>
+                      <button style={{ background: "none", border: "none", color: "#5d4037", cursor: "pointer", margin: "0 5px" }}>Delete</button>
+                    </td>
                   </tr>
                   <tr style={{ borderBottom: "1px solid #e8ddd4" }}>
                     <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Community Health Initiative</td>
                     <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Healthcare</td>
                     <td style={{ padding: "12px", textAlign: "right", color: "#5d4037", fontSize: "14px" }}>150,000</td>
                     <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Planning</td>
+                    <td style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>
+                      <button style={{ background: "none", border: "none", color: "#5d4037", cursor: "pointer", margin: "0 5px" }}>Edit</button>
+                      <button style={{ background: "none", border: "none", color: "#5d4037", cursor: "pointer", margin: "0 5px" }}>Delete</button>
+                    </td>
                   </tr>
                   <tr>
                     <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Environmental Cleanup</td>
                     <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Environment</td>
                     <td style={{ padding: "12px", textAlign: "right", color: "#5d4037", fontSize: "14px" }}>75,000</td>
                     <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Completed</td>
+                    <td style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>
+                      <button style={{ background: "none", border: "none", color: "#5d4037", cursor: "pointer", margin: "0 5px" }}>Edit</button>
+                      <button style={{ background: "none", border: "none", color: "#5d4037", cursor: "pointer", margin: "0 5px" }}>Delete</button>
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -2386,6 +2404,12 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
       </div>
     )
   }
+
+  const socialSubTabs = [
+    { id: "workforce-demographics", label: "Workforce Demographics" },
+    { id: "ownership-inclusion", label: "Ownership & Inclusion" },
+    { id: "community-esd", label: "Community & ESD Participation" },
+  ]
 
   return (
     <div>
@@ -2429,7 +2453,6 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
     </div>
   )
 }
-
 // Governance Tab Components - SIMPLIFIED WITH DROPDOWNS
 const GovernanceTab = ({ userData, onSave, isInvestorView }) => {
   // Handle dropdown changes for governance data

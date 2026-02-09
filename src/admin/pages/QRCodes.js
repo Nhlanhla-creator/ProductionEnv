@@ -29,6 +29,7 @@ import {
   Twitter,
   Youtube,
   RefreshCw,
+  Image as ImageIcon,
 } from "lucide-react"
 import QRCodeStyling from "qr-code-styling"
 import styles from "./qr-codes.module.css"
@@ -45,9 +46,12 @@ function QRCodesManager() {
   const [editingCard, setEditingCard] = useState(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [logoPreview, setLogoPreview] = useState(null)
+  const [picturePreview, setPicturePreview] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const fileInputRef = useRef(null)
+  const [isCompressing, setIsCompressing] = useState(false)
+  const logoInputRef = useRef(null)
+  const pictureInputRef = useRef(null)
 
   const [formData, setFormData] = useState({
     firstName: "",
@@ -70,6 +74,7 @@ function QRCodesManager() {
     twitter: "",
     youtube: "",
     logo: "",
+    picture: "",
   })
 
   const [cardDesign, setCardDesign] = useState({
@@ -77,7 +82,60 @@ function QRCodesManager() {
     textColor: "#ffffff",
     accentColor: "#f8f7f3",
     logoUrl: "",
+    pictureUrl: "",
   })
+
+  // Image compression function to handle large files
+  const compressImage = (file, maxSizeKB = 300) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.readAsDataURL(file)
+      reader.onload = (event) => {
+        const img = new Image()
+        img.src = event.target.result
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          let width = img.width
+          let height = img.height
+          
+          // Calculate new dimensions while maintaining aspect ratio
+          const maxDimension = 1200 // Max width or height - good quality
+          if (width > height && width > maxDimension) {
+            height = (height * maxDimension) / width
+            width = maxDimension
+          } else if (height > maxDimension) {
+            width = (width * maxDimension) / height
+            height = maxDimension
+          }
+          
+          canvas.width = width
+          canvas.height = height
+          
+          const ctx = canvas.getContext('2d')
+          ctx.drawImage(img, 0, 0, width, height)
+          
+          // Start with high quality and reduce if needed
+          let quality = 0.92
+          let compressedDataUrl = canvas.toDataURL('image/jpeg', quality)
+          
+          // Keep reducing quality until we're under the size limit
+          // Base64 is ~37% larger than actual file size
+          while (compressedDataUrl.length > maxSizeKB * 1024 * 1.37 && quality > 0.5) {
+            quality -= 0.05
+            compressedDataUrl = canvas.toDataURL('image/jpeg', quality)
+          }
+          
+          const originalSizeKB = Math.round(file.size / 1024)
+          const finalSizeKB = Math.round(compressedDataUrl.length / 1024 / 1.37)
+          console.log(`Image compressed: ${originalSizeKB}KB → ${finalSizeKB}KB (${Math.round(quality * 100)}% quality)`)
+          
+          resolve(compressedDataUrl)
+        }
+        img.onerror = () => reject(new Error('Failed to load image'))
+      }
+      reader.onerror = () => reject(new Error('Failed to read file'))
+    })
+  }
 
   useEffect(() => {
     const loadCardsFromFirestore = async (user) => {
@@ -112,46 +170,64 @@ function QRCodesManager() {
       }
     }
 
-    // Listen for auth state changes
     const unsubscribe = auth.onAuthStateChanged((user) => {
       console.log('Auth state changed:', user ? 'Logged in' : 'Logged out')
       setLoading(true)
       loadCardsFromFirestore(user)
     })
 
-    // Cleanup listener on unmount
     return () => unsubscribe()
   }, [])
 
-  // Firebase Firestore handles persistence - no need for localStorage sync
-
-  const handleLogoUpload = (e) => {
+  const handleImageUpload = async (e, type) => {
     const file = e.target.files[0]
     if (file) {
-      if (file.size > 500000) {
-        alert("Logo file is too large. Please use an image smaller than 500KB. Large logos make QR codes very long.")
+      // Accept files up to 10MB - we'll compress them
+      if (file.size > 10000000) {
+        alert("Image file is too large. Please use an image smaller than 10MB.")
         return
       }
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        const base64String = reader.result
-        console.log('Logo uploaded, size:', base64String.length, 'characters')
+
+      // Check if it's an image
+      if (!file.type.startsWith('image/')) {
+        alert("Please upload an image file (JPG, PNG, etc.)")
+        return
+      }
+
+      try {
+        setIsCompressing(true)
+        console.log(`Processing ${type}: ${file.name} (${Math.round(file.size / 1024)}KB)`)
         
-        setLogoPreview(base64String)
-        setCardDesign((prev) => ({
-          ...prev,
-          logoUrl: base64String,
-        }))
-        setFormData((prev) => ({
-          ...prev,
-          logo: base64String,
-        }))
+        // Compress the image (target 300KB for good quality)
+        const compressedDataUrl = await compressImage(file, 300)
+        
+        if (type === 'logo') {
+          setLogoPreview(compressedDataUrl)
+          setCardDesign((prev) => ({
+            ...prev,
+            logoUrl: compressedDataUrl,
+          }))
+          setFormData((prev) => ({
+            ...prev,
+            logo: compressedDataUrl,
+          }))
+        } else {
+          setPicturePreview(compressedDataUrl)
+          setCardDesign((prev) => ({
+            ...prev,
+            pictureUrl: compressedDataUrl,
+          }))
+          setFormData((prev) => ({
+            ...prev,
+            picture: compressedDataUrl,
+          }))
+        }
+      } catch (error) {
+        console.error(`Error processing ${type}:`, error)
+        alert(`Error processing ${type}. Please try a different image.`)
+      } finally {
+        setIsCompressing(false)
       }
-      reader.onerror = () => {
-        console.error('Error reading logo file')
-        alert('Error reading logo file. Please try again.')
-      }
-      reader.readAsDataURL(file)
     }
   }
 
@@ -242,14 +318,39 @@ END:VCARD`
         return
       }
 
-      // Create a document reference to get the ID FIRST
       const cardsRef = collection(db, "businessCards")
       const newCardRef = editingCard ? doc(db, "businessCards", editingCard.id) : doc(cardsRef)
-      const cardId = newCardRef.id  // This is the Firestore document ID!
+      const cardId = newCardRef.id
       
       console.log('Card ID:', cardId)
       
-      // Prepare card data
+      // Upload logo to Storage if present
+      let logoUrl = ''
+      if (formData.logo) {
+        console.log('Uploading logo to Storage...')
+        const logoStorageRef = ref(storage, `logos/${auth.currentUser.uid}/${cardId}_logo.png`)
+        await uploadString(logoStorageRef, formData.logo, 'data_url')
+        logoUrl = await getDownloadURL(logoStorageRef)
+        console.log('Logo uploaded:', logoUrl)
+      }
+
+      // Upload picture to Storage if present
+      let pictureUrl = ''
+      if (formData.picture) {
+        console.log('Uploading picture to Storage...')
+        const pictureStorageRef = ref(storage, `pictures/${auth.currentUser.uid}/${cardId}_picture.png`)
+        await uploadString(pictureStorageRef, formData.picture, 'data_url')
+        pictureUrl = await getDownloadURL(pictureStorageRef)
+        console.log('Picture uploaded:', pictureUrl)
+      }
+
+      // Update cardDesign with Storage URLs instead of base64
+      const updatedCardDesign = {
+        ...cardDesign,
+        logoUrl: logoUrl || cardDesign.logoUrl,
+        pictureUrl: pictureUrl || cardDesign.pictureUrl,
+      }
+      
       const cardData = {
         userId: auth.currentUser.uid,
         firstName: formData.firstName,
@@ -271,15 +372,16 @@ END:VCARD`
         twitter: formData.twitter,
         youtube: formData.youtube,
         notes: formData.notes,
-        design: cardDesign,
-        logo: formData.logo,
+        design: updatedCardDesign,
+        // Store URLs instead of base64 strings
+        logoUrl: logoUrl,
+        pictureUrl: pictureUrl,
         createdAt: editingCard ? editingCard.createdAt : new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       }
 
       console.log('Card data prepared')
 
-      // Generate the URL that the QR code will point to (using Firestore document ID!)
       const baseUrl = window.location.hostname === 'localhost' 
         ? window.location.origin 
         : 'https://www.bigmarketplace.africa'
@@ -287,13 +389,11 @@ END:VCARD`
       
       console.log('Card URL:', cardUrl)
 
-      // Generate vCard data
       const vCardData = generateVCard(formData)
       console.log('vCard generated')
 
-      // Generate QR code
       console.log('Generating QR code...')
-      const qrCode = await generateQRCode(cardUrl, cardDesign)
+      const qrCode = await generateQRCode(cardUrl, updatedCardDesign)
 
       console.log('Getting QR code image data...')
       await qrCode.getRawData("png").then(async (qrBlob) => {
@@ -304,13 +404,11 @@ END:VCARD`
             
             const qrCodeDataUrl = reader.result
             
-            // Upload QR code to Firebase Storage
             const qrStorageRef = ref(storage, `qr-codes/${auth.currentUser.uid}/${cardId}.png`)
             await uploadString(qrStorageRef, qrCodeDataUrl, 'data_url')
             const qrCodeUrl = await getDownloadURL(qrStorageRef)
             console.log('QR code uploaded to Storage:', qrCodeUrl)
 
-            // Prepare final card object
             const finalCardData = {
               ...cardData,
               qrCodeData: qrCodeUrl,
@@ -318,18 +416,15 @@ END:VCARD`
               cardUrl: cardUrl,
             }
 
-            // Save to Firestore using setDoc (not addDoc) with our specific ID
             await setDoc(newCardRef, finalCardData)
             console.log('Card saved to Firestore with ID:', cardId)
             
             if (editingCard) {
-              // Update local state
               setBusinessCards((prev) =>
                 prev.map((card) => (card.id === editingCard.id ? { ...finalCardData, id: cardId } : card))
               )
               console.log('Card updated successfully')
             } else {
-              // Add to local state
               setBusinessCards((prev) => [...prev, { ...finalCardData, id: cardId }])
               console.log('New card added successfully')
             }
@@ -419,14 +514,17 @@ END:VCARD`
       twitter: "",
       youtube: "",
       logo: "",
+      picture: "",
     })
     setCardDesign({
       backgroundColor: "#9e6e3c",
       textColor: "#ffffff",
       accentColor: "#f8f7f3",
       logoUrl: "",
+      pictureUrl: "",
     })
     setLogoPreview(null)
+    setPicturePreview(null)
     setEditingCard(null)
   }
 
@@ -451,10 +549,12 @@ END:VCARD`
       instagram: card.instagram || "",
       twitter: card.twitter || "",
       youtube: card.youtube || "",
-      logo: card.logo || card.design?.logoUrl || "",
+      logo: card.logoUrl || card.design?.logoUrl || "",
+      picture: card.pictureUrl || card.design?.pictureUrl || "",
     })
     setCardDesign(card.design)
-    setLogoPreview(card.design?.logoUrl || card.logo)
+    setLogoPreview(card.logoUrl || card.design?.logoUrl)
+    setPicturePreview(card.pictureUrl || card.design?.pictureUrl)
     setEditingCard(card)
     setShowGenerator(true)
   }
@@ -462,20 +562,33 @@ END:VCARD`
   const handleDelete = async (id) => {
     if (window.confirm("Are you sure you want to delete this business card?")) {
       try {
-        // Delete from Firestore
         await deleteDoc(doc(db, "businessCards", id))
         
-        // Delete QR code image from Storage
         try {
           const qrStorageRef = ref(storage, `qr-codes/${auth.currentUser.uid}/${id}.png`)
           await deleteObject(qrStorageRef)
         } catch (storageError) {
           console.warn('QR code image not found in storage or already deleted:', storageError)
         }
+
+        // Delete logo from Storage
+        try {
+          const logoStorageRef = ref(storage, `logos/${auth.currentUser.uid}/${id}_logo.png`)
+          await deleteObject(logoStorageRef)
+        } catch (storageError) {
+          console.warn('Logo image not found in storage or already deleted:', storageError)
+        }
+
+        // Delete picture from Storage
+        try {
+          const pictureStorageRef = ref(storage, `pictures/${auth.currentUser.uid}/${id}_picture.png`)
+          await deleteObject(pictureStorageRef)
+        } catch (storageError) {
+          console.warn('Picture image not found in storage or already deleted:', storageError)
+        }
         
-        // Update local state
         setBusinessCards((prev) => prev.filter((card) => card.id !== id))
-        console.log('Card deleted successfully')
+        console.log('Card and all associated images deleted successfully')
       } catch (error) {
         console.error('Error deleting card:', error)
         alert('Error deleting business card. Please try again.')
@@ -491,15 +604,12 @@ END:VCARD`
   }
 
   const viewCard = (cardId) => {
-    // Find the card and use its cardUrl which includes the data parameter
     const card = businessCards.find(c => c.id === cardId)
     if (card && card.cardUrl) {
-      // Extract the path and query params from the full URL
       const url = new URL(card.cardUrl)
       const path = url.pathname + url.search
       window.open(path, '_blank')
     } else {
-      // Fallback to simple navigation for old cards
       navigate(`/card/${cardId}`)
     }
   }
@@ -609,11 +719,18 @@ END:VCARD`
                 }}
               >
                 <div className={styles.cardContent}>
-                  {card.design.logoUrl && (
-                    <div className={styles.miniLogo}>
-                      <img src={card.design.logoUrl} alt="Logo" />
-                    </div>
-                  )}
+                  <div className={styles.cardHeader}>
+                    {card.design.pictureUrl && (
+                      <div className={styles.miniPicture}>
+                        <img src={card.design.pictureUrl} alt="Profile" />
+                      </div>
+                    )}
+                    {card.design.logoUrl && (
+                      <div className={styles.miniLogo}>
+                        <img src={card.design.logoUrl} alt="Logo" />
+                      </div>
+                    )}
+                  </div>
                   <h3>
                     {card.firstName} {card.lastName}
                   </h3>
@@ -678,13 +795,17 @@ END:VCARD`
             Generate professional digital business cards with beautiful landing pages and QR codes
           </p>
           <p className={styles.placeholderSubtext}>
-            Add logo, social media links, and create a mobile-optimized contact page
+            Add logo, profile picture, social media links, and create a mobile-optimized contact page
           </p>
 
           <div className={styles.placeholderFeatures}>
             <div className={styles.featureItem}>
               <Camera size={20} />
-              <span>Add Logo</span>
+              <span>Profile Photo</span>
+            </div>
+            <div className={styles.featureItem}>
+              <ImageIcon size={20} />
+              <span>Company Logo</span>
             </div>
             <div className={styles.featureItem}>
               <QrCode size={20} />
@@ -693,10 +814,6 @@ END:VCARD`
             <div className={styles.featureItem}>
               <Smartphone size={20} />
               <span>Landing Page</span>
-            </div>
-            <div className={styles.featureItem}>
-              <Linkedin size={20} />
-              <span>Social Links</span>
             </div>
           </div>
 
@@ -732,42 +849,87 @@ END:VCARD`
                 <div className={styles.formColumn}>
                   <h3>Personal Information</h3>
 
-                  <div className={styles.formGroup}>
-                    <label>
-                      <Camera size={16} />
-                      Logo / Photo
-                    </label>
-                    <div className={styles.logoUpload}>
-                      <input
-                        type="file"
-                        ref={fileInputRef}
-                        onChange={handleLogoUpload}
-                        accept="image/*"
-                        style={{ display: 'none' }}
-                      />
-                      <button
-                        type="button"
-                        className={styles.uploadButton}
-                        onClick={() => fileInputRef.current?.click()}
-                      >
-                        <Upload size={20} />
-                        {logoPreview ? 'Change Logo' : 'Upload Logo'}
-                      </button>
-                      {logoPreview && (
-                        <div className={styles.logoPreviewContainer}>
-                          <img src={logoPreview} alt="Logo preview" />
-                          <button
-                            type="button"
-                            className={styles.removeButton}
-                            onClick={() => {
-                              setLogoPreview(null)
-                              setCardDesign(prev => ({ ...prev, logoUrl: '' }))
-                            }}
-                          >
-                            <X size={16} />
-                          </button>
-                        </div>
-                      )}
+                  <div className={styles.imageUploadsRow}>
+                    <div className={styles.formGroup}>
+                      <label>
+                        <Camera size={16} />
+                        Profile Picture
+                      </label>
+                      <div className={styles.imageUpload}>
+                        <input
+                          type="file"
+                          ref={pictureInputRef}
+                          onChange={(e) => handleImageUpload(e, 'picture')}
+                          accept="image/*"
+                          style={{ display: 'none' }}
+                        />
+                        <button
+                          type="button"
+                          className={styles.uploadButton}
+                          onClick={() => pictureInputRef.current?.click()}
+                          disabled={isCompressing}
+                        >
+                          <Upload size={20} />
+                          {isCompressing ? 'Processing...' : picturePreview ? 'Change' : 'Upload'}
+                        </button>
+                        {picturePreview && (
+                          <div className={styles.imagePreviewContainer}>
+                            <img src={picturePreview} alt="Profile preview" className={styles.picturePreview} />
+                            <button
+                              type="button"
+                              className={styles.removeButton}
+                              onClick={() => {
+                                setPicturePreview(null)
+                                setCardDesign(prev => ({ ...prev, pictureUrl: '' }))
+                                setFormData(prev => ({ ...prev, picture: '' }))
+                              }}
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className={styles.formGroup}>
+                      <label>
+                        <ImageIcon size={16} />
+                        Company Logo
+                      </label>
+                      <div className={styles.imageUpload}>
+                        <input
+                          type="file"
+                          ref={logoInputRef}
+                          onChange={(e) => handleImageUpload(e, 'logo')}
+                          accept="image/*"
+                          style={{ display: 'none' }}
+                        />
+                        <button
+                          type="button"
+                          className={styles.uploadButton}
+                          onClick={() => logoInputRef.current?.click()}
+                          disabled={isCompressing}
+                        >
+                          <Upload size={20} />
+                          {isCompressing ? 'Processing...' : logoPreview ? 'Change' : 'Upload'}
+                        </button>
+                        {logoPreview && (
+                          <div className={styles.imagePreviewContainer}>
+                            <img src={logoPreview} alt="Logo preview" />
+                            <button
+                              type="button"
+                              className={styles.removeButton}
+                              onClick={() => {
+                                setLogoPreview(null)
+                                setCardDesign(prev => ({ ...prev, logoUrl: '' }))
+                                setFormData(prev => ({ ...prev, logo: '' }))
+                              }}
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -1181,17 +1343,23 @@ END:VCARD`
                         color: cardDesign.textColor,
                       }}
                     >
-                      {(logoPreview || formData.firstName) && (
-                        <div className={styles.previewLogo}>
-                          {logoPreview ? (
+                      <div className={styles.previewHeader}>
+                        {picturePreview && (
+                          <div className={styles.previewPicture}>
+                            <img src={picturePreview} alt="Profile" />
+                          </div>
+                        )}
+                        {logoPreview && (
+                          <div className={styles.previewLogo}>
                             <img src={logoPreview} alt="Logo" />
-                          ) : (
-                            <div className={styles.previewInitials}>
-                              {formData.firstName.charAt(0)}{formData.lastName.charAt(0)}
-                            </div>
-                          )}
-                        </div>
-                      )}
+                          </div>
+                        )}
+                        {!picturePreview && !logoPreview && formData.firstName && (
+                          <div className={styles.previewInitials}>
+                            {formData.firstName.charAt(0)}{formData.lastName.charAt(0)}
+                          </div>
+                        )}
+                      </div>
                       <div className={styles.previewContent}>
                         <h4>
                           {formData.firstName || "First"} {formData.lastName || "Last"}
