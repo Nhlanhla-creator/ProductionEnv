@@ -181,7 +181,7 @@ export default function FundingMatchesPage() {
   }
 
   // Show Upsell for Basic and Standard plan users
-  if (currentPlan === "standard") {
+  if (currentPlan === "basic" || currentPlan === "standard") {
     return (
       <Upsell
         userType={"sme"}

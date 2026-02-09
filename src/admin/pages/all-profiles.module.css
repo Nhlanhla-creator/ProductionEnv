@@ -1,12 +1,12 @@
+/* Centralized styles for all profile pages (Advisors, Catalysts, Interns, Investors, SMEs, Sponsors) */
+
+/* Base Container */
 .container {
-  padding: 88px 32px 32px;
+  padding: 32px;
   min-height: 100vh;
-    margin-left: 250px;
-  background-color: #f8f7f3;
   color: #624635;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
 }
-/* Add these styles to your all-advisors.module.css file */
 
 /* Document Section Styles */
 .documentsSection {
@@ -181,29 +181,6 @@
   transform: translateY(1px);
 }
 
-/* Responsive adjustments for document table */
-@media (max-width: 768px) {
-  .documentsTableContainer {
-    font-size: 0.75rem;
-  }
-  
-  .documentsTable th,
-  .documentsTable td {
-    padding: 0.5rem 0.25rem;
-  }
-  
-  .documentStats {
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-  
-  .sectionHeader {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
-  }
-}
-
 /* Loading State */
 .loading {
   display: flex;
@@ -341,7 +318,7 @@
   box-shadow: 0 0 0 3px rgba(158, 110, 60, 0.1);
 }
 
-.searchInput:placeholder {
+.searchInput::placeholder {
   color: #aaa199;
 }
 
@@ -364,7 +341,6 @@
   cursor: pointer;
   outline: none;
 }
-
 
 /* Table */
 .tableContainer {
@@ -436,6 +412,11 @@
   color: #372c27;
 }
 
+.amount {
+  font-weight: 600;
+  color: #9e6e3c;
+}
+
 /* Status Badges */
 .statusBadge {
   display: inline-flex;
@@ -465,6 +446,52 @@
 .statusSuspended {
   background-color: rgba(158, 110, 60, 0.1);
   color: #9e6e3c;
+}
+
+.statusCompleted {
+  background-color: rgba(52, 152, 219, 0.1);
+  color: #3498db;
+}
+
+.statusExpired {
+  background-color: rgba(149, 165, 166, 0.1);
+  color: #95a5a6;
+}
+
+/* Tier Badges (for Sponsors) */
+.tierBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tierPlatinum {
+  background: linear-gradient(135deg, #e8e8e8 0%, #c0c0c0 100%);
+  color: #2c3e50;
+  box-shadow: 0 2px 8px rgba(192, 192, 192, 0.3);
+}
+
+.tierGold {
+  background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+  color: #996515;
+  box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3);
+}
+
+.tierSilver {
+  background: linear-gradient(135deg, #c0c0c0 0%, #e8e8e8 100%);
+  color: #5d6d7e;
+  box-shadow: 0 2px 8px rgba(192, 192, 192, 0.3);
+}
+
+.tierBronze {
+  background: linear-gradient(135deg, #cd7f32 0%, #daa520 100%);
+  color: #4a2511;
+  box-shadow: 0 2px 8px rgba(205, 127, 50, 0.3);
 }
 
 /* Actions */
@@ -707,6 +734,57 @@
   color: #372c27;
 }
 
+/* Application Sections (for Interns, SMEs, Sponsors) */
+.applicationSection h3 {
+  margin: 0 0 20px;
+  color: #372c27;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.applicationCard {
+  border: 1px solid rgba(158, 110, 60, 0.1);
+  border-radius: 12px;
+  padding: 20px;
+  background-color: #f8f7f3;
+}
+
+.applicationStatus {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.applicationDate {
+  font-size: 0.85rem;
+  color: #878787;
+}
+
+.applicationDetails p {
+  margin: 8px 0;
+  color: #624635;
+}
+
+.applicationDetails strong {
+  color: #372c27;
+}
+
+.tierHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(158, 110, 60, 0.1);
+}
+
+.tierHeader .amount {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #9e6e3c;
+}
+
 /* Documents Section */
 .documentsSection h3 {
   margin: 0 0 20px;
@@ -757,6 +835,135 @@
 
 .iconPending {
   color: #f39c12;
+}
+
+/* Payments Section (for Investors, Sponsors) */
+.paymentsSection h3 {
+  margin: 0 0 20px;
+  color: #372c27;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.paymentCard {
+  border: 1px solid rgba(158, 110, 60, 0.1);
+  border-radius: 12px;
+  padding: 20px;
+  background-color: #f8f7f3;
+}
+
+.paymentHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.paymentHeader h4 {
+  margin: 0;
+  color: #372c27;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.paymentDetails p {
+  margin: 8px 0;
+  color: #624635;
+}
+
+.paymentDetails strong {
+  color: #372c27;
+}
+
+/* Performance Stats (for Interns) */
+.performanceStats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.statCard {
+  background-color: white;
+  border: 1px solid rgba(158, 110, 60, 0.1);
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+}
+
+.statValue {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #9e6e3c;
+  margin-bottom: 8px;
+}
+
+.statLabel {
+  font-size: 0.85rem;
+  color: #878787;
+  font-weight: 500;
+}
+
+/* Impact Stats (for Sponsors) */
+.impactStats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+.impactCard {
+  background-color: white;
+  border: 1px solid rgba(158, 110, 60, 0.1);
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.impactCard:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(158, 110, 60, 0.15);
+}
+
+.impactIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  background-color: rgba(158, 110, 60, 0.1);
+  color: #9e6e3c;
+}
+
+.impactValue {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #372c27;
+  margin-bottom: 8px;
+}
+
+.impactLabel {
+  font-size: 0.9rem;
+  color: #878787;
+  font-weight: 500;
+}
+
+/* Progress Bar (for Interns) */
+.progressBar {
+  width: 100%;
+  height: 8px;
+  background-color: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 12px;
+}
+
+.progressFill {
+  height: 100%;
+  background-color: #9e6e3c;
+  transition: width 0.3s ease;
 }
 
 /* Form Styles */
@@ -817,7 +1024,7 @@
   box-shadow: 0 0 0 3px rgba(158, 110, 60, 0.1);
 }
 
-.formInput:placeholder {
+.formInput::placeholder {
   color: #aaa199;
 }
 
@@ -935,7 +1142,7 @@
     gap: 8px;
   }
 
-  .profileItem span:nth-child(2):after {
+  .profileItem span:nth-child(2)::after {
     content: ":";
   }
 
@@ -960,6 +1167,33 @@
   .saveButton {
     width: 100%;
     justify-content: center;
+  }
+
+  /* Responsive adjustments for document table */
+  .documentsTableContainer {
+    font-size: 0.75rem;
+  }
+  
+  .documentsTable th,
+  .documentsTable td {
+    padding: 0.5rem 0.25rem;
+  }
+  
+  .documentStats {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .sectionHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  /* Additional responsive styles */
+  .performanceStats,
+  .impactStats {
+    grid-template-columns: 1fr;
   }
 }
 

@@ -1,202 +1,330 @@
-import React, { useState } from "react";
-import { ChevronRight } from "lucide-react";
+import React, { useState, useCallback, useEffect } from 'react';
+import { FileExplorer } from './shared/FileExplorer';
+import { FileUploader } from './shared/FileUploader';
+import { GROWTH_STRUCTURE } from './growth-components/growthStructure';
+import {
+  uploadFile,
+  addFileToCollection,
+  deleteFile,
+  loadContent,
+  loadAllContent
+} from './services/growth';
+import { useAuth } from '../../smses/hooks/useAuth';
+import { AlertCircle } from 'lucide-react';
 
 const Growth = () => {
-  const [selectedSection, setSelectedSection] = useState(null);
+  const { user, loading: authLoading } = useAuth();
+  const [expandedFolders, setExpandedFolders] = useState({});
+  const [selectedPath, setSelectedPath] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [currentContent, setCurrentContent] = useState(null);
+  const [contentStatus, setContentStatus] = useState({});
+  const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const resetFromSection = (section) => {
-    setSelectedSection(section);
+  // Load all content on mount
+  useEffect(() => {
+    if (!user) {
+      setIsLoading(false);
+      return;
+    }
+
+    const loadAllData = async () => {
+      try {
+        setIsLoading(true);
+        const allContent = await loadAllContent();
+        
+        // Create status map
+        const status = {};
+        Object.keys(allContent).forEach(pathKey => {
+          status[pathKey] = true;
+        });
+        setContentStatus(status);
+      } catch (error) {
+        console.error('Error loading content:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadAllData();
+  }, [user]);
+
+  // Load content when item is selected
+  useEffect(() => {
+    if (!selectedPath || !user) {
+      setCurrentContent(null);
+      return;
+    }
+
+    const loadData = async () => {
+      try {
+        const content = await loadContent(selectedPath);
+        setCurrentContent(content);
+      } catch (error) {
+        console.error('Error loading content:', error);
+        setCurrentContent(null);
+      }
+    };
+
+    loadData();
+  }, [selectedPath, user]);
+
+  const handleToggleFolder = useCallback(
+    (path) => {
+      const pathKey = path.join(" > ");
+      const folderIsExpanded = expandedFolders[pathKey];
+      const folderLevel = path.length - 1;
+
+      // Create new expanded folders object
+      const newExpandedFolders = {};
+
+      if (!folderIsExpanded) {
+        // Close all folders at the same level by only opening the clicked one
+        Object.keys(expandedFolders).forEach((expandedPathKey) => {
+          const expandedPath = expandedPathKey.split(" > ");
+          const expandedPathLevel = expandedPath.length - 1;
+
+          // Keep folders that are at different levels
+          if (expandedPathLevel !== folderLevel) {
+            newExpandedFolders[expandedPathKey] = true;
+          }
+        });
+
+        // Open the clicked folder
+        newExpandedFolders[pathKey] = true;
+      } else {
+        // Just close the clicked folder, keep others as-is
+        Object.keys(expandedFolders).forEach((expandedPathKey) => {
+          if (expandedPathKey !== pathKey) {
+            newExpandedFolders[expandedPathKey] = true;
+          }
+        });
+      }
+
+      setExpandedFolders(newExpandedFolders);
+    },
+    [expandedFolders],
+  );
+
+  const handleSelectItem = useCallback((path, item) => {
+    setSelectedPath(path);
+    setSelectedItem(item);
+  }, []);
+
+  const handleUploadFile = useCallback(async (file) => {
+    if (!selectedPath || !user) return;
+
+    try {
+      setIsUploading(true);
+      
+      // Check if this is the first file or adding to existing collection
+      if (currentContent && currentContent.files && currentContent.files.length > 0) {
+        await addFileToCollection(selectedPath, file);
+      } else {
+        await uploadFile(selectedPath, file);
+      }
+
+      // Update status
+      const pathKey = selectedPath.join(' > ');
+      setContentStatus(prev => ({
+        ...prev,
+        [pathKey]: true
+      }));
+
+      // Reload content
+      const updatedContent = await loadContent(selectedPath);
+      setCurrentContent(updatedContent);
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      alert('Failed to upload file. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
+  }, [selectedPath, currentContent, user]);
+
+  const handleDeleteFile = useCallback(async (fileIndex) => {
+    if (!selectedPath || !user) return;
+
+    try {
+      await deleteFile(selectedPath, fileIndex);
+
+      // Reload content
+      const updatedContent = await loadContent(selectedPath);
+      setCurrentContent(updatedContent);
+
+      // Update status if no files left
+      if (!updatedContent || !updatedContent.files || updatedContent.files.length === 0) {
+        const pathKey = selectedPath.join(' > ');
+        setContentStatus(prev => {
+          const newStatus = { ...prev };
+          delete newStatus[pathKey];
+          return newStatus;
+        });
+      }
+    } catch (error) {
+      console.error('Error deleting file:', error);
+      alert('Failed to delete file. Please try again.');
+    }
+  }, [selectedPath, user]);
+
+  const handleCloseEditor = useCallback(() => {
+    setSelectedPath(null);
     setSelectedItem(null);
-  };
+    setCurrentContent(null);
+  }, []);
 
-  const structure = {
-    "Strategy Vision": {
-      items: [
-        "Vision Mission",
-        "Platform Thesis",
-        "Unicorn Roadmap",
-        "Market Problem Definition",
-        "Competitive Analysis",
-        "ESG ESD Strategy",
-        "Expansion Roadmap",
-        "Financial Models",
-        "Budgets Forecasts"
-      ]
-    },
+  // Loading state
+  if (authLoading || isLoading) {
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh',
+        background: 'var(--background-brown)'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: 40,
+            height: 40,
+            border: '4px solid var(--pale-brown)',
+            borderTopColor: 'var(--primary-brown)',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            margin: '0 auto 16px'
+          }} />
+          <p style={{ color: 'var(--text-brown)' }}>
+            {authLoading ? 'Authenticating...' : 'Loading repository...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
-    "Finance & Funding": {
-      items: [
-        "Funding Rounds",
-        "Investor Decks",
-        "Grant Applications",
-        "Revenue Models"
-      ],
-      children: {
-        "Funding Rounds": ["Pre-Seed", "Seed", "Series A"]
-      }
-    },
-
-    "Marketing & Branding": {
-      items: [
-        "Brand Positioning",
-        "Website Content",
-        "Thought Leadership",
-        "BIG Pulse",
-        "Campaigns",
-        "Partnerships Comms",
-        "Asset Design & Templates"
-      ],
-      children: {
-        "Asset Design & Templates": [
-          "Brand Guidelines",
-          "Logos",
-          "UI Designs",
-          "Pitch Visuals",
-          "Diagrams"
-        ]
-      }
-    }
-  };
-
-  const colors = {
-    lightBrown: "#f5f0e1",
-    mediumBrown: "#e6d7c3",
-    accentBrown: "#c8b6a6",
-    primaryBrown: "#a67c52",
-    darkBrown: "#7d5a50",
-    textBrown: "#4a352f",
-    backgroundBrown: "#faf7f2",
-    paleBrown: "#f0e6d9"
-  };
-
-  const styles = {
-    wrapper: {
-      padding: 24,
-      background: colors.backgroundBrown,
-      minHeight: "100vh"
-    },
-    title: {
-      fontSize: 24,
-      color: colors.textBrown,
-      marginBottom: 16
-    },
-    grid: {
-      display: "flex",
-      gap: 12
-    },
-    column: {
-      width: 260,
-      background: colors.lightBrown,
-      border: `1px solid ${colors.accentBrown}`,
-      borderRadius: 8,
-      overflow: "hidden"
-    },
-    columnHeader: {
-      padding: 16,
-      background: colors.paleBrown,
-      fontWeight: 600,
-      color: colors.textBrown,
-      borderBottom: `1px solid ${colors.accentBrown}`
-    },
-    item: {
-      padding: "12px 16px",
-      borderBottom: `1px solid ${colors.accentBrown}`,
-      cursor: "pointer",
-      color: colors.textBrown,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      fontWeight: 500,
-      background: "transparent",
-      transition: "background 0.2s"
-    },
-    expandable: {
-      background: colors.primaryBrown
-    },
-    subItem: {
-      padding: "10px 16px",
-      borderBottom: `1px solid ${colors.accentBrown}`,
-      color: colors.textBrown,
-      background: colors.backgroundBrown
-    }
-  };
+  // Not authenticated
+  if (!user) {
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh',
+        background: 'var(--background-brown)'
+      }}>
+        <div style={{
+          textAlign: 'center',
+          padding: 40,
+          background: 'white',
+          borderRadius: 8,
+          border: '1px solid var(--medium-brown)'
+        }}>
+          <AlertCircle size={48} color="var(--accent-brown)" style={{ marginBottom: 16 }} />
+          <h2 style={{ color: 'var(--text-brown)', marginBottom: 8 }}>Authentication Required</h2>
+          <p style={{ color: '#666' }}>Please log in to access the Growth repository.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div style={styles.wrapper}>
-      <h2 style={styles.title}>01 GROWTH</h2>
+    <>
+      <style>{`
+        :root {
+          --light-brown: #f5f0e1;
+          --medium-brown: #e6d7c3;
+          --accent-brown: #c8b6a6;
+          --primary-brown: #a67c52;
+          --dark-brown: #7d5a50;
+          --text-brown: #4a352f;
+          --background-brown: #faf7f2;
+          --pale-brown: #f0e6d9;
+        }
 
-      <div style={styles.grid}>
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
 
-        {/* COLUMN 2 - Sections */}
-        <div style={styles.column}>
-          <div style={styles.columnHeader}>Sections</div>
-          {Object.keys(structure).map((section) => (
-            <div
-              key={section}
-              onClick={() => resetFromSection(section)}
-              style={{
-                ...styles.item,
-                background: selectedSection === section ? colors.primaryBrown : "transparent"
-              }}
-            >
-              <span>{section}</span>
-              <ChevronRight
-                size={16}
-                style={{
-                  transform: selectedSection === section ? "rotate(90deg)" : "rotate(0deg)",
-                  transition: "transform 0.2s",
-                  opacity: 0.7
-                }}
-              />
-            </div>
-          ))}
+        * {
+          box-sizing: border-box;
+        }
+      `}</style>
+
+      <div style={{
+        padding: 24,
+        background: 'var(--background-brown)',
+        minHeight: '100vh'
+      }}>
+        <div style={{ marginBottom: 24 }}>
+          <h2 style={{
+            fontSize: 24,
+            color: 'var(--text-brown)',
+            margin: 0,
+            fontWeight: 600
+          }}>
+            01 GROWTH
+          </h2>
+          <p style={{
+            fontSize: 14,
+            color: '#666',
+            margin: '4px 0 0 0'
+          }}>
+            Strategy, funding, and marketing resources
+          </p>
         </div>
 
-        {/* COLUMN 3 - Items (only shown when section is selected) */}
-        {selectedSection && (
-          <div style={styles.column}>
-            <div style={styles.columnHeader}>{selectedSection}</div>
-            {structure[selectedSection].items.map((item) => (
-              <div
-                key={item}
-                onClick={() => setSelectedItem(item)}
-                style={{
-                  ...styles.item,
-                  background: selectedItem === item ? colors.primaryBrown : "transparent"
-                }}
-              >
-                <span>{item}</span>
-                {structure[selectedSection].children?.[item] && (
-                  <ChevronRight
-                    size={14}
-                    style={{
-                      transform: selectedItem === item ? "rotate(90deg)" : "rotate(0deg)",
-                      transition: "transform 0.2s",
-                      opacity: 0.7
-                    }}
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: selectedPath ? '350px 1fr' : '1fr',
+          gap: 20,
+          height: 'calc(100vh - 160px)'
+        }}>
+          {/* File Explorer */}
+          <FileExplorer
+            structure={GROWTH_STRUCTURE}
+            expandedFolders={expandedFolders}
+            selectedPath={selectedPath}
+            onToggleFolder={handleToggleFolder}
+            onSelectItem={handleSelectItem}
+            contentStatus={contentStatus}
+          />
 
-        {/* COLUMN 4 - Children (only shown when item with children is selected) */}
-        {selectedSection &&
-          selectedItem &&
-          structure[selectedSection].children?.[selectedItem] && (
-            <div style={styles.column}>
-              <div style={styles.columnHeader}>{selectedItem}</div>
-              {structure[selectedSection].children[selectedItem].map((child) => (
-                <div key={child} style={styles.subItem}>
-                  {child}
-                </div>
-              ))}
+          {/* Content Editor */}
+          {selectedPath && selectedItem && (
+            <FileUploader
+              path={selectedPath}
+              itemConfig={selectedItem}
+              content={currentContent}
+              onUpload={handleUploadFile}
+              onDelete={handleDeleteFile}
+              onClose={handleCloseEditor}
+              isUploading={isUploading}
+            />
+          )}
+
+          {/* Empty state */}
+          {!selectedPath && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'white',
+              borderRadius: 8,
+              border: '1px solid var(--medium-brown)'
+            }}>
+              <div style={{ textAlign: 'center', padding: 40 }}>
+                <AlertCircle size={48} color="var(--accent-brown)" style={{ marginBottom: 16 }} />
+                <h3 style={{ color: 'var(--text-brown)', marginBottom: 8 }}>No Item Selected</h3>
+                <p style={{ color: '#666', margin: 0 }}>
+                  Select a file or folder from the explorer to begin
+                </p>
+              </div>
             </div>
           )}
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

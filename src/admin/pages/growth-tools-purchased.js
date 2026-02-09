@@ -1227,12 +1227,10 @@ const GrowthToolsAdmin = () => {
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         .growth-tools-container {
           min-height: 100vh;
-          background: ${colors.offWhite};
           padding: 2rem;
-          margin-left: 280px;
           padding-top: 5rem;
         }
 

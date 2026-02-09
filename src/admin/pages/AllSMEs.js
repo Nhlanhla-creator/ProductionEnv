@@ -31,7 +31,7 @@ import {
   Shield,
   LockKeyhole,
 } from "lucide-react"
-import styles from "./all-smes.module.css"
+import styles from "./all-profiles.module.css"
 import { collection, query, where, getDocs, doc, getDoc, deleteDoc } from "firebase/firestore"
 import * as XLSX from 'xlsx';
 import databaseService from "../../services/databaseService"
