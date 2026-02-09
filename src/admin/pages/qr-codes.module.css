@@ -177,20 +177,57 @@
   flex: 1;
 }
 
-.miniLogo {
-  width: 50px;
-  height: 50px;
+/* Card header for displaying both images - stacked with overlap */
+.cardHeader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 0;
+  position: relative;
+}
+
+.miniPicture {
+  width: 70px;
+  height: 70px;
   border-radius: 50%;
-  background: white;
   overflow: hidden;
-  margin-bottom: 12px;
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+  background: white;
+  margin-bottom: -20px;
+}
+
+.miniPicture img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.miniLogo {
+  width: 90px;
+  height: auto;
+  min-height: 45px;
+  max-height: 55px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 25px 10px 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .miniLogo img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .cardContent h3 {
@@ -490,74 +527,83 @@
   gap: 16px;
 }
 
-/* Logo Upload */
-.logoUpload {
+/* Image uploads row for side-by-side layout */
+.imageUploadsRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.imageUpload {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-}
-
-.uploadButton {
-  display: flex;
-  align-items: center;
-  justify-content: center;
   gap: 12px;
-  padding: 16px 24px;
-  background: linear-gradient(135deg, #9e6e3c 0%, #8b5d33 100%);
-  color: white;
-  border: none;
-  border-radius: 12px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(158, 110, 60, 0.2);
 }
 
-.uploadButton:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(158, 110, 60, 0.3);
-}
-
-.logoPreviewContainer {
+.imagePreviewContainer {
   position: relative;
-  width: 150px;
-  height: 150px;
-  border-radius: 50%;
+  width: 120px;
+  height: 120px;
+  border-radius: 8px;
   overflow: hidden;
-  border: 3px solid #9e6e3c;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border: 2px solid #e0e0e0;
+  background: #f5f5f5;
   margin: 0 auto;
 }
 
-.logoPreviewContainer img {
+.imagePreviewContainer img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
+.picturePreview {
+  border-radius: 50% !important;
+}
+
+.uploadButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #f0f0f0;
+  border: 2px dashed #ccc;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 14px;
+  color: #666;
+  width: 100%;
+  justify-content: center;
+}
+
+.uploadButton:hover {
+  background: #e8e8e8;
+  border-color: #999;
+}
+
 .removeButton {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 32px;
-  height: 32px;
+  top: 4px;
+  right: 4px;
+  background: rgba(255, 0, 0, 0.8);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.95);
-  border: none;
-  border-radius: 50%;
-  color: #c0392b;
   cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  padding: 0;
+  transition: background 0.2s;
+  z-index: 10;
 }
 
 .removeButton:hover {
-  background: #c0392b;
-  color: white;
-  transform: scale(1.1);
+  background: rgba(255, 0, 0, 1);
 }
 
 /* Color Pickers */
@@ -668,28 +714,71 @@
   text-align: center;
 }
 
-.previewLogo {
-  width: 100px;
-  height: 100px;
-  border-radius: 50%;
-  background: white;
-  overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+/* Preview header for form preview - stacked with overlap */
+.previewHeader {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  margin-bottom: 20px;
+  gap: 0;
+  position: relative;
 }
 
-.previewLogo img {
+.previewPicture {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 4px solid rgba(255, 255, 255, 0.95);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+  background: white;
+  margin-bottom: -25px;
+}
+
+.previewPicture img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
+.previewLogo {
+  width: 130px;
+  height: auto;
+  min-height: 55px;
+  max-height: 70px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.98);
+  padding: 32px 14px 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.15);
+}
+
+.previewLogo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 .previewInitials {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 36px;
   font-weight: bold;
-  color: #9e6e3c;
+  text-transform: uppercase;
+  flex-shrink: 0;
 }
 
 .previewContent {
@@ -720,6 +809,21 @@
 
 .previewContact small {
   display: block;
+}
+
+/* When only one image is present (no overlap needed) */
+.cardHeader:has(.miniPicture:only-child) .miniPicture,
+.previewHeader:has(.previewPicture:only-child) .previewPicture {
+  margin-bottom: 0;
+}
+
+/* When only logo is present (adjust padding) */
+.cardHeader:has(.miniLogo:only-child) .miniLogo {
+  padding: 8px 10px;
+}
+
+.previewHeader:has(.previewLogo:only-child) .previewLogo {
+  padding: 10px 14px;
 }
 
 /* Form Actions */
@@ -1119,6 +1223,10 @@
     grid-template-columns: 1fr;
   }
 
+  .imageUploadsRow {
+    grid-template-columns: 1fr;
+  }
+
   .cardPreviewLarge {
     flex-direction: column;
     padding: 24px;
@@ -1198,17 +1306,25 @@
     height: 60px;
   }
 
-  .logoPreviewContainer {
-    width: 120px;
-    height: 120px;
+  .imagePreviewContainer {
+    width: 100px;
+    height: 100px;
+  }
+
+  .previewPicture {
+    width: 80px;
+    height: 80px;
+    margin-bottom: -20px;
   }
 
   .previewLogo {
-    width: 80px;
-    height: 80px;
+    width: 110px;
+    padding: 28px 12px 8px 12px;
   }
 
   .previewInitials {
+    width: 70px;
+    height: 70px;
     font-size: 28px;
   }
 
