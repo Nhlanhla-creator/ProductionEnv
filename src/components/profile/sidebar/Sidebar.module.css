@@ -258,12 +258,12 @@
 
 .sidebar.collapsed .menuItem.active .menuIconContainer {
   background: transparent;
-  color: var(--sidebar-active);
+  color: var(--sidebar-text);
 }
 
 .menuItem:hover .menuIconContainer {
   background: rgba(188, 174, 156, 0.15);
-  transform: scale(1.05);
+  transform: scale(1.0);
 }
 
 .sidebar.collapsed .menuItem:hover .menuIconContainer {

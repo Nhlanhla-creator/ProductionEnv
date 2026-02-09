@@ -30,7 +30,7 @@ import {
   Award,
   TrendingUp,
 } from "lucide-react"
-import styles from "./all-interns.module.css"
+import styles from "./all-profiles.module.css"
 import { collection, query, where, getDocs, doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore"
 // import { db, auth } from "../../firebaseConfig"
 import databaseService from "../../services/databaseService"

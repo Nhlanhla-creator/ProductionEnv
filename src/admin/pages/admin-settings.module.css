@@ -44,15 +44,13 @@
 /* Main Container */
 .container {
   min-height: 100vh;
-    margin-left: 250px;
-  background: var(--background-brown);
   color: var(--text-brown);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 /* Header */
 .header {
-    margin-top: 50px;
+  margin-top: 50px;
   display: flex;
   justify-content: space-between;
   align-items: center;

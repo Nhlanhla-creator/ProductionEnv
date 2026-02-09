@@ -34,7 +34,7 @@ import {
   File,
   Shield,
 } from "lucide-react"
-import styles from "./all-advisors.module.css"
+import styles from "./all-profiles.module.css"
 import { collection, query, where, getDocs, doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore"
 import { auth } from "../../firebaseConfig"
 import * as XLSX from 'xlsx';

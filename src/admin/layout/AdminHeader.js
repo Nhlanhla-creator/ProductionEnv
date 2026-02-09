@@ -334,7 +334,7 @@ function AdminHeader({ companyName, profileImage, setProfileImage, isSidebarColl
   }
 
   return (
-    <header className={styles.header} style={isSidebarCollapsed ? {left: "80px"} : {left: "280px"}}>
+    <header className={styles.header} style={isSidebarCollapsed ? {left: "80px", width: "calc(100% - 80px)"} : {left: "280px", width: "calc(100% - 280px)"}}>
       <div className={styles["header-left"]}>
         <div className={styles["header-logo"]}>
           <img src="/MainLogo.png" alt="Company Logo" className={styles["logo-image"]} />

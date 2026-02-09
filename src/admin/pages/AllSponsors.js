@@ -31,7 +31,7 @@ import {
   Globe,
   Briefcase,
 } from "lucide-react"
-import styles from "./all-sponsors.module.css"
+import styles from "./all-profiles.module.css"
 
 function AllSponsors() {
   const navigate = useNavigate()
