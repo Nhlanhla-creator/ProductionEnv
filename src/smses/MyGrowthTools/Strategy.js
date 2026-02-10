@@ -5,9 +5,13 @@ import { Bar, Scatter } from "react-chartjs-2"
 import Sidebar from "smses/Sidebar/Sidebar"
 import Header from "../DashboardHeader/DashboardHeader"
 import { db, auth } from "../../firebaseConfig"
-import { FaChevronDown, FaChevronUp } from "react-icons/fa"
-import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, where } from "firebase/firestore"
+import { FaChevronDown, FaChevronUp, FaRobot, FaSpinner } from "react-icons/fa"
+import { 
+  collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, where, 
+  onSnapshot, setDoc, getDoc 
+} from "firebase/firestore"
 import { onAuthStateChanged } from "firebase/auth"
+import { getFunctions, httpsCallable } from "firebase/functions"
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -37,13 +41,23 @@ ChartJS.register(
 )
 
 // Helper function to get months array based on year
-
+const getMonths = (year) => {
+  const currentYear = new Date().getFullYear()
+  if (year === currentYear) {
+    const currentMonth = new Date().getMonth()
+    return Array.from({ length: currentMonth + 1 }, (_, i) => 
+      new Date(currentYear, i, 1).toLocaleString('default', { month: 'short' })
+    )
+  }
+  return Array.from({ length: 12 }, (_, i) => 
+    new Date(year, i, 1).toLocaleString('default', { month: 'short' })
+  )
+}
 
 // Key Question Component with Show More functionality
 const KeyQuestionBox = ({ question, signals, decisions }) => {
   const [showMore, setShowMore] = useState(false)
   
-  // Get first sentence
   const getFirstSentence = (text) => {
     const match = text.match(/^[^.!?]+[.!?]/)
     return match ? match[0] : text.split('.')[0] + '.'
@@ -52,17 +66,11 @@ const KeyQuestionBox = ({ question, signals, decisions }) => {
   return (
     <div
       style={{
-        backgroundColor: "#fff9c4",
+        backgroundColor: "#DCDCDC",
         padding: "15px 20px",
         borderRadius: "8px",
         marginBottom: "20px",
-        border: "1px solid #f9a825",
-
-        backgroundColor: "	#DCDCDC",
-        padding: "15px 20px",
-        borderRadius: "8px",
-        marginBottom: "20px",
-        border: "1px solid 	#5d4037",
+        border: "1px solid #5d4037",
       }}
     >
       <div style={{ display: "flex", alignItems: "flex-start", marginBottom: "8px" }}>
@@ -119,61 +127,409 @@ const KeyQuestionBox = ({ question, signals, decisions }) => {
   )
 }
 
+
+const RISK_TYPE_DEFINITIONS = {
+  "Financial Risk": "Risks related to funding, cash flow, pricing, revenue, and financial sustainability",
+  "Market Risk": "Risks related to market dynamics, competition, demand shifts, and market positioning",
+  "Operational Risk": "Risks related to processes, systems, resource availability, and operational execution",
+  "Reputational Risk": "Risks related to brand perception, stakeholder trust, and public image",
+  "Compliance Risk": "Risks related to legal requirements, regulations, licenses, and statutory obligations",
+  "Technology Risk": "Risks related to technology infrastructure, cybersecurity, and digital capabilities",
+}
+
 // AI Analysis Component
-const AIAnalysisButton = ({ onAIAnalysis }) => {
+const AIAnalysisButton = ({ 
+  visionMissionData, 
+  userId, 
+  isInvestorView,
+  triggerAnalysis 
+}) => {
   const [showAnalysis, setShowAnalysis] = useState(false)
-  const [analysis, setAnalysis] = useState("")
+  const [aiAnalysis, setAiAnalysis] = useState("")
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [analysisError, setAnalysisError] = useState("")
+  const [savedAnalysis, setSavedAnalysis] = useState("")
+
+  // Load saved analysis on component mount
+  useEffect(() => {
+    if (userId) {
+      loadSavedAnalysis()
+    }
+  }, [userId])
+
+  const loadSavedAnalysis = async () => {
+    try {
+      const aiAnalysisRef = doc(db, "strategicClarityAnalysis", userId)
+      const aiSnapshot = await getDoc(aiAnalysisRef)
+      
+      if (aiSnapshot.exists()) {
+        const data = aiSnapshot.data()
+        if (data.analysis) {
+          setSavedAnalysis(data.analysis)
+          setAiAnalysis(data.analysis)
+        }
+      }
+    } catch (error) {
+      console.error("Error loading saved analysis:", error)
+    }
+  }
+
+  const generateAIAnalysis = async () => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot generate AI analysis.")
+      return
+    }
+
+    if (!visionMissionData || !userId) {
+      setAnalysisError("No data available for analysis.")
+      return
+    }
+
+    setIsGenerating(true)
+    setAnalysisError("")
+    setShowAnalysis(true)
+
+    try {
+      // Prepare data for AI analysis
+      const analysisData = prepareStrategicClarityData(visionMissionData)
+      
+      // Create prompt for AI analysis
+      const prompt = createStrategicClarityPrompt(analysisData)
+
+      // Call Firebase Function for AI analysis
+      const functions = getFunctions()
+      const generateStrategicClarityAnalysis = httpsCallable(functions, "generateStrategicClarityAnalysis")
+      
+      const response = await generateStrategicClarityAnalysis({
+        prompt: prompt,
+        userId: userId,
+        timestamp: new Date().toISOString()
+      })
+
+      const analysis = response?.data?.content || response?.data?.analysis
+      
+      if (!analysis) {
+        throw new Error("No analysis generated")
+      }
+
+      // Save analysis to Firestore
+      const aiAnalysisRef = doc(db, "strategicClarityAnalysis", userId)
+      await setDoc(aiAnalysisRef, {
+        analysis: analysis,
+        timestamp: new Date().toISOString(),
+        dataSnapshot: visionMissionData,
+        userId: userId
+      }, { merge: true })
+
+      setAiAnalysis(analysis)
+      setSavedAnalysis(analysis)
+      
+    } catch (error) {
+      console.error("Error generating AI analysis:", error)
+      setAnalysisError(`Failed to generate analysis: ${error.message}`)
+      setAiAnalysis("AI analysis will be generated based on your data trends, comparing current performance against historical averages and industry benchmarks. This feature provides actionable insights for improving this metric.")
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  const prepareStrategicClarityData = (data) => {
+    return {
+      vision: data.vision || "Not provided",
+      mission: data.mission || "Not provided",
+      values: data.values || [],
+      strategicPriorities: data.strategicPriorities || [],
+      strategicHorizon: data.strategicHorizon || "12",
+      completedPriorities: data.strategicPriorities?.filter(p => p.status === "Done").length || 0,
+      totalPriorities: data.strategicPriorities?.length || 0,
+      valuesCount: data.values?.length || 0,
+      hasVision: !!data.vision,
+      hasMission: !!data.mission,
+      hasValues: data.values?.length > 0,
+      hasPriorities: data.strategicPriorities?.length > 0
+    }
+  }
+
+  const createStrategicClarityPrompt = (data) => {
+    return `Analyze the strategic clarity of a business based on the following data and provide actionable insights:
+
+STRATEGIC CLARITY ASSESSMENT DATA:
+1. Vision Statement: ${data.vision}
+2. Mission Statement: ${data.mission}
+3. Core Values: ${data.valuesCount} values defined - ${data.values.join(", ")}
+4. Strategic Horizon: ${data.strategicHorizon} months
+5. Strategic Priorities: ${data.totalPriorities} total, ${data.completedPriorities} completed
+   ${data.strategicPriorities.map((p, i) => `${i+1}. ${p.description} (Due: ${p.dueDate}, Status: ${p.status})`).join("\n   ")}
+
+ANALYSIS REQUIREMENTS:
+1. ASSESSMENT OVERVIEW:
+   - Evaluate completeness of strategic elements (vision, mission, values, priorities)
+   - Rate strategic clarity on a scale of 1-10 (10 being highest)
+   - Identify strengths and gaps
+
+2. DATA TRENDS ANALYSIS:
+   - Compare against industry benchmarks for strategic planning
+   - Analyze completion rate of strategic priorities
+   - Assess alignment between vision, mission, and actual priorities
+
+3. ACTIONABLE INSIGHTS:
+   - Provide 3-5 specific, actionable recommendations
+   - Suggest improvements for each strategic element
+   - Include timelines and measurable goals
+
+4. RISK ASSESSMENT:
+   - Identify potential strategic risks based on gaps
+   - Suggest mitigation strategies
+
+5. IMPROVEMENT ROADMAP:
+   - Priority areas for immediate attention
+   - Timeline for strategic review and updates
+   - Key performance indicators to track progress
+
+FORMAT REQUIREMENTS:
+- Start with an executive summary
+- Use clear section headers with ###
+- Include specific examples and recommendations
+- End with a strategic clarity score and rating
+
+OUTPUT FORMAT:
+### Executive Summary
+[Brief overview of strategic clarity status]
+
+### Current Assessment
+- Vision: [Analysis of vision statement clarity and effectiveness]
+- Mission: [Analysis of mission statement alignment and focus]
+- Values: [Analysis of core values implementation]
+- Strategic Priorities: [Analysis of priority setting and execution]
+- Strategic Horizon: [Analysis of timeframe appropriateness]
+
+### Strategic Clarity Score: [X]/10
+**Rating:** [Poor/Fair/Good/Excellent]
+
+### Data Trends & Benchmark Comparison
+[Comparison against industry standards and historical trends]
+
+### Actionable Recommendations
+1. [Specific action with timeline]
+2. [Specific action with measurable goal]
+3. [Specific action with concrete steps]
+
+### Risk Assessment & Mitigation
+[Identify risks and provide mitigation strategies]
+
+### Improvement Roadmap
+[Timeline and steps for strategic clarity enhancement]
+
+IMPORTANT: Be specific, actionable, and provide concrete examples based on the data provided.`
+  }
 
   const handleAIAnalysis = () => {
-    setShowAnalysis(!showAnalysis)
-    if (onAIAnalysis) onAIAnalysis(analysis)
+    if (!showAnalysis) {
+      // If we have saved analysis, show it
+      if (savedAnalysis) {
+        setAiAnalysis(savedAnalysis)
+        setShowAnalysis(true)
+      } else {
+        // Otherwise generate new analysis
+        generateAIAnalysis()
+      }
+    } else {
+      setShowAnalysis(!showAnalysis)
+    }
+  }
+
+  const refreshAnalysis = async () => {
+    await generateAIAnalysis()
   }
 
   return (
     <div style={{ marginTop: "20px" }}>
-      <button
-        onClick={handleAIAnalysis}
-        style={{
-          padding: "10px 20px",
-          backgroundColor: "#4a352f",
-          color: "#fdfcfb",
-          border: "none",
-          borderRadius: "6px",
-          cursor: "pointer",
-          fontWeight: "600",
-          fontSize: "14px",
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
-        }}
-      >
-        AI Analysis
-      </button>
+      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "15px" }}>
+        <button
+          onClick={handleAIAnalysis}
+          disabled={isGenerating || isInvestorView}
+          style={{
+            padding: "12px 24px",
+            backgroundColor: isInvestorView ? "#a1887f" : "#4a352f",
+            color: "#fdfcfb",
+            border: "none",
+            borderRadius: "6px",
+            cursor: isInvestorView ? "not-allowed" : "pointer",
+            fontWeight: "600",
+            fontSize: "14px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            transition: "all 0.2s ease",
+            opacity: isGenerating ? 0.7 : 1
+          }}
+        >
+          {isGenerating ? (
+            <>
+              <FaSpinner className="spin" style={{ animation: "spin 1s linear infinite" }} />
+              Generating Analysis...
+            </>
+          ) : (
+            <>
+              <FaRobot />
+              AI Analysis
+            </>
+          )}
+        </button>
+
+        {savedAnalysis && !isGenerating && (
+          <button
+            onClick={refreshAnalysis}
+            disabled={isInvestorView}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#7d5a50",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: isInvestorView ? "not-allowed" : "pointer",
+              fontSize: "12px",
+              fontWeight: "500",
+              display: "flex",
+              alignItems: "center",
+              gap: "5px"
+            }}
+            title="Refresh AI Analysis"
+          >
+            Refresh
+          </button>
+        )}
+      </div>
       
       {showAnalysis && (
         <div
           style={{
-            backgroundColor: "#e3f2fd",
-            padding: "15px",
-            borderRadius: "6px",
-            border: "1px solid #90caf9",
+            backgroundColor: "#f8f4f0",
+            padding: "20px",
+            borderRadius: "8px",
+            border: "1px solid #d7ccc8",
             marginTop: "10px",
+            position: "relative"
           }}
         >
-          <label
-            style={{
-              fontSize: "12px",
-              color: "#1565c0",
-              fontWeight: "600",
-              display: "block",
-              marginBottom: "8px",
-            }}
-          >
-            AI Analysis:
-          </label>
-          <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
-            {analysis || "AI analysis will be generated based on your data trends, comparing current performance against historical averages and industry benchmarks. This feature provides actionable insights for improving this metric."}
-          </p>
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            marginBottom: "15px"
+          }}>
+            <div>
+              <label
+                style={{
+                  fontSize: "16px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "8px",
+                }}
+              >
+                Strategic Clarity AI Analysis
+              </label>
+              <p style={{
+                fontSize: "12px",
+                color: "#8d6e63",
+                margin: "0 0 10px 0",
+                fontStyle: "italic"
+              }}>
+                Analysis generated from your strategic clarity data
+              </p>
+            </div>
+            
+            {savedAnalysis && (
+              <span style={{
+                fontSize: "10px",
+                color: "#8d6e63",
+                backgroundColor: "#efebe9",
+                padding: "4px 8px",
+                borderRadius: "4px",
+                fontWeight: "500"
+              }}>
+                Saved Analysis
+              </span>
+            )}
+          </div>
+
+          {analysisError ? (
+            <div style={{
+              padding: "15px",
+              backgroundColor: "#ffebee",
+              borderRadius: "6px",
+              border: "1px solid #ffcdd2",
+              color: "#c62828",
+              fontSize: "14px"
+            }}>
+              <strong>Error:</strong> {analysisError}
+            </div>
+          ) : isGenerating ? (
+            <div style={{
+              textAlign: "center",
+              padding: "30px",
+              color: "#5d4037"
+            }}>
+              <div style={{
+                width: "40px",
+                height: "40px",
+                border: "3px solid #f3e5f5",
+                borderTop: "3px solid #8d6e63",
+                borderRadius: "50%",
+                animation: "spin 1s linear infinite",
+                margin: "0 auto 15px"
+              }}></div>
+              <p>Analyzing your strategic clarity data...</p>
+              <p style={{ fontSize: "12px", color: "#8d6e63", marginTop: "5px" }}>
+                Comparing against industry benchmarks and best practices
+              </p>
+            </div>
+          ) : (
+            <div
+              style={{
+                backgroundColor: "white",
+                padding: "20px",
+                borderRadius: "6px",
+                border: "1px solid #e8d8cf",
+                maxHeight: "400px",
+                overflowY: "auto",
+                fontSize: "14px",
+                lineHeight: "1.6",
+                color: "#5d4037",
+                whiteSpace: "pre-wrap"
+              }}
+            >
+              {aiAnalysis || "AI analysis will be generated based on your data trends, comparing current performance against historical averages and industry benchmarks. This feature provides actionable insights for improving this metric."}
+            </div>
+          )}
+
+          <div style={{
+            marginTop: "15px",
+            paddingTop: "15px",
+            borderTop: "1px solid #e8d8cf",
+            fontSize: "11px",
+            color: "#8d6e63",
+            fontStyle: "italic",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center"
+          }}>
+            <span>Analysis powered by AI • Updates when data changes</span>
+            <button
+              onClick={() => setShowAnalysis(false)}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#8d6e63",
+                cursor: "pointer",
+                fontSize: "12px",
+                textDecoration: "underline"
+              }}
+            >
+              Hide Analysis
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -194,52 +550,6 @@ const SECTION_DATA = {
       "Strategic Horizon (timeframe selector 12-36 months)",
     ],
   },
-  "operating-model": {
-    name: "Operating Model",
-    keyQuestion: "Is the way the business operates clearly defined and understood? Is the operating model fit for the current size and complexity of the business?",
-    keySignals: "Current operating model explicit, not assumed.",
-    keyDecisions: "Op model visibility, scalability, replicability, execution dependability",
-    kpis: [
-      "Operating model definition",
-      "Operating Model Fit: draw a table similar to heat map with each component of business canvas and we can do an analysis to see if it Strained 🔴 Strained 🟡 Misaligned 🔴",
-    ],
-  },
-  "strategy-operationalisation": {
-    name: "Strategy Operationalisation",
-    keyQuestion: "Is strategy translated into clear goals, milestones, and management focus?",
-    keySignals: "Strategic goals exist, Milestones are defined, Progress is reviewed, Accountability is clear",
-    keyDecisions: "Business execution-ready for growth? Alignment to strategy, likelihood of absorbing funding effectively?",
-    kpis: ["Goal and Milestone table"],
-  },
-  "strategic-risk-control": {
-    name: "Strategic Risk Control",
-    keyQuestion: "Are strategic risks identified, monitored, and mitigated?",
-    keySignals: "Risk register exists, Risks prioritised, Mitigations tracked, Ownership assigned",
-    keyDecisions: "Business governability, existential risk mitigation, risk maturity sufficiency assessment",
-    kpis: [
-      'Risk Management (change to Risk Register), and add "Owner" after Likelihood. Also add "review cadence" after status. Change mitigation status dropdown to 🟢 Controlled 🟡 Partially controlled 🔴 Uncontrolled',
-    ],
-  },
-  "change-adaptability": {
-    name: "Change and adaptability",
-    keyQuestion: "Can the business adapt strategy in response to change without losing control?",
-    keySignals: "Strategy reviews occur, Adjustments are deliberate, Learning is institutionalised",
-    keyDecisions: "Business resilience, change management, growth signals",
-    kpis: [
-      'Strategy review calendar (with place for status "done or not done"',
-      "Adjustments documented",
-      "Pivot history documented",
-    ],
-  },
-}
-
-const RISK_TYPE_DEFINITIONS = {
-  "Financial Risk": "Risks related to funding, cash flow, pricing, revenue, and financial sustainability",
-  "Market Risk": "Risks related to market dynamics, competition, demand shifts, and market positioning",
-  "Operational Risk": "Risks related to processes, systems, resource availability, and operational execution",
-  "Reputational Risk": "Risks related to brand perception, stakeholder trust, and public image",
-  "Compliance Risk": "Risks related to legal requirements, regulations, licenses, and statutory obligations",
-  "Technology Risk": "Risks related to technology infrastructure, cybersecurity, and digital capabilities",
 }
 
 // Strategic Clarity Component with updated UI
@@ -259,11 +569,13 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
     dueDate: "",
     status: "Not Done",
   })
+  const [triggerAnalysis, setTriggerAnalysis] = useState(false)
 
+  // Load data and set up real-time listener
   useEffect(() => {
-    const loadVisionMissionData = async () => {
-      if (!currentUser || activeSection !== "strategic-clarity") return
+    if (!currentUser || activeSection !== "strategic-clarity") return
 
+    const loadVisionMissionData = async () => {
       try {
         const visionMissionSnapshot = await getDocs(
           query(collection(db, "visionMission"), where("userId", "==", currentUser.uid)),
@@ -272,7 +584,9 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
         if (!visionMissionSnapshot.empty) {
           const data = visionMissionSnapshot.docs[0].data()
           setVisionMissionData({
-            ...data,
+            vision: data.vision || "",
+            mission: data.mission || "",
+            values: data.values || [],
             strategicPriorities: data.strategicPriorities || [],
             strategicHorizon: data.strategicHorizon || "12",
           })
@@ -283,7 +597,41 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
     }
 
     loadVisionMissionData()
+
+    // Set up real-time listener for changes
+    const visionMissionQuery = query(
+      collection(db, "visionMission"), 
+      where("userId", "==", currentUser.uid)
+    )
+    
+    const unsubscribe = onSnapshot(visionMissionQuery, (snapshot) => {
+      if (!snapshot.empty) {
+        const data = snapshot.docs[0].data()
+        setVisionMissionData({
+          vision: data.vision || "",
+          mission: data.mission || "",
+          values: data.values || [],
+          strategicPriorities: data.strategicPriorities || [],
+          strategicHorizon: data.strategicHorizon || "12",
+        })
+        
+        // Trigger AI analysis when data changes significantly
+        if (snapshot.docs[0].metadata.hasPendingWrites) {
+          setTriggerAnalysis(true)
+        }
+      }
+    })
+
+    return () => unsubscribe()
   }, [activeSection, currentUser])
+
+  // Reset trigger after analysis
+  useEffect(() => {
+    if (triggerAnalysis) {
+      // Trigger AI analysis update
+      setTriggerAnalysis(false)
+    }
+  }, [triggerAnalysis])
 
   if (activeSection !== "strategic-clarity") return null
 
@@ -578,7 +926,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
             </div>
           </div>
 
-          {/* Strategic Horizon moved to under Core Values */}
+          {/* Strategic Horizon */}
           <div
             style={{
               backgroundColor: "#f7f3f0",
@@ -595,7 +943,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
               onChange={(e) => setVisionMissionData((prev) => ({ ...prev, strategicHorizon: e.target.value }))}
               disabled={isInvestorView}
               style={{
-                width: "150px", // Reduced width
+                width: "150px",
                 padding: "12px",
                 border: "2px solid #e8ddd4",
                 borderRadius: "4px",
@@ -768,7 +1116,12 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
           </div>
 
           {/* AI Analysis Section */}
-          <AIAnalysisButton />
+          <AIAnalysisButton 
+            visionMissionData={visionMissionData}
+            userId={currentUser?.uid}
+            isInvestorView={isInvestorView}
+            triggerAnalysis={triggerAnalysis}
+          />
 
           {!isInvestorView && (
             <div style={{ marginTop: "20px", textAlign: "right" }}>
@@ -985,6 +1338,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
     </div>
   )
 }
+
 
 // Business Model Canvas Component with sub-tabs
 const BusinessModelCanvas = ({ activeSection, currentUser, isInvestorView }) => {
