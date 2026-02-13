@@ -5,12 +5,12 @@ import { Bar, Scatter } from "react-chartjs-2"
 import Sidebar from "smses/Sidebar/Sidebar"
 import Header from "../DashboardHeader/DashboardHeader"
 import { db, auth } from "../../firebaseConfig"
+import { onAuthStateChanged } from "firebase/auth"
 import { FaChevronDown, FaChevronUp, FaRobot, FaSpinner } from "react-icons/fa"
 import { 
   collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, where, 
   onSnapshot, setDoc, getDoc 
 } from "firebase/firestore"
-import { onAuthStateChanged } from "firebase/auth"
 import { getFunctions, httpsCallable } from "firebase/functions"
 import {
   Chart as ChartJS,
@@ -39,6 +39,76 @@ ChartJS.register(
   Tooltip,
   Legend,
 )
+
+
+
+const SECTION_DATA = {
+  "strategic-clarity": {
+    name: "Strategic Clarity",
+    keyQuestion: "Is there a clear, articulated strategy that guides decision-making across the business?",
+    keySignals: "Strategic priorities are explicit, Operating intent is consistent",
+    keyDecisions: "Is the business intentionally steered or founder-driven? Is strategic clarification required before scaling or funding? Can external stakeholders understand the business direction?",
+    kpis: [
+      "Vision",
+      "Mission",
+      "Values",
+      "Strategic Priorities (Max 3-5)",
+      "Strategic Horizon (timeframe selector 12-36 months)",
+    ],
+  },
+  // Add the missing operating-model section
+  "operating-model": {
+    name: "Operating Model",
+    keyQuestion: "Is the operating model aligned with the current business strategy and stage?",
+    keySignals: "Business model canvas is clearly defined, Resources and activities match strategic priorities",
+    keyDecisions: "Does the operating model need to evolve for scaling? Are there gaps between strategy and execution? Is the cost structure sustainable?",
+    kpis: [
+      "Key Partners",
+      "Key Activities",
+      "Key Resources",
+      "Value Propositions",
+      "Customer Relationships",
+      "Channels",
+      "Customer Segments",
+      "Cost Structure",
+      "Revenue Streams",
+    ],
+  },
+  "strategy-operationalisation": {
+    name: "Strategy Operationalisation",
+    keyQuestion: "Is strategy being translated into actionable goals and milestones?",
+    keySignals: "Clear strategic goals exist, Progress is tracked against milestones",
+    keyDecisions: "Are goals being met? Should resources be reallocated? Are timelines realistic?",
+    kpis: [
+      "Goal completion rates",
+      "Milestone achievement",
+      "Progress tracking",
+    ],
+  },
+  "strategic-risk-control": {
+    name: "Strategic Risk Control",
+    keyQuestion: "Are strategic risks identified and actively managed?",
+    keySignals: "Risk register is maintained, Mitigation plans are in place",
+    keyDecisions: "What risks are acceptable? Where to invest in risk mitigation? Is the risk appetite appropriate?",
+    kpis: [
+      "Risk identification",
+      "Risk assessment",
+      "Mitigation status",
+      "Review cadence",
+    ],
+  },
+  "change-adaptability": {
+    name: "Change and Adaptability",
+    keyQuestion: "Does the organization effectively adapt its strategy based on feedback and changing conditions?",
+    keySignals: "Strategy reviews occur regularly, Pivots are documented and reasoned",
+    keyDecisions: "When to pivot vs persist? What adjustments are needed? How to communicate changes?",
+    kpis: [
+      "Review frequency",
+      "Pivot documentation",
+      "Strategy adjustments",
+    ],
+  },
+}
 
 // Helper function to get months array based on year
 const getMonths = (year) => {
@@ -126,7 +196,6 @@ const KeyQuestionBox = ({ question, signals, decisions }) => {
     </div>
   )
 }
-
 
 const RISK_TYPE_DEFINITIONS = {
   "Financial Risk": "Risks related to funding, cash flow, pricing, revenue, and financial sustainability",
@@ -536,21 +605,6 @@ IMPORTANT: Be specific, actionable, and provide concrete examples based on the d
   )
 }
 
-const SECTION_DATA = {
-  "strategic-clarity": {
-    name: "Strategic Clarity",
-    keyQuestion: "Is there a clear, articulated strategy that guides decision-making across the business?",
-    keySignals: "Strategic priorities are explicit, Operating intent is consistent",
-    keyDecisions: "Is the business intentionally steered or founder-driven? Is strategic clarification required before scaling or funding? Can external stakeholders understand the business direction?",
-    kpis: [
-      "Vision",
-      "Mission",
-      "Values",
-      "Strategic Priorities (Max 3-5)",
-      "Strategic Horizon (timeframe selector 12-36 months)",
-    ],
-  },
-}
 
 // Strategic Clarity Component with updated UI
 const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
@@ -1339,7 +1393,6 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
   )
 }
 
-
 // Business Model Canvas Component with sub-tabs
 const BusinessModelCanvas = ({ activeSection, currentUser, isInvestorView }) => {
   const [activeSubTab, setActiveSubTab] = useState("all")
@@ -1358,7 +1411,12 @@ const BusinessModelCanvas = ({ activeSection, currentUser, isInvestorView }) => 
     revenueStreams: "",
   })
 
- 
+  // AI Analysis States
+  const [showAIAnalysis, setShowAIAnalysis] = useState(false)
+  const [aiAnalysis, setAiAnalysis] = useState("")
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [analysisError, setAnalysisError] = useState("")
+  const [savedAnalysis, setSavedAnalysis] = useState("")
 
   useEffect(() => {
     const loadCanvasData = async () => {
@@ -1380,6 +1438,30 @@ const BusinessModelCanvas = ({ activeSection, currentUser, isInvestorView }) => 
 
     loadCanvasData()
   }, [activeSection, currentUser])
+
+  // Load saved AI analysis
+  useEffect(() => {
+    if (currentUser && activeSection === "operating-model") {
+      loadSavedAIAnalysis()
+    }
+  }, [currentUser, activeSection])
+
+  const loadSavedAIAnalysis = async () => {
+    try {
+      const aiAnalysisRef = doc(db, "businessModelCanvasAnalysis", currentUser.uid)
+      const aiSnapshot = await getDoc(aiAnalysisRef)
+      
+      if (aiSnapshot.exists()) {
+        const data = aiSnapshot.data()
+        if (data.analysis) {
+          setSavedAnalysis(data.analysis)
+          setAiAnalysis(data.analysis)
+        }
+      }
+    } catch (error) {
+      console.error("Error loading saved analysis:", error)
+    }
+  }
 
   if (activeSection !== "operating-model") return null
 
@@ -1419,6 +1501,183 @@ const BusinessModelCanvas = ({ activeSection, currentUser, isInvestorView }) => 
     }
   }
 
+  // AI Analysis Functions
+  const prepareBusinessModelData = (data) => {
+    return {
+      keyPartners: data.keyPartners || "Not provided",
+      keyActivities: data.keyActivities || "Not provided",
+      keyResources: data.keyResources || "Not provided",
+      valuePropositions: data.valuePropositions || "Not provided",
+      customerRelationships: data.customerRelationships || "Not provided",
+      channels: data.channels || "Not provided",
+      customerSegments: data.customerSegments || "Not provided",
+      costStructure: data.costStructure || "Not provided",
+      revenueStreams: data.revenueStreams || "Not provided",
+      // Assessment metrics
+      hasValueProposition: !!data.valuePropositions,
+      hasCustomerSegments: !!data.customerSegments,
+      hasRevenueStreams: !!data.revenueStreams,
+      hasCostStructure: !!data.costStructure,
+      hasKeyPartners: !!data.keyPartners,
+      hasKeyActivities: !!data.keyActivities,
+      hasKeyResources: !!data.keyResources,
+      hasChannels: !!data.channels,
+      hasCustomerRelationships: !!data.customerRelationships,
+    }
+  }
+
+  const createBusinessModelPrompt = (data) => {
+    return `Analyze the Business Model Canvas and Operating Model of a business based on the following data:
+
+BUSINESS MODEL CANVAS DATA:
+1. Key Partners: ${data.keyPartners}
+2. Key Activities: ${data.keyActivities}
+3. Key Resources: ${data.keyResources}
+4. Value Propositions: ${data.valuePropositions}
+5. Customer Relationships: ${data.customerRelationships}
+6. Channels: ${data.channels}
+7. Customer Segments: ${data.customerSegments}
+8. Cost Structure: ${data.costStructure}
+9. Revenue Streams: ${data.revenueStreams}
+
+ANALYSIS REQUIREMENTS:
+
+1. OPERATING MODEL ASSESSMENT:
+   - Evaluate completeness of each Business Model Canvas block
+   - Identify strengths and gaps in the current operating model
+   - Rate overall operating model maturity (1-10)
+
+2. COHERENCE ANALYSIS:
+   - How well do the nine building blocks align with each other?
+   - Is there logical flow from value proposition to customer segments to revenue?
+   - Are key activities and resources appropriate for the value proposition?
+
+3. SCALABILITY ASSESSMENT:
+   - Can this operating model scale with business growth?
+   - Identify bottlenecks or constraints
+   - Suggest improvements for scalability
+
+4. RISK IDENTIFICATION:
+   - What are the critical dependencies or vulnerabilities?
+   - Which building blocks are underdeveloped?
+   - What external factors could impact this model?
+
+5. ACTIONABLE RECOMMENDATIONS:
+   - Provide 3-5 specific, actionable improvements
+   - Prioritize recommendations by impact and effort
+   - Include timelines and measurable outcomes
+
+FORMAT REQUIREMENTS:
+- Start with an executive summary
+- Use clear section headers with ###
+- Include specific examples from the data
+- End with an Operating Model Score and Rating
+
+OUTPUT FORMAT:
+### Executive Summary
+[Brief overview of operating model status]
+
+### Business Model Canvas Assessment
+- Key Partners: [Analysis and recommendations]
+- Key Activities: [Analysis and recommendations]
+- Key Resources: [Analysis and recommendations]
+- Value Propositions: [Analysis and recommendations]
+- Customer Relationships: [Analysis and recommendations]
+- Channels: [Analysis and recommendations]
+- Customer Segments: [Analysis and recommendations]
+- Cost Structure: [Analysis and recommendations]
+- Revenue Streams: [Analysis and recommendations]
+
+### Operating Model Coherence Score: [X]/10
+**Rating:** [Poor/Fair/Good/Excellent]
+
+### Scalability Assessment
+[Analysis of scalability potential with recommendations]
+
+### Risk Analysis
+[Key risks and mitigation strategies]
+
+### Top 5 Actionable Recommendations
+1. [Specific action with timeline]
+2. [Specific action with measurable goal]
+3. [Specific action with concrete steps]
+4. [Specific action with owner suggestion]
+5. [Specific action with expected impact]
+
+IMPORTANT: Be specific, actionable, and provide concrete recommendations based on the data provided.`
+  }
+
+  const generateAIAnalysis = async () => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot generate AI analysis.")
+      return
+    }
+
+    if (!canvasData || !currentUser) {
+      setAnalysisError("No data available for analysis.")
+      return
+    }
+
+    setIsGenerating(true)
+    setAnalysisError("")
+    setShowAIAnalysis(true)
+
+    try {
+      const analysisData = prepareBusinessModelData(canvasData)
+      const prompt = createBusinessModelPrompt(analysisData)
+
+      const functions = getFunctions()
+      const generateOperatingModelAnalysis = httpsCallable(functions, "generateOperatingModelAnalysis")
+      
+      const response = await generateOperatingModelAnalysis({
+        prompt: prompt,
+        userId: currentUser.uid,
+        timestamp: new Date().toISOString()
+      })
+
+      const analysis = response?.data?.content || response?.data?.analysis
+      
+      if (!analysis) {
+        throw new Error("No analysis generated")
+      }
+
+      // Save analysis to Firestore
+      const aiAnalysisRef = doc(db, "businessModelCanvasAnalysis", currentUser.uid)
+      await setDoc(aiAnalysisRef, {
+        analysis: analysis,
+        timestamp: new Date().toISOString(),
+        dataSnapshot: canvasData,
+        userId: currentUser.uid
+      }, { merge: true })
+
+      setAiAnalysis(analysis)
+      setSavedAnalysis(analysis)
+      
+    } catch (error) {
+      console.error("Error generating AI analysis:", error)
+      setAnalysisError(`Failed to generate analysis: ${error.message}`)
+      setAiAnalysis("AI analysis will be generated based on your Business Model Canvas data, comparing against best practices and industry benchmarks. This feature provides actionable insights for improving your operating model.")
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  const handleAIAnalysis = () => {
+    if (!showAIAnalysis) {
+      if (savedAnalysis) {
+        setAiAnalysis(savedAnalysis)
+        setShowAIAnalysis(true)
+      } else {
+        generateAIAnalysis()
+      }
+    } else {
+      setShowAIAnalysis(!showAIAnalysis)
+    }
+  }
+
+  const refreshAnalysis = async () => {
+    await generateAIAnalysis()
+  }
 
   return (
     <div
@@ -1454,10 +1713,6 @@ const BusinessModelCanvas = ({ activeSection, currentUser, isInvestorView }) => 
 
       {currentUser && (
         <>
-       
-
-         
-
           {/* Content based on active sub-tab */}
           {activeSubTab === "all" ? (
             <div
@@ -1717,11 +1972,9 @@ const BusinessModelCanvas = ({ activeSection, currentUser, isInvestorView }) => 
                   marginBottom: "20px",
                 }}
               >
-               
                 <textarea
                   value={canvasData[activeSubTab] || ""}
                   onChange={(e) => setCanvasData((prev) => ({ ...prev, [activeSubTab]: e.target.value }))}
-                
                   rows="6"
                   disabled={isInvestorView}
                   style={{
@@ -1738,8 +1991,6 @@ const BusinessModelCanvas = ({ activeSection, currentUser, isInvestorView }) => 
                   }}
                 />
               </div>
-              
-              
             </div>
           )}
 
@@ -1820,7 +2071,195 @@ const BusinessModelCanvas = ({ activeSection, currentUser, isInvestorView }) => 
           )}
 
           {/* AI Analysis Section */}
-          <AIAnalysisButton />
+          <div style={{ marginTop: "30px", marginBottom: "20px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "15px" }}>
+              <button
+                onClick={handleAIAnalysis}
+                disabled={isGenerating || isInvestorView}
+                style={{
+                  padding: "12px 24px",
+                  backgroundColor: isInvestorView ? "#a1887f" : "#4a352f",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: isInvestorView ? "not-allowed" : "pointer",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  transition: "all 0.2s ease",
+                  opacity: isGenerating ? 0.7 : 1
+                }}
+              >
+                {isGenerating ? (
+                  <>
+                    <FaSpinner className="spin" style={{ animation: "spin 1s linear infinite" }} />
+                    Generating Analysis...
+                  </>
+                ) : (
+                  <>
+                    <FaRobot />
+                    AI Operating Model Analysis
+                  </>
+                )}
+              </button>
+
+              {savedAnalysis && !isGenerating && !isInvestorView && (
+                <button
+                  onClick={refreshAnalysis}
+                  style={{
+                    padding: "8px 16px",
+                    backgroundColor: "#7d5a50",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontSize: "12px",
+                    fontWeight: "500",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "5px"
+                  }}
+                  title="Refresh AI Analysis"
+                >
+                  Refresh
+                </button>
+              )}
+            </div>
+            
+            {showAIAnalysis && (
+              <div
+                style={{
+                  backgroundColor: "#f8f4f0",
+                  padding: "20px",
+                  borderRadius: "8px",
+                  border: "1px solid #d7ccc8",
+                  marginTop: "10px",
+                  position: "relative"
+                }}
+              >
+                <div style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                  marginBottom: "15px"
+                }}>
+                  <div>
+                    <label
+                      style={{
+                        fontSize: "16px",
+                        color: "#5d4037",
+                        fontWeight: "600",
+                        display: "block",
+                        marginBottom: "8px",
+                      }}
+                    >
+                      Operating Model AI Analysis
+                    </label>
+                    <p style={{
+                      fontSize: "12px",
+                      color: "#8d6e63",
+                      margin: "0 0 10px 0",
+                      fontStyle: "italic"
+                    }}>
+                      Analysis generated from your Business Model Canvas data
+                    </p>
+                  </div>
+                  
+                  {savedAnalysis && (
+                    <span style={{
+                      fontSize: "10px",
+                      color: "#8d6e63",
+                      backgroundColor: "#efebe9",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      fontWeight: "500"
+                    }}>
+                      Saved Analysis
+                    </span>
+                  )}
+                </div>
+
+                {analysisError ? (
+                  <div style={{
+                    padding: "15px",
+                    backgroundColor: "#ffebee",
+                    borderRadius: "6px",
+                    border: "1px solid #ffcdd2",
+                    color: "#c62828",
+                    fontSize: "14px"
+                  }}>
+                    <strong>Error:</strong> {analysisError}
+                  </div>
+                ) : isGenerating ? (
+                  <div style={{
+                    textAlign: "center",
+                    padding: "30px",
+                    color: "#5d4037"
+                  }}>
+                    <div style={{
+                      width: "40px",
+                      height: "40px",
+                      border: "3px solid #f3e5f5",
+                      borderTop: "3px solid #8d6e63",
+                      borderRadius: "50%",
+                      animation: "spin 1s linear infinite",
+                      margin: "0 auto 15px"
+                    }}></div>
+                    <p>Analyzing your Business Model Canvas...</p>
+                    <p style={{ fontSize: "12px", color: "#8d6e63", marginTop: "5px" }}>
+                      Evaluating coherence, scalability, and alignment
+                    </p>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      backgroundColor: "white",
+                      padding: "20px",
+                      borderRadius: "6px",
+                      border: "1px solid #e8d8cf",
+                      maxHeight: "400px",
+                      overflowY: "auto",
+                      fontSize: "14px",
+                      lineHeight: "1.6",
+                      color: "#5d4037",
+                      whiteSpace: "pre-wrap"
+                    }}
+                  >
+                    {aiAnalysis || "AI analysis will be generated based on your Business Model Canvas data, comparing against best practices and industry benchmarks. This feature provides actionable insights for improving your operating model."}
+                  </div>
+                )}
+
+                <div style={{
+                  marginTop: "15px",
+                  paddingTop: "15px",
+                  borderTop: "1px solid #e8d8cf",
+                  fontSize: "11px",
+                  color: "#8d6e63",
+                  fontStyle: "italic",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center"
+                }}>
+                  <span>Analysis powered by AI • Updates when data changes</span>
+                  <button
+                    onClick={() => setShowAIAnalysis(false)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "#8d6e63",
+                      cursor: "pointer",
+                      fontSize: "12px",
+                      textDecoration: "underline"
+                    }}
+                  >
+                    Hide Analysis
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
           {!isInvestorView && (
             <div style={{ textAlign: "right", marginTop: "20px" }}>
@@ -1852,6 +2291,13 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
   const [activeSubTab, setActiveSubTab] = useState("all")
   const [viewMode, setViewMode] = useState("month")
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  
+  // AI Analysis States
+  const [showAIAnalysis, setShowAIAnalysis] = useState(false)
+  const [aiAnalysis, setAiAnalysis] = useState("")
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [analysisError, setAnalysisError] = useState("")
+  const [savedAnalysis, setSavedAnalysis] = useState("")
   
   const categories = [
     { key: "Growth", name: "Growth", color: "#4A2E1F" },
@@ -1888,6 +2334,30 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
     owner: "",
     percentageCompletion: 0,
   })
+
+  // Load saved AI analysis
+  useEffect(() => {
+    if (currentUser && activeSection === "strategy-operationalisation") {
+      loadSavedAIAnalysis()
+    }
+  }, [currentUser, activeSection])
+
+  const loadSavedAIAnalysis = async () => {
+    try {
+      const aiAnalysisRef = doc(db, "strategyOperationalisationAnalysis", currentUser.uid)
+      const aiSnapshot = await getDoc(aiAnalysisRef)
+      
+      if (aiSnapshot.exists()) {
+        const data = aiSnapshot.data()
+        if (data.analysis) {
+          setSavedAnalysis(data.analysis)
+          setAiAnalysis(data.analysis)
+        }
+      }
+    } catch (error) {
+      console.error("Error loading saved analysis:", error)
+    }
+  }
 
   if (activeSection !== "strategy-operationalisation") return null
 
@@ -2110,6 +2580,236 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
     return monthMatch && yearMatch
   })
 
+  // AI Analysis Functions
+  const prepareStrategicOperationalisationData = (data) => {
+    // Group milestones by goal domain
+    const milestonesByDomain = {}
+    const milestonesByGoal = {}
+    const milestonesByStatus = {}
+    const completionRates = {}
+    
+    data.forEach((milestone) => {
+      // By domain
+      if (!milestonesByDomain[milestone.growthStage]) {
+        milestonesByDomain[milestone.growthStage] = []
+      }
+      milestonesByDomain[milestone.growthStage].push(milestone)
+      
+      // By goal
+      const goalKey = `${milestone.growthStage}-${milestone.goal}`
+      if (!milestonesByGoal[goalKey]) {
+        milestonesByGoal[goalKey] = []
+      }
+      milestonesByGoal[goalKey].push(milestone)
+      
+      // By status
+      if (!milestonesByStatus[milestone.status]) {
+        milestonesByStatus[milestone.status] = 0
+      }
+      milestonesByStatus[milestone.status]++
+      
+      // Completion rates by domain
+      if (!completionRates[milestone.growthStage]) {
+        completionRates[milestone.growthStage] = { total: 0, sum: 0 }
+      }
+      completionRates[milestone.growthStage].total++
+      completionRates[milestone.growthStage].sum += milestone.percentageCompletion || 0
+    })
+    
+    // Calculate average completion by domain
+    const avgCompletionByDomain = {}
+    Object.keys(completionRates).forEach(domain => {
+      avgCompletionByDomain[domain] = Math.round(completionRates[domain].sum / completionRates[domain].total)
+    })
+    
+    return {
+      totalMilestones: data.length,
+      milestonesByDomain,
+      milestonesByGoal,
+      milestonesByStatus,
+      avgCompletionByDomain,
+      domainsWithMilestones: Object.keys(milestonesByDomain),
+      completedMilestones: data.filter(m => m.status === "Done").length,
+      inProgressMilestones: data.filter(m => m.status === "In Progress" || m.status === "On Track").length,
+      atRiskMilestones: data.filter(m => m.status === "At Risk").length,
+      notStartedMilestones: data.filter(m => m.status === "Not Started").length,
+      overallCompletionRate: data.length > 0 
+        ? Math.round(data.reduce((sum, m) => sum + (m.percentageCompletion || 0), 0) / data.length) 
+        : 0,
+    }
+  }
+
+  const createStrategicOperationalisationPrompt = (data) => {
+    return `Analyze the Strategy Operationalisation of a business based on the following milestone tracking data:
+
+STRATEGY OPERATIONALISATION DATA:
+Total Milestones: ${data.totalMilestones}
+Overall Completion Rate: ${data.overallCompletionRate}%
+
+MILESTONES BY STATUS:
+- Completed (Done): ${data.completedMilestones}
+- In Progress/On Track: ${data.inProgressMilestones}
+- At Risk: ${data.atRiskMilestones}
+- Not Started: ${data.notStartedMilestones}
+
+MILESTONES BY GOAL DOMAIN:
+${Object.keys(data.milestonesByDomain).map(domain => {
+  const milestones = data.milestonesByDomain[domain]
+  const avgCompletion = data.avgCompletionByDomain[domain] || 0
+  return `- ${domain}: ${milestones.length} milestones, ${avgCompletion}% avg completion`
+}).join('\n')}
+
+MILESTONE DETAILS BY DOMAIN:
+${Object.keys(data.milestonesByDomain).map(domain => {
+  const milestones = data.milestonesByDomain[domain]
+  return `\n${domain}:
+  ${milestones.map(m => `  • ${m.goal}: ${m.milestoneDescription} - Status: ${m.status}, ${m.percentageCompletion}% complete, Owner: ${m.owner}, Target: ${m.targetDate}`).join('\n')}`
+}).join('')}
+
+ANALYSIS REQUIREMENTS:
+
+1. STRATEGY EXECUTION ASSESSMENT:
+   - Evaluate how well strategy is being translated into actionable milestones
+   - Assess goal alignment across different domains
+   - Identify strengths and gaps in execution
+
+2. PROGRESS ANALYSIS:
+   - Analyze completion rates by domain and goal
+   - Identify patterns in milestone delays or early completions
+   - Assess overall execution velocity
+
+3. RESOURCE & OWNERSHIP ANALYSIS:
+   - Evaluate owner distribution and accountability
+   - Identify potential resource constraints or bottlenecks
+   - Assess team capacity and workload balance
+
+4. RISK IDENTIFICATION:
+   - Identify at-risk milestones and their impact on strategic goals
+   - Highlight domains with low completion rates
+   - Flag potential timeline issues
+
+5. ACTIONABLE RECOMMENDATIONS:
+   - Provide 3-5 specific, actionable improvements
+   - Suggest priority areas for immediate focus
+   - Recommend resource reallocation if needed
+   - Include timelines and measurable outcomes
+
+6. STRATEGIC ALIGNMENT:
+   - Assess coherence between milestones and strategic objectives
+   - Evaluate balance across different goal domains
+   - Suggest strategic reprioritization if needed
+
+FORMAT REQUIREMENTS:
+- Start with an executive summary
+- Use clear section headers with ###
+- Include specific examples from the data
+- End with a Strategy Execution Score and Rating
+
+OUTPUT FORMAT:
+### Executive Summary
+[Brief overview of strategy operationalisation status]
+
+### Strategy Execution Score: [X]/10
+**Rating:** [Poor/Fair/Good/Excellent]
+
+### Progress Analysis by Domain
+[Detailed analysis of each domain's progress]
+
+### Status Distribution Analysis
+[Analysis of milestone status distribution and implications]
+
+### Risk Assessment
+[Key risks and mitigation strategies]
+
+### Resource & Ownership Insights
+[Analysis of team allocation and accountability]
+
+### Top 5 Actionable Recommendations
+1. [Specific action with timeline and owner suggestion]
+2. [Specific action with measurable goal]
+3. [Specific action with concrete steps]
+4. [Specific action for at-risk milestones]
+5. [Specific action for improving execution velocity]
+
+### Strategic Alignment Assessment
+[How well execution aligns with strategic objectives]
+
+IMPORTANT: Be specific, actionable, and provide concrete recommendations based on the actual milestone data provided.`
+  }
+
+  const generateAIAnalysis = async () => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot generate AI analysis.")
+      return
+    }
+
+    if (!milestoneData || milestoneData.length === 0 || !currentUser) {
+      setAnalysisError("No milestone data available for analysis. Please add some milestones first.")
+      return
+    }
+
+    setIsGenerating(true)
+    setAnalysisError("")
+    setShowAIAnalysis(true)
+
+    try {
+      const analysisData = prepareStrategicOperationalisationData(milestoneData)
+      const prompt = createStrategicOperationalisationPrompt(analysisData)
+
+      const functions = getFunctions()
+      const generateStrategyOperationalisationAnalysis = httpsCallable(functions, "generateStrategyOperationalisationAnalysis")
+      
+      const response = await generateStrategyOperationalisationAnalysis({
+        prompt: prompt,
+        userId: currentUser.uid,
+        timestamp: new Date().toISOString()
+      })
+
+      const analysis = response?.data?.content || response?.data?.analysis
+      
+      if (!analysis) {
+        throw new Error("No analysis generated")
+      }
+
+      // Save analysis to Firestore
+      const aiAnalysisRef = doc(db, "strategyOperationalisationAnalysis", currentUser.uid)
+      await setDoc(aiAnalysisRef, {
+        analysis: analysis,
+        timestamp: new Date().toISOString(),
+        dataSnapshot: milestoneData,
+        userId: currentUser.uid,
+        milestoneCount: milestoneData.length
+      }, { merge: true })
+
+      setAiAnalysis(analysis)
+      setSavedAnalysis(analysis)
+      
+    } catch (error) {
+      console.error("Error generating AI analysis:", error)
+      setAnalysisError(`Failed to generate analysis: ${error.message}`)
+      setAiAnalysis("AI analysis will be generated based on your strategic milestones data, tracking progress, identifying risks, and providing actionable insights to improve strategy execution.")
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  const handleAIAnalysis = () => {
+    if (!showAIAnalysis) {
+      if (savedAnalysis) {
+        setAiAnalysis(savedAnalysis)
+        setShowAIAnalysis(true)
+      } else {
+        generateAIAnalysis()
+      }
+    } else {
+      setShowAIAnalysis(!showAIAnalysis)
+    }
+  }
+
+  const refreshAnalysis = async () => {
+    await generateAIAnalysis()
+  }
+
   const handleAddMilestone = () => {
     if (isInvestorView) {
       alert("You are in view-only mode and cannot make changes.")
@@ -2181,6 +2881,7 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
         percentageCompletion: newMilestone.percentageCompletion,
         userId: currentUser.uid,
         createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       }
 
       if (editingMilestone) {
@@ -2208,6 +2909,10 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
         owner: "",
         percentageCompletion: 0,
       })
+      
+      // Clear saved analysis when data changes significantly
+      setSavedAnalysis("")
+      
     } catch (error) {
       console.error("Error saving milestone:", error)
       alert("Error saving milestone. Please try again.")
@@ -2224,15 +2929,14 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
       try {
         await deleteDoc(doc(db, "milestones", milestoneId))
         setMilestoneData((prev) => prev.filter((m) => m.id !== milestoneId))
+        // Clear saved analysis when data changes
+        setSavedAnalysis("")
       } catch (error) {
         console.error("Error deleting milestone:", error)
         alert("Error deleting milestone. Please try again.")
       }
     }
   }
-
-
-
 
   return (
     <div
@@ -2274,12 +2978,6 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
             {tab.label}
           </button>
         ))}
-      </div>
-
-      {/* View Mode Selector */}
-      <div style={{ display: "flex", gap: "10px", marginBottom: "20px", alignItems: "center" }}>
-       
-      
       </div>
 
       {/* Charts based on active sub-tab */}
@@ -2388,7 +3086,6 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
           </optgroup>
         </select>
 
-     
         {!isInvestorView && (
           <button
             onClick={handleAddMilestone}
@@ -2404,7 +3101,7 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
               marginLeft: "auto",
             }}
           >
-            Add Data
+            Add Milestone
           </button>
         )}
       </div>
@@ -2414,7 +3111,7 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
         {filteredMilestones.length === 0 ? (
           <div style={{ textAlign: "center", padding: "40px", color: "#7d5a50" }}>
             {filterBy === "all"
-              ? `No milestones added yet. ${!isInvestorView ? 'Click "Add Data" to get started.' : ""}`
+              ? `No milestones added yet. ${!isInvestorView ? 'Click "Add Milestone" to get started.' : ""}`
               : `No milestones found for the selected filter.`}
           </div>
         ) : (
@@ -2511,7 +3208,201 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
       </div>
 
       {/* AI Analysis Section */}
-      <AIAnalysisButton />
+      <div style={{ marginTop: "30px", marginBottom: "20px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "15px" }}>
+          <button
+            onClick={handleAIAnalysis}
+            disabled={isGenerating || isInvestorView || milestoneData.length === 0}
+            style={{
+              padding: "12px 24px",
+              backgroundColor: isInvestorView || milestoneData.length === 0 ? "#a1887f" : "#4a352f",
+              color: "#fdfcfb",
+              border: "none",
+              borderRadius: "6px",
+              cursor: isInvestorView || milestoneData.length === 0 ? "not-allowed" : "pointer",
+              fontWeight: "600",
+              fontSize: "14px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              transition: "all 0.2s ease",
+              opacity: isGenerating ? 0.7 : 1
+            }}
+          >
+            {isGenerating ? (
+              <>
+                <FaSpinner className="spin" style={{ animation: "spin 1s linear infinite" }} />
+                Generating Analysis...
+              </>
+            ) : (
+              <>
+                <FaRobot />
+                AI Strategy Execution Analysis
+              </>
+            )}
+          </button>
+
+          {savedAnalysis && !isGenerating && !isInvestorView && milestoneData.length > 0 && (
+            <button
+              onClick={refreshAnalysis}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#7d5a50",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontSize: "12px",
+                fontWeight: "500",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px"
+              }}
+              title="Refresh AI Analysis"
+            >
+              Refresh
+            </button>
+          )}
+        </div>
+        
+        {milestoneData.length === 0 && (
+          <p style={{ color: "#8d6e63", fontSize: "13px", fontStyle: "italic", marginLeft: "10px" }}>
+            Add milestones to generate AI analysis of your strategy execution.
+          </p>
+        )}
+        
+        {showAIAnalysis && (
+          <div
+            style={{
+              backgroundColor: "#f8f4f0",
+              padding: "20px",
+              borderRadius: "8px",
+              border: "1px solid #d7ccc8",
+              marginTop: "10px",
+              position: "relative"
+            }}
+          >
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              marginBottom: "15px"
+            }}>
+              <div>
+                <label
+                  style={{
+                    fontSize: "16px",
+                    color: "#5d4037",
+                    fontWeight: "600",
+                    display: "block",
+                    marginBottom: "8px",
+                  }}
+                >
+                  Strategy Execution AI Analysis
+                </label>
+                <p style={{
+                  fontSize: "12px",
+                  color: "#8d6e63",
+                  margin: "0 0 10px 0",
+                  fontStyle: "italic"
+                }}>
+                  Analysis generated from {milestoneData.length} strategic milestones
+                </p>
+              </div>
+              
+              {savedAnalysis && (
+                <span style={{
+                  fontSize: "10px",
+                  color: "#8d6e63",
+                  backgroundColor: "#efebe9",
+                  padding: "4px 8px",
+                  borderRadius: "4px",
+                  fontWeight: "500"
+                }}>
+                  Saved Analysis
+                </span>
+              )}
+            </div>
+
+            {analysisError ? (
+              <div style={{
+                padding: "15px",
+                backgroundColor: "#ffebee",
+                borderRadius: "6px",
+                border: "1px solid #ffcdd2",
+                color: "#c62828",
+                fontSize: "14px"
+              }}>
+                <strong>Error:</strong> {analysisError}
+              </div>
+            ) : isGenerating ? (
+              <div style={{
+                textAlign: "center",
+                padding: "30px",
+                color: "#5d4037"
+              }}>
+                <div style={{
+                  width: "40px",
+                  height: "40px",
+                  border: "3px solid #f3e5f5",
+                  borderTop: "3px solid #8d6e63",
+                  borderRadius: "50%",
+                  animation: "spin 1s linear infinite",
+                  margin: "0 auto 15px"
+                }}></div>
+                <p>Analyzing your strategic milestones...</p>
+                <p style={{ fontSize: "12px", color: "#8d6e63", marginTop: "5px" }}>
+                  Evaluating progress, identifying risks, and generating recommendations
+                </p>
+              </div>
+            ) : (
+              <div
+                style={{
+                  backgroundColor: "white",
+                  padding: "20px",
+                  borderRadius: "6px",
+                  border: "1px solid #e8d8cf",
+                  maxHeight: "400px",
+                  overflowY: "auto",
+                  fontSize: "14px",
+                  lineHeight: "1.6",
+                  color: "#5d4037",
+                  whiteSpace: "pre-wrap"
+                }}
+              >
+                {aiAnalysis || "AI analysis will be generated based on your strategic milestones data, tracking progress, identifying risks, and providing actionable insights to improve strategy execution."}
+              </div>
+            )}
+
+            <div style={{
+              marginTop: "15px",
+              paddingTop: "15px",
+              borderTop: "1px solid #e8d8cf",
+              fontSize: "11px",
+              color: "#8d6e63",
+              fontStyle: "italic",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center"
+            }}>
+              <span>Analysis powered by AI • Updates when milestone data changes</span>
+              <button
+                onClick={() => setShowAIAnalysis(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#8d6e63",
+                  cursor: "pointer",
+                  fontSize: "12px",
+                  textDecoration: "underline"
+                }}
+              >
+                Hide Analysis
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Milestone Modal */}
       {showMilestoneModal && !isInvestorView && (
@@ -2830,6 +3721,13 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
   const [hoveredRiskType, setHoveredRiskType] = useState(null)
   const [selectedMonth, setSelectedMonth] = useState("")
   const [selectedYear, setSelectedYear] = useState("")
+  
+  // AI Analysis States
+  const [showAIAnalysis, setShowAIAnalysis] = useState(false)
+  const [aiAnalysis, setAiAnalysis] = useState("")
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [analysisError, setAnalysisError] = useState("")
+  const [savedAnalysis, setSavedAnalysis] = useState("")
 
   const riskCategories = [
     { id: "business-risk", name: "Business Risk (All)", color: "#7d5a50" },
@@ -2874,6 +3772,30 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     loadRiskData()
   }, [activeSection, currentUser])
 
+  // Load saved AI analysis
+  useEffect(() => {
+    if (currentUser && activeSection === "strategic-risk-control") {
+      loadSavedAIAnalysis()
+    }
+  }, [currentUser, activeSection])
+
+  const loadSavedAIAnalysis = async () => {
+    try {
+      const aiAnalysisRef = doc(db, "strategicRiskControlAnalysis", currentUser.uid)
+      const aiSnapshot = await getDoc(aiAnalysisRef)
+      
+      if (aiSnapshot.exists()) {
+        const data = aiSnapshot.data()
+        if (data.analysis) {
+          setSavedAnalysis(data.analysis)
+          setAiAnalysis(data.analysis)
+        }
+      }
+    } catch (error) {
+      console.error("Error loading saved analysis:", error)
+    }
+  }
+
   if (activeSection !== "strategic-risk-control") return null
 
   const addRiskItem = async (category) => {
@@ -2909,6 +3831,8 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
         ...prev,
         [category]: [...prev[category], { id: docRef.id, ...newRisk }],
       }))
+      // Clear saved analysis when data changes
+      setSavedAnalysis("")
     } catch (error) {
       console.error("Error adding risk:", error)
       alert("Error adding risk. Please try again.")
@@ -2947,6 +3871,8 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
           ...prev,
           [category]: prev[category].filter((item) => item.id !== id),
         }))
+        // Clear saved analysis when data changes
+        setSavedAnalysis("")
       } catch (error) {
         console.error("Error deleting risk:", error)
         alert("Error deleting risk. Please try again.")
@@ -2965,6 +3891,8 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
             x: item.likelihood,
             y: item.severity,
             label: item.risk || "Unnamed Risk",
+            riskLevel: item.likelihood * item.severity,
+            status: item.mitigationStatus,
           })),
           backgroundColor: color,
           borderColor: "#5d4037",
@@ -2987,6 +3915,10 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
         callbacks: {
           label: (context) => {
             return context.raw.label || "Risk"
+          },
+          afterLabel: (context) => {
+            const riskLevel = context.raw.x * context.raw.y
+            return `Risk Score: ${riskLevel} (${context.raw.x} × ${context.raw.y})`
           },
         },
       },
@@ -3049,6 +3981,279 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     })
   }
 
+  // AI Analysis Functions
+  const prepareRiskData = (data) => {
+    const allRisks = Object.values(data).flat()
+    
+    // Calculate risk scores
+    const riskScores = allRisks.map(risk => ({
+      ...risk,
+      riskScore: (risk.severity || 1) * (risk.likelihood || 1)
+    }))
+    
+    // Group by category
+    const risksByCategory = {}
+    const risksByStatus = {}
+    const risksByOwner = {}
+    const risksByReviewCadence = {}
+    const highRisks = []
+    const mediumRisks = []
+    const lowRisks = []
+    
+    riskScores.forEach(risk => {
+      const category = risk.riskCategory || "Uncategorized"
+      if (!risksByCategory[category]) risksByCategory[category] = []
+      risksByCategory[category].push(risk)
+      
+      // By status
+      const status = risk.mitigationStatus || "Uncontrolled"
+      if (!risksByStatus[status]) risksByStatus[status] = 0
+      risksByStatus[status]++
+      
+      // By owner
+      if (risk.owner) {
+        if (!risksByOwner[risk.owner]) risksByOwner[risk.owner] = 0
+        risksByOwner[risk.owner]++
+      }
+      
+      // By review cadence
+      if (risk.reviewCadence) {
+        if (!risksByReviewCadence[risk.reviewCadence]) risksByReviewCadence[risk.reviewCadence] = 0
+        risksByReviewCadence[risk.reviewCadence]++
+      }
+      
+      // Risk levels
+      if (risk.riskScore >= 16) highRisks.push(risk)
+      else if (risk.riskScore >= 9) mediumRisks.push(risk)
+      else lowRisks.push(risk)
+    })
+    
+    // Calculate average scores by category
+    const avgScoresByCategory = {}
+    Object.keys(risksByCategory).forEach(category => {
+      const risks = risksByCategory[category]
+      const avgSeverity = risks.reduce((sum, r) => sum + (r.severity || 1), 0) / risks.length
+      const avgLikelihood = risks.reduce((sum, r) => sum + (r.likelihood || 1), 0) / risks.length
+      const avgRiskScore = risks.reduce((sum, r) => sum + (r.riskScore || 1), 0) / risks.length
+      
+      avgScoresByCategory[category] = {
+        avgSeverity: Math.round(avgSeverity * 10) / 10,
+        avgLikelihood: Math.round(avgLikelihood * 10) / 10,
+        avgRiskScore: Math.round(avgRiskScore * 10) / 10,
+        count: risks.length,
+        controlledRisks: risks.filter(r => r.mitigationStatus === "🟢 Controlled").length,
+        uncontrolledRisks: risks.filter(r => r.mitigationStatus === "🔴 Uncontrolled").length
+      }
+    })
+    
+    return {
+      totalRisks: allRisks.length,
+      risksByCategory,
+      risksByStatus,
+      risksByOwner,
+      risksByReviewCadence,
+      avgScoresByCategory,
+      highRisks: highRisks.length,
+      mediumRisks: mediumRisks.length,
+      lowRisks: lowRisks.length,
+      highRiskItems: highRisks.slice(0, 5), // Top 5 high risks
+      controlledRisks: allRisks.filter(r => r.mitigationStatus === "🟢 Controlled").length,
+      partiallyControlledRisks: allRisks.filter(r => r.mitigationStatus === "🟡 Partially controlled").length,
+      uncontrolledRisks: allRisks.filter(r => r.mitigationStatus === "🔴 Uncontrolled").length,
+      risksWithOwners: allRisks.filter(r => r.owner).length,
+      risksWithReviewCadence: allRisks.filter(r => r.reviewCadence).length,
+      risksWithMitigation: allRisks.filter(r => r.mitigation).length,
+    }
+  }
+
+  const createRiskPrompt = (data) => {
+    return `Analyze the Strategic Risk Control and Risk Register of a business based on the following risk assessment data:
+
+RISK REGISTER DATA:
+Total Risks Identified: ${data.totalRisks}
+
+RISK LEVEL DISTRIBUTION:
+- High Risk (Score 16-25): ${data.highRisks}
+- Medium Risk (Score 9-15): ${data.mediumRisks}
+- Low Risk (Score 1-8): ${data.lowRisks}
+
+MITIGATION STATUS:
+- 🟢 Controlled: ${data.controlledRisks}
+- 🟡 Partially controlled: ${data.partiallyControlledRisks}
+- 🔴 Uncontrolled: ${data.uncontrolledRisks}
+
+GOVERNANCE METRICS:
+- Risks with assigned owners: ${data.risksWithOwners} (${Math.round(data.risksWithOwners / data.totalRisks * 100)}%)
+- Risks with review cadence: ${data.risksWithReviewCadence} (${Math.round(data.risksWithReviewCadence / data.totalRisks * 100)}%)
+- Risks with mitigation plans: ${data.risksWithMitigation} (${Math.round(data.risksWithMitigation / data.totalRisks * 100)}%)
+
+RISK CATEGORY BREAKDOWN:
+${Object.keys(data.avgScoresByCategory).map(category => {
+  const cat = data.avgScoresByCategory[category]
+  return `- ${category}: ${cat.count} risks, Avg Risk Score: ${cat.avgRiskScore}, Controlled: ${cat.controlledRisks}/${cat.count}`
+}).join('\n')}
+
+TOP 5 HIGHEST RISK ITEMS:
+${data.highRiskItems.map((risk, i) => 
+  `  ${i+1}. ${risk.risk || 'Unnamed Risk'} - Score: ${risk.riskScore} (Severity: ${risk.severity}, Likelihood: ${risk.likelihood}), Status: ${risk.mitigationStatus}, Owner: ${risk.owner || 'Unassigned'}`
+).join('\n')}
+
+RISK STATUS DISTRIBUTION:
+${Object.keys(data.risksByStatus).map(status => 
+  `- ${status}: ${data.risksByStatus[status]}`
+).join('\n')}
+
+ANALYSIS REQUIREMENTS:
+
+1. RISK PROFILE ASSESSMENT:
+   - Evaluate the overall risk exposure and maturity of risk management
+   - Identify the most critical risk categories and their trends
+   - Rate overall risk management effectiveness (1-10)
+
+2. MITIGATION EFFECTIVENESS:
+   - Analyze the current state of risk controls
+   - Identify gaps in mitigation strategies
+   - Assess the balance between controlled vs uncontrolled risks
+
+3. GOVERNANCE & ACCOUNTABILITY:
+   - Evaluate risk ownership assignment and coverage
+   - Assess review cadence adequacy
+   - Identify governance gaps
+
+4. CRITICAL RISK ANALYSIS:
+   - Deep dive into top 5 highest risk items
+   - Recommend immediate actions for high-risk items
+   - Prioritize risks requiring urgent attention
+
+5. ACTIONABLE RECOMMENDATIONS:
+   - Provide 3-5 specific, actionable improvements for risk management
+   - Suggest mitigation strategies for uncontrolled risks
+   - Recommend risk treatment plans with timelines
+   - Identify opportunities for risk reduction
+
+6. STRATEGIC IMPLICATIONS:
+   - How identified risks impact strategic objectives
+   - Risk appetite alignment assessment
+   - Recommendations for risk-aware decision making
+
+FORMAT REQUIREMENTS:
+- Start with an executive summary
+- Use clear section headers with ###
+- Include specific examples from the data
+- End with a Risk Management Maturity Score and Rating
+
+OUTPUT FORMAT:
+### Executive Summary
+[Brief overview of strategic risk control status]
+
+### Risk Management Maturity Score: [X]/10
+**Rating:** [Initial/Repeatable/Defined/Managed/Optimizing]
+
+### Risk Profile Analysis
+[Analysis of overall risk exposure and distribution]
+
+### Category Risk Assessment
+[Detailed analysis of each risk category with scores]
+
+### Critical Risk Watchlist
+[Top 5 risks requiring immediate attention with recommended actions]
+
+### Mitigation Effectiveness
+[Analysis of control effectiveness and gaps]
+
+### Governance Assessment
+[Evaluation of risk ownership, review cadence, and accountability]
+
+### Top 5 Actionable Recommendations
+1. [Specific action with timeline and owner suggestion]
+2. [Specific action with measurable outcome]
+3. [Specific action for high-risk items]
+4. [Specific action for governance improvement]
+5. [Specific action for risk culture/monitoring]
+
+### Strategic Risk Outlook
+[How risk posture affects strategic objectives and recommendations]
+
+IMPORTANT: Be specific, actionable, and provide concrete recommendations based on the actual risk register data provided.`
+  }
+
+  const generateAIAnalysis = async () => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot generate AI analysis.")
+      return
+    }
+
+    const allRisks = Object.values(riskData).flat()
+    if (allRisks.length === 0 || !currentUser) {
+      setAnalysisError("No risk data available for analysis. Please add some risk items first.")
+      return
+    }
+
+    setIsGenerating(true)
+    setAnalysisError("")
+    setShowAIAnalysis(true)
+
+    try {
+      const analysisData = prepareRiskData(riskData)
+      const prompt = createRiskPrompt(analysisData)
+
+      const functions = getFunctions()
+      const generateStrategicRiskAnalysis = httpsCallable(functions, "generateStrategicRiskAnalysis")
+      
+      const response = await generateStrategicRiskAnalysis({
+        prompt: prompt,
+        userId: currentUser.uid,
+        timestamp: new Date().toISOString()
+      })
+
+      const analysis = response?.data?.content || response?.data?.analysis
+      
+      if (!analysis) {
+        throw new Error("No analysis generated")
+      }
+
+      // Save analysis to Firestore
+      const aiAnalysisRef = doc(db, "strategicRiskControlAnalysis", currentUser.uid)
+      await setDoc(aiAnalysisRef, {
+        analysis: analysis,
+        timestamp: new Date().toISOString(),
+        dataSnapshot: {
+          totalRisks: allRisks.length,
+          riskCategories: Object.keys(riskData).filter(cat => riskData[cat].length > 0),
+          riskCount: allRisks.length
+        },
+        userId: currentUser.uid,
+        riskCount: allRisks.length
+      }, { merge: true })
+
+      setAiAnalysis(analysis)
+      setSavedAnalysis(analysis)
+      
+    } catch (error) {
+      console.error("Error generating AI analysis:", error)
+      setAnalysisError(`Failed to generate analysis: ${error.message}`)
+      setAiAnalysis("AI analysis will be generated based on your risk register data, identifying critical risks, evaluating mitigation effectiveness, and providing actionable recommendations to strengthen strategic risk control.")
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  const handleAIAnalysis = () => {
+    if (!showAIAnalysis) {
+      if (savedAnalysis) {
+        setAiAnalysis(savedAnalysis)
+        setShowAIAnalysis(true)
+      } else {
+        generateAIAnalysis()
+      }
+    } else {
+      setShowAIAnalysis(!showAIAnalysis)
+    }
+  }
+
+  const refreshAnalysis = async () => {
+    await generateAIAnalysis()
+  }
 
   const currentYear = new Date().getFullYear()
   const years = Array.from({ length: 5 }, (_, i) => currentYear + i)
@@ -3071,8 +4276,6 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
       />
 
       <h3 style={{ color: "#4a352f", marginBottom: "20px" }}>Risk Register</h3>
-
-    
 
       {/* Risk Category Tabs with hover tooltips */}
       <div
@@ -3481,8 +4684,8 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
                               <td style={{ padding: "12px", display: "flex", gap: "5px" }}>
                                 <button
                                   onClick={() => {
-                                    const itemToEdit = riskData[originalCategory].find(r => r.id === item.id)
-                                    // Add edit functionality here
+                                    // Edit functionality - could open a modal similar to milestones
+                                    // For now, fields are directly editable in the table
                                   }}
                                   style={{
                                     padding: "6px",
@@ -3527,7 +4730,201 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
       })}
 
       {/* AI Analysis Section */}
-      <AIAnalysisButton />
+      <div style={{ marginTop: "30px", marginBottom: "20px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "15px" }}>
+          <button
+            onClick={handleAIAnalysis}
+            disabled={isGenerating || isInvestorView || Object.values(riskData).flat().length === 0}
+            style={{
+              padding: "12px 24px",
+              backgroundColor: isInvestorView || Object.values(riskData).flat().length === 0 ? "#a1887f" : "#4a352f",
+              color: "#fdfcfb",
+              border: "none",
+              borderRadius: "6px",
+              cursor: isInvestorView || Object.values(riskData).flat().length === 0 ? "not-allowed" : "pointer",
+              fontWeight: "600",
+              fontSize: "14px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              transition: "all 0.2s ease",
+              opacity: isGenerating ? 0.7 : 1
+            }}
+          >
+            {isGenerating ? (
+              <>
+                <FaSpinner className="spin" style={{ animation: "spin 1s linear infinite" }} />
+                Generating Risk Analysis...
+              </>
+            ) : (
+              <>
+                <FaRobot />
+                AI Strategic Risk Analysis
+              </>
+            )}
+          </button>
+
+          {savedAnalysis && !isGenerating && !isInvestorView && Object.values(riskData).flat().length > 0 && (
+            <button
+              onClick={refreshAnalysis}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#7d5a50",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontSize: "12px",
+                fontWeight: "500",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px"
+              }}
+              title="Refresh AI Analysis"
+            >
+              Refresh
+            </button>
+          )}
+        </div>
+        
+        {Object.values(riskData).flat().length === 0 && (
+          <p style={{ color: "#8d6e63", fontSize: "13px", fontStyle: "italic", marginLeft: "10px" }}>
+            Add risk items to generate AI analysis of your strategic risk posture.
+          </p>
+        )}
+        
+        {showAIAnalysis && (
+          <div
+            style={{
+              backgroundColor: "#f8f4f0",
+              padding: "20px",
+              borderRadius: "8px",
+              border: "1px solid #d7ccc8",
+              marginTop: "10px",
+              position: "relative"
+            }}
+          >
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              marginBottom: "15px"
+            }}>
+              <div>
+                <label
+                  style={{
+                    fontSize: "16px",
+                    color: "#5d4037",
+                    fontWeight: "600",
+                    display: "block",
+                    marginBottom: "8px",
+                  }}
+                >
+                  Strategic Risk Control AI Analysis
+                </label>
+                <p style={{
+                  fontSize: "12px",
+                  color: "#8d6e63",
+                  margin: "0 0 10px 0",
+                  fontStyle: "italic"
+                }}>
+                  Analysis generated from {Object.values(riskData).flat().length} risk items in your register
+                </p>
+              </div>
+              
+              {savedAnalysis && (
+                <span style={{
+                  fontSize: "10px",
+                  color: "#8d6e63",
+                  backgroundColor: "#efebe9",
+                  padding: "4px 8px",
+                  borderRadius: "4px",
+                  fontWeight: "500"
+                }}>
+                  Saved Analysis
+                </span>
+              )}
+            </div>
+
+            {analysisError ? (
+              <div style={{
+                padding: "15px",
+                backgroundColor: "#ffebee",
+                borderRadius: "6px",
+                border: "1px solid #ffcdd2",
+                color: "#c62828",
+                fontSize: "14px"
+              }}>
+                <strong>Error:</strong> {analysisError}
+              </div>
+            ) : isGenerating ? (
+              <div style={{
+                textAlign: "center",
+                padding: "30px",
+                color: "#5d4037"
+              }}>
+                <div style={{
+                  width: "40px",
+                  height: "40px",
+                  border: "3px solid #f3e5f5",
+                  borderTop: "3px solid #8d6e63",
+                  borderRadius: "50%",
+                  animation: "spin 1s linear infinite",
+                  margin: "0 auto 15px"
+                }}></div>
+                <p>Analyzing your risk register...</p>
+                <p style={{ fontSize: "12px", color: "#8d6e63", marginTop: "5px" }}>
+                  Evaluating risk scores, mitigation effectiveness, and governance maturity
+                </p>
+              </div>
+            ) : (
+              <div
+                style={{
+                  backgroundColor: "white",
+                  padding: "20px",
+                  borderRadius: "6px",
+                  border: "1px solid #e8d8cf",
+                  maxHeight: "400px",
+                  overflowY: "auto",
+                  fontSize: "14px",
+                  lineHeight: "1.6",
+                  color: "#5d4037",
+                  whiteSpace: "pre-wrap"
+                }}
+              >
+                {aiAnalysis || "AI analysis will be generated based on your risk register data, identifying critical risks, evaluating mitigation effectiveness, and providing actionable recommendations to strengthen strategic risk control."}
+              </div>
+            )}
+
+            <div style={{
+              marginTop: "15px",
+              paddingTop: "15px",
+              borderTop: "1px solid #e8d8cf",
+              fontSize: "11px",
+              color: "#8d6e63",
+              fontStyle: "italic",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center"
+            }}>
+              <span>Analysis powered by AI • Updates when risk data changes</span>
+              <button
+                onClick={() => setShowAIAnalysis(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#8d6e63",
+                  cursor: "pointer",
+                  fontSize: "12px",
+                  textDecoration: "underline"
+                }}
+              >
+                Hide Analysis
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -3557,6 +4954,13 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
   })
   const [selectedMonth, setSelectedMonth] = useState("")
   const [selectedYear, setSelectedYear] = useState("")
+  
+  // AI Analysis States
+  const [showAIAnalysis, setShowAIAnalysis] = useState(false)
+  const [aiAnalysis, setAiAnalysis] = useState("")
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [analysisError, setAnalysisError] = useState("")
+  const [savedAnalysis, setSavedAnalysis] = useState("")
 
   useEffect(() => {
     const loadChangeData = async () => {
@@ -3583,6 +4987,30 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
     loadChangeData()
   }, [activeSection, currentUser])
 
+  // Load saved AI analysis
+  useEffect(() => {
+    if (currentUser && activeSection === "change-adaptability") {
+      loadSavedAIAnalysis()
+    }
+  }, [currentUser, activeSection])
+
+  const loadSavedAIAnalysis = async () => {
+    try {
+      const aiAnalysisRef = doc(db, "changeAdaptabilityAnalysis", currentUser.uid)
+      const aiSnapshot = await getDoc(aiAnalysisRef)
+      
+      if (aiSnapshot.exists()) {
+        const data = aiSnapshot.data()
+        if (data.analysis) {
+          setSavedAnalysis(data.analysis)
+          setAiAnalysis(data.analysis)
+        }
+      }
+    } catch (error) {
+      console.error("Error loading saved analysis:", error)
+    }
+  }
+
   if (activeSection !== "change-adaptability") return null
 
   const handleAddReview = async () => {
@@ -3606,6 +5034,8 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
       setReviewData((prev) => [...prev, { id: docRef.id, ...reviewWithUser }])
       setShowReviewModal(false)
       setNewReview({ date: "", topic: "", status: "Not Done", notes: "" })
+      // Clear saved analysis when data changes
+      setSavedAnalysis("")
     } catch (error) {
       console.error("Error adding review:", error)
       alert("Error adding review. Please try again.")
@@ -3618,6 +5048,8 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
       try {
         await deleteDoc(doc(db, "strategyReviews", id))
         setReviewData((prev) => prev.filter((r) => r.id !== id))
+        // Clear saved analysis when data changes
+        setSavedAnalysis("")
       } catch (error) {
         console.error("Error deleting review:", error)
       }
@@ -3654,6 +5086,8 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
         document: null,
         documentName: ""
       })
+      // Clear saved analysis when data changes
+      setSavedAnalysis("")
     } catch (error) {
       console.error("Error adding adjustment:", error)
       alert("Error adding adjustment. Please try again.")
@@ -3666,6 +5100,8 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
       try {
         await deleteDoc(doc(db, "adjustments", id))
         setAdjustments((prev) => prev.filter((a) => a.id !== id))
+        // Clear saved analysis when data changes
+        setSavedAnalysis("")
       } catch (error) {
         console.error("Error deleting adjustment:", error)
       }
@@ -3704,6 +5140,8 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
         document: null,
         documentName: ""
       })
+      // Clear saved analysis when data changes
+      setSavedAnalysis("")
     } catch (error) {
       console.error("Error adding pivot:", error)
       alert("Error adding pivot. Please try again.")
@@ -3716,6 +5154,8 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
       try {
         await deleteDoc(doc(db, "pivots", id))
         setPivots((prev) => prev.filter((p) => p.id !== id))
+        // Clear saved analysis when data changes
+        setSavedAnalysis("")
       } catch (error) {
         console.error("Error deleting pivot:", error)
       }
@@ -3741,6 +5181,349 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
     }
   }
 
+  // AI Analysis Functions
+  const prepareChangeAdaptabilityData = () => {
+    // Calculate review metrics
+    const totalReviews = reviewData.length
+    const completedReviews = reviewData.filter(r => r.status === "Done").length
+    const pendingReviews = reviewData.filter(r => r.status === "Not Done").length
+    const reviewCompletionRate = totalReviews > 0 ? Math.round((completedReviews / totalReviews) * 100) : 0
+    
+    // Group reviews by month/year
+    const reviewsByTimeframe = {}
+    reviewData.forEach(review => {
+      if (review.date) {
+        const date = new Date(review.date)
+        const monthYear = `${date.toLocaleString('default', { month: 'short' })} ${date.getFullYear()}`
+        if (!reviewsByTimeframe[monthYear]) reviewsByTimeframe[monthYear] = 0
+        reviewsByTimeframe[monthYear]++
+      }
+    })
+
+    // Calculate adjustment metrics
+    const totalAdjustments = adjustments.length
+    const adjustmentsWithDocs = adjustments.filter(a => a.documentName).length
+    const adjustmentsWithReason = adjustments.filter(a => a.reason && a.reason.trim() !== "").length
+    
+    // Calculate pivot metrics
+    const totalPivots = pivots.length
+    const pivotsWithDocs = pivots.filter(p => p.documentName).length
+    const pivotsWithReason = pivots.filter(p => p.reason && p.reason.trim() !== "").length
+    
+    // Calculate adaptation velocity (adjustments + pivots per month)
+    const allChanges = [...adjustments, ...pivots].filter(item => item.date)
+    const changesByMonth = {}
+    allChanges.forEach(item => {
+      if (item.date) {
+        const date = new Date(item.date)
+        const monthYear = `${date.toLocaleString('default', { month: 'short' })} ${date.getFullYear()}`
+        if (!changesByMonth[monthYear]) changesByMonth[monthYear] = 0
+        changesByMonth[monthYear]++
+      }
+    })
+    
+    // Calculate average changes per month
+    const monthsWithChanges = Object.keys(changesByMonth).length
+    const avgChangesPerMonth = monthsWithChanges > 0 
+      ? (totalAdjustments + totalPivots) / monthsWithChanges 
+      : 0
+    
+    // Analyze pivot patterns
+    const pivotThemes = {}
+    pivots.forEach(pivot => {
+      const fromWords = (pivot.from || "").toLowerCase().split(/\s+/)
+      const toWords = (pivot.to || "").toLowerCase().split(/\s+/)
+      
+      ;[...fromWords, ...toWords].forEach(word => {
+        if (word.length > 3) {
+          if (!pivotThemes[word]) pivotThemes[word] = 0
+          pivotThemes[word]++
+        }
+      })
+    })
+    
+    // Sort themes by frequency
+    const topPivotThemes = Object.entries(pivotThemes)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([theme, count]) => ({ theme, count }))
+    
+    // Analyze adjustment reasons
+    const adjustmentReasons = {}
+    adjustments.forEach(adj => {
+      const reasonWords = (adj.reason || "").toLowerCase().split(/\s+/)
+      reasonWords.forEach(word => {
+        if (word.length > 3) {
+          if (!adjustmentReasons[word]) adjustmentReasons[word] = 0
+          adjustmentReasons[word]++
+        }
+      })
+    })
+    
+    const topAdjustmentReasons = Object.entries(adjustmentReasons)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([reason, count]) => ({ reason, count }))
+
+    return {
+      // Review metrics
+      totalReviews,
+      completedReviews,
+      pendingReviews,
+      reviewCompletionRate,
+      reviewsByTimeframe,
+      
+      // Adjustment metrics
+      totalAdjustments,
+      adjustmentsWithDocs,
+      adjustmentsWithReason,
+      adjustmentDocumentationRate: totalAdjustments > 0 ? Math.round((adjustmentsWithDocs / totalAdjustments) * 100) : 0,
+      adjustmentReasonRate: totalAdjustments > 0 ? Math.round((adjustmentsWithReason / totalAdjustments) * 100) : 0,
+      
+      // Pivot metrics
+      totalPivots,
+      pivotsWithDocs,
+      pivotsWithReason,
+      pivotDocumentationRate: totalPivots > 0 ? Math.round((pivotsWithDocs / totalPivots) * 100) : 0,
+      pivotReasonRate: totalPivots > 0 ? Math.round((pivotsWithReason / totalPivots) * 100) : 0,
+      
+      // Adaptation velocity
+      totalChanges: totalAdjustments + totalPivots,
+      avgChangesPerMonth: Math.round(avgChangesPerMonth * 10) / 10,
+      changesByMonth,
+      
+      // Pattern analysis
+      topPivotThemes,
+      topAdjustmentReasons,
+      
+      // Documentation health
+      overallDocumentationRate: (totalAdjustments + totalPivots) > 0
+        ? Math.round(((adjustmentsWithDocs + pivotsWithDocs) / (totalAdjustments + totalPivots)) * 100)
+        : 0,
+      
+      // Has data flags
+      hasReviews: totalReviews > 0,
+      hasAdjustments: totalAdjustments > 0,
+      hasPivots: totalPivots > 0,
+      hasAnyData: totalReviews > 0 || totalAdjustments > 0 || totalPivots > 0
+    }
+  }
+
+  const createChangeAdaptabilityPrompt = (data) => {
+    return `Analyze the Change and Adaptability capability of a business based on the following strategic adaptation data:
+
+CHANGE MANAGEMENT DATA:
+
+1. STRATEGY REVIEWS:
+   Total Reviews Scheduled: ${data.totalReviews}
+   Completed Reviews: ${data.completedReviews} (${data.reviewCompletionRate}% completion rate)
+   Pending Reviews: ${data.pendingReviews}
+   
+   Reviews by Timeframe:
+   ${Object.keys(data.reviewsByTimeframe).map(month => 
+     `   - ${month}: ${data.reviewsByTimeframe[month]} reviews`
+   ).join('\n')}
+
+2. STRATEGIC ADJUSTMENTS:
+   Total Adjustments Made: ${data.totalAdjustments}
+   Adjustments with Documentation: ${data.adjustmentsWithDocs} (${data.adjustmentDocumentationRate}%)
+   Adjustments with Clear Reason: ${data.adjustmentsWithReason} (${data.adjustmentReasonRate}%)
+   
+   Top Adjustment Reasons:
+   ${data.topAdjustmentReasons.map((r, i) => 
+     `   ${i+1}. "${r.reason}" (${r.count} occurrences)`
+   ).join('\n')}
+
+3. STRATEGIC PIVOTS:
+   Total Pivots Executed: ${data.totalPivots}
+   Pivots with Documentation: ${data.pivotsWithDocs} (${data.pivotDocumentationRate}%)
+   Pivots with Clear Reason: ${data.pivotsWithReason} (${data.pivotReasonRate}%)
+   
+   Top Pivot Themes:
+   ${data.topPivotThemes.map((t, i) => 
+     `   ${i+1}. "${t.theme}" (${t.count} occurrences)`
+   ).join('\n')}
+
+4. ADAPTATION VELOCITY:
+   Total Changes (Adjustments + Pivots): ${data.totalChanges}
+   Average Changes per Month: ${data.avgChangesPerMonth}
+   
+   Changes by Month:
+   ${Object.keys(data.changesByMonth).map(month => 
+     `   - ${month}: ${data.changesByMonth[month]} changes`
+   ).join('\n')}
+
+5. DOCUMENTATION HEALTH:
+   Overall Documentation Rate: ${data.overallDocumentationRate}%
+
+ANALYSIS REQUIREMENTS:
+
+1. ADAPTABILITY ASSESSMENT:
+   - Evaluate the organization's ability to conduct regular strategy reviews
+   - Assess the frequency and quality of strategic adjustments
+   - Analyze pivot patterns and strategic direction changes
+   - Rate overall change adaptability on a scale of 1-10
+
+2. REVIEW DISCIPLINE:
+   - Analyze strategy review cadence and completion rates
+   - Identify gaps in review execution
+   - Recommend optimal review frequency
+
+3. ADJUSTMENT EFFECTIVENESS:
+   - Evaluate the quality of strategic adjustments
+   - Assess documentation and reasoning completeness
+   - Identify patterns in what triggers adjustments
+
+4. PIVOT INTELLIGENCE:
+   - Analyze pivot themes and direction changes
+   - Assess pivot documentation quality
+   - Evaluate strategic learning from pivots
+
+5. ADAPTATION VELOCITY:
+   - Assess the speed of organizational response to change
+   - Compare change frequency against industry benchmarks
+   - Recommend optimal change velocity
+
+6. ACTIONABLE RECOMMENDATIONS:
+   - Provide 3-5 specific, actionable improvements
+   - Suggest improvements for review discipline
+   - Recommend better change documentation practices
+   - Include timelines and measurable goals
+
+7. ORGANIZATIONAL LEARNING:
+   - Assess how change is institutionalized
+   - Evaluate learning from past adjustments and pivots
+   - Recommend knowledge management improvements
+
+FORMAT REQUIREMENTS:
+- Start with an executive summary
+- Use clear section headers with ###
+- Include specific examples from the data
+- End with a Change Adaptability Score and Rating
+
+OUTPUT FORMAT:
+### Executive Summary
+[Brief overview of change and adaptability capability]
+
+### Change Adaptability Score: [X]/10
+**Rating:** [Rigid/Reactive/Responsive/Proactive/Agile]
+
+### Strategy Review Discipline
+[Analysis of review cadence, completion rates, and recommendations]
+
+### Strategic Adjustment Analysis
+[Evaluation of adjustment quality, triggers, and patterns]
+
+### Pivot Intelligence Assessment
+[Analysis of pivot themes, strategic learning, and direction changes]
+
+### Adaptation Velocity
+[Assessment of change frequency and organizational responsiveness]
+
+### Documentation & Governance
+[Evaluation of change documentation practices and recommendations]
+
+### Organizational Learning Index
+[How well the organization learns and institutionalizes change]
+
+### Top 5 Actionable Recommendations
+1. [Specific action with timeline and owner suggestion]
+2. [Specific action with measurable outcome]
+3. [Specific action for improving review discipline]
+4. [Specific action for enhancing change documentation]
+5. [Specific action for building adaptive capacity]
+
+### Strategic Resilience Outlook
+[How adaptability affects long-term strategic resilience]
+
+IMPORTANT: Be specific, actionable, and provide concrete recommendations based on the actual change data provided.`
+  }
+
+  const generateAIAnalysis = async () => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot generate AI analysis.")
+      return
+    }
+
+    if (!currentUser) {
+      setAnalysisError("You must be logged in to generate analysis.")
+      return
+    }
+
+    const analysisData = prepareChangeAdaptabilityData()
+    
+    if (!analysisData.hasAnyData) {
+      setAnalysisError("No change and adaptability data available for analysis. Please add strategy reviews, adjustments, or pivots first.")
+      return
+    }
+
+    setIsGenerating(true)
+    setAnalysisError("")
+    setShowAIAnalysis(true)
+
+    try {
+      const prompt = createChangeAdaptabilityPrompt(analysisData)
+
+      const functions = getFunctions()
+      const generateChangeAdaptabilityAnalysis = httpsCallable(functions, "generateChangeAdaptabilityAnalysis")
+      
+      const response = await generateChangeAdaptabilityAnalysis({
+        prompt: prompt,
+        userId: currentUser.uid,
+        timestamp: new Date().toISOString()
+      })
+
+      const analysis = response?.data?.content || response?.data?.analysis
+      
+      if (!analysis) {
+        throw new Error("No analysis generated")
+      }
+
+      // Save analysis to Firestore
+      const aiAnalysisRef = doc(db, "changeAdaptabilityAnalysis", currentUser.uid)
+      await setDoc(aiAnalysisRef, {
+        analysis: analysis,
+        timestamp: new Date().toISOString(),
+        dataSnapshot: {
+          totalReviews: analysisData.totalReviews,
+          totalAdjustments: analysisData.totalAdjustments,
+          totalPivots: analysisData.totalPivots,
+          reviewCompletionRate: analysisData.reviewCompletionRate,
+          avgChangesPerMonth: analysisData.avgChangesPerMonth,
+          overallDocumentationRate: analysisData.overallDocumentationRate
+        },
+        userId: currentUser.uid
+      }, { merge: true })
+
+      setAiAnalysis(analysis)
+      setSavedAnalysis(analysis)
+      
+    } catch (error) {
+      console.error("Error generating AI analysis:", error)
+      setAnalysisError(`Failed to generate analysis: ${error.message}`)
+      setAiAnalysis("AI analysis will be generated based on your strategy reviews, adjustments, and pivot data, evaluating your organization's ability to adapt to change and institutionalize learning.")
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  const handleAIAnalysis = () => {
+    if (!showAIAnalysis) {
+      if (savedAnalysis) {
+        setAiAnalysis(savedAnalysis)
+        setShowAIAnalysis(true)
+      } else {
+        generateAIAnalysis()
+      }
+    } else {
+      setShowAIAnalysis(!showAIAnalysis)
+    }
+  }
+
+  const refreshAnalysis = async () => {
+    await generateAIAnalysis()
+  }
+
   const filteredAdjustments = adjustments.filter((item) => {
     if (!selectedMonth && !selectedYear) return true
     
@@ -3760,7 +5543,6 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
     
     return monthMatch && yearMatch
   })
-
 
   const currentYear = new Date().getFullYear()
   const years = Array.from({ length: 5 }, (_, i) => currentYear + i)
@@ -3783,7 +5565,70 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
       />
 
       {/* Month/Year Filter */}
-     
+      <div style={{ display: "flex", gap: "10px", marginBottom: "20px", alignItems: "center" }}>
+        <label style={{ color: "#4a352f", fontWeight: "500" }}>Filter by:</label>
+        <select
+          value={selectedMonth}
+          onChange={(e) => setSelectedMonth(e.target.value)}
+          style={{
+            padding: "8px 12px",
+            border: "2px solid #e8ddd4",
+            borderRadius: "4px",
+            backgroundColor: "white",
+            color: "#4a352f",
+            cursor: "pointer",
+            fontSize: "14px",
+          }}
+        >
+          <option value="">All Months</option>
+          {Array.from({ length: 12 }, (_, i) => (
+            <option key={i + 1} value={i + 1}>
+              {new Date(2024, i, 1).toLocaleString('default', { month: 'long' })}
+            </option>
+          ))}
+        </select>
+        
+        <select
+          value={selectedYear}
+          onChange={(e) => setSelectedYear(e.target.value)}
+          style={{
+            padding: "8px 12px",
+            border: "2px solid #e8ddd4",
+            borderRadius: "4px",
+            backgroundColor: "white",
+            color: "#4a352f",
+            cursor: "pointer",
+            fontSize: "14px",
+          }}
+        >
+          <option value="">All Years</option>
+          {years.map((year) => (
+            <option key={year} value={year}>
+              {year}
+            </option>
+          ))}
+        </select>
+        
+        {(selectedMonth || selectedYear) && (
+          <button
+            onClick={() => {
+              setSelectedMonth("")
+              setSelectedYear("")
+            }}
+            style={{
+              padding: "8px 12px",
+              backgroundColor: "#e6d7c3",
+              color: "#4a352f",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontSize: "12px",
+            }}
+          >
+            Clear Filter
+          </button>
+        )}
+      </div>
 
       {/* Strategy Review Calendar */}
       <div
@@ -3886,6 +5731,114 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
         )}
       </div>
 
+      {/* Adjustments Documented */}
+      <div
+        style={{
+          backgroundColor: "#f7f3f0",
+          padding: "20px",
+          borderRadius: "6px",
+          marginBottom: "30px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "15px",
+          }}
+        >
+          <h3 style={{ color: "#5d4037", margin: 0 }}>Adjustments Documented</h3>
+          {!isInvestorView && (
+            <button
+              onClick={() => setShowAdjustmentModal(true)}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#7d5a50",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "12px",
+              }}
+            >
+              Add Adjustment
+            </button>
+          )}
+        </div>
+
+        {filteredAdjustments.length === 0 ? (
+          <p style={{ color: "#7d5a50", textAlign: "center", padding: "20px" }}>No adjustments documented yet.</p>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                color: "#4a352f",
+                minWidth: "800px",
+              }}
+            >
+              <thead>
+                <tr style={{ backgroundColor: "#e6d7c3", borderBottom: "2px solid #c8b6a6" }}>
+                  <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Date</th>
+                  <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Description</th>
+                  <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Reason</th>
+                  <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Documents</th>
+                  {!isInvestorView && <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Actions</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredAdjustments.map((adjustment) => (
+                  <tr key={adjustment.id} style={{ borderBottom: "1px solid #e6d7c3" }}>
+                    <td style={{ padding: "12px" }}>{adjustment.date}</td>
+                    <td style={{ padding: "12px", maxWidth: "300px" }}>{adjustment.description}</td>
+                    <td style={{ padding: "12px", maxWidth: "300px" }}>{adjustment.reason}</td>
+                    <td style={{ padding: "12px" }}>
+                      {adjustment.documentName && (
+                        <a
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            alert(`Downloading: ${adjustment.documentName}`)
+                          }}
+                          style={{
+                            color: "#7d5a50",
+                            textDecoration: "underline",
+                          }}
+                        >
+                          📄 {adjustment.documentName}
+                        </a>
+                      )}
+                    </td>
+                    {!isInvestorView && (
+                      <td style={{ padding: "12px", display: "flex", gap: "5px" }}>
+                        <button
+                          onClick={() => handleDeleteAdjustment(adjustment.id)}
+                          style={{
+                            padding: "6px",
+                            backgroundColor: "transparent",
+                            color: "#F44336",
+                            border: "none",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontSize: "16px",
+                          }}
+                          title="Delete"
+                        >
+                          ×
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {/* Pivot History Documented */}
       <div
         style={{
@@ -3958,7 +5911,6 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
                           href="#"
                           onClick={(e) => {
                             e.preventDefault()
-                            // Handle document view/download
                             alert(`Downloading: ${pivot.documentName}`)
                           }}
                           style={{
@@ -3998,7 +5950,201 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
       </div>
 
       {/* AI Analysis Section */}
-      <AIAnalysisButton />
+      <div style={{ marginTop: "30px", marginBottom: "20px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "15px" }}>
+          <button
+            onClick={handleAIAnalysis}
+            disabled={isGenerating || isInvestorView || !prepareChangeAdaptabilityData().hasAnyData}
+            style={{
+              padding: "12px 24px",
+              backgroundColor: isInvestorView || !prepareChangeAdaptabilityData().hasAnyData ? "#a1887f" : "#4a352f",
+              color: "#fdfcfb",
+              border: "none",
+              borderRadius: "6px",
+              cursor: isInvestorView || !prepareChangeAdaptabilityData().hasAnyData ? "not-allowed" : "pointer",
+              fontWeight: "600",
+              fontSize: "14px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              transition: "all 0.2s ease",
+              opacity: isGenerating ? 0.7 : 1
+            }}
+          >
+            {isGenerating ? (
+              <>
+                <FaSpinner className="spin" style={{ animation: "spin 1s linear infinite" }} />
+                Generating Adaptability Analysis...
+              </>
+            ) : (
+              <>
+                <FaRobot />
+                AI Change Adaptability Analysis
+              </>
+            )}
+          </button>
+
+          {savedAnalysis && !isGenerating && !isInvestorView && prepareChangeAdaptabilityData().hasAnyData && (
+            <button
+              onClick={refreshAnalysis}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#7d5a50",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontSize: "12px",
+                fontWeight: "500",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px"
+              }}
+              title="Refresh AI Analysis"
+            >
+              Refresh
+            </button>
+          )}
+        </div>
+        
+        {!prepareChangeAdaptabilityData().hasAnyData && (
+          <p style={{ color: "#8d6e63", fontSize: "13px", fontStyle: "italic", marginLeft: "10px" }}>
+            Add strategy reviews, adjustments, or pivots to generate AI analysis of your change adaptability.
+          </p>
+        )}
+        
+        {showAIAnalysis && (
+          <div
+            style={{
+              backgroundColor: "#f8f4f0",
+              padding: "20px",
+              borderRadius: "8px",
+              border: "1px solid #d7ccc8",
+              marginTop: "10px",
+              position: "relative"
+            }}
+          >
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              marginBottom: "15px"
+            }}>
+              <div>
+                <label
+                  style={{
+                    fontSize: "16px",
+                    color: "#5d4037",
+                    fontWeight: "600",
+                    display: "block",
+                    marginBottom: "8px",
+                  }}
+                >
+                  Change & Adaptability AI Analysis
+                </label>
+                <p style={{
+                  fontSize: "12px",
+                  color: "#8d6e63",
+                  margin: "0 0 10px 0",
+                  fontStyle: "italic"
+                }}>
+                  Analysis generated from {reviewData.length} reviews, {adjustments.length} adjustments, and {pivots.length} pivots
+                </p>
+              </div>
+              
+              {savedAnalysis && (
+                <span style={{
+                  fontSize: "10px",
+                  color: "#8d6e63",
+                  backgroundColor: "#efebe9",
+                  padding: "4px 8px",
+                  borderRadius: "4px",
+                  fontWeight: "500"
+                }}>
+                  Saved Analysis
+                </span>
+              )}
+            </div>
+
+            {analysisError ? (
+              <div style={{
+                padding: "15px",
+                backgroundColor: "#ffebee",
+                borderRadius: "6px",
+                border: "1px solid #ffcdd2",
+                color: "#c62828",
+                fontSize: "14px"
+              }}>
+                <strong>Error:</strong> {analysisError}
+              </div>
+            ) : isGenerating ? (
+              <div style={{
+                textAlign: "center",
+                padding: "30px",
+                color: "#5d4037"
+              }}>
+                <div style={{
+                  width: "40px",
+                  height: "40px",
+                  border: "3px solid #f3e5f5",
+                  borderTop: "3px solid #8d6e63",
+                  borderRadius: "50%",
+                  animation: "spin 1s linear infinite",
+                  margin: "0 auto 15px"
+                }}></div>
+                <p>Analyzing your change and adaptability data...</p>
+                <p style={{ fontSize: "12px", color: "#8d6e63", marginTop: "5px" }}>
+                  Evaluating review discipline, adjustment patterns, pivot intelligence, and adaptation velocity
+                </p>
+              </div>
+            ) : (
+              <div
+                style={{
+                  backgroundColor: "white",
+                  padding: "20px",
+                  borderRadius: "6px",
+                  border: "1px solid #e8d8cf",
+                  maxHeight: "400px",
+                  overflowY: "auto",
+                  fontSize: "14px",
+                  lineHeight: "1.6",
+                  color: "#5d4037",
+                  whiteSpace: "pre-wrap"
+                }}
+              >
+                {aiAnalysis || "AI analysis will be generated based on your strategy reviews, adjustments, and pivot data, evaluating your organization's ability to adapt to change and institutionalize learning."}
+              </div>
+            )}
+
+            <div style={{
+              marginTop: "15px",
+              paddingTop: "15px",
+              borderTop: "1px solid #e8d8cf",
+              fontSize: "11px",
+              color: "#8d6e63",
+              fontStyle: "italic",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center"
+            }}>
+              <span>Analysis powered by AI • Updates when change data changes</span>
+              <button
+                onClick={() => setShowAIAnalysis(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#8d6e63",
+                  cursor: "pointer",
+                  fontSize: "12px",
+                  textDecoration: "underline"
+                }}
+              >
+                Hide Analysis
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Modals */}
       {showReviewModal && !isInvestorView && (
