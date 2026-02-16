@@ -1,4 +1,3 @@
-// growth-components/growthFirebaseService.js
 import { db, auth, storage } from '../../../firebaseConfig'; // Adjust path
 import { 
   collection, 

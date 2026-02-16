@@ -42,21 +42,23 @@ import { onAuthStateChanged } from "firebase/auth";
 import { doc } from "firebase/firestore";
 
 function AdminSidebar() {
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+  // --- Sidebar hover/manual expand/collapse logic ---
+  const [isCollapsed, setIsCollapsed] = useState(() => {
     try {
-      if (typeof document !== "undefined" && document.body) {
-        return document.body.classList.contains("sidebar-collapsed");
-      }
-      return localStorage.getItem("sidebarOpen") === "false";
-    } catch (e) {
+      const saved = localStorage.getItem("adminSidebarCollapsed");
+      return saved !== null ? JSON.parse(saved) : false;
+    } catch {
       return false;
     }
   });
+  // Track if user manually toggled (chevron)
+  const [manualOverride, setManualOverride] = useState(false);
+  // Track if sidebar is hovered (except chevron)
+  const [isHovered, setIsHovered] = useState(false);
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const location = useLocation();
   const [expandedMenus, setExpandedMenus] = useState({});
-  const [isCollapsed, setIsCollapsed] = useState(false);
   const [userName, setUserName] = useState("Admin");
   const [date, setDate] = useState(new Date());
 
@@ -124,16 +126,9 @@ function AdminSidebar() {
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    const savedCollapsedState = localStorage.getItem("adminSidebarCollapsed");
-    if (savedCollapsedState !== null) {
-      setIsCollapsed(JSON.parse(savedCollapsedState));
-    }
-  }, []);
-
+  // Save collapse state
   useEffect(() => {
     localStorage.setItem("adminSidebarCollapsed", JSON.stringify(isCollapsed));
-
     if (isCollapsed) {
       document.body.classList.add("admin-sidebar-collapsed");
     } else {
@@ -376,9 +371,37 @@ function AdminSidebar() {
     }
   };
 
-  const toggleSidebar = () => {
-    setIsCollapsed(!isCollapsed);
+  // Manual chevron click: override hover
+  const toggleSidebar = (e) => {
+    if (e) e.stopPropagation();
+    setIsCollapsed((prev) => {
+      setManualOverride(true);
+      return !prev;
+    });
   };
+
+  // Hover handlers for sidebar (not chevron)
+  const handleSidebarMouseEnter = () => {
+    if (!manualOverride) {
+      setIsCollapsed(false);
+    }
+    setIsHovered(true);
+  };
+  const handleSidebarMouseLeave = () => {
+    setIsHovered(false);
+    if (!manualOverride) {
+      setIsCollapsed(true);
+    }
+  };
+
+  // If user clicks anywhere else, reset manual override
+  useEffect(() => {
+    if (!isHovered && manualOverride) {
+      // If sidebar is not hovered and was manually expanded, keep state
+      // But if sidebar is collapsed and not hovered, reset override
+      if (isCollapsed) setManualOverride(false);
+    }
+  }, [isHovered, isCollapsed, manualOverride]);
 
   // Get company initials for logo
   const getCompanyInitials = (name) => {
@@ -404,17 +427,22 @@ function AdminSidebar() {
 
       <div
         className={`${styles.sidebar} ${isCollapsed ? styles.collapsed : ""}`}
+        onMouseEnter={handleSidebarMouseEnter}
+        onMouseLeave={handleSidebarMouseLeave}
       >
-        {/* Toggle Button */}
-        <button className={styles.sidebarToggle} onClick={toggleSidebar}>
+        {/* Toggle Button (chevron) */}
+        <button
+          className={styles.sidebarToggle}
+          onClick={toggleSidebar}
+          onMouseEnter={(e) => e.stopPropagation()} // Prevent hover expand on chevron
+          onMouseLeave={(e) => e.stopPropagation()}
+        >
           {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
         </button>
 
         {/* Header */}
         <div className={styles.companyHeader}>
-          <div className={styles.logoCircle}>
-            {getCompanyInitials(userName)}
-          </div>
+          <div className={styles.logoCircle}>{getCompanyInitials(userName)}</div>
           {!isCollapsed && (
             <div className={styles.companyInfo}>
               <div className={styles.companyName}>{userName}</div>
@@ -480,9 +508,7 @@ function AdminSidebar() {
                         onClick={(e) => handleSubItemClick(subItem, e)}
                       >
                         <div className={styles.submenuIcon}>{subItem.icon}</div>
-                        <span className={styles.submenuLabel}>
-                          {subItem.label}
-                        </span>
+                        <span className={styles.submenuLabel}>{subItem.label}</span>
                       </div>
                     ))}
                   </div>
