@@ -2230,24 +2230,6 @@ const ExecutionCapacity = ({ activeSection, user, isInvestorView }) => {
                       >
                         {status.text}
                       </div>
-                      <button
-                        onClick={() => openTrendModal("Founder Load - " + month, [value])}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          cursor: "pointer",
-                          padding: "4px",
-                          marginTop: "4px",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          width: "100%",
-                        }}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5d4037" strokeWidth="2">
-                          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-                        </svg>
-                      </button>
                     </td>
                   )
                 })}
@@ -2327,24 +2309,6 @@ const ExecutionCapacity = ({ activeSection, user, isInvestorView }) => {
                       >
                         {value ? `${Number.parseFloat(value).toFixed(1)} (${status.text})` : "Not Set"}
                       </div>
-                      <button
-                        onClick={() => openTrendModal("Span of Control - " + month, [value])}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          cursor: "pointer",
-                          padding: "4px",
-                          marginTop: "4px",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          width: "100%",
-                        }}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5d4037" strokeWidth="2">
-                          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-                        </svg>
-                      </button>
                     </td>
                   )
                 })}
@@ -4690,13 +4654,7 @@ const EmployeeCompositionTab = ({ activeSection, user, isInvestorView }) => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [showCalculationModal, setShowCalculationModal] = useState(false)
   const [selectedCalculation, setSelectedCalculation] = useState({ title: "", calculation: "" })
-  const [employeeData, setEmployeeData] = useState({
-    gender: { male: 60, female: 35, other: 5 },
-    race: { african: 40, white: 30, colored: 15, indian: 10, other: 5 },
-    age: { under25: 15, "25-34": 30, "35-44": 25, "45-54": 20, "55+": 10 },
-    tenure: { under1: 20, "1-3": 35, "3-5": 25, "5-10": 15, "10+": 5 },
-    education: { highSchool: 20, diploma: 25, degree: 40, postgraduate: 15 },
-  })
+  const [employeeData, setEmployeeData] = useState(null)
 
   const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
 
@@ -4714,16 +4672,21 @@ const EmployeeCompositionTab = ({ activeSection, user, isInvestorView }) => {
       if (employeeDoc.exists()) {
         const data = employeeDoc.data()
         if (data.employeeData) setEmployeeData(data.employeeData)
+      } else {
+        setEmployeeData(null)
       }
     } catch (error) {
       console.error("Error loading employee composition data:", error)
+      setEmployeeData(null)
     } finally {
       setLoading(false)
     }
   }
 
-  const createPieChartData = (data, colors) => {
-    const labels = Object.keys(data).map(key => 
+  const createPieChartData = (data, colors, categoryLabels) => {
+    if (!data) return null
+    
+    const labels = categoryLabels || Object.keys(data).map(key => 
       key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1')
     )
     const values = Object.values(data)
@@ -4734,31 +4697,20 @@ const EmployeeCompositionTab = ({ activeSection, user, isInvestorView }) => {
         {
           data: values,
           backgroundColor: colors,
-          borderColor: "#5d4037",
+          borderColor: "#ffffff",
           borderWidth: 2,
         },
       ],
     }
   }
 
-  // FIXED: Pie chart options with white labels
-  // FIXED: Pie chart options with white labels
+  // Updated pie chart options with white numbers inside and black labels outside
   const pieChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
       legend: {
-        position: 'bottom',
-        labels: {
-          color: "#FFFFFF", // Changed to white
-          font: {
-            size: 11,
-            weight: 'bold',
-          },
-          padding: 15,
-          usePointStyle: true,
-          pointStyle: 'circle',
-        },
+        display: false, // Hide legend since we have outside labels
       },
       tooltip: {
         backgroundColor: "rgba(93, 64, 55, 0.9)",
@@ -4766,28 +4718,88 @@ const EmployeeCompositionTab = ({ activeSection, user, isInvestorView }) => {
         bodyColor: "#fff",
         borderColor: "#5d4037",
         borderWidth: 1,
+        callbacks: {
+          label: function(context) {
+            const label = context.label || '';
+            const value = context.raw || 0;
+            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+            const percentage = ((value / total) * 100).toFixed(1);
+            return `${label}: ${value} (${percentage}%)`;
+          }
+        }
       },
       datalabels: {
+        // White numbers inside the pie slices
         color: '#FFFFFF',
         font: {
           weight: 'bold',
-          size: 12
+          size: 14
         },
         formatter: function(value, context) {
           const total = context.dataset.data.reduce(function(a, b) { return a + b; }, 0);
           const percentage = ((value / total) * 100).toFixed(1);
-          return percentage + '%';
+          return percentage + '%'; // Show only percentage inside
         },
+        anchor: 'center',
+        align: 'center',
+        offset: 0
       },
     },
+    // Add a custom plugin to draw labels outside
+    layout: {
+      padding: {
+        top: 30,
+        bottom: 30,
+        left: 30,
+        right: 30
+      }
+    }
   }
+
+  // Custom plugin to draw category labels outside the pie
+  const outsideLabelsPlugin = {
+    id: 'outsideLabels',
+    afterDatasetsDraw(chart) {
+      const { ctx, data, chartArea: { width, height } } = chart;
+      
+      ctx.save();
+      ctx.font = 'bold 11px Arial';
+      ctx.fillStyle = '#000000';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      const meta = chart.getDatasetMeta(0);
+      const total = data.datasets[0].data.reduce((a, b) => a + b, 0);
+      
+      data.labels.forEach((label, index) => {
+        const element = meta.data[index];
+        if (element) {
+          const angle = (element.startAngle + element.endAngle) / 2;
+          const radius = element.outerRadius + 20; // Position outside the pie
+          
+          const x = width / 2 + Math.cos(angle) * radius;
+          const y = height / 2 + Math.sin(angle) * radius;
+          
+          // Draw label text
+          ctx.fillText(label, x, y);
+        }
+      });
+      
+      ctx.restore();
+    }
+  };
 
   const handleCalculationClick = (title, calculation) => {
     setSelectedCalculation({ title, calculation })
     setShowCalculationModal(true)
   }
 
-  const renderPieChart = (title, data, colors, calculation = "") => {
+  const renderPieChart = (title, data, colors, calculation = "", categoryLabels = null) => {
+    if (!data) return null
+
+    const chartData = createPieChartData(data, colors, categoryLabels)
+    if (!chartData) return null
+
     return (
       <div
         style={{
@@ -4804,15 +4816,72 @@ const EmployeeCompositionTab = ({ activeSection, user, isInvestorView }) => {
         <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px", textAlign: "center" }}>
           {title}
         </h4>
-        <div style={{ height: "250px", position: "relative" }}>
+        <div style={{ height: "350px", position: "relative" }}>
           <Pie
-            data={createPieChartData(data, colors)}
+            data={chartData}
             options={pieChartOptions}
+            plugins={[outsideLabelsPlugin]}
           />
+        </div>
+        {/* Simple reference guide */}
+        <div style={{ 
+          marginTop: "15px", 
+          display: "flex", 
+          flexWrap: "wrap", 
+          justifyContent: "center",
+          gap: "15px",
+          borderTop: "1px solid #e8ddd4",
+          paddingTop: "15px"
+        }}>
+          {categoryLabels && categoryLabels.map((label, idx) => (
+            <div key={idx} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+              <div style={{ 
+                width: "12px", 
+                height: "12px", 
+                backgroundColor: colors[idx % colors.length],
+                borderRadius: "3px"
+              }}></div>
+              <span style={{ fontSize: "11px", color: "#5d4037" }}>{label}</span>
+            </div>
+          ))}
         </div>
       </div>
     )
   }
+
+  const renderEmptyState = () => (
+    <div
+      style={{
+        backgroundColor: "#fdfcfb",
+        padding: "40px",
+        borderRadius: "8px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        textAlign: "center",
+        gridColumn: "1 / -1",
+      }}
+    >
+      <p style={{ color: "#8d6e63", fontSize: "16px", marginBottom: "20px" }}>
+        No employee composition data available. Click "Add Data" to get started.
+      </p>
+      {!isInvestorView && (
+        <button
+          onClick={() => setShowModal(true)}
+          style={{
+            padding: "10px 20px",
+            backgroundColor: "#5d4037",
+            color: "#fdfcfb",
+            border: "none",
+            borderRadius: "4px",
+            cursor: "pointer",
+            fontWeight: "600",
+            fontSize: "14px",
+          }}
+        >
+          Add Your First Data
+        </button>
+      )}
+    </div>
+  )
 
   if (activeSection !== "employee-composition") return null
 
@@ -4881,93 +4950,106 @@ const EmployeeCompositionTab = ({ activeSection, user, isInvestorView }) => {
         </div>
       </div>
 
-      {/* Pie Charts Grid - 3 per row */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))",
-          gap: "20px",
-          marginBottom: "30px",
-        }}
-      >
-        {renderPieChart(
-          "Gender Distribution", 
-          employeeData.gender, 
-          ["#3E2723", "#5D4037", "#8D6E63"],
-          "Gender Distribution shows the proportion of employees by gender.\n\n" +
-          "Calculation: (Employees in each gender category ÷ Total employees) × 100%\n\n" +
-          "Why this matters:\n" +
-          "• Reflects commitment to diversity and inclusion\n" +
-          "• Correlates with innovation and decision-making quality\n" +
-          "• Increasingly important to investors and clients\n\n" +
-          "Consider:\n" +
-          "• Compare to industry benchmarks\n" +
-          "• Analyze representation at different levels (entry, management, leadership)\n" +
-          "• Set improvement targets with timelines"
-        )}
-        {renderPieChart(
-          "Race Distribution", 
-          employeeData.race, 
-          ["#3E2723", "#5D4037", "#8D6E63", "#A1887F", "#D7CCC8"],
-          "Race/Ethnicity Distribution shows workforce composition by racial/ethnic groups.\n\n" +
-          "Calculation: (Employees in each racial/ethnic group ÷ Total employees) × 100%\n\n" +
-          "Why this matters:\n" +
-          "• Demonstrates commitment to employment equity\n" +
-          "• Enhances understanding of diverse markets\n" +
-          "• Often required for regulatory compliance and tenders\n\n" +
-          "Consider:\n" +
-          "• Compare to available talent pool demographics\n" +
-          "• Analyze by job level and function\n" +
-          "• Review recruitment sources and selection processes"
-        )}
-        {renderPieChart(
-          "Age Distribution", 
-          employeeData.age, 
-          ["#3E2723", "#5D4037", "#8D6E63", "#A1887F", "#D7CCC8"],
-          "Age Distribution shows the proportion of employees across age brackets.\n\n" +
-          "Calculation: (Employees in each age bracket ÷ Total employees) × 100%\n\n" +
-          "Why this matters:\n" +
-          "• Indicates succession planning readiness\n" +
-          "• Reveals potential knowledge transfer gaps\n" +
-          "• Highlights multi-generational workplace dynamics\n\n" +
-          "Consider:\n" +
-          "• High concentration in 55+ = retirement risk\n" +
-          "• Low concentration in under 30 = future talent pipeline concerns\n" +
-          "• Balance across generations for institutional memory + fresh perspectives"
-        )}
-        {renderPieChart(
-          "Tenure Distribution", 
-          employeeData.tenure, 
-          ["#3E2723", "#5D4037", "#8D6E63", "#A1887F", "#D7CCC8"],
-          "Tenure Distribution shows how long employees have been with the organization.\n\n" +
-          "Calculation: (Employees in each tenure bracket ÷ Total employees) × 100%\n\n" +
-          "Why this matters:\n" +
-          "• <1 year: New hire integration effectiveness\n" +
-          "• 1-3 years: Early career development\n" +
-          "• 3-5 years: Growing contributors\n" +
-          "• 5-10 years: Experienced core team\n" +
-          "• 10+ years: Institutional knowledge holders\n\n" +
-          "Healthy distribution includes mix of new talent and experienced staff.\n" +
-          "High concentration in <1 year may indicate rapid growth OR retention issues."
-        )}
-        {renderPieChart(
-          "Education Distribution", 
-          employeeData.education, 
-          ["#3E2723", "#5D4037", "#8D6E63", "#A1887F"],
-          "Education Distribution shows the highest qualification levels of employees.\n\n" +
-          "Calculation: (Employees with each education level ÷ Total employees) × 100%\n\n" +
-          "Why this matters:\n" +
-          "• Indicates technical capability and knowledge base\n" +
-          "• Affects ability to innovate and solve complex problems\n" +
-          "• May influence client perception and credibility\n\n" +
-          "Consider:\n" +
-          "• Requirements vary by industry and role\n" +
-          "• Balance formal qualifications with experience\n" +
-          "• Support ongoing education and professional development"
-        )}
-      </div>
+      {loading ? (
+        <div style={{ textAlign: "center", padding: "40px", color: "#8d6e63" }}>
+          Loading employee composition data...
+        </div>
+      ) : !employeeData ? (
+        <div style={{ marginBottom: "30px" }}>
+          {renderEmptyState()}
+        </div>
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(450px, 1fr))",
+            gap: "20px",
+            marginBottom: "30px",
+          }}
+        >
+          {renderPieChart(
+            "Gender Distribution", 
+            employeeData.gender, 
+            ["#3E2723", "#5D4037", "#8D6E63"],
+            "Gender Distribution shows the proportion of employees by gender.\n\n" +
+            "Calculation: (Employees in each gender category ÷ Total employees) × 100%\n\n" +
+            "Why this matters:\n" +
+            "• Reflects commitment to diversity and inclusion\n" +
+            "• Correlates with innovation and decision-making quality\n" +
+            "• Increasingly important to investors and clients\n\n" +
+            "Consider:\n" +
+            "• Compare to industry benchmarks\n" +
+            "• Analyze representation at different levels (entry, management, leadership)\n" +
+            "• Set improvement targets with timelines",
+            ["Male", "Female", "Other"]
+          )}
+          {renderPieChart(
+            "Race Distribution", 
+            employeeData.race, 
+            ["#3E2723", "#5D4037", "#8D6E63", "#A1887F", "#D7CCC8"],
+            "Race/Ethnicity Distribution shows workforce composition by racial/ethnic groups.\n\n" +
+            "Calculation: (Employees in each racial/ethnic group ÷ Total employees) × 100%\n\n" +
+            "Why this matters:\n" +
+            "• Demonstrates commitment to employment equity\n" +
+            "• Enhances understanding of diverse markets\n" +
+            "• Often required for regulatory compliance and tenders\n\n" +
+            "Consider:\n" +
+            "• Compare to available talent pool demographics\n" +
+            "• Analyze by job level and function\n" +
+            "• Review recruitment sources and selection processes",
+            ["African", "White", "Colored", "Indian", "Other"]
+          )}
+          {renderPieChart(
+            "Age Distribution", 
+            employeeData.age, 
+            ["#3E2723", "#5D4037", "#8D6E63", "#A1887F", "#D7CCC8"],
+            "Age Distribution shows the proportion of employees across age brackets.\n\n" +
+            "Calculation: (Employees in each age bracket ÷ Total employees) × 100%\n\n" +
+            "Why this matters:\n" +
+            "• Indicates succession planning readiness\n" +
+            "• Reveals potential knowledge transfer gaps\n" +
+            "• Highlights multi-generational workplace dynamics\n\n" +
+            "Consider:\n" +
+            "• High concentration in 55+ = retirement risk\n" +
+            "• Low concentration in under 30 = future talent pipeline concerns\n" +
+            "• Balance across generations for institutional memory + fresh perspectives",
+            ["Under 25", "25-34", "35-44", "45-54", "55+"]
+          )}
+          {renderPieChart(
+            "Tenure Distribution", 
+            employeeData.tenure, 
+            ["#3E2723", "#5D4037", "#8D6E63", "#A1887F", "#D7CCC8"],
+            "Tenure Distribution shows how long employees have been with the organization.\n\n" +
+            "Calculation: (Employees in each tenure bracket ÷ Total employees) × 100%\n\n" +
+            "Why this matters:\n" +
+            "• <1 year: New hire integration effectiveness\n" +
+            "• 1-3 years: Early career development\n" +
+            "• 3-5 years: Growing contributors\n" +
+            "• 5-10 years: Experienced core team\n" +
+            "• 10+ years: Institutional knowledge holders\n\n" +
+            "Healthy distribution includes mix of new talent and experienced staff.\n" +
+            "High concentration in <1 year may indicate rapid growth OR retention issues.",
+            ["<1 year", "1-3 years", "3-5 years", "5-10 years", "10+ years"]
+          )}
+          {renderPieChart(
+            "Education Distribution", 
+            employeeData.education, 
+            ["#3E2723", "#5D4037", "#8D6E63", "#A1887F"],
+            "Education Distribution shows the highest qualification levels of employees.\n\n" +
+            "Calculation: (Employees with each education level ÷ Total employees) × 100%\n\n" +
+            "Why this matters:\n" +
+            "• Indicates technical capability and knowledge base\n" +
+            "• Affects ability to innovate and solve complex problems\n" +
+            "• May influence client perception and credibility\n\n" +
+            "Consider:\n" +
+            "• Requirements vary by industry and role\n" +
+            "• Balance formal qualifications with experience\n" +
+            "• Support ongoing education and professional development",
+            ["High School", "Diploma", "Degree", "Postgraduate"]
+          )}
+        </div>
+      )}
 
-      {/* Unified Data Entry Modal */}
       <UnifiedDataEntryModal
         isOpen={showModal}
         onClose={() => setShowModal(false)}
@@ -4977,7 +5059,6 @@ const EmployeeCompositionTab = ({ activeSection, user, isInvestorView }) => {
         loading={loading}
       />
 
-      {/* Calculation Modal */}
       <CalculationModal
         isOpen={showCalculationModal}
         onClose={() => setShowCalculationModal(false)}
