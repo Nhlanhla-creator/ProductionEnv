@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { FileExplorer } from './shared/FileExplorer';
 import { FileUploader } from './shared/FileUploader';
-import { GROWTH_STRUCTURE } from './growth-components/growthStructure';
+import { GROWTH_STRUCTURE } from './structure/growthStructure';
 import {
   uploadFile,
   addFileToCollection,
@@ -182,9 +182,7 @@ const Growth = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: '100vh',
-        background: 'var(--background-brown)'
-      }}>
+        minHeight: '100vh',      }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{
             width: 40,
@@ -210,9 +208,7 @@ const Growth = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: '100vh',
-        background: 'var(--background-brown)'
-      }}>
+        minHeight: '100vh',      }}>
         <div style={{
           textAlign: 'center',
           padding: 40,
@@ -253,7 +249,6 @@ const Growth = () => {
 
       <div style={{
         padding: 24,
-        background: 'var(--background-brown)',
         minHeight: '100vh'
       }}>
         <div style={{ marginBottom: 24 }}>
@@ -263,7 +258,7 @@ const Growth = () => {
             margin: 0,
             fontWeight: 600
           }}>
-            01 GROWTH
+            GROWTH
           </h2>
           <p style={{
             fontSize: 14,

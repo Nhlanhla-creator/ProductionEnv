@@ -157,7 +157,7 @@ export const FileExplorer = memo(({
         fontSize: 14,
         color: 'var(--text-brown)'
       }}>
-        Growth Repository
+        Working Repository
       </div>
 
       <div style={{ padding: '8px 0' }}>

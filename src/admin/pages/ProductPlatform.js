@@ -1,162 +1,325 @@
-import React, { useState } from "react";
-import { ChevronRight } from "lucide-react";
+import React, { useState, useCallback, useEffect } from 'react';
+import { FileExplorer } from './shared/FileExplorer';
+import { FileUploader } from './shared/FileUploader';
+import { PRODUCT_STRUCTURE } from './structure/productPlatformStructure';
+import {
+  uploadFile,
+  addFileToCollection,
+  deleteFile,
+  loadContent,
+  loadAllContent
+} from './services/product';
+import { useAuth } from '../../smses/hooks/useAuth';
+import { AlertCircle } from 'lucide-react';
 
 const ProductPlatform = () => {
-  const [level1, setLevel1] = useState(null);
-  const [level2, setLevel2] = useState(null);
-  const [level3, setLevel3] = useState(null);
+  const { user, loading: authLoading } = useAuth();
+  const [expandedFolders, setExpandedFolders] = useState({});
+  const [selectedPath, setSelectedPath] = useState(null);
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [currentContent, setCurrentContent] = useState(null);
+  const [contentStatus, setContentStatus] = useState({});
+  const [isUploading, setIsUploading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const resetFromLevel1 = (value) => {
-    setLevel1(value);
-    setLevel2(null);
-    setLevel3(null);
-  };
+  // Load all content on mount
+  useEffect(() => {
+    if (!user) {
+      setIsLoading(false);
+      return;
+    }
 
-  const resetFromLevel2 = (value) => {
-    setLevel2(value);
-    setLevel3(null);
-  };
+    const loadAllData = async () => {
+      try {
+        setIsLoading(true);
+        const allContent = await loadAllContent();
+        
+        // Create status map
+        const status = {};
+        Object.keys(allContent).forEach(pathKey => {
+          status[pathKey] = true;
+        });
+        setContentStatus(status);
+      } catch (error) {
+        console.error('Error loading content:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadAllData();
+  }, [user]);
+
+  // Load content when item is selected
+  useEffect(() => {
+    if (!selectedPath || !user) {
+      setCurrentContent(null);
+      return;
+    }
+
+    const loadData = async () => {
+      try {
+        const content = await loadContent(selectedPath);
+        setCurrentContent(content);
+      } catch (error) {
+        console.error('Error loading content:', error);
+        setCurrentContent(null);
+      }
+    };
+
+    loadData();
+  }, [selectedPath, user]);
+
+  // Accordion behavior - same as Growth component
+  const handleToggleFolder = useCallback(
+    (path) => {
+      const pathKey = path.join(" > ");
+      const folderIsExpanded = expandedFolders[pathKey];
+      const folderLevel = path.length - 1;
+
+      // Create new expanded folders object
+      const newExpandedFolders = {};
+
+      if (!folderIsExpanded) {
+        // Close all folders at the same level by only opening the clicked one
+        Object.keys(expandedFolders).forEach((expandedPathKey) => {
+          const expandedPath = expandedPathKey.split(" > ");
+          const expandedPathLevel = expandedPath.length - 1;
+
+          // Keep folders that are at different levels
+          if (expandedPathLevel !== folderLevel) {
+            newExpandedFolders[expandedPathKey] = true;
+          }
+        });
+
+        // Open the clicked folder
+        newExpandedFolders[pathKey] = true;
+      } else {
+        // Just close the clicked folder, keep others as-is
+        Object.keys(expandedFolders).forEach((expandedPathKey) => {
+          if (expandedPathKey !== pathKey) {
+            newExpandedFolders[expandedPathKey] = true;
+          }
+        });
+      }
+
+      setExpandedFolders(newExpandedFolders);
+    },
+    [expandedFolders],
+  );
+
+  const handleSelectItem = useCallback((path, item) => {
+    setSelectedPath(path);
+    setSelectedItem(item);
+  }, []);
+
+  const handleUploadFile = useCallback(async (file) => {
+    if (!selectedPath || !user) return;
+
+    try {
+      setIsUploading(true);
+      
+      if (currentContent && currentContent.files && currentContent.files.length > 0) {
+        await addFileToCollection(selectedPath, file);
+      } else {
+        await uploadFile(selectedPath, file);
+      }
+
+      // Update status
+      const pathKey = selectedPath.join(' > ');
+      setContentStatus(prev => ({
+        ...prev,
+        [pathKey]: true
+      }));
+
+      // Reload content
+      const updatedContent = await loadContent(selectedPath);
+      setCurrentContent(updatedContent);
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      alert('Failed to upload file. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
+  }, [selectedPath, currentContent, user]);
+
+  const handleDeleteFile = useCallback(async (fileIndex) => {
+    if (!selectedPath || !user) return;
+
+    try {
+      await deleteFile(selectedPath, fileIndex);
+
+      // Reload content
+      const updatedContent = await loadContent(selectedPath);
+      setCurrentContent(updatedContent);
+
+      // Update status if no files left
+      if (!updatedContent || !updatedContent.files || updatedContent.files.length === 0) {
+        const pathKey = selectedPath.join(' > ');
+        setContentStatus(prev => {
+          const newStatus = { ...prev };
+          delete newStatus[pathKey];
+          return newStatus;
+        });
+      }
+    } catch (error) {
+      console.error('Error deleting file:', error);
+      alert('Failed to delete file. Please try again.');
+    }
+  }, [selectedPath, user]);
+
+  const handleCloseEditor = useCallback(() => {
+    setSelectedPath(null);
+    setSelectedItem(null);
+    setCurrentContent(null);
+  }, []);
+
+  // Loading state
+  if (authLoading || isLoading) {
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh',      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: 40,
+            height: 40,
+            border: '4px solid var(--pale-brown)',
+            borderTopColor: 'var(--primary-brown)',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            margin: '0 auto 16px'
+          }} />
+          <p style={{ color: 'var(--text-brown)' }}>
+            {authLoading ? 'Authenticating...' : 'Loading product platform...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Not authenticated
+  if (!user) {
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh',      }}>
+        <div style={{
+          textAlign: 'center',
+          padding: 40,
+          background: 'white',
+          borderRadius: 8,
+          border: '1px solid var(--medium-brown)'
+        }}>
+          <AlertCircle size={48} color="var(--accent-brown)" style={{ marginBottom: 16 }} />
+          <h2 style={{ color: 'var(--text-brown)', marginBottom: 8 }}>Authentication Required</h2>
+          <p style={{ color: '#666' }}>Please log in to access Product Platform.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div style={styles.wrapper}>
-      <h1 style={styles.title}>03 PRODUCT PLATFORM</h1>
+    <>
+      <style>{`
+        :root {
+          --light-brown: #f5f0e1;
+          --medium-brown: #e6d7c3;
+          --accent-brown: #c8b6a6;
+          --primary-brown: #a67c52;
+          --dark-brown: #7d5a50;
+          --text-brown: #4a352f;
+          --background-brown: #faf7f2;
+          --pale-brown: #f0e6d9;
+        }
 
-      <div style={styles.grid}>
-        {/* COLUMN 1 */}
-        <div style={styles.column}>
-          <ExpandableItem
-            label="Platform Modules"
-            active={level1 === "platform-modules"}
-            onClick={() => resetFromLevel1("platform-modules")}
-          />
-          <Item label="Messaging and alerts" />
-          <Item label="Customer services" />
-          <Item label="User flows" />
-          <Item label="UX requirements" />
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+
+        * {
+          box-sizing: border-box;
+        }
+      `}</style>
+
+      <div style={{
+        padding: 24,
+        minHeight: '100vh'
+      }}>
+        <div style={{ marginBottom: 24 }}>
+          <h2 style={{
+            fontSize: 24,
+            color: 'var(--text-brown)',
+            margin: 0,
+            fontWeight: 600
+          }}>
+            PRODUCT PLATFORM
+          </h2>
+          <p style={{
+            fontSize: 14,
+            color: '#666',
+            margin: '4px 0 0 0'
+          }}>
+            Platform modules, features, and technical specifications
+          </p>
         </div>
 
-        {/* COLUMN 2 */}
-        {level1 === "platform-modules" && (
-          <div style={styles.column}>
-            <Item label="SME Onboarding" />
-            <ExpandableItem
-              label="BIG Score"
-              active={level2 === "big-score"}
-              onClick={() => resetFromLevel2("big-score")}
-            />
-            <Item label="Matching Engine" />
-            <Item label="Dashboards" />
-            <ExpandableItem
-              label="Payments"
-              active={level2 === "payments"}
-              onClick={() => resetFromLevel2("payments")}
-            />
-            <Item label="API Integrations" />
-          </div>
-        )}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: selectedPath ? '350px 1fr' : '1fr',
+          gap: 20,
+          height: 'calc(100vh - 160px)'
+        }}>
+          {/* File Explorer */}
+          <FileExplorer
+            structure={PRODUCT_STRUCTURE}
+            expandedFolders={expandedFolders}
+            selectedPath={selectedPath}
+            onToggleFolder={handleToggleFolder}
+            onSelectItem={handleSelectItem}
+            contentStatus={contentStatus}
+          />
 
-        {/* COLUMN 3 */}
-        {level2 === "big-score" && (
-          <div style={styles.column}>
-            <Item label="Overview & Definitions" />
-            <ExpandableItem
-              label="Scoring Logic"
-              active={level3 === "scoring-logic"}
-              onClick={() => setLevel3("scoring-logic")}
+          {/* Content Editor */}
+          {selectedPath && selectedItem && (
+            <FileUploader
+              path={selectedPath}
+              itemConfig={selectedItem}
+              content={currentContent}
+              onUpload={handleUploadFile}
+              onDelete={handleDeleteFile}
+              onClose={handleCloseEditor}
+              isUploading={isUploading}
             />
-            <ExpandableItem
-              label="Improve BIG Score"
-              active={level3 === "improve-big-score"}
-              onClick={() => setLevel3("improve-big-score")}
-            />
-          </div>
-        )}
+          )}
 
-        {level2 === "payments" && (
-          <div style={styles.column}>
-            <Item label="payment-gateways" />
-            <Item label="invoicing" />
-            <Item label="refunds" />
-          </div>
-        )}
-
-        {/* COLUMN 4 */}
-        {level3 === "scoring-logic" && (
-          <div style={styles.column}>
-            <Item label="BIG_Score_Methodology" />
-            <Item label="Scoring_Logic_Rules" />
-            <Item label="Lifestyle_Models" />
-            <Item label="Validation_Framework" />
-            <Item label="AI_ML_Models" />
-            <Item label="Training_Data" />
-            <Item label="Funder_Feedback" />
-          </div>
-        )}
-
-        {level3 === "improve-big-score" && (
-          <div style={styles.column}>
-            <Item label="Compliance Score" />
-            <Item label="Legitimacy Score" />
-            <Item label="Leadership Score" />
-            <Item label="Governance Score" />
-            <Item label="Capital Appeal Score" />
-          </div>
-        )}
+          {/* Empty state */}
+          {!selectedPath && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'white',
+              borderRadius: 8,
+              border: '1px solid var(--medium-brown)'
+            }}>
+              <div style={{ textAlign: 'center', padding: 40 }}>
+                <AlertCircle size={48} color="var(--accent-brown)" style={{ marginBottom: 16 }} />
+                <h3 style={{ color: 'var(--text-brown)', marginBottom: 8 }}>No Module Selected</h3>
+                <p style={{ color: '#666', margin: 0 }}>
+                  Select a platform module from the explorer to begin
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
-};
-
-const Item = ({ label }) => (
-  <div style={styles.item}>{label}</div>
-);
-
-const ExpandableItem = ({ label, onClick, active }) => (
-  <div onClick={onClick} style={{ ...styles.item, ...styles.expandable }}>
-    <span>{label}</span>
-    <ChevronRight
-      size={16}
-      style={{
-        transform: active ? "rotate(90deg)" : "rotate(0deg)",
-        transition: "transform 0.2s",
-        opacity: 0.7,
-      }}
-    />
-  </div>
-);
-
-const styles = {
-  wrapper: {
-    padding: 24,
-    marginLeft: 280,
-    background: "#faf7f2",
-    minHeight: "100vh",
-  },
-  title: {
-    fontSize: 24,
-    marginBottom: 16,
-  },
-  grid: {
-    display: "flex",
-    gap: 12,
-  },
-  column: {
-    width: 260,
-    background: "#f0e6d9",
-    border: "1px solid #e0d6c8",
-  },
-  item: {
-    padding: "10px 14px",
-    borderBottom: "1px solid #e6d7c3",
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    fontWeight: 500,
-  },
-  expandable: {
-    background: "#fff",
-  },
 };
 
 export default ProductPlatform;
