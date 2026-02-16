@@ -20,126 +20,148 @@ import {
   Legend,
 } from "chart.js"
 
-// Icons for actions
-import { FaTrashAlt, FaEdit, FaPlus, FaChevronDown, FaChevronUp, FaStickyNote, FaChartBar } from "react-icons/fa"
-
-// Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, PointElement, LineElement, Title, Tooltip, Legend)
 
-const PIPELINE_SECTIONS = {
-  "pipeline-visibility": {
-    name: "Pipeline Visibility",
-    notes: {
-      keyQuestion: "Do we have enough quality demand, at the right risk, to hit revenue?",
-      keySignals: "Forecast clarity",
-      keyDecisions: "Formalise sales",
-    },
-    kpis: [
-      "New Leads (#)",
-      "Funnel conversion rates (Visitor → Lead → MQL → SQL → Opportunity → Customer)",
-      "Sales velocity (Average days to close)",
-      "Total pipeline value (ZAR) & Risk Adjusted Pipeline value (= Total Pipeline value * probability)",
-      "Pipeline coverage ratio = Pipeline Value ÷ Target(budget) Revenue",
-      "Lead volume trends",
-    ],
-  },
-  "pipeline-sufficiency": {
-    name: "Pipeline Sufficiency",
-    notes: {
-      keyQuestion: "Is pipeline big enough?",
-      keySignals: "Coverage risk",
-      keyDecisions: "Adjust targets",
-    },
-    kpis: [
-      "Total pipeline value (ZAR) & Risk Adjusted Pipeline value (= Total Pipeline value * probability)",
-      "Pipeline coverage ratio = Pipeline Value ÷ Target(budget) Revenue",
-      "Lead volume trends",
-      "Conversion rates",
-      "Pipeline coverage (not a trend chart, just a single number)",
-    ],
-  },
-  "pipeline-quality": {
-    name: "Pipeline Quality",
-    notes: {
-      keyQuestion: "How real is this pipeline? Will it convert?",
-      keySignals: "Credibility",
-      keyDecisions: "Improve sales discipline",
-    },
-    kpis: [
-      "Cost per lead (by channel)",
-      "CAC vs LTV trend",
-      "SQL → Opportunity conversion",
-      "Opportunity → Customer conversion",
-      "Repeat customers vs churn (excellent inclusion)",
-    ],
-  },
-  "revenue-concentration": {
-    name: "Revenue Concentration",
-    notes: {
-      keyQuestion: "Where does revenue actually come from? Are we over-dependent?",
-      keySignals: "Client/channel risk",
-      keyDecisions: "Diversify clients",
-    },
-    kpis: [
-      "Revenue by channel (bubble chart) or by customer segment",
-      "Revenue per channel vs spend",
-      "Top 3 channels as % of revenue",
-    ],
-  },
-  "demand-sustainability": {
-    name: "Demand Sustainability",
-    notes: {
-      keyQuestion: "Is demand repeatable? Will demand persist without constant spend",
-      keySignals: "Founder or single client reliance",
-      keyDecisions: "Build Demand Engine",
-    },
-    kpis: [
-      "Referral rate trend",
-      "Repeat customer & churn rate",
-      "Cost per Lead by campaign (change to campaign cost contribution), Campaign ROI Analysis",
-      "Declining CAC with rising LTV (this is key)",
-    ],
-  },
-  "pipeline-table": {
-    name: "Pipeline Table",
-    notes: {
-      keyQuestion: "",
-      keySignals: "",
-      keyDecisions: "",
-    },
-    kpis: [
-      "Client / Deal",
-      "Segment",
-      "Stage",
-      "Probability %",
-      "Expected Close",
-      "Deal Value (ZAR)",
-      "Risk Adjusted Pipeline value (ZAR)",
-      "Source",
-      "Owner",
-    ],
-  },
+// ==================== HELPER FUNCTIONS ====================
+
+const getMonthsForYear = (year, viewMode = "month") => {
+  if (viewMode === "year") return [`FY ${year}`]
+  if (viewMode === "quarter") return ["Q1", "Q2", "Q3", "Q4"]
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  return months
 }
 
-// NotesSection Component with See More functionality
+const formatCurrency = (value, unit = "zar_million") => {
+  const num = Number.parseFloat(value) || 0
+  switch(unit) {
+    case "zar": return `R${num.toLocaleString()}`
+    case "zar_thousand": return `R${(num * 1000).toLocaleString()}K`
+    case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})}m`
+    case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}bn`
+    default: return `R${num.toLocaleString()}`
+  }
+}
 
-// Updated NotesSection Component with "See More/See Less" functionality
-const NotesSection = ({ sectionKey, isExpanded, onToggle }) => {
-  const notes = PIPELINE_SECTIONS[sectionKey].notes
+const formatPercentage = (value) => {
+  const num = Number.parseFloat(value) || 0
+  return `${num.toFixed(1)}%`
+}
+
+const getMonthIndex = (month) => {
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  return months.indexOf(month)
+}
+
+// ==================== COMPONENTS ====================
+
+const EyeIcon = ({ onClick, title }) => (
+  <div
+    onClick={onClick}
+    style={{
+      position: "absolute",
+      top: "10px",
+      right: "10px",
+      cursor: "pointer",
+      width: "32px",
+      height: "32px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: "50%",
+      backgroundColor: "#fdfcfb",
+      boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+      transition: "all 0.2s ease",
+      zIndex: 10,
+    }}
+    onMouseEnter={(e) => {
+      e.currentTarget.style.backgroundColor = "#e8ddd4"
+      e.currentTarget.style.transform = "scale(1.1)"
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.backgroundColor = "#fdfcfb"
+      e.currentTarget.style.transform = "scale(1)"
+    }}
+  >
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#5d4037"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="3"></circle>
+      <path d="M22 12c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2s10 4.48 10 10z"></path>
+    </svg>
+    {title && <span style={{ position: "absolute", top: "40px", right: "0", fontSize: "11px", color: "#5d4037", whiteSpace: "nowrap", backgroundColor: "#fdfcfb", padding: "4px 8px", borderRadius: "4px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", display: "none" }}>{title}</span>}
+  </div>
+)
+
+const CalculationModal = ({ isOpen, onClose, title, calculation }) => {
+  if (!isOpen) return null
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(0,0,0,0.5)",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        zIndex: 2000,
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: "#fdfcfb",
+          padding: "30px",
+          borderRadius: "8px",
+          maxWidth: "500px",
+          width: "90%",
+          maxHeight: "80vh",
+          overflow: "auto",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+          <h3 style={{ color: "#5d4037", margin: 0 }}>{title} - Calculation</h3>
+          <button
+            onClick={onClose}
+            style={{
+              background: "none",
+              border: "none",
+              fontSize: "24px",
+              color: "#5d4037",
+              cursor: "pointer",
+              padding: "0",
+              lineHeight: "1",
+            }}
+          >
+            ×
+          </button>
+        </div>
+        <div style={{ backgroundColor: "#f5f0eb", padding: "20px", borderRadius: "6px" }}>
+          <p style={{ color: "#5d4037", fontSize: "14px", lineHeight: "1.6", margin: 0, whiteSpace: "pre-wrap" }}>
+            {calculation}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const KeyQuestionBox = ({ question, signals, decisions, section }) => {
+  const [showMore, setShowMore] = useState(false)
   
-  // Get first sentence for collapsed view
   const getFirstSentence = (text) => {
-    if (!text) return "";
-    const match = text.match(/^[^.!?]+[.!?]/);
-    return match ? match[0] : text.split('.')[0] + '.';
-  };
-  
-  const firstSentence = getFirstSentence(notes.keyQuestion);
-  const showSeeMore = !isExpanded && (
-    notes.keyQuestion.length > firstSentence.length || 
-    notes.keySignals || 
-    notes.keyDecisions
-  );
+    const match = text.match(/^[^.!?]+[.!?]/)
+    return match ? match[0] : text.split('.')[0] + '.'
+  }
   
   return (
     <div
@@ -148,27 +170,25 @@ const NotesSection = ({ sectionKey, isExpanded, onToggle }) => {
         padding: "15px 20px",
         borderRadius: "8px",
         marginBottom: "20px",
-        border: "1px solid	#5d4037",
+        border: "1px solid #5d4037",
       }}
     >
-      <div style={{ display: "flex", alignItems: "flex-start", marginBottom: "8px" }}>
-        <strong style={{ color: "#5d4037", fontSize: "14px", minWidth: "100px" }}>Key Question:</strong>
-        <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px", flex: 1 }}>
-          {isExpanded ? notes.keyQuestion : firstSentence}
+      <div style={{ marginBottom: "8px" }}>
+        <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Question:</strong>
+        <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
+          {showMore ? question : getFirstSentence(question)}
         </span>
-        {showSeeMore && (
+        {!showMore && (question.length > getFirstSentence(question).length || signals || decisions) && (
           <button
-            onClick={onToggle}
+            onClick={() => setShowMore(true)}
             style={{
               background: "none",
               border: "none",
               color: "#5d4037",
               fontWeight: "600",
               cursor: "pointer",
-              marginLeft: "10px",
+              marginLeft: "5px",
               textDecoration: "underline",
-              whiteSpace: "nowrap",
-              fontSize: "14px",
             }}
           >
             See more
@@ -176,22 +196,18 @@ const NotesSection = ({ sectionKey, isExpanded, onToggle }) => {
         )}
       </div>
       
-      {isExpanded && (
+      {showMore && (
         <>
-          {notes.keySignals && (
-            <div style={{ display: "flex", alignItems: "flex-start", marginBottom: "8px" }}>
-              <strong style={{ color: "#5d4037", fontSize: "14px", minWidth: "100px" }}>Key Signals:</strong>
-              <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px", flex: 1 }}>{notes.keySignals}</span>
-            </div>
-          )}
-          {notes.keyDecisions && (
-            <div style={{ display: "flex", alignItems: "flex-start", marginBottom: "8px" }}>
-              <strong style={{ color: "#5d4037", fontSize: "14px", minWidth: "100px" }}>Key Decisions:</strong>
-              <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px", flex: 1 }}>{notes.keyDecisions}</span>
-            </div>
-          )}
+          <div style={{ marginBottom: "8px" }}>
+            <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Signals:</strong>
+            <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>{signals}</span>
+          </div>
+          <div>
+            <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Decisions:</strong>
+            <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>{decisions}</span>
+          </div>
           <button
-            onClick={onToggle}
+            onClick={() => setShowMore(false)}
             style={{
               background: "none",
               border: "none",
@@ -200,7 +216,6 @@ const NotesSection = ({ sectionKey, isExpanded, onToggle }) => {
               cursor: "pointer",
               marginTop: "10px",
               textDecoration: "underline",
-              fontSize: "14px",
             }}
           >
             See less
@@ -210,67 +225,1357 @@ const NotesSection = ({ sectionKey, isExpanded, onToggle }) => {
     </div>
   )
 }
-// ChartActions Component for Add Notes and View Analysis buttons
-const ChartActions = ({ onAddNotes, onViewAnalysis }) => {
+
+// ==================== TREND MODAL COMPONENT ====================
+
+const TrendModal = ({ isOpen, onClose, title, data, labels, isPercentage, formatValue, currencyUnit }) => {
+  if (!isOpen || !data) return null
+
+  const chartData = {
+    labels,
+    datasets: [
+      {
+        label: title,
+        data: data,
+        borderColor: "#5d4037",
+        backgroundColor: "rgba(93, 64, 55, 0.1)",
+        borderWidth: 3,
+        fill: true,
+        tension: 0.3,
+      },
+    ]
+  }
+
+  // Calculate statistics
+  const validData = data.filter(v => !isNaN(parseFloat(v)) && parseFloat(v) !== 0)
+  const currentValue = validData.length > 0 ? validData[validData.length - 1] : 0
+  const averageValue = validData.length > 0 
+    ? validData.reduce((a, b) => a + parseFloat(b), 0) / validData.length 
+    : 0
+  
+  let trend = "N/A"
+  if (validData.length >= 2) {
+    const last = parseFloat(validData[validData.length - 1])
+    const prev = parseFloat(validData[validData.length - 2])
+    if (last > prev) trend = "↗ Increasing"
+    else if (last < prev) trend = "↘ Decreasing"
+    else trend = "→ Stable"
+  }
+
   return (
-    <div style={{ display: "flex", gap: "10px", marginTop: "15px", justifyContent: "flex-end" }}>
-      <button
-        onClick={onAddNotes}
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(0,0,0,0.5)",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        zIndex: 1001,
+      }}
+    >
+      <div
         style={{
-          padding: "8px 16px",
-          backgroundColor: "#7d5a50",
-          color: "#fdfcfb",
-          border: "none",
-          borderRadius: "4px",
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          gap: "5px",
-          fontSize: "14px",
+          backgroundColor: "#fdfcfb",
+          padding: "30px",
+          borderRadius: "8px",
+          maxWidth: "900px",
+          width: "95%",
+          maxHeight: "90vh",
+          overflow: "auto",
         }}
       >
-        <FaStickyNote /> Add Notes
-      </button>
-      <button
-        onClick={onViewAnalysis}
-        style={{
-          padding: "8px 16px",
-          backgroundColor: "#5d4037",
-          color: "#fdfcfb",
-          border: "none",
-          borderRadius: "4px",
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          gap: "5px",
-          fontSize: "14px",
-        }}
-      >
-        <FaChartBar /> View Analysis
-      </button>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+          <h3 style={{ color: "#5d4037", margin: 0 }}>{title} - Trend Analysis</h3>
+          <button
+            onClick={onClose}
+            style={{
+              background: "none",
+              border: "none",
+              fontSize: "24px",
+              color: "#5d4037",
+              cursor: "pointer",
+              padding: "0",
+              lineHeight: "1",
+            }}
+          >
+            ×
+          </button>
+        </div>
+        
+        <div style={{ height: "400px", marginBottom: "20px" }}>
+          <Line
+            data={chartData}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { 
+                  display: true,
+                  position: "top",
+                },
+                title: { display: false },
+                tooltip: {
+                  callbacks: {
+                    label: (context) => {
+                      const value = context.raw
+                      return isPercentage
+                        ? `${context.dataset.label}: ${parseFloat(value).toFixed(2)}%`
+                        : `${context.dataset.label}: ${formatValue(value, currencyUnit)}`
+                    },
+                  },
+                },
+              },
+              scales: {
+                y: { 
+                  beginAtZero: true,
+                  title: {
+                    display: true,
+                    text: isPercentage ? "Percentage (%)" : `Value`,
+                    color: "#5d4037",
+                  },
+                },
+                x: {
+                  title: {
+                    display: true,
+                    text: "Time Period",
+                    color: "#5d4037",
+                  },
+                },
+              },
+            }}
+          />
+        </div>
+
+        {/* Trend Statistics */}
+        <div style={{ 
+          backgroundColor: "#f5f0eb", 
+          padding: "20px", 
+          borderRadius: "6px",
+          marginBottom: "20px" 
+        }}>
+          <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>Trend Statistics</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "15px" }}>
+            <div>
+              <div style={{ fontSize: "12px", color: "#8d6e63", marginBottom: "5px" }}>Current Value</div>
+              <div style={{ fontSize: "16px", fontWeight: "600", color: "#5d4037" }}>
+                {isPercentage 
+                  ? `${parseFloat(currentValue).toFixed(1)}%`
+                  : formatValue(currentValue, currencyUnit)
+                }
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: "12px", color: "#8d6e63", marginBottom: "5px" }}>Average</div>
+              <div style={{ fontSize: "16px", fontWeight: "600", color: "#5d4037" }}>
+                {isPercentage
+                  ? `${parseFloat(averageValue).toFixed(1)}%`
+                  : formatValue(averageValue, currencyUnit)
+                }
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: "12px", color: "#8d6e63", marginBottom: "5px" }}>Trend</div>
+              <div style={{ fontSize: "16px", fontWeight: "600", color: "#5d4037" }}>
+                {trend}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: "12px", color: "#8d6e63", marginBottom: "5px" }}>Data Points</div>
+              <div style={{ fontSize: "16px", fontWeight: "600", color: "#5d4037" }}>
+                {validData.length}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+          <button
+            onClick={onClose}
+            style={{
+              padding: "10px 20px",
+              backgroundColor: "#5d4037",
+              color: "#fdfcfb",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontWeight: "600",
+            }}
+          >
+            Close
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
 
-// Pipeline Visibility Component
-// Pipeline Visibility Component
-const PipelineVisibility = ({ activeSection, currentUser, isInvestorView }) => {
-  const [newLeadsData, setNewLeadsData] = useState(Array(12).fill(0))
-  const [funnelData, setFunnelData] = useState({
-    visitors: 0,
-    leads: 0,
-    mql: 0,
-    sql: 0,
-    opportunity: 0,
-    customer: 0,
-  })
-  const [salesVelocityData, setSalesVelocityData] = useState(Array(12).fill(0))
-  const [showEditForm, setShowEditForm] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-  const [notesExpanded, setNotesExpanded] = useState(false)
+// ==================== UNIVERSAL ADD DATA MODAL ====================
 
-  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+const UniversalAddDataModal = ({ 
+  isOpen, 
+  onClose, 
+  currentTab,
+  user,
+  onSave,
+  loading,
+  initialData = {}
+}) => {
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [selectedMonth, setSelectedMonth] = useState("Jan")
+  
+  // ========== PIPELINE VISIBILITY DATA ==========
+  const [pipelineVisibilityData, setPipelineVisibilityData] = useState({
+    newLeads: Array(12).fill(""),
+    funnelVisitors: "",
+    funnelLeads: "",
+    funnelMql: "",
+    funnelSql: "",
+    funnelOpportunity: "",
+    funnelCustomer: "",
+    salesVelocity: Array(12).fill(""),
+    notes: "",
+  })
+
+  // ========== PIPELINE SUFFICIENCY DATA ==========
+  const [pipelineSufficiencyData, setPipelineSufficiencyData] = useState({
+    totalPipelineValue: "",
+    probability: "",
+    targetRevenue: "",
+    leadVolumeTrends: Array(12).fill(""),
+    conversionRates: Array(12).fill(""),
+    notes: "",
+  })
+
+  // ========== PIPELINE QUALITY DATA ==========
+  const [pipelineQualityData, setPipelineQualityData] = useState({
+    costPerLeadChannels: [
+      { name: "Social Media", cost: "" },
+      { name: "Email", cost: "" },
+      { name: "PPC", cost: "" },
+      { name: "SEO", cost: "" },
+      { name: "Referral", cost: "" }
+    ],
+    cacLtvData: Array(12).fill({ cac: "", ltv: "" }),
+    sqlToOpportunity: "",
+    opportunityToCustomer: "",
+    repeatCustomers: "",
+    churnRate: "",
+    notes: "",
+  })
+
+  // ========== REVENUE CONCENTRATION DATA ==========
+  const [revenueConcentrationData, setRevenueConcentrationData] = useState({
+    revenueChannels: [
+      { name: "Social Media", revenue: "", spend: "" },
+      { name: "Email", revenue: "", spend: "" },
+      { name: "PPC", revenue: "", spend: "" },
+      { name: "SEO", revenue: "", spend: "" },
+      { name: "Referral", revenue: "", spend: "" },
+      { name: "Direct", revenue: "", spend: "" }
+    ],
+    customerSegments: [
+      { name: "Enterprise", revenue: "", customerCount: "" },
+      { name: "SMB", revenue: "", customerCount: "" },
+      { name: "Startup", revenue: "", customerCount: "" },
+      { name: "Non-Profit", revenue: "", customerCount: "" },
+      { name: "Education", revenue: "", customerCount: "" }
+    ],
+    notes: "",
+  })
+
+  // ========== DEMAND SUSTAINABILITY DATA ==========
+  const [demandSustainabilityData, setDemandSustainabilityData] = useState({
+    referralRateTrend: Array(12).fill(""),
+    repeatCustomerRate: "",
+    churnRate: "",
+    campaigns: [
+      { name: "Q1 Campaign", cost: "", revenue: "" },
+      { name: "Q2 Campaign", cost: "", revenue: "" },
+      { name: "Summer Sale", cost: "", revenue: "" },
+      { name: "Holiday Campaign", cost: "", revenue: "" }
+    ],
+    cacLtvData: Array(12).fill({ cac: "", ltv: "" }),
+    notes: "",
+  })
+
+  // ========== PIPELINE TABLE DATA ==========
+  const [pipelineDealData, setPipelineDealData] = useState({
+    clientName: "",
+    segment: "",
+    stage: "initial-contact",
+    probability: "",
+    expectedClose: "",
+    dealValue: "",
+    source: "",
+    owner: "",
+    establishedStartDate: "",
+    expectedOnboardingDate: "",
+    signedDate: "",
+  })
+
+  const months = getMonthsForYear(selectedYear, "month")
+  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
+
+  // Load existing data when modal opens
+  useEffect(() => {
+    if (isOpen && user) {
+      loadDataForTab(currentTab)
+    }
+  }, [isOpen, currentTab, user, selectedYear])
+
+  const loadDataForTab = async (tabId) => {
+    try {
+      switch(tabId) {
+        case "pipeline-visibility":
+          const visibilityDoc = await getDoc(doc(db, "pipelineData", `${user.uid}_visibility_${selectedYear}`))
+          if (visibilityDoc.exists()) {
+            const data = visibilityDoc.data()
+            setPipelineVisibilityData({
+              newLeads: data.newLeads?.map(String) || Array(12).fill(""),
+              funnelVisitors: data.funnelVisitors?.toString() || "",
+              funnelLeads: data.funnelLeads?.toString() || "",
+              funnelMql: data.funnelMql?.toString() || "",
+              funnelSql: data.funnelSql?.toString() || "",
+              funnelOpportunity: data.funnelOpportunity?.toString() || "",
+              funnelCustomer: data.funnelCustomer?.toString() || "",
+              salesVelocity: data.salesVelocity?.map(String) || Array(12).fill(""),
+              notes: data.notes || "",
+            })
+          }
+          break
+        case "pipeline-sufficiency":
+          const sufficiencyDoc = await getDoc(doc(db, "pipelineData", `${user.uid}_sufficiency_${selectedYear}`))
+          if (sufficiencyDoc.exists()) {
+            const data = sufficiencyDoc.data()
+            setPipelineSufficiencyData({
+              totalPipelineValue: data.totalPipelineValue?.toString() || "",
+              probability: data.probability?.toString() || "",
+              targetRevenue: data.targetRevenue?.toString() || "",
+              leadVolumeTrends: data.leadVolumeTrends?.map(String) || Array(12).fill(""),
+              conversionRates: data.conversionRates?.map(String) || Array(12).fill(""),
+              notes: data.notes || "",
+            })
+          }
+          break
+        case "pipeline-quality":
+          const qualityDoc = await getDoc(doc(db, "pipelineData", `${user.uid}_quality_${selectedYear}`))
+          if (qualityDoc.exists()) {
+            const data = qualityDoc.data()
+            setPipelineQualityData({
+              costPerLeadChannels: data.costPerLeadChannels || [
+                { name: "Social Media", cost: "" },
+                { name: "Email", cost: "" },
+                { name: "PPC", cost: "" },
+                { name: "SEO", cost: "" },
+                { name: "Referral", cost: "" }
+              ],
+              cacLtvData: data.cacLtvData || Array(12).fill({ cac: "", ltv: "" }),
+              sqlToOpportunity: data.sqlToOpportunity?.toString() || "",
+              opportunityToCustomer: data.opportunityToCustomer?.toString() || "",
+              repeatCustomers: data.repeatCustomers?.toString() || "",
+              churnRate: data.churnRate?.toString() || "",
+              notes: data.notes || "",
+            })
+          }
+          break
+        case "revenue-concentration":
+          const concentrationDoc = await getDoc(doc(db, "pipelineData", `${user.uid}_concentration_${selectedYear}`))
+          if (concentrationDoc.exists()) {
+            const data = concentrationDoc.data()
+            setRevenueConcentrationData({
+              revenueChannels: data.revenueChannels || [
+                { name: "Social Media", revenue: "", spend: "" },
+                { name: "Email", revenue: "", spend: "" },
+                { name: "PPC", revenue: "", spend: "" },
+                { name: "SEO", revenue: "", spend: "" },
+                { name: "Referral", revenue: "", spend: "" },
+                { name: "Direct", revenue: "", spend: "" }
+              ],
+              customerSegments: data.customerSegments || [
+                { name: "Enterprise", revenue: "", customerCount: "" },
+                { name: "SMB", revenue: "", customerCount: "" },
+                { name: "Startup", revenue: "", customerCount: "" },
+                { name: "Non-Profit", revenue: "", customerCount: "" },
+                { name: "Education", revenue: "", customerCount: "" }
+              ],
+              notes: data.notes || "",
+            })
+          }
+          break
+        case "demand-sustainability":
+          const sustainabilityDoc = await getDoc(doc(db, "pipelineData", `${user.uid}_sustainability_${selectedYear}`))
+          if (sustainabilityDoc.exists()) {
+            const data = sustainabilityDoc.data()
+            setDemandSustainabilityData({
+              referralRateTrend: data.referralRateTrend?.map(String) || Array(12).fill(""),
+              repeatCustomerRate: data.repeatCustomerRate?.toString() || "",
+              churnRate: data.churnRate?.toString() || "",
+              campaigns: data.campaigns || [
+                { name: "Q1 Campaign", cost: "", revenue: "" },
+                { name: "Q2 Campaign", cost: "", revenue: "" },
+                { name: "Summer Sale", cost: "", revenue: "" },
+                { name: "Holiday Campaign", cost: "", revenue: "" }
+              ],
+              cacLtvData: data.cacLtvData || Array(12).fill({ cac: "", ltv: "" }),
+              notes: data.notes || "",
+            })
+          }
+          break
+      }
+    } catch (error) {
+      console.error(`Error loading data for ${tabId}:`, error)
+    }
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!user) {
+      alert("Please log in to save data")
+      return
+    }
+
+    try {
+      switch(currentTab) {
+        case "pipeline-visibility":
+          await setDoc(doc(db, "pipelineData", `${user.uid}_visibility_${selectedYear}`), {
+            userId: user.uid,
+            year: selectedYear,
+            newLeads: pipelineVisibilityData.newLeads.map(v => Number.parseFloat(v) || 0),
+            funnelVisitors: Number.parseFloat(pipelineVisibilityData.funnelVisitors) || 0,
+            funnelLeads: Number.parseFloat(pipelineVisibilityData.funnelLeads) || 0,
+            funnelMql: Number.parseFloat(pipelineVisibilityData.funnelMql) || 0,
+            funnelSql: Number.parseFloat(pipelineVisibilityData.funnelSql) || 0,
+            funnelOpportunity: Number.parseFloat(pipelineVisibilityData.funnelOpportunity) || 0,
+            funnelCustomer: Number.parseFloat(pipelineVisibilityData.funnelCustomer) || 0,
+            salesVelocity: pipelineVisibilityData.salesVelocity.map(v => Number.parseFloat(v) || 0),
+            notes: pipelineVisibilityData.notes,
+            lastUpdated: new Date().toISOString(),
+          })
+          break
+        case "pipeline-sufficiency":
+          await setDoc(doc(db, "pipelineData", `${user.uid}_sufficiency_${selectedYear}`), {
+            userId: user.uid,
+            year: selectedYear,
+            totalPipelineValue: Number.parseFloat(pipelineSufficiencyData.totalPipelineValue) || 0,
+            probability: Number.parseFloat(pipelineSufficiencyData.probability) || 0,
+            targetRevenue: Number.parseFloat(pipelineSufficiencyData.targetRevenue) || 0,
+            leadVolumeTrends: pipelineSufficiencyData.leadVolumeTrends.map(v => Number.parseFloat(v) || 0),
+            conversionRates: pipelineSufficiencyData.conversionRates.map(v => Number.parseFloat(v) || 0),
+            notes: pipelineSufficiencyData.notes,
+            lastUpdated: new Date().toISOString(),
+          })
+          break
+        case "pipeline-quality":
+          await setDoc(doc(db, "pipelineData", `${user.uid}_quality_${selectedYear}`), {
+            userId: user.uid,
+            year: selectedYear,
+            costPerLeadChannels: pipelineQualityData.costPerLeadChannels.map(c => ({
+              name: c.name,
+              cost: Number.parseFloat(c.cost) || 0
+            })),
+            cacLtvData: pipelineQualityData.cacLtvData.map(item => ({
+              cac: Number.parseFloat(item.cac) || 0,
+              ltv: Number.parseFloat(item.ltv) || 0
+            })),
+            sqlToOpportunity: Number.parseFloat(pipelineQualityData.sqlToOpportunity) || 0,
+            opportunityToCustomer: Number.parseFloat(pipelineQualityData.opportunityToCustomer) || 0,
+            repeatCustomers: Number.parseFloat(pipelineQualityData.repeatCustomers) || 0,
+            churnRate: Number.parseFloat(pipelineQualityData.churnRate) || 0,
+            notes: pipelineQualityData.notes,
+            lastUpdated: new Date().toISOString(),
+          })
+          break
+        case "revenue-concentration":
+          await setDoc(doc(db, "pipelineData", `${user.uid}_concentration_${selectedYear}`), {
+            userId: user.uid,
+            year: selectedYear,
+            revenueChannels: revenueConcentrationData.revenueChannels.map(c => ({
+              name: c.name,
+              revenue: Number.parseFloat(c.revenue) || 0,
+              spend: Number.parseFloat(c.spend) || 0
+            })),
+            customerSegments: revenueConcentrationData.customerSegments.map(s => ({
+              name: s.name,
+              revenue: Number.parseFloat(s.revenue) || 0,
+              customerCount: Number.parseFloat(s.customerCount) || 0
+            })),
+            notes: revenueConcentrationData.notes,
+            lastUpdated: new Date().toISOString(),
+          })
+          break
+        case "demand-sustainability":
+          await setDoc(doc(db, "pipelineData", `${user.uid}_sustainability_${selectedYear}`), {
+            userId: user.uid,
+            year: selectedYear,
+            referralRateTrend: demandSustainabilityData.referralRateTrend.map(v => Number.parseFloat(v) || 0),
+            repeatCustomerRate: Number.parseFloat(demandSustainabilityData.repeatCustomerRate) || 0,
+            churnRate: Number.parseFloat(demandSustainabilityData.churnRate) || 0,
+            campaigns: demandSustainabilityData.campaigns.map(c => ({
+              name: c.name,
+              cost: Number.parseFloat(c.cost) || 0,
+              revenue: Number.parseFloat(c.revenue) || 0
+            })),
+            cacLtvData: demandSustainabilityData.cacLtvData.map(item => ({
+              cac: Number.parseFloat(item.cac) || 0,
+              ltv: Number.parseFloat(item.ltv) || 0
+            })),
+            notes: demandSustainabilityData.notes,
+            lastUpdated: new Date().toISOString(),
+          })
+          break
+        case "pipeline-table":
+          if (!pipelineDealData.clientName || !pipelineDealData.dealValue) {
+            alert("Please fill in required fields")
+            return
+          }
+          const riskAdjustedValue = (Number.parseFloat(pipelineDealData.dealValue) * Number.parseFloat(pipelineDealData.probability) / 100) || 0
+          await addDoc(collection(db, "pipelineData", `${user.uid}_deals`), {
+            userId: user.uid,
+            year: selectedYear,
+            ...pipelineDealData,
+            probability: Number.parseFloat(pipelineDealData.probability) || 0,
+            dealValue: Number.parseFloat(pipelineDealData.dealValue) || 0,
+            riskAdjustedValue,
+            createdAt: new Date().toISOString(),
+          })
+          break
+      }
+      
+      if (onSave) onSave()
+      alert("Data saved successfully!")
+    } catch (error) {
+      console.error("Error saving data:", error)
+      alert("Error saving data. Please try again.")
+    }
+  }
+
+  const renderMonthlyInputs = (label, dataArray, setDataArray, options = {}) => {
+    const { step = "0.01", unit = "" } = options
+    
+    return (
+      <div style={{ marginBottom: "20px" }}>
+        <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>
+          {label} {unit && <span style={{ fontSize: "12px", color: "#8d6e63", marginLeft: "8px" }}>({unit})</span>}
+        </h5>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(12, 1fr)",
+            gap: "5px",
+          }}
+        >
+          {months.map((month, idx) => (
+            <div key={month}>
+              <label style={{ fontSize: "10px", color: "#8d6e63", display: "block", marginBottom: "2px" }}>
+                {month}
+              </label>
+              <input
+                type="number"
+                step={step}
+                value={dataArray[idx] || ""}
+                onChange={(e) => {
+                  const newArray = [...dataArray]
+                  newArray[idx] = e.target.value
+                  setDataArray(newArray)
+                }}
+                placeholder="0"
+                style={{
+                  width: "100%",
+                  padding: "6px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "12px",
+                }}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(0,0,0,0.5)",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        zIndex: 1000,
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: "#fdfcfb",
+          padding: "20px",
+          borderRadius: "8px",
+          maxWidth: "1400px",
+          maxHeight: "90vh",
+          overflow: "auto",
+          width: "95%",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+          <h3 style={{ color: "#5d4037", margin: 0 }}>Add Marketing & Sales Data</h3>
+          <button
+            onClick={onClose}
+            style={{
+              background: "none",
+              border: "none",
+              fontSize: "24px",
+              color: "#5d4037",
+              cursor: "pointer",
+              padding: "0",
+              lineHeight: "1",
+            }}
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Year/Month Selection */}
+        <div style={{ display: "flex", gap: "20px", marginBottom: "20px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+            <span style={{ color: "#5d4037", fontSize: "14px" }}>Select Year:</span>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
+              style={{
+                padding: "8px 12px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+                fontSize: "14px",
+                color: "#5d4037",
+                minWidth: "100px",
+              }}
+            >
+              {years.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          </div>
+          
+          <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+            <span style={{ color: "#5d4037", fontSize: "14px" }}>Select Month:</span>
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              style={{
+                padding: "8px 12px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+                fontSize: "14px",
+                color: "#5d4037",
+                minWidth: "100px",
+              }}
+            >
+              {months.map((month) => (
+                <option key={month} value={month}>
+                  {month}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* ========== PIPELINE VISIBILITY ========== */}
+        {currentTab === "pipeline-visibility" && (
+          <div>
+            <h4 style={{ color: "#5d4037", marginBottom: "20px" }}>Pipeline Visibility Data</h4>
+            
+            {renderMonthlyInputs("New Leads", pipelineVisibilityData.newLeads, (val) => 
+              setPipelineVisibilityData({...pipelineVisibilityData, newLeads: val}), { unit: "leads", step: "1" })}
+            
+            <div style={{ marginBottom: "30px" }}>
+              <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>Funnel Conversion Data</h5>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "15px" }}>
+                <div>
+                  <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Visitors</label>
+                  <input
+                    type="number"
+                    value={pipelineVisibilityData.funnelVisitors}
+                    onChange={(e) => setPipelineVisibilityData({...pipelineVisibilityData, funnelVisitors: e.target.value})}
+                    style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Leads</label>
+                  <input
+                    type="number"
+                    value={pipelineVisibilityData.funnelLeads}
+                    onChange={(e) => setPipelineVisibilityData({...pipelineVisibilityData, funnelLeads: e.target.value})}
+                    style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>MQL</label>
+                  <input
+                    type="number"
+                    value={pipelineVisibilityData.funnelMql}
+                    onChange={(e) => setPipelineVisibilityData({...pipelineVisibilityData, funnelMql: e.target.value})}
+                    style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>SQL</label>
+                  <input
+                    type="number"
+                    value={pipelineVisibilityData.funnelSql}
+                    onChange={(e) => setPipelineVisibilityData({...pipelineVisibilityData, funnelSql: e.target.value})}
+                    style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Opportunity</label>
+                  <input
+                    type="number"
+                    value={pipelineVisibilityData.funnelOpportunity}
+                    onChange={(e) => setPipelineVisibilityData({...pipelineVisibilityData, funnelOpportunity: e.target.value})}
+                    style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Customer</label>
+                  <input
+                    type="number"
+                    value={pipelineVisibilityData.funnelCustomer}
+                    onChange={(e) => setPipelineVisibilityData({...pipelineVisibilityData, funnelCustomer: e.target.value})}
+                    style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                  />
+                </div>
+              </div>
+            </div>
+            
+            {renderMonthlyInputs("Sales Velocity (Days to Close)", pipelineVisibilityData.salesVelocity, (val) => 
+              setPipelineVisibilityData({...pipelineVisibilityData, salesVelocity: val}), { unit: "days", step: "1" })}
+            
+            <div style={{ marginBottom: "20px" }}>
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Notes:
+              </label>
+              <textarea
+                value={pipelineVisibilityData.notes}
+                onChange={(e) => setPipelineVisibilityData({...pipelineVisibilityData, notes: e.target.value})}
+                placeholder="Add any additional notes..."
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "80px",
+                  fontSize: "13px",
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ========== PIPELINE SUFFICIENCY ========== */}
+        {currentTab === "pipeline-sufficiency" && (
+          <div>
+            <h4 style={{ color: "#5d4037", marginBottom: "20px" }}>Pipeline Sufficiency Data</h4>
+            
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px", marginBottom: "30px" }}>
+              <div>
+                <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Total Pipeline Value (R m)</label>
+                <input
+                  type="number"
+                  value={pipelineSufficiencyData.totalPipelineValue}
+                  onChange={(e) => setPipelineSufficiencyData({...pipelineSufficiencyData, totalPipelineValue: e.target.value})}
+                  style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Overall Probability (%)</label>
+                <input
+                  type="number"
+                  value={pipelineSufficiencyData.probability}
+                  onChange={(e) => setPipelineSufficiencyData({...pipelineSufficiencyData, probability: e.target.value})}
+                  style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                  min="0"
+                  max="100"
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Target Revenue (R m)</label>
+                <input
+                  type="number"
+                  value={pipelineSufficiencyData.targetRevenue}
+                  onChange={(e) => setPipelineSufficiencyData({...pipelineSufficiencyData, targetRevenue: e.target.value})}
+                  style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+              </div>
+            </div>
+            
+            {renderMonthlyInputs("Lead Volume Trends", pipelineSufficiencyData.leadVolumeTrends, (val) => 
+              setPipelineSufficiencyData({...pipelineSufficiencyData, leadVolumeTrends: val}), { unit: "leads", step: "1" })}
+            
+            {renderMonthlyInputs("Conversion Rates (%)", pipelineSufficiencyData.conversionRates, (val) => 
+              setPipelineSufficiencyData({...pipelineSufficiencyData, conversionRates: val}), { unit: "%", step: "0.1" })}
+            
+            <div style={{ marginBottom: "20px" }}>
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Notes:
+              </label>
+              <textarea
+                value={pipelineSufficiencyData.notes}
+                onChange={(e) => setPipelineSufficiencyData({...pipelineSufficiencyData, notes: e.target.value})}
+                placeholder="Add any additional notes..."
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "80px",
+                  fontSize: "13px",
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ========== PIPELINE QUALITY ========== */}
+        {currentTab === "pipeline-quality" && (
+          <div>
+            <h4 style={{ color: "#5d4037", marginBottom: "20px" }}>Pipeline Quality Data</h4>
+            
+            <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>Cost Per Lead by Channel</h5>
+            {pipelineQualityData.costPerLeadChannels.map((channel, index) => (
+              <div key={index} style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "10px", marginBottom: "10px" }}>
+                <input
+                  type="text"
+                  value={channel.name}
+                  onChange={(e) => {
+                    const newChannels = [...pipelineQualityData.costPerLeadChannels]
+                    newChannels[index].name = e.target.value
+                    setPipelineQualityData({...pipelineQualityData, costPerLeadChannels: newChannels})
+                  }}
+                  style={{ padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+                <input
+                  type="number"
+                  value={channel.cost}
+                  onChange={(e) => {
+                    const newChannels = [...pipelineQualityData.costPerLeadChannels]
+                    newChannels[index].cost = e.target.value
+                    setPipelineQualityData({...pipelineQualityData, costPerLeadChannels: newChannels})
+                  }}
+                  placeholder="Cost (R)"
+                  style={{ padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+              </div>
+            ))}
+            
+            <h5 style={{ color: "#5d4037", marginTop: "30px", marginBottom: "15px", fontWeight: "600" }}>CAC vs LTV (Monthly)</h5>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "15px", marginBottom: "30px" }}>
+              {months.map((month, index) => (
+                <div key={month} style={{ backgroundColor: "#f5f0eb", padding: "10px", borderRadius: "4px" }}>
+                  <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>{month}</label>
+                  <div style={{ display: "flex", gap: "5px", marginTop: "5px" }}>
+                    <input
+                      type="number"
+                      value={pipelineQualityData.cacLtvData[index]?.cac || ""}
+                      onChange={(e) => {
+                        const newData = [...pipelineQualityData.cacLtvData]
+                        newData[index] = { ...newData[index], cac: e.target.value }
+                        setPipelineQualityData({...pipelineQualityData, cacLtvData: newData})
+                      }}
+                      placeholder="CAC"
+                      style={{ width: "50%", padding: "6px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                    />
+                    <input
+                      type="number"
+                      value={pipelineQualityData.cacLtvData[index]?.ltv || ""}
+                      onChange={(e) => {
+                        const newData = [...pipelineQualityData.cacLtvData]
+                        newData[index] = { ...newData[index], ltv: e.target.value }
+                        setPipelineQualityData({...pipelineQualityData, cacLtvData: newData})
+                      }}
+                      placeholder="LTV"
+                      style={{ width: "50%", padding: "6px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "15px", marginBottom: "30px" }}>
+              <div>
+                <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>SQL → Opportunity (%)</label>
+                <input
+                  type="number"
+                  value={pipelineQualityData.sqlToOpportunity}
+                  onChange={(e) => setPipelineQualityData({...pipelineQualityData, sqlToOpportunity: e.target.value})}
+                  style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Opportunity → Customer (%)</label>
+                <input
+                  type="number"
+                  value={pipelineQualityData.opportunityToCustomer}
+                  onChange={(e) => setPipelineQualityData({...pipelineQualityData, opportunityToCustomer: e.target.value})}
+                  style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Repeat Customers (%)</label>
+                <input
+                  type="number"
+                  value={pipelineQualityData.repeatCustomers}
+                  onChange={(e) => setPipelineQualityData({...pipelineQualityData, repeatCustomers: e.target.value})}
+                  style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Churn Rate (%)</label>
+                <input
+                  type="number"
+                  value={pipelineQualityData.churnRate}
+                  onChange={(e) => setPipelineQualityData({...pipelineQualityData, churnRate: e.target.value})}
+                  style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+              </div>
+            </div>
+            
+            <div style={{ marginBottom: "20px" }}>
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Notes:
+              </label>
+              <textarea
+                value={pipelineQualityData.notes}
+                onChange={(e) => setPipelineQualityData({...pipelineQualityData, notes: e.target.value})}
+                placeholder="Add any additional notes..."
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "80px",
+                  fontSize: "13px",
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ========== REVENUE CONCENTRATION ========== */}
+        {currentTab === "revenue-concentration" && (
+          <div>
+            <h4 style={{ color: "#5d4037", marginBottom: "20px" }}>Revenue Concentration Data</h4>
+            
+            <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>Revenue by Channel</h5>
+            {revenueConcentrationData.revenueChannels.map((channel, index) => (
+              <div key={index} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+                <input
+                  type="text"
+                  value={channel.name}
+                  onChange={(e) => {
+                    const newChannels = [...revenueConcentrationData.revenueChannels]
+                    newChannels[index].name = e.target.value
+                    setRevenueConcentrationData({...revenueConcentrationData, revenueChannels: newChannels})
+                  }}
+                  style={{ padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+                <input
+                  type="number"
+                  value={channel.revenue}
+                  onChange={(e) => {
+                    const newChannels = [...revenueConcentrationData.revenueChannels]
+                    newChannels[index].revenue = e.target.value
+                    setRevenueConcentrationData({...revenueConcentrationData, revenueChannels: newChannels})
+                  }}
+                  placeholder="Revenue (R m)"
+                  style={{ padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+                <input
+                  type="number"
+                  value={channel.spend}
+                  onChange={(e) => {
+                    const newChannels = [...revenueConcentrationData.revenueChannels]
+                    newChannels[index].spend = e.target.value
+                    setRevenueConcentrationData({...revenueConcentrationData, revenueChannels: newChannels})
+                  }}
+                  placeholder="Spend (R m)"
+                  style={{ padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+              </div>
+            ))}
+            
+            <h5 style={{ color: "#5d4037", marginTop: "30px", marginBottom: "15px", fontWeight: "600" }}>Customer Segments</h5>
+            {revenueConcentrationData.customerSegments.map((segment, index) => (
+              <div key={index} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+                <input
+                  type="text"
+                  value={segment.name}
+                  onChange={(e) => {
+                    const newSegments = [...revenueConcentrationData.customerSegments]
+                    newSegments[index].name = e.target.value
+                    setRevenueConcentrationData({...revenueConcentrationData, customerSegments: newSegments})
+                  }}
+                  style={{ padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+                <input
+                  type="number"
+                  value={segment.revenue}
+                  onChange={(e) => {
+                    const newSegments = [...revenueConcentrationData.customerSegments]
+                    newSegments[index].revenue = e.target.value
+                    setRevenueConcentrationData({...revenueConcentrationData, customerSegments: newSegments})
+                  }}
+                  placeholder="Revenue (R m)"
+                  style={{ padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+                <input
+                  type="number"
+                  value={segment.customerCount}
+                  onChange={(e) => {
+                    const newSegments = [...revenueConcentrationData.customerSegments]
+                    newSegments[index].customerCount = e.target.value
+                    setRevenueConcentrationData({...revenueConcentrationData, customerSegments: newSegments})
+                  }}
+                  placeholder="# Customers"
+                  style={{ padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+              </div>
+            ))}
+            
+            <div style={{ marginBottom: "20px", marginTop: "30px" }}>
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Notes:
+              </label>
+              <textarea
+                value={revenueConcentrationData.notes}
+                onChange={(e) => setRevenueConcentrationData({...revenueConcentrationData, notes: e.target.value})}
+                placeholder="Add any additional notes..."
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "80px",
+                  fontSize: "13px",
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ========== DEMAND SUSTAINABILITY ========== */}
+        {currentTab === "demand-sustainability" && (
+          <div>
+            <h4 style={{ color: "#5d4037", marginBottom: "20px" }}>Demand Sustainability Data</h4>
+            
+            {renderMonthlyInputs("Referral Rate Trend (%)", demandSustainabilityData.referralRateTrend, (val) => 
+              setDemandSustainabilityData({...demandSustainabilityData, referralRateTrend: val}), { unit: "%", step: "0.1" })}
+            
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "30px" }}>
+              <div>
+                <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Repeat Customer Rate (%)</label>
+                <input
+                  type="number"
+                  value={demandSustainabilityData.repeatCustomerRate}
+                  onChange={(e) => setDemandSustainabilityData({...demandSustainabilityData, repeatCustomerRate: e.target.value})}
+                  style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Churn Rate (%)</label>
+                <input
+                  type="number"
+                  value={demandSustainabilityData.churnRate}
+                  onChange={(e) => setDemandSustainabilityData({...demandSustainabilityData, churnRate: e.target.value})}
+                  style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+              </div>
+            </div>
+            
+            <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>Campaigns</h5>
+            {demandSustainabilityData.campaigns.map((campaign, index) => (
+              <div key={index} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+                <input
+                  type="text"
+                  value={campaign.name}
+                  onChange={(e) => {
+                    const newCampaigns = [...demandSustainabilityData.campaigns]
+                    newCampaigns[index].name = e.target.value
+                    setDemandSustainabilityData({...demandSustainabilityData, campaigns: newCampaigns})
+                  }}
+                  style={{ padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+                <input
+                  type="number"
+                  value={campaign.cost}
+                  onChange={(e) => {
+                    const newCampaigns = [...demandSustainabilityData.campaigns]
+                    newCampaigns[index].cost = e.target.value
+                    setDemandSustainabilityData({...demandSustainabilityData, campaigns: newCampaigns})
+                  }}
+                  placeholder="Cost (R m)"
+                  style={{ padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+                <input
+                  type="number"
+                  value={campaign.revenue}
+                  onChange={(e) => {
+                    const newCampaigns = [...demandSustainabilityData.campaigns]
+                    newCampaigns[index].revenue = e.target.value
+                    setDemandSustainabilityData({...demandSustainabilityData, campaigns: newCampaigns})
+                  }}
+                  placeholder="Revenue (R m)"
+                  style={{ padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+              </div>
+            ))}
+            
+            <h5 style={{ color: "#5d4037", marginTop: "30px", marginBottom: "15px", fontWeight: "600" }}>CAC vs LTV (Monthly)</h5>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "15px", marginBottom: "30px" }}>
+              {months.map((month, index) => (
+                <div key={month} style={{ backgroundColor: "#f5f0eb", padding: "10px", borderRadius: "4px" }}>
+                  <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>{month}</label>
+                  <div style={{ display: "flex", gap: "5px", marginTop: "5px" }}>
+                    <input
+                      type="number"
+                      value={demandSustainabilityData.cacLtvData[index]?.cac || ""}
+                      onChange={(e) => {
+                        const newData = [...demandSustainabilityData.cacLtvData]
+                        newData[index] = { ...newData[index], cac: e.target.value }
+                        setDemandSustainabilityData({...demandSustainabilityData, cacLtvData: newData})
+                      }}
+                      placeholder="CAC"
+                      style={{ width: "50%", padding: "6px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                    />
+                    <input
+                      type="number"
+                      value={demandSustainabilityData.cacLtvData[index]?.ltv || ""}
+                      onChange={(e) => {
+                        const newData = [...demandSustainabilityData.cacLtvData]
+                        newData[index] = { ...newData[index], ltv: e.target.value }
+                        setDemandSustainabilityData({...demandSustainabilityData, cacLtvData: newData})
+                      }}
+                      placeholder="LTV"
+                      style={{ width: "50%", padding: "6px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            <div style={{ marginBottom: "20px" }}>
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
+                Notes:
+              </label>
+              <textarea
+                value={demandSustainabilityData.notes}
+                onChange={(e) => setDemandSustainabilityData({...demandSustainabilityData, notes: e.target.value})}
+                placeholder="Add any additional notes..."
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "80px",
+                  fontSize: "13px",
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ========== PIPELINE TABLE ========== */}
+        {currentTab === "pipeline-table" && (
+          <div style={{ padding: "20px" }}>
+            <h4 style={{ color: "#5d4037", marginBottom: "20px" }}>Add New Deal</h4>
+            
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+              <div>
+                <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Client / Deal *</label>
+                <input
+                  type="text"
+                  value={pipelineDealData.clientName}
+                  onChange={(e) => setPipelineDealData({...pipelineDealData, clientName: e.target.value})}
+                  style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Customer Segment</label>
+                <input
+                  type="text"
+                  value={pipelineDealData.segment}
+                  onChange={(e) => setPipelineDealData({...pipelineDealData, segment: e.target.value})}
+                  style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Stage</label>
+                <select
+                  value={pipelineDealData.stage}
+                  onChange={(e) => setPipelineDealData({...pipelineDealData, stage: e.target.value})}
+                  style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                >
+                  <option value="initial-contact">Initial Contact</option>
+                  <option value="qualification">Qualification</option>
+                  <option value="proposal">Proposal</option>
+                  <option value="negotiation">Negotiation</option>
+                  <option value="closed-won">Closed Won</option>
+                  <option value="closed-lost">Closed Lost</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Probability (%)</label>
+                <input
+                  type="number"
+                  value={pipelineDealData.probability}
+                  onChange={(e) => setPipelineDealData({...pipelineDealData, probability: e.target.value})}
+                  style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Expected Close</label>
+                <input
+                  type="date"
+                  value={pipelineDealData.expectedClose}
+                  onChange={(e) => setPipelineDealData({...pipelineDealData, expectedClose: e.target.value})}
+                  style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Deal Value (R m) *</label>
+                <input
+                  type="number"
+                  value={pipelineDealData.dealValue}
+                  onChange={(e) => setPipelineDealData({...pipelineDealData, dealValue: e.target.value})}
+                  style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Source</label>
+                <input
+                  type="text"
+                  value={pipelineDealData.source}
+                  onChange={(e) => setPipelineDealData({...pipelineDealData, source: e.target.value})}
+                  style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Owner</label>
+                <input
+                  type="text"
+                  value={pipelineDealData.owner}
+                  onChange={(e) => setPipelineDealData({...pipelineDealData, owner: e.target.value})}
+                  style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Established Start Date</label>
+                <input
+                  type="date"
+                  value={pipelineDealData.establishedStartDate}
+                  onChange={(e) => setPipelineDealData({...pipelineDealData, establishedStartDate: e.target.value})}
+                  style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Expected Onboarding</label>
+                <input
+                  type="date"
+                  value={pipelineDealData.expectedOnboardingDate}
+                  onChange={(e) => setPipelineDealData({...pipelineDealData, expectedOnboardingDate: e.target.value})}
+                  style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Signed Date</label>
+                <input
+                  type="date"
+                  value={pipelineDealData.signedDate}
+                  onChange={(e) => setPipelineDealData({...pipelineDealData, signedDate: e.target.value})}
+                  style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "20px" }}>
+          <button
+            onClick={onClose}
+            style={{
+              padding: "10px 20px",
+              backgroundColor: "#e8ddd4",
+              color: "#5d4037",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontWeight: "600",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            style={{
+              padding: "10px 20px",
+              backgroundColor: "#5d4037",
+              color: "#fdfcfb",
+              border: "none",
+              borderRadius: "6px",
+              cursor: loading ? "wait" : "pointer",
+              fontWeight: "600",
+              opacity: loading ? 0.7 : 1,
+            }}
+          >
+            {loading ? "Saving..." : "Save Data"}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ==================== PIPELINE VISIBILITY COMPONENT ====================
+
+const PipelineVisibility = ({ activeSection, currentUser, isInvestorView }) => {
+  const [showModal, setShowModal] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [selectedMonth, setSelectedMonth] = useState("Jan")
+  const [selectedViewMode, setSelectedViewMode] = useState("month")
+  const [expandedNotes, setExpandedNotes] = useState({})
+  const [kpiNotes, setKpiNotes] = useState({})
+  const [kpiAnalysis, setKpiAnalysis] = useState({})
+  const [currencyUnit, setCurrencyUnit] = useState("zar_million")
+  const [showCalculationModal, setShowCalculationModal] = useState(false)
+  const [selectedCalculation, setSelectedCalculation] = useState({ title: "", calculation: "" })
+  const [showTrendModal, setShowTrendModal] = useState(false)
+  const [selectedTrendItem, setSelectedTrendItem] = useState(null)
+
+  const [pipelineData, setPipelineData] = useState({
+    newLeads: Array(12).fill(0),
+    funnelVisitors: 0,
+    funnelLeads: 0,
+    funnelMql: 0,
+    funnelSql: 0,
+    funnelOpportunity: 0,
+    funnelCustomer: 0,
+    salesVelocity: Array(12).fill(0),
+    notes: "",
+  })
 
   useEffect(() => {
     if (currentUser && activeSection === "pipeline-visibility") {
@@ -280,718 +1585,534 @@ const PipelineVisibility = ({ activeSection, currentUser, isInvestorView }) => {
 
   const loadData = async () => {
     if (!currentUser) return
+    setLoading(true)
     try {
-      setIsLoading(true)
-      const docRef = doc(db, "pipeline-visibility", `${currentUser.uid}_${selectedYear}`)
+      const docRef = doc(db, "pipelineData", `${currentUser.uid}_visibility_${selectedYear}`)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         const data = docSnap.data()
-        setNewLeadsData(data.newLeadsData || Array(12).fill(0))
-        setFunnelData(data.funnelData || {
-          visitors: 0,
-          leads: 0,
-          mql: 0,
-          sql: 0,
-          opportunity: 0,
-          customer: 0,
-        })
-        setSalesVelocityData(data.salesVelocityData || Array(12).fill(0))
-      } else {
-        // Set all zeros as default instead of unrealistic values
-        await setDoc(docRef, {
-          newLeadsData: Array(12).fill(0),
-          funnelData: {
-            visitors: 0,
-            leads: 0,
-            mql: 0,
-            sql: 0,
-            opportunity: 0,
-            customer: 0,
-          },
-          salesVelocityData: Array(12).fill(0),
-          lastUpdated: new Date().toISOString(),
+        setPipelineData({
+          newLeads: data.newLeads || Array(12).fill(0),
+          funnelVisitors: data.funnelVisitors || 0,
+          funnelLeads: data.funnelLeads || 0,
+          funnelMql: data.funnelMql || 0,
+          funnelSql: data.funnelSql || 0,
+          funnelOpportunity: data.funnelOpportunity || 0,
+          funnelCustomer: data.funnelCustomer || 0,
+          salesVelocity: data.salesVelocity || Array(12).fill(0),
+          notes: data.notes || "",
         })
       }
     } catch (error) {
       console.error("Error loading pipeline visibility data:", error)
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
-  const saveData = async () => {
-    if (!currentUser || isInvestorView) {
-      alert("You cannot save data in this mode.")
-      return
+  const openTrendModal = (itemName, dataArray) => {
+    setSelectedTrendItem({ 
+      name: itemName, 
+      data: dataArray,
+      isPercentage: false
+    })
+    setShowTrendModal(true)
+  }
+
+  const handleCalculationClick = (title, calculation) => {
+    setSelectedCalculation({ title, calculation })
+    setShowCalculationModal(true)
+  }
+
+  const months = getMonthsForYear(selectedYear, selectedViewMode)
+  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
+  const monthIndex = getMonthIndex(selectedMonth)
+
+  const formatValue = (value) => {
+    const num = Number.parseFloat(value) || 0
+    return num.toLocaleString()
+  }
+
+  const aggregateDataForView = (data) => {
+    if (selectedViewMode === "month") return data
+    else if (selectedViewMode === "quarter") {
+      const quarters = []
+      for (let i = 0; i < 4; i++) {
+        const sum = data.slice(i * 3, i * 3 + 3).reduce((acc, val) => acc + (val || 0), 0)
+        quarters.push(sum / 3)
+      }
+      return quarters
+    } else {
+      const avg = data.reduce((acc, val) => acc + (val || 0), 0) / data.length
+      return [avg]
     }
-    try {
-      await setDoc(doc(db, "pipeline-visibility", `${currentUser.uid}_${selectedYear}`), {
-        newLeadsData,
-        funnelData,
-        salesVelocityData,
-        lastUpdated: new Date().toISOString(),
-      })
-      setShowEditForm(false)
-      alert("Pipeline visibility data saved successfully!")
-    } catch (error) {
-      console.error("Error saving data:", error)
-      alert("Error saving data")
+  }
+
+  const generateLabels = () => {
+    if (selectedViewMode === "month") return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    else if (selectedViewMode === "quarter") return ["Q1", "Q2", "Q3", "Q4"]
+    else return [selectedYear.toString()]
+  }
+
+  const renderKPICard = (title, dataKey, calculation = "", isPercentage = false) => {
+    let currentValue = 0
+    let dataArray = []
+    
+    if (dataKey === "newLeads") {
+      dataArray = pipelineData.newLeads || []
+      currentValue = dataArray[monthIndex] || 0
+    } else if (dataKey === "salesVelocity") {
+      dataArray = pipelineData.salesVelocity || []
+      currentValue = dataArray[monthIndex] || 0
+    } else if (dataKey === "visitorToLead") {
+      currentValue = pipelineData.funnelVisitors > 0 ? (pipelineData.funnelLeads / pipelineData.funnelVisitors) * 100 : 0
+    } else if (dataKey === "leadToMql") {
+      currentValue = pipelineData.funnelLeads > 0 ? (pipelineData.funnelMql / pipelineData.funnelLeads) * 100 : 0
+    } else if (dataKey === "mqlToSql") {
+      currentValue = pipelineData.funnelMql > 0 ? (pipelineData.funnelSql / pipelineData.funnelMql) * 100 : 0
+    } else if (dataKey === "sqlToOpportunity") {
+      currentValue = pipelineData.funnelSql > 0 ? (pipelineData.funnelOpportunity / pipelineData.funnelSql) * 100 : 0
+    } else if (dataKey === "opportunityToCustomer") {
+      currentValue = pipelineData.funnelOpportunity > 0 ? (pipelineData.funnelCustomer / pipelineData.funnelOpportunity) * 100 : 0
     }
-  }
 
-  const handleAddNotes = (chartName) => {
-    alert(`Add Notes functionality for ${chartName}`)
-  }
-
-  const handleViewAnalysis = (chartName) => {
-    alert(`View Analysis functionality for ${chartName}`)
-  }
-
-  if (activeSection !== "pipeline-visibility") return null
-
-  if (isLoading) {
     return (
       <div
         style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "200px",
           backgroundColor: "#fdfcfb",
+          padding: "20px",
           borderRadius: "8px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          marginBottom: "20px",
+          position: "relative",
         }}
       >
-        <div>Loading data...</div>
+        <EyeIcon onClick={() => handleCalculationClick(title, calculation)} />
+        
+        <div style={{ display: "flex", alignItems: "center", marginBottom: "15px" }}>
+          <div
+            style={{
+              width: "100px",
+              height: "100px",
+              borderRadius: "50%",
+              border: "5px solid #f9a825",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginRight: "20px",
+              backgroundColor: "#fff9c4",
+            }}
+          >
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "16px", fontWeight: "700", color: "#5d4037" }}>
+                {isPercentage ? `${currentValue.toFixed(1)}%` : formatValue(currentValue)}
+              </div>
+              <div style={{ fontSize: "11px", color: "#8d6e63" }}>Current</div>
+            </div>
+          </div>
+          <div style={{ flex: 1 }}>
+            <h4 style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}>{title}</h4>
+          </div>
+        </div>
+
+        <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
+          <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+            <button
+              onClick={() => setExpandedNotes(prev => ({ ...prev, [dataKey]: !prev[dataKey] }))}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "12px",
+              }}
+            >
+              Add notes
+            </button>
+            <button
+              onClick={() => setExpandedNotes(prev => ({ ...prev, [`${dataKey}_analysis`]: !prev[`${dataKey}_analysis`] }))}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "12px",
+              }}
+            >
+              AI analysis
+            </button>
+            <button
+              onClick={() => {
+                if (dataKey === "newLeads" || dataKey === "salesVelocity") {
+                  openTrendModal(title, dataArray)
+                } else {
+                  alert("Trend view not available for this metric")
+                }
+              }}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "12px",
+              }}
+            >
+              View trend
+            </button>
+          </div>
+
+          {expandedNotes[dataKey] && (
+            <div style={{ marginBottom: "10px" }}>
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "5px",
+                }}
+              >
+                Notes / Comments:
+              </label>
+              <textarea
+                value={kpiNotes[dataKey] || ""}
+                onChange={(e) => setKpiNotes(prev => ({ ...prev, [dataKey]: e.target.value }))}
+                placeholder="Add notes or comments..."
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "60px",
+                  fontSize: "13px",
+                }}
+              />
+            </div>
+          )}
+
+          {expandedNotes[`${dataKey}_analysis`] && (
+            <div
+              style={{
+                backgroundColor: "#e3f2fd",
+                padding: "15px",
+                borderRadius: "6px",
+                border: "1px solid #90caf9",
+              }}
+            >
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#1565c0",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "8px",
+                }}
+              >
+                AI Analysis:
+              </label>
+              <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
+                {kpiAnalysis[dataKey] ||
+                  `Based on the current ${title.toLowerCase()} of ${isPercentage ? `${currentValue.toFixed(1)}%` : formatValue(currentValue)}:
+                  \n\nThis metric indicates your ${title.toLowerCase()} performance.
+                  \n\nRecommended actions:
+                  \n• Monitor this metric monthly
+                  \n• Compare against targets
+                  \n• Investigate significant changes`}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     )
   }
 
-  // Calculate conversion rates
-  const conversionRates = {
-    visitorToLead: funnelData.visitors > 0 ? ((funnelData.leads / funnelData.visitors) * 100).toFixed(1) : 0,
-    leadToMQL: funnelData.leads > 0 ? ((funnelData.mql / funnelData.leads) * 100).toFixed(1) : 0,
-    mqlToSQL: funnelData.mql > 0 ? ((funnelData.sql / funnelData.mql) * 100).toFixed(1) : 0,
-    sqlToOpportunity: funnelData.sql > 0 ? ((funnelData.opportunity / funnelData.sql) * 100).toFixed(1) : 0,
-    opportunityToCustomer: funnelData.opportunity > 0 ? ((funnelData.customer / funnelData.opportunity) * 100).toFixed(1) : 0,
+  if (activeSection !== "pipeline-visibility") return null
+
+  const totalNewLeads = pipelineData.newLeads.reduce((sum, val) => sum + val, 0)
+  const avgSalesVelocity = pipelineData.salesVelocity.reduce((sum, val) => sum + val, 0) / (pipelineData.salesVelocity.filter(v => v > 0).length || 1)
+
+  const calculationTexts = {
+    newLeads: "New Leads: Number of new leads generated in the period.\n\nCalculation: Count of new leads added to CRM.",
+    salesVelocity: "Sales Velocity = (Number of Opportunities × Deal Value × Win Rate) ÷ Sales Cycle Length\n\nMeasures how quickly deals move through the pipeline.",
+    visitorToLead: "Visitor to Lead Conversion = (Leads ÷ Visitors) × 100%\n\nMeasures effectiveness of converting website traffic into leads.",
+    leadToMql: "Lead to MQL Conversion = (MQL ÷ Leads) × 100%\n\nMeasures lead qualification effectiveness.",
+    mqlToSql: "MQL to SQL Conversion = (SQL ÷ MQL) × 100%\n\nMeasures marketing-qualified to sales-qualified conversion.",
+    sqlToOpportunity: "SQL to Opportunity Conversion = (Opportunity ÷ SQL) × 100%\n\nMeasures sales acceptance rate.",
+    opportunityToCustomer: "Opportunity to Customer Conversion = (Customer ÷ Opportunity) × 100%\n\nMeasures sales close rate.",
   }
 
-  // Calculate overall metrics
-  const totalNewLeads = newLeadsData.reduce((sum, val) => sum + val, 0)
-  const avgSalesVelocity = salesVelocityData.reduce((sum, val) => sum + val, 0) / (salesVelocityData.filter(val => val > 0).length || 1)
-
   return (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "20px",
-        margin: "20px 0",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
-      <NotesSection 
-        sectionKey="pipeline-visibility" 
-        isExpanded={notesExpanded}
-        onToggle={() => setNotesExpanded(!notesExpanded)}
+    <div>
+      <KeyQuestionBox
+        question="Do we have enough quality demand, at the right risk, to hit revenue?"
+        signals="Forecast clarity, pipeline coverage, conversion rates"
+        decisions="Formalise sales process, improve lead quality, adjust targets"
+        section="pipeline-visibility"
       />
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Pipeline Visibility</h2>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-            style={{
-              padding: "8px 12px",
-              border: "1px solid #d4c4b0",
-              borderRadius: "4px",
-              backgroundColor: "#fdfcfb",
-              color: "#5d4037",
-            }}
-          >
-            {[2023, 2024, 2025, 2026].map(year => (
-              <option key={year} value={year}>{year}</option>
-            ))}
-          </select>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "20px",
+          flexWrap: "wrap",
+          gap: "15px",
+        }}
+      >
+        <h2 style={{ color: "#5d4037", fontSize: "24px", fontWeight: "700", margin: 0 }}>Pipeline Visibility</h2>
+
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+              <span style={{ color: "#5d4037", fontSize: "14px" }}>Year:</span>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  minWidth: "100px",
+                }}
+              >
+                {years.map((year) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+              <span style={{ color: "#5d4037", fontSize: "14px" }}>Month:</span>
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  minWidth: "100px",
+                }}
+              >
+                {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((month) => (
+                  <option key={month} value={month}>{month}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <button
+              onClick={() => setSelectedViewMode("month")}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: selectedViewMode === "month" ? "#5d4037" : "#e8ddd4",
+                color: selectedViewMode === "month" ? "#fdfcfb" : "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "14px",
+              }}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setSelectedViewMode("quarter")}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: selectedViewMode === "quarter" ? "#5d4037" : "#e8ddd4",
+                color: selectedViewMode === "quarter" ? "#fdfcfb" : "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "14px",
+              }}
+            >
+              Quarterly
+            </button>
+            <button
+              onClick={() => setSelectedViewMode("year")}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: selectedViewMode === "year" ? "#5d4037" : "#e8ddd4",
+                color: selectedViewMode === "year" ? "#fdfcfb" : "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "14px",
+              }}
+            >
+              Yearly
+            </button>
+          </div>
+          
           {!isInvestorView && (
-            <>
-              <button
-                onClick={() => setShowEditForm(!showEditForm)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                }}
-              >
-                <FaPlus /> Add Data
-              </button>
-              <button
-                onClick={() => alert("Add KPI functionality")}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#7d5a50",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                }}
-              >
-                <FaPlus /> Add KPI
-              </button>
-            </>
+            <button
+              onClick={() => setShowModal(true)}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "14px",
+              }}
+            >
+              Add Data
+            </button>
           )}
         </div>
       </div>
 
-      {!isInvestorView && showEditForm && (
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#72542b", marginTop: 0 }}>Add Pipeline Visibility Data</h3>
-          
-          <h4 style={{ color: "#72542b" }}>New Leads Data (Monthly)</h4>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: "20px" }}>
-            {monthNames.map((month, index) => (
-              <div key={month}>
-                <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>{month}</label>
-                <input
-                  type="number"
-                  value={newLeadsData[index]}
-                  onChange={(e) => {
-                    const newData = [...newLeadsData]
-                    newData[index] = Number(e.target.value)
-                    setNewLeadsData(newData)
-                  }}
-                  style={{
-                    width: "100%",
-                    padding: "6px",
-                    border: "1px solid #d4c4b0",
-                    borderRadius: "4px",
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-
-          <h4 style={{ color: "#72542b" }}>Funnel Conversion Data</h4>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px", marginBottom: "20px" }}>
-            <div>
-              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Visitors</label>
-              <input
-                type="number"
-                value={funnelData.visitors}
-                onChange={(e) => setFunnelData({ ...funnelData, visitors: Number(e.target.value) })}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Leads</label>
-              <input
-                type="number"
-                value={funnelData.leads}
-                onChange={(e) => setFunnelData({ ...funnelData, leads: Number(e.target.value) })}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>MQL</label>
-              <input
-                type="number"
-                value={funnelData.mql}
-                onChange={(e) => setFunnelData({ ...funnelData, mql: Number(e.target.value) })}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>SQL</label>
-              <input
-                type="number"
-                value={funnelData.sql}
-                onChange={(e) => setFunnelData({ ...funnelData, sql: Number(e.target.value) })}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Opportunity</label>
-              <input
-                type="number"
-                value={funnelData.opportunity}
-                onChange={(e) => setFunnelData({ ...funnelData, opportunity: Number(e.target.value) })}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Customer</label>
-              <input
-                type="number"
-                value={funnelData.customer}
-                onChange={(e) => setFunnelData({ ...funnelData, customer: Number(e.target.value) })}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-              />
-            </div>
-          </div>
-
-          <h4 style={{ color: "#72542b" }}>Sales Velocity (Monthly Average Days)</h4>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: "20px" }}>
-            {monthNames.map((month, index) => (
-              <div key={month}>
-                <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>{month}</label>
-                <input
-                  type="number"
-                  value={salesVelocityData[index]}
-                  onChange={(e) => {
-                    const newData = [...salesVelocityData]
-                    newData[index] = Number(e.target.value)
-                    setSalesVelocityData(newData)
-                  }}
-                  style={{
-                    width: "100%",
-                    padding: "6px",
-                    border: "1px solid #d4c4b0",
-                    borderRadius: "4px",
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-
-          <button
-            onClick={saveData}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              marginTop: "15px",
-            }}
-          >
-            Save Data
-          </button>
-        </div>
-      )}
-
-      {/* Overall Metrics on Top */}
+      {/* Summary Metrics */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "15px", marginBottom: "30px" }}>
         <div
           style={{
-            backgroundColor: "#f7f3f0",
+            backgroundColor: "#f5f0eb",
             padding: "20px",
             borderRadius: "6px",
             textAlign: "center",
-            borderTop: "4px solid #9c7c5f",
           }}
         >
-          <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "8px", fontWeight: "600" }}>Total New Leads</div>
-          <div style={{ fontSize: "32px", color: "#5d4037", fontWeight: "bold" }}>{totalNewLeads.toLocaleString()}</div>
-          <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>Year {selectedYear}</div>
-        </div>
-        
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            textAlign: "center",
-            borderTop: "4px solid #7d5a50",
-          }}
-        >
-          <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "8px", fontWeight: "600" }}>Overall Conversion Rate</div>
-          <div style={{ fontSize: "32px", color: "#5d4037", fontWeight: "bold" }}>
-            {funnelData.visitors > 0 ? ((funnelData.customer / funnelData.visitors) * 100).toFixed(1) : 0}%
+          <div style={{ fontSize: "14px", color: "#5d4037", marginBottom: "8px", fontWeight: "600" }}>
+            Total New Leads
           </div>
-          <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>Visitor → Customer</div>
+          <div style={{ fontSize: "28px", color: "#5d4037", fontWeight: "700" }}>
+            {totalNewLeads.toLocaleString()}
+          </div>
+          <div style={{ fontSize: "12px", color: "#8d6e63", marginTop: "5px" }}>
+            Year {selectedYear}
+          </div>
         </div>
         
         <div
           style={{
-            backgroundColor: "#f7f3f0",
+            backgroundColor: "#f5f0eb",
             padding: "20px",
             borderRadius: "6px",
             textAlign: "center",
-            borderTop: "4px solid #5d4037",
           }}
         >
-          <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "8px", fontWeight: "600" }}>Avg Sales Velocity</div>
-          <div style={{ fontSize: "32px", color: "#5d4037", fontWeight: "bold" }}>{avgSalesVelocity.toFixed(1)} days</div>
-          <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>Average to close</div>
+          <div style={{ fontSize: "14px", color: "#5d4037", marginBottom: "8px", fontWeight: "600" }}>
+            Avg Sales Velocity
+          </div>
+          <div style={{ fontSize: "28px", color: "#5d4037", fontWeight: "700" }}>
+            {avgSalesVelocity.toFixed(1)} days
+          </div>
+          <div style={{ fontSize: "12px", color: "#8d6e63", marginTop: "5px" }}>
+            Average to close
+          </div>
+        </div>
+        
+        <div
+          style={{
+            backgroundColor: "#f5f0eb",
+            padding: "20px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "14px", color: "#5d4037", marginBottom: "8px", fontWeight: "600" }}>
+            Current Month Leads
+          </div>
+          <div style={{ fontSize: "28px", color: "#5d4037", fontWeight: "700" }}>
+            {(pipelineData.newLeads[monthIndex] || 0).toLocaleString()}
+          </div>
+          <div style={{ fontSize: "12px", color: "#8d6e63", marginTop: "5px" }}>
+            {selectedMonth} {selectedYear}
+          </div>
         </div>
       </div>
 
-      {/* Three Charts Side by Side */}
+      {/* KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px", marginBottom: "30px" }}>
-        
-        {/* New Leads Chart */}
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          }}
-        >
-          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>New Leads (#)</h3>
-          <div style={{ height: "250px", marginBottom: "15px" }}>
-            <Bar
-              data={{
-                labels: monthNames,
-                datasets: [
-                  {
-                    label: "New Leads",
-                    data: newLeadsData,
-                    backgroundColor: "#9c7c5f",
-                    borderColor: "#5d4037",
-                    borderWidth: 1,
-                    borderRadius: 4,
-                  },
-                ],
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    display: false,
-                  },
-                },
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    title: {
-                      display: true,
-                      text: "Number of Leads",
-                      color: "#72542b",
-                    },
-                    grid: {
-                      color: "rgba(125, 90, 80, 0.1)",
-                    },
-                    ticks: {
-                      color: "#72542b",
-                    },
-                  },
-                  x: {
-                    ticks: {
-                      color: "#72542b",
-                      maxRotation: 45,
-                    },
-                    grid: {
-                      color: "rgba(125, 90, 80, 0.1)",
-                    },
-                  },
-                },
-              }}
-            />
-          </div>
-          <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
-            <button
-              onClick={() => handleAddNotes("New Leads")}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#7d5a50",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
-                fontSize: "12px",
-              }}
-            >
-              <FaStickyNote size={12} /> Add Notes
-            </button>
-            <button
-              onClick={() => handleViewAnalysis("New Leads")}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
-                fontSize: "12px",
-              }}
-            >
-              <FaChartBar size={12} /> View Analysis
-            </button>
-          </div>
-        </div>
-
-        {/* Funnel Conversion Rates Chart */}
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          }}
-        >
-          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
-            Funnel Conversion Rates
-          </h3>
-          <div style={{ height: "250px", marginBottom: "15px" }}>
-            <Bar
-              data={{
-                labels: ["Vis→Lead", "Lead→MQL", "MQL→SQL", "SQL→Opp", "Opp→Cust"],
-                datasets: [
-                  {
-                    label: "Conversion Rate (%)",
-                    data: [
-                      conversionRates.visitorToLead,
-                      conversionRates.leadToMQL,
-                      conversionRates.mqlToSQL,
-                      conversionRates.sqlToOpportunity,
-                      conversionRates.opportunityToCustomer,
-                    ],
-                    backgroundColor: "#7d5a50",
-                    borderColor: "#5d4037",
-                    borderWidth: 1,
-                    borderRadius: 4,
-                  },
-                ],
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    display: false,
-                  },
-                },
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    max: 100,
-                    title: {
-                      display: true,
-                      text: "Conversion Rate (%)",
-                      color: "#72542b",
-                    },
-                    grid: {
-                      color: "rgba(125, 90, 80, 0.1)",
-                    },
-                    ticks: {
-                      color: "#72542b",
-                    },
-                  },
-                  x: {
-                    ticks: {
-                      color: "#72542b",
-                      maxRotation: 45,
-                    },
-                    grid: {
-                      color: "rgba(125, 90, 80, 0.1)",
-                    },
-                  },
-                },
-              }}
-            />
-          </div>
-          <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
-            <button
-              onClick={() => handleAddNotes("Funnel Conversion Rates")}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#7d5a50",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
-                fontSize: "12px",
-              }}
-            >
-              <FaStickyNote size={12} /> Add Notes
-            </button>
-            <button
-              onClick={() => handleViewAnalysis("Funnel Conversion Rates")}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
-                fontSize: "12px",
-              }}
-            >
-              <FaChartBar size={12} /> View Analysis
-            </button>
-          </div>
-        </div>
-
-        {/* Sales Velocity Chart */}
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          }}
-        >
-          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
-            Sales Velocity (Days to Close)
-          </h3>
-          <div style={{ height: "250px", marginBottom: "15px" }}>
-            <Line
-              data={{
-                labels: monthNames,
-                datasets: [
-                  {
-                    label: "Days to Close",
-                    data: salesVelocityData,
-                    borderColor: "#5d4037",
-                    backgroundColor: "rgba(93, 64, 55, 0.1)",
-                    borderWidth: 2,
-                    tension: 0.3,
-                    fill: true,
-                  },
-                ],
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    display: false,
-                  },
-                },
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    title: {
-                      display: true,
-                      text: "Days to Close",
-                      color: "#72542b",
-                    },
-                    grid: {
-                      color: "rgba(125, 90, 80, 0.1)",
-                    },
-                    ticks: {
-                      color: "#72542b",
-                    },
-                  },
-                  x: {
-                    ticks: {
-                      color: "#72542b",
-                      maxRotation: 45,
-                    },
-                    grid: {
-                      color: "rgba(125, 90, 80, 0.1)",
-                    },
-                  },
-                },
-              }}
-            />
-          </div>
-          <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
-            <button
-              onClick={() => handleAddNotes("Sales Velocity")}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#7d5a50",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
-                fontSize: "12px",
-              }}
-            >
-              <FaStickyNote size={12} /> Add Notes
-            </button>
-            <button
-              onClick={() => handleViewAnalysis("Sales Velocity")}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
-                fontSize: "12px",
-              }}
-            >
-              <FaChartBar size={12} /> View Analysis
-            </button>
-          </div>
-        </div>
+        {renderKPICard("New Leads", "newLeads", calculationTexts.newLeads)}
+        {renderKPICard("Sales Velocity", "salesVelocity", calculationTexts.salesVelocity)}
+        {renderKPICard("Visitor → Lead", "visitorToLead", calculationTexts.visitorToLead, true)}
+        {renderKPICard("Lead → MQL", "leadToMql", calculationTexts.leadToMql, true)}
+        {renderKPICard("MQL → SQL", "mqlToSql", calculationTexts.mqlToSql, true)}
+        {renderKPICard("SQL → Opp", "sqlToOpportunity", calculationTexts.sqlToOpportunity, true)}
+        {renderKPICard("Opp → Customer", "opportunityToCustomer", calculationTexts.opportunityToCustomer, true)}
       </div>
+
+      {/* Universal Add Data Modal */}
+      <UniversalAddDataModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        currentTab="pipeline-visibility"
+        user={currentUser}
+        onSave={loadData}
+        loading={loading}
+      />
+
+      {/* Calculation Modal */}
+      <CalculationModal
+        isOpen={showCalculationModal}
+        onClose={() => setShowCalculationModal(false)}
+        title={selectedCalculation.title}
+        calculation={selectedCalculation.calculation}
+      />
+
+      {/* Trend Modal */}
+      {showTrendModal && selectedTrendItem && (
+        <TrendModal
+          isOpen={showTrendModal}
+          onClose={() => setShowTrendModal(false)}
+          title={selectedTrendItem.name}
+          data={selectedTrendItem.data}
+          labels={generateLabels()}
+          isPercentage={selectedTrendItem.isPercentage}
+          formatValue={formatValue}
+          currencyUnit={currencyUnit}
+        />
+      )}
     </div>
   )
 }
-// Pipeline Sufficiency Component
-// Pipeline Sufficiency Component
-const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView }) => {
-  const [totalPipelineValue, setTotalPipelineValue] = useState(0)
-  const [probability, setProbability] = useState(0) // Overall probability percentage
-  const [targetRevenue, setTargetRevenue] = useState(0)
-  const [leadVolumeTrends, setLeadVolumeTrends] = useState(Array(12).fill(0))
-  const [conversionRates, setConversionRates] = useState(Array(12).fill(0))
-  const [showEditForm, setShowEditForm] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-  const [notesExpanded, setNotesExpanded] = useState(false)
 
-  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+// ==================== PIPELINE SUFFICIENCY COMPONENT ====================
+
+const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView }) => {
+  const [showModal, setShowModal] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [selectedMonth, setSelectedMonth] = useState("Jan")
+  const [selectedViewMode, setSelectedViewMode] = useState("month")
+  const [expandedNotes, setExpandedNotes] = useState({})
+  const [kpiNotes, setKpiNotes] = useState({})
+  const [kpiAnalysis, setKpiAnalysis] = useState({})
+  const [currencyUnit, setCurrencyUnit] = useState("zar_million")
+  const [showCalculationModal, setShowCalculationModal] = useState(false)
+  const [selectedCalculation, setSelectedCalculation] = useState({ title: "", calculation: "" })
+  const [showTrendModal, setShowTrendModal] = useState(false)
+  const [selectedTrendItem, setSelectedTrendItem] = useState(null)
+
+  const [pipelineData, setPipelineData] = useState({
+    totalPipelineValue: 0,
+    probability: 0,
+    targetRevenue: 0,
+    leadVolumeTrends: Array(12).fill(0),
+    conversionRates: Array(12).fill(0),
+    notes: "",
+  })
 
   useEffect(() => {
     if (currentUser && activeSection === "pipeline-sufficiency") {
@@ -1001,828 +2122,506 @@ const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView }) => 
 
   const loadData = async () => {
     if (!currentUser) return
+    setLoading(true)
     try {
-      setIsLoading(true)
-      const docRef = doc(db, "pipeline-sufficiency", `${currentUser.uid}_${selectedYear}`)
+      const docRef = doc(db, "pipelineData", `${currentUser.uid}_sufficiency_${selectedYear}`)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         const data = docSnap.data()
-        setTotalPipelineValue(data.totalPipelineValue || 0)
-        setProbability(data.probability || 0)
-        setTargetRevenue(data.targetRevenue || 0)
-        setLeadVolumeTrends(data.leadVolumeTrends || Array(12).fill(0))
-        setConversionRates(data.conversionRates || Array(12).fill(0))
-      } else {
-        await setDoc(docRef, {
-          totalPipelineValue: 0,
-          probability: 0,
-          targetRevenue: 0,
-          leadVolumeTrends: Array(12).fill(0),
-          conversionRates: Array(12).fill(0),
-          lastUpdated: new Date().toISOString(),
+        setPipelineData({
+          totalPipelineValue: data.totalPipelineValue || 0,
+          probability: data.probability || 0,
+          targetRevenue: data.targetRevenue || 0,
+          leadVolumeTrends: data.leadVolumeTrends || Array(12).fill(0),
+          conversionRates: data.conversionRates || Array(12).fill(0),
+          notes: data.notes || "",
         })
       }
     } catch (error) {
       console.error("Error loading pipeline sufficiency data:", error)
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
-  const saveData = async () => {
-    if (!currentUser || isInvestorView) {
-      alert("You cannot save data in this mode.")
-      return
+  const openTrendModal = (itemName, dataArray) => {
+    setSelectedTrendItem({ 
+      name: itemName, 
+      data: dataArray,
+      isPercentage: false
+    })
+    setShowTrendModal(true)
+  }
+
+  const handleCalculationClick = (title, calculation) => {
+    setSelectedCalculation({ title, calculation })
+    setShowCalculationModal(true)
+  }
+
+  const months = getMonthsForYear(selectedYear, selectedViewMode)
+  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
+  const monthIndex = getMonthIndex(selectedMonth)
+
+  const formatValue = (value) => {
+    const num = Number.parseFloat(value) || 0
+    switch(currencyUnit) {
+      case "zar": return `R${num.toLocaleString()}`
+      case "zar_thousand": return `R${(num * 1000).toLocaleString()}K`
+      case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})}m`
+      case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}bn`
+      default: return `R${num.toLocaleString()}`
     }
-    try {
-      await setDoc(doc(db, "pipeline-sufficiency", `${currentUser.uid}_${selectedYear}`), {
-        totalPipelineValue,
-        probability,
-        targetRevenue,
-        leadVolumeTrends,
-        conversionRates,
-        lastUpdated: new Date().toISOString(),
-      })
-      setShowEditForm(false)
-      alert("Pipeline sufficiency data saved successfully!")
-    } catch (error) {
-      console.error("Error saving data:", error)
-      alert("Error saving data")
+  }
+
+  const aggregateDataForView = (data) => {
+    if (selectedViewMode === "month") return data
+    else if (selectedViewMode === "quarter") {
+      const quarters = []
+      for (let i = 0; i < 4; i++) {
+        const sum = data.slice(i * 3, i * 3 + 3).reduce((acc, val) => acc + (val || 0), 0)
+        quarters.push(sum / 3)
+      }
+      return quarters
+    } else {
+      const avg = data.reduce((acc, val) => acc + (val || 0), 0) / data.length
+      return [avg]
     }
   }
 
-  const handleAddNotes = (chartName) => {
-    alert(`Add Notes functionality for ${chartName}`)
+  const generateLabels = () => {
+    if (selectedViewMode === "month") return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    else if (selectedViewMode === "quarter") return ["Q1", "Q2", "Q3", "Q4"]
+    else return [selectedYear.toString()]
   }
 
-  const handleViewAnalysis = (chartName) => {
-    alert(`View Analysis functionality for ${chartName}`)
-  }
+  const renderKPICard = (title, dataKey, calculation = "", isPercentage = false) => {
+    let currentValue = 0
+    let dataArray = []
+    
+    if (dataKey === "leadVolumeTrends") {
+      dataArray = pipelineData.leadVolumeTrends || []
+      currentValue = dataArray[monthIndex] || 0
+    } else if (dataKey === "conversionRates") {
+      dataArray = pipelineData.conversionRates || []
+      currentValue = dataArray[monthIndex] || 0
+    } else if (dataKey === "riskAdjustedValue") {
+      currentValue = (pipelineData.totalPipelineValue * pipelineData.probability) / 100
+    } else if (dataKey === "pipelineCoverage") {
+      currentValue = pipelineData.targetRevenue > 0 ? (pipelineData.totalPipelineValue / pipelineData.targetRevenue) * 100 : 0
+    } else if (dataKey === "totalPipelineValue") {
+      currentValue = pipelineData.totalPipelineValue
+    }
 
-  if (activeSection !== "pipeline-sufficiency") return null
+    const displayValue = isPercentage 
+      ? `${currentValue.toFixed(1)}%`
+      : formatValue(currentValue)
 
-  if (isLoading) {
     return (
       <div
         style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "200px",
           backgroundColor: "#fdfcfb",
+          padding: "20px",
           borderRadius: "8px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          marginBottom: "20px",
+          position: "relative",
         }}
       >
-        <div>Loading data...</div>
+        <EyeIcon onClick={() => handleCalculationClick(title, calculation)} />
+        
+        <div style={{ display: "flex", alignItems: "center", marginBottom: "15px" }}>
+          <div
+            style={{
+              width: "100px",
+              height: "100px",
+              borderRadius: "50%",
+              border: "5px solid #f9a825",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginRight: "20px",
+              backgroundColor: "#fff9c4",
+            }}
+          >
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "16px", fontWeight: "700", color: "#5d4037" }}>
+                {displayValue}
+              </div>
+              <div style={{ fontSize: "11px", color: "#8d6e63" }}>Current</div>
+            </div>
+          </div>
+          <div style={{ flex: 1 }}>
+            <h4 style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}>{title}</h4>
+          </div>
+        </div>
+
+        <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
+          <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+            <button
+              onClick={() => setExpandedNotes(prev => ({ ...prev, [dataKey]: !prev[dataKey] }))}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "12px",
+              }}
+            >
+              Add notes
+            </button>
+            <button
+              onClick={() => setExpandedNotes(prev => ({ ...prev, [`${dataKey}_analysis`]: !prev[`${dataKey}_analysis`] }))}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "12px",
+              }}
+            >
+              AI analysis
+            </button>
+            <button
+              onClick={() => {
+                if (dataKey === "leadVolumeTrends" || dataKey === "conversionRates") {
+                  openTrendModal(title, dataArray)
+                } else {
+                  alert("Trend view not available for this metric")
+                }
+              }}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "12px",
+              }}
+            >
+              View trend
+            </button>
+          </div>
+
+          {expandedNotes[dataKey] && (
+            <div style={{ marginBottom: "10px" }}>
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "5px",
+                }}
+              >
+                Notes / Comments:
+              </label>
+              <textarea
+                value={kpiNotes[dataKey] || ""}
+                onChange={(e) => setKpiNotes(prev => ({ ...prev, [dataKey]: e.target.value }))}
+                placeholder="Add notes or comments..."
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "60px",
+                  fontSize: "13px",
+                }}
+              />
+            </div>
+          )}
+
+          {expandedNotes[`${dataKey}_analysis`] && (
+            <div
+              style={{
+                backgroundColor: "#e3f2fd",
+                padding: "15px",
+                borderRadius: "6px",
+                border: "1px solid #90caf9",
+              }}
+            >
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#1565c0",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "8px",
+                }}
+              >
+                AI Analysis:
+              </label>
+              <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
+                {kpiAnalysis[dataKey] ||
+                  `Based on the current ${title.toLowerCase()} of ${displayValue}:
+                  \n\nThis metric indicates your pipeline sufficiency.
+                  \n\nRecommended actions:
+                  \n• Monitor this metric monthly
+                  \n• Compare against targets
+                  \n• Adjust pipeline generation activities`}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     )
   }
 
-  // CALCULATIONS BASED ON YOUR SPECIFICATIONS:
-  
-  // 1. Risk Adjusted Pipeline Value = Total Pipeline value * probability
-  const riskAdjustedValue = (totalPipelineValue * probability) / 100
-  
-  // 2. Pipeline Coverage Ratio = Pipeline Value ÷ Target Revenue (as percentage)
-  const pipelineCoverageRatio = targetRevenue > 0 ? ((totalPipelineValue / targetRevenue) * 100).toFixed(2) : 0
-  
-  // 3. Average Lead Volume (for summary)
-  const avgLeadVolume = leadVolumeTrends.reduce((sum, val) => sum + val, 0) / 12
-  
-  // 4. Average Conversion Rate (for summary)
-  const avgConversionRate = conversionRates.reduce((sum, val) => sum + val, 0) / 12
+  if (activeSection !== "pipeline-sufficiency") return null
+
+  const riskAdjustedValue = (pipelineData.totalPipelineValue * pipelineData.probability) / 100
+  const pipelineCoverage = pipelineData.targetRevenue > 0 ? (pipelineData.totalPipelineValue / pipelineData.targetRevenue) * 100 : 0
+  const avgLeadVolume = pipelineData.leadVolumeTrends.reduce((sum, val) => sum + val, 0) / 12
+  const avgConversionRate = pipelineData.conversionRates.reduce((sum, val) => sum + val, 0) / 12
+
+  const calculationTexts = {
+    totalPipelineValue: "Total Pipeline Value: Sum of all deal values in the pipeline.\n\nCalculation: Sum of all open deal values.",
+    riskAdjustedValue: "Risk Adjusted Pipeline Value = Total Pipeline Value × Probability %\n\nAccounts for deal probability to show expected value.",
+    pipelineCoverage: "Pipeline Coverage Ratio = (Pipeline Value ÷ Target Revenue) × 100%\n\nMeasures if pipeline is sufficient to meet revenue targets.",
+    leadVolumeTrends: "Lead Volume Trends: Monthly count of new leads.\n\nIndicates demand generation effectiveness.",
+    conversionRates: "Conversion Rates: Percentage of leads that convert through each stage.\n\nShows funnel efficiency.",
+  }
 
   return (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "20px",
-        margin: "20px 0",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
-      <NotesSection 
-        sectionKey="pipeline-sufficiency" 
-        isExpanded={notesExpanded}
-        onToggle={() => setNotesExpanded(!notesExpanded)}
+    <div>
+      <KeyQuestionBox
+        question="Is pipeline big enough?"
+        signals="Coverage ratio, lead volume trends"
+        decisions="Increase lead generation, adjust targets"
+        section="pipeline-sufficiency"
       />
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Pipeline Sufficiency</h2>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-            style={{
-              padding: "8px 12px",
-              border: "1px solid #d4c4b0",
-              borderRadius: "4px",
-              backgroundColor: "#fdfcfb",
-              color: "#5d4037",
-            }}
-          >
-            {[2023, 2024, 2025, 2026].map(year => (
-              <option key={year} value={year}>{year}</option>
-            ))}
-          </select>
-          {!isInvestorView && (
-            <>
-              <button
-                onClick={() => setShowEditForm(!showEditForm)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                }}
-              >
-                <FaPlus /> Add Data
-              </button>
-              <button
-                onClick={() => alert("Add KPI functionality")}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#7d5a50",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                }}
-              >
-                <FaPlus /> Add KPI
-              </button>
-            </>
-          )}
-        </div>
-      </div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "20px",
+          flexWrap: "wrap",
+          gap: "15px",
+        }}
+      >
+        <h2 style={{ color: "#5d4037", fontSize: "24px", fontWeight: "700", margin: 0 }}>Pipeline Sufficiency</h2>
 
-      {!isInvestorView && showEditForm && (
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#72542b", marginTop: 0 }}>Add Pipeline Sufficiency Data</h3>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+              <span style={{ color: "#5d4037", fontSize: "14px" }}>Year:</span>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  minWidth: "100px",
+                }}
+              >
+                {years.map((year) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+              <span style={{ color: "#5d4037", fontSize: "14px" }}>Month:</span>
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  minWidth: "100px",
+                }}
+              >
+                {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((month) => (
+                  <option key={month} value={month}>{month}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+              <span style={{ color: "#5d4037", fontSize: "14px" }}>Units:</span>
+              <select
+                value={currencyUnit}
+                onChange={(e) => setCurrencyUnit(e.target.value)}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  minWidth: "100px",
+                }}
+              >
+                <option value="zar">ZAR</option>
+                <option value="zar_thousand">R K</option>
+                <option value="zar_million">R m</option>
+                <option value="zar_billion">R bn</option>
+              </select>
+            </div>
+          </div>
           
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px", marginBottom: "20px" }}>
-            <div>
-              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>
-                Total Pipeline Value (ZAR)
-              </label>
-              <input
-                type="number"
-                value={totalPipelineValue}
-                onChange={(e) => setTotalPipelineValue(Number(e.target.value))}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>
-                Overall Probability (%)
-              </label>
-              <input
-                type="number"
-                value={probability}
-                onChange={(e) => setProbability(Number(e.target.value))}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-                min="0"
-                max="100"
-              />
-              <small style={{ color: "#7d5a50", fontSize: "11px" }}>
-                Overall probability percentage (0-100%)
-              </small>
-            </div>
-            <div>
-              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>
-                Target/Budget Revenue (ZAR)
-              </label>
-              <input
-                type="number"
-                value={targetRevenue}
-                onChange={(e) => setTargetRevenue(Number(e.target.value))}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-              />
-            </div>
-          </div>
-
-          <h4 style={{ color: "#72542b" }}>Lead Volume Trends (Monthly)</h4>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: "20px" }}>
-            {monthNames.map((month, index) => (
-              <div key={month}>
-                <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>{month}</label>
-                <input
-                  type="number"
-                  value={leadVolumeTrends[index]}
-                  onChange={(e) => {
-                    const newData = [...leadVolumeTrends]
-                    newData[index] = Number(e.target.value)
-                    setLeadVolumeTrends(newData)
-                  }}
-                  style={{
-                    width: "100%",
-                    padding: "6px",
-                    border: "1px solid #d4c4b0",
-                    borderRadius: "4px",
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-
-          <h4 style={{ color: "#72542b" }}>Conversion Rates (Monthly %)</h4>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: "20px" }}>
-            {monthNames.map((month, index) => (
-              <div key={month}>
-                <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>{month}</label>
-                <input
-                  type="number"
-                  value={conversionRates[index]}
-                  onChange={(e) => {
-                    const newData = [...conversionRates]
-                    newData[index] = Number(e.target.value)
-                    setConversionRates(newData)
-                  }}
-                  style={{
-                    width: "100%",
-                    padding: "6px",
-                    border: "1px solid #d4c4b0",
-                    borderRadius: "4px",
-                  }}
-                  min="0"
-                  max="100"
-                />
-              </div>
-            ))}
-          </div>
-
-          <button
-            onClick={saveData}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              marginTop: "15px",
-            }}
-          >
-            Save Data
-          </button>
-        </div>
-      )}
-
-      {/* KEY METRICS - Top Section */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "15px", marginBottom: "30px" }}>
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            textAlign: "center",
-            borderTop: "4px solid #9c7c5f",
-          }}
-        >
-          <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "8px", fontWeight: "600" }}>
-            Total Pipeline Value
-          </div>
-          <div style={{ fontSize: "20px", color: "#5d4037", fontWeight: "bold" }}>
-            R {totalPipelineValue.toLocaleString()}
-          </div>
-          <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
-            Probability: {probability}%
-          </div>
-        </div>
-        
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            textAlign: "center",
-            borderTop: "4px solid #7d5a50",
-          }}
-        >
-          <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "8px", fontWeight: "600" }}>
-            Risk Adjusted Value
-          </div>
-          <div style={{ fontSize: "20px", color: "#5d4037", fontWeight: "bold" }}>
-            R {riskAdjustedValue.toLocaleString()}
-          </div>
-          <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
-            Formula: Total Value × {probability}%
-          </div>
-        </div>
-        
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            textAlign: "center",
-            borderTop: "4px solid #5d4037",
-          }}
-        >
-          <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "8px", fontWeight: "600" }}>
-            Pipeline Coverage
-          </div>
-          <div style={{ fontSize: "20px", color: "#5d4037", fontWeight: "bold" }}>
-            {pipelineCoverageRatio}%
-          </div>
-          <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
-            Target Revenue: R {targetRevenue.toLocaleString()}
-          </div>
-        </div>
-        
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            textAlign: "center",
-            borderTop: "4px solid #4a352f",
-          }}
-        >
-          <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "8px", fontWeight: "600" }}>
-            Avg Conversion Rate
-          </div>
-          <div style={{ fontSize: "20px", color: "#5d4037", fontWeight: "bold" }}>
-            {avgConversionRate.toFixed(1)}%
-          </div>
-          <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
-            Monthly Average
-          </div>
-        </div>
-      </div>
-
-      {/* CHARTS SECTION - Four Charts (2x2 grid) */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px", marginBottom: "30px" }}>
-        
-        {/* Lead Volume Trends Chart */}
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          }}
-        >
-          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
-            Lead Volume Trends
-          </h3>
-          <div style={{ height: "250px", marginBottom: "15px" }}>
-            <Bar
-              data={{
-                labels: monthNames,
-                datasets: [
-                  {
-                    label: "Lead Volume",
-                    data: leadVolumeTrends,
-                    backgroundColor: "#9c7c5f",
-                    borderColor: "#5d4037",
-                    borderWidth: 1,
-                    borderRadius: 4,
-                  },
-                ],
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    display: false,
-                  },
-                },
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    title: {
-                      display: true,
-                      text: "Number of Leads",
-                      color: "#72542b",
-                    },
-                    grid: {
-                      color: "rgba(125, 90, 80, 0.1)",
-                    },
-                    ticks: {
-                      color: "#72542b",
-                    },
-                  },
-                  x: {
-                    ticks: {
-                      color: "#72542b",
-                      maxRotation: 45,
-                    },
-                    grid: {
-                      color: "rgba(125, 90, 80, 0.1)",
-                    },
-                  },
-                },
-              }}
-            />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
-              Avg: {avgLeadVolume.toFixed(1)} leads/month
-            </div>
-            <div style={{ display: "flex", gap: "10px" }}>
-              <button
-                onClick={() => handleAddNotes("Lead Volume Trends")}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#7d5a50",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  fontSize: "12px",
-                }}
-              >
-                <FaStickyNote size={12} /> Add Notes
-              </button>
-              <button
-                onClick={() => handleViewAnalysis("Lead Volume Trends")}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  fontSize: "12px",
-                }}
-              >
-                <FaChartBar size={12} /> View Analysis
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Conversion Rates Chart */}
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          }}
-        >
-          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
-            Conversion Rates Trend
-          </h3>
-          <div style={{ height: "250px", marginBottom: "15px" }}>
-            <Line
-              data={{
-                labels: monthNames,
-                datasets: [
-                  {
-                    label: "Conversion Rate (%)",
-                    data: conversionRates,
-                    borderColor: "#7d5a50",
-                    backgroundColor: "rgba(125, 90, 80, 0.1)",
-                    borderWidth: 2,
-                    tension: 0.3,
-                    fill: true,
-                  },
-                ],
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    display: false,
-                  },
-                },
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    max: 100,
-                    title: {
-                      display: true,
-                      text: "Conversion Rate (%)",
-                      color: "#72542b",
-                    },
-                    grid: {
-                      color: "rgba(125, 90, 80, 0.1)",
-                    },
-                    ticks: {
-                      color: "#72542b",
-                      callback: function(value) {
-                        return value + '%';
-                      }
-                    },
-                  },
-                  x: {
-                    ticks: {
-                      color: "#72542b",
-                      maxRotation: 45,
-                    },
-                    grid: {
-                      color: "rgba(125, 90, 80, 0.1)",
-                    },
-                  },
-                },
-              }}
-            />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
-              Range: {Math.min(...conversionRates).toFixed(1)}% - {Math.max(...conversionRates).toFixed(1)}%
-            </div>
-            <div style={{ display: "flex", gap: "10px" }}>
-              <button
-                onClick={() => handleAddNotes("Conversion Rates")}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#7d5a50",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  fontSize: "12px",
-                }}
-              >
-                <FaStickyNote size={12} /> Add Notes
-              </button>
-              <button
-                onClick={() => handleViewAnalysis("Conversion Rates")}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  fontSize: "12px",
-                }}
-              >
-                <FaChartBar size={12} /> View Analysis
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Pipeline Value vs Risk Adjusted Value Chart */}
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          }}
-        >
-          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
-            Pipeline Value Comparison
-          </h3>
-          <div style={{ height: "250px", marginBottom: "15px" }}>
-            <Bar
-              data={{
-                labels: ["Total vs Risk Adjusted"],
-                datasets: [
-                  {
-                    label: "Total Pipeline Value",
-                    data: [totalPipelineValue],
-                    backgroundColor: "#9c7c5f",
-                    borderColor: "#5d4037",
-                    borderWidth: 1,
-                    borderRadius: 4,
-                  },
-                  {
-                    label: "Risk Adjusted Value",
-                    data: [riskAdjustedValue],
-                    backgroundColor: "#7d5a50",
-                    borderColor: "#4a352f",
-                    borderWidth: 1,
-                    borderRadius: 4,
-                  },
-                ],
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: 'top',
-                    labels: {
-                      color: "#72542b",
-                    }
-                  },
-                },
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    title: {
-                      display: true,
-                      text: "Value (ZAR)",
-                      color: "#72542b",
-                    },
-                    grid: {
-                      color: "rgba(125, 90, 80, 0.1)",
-                    },
-                    ticks: {
-                      color: "#72542b",
-                      callback: function(value) {
-                        if (value >= 1000000) {
-                          return 'R' + (value / 1000000).toFixed(1) + 'M';
-                        } else if (value >= 1000) {
-                          return 'R' + (value / 1000).toFixed(0) + 'K';
-                        }
-                        return 'R' + value;
-                      }
-                    },
-                  },
-                  x: {
-                    ticks: {
-                      color: "#72542b",
-                    },
-                    grid: {
-                      color: "rgba(125, 90, 80, 0.1)",
-                    },
-                  },
-                },
-              }}
-            />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
-              Risk Adjustment: {probability}% probability
-            </div>
-            <div style={{ display: "flex", gap: "10px" }}>
-              <button
-                onClick={() => handleAddNotes("Pipeline Value Comparison")}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#7d5a50",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  fontSize: "12px",
-                }}
-              >
-                <FaStickyNote size={12} /> Add Notes
-              </button>
-              <button
-                onClick={() => handleViewAnalysis("Pipeline Value Comparison")}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  fontSize: "12px",
-                }}
-              >
-                <FaChartBar size={12} /> View Analysis
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Pipeline Coverage Explanation */}
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
-            Pipeline Coverage Analysis
-          </h3>
-          <div style={{ 
-            flex: 1, 
-            display: "flex", 
-            flexDirection: "column", 
-            justifyContent: "center",
-            alignItems: "center",
-            textAlign: "center"
-          }}>
-            <div style={{ 
-              fontSize: "48px", 
-              color: pipelineCoverageRatio >= 100 ? "#16a34a" : 
-                     pipelineCoverageRatio >= 80 ? "#f59e0b" : "#dc2626",
-              fontWeight: "bold",
-              marginBottom: "10px"
-            }}>
-              {pipelineCoverageRatio}%
-            </div>
-            <div style={{ fontSize: "16px", color: "#5d4037", marginBottom: "5px", fontWeight: "600" }}>
-              Pipeline Coverage Ratio
-            </div>
-            <div style={{ fontSize: "14px", color: "#7d5a50", marginBottom: "15px" }}>
-              Pipeline Value ÷ Target Revenue
-            </div>
-            
-            <div style={{ 
-              width: "100%", 
-              backgroundColor: "#e8ddd4", 
-              height: "20px", 
-              borderRadius: "10px",
-              marginBottom: "15px",
-              overflow: "hidden"
-            }}>
-              <div 
-                style={{ 
-                  width: `${Math.min(pipelineCoverageRatio, 100)}%`, 
-                  height: "100%", 
-                  backgroundColor: pipelineCoverageRatio >= 100 ? "#16a34a" : 
-                                 pipelineCoverageRatio >= 80 ? "#f59e0b" : "#dc2626",
-                  transition: "width 0.5s ease"
-                }} 
-              />
-            </div>
-            
-            <div style={{ fontSize: "13px", color: "#72542b", textAlign: "left", width: "100%" }}>
-              <div style={{ marginBottom: "8px", display: "flex", justifyContent: "space-between" }}>
-                <span>Target Revenue:</span>
-                <span style={{ fontWeight: "600" }}>R {targetRevenue.toLocaleString()}</span>
-              </div>
-              <div style={{ marginBottom: "8px", display: "flex", justifyContent: "space-between" }}>
-                <span>Pipeline Value:</span>
-                <span style={{ fontWeight: "600" }}>R {totalPipelineValue.toLocaleString()}</span>
-              </div>
-              <div style={{ marginBottom: "8px", display: "flex", justifyContent: "space-between" }}>
-                <span>Risk Adjusted:</span>
-                <span style={{ fontWeight: "600" }}>R {riskAdjustedValue.toLocaleString()}</span>
-              </div>
-            </div>
-          </div>
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "15px" }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
             <button
-              onClick={() => handleAddNotes("Pipeline Coverage")}
+              onClick={() => setSelectedViewMode("month")}
               style={{
-                padding: "6px 12px",
-                backgroundColor: "#7d5a50",
+                padding: "8px 16px",
+                backgroundColor: selectedViewMode === "month" ? "#5d4037" : "#e8ddd4",
+                color: selectedViewMode === "month" ? "#fdfcfb" : "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "14px",
+              }}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setSelectedViewMode("quarter")}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: selectedViewMode === "quarter" ? "#5d4037" : "#e8ddd4",
+                color: selectedViewMode === "quarter" ? "#fdfcfb" : "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "14px",
+              }}
+            >
+              Quarterly
+            </button>
+            <button
+              onClick={() => setSelectedViewMode("year")}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: selectedViewMode === "year" ? "#5d4037" : "#e8ddd4",
+                color: selectedViewMode === "year" ? "#fdfcfb" : "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "14px",
+              }}
+            >
+              Yearly
+            </button>
+          </div>
+          
+          {!isInvestorView && (
+            <button
+              onClick={() => setShowModal(true)}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#5d4037",
                 color: "#fdfcfb",
                 border: "none",
                 borderRadius: "4px",
                 cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
-                fontSize: "12px",
+                fontWeight: "600",
+                fontSize: "14px",
               }}
             >
-              <FaStickyNote size={12} /> Add Notes
+              Add Data
             </button>
+          )}
+        </div>
+      </div>
+
+      {/* Summary Metrics */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "15px", marginBottom: "30px" }}>
+        <div
+          style={{
+            backgroundColor: "#f5f0eb",
+            padding: "20px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "14px", color: "#5d4037", marginBottom: "8px", fontWeight: "600" }}>
+            Pipeline Value
+          </div>
+          <div style={{ fontSize: "20px", color: "#5d4037", fontWeight: "700" }}>
+            {formatValue(pipelineData.totalPipelineValue)}
+          </div>
+        </div>
+        
+        <div
+          style={{
+            backgroundColor: "#f5f0eb",
+            padding: "20px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "14px", color: "#5d4037", marginBottom: "8px", fontWeight: "600" }}>
+            Risk Adjusted
+          </div>
+          <div style={{ fontSize: "20px", color: "#5d4037", fontWeight: "700" }}>
+            {formatValue(riskAdjustedValue)}
+          </div>
+        </div>
+        
+        <div
+          style={{
+            backgroundColor: "#f5f0eb",
+            padding: "20px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "14px", color: "#5d4037", marginBottom: "8px", fontWeight: "600" }}>
+            Pipeline Coverage
+          </div>
+          <div style={{ fontSize: "20px", color: "#5d4037", fontWeight: "700" }}>
+            {pipelineCoverage.toFixed(1)}%
+          </div>
+        </div>
+        
+        <div
+          style={{
+            backgroundColor: "#f5f0eb",
+            padding: "20px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "14px", color: "#5d4037", marginBottom: "8px", fontWeight: "600" }}>
+            Target Revenue
+          </div>
+          <div style={{ fontSize: "20px", color: "#5d4037", fontWeight: "700" }}>
+            {formatValue(pipelineData.targetRevenue)}
           </div>
         </div>
       </div>
 
-      {/* CALCULATION SUMMARY */}
+      {/* KPI Cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px", marginBottom: "30px" }}>
+        {renderKPICard("Total Pipeline Value", "totalPipelineValue", calculationTexts.totalPipelineValue)}
+        {renderKPICard("Risk Adjusted Value", "riskAdjustedValue", calculationTexts.riskAdjustedValue)}
+        {renderKPICard("Pipeline Coverage", "pipelineCoverage", calculationTexts.pipelineCoverage, true)}
+        {renderKPICard("Lead Volume Trends", "leadVolumeTrends", calculationTexts.leadVolumeTrends)}
+        {renderKPICard("Conversion Rates", "conversionRates", calculationTexts.conversionRates, true)}
+      </div>
+
+      {/* Calculation Summary */}
       <div style={{ 
-        backgroundColor: "#f7f3f0", 
+        backgroundColor: "#f5f0eb", 
         padding: "15px", 
         borderRadius: "6px",
         marginTop: "20px"
@@ -1830,48 +2629,97 @@ const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView }) => 
         <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px" }}>Calculation Formulas</h4>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
           <div>
-            <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
+            <div style={{ fontSize: "13px", color: "#5d4037", fontWeight: "600", marginBottom: "5px" }}>
               Risk Adjusted Pipeline Value
             </div>
-            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
+            <div style={{ fontSize: "12px", color: "#8d6e63" }}>
               = Total Pipeline Value × Probability %
             </div>
             <div style={{ fontSize: "12px", color: "#5d4037", marginTop: "5px" }}>
-              R {totalPipelineValue.toLocaleString()} × {probability}% = R {riskAdjustedValue.toLocaleString()}
+              {formatValue(pipelineData.totalPipelineValue)} × {pipelineData.probability}% = {formatValue(riskAdjustedValue)}
             </div>
           </div>
           <div>
-            <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
+            <div style={{ fontSize: "13px", color: "#5d4037", fontWeight: "600", marginBottom: "5px" }}>
               Pipeline Coverage Ratio
             </div>
-            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
+            <div style={{ fontSize: "12px", color: "#8d6e63" }}>
               = (Pipeline Value ÷ Target Revenue) × 100%
             </div>
             <div style={{ fontSize: "12px", color: "#5d4037", marginTop: "5px" }}>
-              (R {totalPipelineValue.toLocaleString()} ÷ R {targetRevenue.toLocaleString()}) × 100% = {pipelineCoverageRatio}%
+              ({formatValue(pipelineData.totalPipelineValue)} ÷ {formatValue(pipelineData.targetRevenue)}) × 100% = {pipelineCoverage.toFixed(1)}%
             </div>
           </div>
         </div>
       </div>
+
+      {/* Universal Add Data Modal */}
+      <UniversalAddDataModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        currentTab="pipeline-sufficiency"
+        user={currentUser}
+        onSave={loadData}
+        loading={loading}
+      />
+
+      {/* Calculation Modal */}
+      <CalculationModal
+        isOpen={showCalculationModal}
+        onClose={() => setShowCalculationModal(false)}
+        title={selectedCalculation.title}
+        calculation={selectedCalculation.calculation}
+      />
+
+      {/* Trend Modal */}
+      {showTrendModal && selectedTrendItem && (
+        <TrendModal
+          isOpen={showTrendModal}
+          onClose={() => setShowTrendModal(false)}
+          title={selectedTrendItem.name}
+          data={selectedTrendItem.data}
+          labels={generateLabels()}
+          isPercentage={selectedTrendItem.isPercentage}
+          formatValue={formatValue}
+          currencyUnit={currencyUnit}
+        />
+      )}
     </div>
   )
 }
 
-// Pipeline Quality Component
-// Pipeline Quality Component
-const PipelineQuality = ({ activeSection, currentUser, isInvestorView }) => {
-  const [costPerLeadChannels, setCostPerLeadChannels] = useState([])
-  const [cacLtvData, setCacLtvData] = useState(Array(12).fill({ cac: 0, ltv: 0 }))
-  const [sqlToOpportunity, setSqlToOpportunity] = useState(0)
-  const [opportunityToCustomer, setOpportunityToCustomer] = useState(0)
-  const [repeatCustomers, setRepeatCustomers] = useState(0)
-  const [churnRate, setChurnRate] = useState(0)
-  const [showEditForm, setShowEditForm] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-  const [notesExpanded, setNotesExpanded] = useState(false)
+// ==================== PIPELINE QUALITY COMPONENT ====================
 
-  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+const PipelineQuality = ({ activeSection, currentUser, isInvestorView }) => {
+  const [showModal, setShowModal] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [selectedMonth, setSelectedMonth] = useState("Jan")
+  const [selectedViewMode, setSelectedViewMode] = useState("month")
+  const [expandedNotes, setExpandedNotes] = useState({})
+  const [kpiNotes, setKpiNotes] = useState({})
+  const [kpiAnalysis, setKpiAnalysis] = useState({})
+  const [currencyUnit, setCurrencyUnit] = useState("zar_million")
+  const [showCalculationModal, setShowCalculationModal] = useState(false)
+  const [selectedCalculation, setSelectedCalculation] = useState({ title: "", calculation: "" })
+  const [showTrendModal, setShowTrendModal] = useState(false)
+  const [selectedTrendItem, setSelectedTrendItem] = useState(null)
+
+  const [pipelineData, setPipelineData] = useState({
+    costPerLeadChannels: [
+      { name: "Social Media", cost: 0 },
+      { name: "Email", cost: 0 },
+      { name: "PPC", cost: 0 },
+      { name: "SEO", cost: 0 },
+      { name: "Referral", cost: 0 }
+    ],
+    cacLtvData: Array(12).fill({ cac: 0, ltv: 0 }),
+    sqlToOpportunity: 0,
+    opportunityToCustomer: 0,
+    repeatCustomers: 0,
+    churnRate: 0,
+    notes: "",
+  })
 
   useEffect(() => {
     if (currentUser && activeSection === "pipeline-quality") {
@@ -1881,1070 +2729,556 @@ const PipelineQuality = ({ activeSection, currentUser, isInvestorView }) => {
 
   const loadData = async () => {
     if (!currentUser) return
+    setLoading(true)
     try {
-      setIsLoading(true)
-      const docRef = doc(db, "pipeline-quality", `${currentUser.uid}_${selectedYear}`)
+      const docRef = doc(db, "pipelineData", `${currentUser.uid}_quality_${selectedYear}`)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         const data = docSnap.data()
-        setCostPerLeadChannels(data.costPerLeadChannels || [])
-        setCacLtvData(data.cacLtvData || Array(12).fill({ cac: 0, ltv: 0 }))
-        setSqlToOpportunity(data.sqlToOpportunity || 0)
-        setOpportunityToCustomer(data.opportunityToCustomer || 0)
-        setRepeatCustomers(data.repeatCustomers || 0)
-        setChurnRate(data.churnRate || 0)
-      } else {
-        await setDoc(docRef, {
-          costPerLeadChannels: [
+        setPipelineData({
+          costPerLeadChannels: data.costPerLeadChannels || [
             { name: "Social Media", cost: 0 },
             { name: "Email", cost: 0 },
             { name: "PPC", cost: 0 },
             { name: "SEO", cost: 0 },
             { name: "Referral", cost: 0 }
           ],
-          cacLtvData: Array(12).fill({ cac: 0, ltv: 0 }),
-          sqlToOpportunity: 0,
-          opportunityToCustomer: 0,
-          repeatCustomers: 0,
-          churnRate: 0,
-          lastUpdated: new Date().toISOString(),
+          cacLtvData: data.cacLtvData || Array(12).fill({ cac: 0, ltv: 0 }),
+          sqlToOpportunity: data.sqlToOpportunity || 0,
+          opportunityToCustomer: data.opportunityToCustomer || 0,
+          repeatCustomers: data.repeatCustomers || 0,
+          churnRate: data.churnRate || 0,
+          notes: data.notes || "",
         })
       }
     } catch (error) {
       console.error("Error loading pipeline quality data:", error)
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
-  const saveData = async () => {
-    if (!currentUser || isInvestorView) {
-      alert("You cannot save data in this mode.")
-      return
-    }
-    try {
-      await setDoc(doc(db, "pipeline-quality", `${currentUser.uid}_${selectedYear}`), {
-        costPerLeadChannels,
-        cacLtvData,
-        sqlToOpportunity,
-        opportunityToCustomer,
-        repeatCustomers,
-        churnRate,
-        lastUpdated: new Date().toISOString(),
+  const openTrendModal = (itemName, dataArray, isPercentage = false) => {
+    if (dataArray === "cacLtv") {
+      // Handle CAC/LTV trend
+      const cacData = pipelineData.cacLtvData.map(d => d.cac)
+      const ltvData = pipelineData.cacLtvData.map(d => d.ltv)
+      setSelectedTrendItem({ 
+        name: itemName, 
+        data: { cac: cacData, ltv: ltvData },
+        isPercentage
       })
-      setShowEditForm(false)
-      alert("Pipeline quality data saved successfully!")
-    } catch (error) {
-      console.error("Error saving data:", error)
-      alert("Error saving data")
+    } else {
+      setSelectedTrendItem({ 
+        name: itemName, 
+        data: dataArray,
+        isPercentage
+      })
     }
+    setShowTrendModal(true)
   }
 
-  const addChannel = () => {
-    setCostPerLeadChannels([...costPerLeadChannels, { name: "New Channel", cost: 0 }])
+  const handleCalculationClick = (title, calculation) => {
+    setSelectedCalculation({ title, calculation })
+    setShowCalculationModal(true)
   }
 
-  const removeChannel = (index) => {
-    const newChannels = costPerLeadChannels.filter((_, i) => i !== index)
-    setCostPerLeadChannels(newChannels)
+  const months = getMonthsForYear(selectedYear, selectedViewMode)
+  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
+  const monthIndex = getMonthIndex(selectedMonth)
+
+  const formatValue = (value) => {
+    const num = Number.parseFloat(value) || 0
+    return num.toLocaleString()
   }
 
-  const updateChannel = (index, field, value) => {
-    const newChannels = [...costPerLeadChannels]
-    newChannels[index][field] = field === "name" ? value : Number(value)
-    setCostPerLeadChannels(newChannels)
+  const generateLabels = () => {
+    if (selectedViewMode === "month") return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    else if (selectedViewMode === "quarter") return ["Q1", "Q2", "Q3", "Q4"]
+    else return [selectedYear.toString()]
   }
 
-  const handleAddNotes = (chartName) => {
-    alert(`Add Notes functionality for ${chartName}`)
-  }
+  const renderKPICard = (title, dataKey, calculation = "", isPercentage = false) => {
+    let currentValue = 0
+    
+    if (dataKey === "sqlToOpportunity") {
+      currentValue = pipelineData.sqlToOpportunity
+    } else if (dataKey === "opportunityToCustomer") {
+      currentValue = pipelineData.opportunityToCustomer
+    } else if (dataKey === "repeatCustomers") {
+      currentValue = pipelineData.repeatCustomers
+    } else if (dataKey === "churnRate") {
+      currentValue = pipelineData.churnRate
+    } else if (dataKey === "avgCostPerLead") {
+      const validCosts = pipelineData.costPerLeadChannels.filter(c => c.cost > 0)
+      currentValue = validCosts.length > 0 
+        ? validCosts.reduce((sum, c) => sum + c.cost, 0) / validCosts.length
+        : 0
+    } else if (dataKey === "ltvCacRatio") {
+      const avgCac = pipelineData.cacLtvData.reduce((sum, m) => sum + m.cac, 0) / (pipelineData.cacLtvData.filter(m => m.cac > 0).length || 1)
+      const avgLtv = pipelineData.cacLtvData.reduce((sum, m) => sum + m.ltv, 0) / (pipelineData.cacLtvData.filter(m => m.ltv > 0).length || 1)
+      currentValue = avgCac > 0 ? avgLtv / avgCac : 0
+    }
 
-  const handleViewAnalysis = (chartName) => {
-    alert(`View Analysis functionality for ${chartName}`)
-  }
+    const displayValue = isPercentage 
+      ? `${currentValue.toFixed(1)}%`
+      : dataKey === "ltvCacRatio" 
+        ? `${currentValue.toFixed(1)}x`
+        : formatValue(currentValue)
 
-  if (activeSection !== "pipeline-quality") return null
-
-  if (isLoading) {
     return (
       <div
         style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "200px",
           backgroundColor: "#fdfcfb",
+          padding: "20px",
           borderRadius: "8px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          marginBottom: "20px",
+          position: "relative",
         }}
       >
-        <div>Loading data...</div>
+        <EyeIcon onClick={() => handleCalculationClick(title, calculation)} />
+        
+        <div style={{ display: "flex", alignItems: "center", marginBottom: "15px" }}>
+          <div
+            style={{
+              width: "100px",
+              height: "100px",
+              borderRadius: "50%",
+              border: "5px solid #f9a825",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginRight: "20px",
+              backgroundColor: "#fff9c4",
+            }}
+          >
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "16px", fontWeight: "700", color: "#5d4037" }}>
+                {displayValue}
+              </div>
+              <div style={{ fontSize: "11px", color: "#8d6e63" }}>Current</div>
+            </div>
+          </div>
+          <div style={{ flex: 1 }}>
+            <h4 style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}>{title}</h4>
+          </div>
+        </div>
+
+        <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
+          <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+            <button
+              onClick={() => setExpandedNotes(prev => ({ ...prev, [dataKey]: !prev[dataKey] }))}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "12px",
+              }}
+            >
+              Add notes
+            </button>
+            <button
+              onClick={() => setExpandedNotes(prev => ({ ...prev, [`${dataKey}_analysis`]: !prev[`${dataKey}_analysis`] }))}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "12px",
+              }}
+            >
+              AI analysis
+            </button>
+            <button
+              onClick={() => {
+                if (dataKey === "cacLtv") {
+                  openTrendModal(title, "cacLtv")
+                } else {
+                  alert("Trend view not available for this metric")
+                }
+              }}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "12px",
+              }}
+            >
+              View trend
+            </button>
+          </div>
+
+          {expandedNotes[dataKey] && (
+            <div style={{ marginBottom: "10px" }}>
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "5px",
+                }}
+              >
+                Notes / Comments:
+              </label>
+              <textarea
+                value={kpiNotes[dataKey] || ""}
+                onChange={(e) => setKpiNotes(prev => ({ ...prev, [dataKey]: e.target.value }))}
+                placeholder="Add notes or comments..."
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "60px",
+                  fontSize: "13px",
+                }}
+              />
+            </div>
+          )}
+
+          {expandedNotes[`${dataKey}_analysis`] && (
+            <div
+              style={{
+                backgroundColor: "#e3f2fd",
+                padding: "15px",
+                borderRadius: "6px",
+                border: "1px solid #90caf9",
+              }}
+            >
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#1565c0",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "8px",
+                }}
+              >
+                AI Analysis:
+              </label>
+              <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
+                {kpiAnalysis[dataKey] ||
+                  `Based on the current ${title.toLowerCase()} of ${displayValue}:
+                  \n\nThis metric indicates your pipeline quality.
+                  \n\nRecommended actions:
+                  \n• Monitor this metric
+                  \n• Compare against benchmarks
+                  \n• Identify improvement areas`}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     )
   }
 
-  // Calculate averages and totals
-  const totalCac = cacLtvData.reduce((sum, month) => sum + month.cac, 0) / (cacLtvData.filter(m => m.cac > 0).length || 1)
-  const totalLtv = cacLtvData.reduce((sum, month) => sum + month.ltv, 0) / (cacLtvData.filter(m => m.ltv > 0).length || 1)
-  const ltvCacRatio = totalCac > 0 ? (totalLtv / totalCac).toFixed(1) : 0
-  
-  // Calculate average cost per lead across all channels
-  const avgCostPerLead = costPerLeadChannels.length > 0 
-    ? costPerLeadChannels.reduce((sum, channel) => sum + channel.cost, 0) / costPerLeadChannels.length
-    : 0
+  if (activeSection !== "pipeline-quality") return null
+
+  const avgCac = pipelineData.cacLtvData.reduce((sum, m) => sum + m.cac, 0) / (pipelineData.cacLtvData.filter(m => m.cac > 0).length || 1)
+  const avgLtv = pipelineData.cacLtvData.reduce((sum, m) => sum + m.ltv, 0) / (pipelineData.cacLtvData.filter(m => m.ltv > 0).length || 1)
+  const ltvCacRatio = avgCac > 0 ? avgLtv / avgCac : 0
+
+  const calculationTexts = {
+    sqlToOpportunity: "SQL to Opportunity Conversion = (Opportunity ÷ SQL) × 100%\n\nMeasures sales acceptance rate.",
+    opportunityToCustomer: "Opportunity to Customer Conversion = (Customer ÷ Opportunity) × 100%\n\nMeasures sales close rate.",
+    repeatCustomers: "Repeat Customers: Percentage of customers who make multiple purchases.\n\nIndicates customer satisfaction and loyalty.",
+    churnRate: "Churn Rate: Percentage of customers lost over a period.\n\nMeasures customer retention.",
+    avgCostPerLead: "Average Cost Per Lead = Total Marketing Spend ÷ Total Leads\n\nMeasures marketing efficiency.",
+    ltvCacRatio: "LTV:CAC Ratio = Average Lifetime Value ÷ Average Customer Acquisition Cost\n\nHealthy ratio is > 3:1.",
+  }
 
   return (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "20px",
-        margin: "20px 0",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
-      <NotesSection 
-        sectionKey="pipeline-quality" 
-        isExpanded={notesExpanded}
-        onToggle={() => setNotesExpanded(!notesExpanded)}
+    <div>
+      <KeyQuestionBox
+        question="How real is this pipeline? Will it convert?"
+        signals="Credibility, conversion rates, CAC vs LTV"
+        decisions="Improve sales discipline, focus on high-quality leads"
+        section="pipeline-quality"
       />
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Pipeline Quality</h2>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-            style={{
-              padding: "8px 12px",
-              border: "1px solid #d4c4b0",
-              borderRadius: "4px",
-              backgroundColor: "#fdfcfb",
-              color: "#5d4037",
-            }}
-          >
-            {[2023, 2024, 2025, 2026].map(year => (
-              <option key={year} value={year}>{year}</option>
-            ))}
-          </select>
-          {!isInvestorView && (
-            <>
-              <button
-                onClick={() => setShowEditForm(!showEditForm)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                }}
-              >
-                <FaPlus /> Add Data
-              </button>
-              <button
-                onClick={() => alert("Add KPI functionality")}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#7d5a50",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                }}
-              >
-                <FaPlus /> Add KPI
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {!isInvestorView && showEditForm && (
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#72542b", marginTop: 0 }}>Add Pipeline Quality Data</h3>
-
-          <h4 style={{ color: "#72542b" }}>Cost Per Lead by Channel (ZAR)</h4>
-          {costPerLeadChannels.map((channel, index) => (
-            <div
-              key={index}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "2fr 1fr auto",
-                gap: "10px",
-                alignItems: "center",
-                marginBottom: "10px",
-                padding: "10px",
-                backgroundColor: "#fdfcfb",
-                borderRadius: "4px",
-              }}
-            >
-              <input
-                type="text"
-                value={channel.name}
-                onChange={(e) => updateChannel(index, "name", e.target.value)}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-                placeholder="Channel Name"
-              />
-              <input
-                type="number"
-                value={channel.cost}
-                onChange={(e) => updateChannel(index, "cost", e.target.value)}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-                placeholder="Cost (ZAR)"
-              />
-              <button
-                onClick={() => removeChannel(index)}
-                style={{
-                  padding: "8px",
-                  backgroundColor: "#dc2626",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                }}
-              >
-                <FaTrashAlt />
-              </button>
-            </div>
-          ))}
-          <button
-            onClick={addChannel}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#5d4037",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              marginBottom: "20px",
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
-            }}
-          >
-            <FaPlus /> Add Channel
-          </button>
-
-          <h4 style={{ color: "#72542b" }}>CAC vs LTV Trend (Monthly)</h4>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px", marginBottom: "20px" }}>
-            {monthNames.map((month, index) => (
-              <div key={month} style={{ backgroundColor: "#fdfcfb", padding: "10px", borderRadius: "4px" }}>
-                <label style={{ display: "block", color: "#72542b", marginBottom: "5px", fontWeight: "bold" }}>
-                  {month}
-                </label>
-                <div style={{ display: "flex", gap: "5px" }}>
-                  <input
-                    type="number"
-                    value={cacLtvData[index]?.cac || 0}
-                    onChange={(e) => {
-                      const newData = [...cacLtvData]
-                      newData[index] = { ...newData[index], cac: Number(e.target.value) }
-                      setCacLtvData(newData)
-                    }}
-                    style={{
-                      width: "50%",
-                      padding: "6px",
-                      border: "1px solid #d4c4b0",
-                      borderRadius: "4px",
-                    }}
-                    placeholder="CAC"
-                  />
-                  <input
-                    type="number"
-                    value={cacLtvData[index]?.ltv || 0}
-                    onChange={(e) => {
-                      const newData = [...cacLtvData]
-                      newData[index] = { ...newData[index], ltv: Number(e.target.value) }
-                      setCacLtvData(newData)
-                    }}
-                    style={{
-                      width: "50%",
-                      padding: "6px",
-                      border: "1px solid #d4c4b0",
-                      borderRadius: "4px",
-                    }}
-                    placeholder="LTV"
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <h4 style={{ color: "#72542b" }}>Conversion Metrics</h4>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "15px", marginBottom: "20px" }}>
-            <div>
-              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>
-                SQL → Opportunity Conversion (%)
-              </label>
-              <input
-                type="number"
-                value={sqlToOpportunity}
-                onChange={(e) => setSqlToOpportunity(Number(e.target.value))}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-                min="0"
-                max="100"
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>
-                Opportunity → Customer Conversion (%)
-              </label>
-              <input
-                type="number"
-                value={opportunityToCustomer}
-                onChange={(e) => setOpportunityToCustomer(Number(e.target.value))}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-                min="0"
-                max="100"
-              />
-            </div>
-          </div>
-
-          <h4 style={{ color: "#72542b" }}>Customer Retention Metrics</h4>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "15px", marginBottom: "20px" }}>
-            <div>
-              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Repeat Customers (%)</label>
-              <input
-                type="number"
-                value={repeatCustomers}
-                onChange={(e) => setRepeatCustomers(Number(e.target.value))}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-                min="0"
-                max="100"
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Churn Rate (%)</label>
-              <input
-                type="number"
-                value={churnRate}
-                onChange={(e) => setChurnRate(Number(e.target.value))}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-                min="0"
-                max="100"
-              />
-            </div>
-          </div>
-
-          <button
-            onClick={saveData}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              marginTop: "15px",
-            }}
-          >
-            Save Data
-          </button>
-        </div>
-      )}
-
-      {/* KEY METRICS - Top Section */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "10px", marginBottom: "30px" }}>
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "15px",
-            borderRadius: "6px",
-            textAlign: "center",
-            borderTop: "4px solid #9c7c5f",
-          }}
-        >
-          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
-            Avg Cost Per Lead
-          </div>
-          <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>
-            R {avgCostPerLead.toFixed(0)}
-          </div>
-          <div style={{ fontSize: "10px", color: "#7d5a50", marginTop: "3px" }}>
-            {costPerLeadChannels.length} channels
-          </div>
-        </div>
-        
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "15px",
-            borderRadius: "6px",
-            textAlign: "center",
-            borderTop: "4px solid #7d5a50",
-          }}
-        >
-          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
-            SQL → Opportunity
-          </div>
-          <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>{sqlToOpportunity}%</div>
-          <div style={{ fontSize: "10px", color: "#7d5a50", marginTop: "3px" }}>Conversion Rate</div>
-        </div>
-        
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "15px",
-            borderRadius: "6px",
-            textAlign: "center",
-            borderTop: "4px solid #5d4037",
-          }}
-        >
-          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
-            Opp → Customer
-          </div>
-          <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>{opportunityToCustomer}%</div>
-          <div style={{ fontSize: "10px", color: "#7d5a50", marginTop: "3px" }}>Conversion Rate</div>
-        </div>
-        
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "15px",
-            borderRadius: "6px",
-            textAlign: "center",
-            borderTop: "4px solid #4a352f",
-          }}
-        >
-          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
-            Repeat Customers
-          </div>
-          <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>{repeatCustomers}%</div>
-          <div style={{ fontSize: "10px", color: "#7d5a50", marginTop: "3px" }}>Retention Rate</div>
-        </div>
-        
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "15px",
-            borderRadius: "6px",
-            textAlign: "center",
-            borderTop: "4px solid #dc2626",
-          }}
-        >
-          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
-            Churn Rate
-          </div>
-          <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>{churnRate}%</div>
-          <div style={{ fontSize: "10px", color: "#7d5a50", marginTop: "3px" }}>Customer Loss</div>
-        </div>
-        
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "15px",
-            borderRadius: "6px",
-            textAlign: "center",
-            borderTop: "4px solid #16a34a",
-          }}
-        >
-          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
-            LTV:CAC Ratio
-          </div>
-          <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>{ltvCacRatio}x</div>
-          <div style={{ fontSize: "10px", color: "#7d5a50", marginTop: "3px" }}>
-            Avg: R{totalLtv.toFixed(0)}:R{totalCac.toFixed(0)}
-          </div>
-        </div>
-      </div>
-
-      {/* CHARTS SECTION - 3 charts */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px", marginBottom: "30px" }}>
-        
-        {/* Cost Per Lead by Channel Chart */}
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          }}
-        >
-          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
-            Cost Per Lead by Channel
-          </h3>
-          <div style={{ height: "250px", marginBottom: "15px" }}>
-            <Bar
-              data={{
-                labels: costPerLeadChannels.map((c) => c.name),
-                datasets: [
-                  {
-                    label: "Cost (ZAR)",
-                    data: costPerLeadChannels.map((c) => c.cost),
-                    backgroundColor: "#9c7c5f",
-                    borderColor: "#5d4037",
-                    borderWidth: 1,
-                    borderRadius: 4,
-                  },
-                ],
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    display: false,
-                  },
-                },
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    title: {
-                      display: true,
-                      text: "Cost (ZAR)",
-                      color: "#72542b",
-                    },
-                    grid: {
-                      color: "rgba(125, 90, 80, 0.1)",
-                    },
-                    ticks: {
-                      color: "#72542b",
-                    },
-                  },
-                  x: {
-                    ticks: {
-                      color: "#72542b",
-                      maxRotation: 45,
-                    },
-                    grid: {
-                      color: "rgba(125, 90, 80, 0.1)",
-                    },
-                  },
-                },
-              }}
-            />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
-              Avg: R{avgCostPerLead.toFixed(0)}
-            </div>
-            <div style={{ display: "flex", gap: "10px" }}>
-              <button
-                onClick={() => handleAddNotes("Cost Per Lead")}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#7d5a50",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  fontSize: "12px",
-                }}
-              >
-                <FaStickyNote size={12} /> Add Notes
-              </button>
-              <button
-                onClick={() => handleViewAnalysis("Cost Per Lead")}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  fontSize: "12px",
-                }}
-              >
-                <FaChartBar size={12} /> View Analysis
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* CAC vs LTV Trend Chart */}
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          }}
-        >
-          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
-            CAC vs LTV Trend
-          </h3>
-          <div style={{ height: "250px", marginBottom: "15px" }}>
-            <Line
-              data={{
-                labels: monthNames,
-                datasets: [
-                  {
-                    label: "CAC (ZAR)",
-                    data: cacLtvData.map((d) => d.cac),
-                    borderColor: "#dc2626",
-                    backgroundColor: "rgba(220, 38, 38, 0.1)",
-                    borderWidth: 2,
-                    tension: 0.3,
-                    fill: false,
-                  },
-                  {
-                    label: "LTV (ZAR)",
-                    data: cacLtvData.map((d) => d.ltv),
-                    borderColor: "#16a34a",
-                    backgroundColor: "rgba(22, 163, 74, 0.1)",
-                    borderWidth: 2,
-                    tension: 0.3,
-                    fill: false,
-                  },
-                ],
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: 'top',
-                    labels: {
-                      color: "#72542b",
-                    }
-                  },
-                },
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    title: {
-                      display: true,
-                      text: "Value (ZAR)",
-                      color: "#72542b",
-                    },
-                    grid: {
-                      color: "rgba(125, 90, 80, 0.1)",
-                    },
-                    ticks: {
-                      color: "#72542b",
-                    },
-                  },
-                  x: {
-                    ticks: {
-                      color: "#72542b",
-                      maxRotation: 45,
-                    },
-                    grid: {
-                      color: "rgba(125, 90, 80, 0.1)",
-                    },
-                  },
-                },
-              }}
-            />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
-              LTV:CAC = {ltvCacRatio}x
-            </div>
-            <div style={{ display: "flex", gap: "10px" }}>
-              <button
-                onClick={() => handleAddNotes("CAC vs LTV")}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#7d5a50",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  fontSize: "12px",
-                }}
-              >
-                <FaStickyNote size={12} /> Add Notes
-              </button>
-              <button
-                onClick={() => handleViewAnalysis("CAC vs LTV")}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  fontSize: "12px",
-                }}
-              >
-                <FaChartBar size={12} /> View Analysis
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Repeat Customers vs Churn Chart */}
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          }}
-        >
-          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
-            Repeat Customers vs Churn
-          </h3>
-          <div style={{ height: "250px", marginBottom: "15px" }}>
-            <Bar
-              data={{
-                labels: ["Retention vs Churn"],
-                datasets: [
-                  {
-                    label: "Repeat Customers",
-                    data: [repeatCustomers],
-                    backgroundColor: "#16a34a",
-                    borderColor: "#15803d",
-                    borderWidth: 1,
-                    borderRadius: 4,
-                  },
-                  {
-                    label: "Churn Rate",
-                    data: [churnRate],
-                    backgroundColor: "#dc2626",
-                    borderColor: "#b91c1c",
-                    borderWidth: 1,
-                    borderRadius: 4,
-                  },
-                ],
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: 'top',
-                    labels: {
-                      color: "#72542b",
-                    }
-                  },
-                },
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    max: 100,
-                    title: {
-                      display: true,
-                      text: "Percentage (%)",
-                      color: "#72542b",
-                    },
-                    grid: {
-                      color: "rgba(125, 90, 80, 0.1)",
-                    },
-                    ticks: {
-                      color: "#72542b",
-                      callback: function(value) {
-                        return value + '%';
-                      }
-                    },
-                  },
-                  x: {
-                    ticks: {
-                      color: "#72542b",
-                    },
-                    grid: {
-                      color: "rgba(125, 90, 80, 0.1)",
-                    },
-                  },
-                },
-              }}
-            />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
-              Net Retention: {repeatCustomers - churnRate}%
-            </div>
-            <div style={{ display: "flex", gap: "10px" }}>
-              <button
-                onClick={() => handleAddNotes("Retention vs Churn")}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#7d5a50",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  fontSize: "12px",
-                }}
-              >
-                <FaStickyNote size={12} /> Add Notes
-              </button>
-              <button
-                onClick={() => handleViewAnalysis("Retention vs Churn")}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  fontSize: "12px",
-                }}
-              >
-                <FaChartBar size={12} /> View Analysis
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* CONVERSION FUNNEL VISUALIZATION */}
       <div
         style={{
-          backgroundColor: "#f7f3f0",
-          padding: "20px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          marginBottom: "30px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "20px",
+          flexWrap: "wrap",
+          gap: "15px",
         }}
       >
-        <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
-          Conversion Funnel Analysis
-        </h3>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-around" }}>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ 
-              backgroundColor: "#fdfcfb", 
-              padding: "15px 25px", 
-              borderRadius: "8px",
-              border: "2px solid #d4c4b0",
-              marginBottom: "10px"
-            }}>
-              <div style={{ fontSize: "14px", color: "#72542b", fontWeight: "600" }}>SQL</div>
-              <div style={{ fontSize: "12px", color: "#7d5a50" }}>Starting Point</div>
+        <h2 style={{ color: "#5d4037", fontSize: "24px", fontWeight: "700", margin: 0 }}>Pipeline Quality</h2>
+
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+              <span style={{ color: "#5d4037", fontSize: "14px" }}>Year:</span>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  minWidth: "100px",
+                }}
+              >
+                {years.map((year) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
             </div>
-            <div style={{ 
-              backgroundColor: sqlToOpportunity >= 50 ? "#16a34a" : 
-                             sqlToOpportunity >= 30 ? "#f59e0b" : "#dc2626",
-              color: "white",
-              padding: "5px 10px",
-              borderRadius: "15px",
-              fontSize: "12px",
-              fontWeight: "600",
-              marginTop: "10px"
-            }}>
-              {sqlToOpportunity}% Convert
-            </div>
-          </div>
-          
-          <div style={{ fontSize: "24px", color: "#7d5a50", margin: "0 10px" }}>→</div>
-          
-          <div style={{ textAlign: "center" }}>
-            <div style={{ 
-              backgroundColor: "#fdfcfb", 
-              padding: "15px 25px", 
-              borderRadius: "8px",
-              border: "2px solid #d4c4b0",
-              marginBottom: "10px"
-            }}>
-              <div style={{ fontSize: "14px", color: "#72542b", fontWeight: "600" }}>Opportunity</div>
-              <div style={{ fontSize: "12px", color: "#7d5a50" }}>Qualified Leads</div>
-            </div>
-            <div style={{ 
-              backgroundColor: opportunityToCustomer >= 50 ? "#16a34a" : 
-                             opportunityToCustomer >= 30 ? "#f59e0b" : "#dc2626",
-              color: "white",
-              padding: "5px 10px",
-              borderRadius: "15px",
-              fontSize: "12px",
-              fontWeight: "600",
-              marginTop: "10px"
-            }}>
-              {opportunityToCustomer}% Convert
+            
+            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+              <span style={{ color: "#5d4037", fontSize: "14px" }}>Month:</span>
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  minWidth: "100px",
+                }}
+              >
+                {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((month) => (
+                  <option key={month} value={month}>{month}</option>
+                ))}
+              </select>
             </div>
           </div>
           
-          <div style={{ fontSize: "24px", color: "#7d5a50", margin: "0 10px" }}>→</div>
-          
-          <div style={{ textAlign: "center" }}>
-            <div style={{ 
-              backgroundColor: "#fdfcfb", 
-              padding: "15px 25px", 
-              borderRadius: "8px",
-              border: "2px solid #d4c4b0",
-              marginBottom: "10px"
-            }}>
-              <div style={{ fontSize: "14px", color: "#72542b", fontWeight: "600" }}>Customer</div>
-              <div style={{ fontSize: "12px", color: "#7d5a50" }}>Closed Deals</div>
-            </div>
-            <div style={{ 
-              backgroundColor: repeatCustomers >= 70 ? "#16a34a" : 
-                             repeatCustomers >= 50 ? "#f59e0b" : "#dc2626",
-              color: "white",
-              padding: "5px 10px",
-              borderRadius: "15px",
-              fontSize: "12px",
-              fontWeight: "600",
-              marginTop: "10px"
-            }}>
-              {repeatCustomers}% Repeat
-            </div>
-          </div>
-        </div>
-        
-        <div style={{ 
-          display: "flex", 
-          justifyContent: "space-between", 
-          marginTop: "20px",
-          paddingTop: "15px",
-          borderTop: "1px solid #e8ddd4"
-        }}>
-          <div style={{ fontSize: "12px", color: "#7d5a50" }}>
-            <strong>Overall Efficiency:</strong> {(sqlToOpportunity * opportunityToCustomer / 100).toFixed(1)}% SQL to Customer
-          </div>
-          <div style={{ display: "flex", gap: "10px" }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
             <button
-              onClick={() => handleAddNotes("Conversion Funnel")}
+              onClick={() => setSelectedViewMode("month")}
               style={{
-                padding: "6px 12px",
-                backgroundColor: "#7d5a50",
-                color: "#fdfcfb",
+                padding: "8px 16px",
+                backgroundColor: selectedViewMode === "month" ? "#5d4037" : "#e8ddd4",
+                color: selectedViewMode === "month" ? "#fdfcfb" : "#5d4037",
                 border: "none",
                 borderRadius: "4px",
                 cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
-                fontSize: "12px",
+                fontWeight: "500",
+                fontSize: "14px",
               }}
             >
-              <FaStickyNote size={12} /> Add Notes
+              Monthly
             </button>
             <button
-              onClick={() => handleViewAnalysis("Conversion Funnel")}
+              onClick={() => setSelectedViewMode("quarter")}
               style={{
-                padding: "6px 12px",
+                padding: "8px 16px",
+                backgroundColor: selectedViewMode === "quarter" ? "#5d4037" : "#e8ddd4",
+                color: selectedViewMode === "quarter" ? "#fdfcfb" : "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "14px",
+              }}
+            >
+              Quarterly
+            </button>
+            <button
+              onClick={() => setSelectedViewMode("year")}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: selectedViewMode === "year" ? "#5d4037" : "#e8ddd4",
+                color: selectedViewMode === "year" ? "#fdfcfb" : "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "14px",
+              }}
+            >
+              Yearly
+            </button>
+          </div>
+          
+          {!isInvestorView && (
+            <button
+              onClick={() => setShowModal(true)}
+              style={{
+                padding: "8px 16px",
                 backgroundColor: "#5d4037",
                 color: "#fdfcfb",
                 border: "none",
                 borderRadius: "4px",
                 cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
-                fontSize: "12px",
+                fontWeight: "600",
+                fontSize: "14px",
               }}
             >
-              <FaChartBar size={12} /> View Analysis
+              Add Data
             </button>
+          )}
+        </div>
+      </div>
+
+      {/* Summary Metrics */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "15px", marginBottom: "30px" }}>
+        <div
+          style={{
+            backgroundColor: "#f5f0eb",
+            padding: "20px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "14px", color: "#5d4037", marginBottom: "8px", fontWeight: "600" }}>
+            Avg Cost Per Lead
+          </div>
+          <div style={{ fontSize: "20px", color: "#5d4037", fontWeight: "700" }}>
+            R {avgCac.toFixed(0)}
+          </div>
+        </div>
+        
+        <div
+          style={{
+            backgroundColor: "#f5f0eb",
+            padding: "20px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "14px", color: "#5d4037", marginBottom: "8px", fontWeight: "600" }}>
+            SQL → Opportunity
+          </div>
+          <div style={{ fontSize: "20px", color: "#5d4037", fontWeight: "700" }}>
+            {pipelineData.sqlToOpportunity}%
+          </div>
+        </div>
+        
+        <div
+          style={{
+            backgroundColor: "#f5f0eb",
+            padding: "20px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "14px", color: "#5d4037", marginBottom: "8px", fontWeight: "600" }}>
+            Opp → Customer
+          </div>
+          <div style={{ fontSize: "20px", color: "#5d4037", fontWeight: "700" }}>
+            {pipelineData.opportunityToCustomer}%
+          </div>
+        </div>
+        
+        <div
+          style={{
+            backgroundColor: "#f5f0eb",
+            padding: "20px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "14px", color: "#5d4037", marginBottom: "8px", fontWeight: "600" }}>
+            LTV:CAC Ratio
+          </div>
+          <div style={{ fontSize: "20px", color: "#5d4037", fontWeight: "700" }}>
+            {ltvCacRatio.toFixed(1)}x
           </div>
         </div>
       </div>
 
-      {/* CAC vs LTV RATIO ANALYSIS */}
-      <div style={{ 
-        backgroundColor: "#f7f3f0", 
-        padding: "15px", 
-        borderRadius: "6px",
-        marginTop: "20px"
-      }}>
-        <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px" }}>LTV:CAC Ratio Analysis</h4>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "15px" }}>
-          <div>
-            <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
-              Current LTV:CAC Ratio
-            </div>
-            <div style={{ 
-              fontSize: "24px", 
-              color: ltvCacRatio >= 3 ? "#16a34a" : 
-                     ltvCacRatio >= 1.5 ? "#f59e0b" : "#dc2626",
-              fontWeight: "bold" 
-            }}>
-              {ltvCacRatio}x
-            </div>
-            <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
-              {ltvCacRatio >= 3 ? "Excellent" : 
-               ltvCacRatio >= 1.5 ? "Good" : "Needs Improvement"}
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
-              Average Customer Acquisition Cost
-            </div>
-            <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>
-              R {totalCac.toFixed(0)}
-            </div>
-            <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
-              Monthly Average CAC
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
-              Average Lifetime Value
-            </div>
-            <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>
-              R {totalLtv.toFixed(0)}
-            </div>
-            <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
-              Monthly Average LTV
-            </div>
-          </div>
-        </div>
+      {/* KPI Cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px", marginBottom: "30px" }}>
+        {renderKPICard("SQL → Opportunity", "sqlToOpportunity", calculationTexts.sqlToOpportunity, true)}
+        {renderKPICard("Opp → Customer", "opportunityToCustomer", calculationTexts.opportunityToCustomer, true)}
+        {renderKPICard("Repeat Customers", "repeatCustomers", calculationTexts.repeatCustomers, true)}
+        {renderKPICard("Churn Rate", "churnRate", calculationTexts.churnRate, true)}
+        {renderKPICard("Avg Cost Per Lead", "avgCostPerLead", calculationTexts.avgCostPerLead)}
+        {renderKPICard("LTV:CAC Ratio", "ltvCacRatio", calculationTexts.ltvCacRatio)}
       </div>
+
+      {/* Universal Add Data Modal */}
+      <UniversalAddDataModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        currentTab="pipeline-quality"
+        user={currentUser}
+        onSave={loadData}
+        loading={loading}
+      />
+
+      {/* Calculation Modal */}
+      <CalculationModal
+        isOpen={showCalculationModal}
+        onClose={() => setShowCalculationModal(false)}
+        title={selectedCalculation.title}
+        calculation={selectedCalculation.calculation}
+      />
+
+      {/* Trend Modal */}
+      {showTrendModal && selectedTrendItem && (
+        <TrendModal
+          isOpen={showTrendModal}
+          onClose={() => setShowTrendModal(false)}
+          title={selectedTrendItem.name}
+          data={selectedTrendItem.data}
+          labels={generateLabels()}
+          isPercentage={selectedTrendItem.isPercentage}
+          formatValue={formatValue}
+          currencyUnit={currencyUnit}
+        />
+      )}
     </div>
   )
 }
 
-// Revenue Concentration Component
-// Revenue Concentration Component
+// ==================== REVENUE CONCENTRATION COMPONENT ====================
+
 const RevenueConcentration = ({ activeSection, currentUser, isInvestorView }) => {
-  const [revenueChannels, setRevenueChannels] = useState([])
-  const [customerSegments, setCustomerSegments] = useState([])
-  const [showEditForm, setShowEditForm] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
+  const [showModal, setShowModal] = useState(false)
+  const [loading, setLoading] = useState(false)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-  const [notesExpanded, setNotesExpanded] = useState(false)
-  const [chartType, setChartType] = useState("channel") // "channel" or "segment"
+  const [selectedMonth, setSelectedMonth] = useState("Jan")
+  const [expandedNotes, setExpandedNotes] = useState({})
+  const [kpiNotes, setKpiNotes] = useState({})
+  const [kpiAnalysis, setKpiAnalysis] = useState({})
+  const [currencyUnit, setCurrencyUnit] = useState("zar_million")
+  const [showCalculationModal, setShowCalculationModal] = useState(false)
+  const [selectedCalculation, setSelectedCalculation] = useState({ title: "", calculation: "" })
+  const [chartType, setChartType] = useState("channel")
+
+  const [concentrationData, setConcentrationData] = useState({
+    revenueChannels: [
+      { name: "Social Media", revenue: 0, spend: 0 },
+      { name: "Email", revenue: 0, spend: 0 },
+      { name: "PPC", revenue: 0, spend: 0 },
+      { name: "SEO", revenue: 0, spend: 0 },
+      { name: "Referral", revenue: 0, spend: 0 },
+      { name: "Direct", revenue: 0, spend: 0 }
+    ],
+    customerSegments: [
+      { name: "Enterprise", revenue: 0, customerCount: 0 },
+      { name: "SMB", revenue: 0, customerCount: 0 },
+      { name: "Startup", revenue: 0, customerCount: 0 },
+      { name: "Non-Profit", revenue: 0, customerCount: 0 },
+      { name: "Education", revenue: 0, customerCount: 0 }
+    ],
+    notes: "",
+  })
+
+  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
 
   useEffect(() => {
     if (currentUser && activeSection === "revenue-concentration") {
@@ -2954,17 +3288,14 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView }) =>
 
   const loadData = async () => {
     if (!currentUser) return
+    setLoading(true)
     try {
-      setIsLoading(true)
-      const docRef = doc(db, "revenue-concentration", `${currentUser.uid}_${selectedYear}`)
+      const docRef = doc(db, "pipelineData", `${currentUser.uid}_concentration_${selectedYear}`)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         const data = docSnap.data()
-        setRevenueChannels(data.revenueChannels || [])
-        setCustomerSegments(data.customerSegments || [])
-      } else {
-        await setDoc(docRef, {
-          revenueChannels: [
+        setConcentrationData({
+          revenueChannels: data.revenueChannels || [
             { name: "Social Media", revenue: 0, spend: 0 },
             { name: "Email", revenue: 0, spend: 0 },
             { name: "PPC", revenue: 0, spend: 0 },
@@ -2972,1088 +3303,518 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView }) =>
             { name: "Referral", revenue: 0, spend: 0 },
             { name: "Direct", revenue: 0, spend: 0 }
           ],
-          customerSegments: [
+          customerSegments: data.customerSegments || [
             { name: "Enterprise", revenue: 0, customerCount: 0 },
             { name: "SMB", revenue: 0, customerCount: 0 },
             { name: "Startup", revenue: 0, customerCount: 0 },
             { name: "Non-Profit", revenue: 0, customerCount: 0 },
             { name: "Education", revenue: 0, customerCount: 0 }
           ],
-          lastUpdated: new Date().toISOString(),
+          notes: data.notes || "",
         })
       }
     } catch (error) {
       console.error("Error loading revenue concentration data:", error)
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
-  const saveData = async () => {
-    if (!currentUser || isInvestorView) {
-      alert("You cannot save data in this mode.")
-      return
-    }
-    try {
-      await setDoc(doc(db, "revenue-concentration", `${currentUser.uid}_${selectedYear}`), {
-        revenueChannels,
-        customerSegments,
-        lastUpdated: new Date().toISOString(),
-      })
-      setShowEditForm(false)
-      alert("Revenue concentration data saved successfully!")
-    } catch (error) {
-      console.error("Error saving data:", error)
-      alert("Error saving data")
+  const handleCalculationClick = (title, calculation) => {
+    setSelectedCalculation({ title, calculation })
+    setShowCalculationModal(true)
+  }
+
+  const formatValue = (value) => {
+    const num = Number.parseFloat(value) || 0
+    switch(currencyUnit) {
+      case "zar": return `R${num.toLocaleString()}`
+      case "zar_thousand": return `R${(num * 1000).toLocaleString()}K`
+      case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})}m`
+      case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}bn`
+      default: return `R${num.toLocaleString()}`
     }
   }
 
-  const addRevenueChannel = () => {
-    setRevenueChannels([...revenueChannels, { name: "New Channel", revenue: 0, spend: 0 }])
-  }
+  const renderKPICard = (title, dataKey, calculation = "", isPercentage = false) => {
+    let currentValue = 0
+    
+    if (dataKey === "totalRevenue") {
+      currentValue = concentrationData.revenueChannels.reduce((sum, c) => sum + c.revenue, 0)
+    } else if (dataKey === "totalSpend") {
+      currentValue = concentrationData.revenueChannels.reduce((sum, c) => sum + c.spend, 0)
+    } else if (dataKey === "totalROI") {
+      const totalRevenue = concentrationData.revenueChannels.reduce((sum, c) => sum + c.revenue, 0)
+      const totalSpend = concentrationData.revenueChannels.reduce((sum, c) => sum + c.spend, 0)
+      currentValue = totalSpend > 0 ? ((totalRevenue - totalSpend) / totalSpend) * 100 : 0
+    } else if (dataKey === "top3Concentration") {
+      const sortedChannels = [...concentrationData.revenueChannels].sort((a, b) => b.revenue - a.revenue)
+      const top3Revenue = sortedChannels.slice(0, 3).reduce((sum, c) => sum + c.revenue, 0)
+      const totalRevenue = concentrationData.revenueChannels.reduce((sum, c) => sum + c.revenue, 0)
+      currentValue = totalRevenue > 0 ? (top3Revenue / totalRevenue) * 100 : 0
+    }
 
-  const removeRevenueChannel = (index) => {
-    const newChannels = revenueChannels.filter((_, i) => i !== index)
-    setRevenueChannels(newChannels)
-  }
+    const displayValue = isPercentage 
+      ? `${currentValue.toFixed(1)}%`
+      : formatValue(currentValue)
 
-  const updateRevenueChannel = (index, field, value) => {
-    const newChannels = [...revenueChannels]
-    newChannels[index][field] = field === "name" ? value : Number(value)
-    setRevenueChannels(newChannels)
-  }
-
-  const addCustomerSegment = () => {
-    setCustomerSegments([...customerSegments, { name: "New Segment", revenue: 0, customerCount: 0 }])
-  }
-
-  const removeCustomerSegment = (index) => {
-    const newSegments = customerSegments.filter((_, i) => i !== index)
-    setCustomerSegments(newSegments)
-  }
-
-  const updateCustomerSegment = (index, field, value) => {
-    const newSegments = [...customerSegments]
-    newSegments[index][field] = field === "name" ? value : Number(value)
-    setCustomerSegments(newSegments)
-  }
-
-  const handleAddNotes = (chartName) => {
-    alert(`Add Notes functionality for ${chartName}`)
-  }
-
-  const handleViewAnalysis = (chartName) => {
-    alert(`View Analysis functionality for ${chartName}`)
-  }
-
-  if (activeSection !== "revenue-concentration") return null
-
-  if (isLoading) {
     return (
       <div
         style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "200px",
           backgroundColor: "#fdfcfb",
+          padding: "20px",
           borderRadius: "8px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          marginBottom: "20px",
+          position: "relative",
         }}
       >
-        <div>Loading data...</div>
+        <EyeIcon onClick={() => handleCalculationClick(title, calculation)} />
+        
+        <div style={{ display: "flex", alignItems: "center", marginBottom: "15px" }}>
+          <div
+            style={{
+              width: "100px",
+              height: "100px",
+              borderRadius: "50%",
+              border: "5px solid #f9a825",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginRight: "20px",
+              backgroundColor: "#fff9c4",
+            }}
+          >
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "16px", fontWeight: "700", color: "#5d4037" }}>
+                {displayValue}
+              </div>
+              <div style={{ fontSize: "11px", color: "#8d6e63" }}>Current</div>
+            </div>
+          </div>
+          <div style={{ flex: 1 }}>
+            <h4 style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}>{title}</h4>
+          </div>
+        </div>
+
+        <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
+          <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+            <button
+              onClick={() => setExpandedNotes(prev => ({ ...prev, [dataKey]: !prev[dataKey] }))}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "12px",
+              }}
+            >
+              Add notes
+            </button>
+            <button
+              onClick={() => setExpandedNotes(prev => ({ ...prev, [`${dataKey}_analysis`]: !prev[`${dataKey}_analysis`] }))}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "12px",
+              }}
+            >
+              AI analysis
+            </button>
+            <button
+              onClick={() => alert("Trend view not available for this metric")}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "12px",
+              }}
+            >
+              View trend
+            </button>
+          </div>
+
+          {expandedNotes[dataKey] && (
+            <div style={{ marginBottom: "10px" }}>
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "5px",
+                }}
+              >
+                Notes / Comments:
+              </label>
+              <textarea
+                value={kpiNotes[dataKey] || ""}
+                onChange={(e) => setKpiNotes(prev => ({ ...prev, [dataKey]: e.target.value }))}
+                placeholder="Add notes or comments..."
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "60px",
+                  fontSize: "13px",
+                }}
+              />
+            </div>
+          )}
+
+          {expandedNotes[`${dataKey}_analysis`] && (
+            <div
+              style={{
+                backgroundColor: "#e3f2fd",
+                padding: "15px",
+                borderRadius: "6px",
+                border: "1px solid #90caf9",
+              }}
+            >
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#1565c0",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "8px",
+                }}
+              >
+                AI Analysis:
+              </label>
+              <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
+                {kpiAnalysis[dataKey] ||
+                  `Based on the current ${title.toLowerCase()} of ${displayValue}:
+                  \n\nThis metric indicates your revenue concentration.
+                  \n\nRecommended actions:
+                  \n• Monitor concentration risk
+                  \n• Diversify revenue sources
+                  \n• Focus on high-ROI channels`}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     )
   }
 
-  // Calculate totals and analytics
-  const totalRevenue = revenueChannels.reduce((sum, channel) => sum + channel.revenue, 0)
-  const totalSpend = revenueChannels.reduce((sum, channel) => sum + channel.spend, 0)
-  const totalROI = totalSpend > 0 ? ((totalRevenue - totalSpend) / totalSpend * 100).toFixed(1) : 0
-  
-  // Sort channels by revenue to get top 3
-  const sortedChannels = [...revenueChannels].sort((a, b) => b.revenue - a.revenue)
-  const top3Channels = sortedChannels.slice(0, 3)
-  const top3Revenue = top3Channels.reduce((sum, c) => sum + c.revenue, 0)
-  const top3Percentage = totalRevenue > 0 ? ((top3Revenue / totalRevenue) * 100).toFixed(1) : 0
-  
-  // Sort segments by revenue to get top 3
-  const sortedSegments = [...customerSegments].sort((a, b) => b.revenue - a.revenue)
-  const top3Segments = sortedSegments.slice(0, 3)
-  const top3SegmentRevenue = top3Segments.reduce((sum, s) => sum + s.revenue, 0)
-  const top3SegmentPercentage = totalRevenue > 0 ? ((top3SegmentRevenue / totalRevenue) * 100).toFixed(1) : 0
+  if (activeSection !== "revenue-concentration") return null
 
-  // Calculate ROI per channel
-  const channelsWithROI = revenueChannels.map(channel => ({
-    ...channel,
-    roi: channel.spend > 0 ? ((channel.revenue - channel.spend) / channel.spend * 100).toFixed(1) : 0,
-    roiValue: channel.spend > 0 ? (channel.revenue - channel.spend) : 0
-  }))
+  const totalRevenue = concentrationData.revenueChannels.reduce((sum, c) => sum + c.revenue, 0)
+  const totalSpend = concentrationData.revenueChannels.reduce((sum, c) => sum + c.spend, 0)
+  const totalROI = totalSpend > 0 ? ((totalRevenue - totalSpend) / totalSpend) * 100 : 0
+  
+  const sortedChannels = [...concentrationData.revenueChannels].sort((a, b) => b.revenue - a.revenue)
+  const top3Revenue = sortedChannels.slice(0, 3).reduce((sum, c) => sum + c.revenue, 0)
+  const top3Percentage = totalRevenue > 0 ? (top3Revenue / totalRevenue) * 100 : 0
 
-  // Calculate revenue per customer for segments
-  const segmentsWithMetrics = customerSegments.map(segment => ({
-    ...segment,
-    avgRevenuePerCustomer: segment.customerCount > 0 ? (segment.revenue / segment.customerCount).toFixed(0) : 0
-  }))
+  const calculationTexts = {
+    totalRevenue: "Total Revenue: Sum of revenue from all channels.\n\nIndicates overall revenue performance.",
+    totalSpend: "Total Spend: Sum of marketing spend across all channels.\n\nShows total marketing investment.",
+    totalROI: "Return on Investment = (Revenue - Spend) ÷ Spend × 100%\n\nMeasures marketing efficiency.",
+    top3Concentration: "Top 3 Channels as % of Revenue = (Revenue from Top 3 Channels ÷ Total Revenue) × 100%\n\nIndicates revenue concentration risk.",
+  }
 
   return (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "20px",
-        margin: "20px 0",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
-      <NotesSection 
-        sectionKey="revenue-concentration" 
-        isExpanded={notesExpanded}
-        onToggle={() => setNotesExpanded(!notesExpanded)}
+    <div>
+      <KeyQuestionBox
+        question="Where does revenue actually come from? Are we over-dependent?"
+        signals="Channel concentration, segment dependency"
+        decisions="Diversify channels, reduce reliance on top clients"
+        section="revenue-concentration"
       />
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Revenue Concentration</h2>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-            style={{
-              padding: "8px 12px",
-              border: "1px solid #d4c4b0",
-              borderRadius: "4px",
-              backgroundColor: "#fdfcfb",
-              color: "#5d4037",
-            }}
-          >
-            {[2023, 2024, 2025, 2026].map(year => (
-              <option key={year} value={year}>{year}</option>
-            ))}
-          </select>
-          {!isInvestorView && (
-            <>
-              <button
-                onClick={() => setShowEditForm(!showEditForm)}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "20px",
+          flexWrap: "wrap",
+          gap: "15px",
+        }}
+      >
+        <h2 style={{ color: "#5d4037", fontSize: "24px", fontWeight: "700", margin: 0 }}>Revenue Concentration</h2>
+
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+              <span style={{ color: "#5d4037", fontSize: "14px" }}>Year:</span>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
                 style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
+                  padding: "8px 12px",
                   borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  minWidth: "100px",
                 }}
               >
-                <FaPlus /> Add Data
-              </button>
-            </>
+                {years.map((year) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+              <span style={{ color: "#5d4037", fontSize: "14px" }}>Units:</span>
+              <select
+                value={currencyUnit}
+                onChange={(e) => setCurrencyUnit(e.target.value)}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  minWidth: "100px",
+                }}
+              >
+                <option value="zar">ZAR</option>
+                <option value="zar_thousand">R K</option>
+                <option value="zar_million">R m</option>
+                <option value="zar_billion">R bn</option>
+              </select>
+            </div>
+          </div>
+          
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <button
+              onClick={() => setChartType("channel")}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: chartType === "channel" ? "#5d4037" : "#e8ddd4",
+                color: chartType === "channel" ? "#fdfcfb" : "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "14px",
+              }}
+            >
+              By Channel
+            </button>
+            <button
+              onClick={() => setChartType("segment")}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: chartType === "segment" ? "#5d4037" : "#e8ddd4",
+                color: chartType === "segment" ? "#fdfcfb" : "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "14px",
+              }}
+            >
+              By Segment
+            </button>
+          </div>
+          
+          {!isInvestorView && (
+            <button
+              onClick={() => setShowModal(true)}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "14px",
+              }}
+            >
+              Add Data
+            </button>
           )}
         </div>
       </div>
 
-      {!isInvestorView && showEditForm && (
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#72542b", marginTop: 0 }}>Add Revenue Concentration Data</h3>
-          
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "30px" }}>
-            {/* Revenue Channels Section */}
-            <div>
-              <h4 style={{ color: "#72542b", marginBottom: "15px" }}>Revenue Channels</h4>
-              {revenueChannels.map((channel, index) => (
-                <div
-                  key={index}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "2fr 1fr 1fr auto",
-                    gap: "10px",
-                    alignItems: "center",
-                    marginBottom: "10px",
-                    padding: "10px",
-                    backgroundColor: "#fdfcfb",
-                    borderRadius: "4px",
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={channel.name}
-                    onChange={(e) => updateRevenueChannel(index, "name", e.target.value)}
-                    style={{
-                      padding: "8px",
-                      border: "1px solid #d4c4b0",
-                      borderRadius: "4px",
-                    }}
-                    placeholder="Channel Name"
-                  />
-                  <input
-                    type="number"
-                    value={channel.revenue}
-                    onChange={(e) => updateRevenueChannel(index, "revenue", e.target.value)}
-                    style={{
-                      padding: "8px",
-                      border: "1px solid #d4c4b0",
-                      borderRadius: "4px",
-                    }}
-                    placeholder="Revenue (ZAR)"
-                  />
-                  <input
-                    type="number"
-                    value={channel.spend}
-                    onChange={(e) => updateRevenueChannel(index, "spend", e.target.value)}
-                    style={{
-                      padding: "8px",
-                      border: "1px solid #d4c4b0",
-                      borderRadius: "4px",
-                    }}
-                    placeholder="Spend (ZAR)"
-                  />
-                  <button
-                    onClick={() => removeRevenueChannel(index)}
-                    style={{
-                      padding: "8px",
-                      backgroundColor: "#dc2626",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "4px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <FaTrashAlt />
-                  </button>
-                </div>
-              ))}
-              <button
-                onClick={addRevenueChannel}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#5d4037",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  marginBottom: "20px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  width: "100%",
-                  justifyContent: "center",
-                }}
-              >
-                <FaPlus /> Add Channel
-              </button>
-            </div>
-
-            {/* Customer Segments Section */}
-            <div>
-              <h4 style={{ color: "#72542b", marginBottom: "15px" }}>Customer Segments</h4>
-              {customerSegments.map((segment, index) => (
-                <div
-                  key={index}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "2fr 1fr 1fr auto",
-                    gap: "10px",
-                    alignItems: "center",
-                    marginBottom: "10px",
-                    padding: "10px",
-                    backgroundColor: "#fdfcfb",
-                    borderRadius: "4px",
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={segment.name}
-                    onChange={(e) => updateCustomerSegment(index, "name", e.target.value)}
-                    style={{
-                      padding: "8px",
-                      border: "1px solid #d4c4b0",
-                      borderRadius: "4px",
-                    }}
-                    placeholder="Segment Name"
-                  />
-                  <input
-                    type="number"
-                    value={segment.revenue}
-                    onChange={(e) => updateCustomerSegment(index, "revenue", e.target.value)}
-                    style={{
-                      padding: "8px",
-                      border: "1px solid #d4c4b0",
-                      borderRadius: "4px",
-                    }}
-                    placeholder="Revenue (ZAR)"
-                  />
-                  <input
-                    type="number"
-                    value={segment.customerCount}
-                    onChange={(e) => updateCustomerSegment(index, "customerCount", e.target.value)}
-                    style={{
-                      padding: "8px",
-                      border: "1px solid #d4c4b0",
-                      borderRadius: "4px",
-                    }}
-                    placeholder="Customers"
-                  />
-                  <button
-                    onClick={() => removeCustomerSegment(index)}
-                    style={{
-                      padding: "8px",
-                      backgroundColor: "#dc2626",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "4px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <FaTrashAlt />
-                  </button>
-                </div>
-              ))}
-              <button
-                onClick={addCustomerSegment}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#5d4037",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  marginBottom: "20px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  width: "100%",
-                  justifyContent: "center",
-                }}
-              >
-                <FaPlus /> Add Segment
-              </button>
-            </div>
-          </div>
-
-          <button
-            onClick={saveData}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              marginTop: "15px",
-              width: "100%",
-            }}
-          >
-            Save Data
-          </button>
-        </div>
-      )}
-
-      {/* KEY METRICS - Top Section */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "15px", marginBottom: "30px" }}>
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            textAlign: "center",
-            borderTop: "4px solid #9c7c5f",
-          }}
-        >
-          <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "8px", fontWeight: "600" }}>
-            Total Revenue
-          </div>
-          <div style={{ fontSize: "20px", color: "#5d4037", fontWeight: "bold" }}>
-            R {totalRevenue.toLocaleString()}
-          </div>
-          <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
-            Year {selectedYear}
-          </div>
-        </div>
-        
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            textAlign: "center",
-            borderTop: "4px solid #7d5a50",
-          }}
-        >
-          <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "8px", fontWeight: "600" }}>
-            Total Spend
-          </div>
-          <div style={{ fontSize: "20px", color: "#5d4037", fontWeight: "bold" }}>
-            R {totalSpend.toLocaleString()}
-          </div>
-          <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
-            Across all channels
-          </div>
-        </div>
-        
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            textAlign: "center",
-            borderTop: "4px solid #5d4037",
-          }}
-        >
-          <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "8px", fontWeight: "600" }}>
-            Overall ROI
-          </div>
-          <div style={{ fontSize: "20px", color: totalROI > 0 ? "#16a34a" : "#dc2626", fontWeight: "bold" }}>
-            {totalROI}%
-          </div>
-          <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
-            Return on Investment
-          </div>
-        </div>
-        
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            textAlign: "center",
-            borderTop: "4px solid #4a352f",
-          }}
-        >
-          <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "8px", fontWeight: "600" }}>
-            Top 3 Concentration
-          </div>
-          <div style={{ 
-            fontSize: "20px", 
-            color: top3Percentage > 70 ? "#dc2626" : 
-                   top3Percentage > 50 ? "#f59e0b" : "#16a34a", 
-            fontWeight: "bold" 
-          }}>
-            {top3Percentage}%
-          </div>
-          <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
-            {chartType === "channel" ? "Channels" : "Segments"}
-          </div>
-        </div>
+      {/* KPI Cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "20px", marginBottom: "30px" }}>
+        {renderKPICard("Total Revenue", "totalRevenue", calculationTexts.totalRevenue)}
+        {renderKPICard("Total Spend", "totalSpend", calculationTexts.totalSpend)}
+        {renderKPICard("Overall ROI", "totalROI", calculationTexts.totalROI, true)}
+        {renderKPICard("Top 3 Concentration", "top3Concentration", calculationTexts.top3Concentration, true)}
       </div>
 
-      {/* CHART TYPE SELECTOR */}
-      <div style={{ marginBottom: "20px", display: "flex", gap: "10px" }}>
-        <button
-          onClick={() => setChartType("channel")}
-          style={{
-            padding: "8px 16px",
-            backgroundColor: chartType === "channel" ? "#5d4037" : "#e8ddd4",
-            color: chartType === "channel" ? "#fdfcfb" : "#5d4037",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-            fontWeight: "600",
-            fontSize: "14px",
-          }}
-        >
-          View by Channel
-        </button>
-        <button
-          onClick={() => setChartType("segment")}
-          style={{
-            padding: "8px 16px",
-            backgroundColor: chartType === "segment" ? "#5d4037" : "#e8ddd4",
-            color: chartType === "segment" ? "#fdfcfb" : "#5d4037",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-            fontWeight: "600",
-            fontSize: "14px",
-          }}
-        >
-          View by Customer Segment
-        </button>
-      </div>
-
-      {/* CHARTS SECTION - 3 charts in grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px", marginBottom: "30px" }}>
-        
-        {/* Revenue Distribution Pie Chart */}
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          }}
-        >
-          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
-            {chartType === "channel" ? "Revenue by Channel" : "Revenue by Customer Segment"}
-          </h3>
-          <div style={{ height: "250px", marginBottom: "15px" }}>
-            {chartType === "channel" ? (
-              <Pie
-                data={{
-                  labels: revenueChannels.map((c) => c.name),
-                  datasets: [
-                    {
-                      label: "Revenue (ZAR)",
-                      data: revenueChannels.map((c) => c.revenue),
-                      backgroundColor: [
-                        "#9c7c5f",
-                        "#7d5a50",
-                        "#e8ddd4",
-                        "#d4c4b0",
-                        "#5d4037",
-                        "#f7f3f0",
-                        "#72542b",
-                        "#4a352f",
-                      ],
-                      borderColor: "#fdfcfb",
-                      borderWidth: 2,
-                    },
-                  ],
-                }}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: {
-                      position: 'right',
-                      labels: {
-                        color: "#72542b",
-                        padding: 15,
-                      }
-                    },
-                  },
-                }}
-              />
-            ) : (
-              <Pie
-                data={{
-                  labels: customerSegments.map((s) => s.name),
-                  datasets: [
-                    {
-                      label: "Revenue (ZAR)",
-                      data: customerSegments.map((s) => s.revenue),
-                      backgroundColor: [
-                        "#16a34a",
-                        "#f59e0b",
-                        "#dc2626",
-                        "#3b82f6",
-                        "#8b5cf6",
-                        "#06b6d4",
-                        "#f97316",
-                      ],
-                      borderColor: "#fdfcfb",
-                      borderWidth: 2,
-                    },
-                  ],
-                }}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: {
-                      position: 'right',
-                      labels: {
-                        color: "#72542b",
-                        padding: 15,
-                      }
-                    },
-                  },
-                }}
-              />
-            )}
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
-              Total: R{totalRevenue.toLocaleString()}
-            </div>
-            <div style={{ display: "flex", gap: "10px" }}>
-              <button
-                onClick={() => handleAddNotes(chartType === "channel" ? "Revenue by Channel" : "Revenue by Segment")}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#7d5a50",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  fontSize: "12px",
-                }}
-              >
-                <FaStickyNote size={12} /> Add Notes
-              </button>
-              <button
-                onClick={() => handleViewAnalysis(chartType === "channel" ? "Revenue by Channel" : "Revenue by Segment")}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  fontSize: "12px",
-                }}
-              >
-                <FaChartBar size={12} /> View Analysis
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Revenue vs Spend Bar Chart */}
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          }}
-        >
-          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
-            Revenue per Channel vs Spend
-          </h3>
-          <div style={{ height: "250px", marginBottom: "15px" }}>
-            <Bar
-              data={{
-                labels: revenueChannels.map((c) => c.name),
-                datasets: [
-                  {
-                    label: "Revenue (ZAR)",
-                    data: revenueChannels.map((c) => c.revenue),
-                    backgroundColor: "#16a34a",
-                    borderColor: "#15803d",
-                    borderWidth: 1,
-                    borderRadius: 4,
-                  },
-                  {
-                    label: "Spend (ZAR)",
-                    data: revenueChannels.map((c) => c.spend),
-                    backgroundColor: "#dc2626",
-                    borderColor: "#b91c1c",
-                    borderWidth: 1,
-                    borderRadius: 4,
-                  },
-                ],
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: 'top',
-                    labels: {
-                      color: "#72542b",
-                    }
-                  },
-                },
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    title: {
-                      display: true,
-                      text: "Amount (ZAR)",
-                      color: "#72542b",
-                    },
-                    grid: {
-                      color: "rgba(125, 90, 80, 0.1)",
-                    },
-                    ticks: {
-                      color: "#72542b",
-                    },
-                  },
-                  x: {
-                    ticks: {
-                      color: "#72542b",
-                      maxRotation: 45,
-                    },
-                    grid: {
-                      color: "rgba(125, 90, 80, 0.1)",
-                    },
-                  },
-                },
-              }}
-            />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
-              ROI: {totalROI}%
-            </div>
-            <div style={{ display: "flex", gap: "10px" }}>
-              <button
-                onClick={() => handleAddNotes("Revenue vs Spend")}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#7d5a50",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  fontSize: "12px",
-                }}
-              >
-                <FaStickyNote size={12} /> Add Notes
-              </button>
-              <button
-                onClick={() => handleViewAnalysis("Revenue vs Spend")}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  fontSize: "12px",
-                }}
-              >
-                <FaChartBar size={12} /> View Analysis
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Top 3 Concentration Pie Chart */}
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          }}
-        >
-          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
-            {chartType === "channel" ? "Top 3 Channels" : "Top 3 Customer Segments"}
-          </h3>
-          <div style={{ height: "250px", marginBottom: "15px" }}>
-            <Pie
-              data={{
-                labels: chartType === "channel" 
-                  ? top3Channels.map((c) => c.name)
-                  : top3Segments.map((s) => s.name),
-                datasets: [
-                  {
-                    label: "Revenue (ZAR)",
-                    data: chartType === "channel"
-                      ? top3Channels.map((c) => c.revenue)
-                      : top3Segments.map((s) => s.revenue),
-                    backgroundColor: [
-                      "#16a34a",
-                      "#f59e0b",
-                      "#dc2626",
-                    ],
-                    borderColor: "#fdfcfb",
-                    borderWidth: 2,
-                  },
-                ],
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: 'right',
-                    labels: {
-                      color: "#72542b",
-                      padding: 15,
-                    }
-                  },
-                },
-              }}
-            />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
-              {top3Percentage}% of total revenue
-            </div>
-            <div style={{ display: "flex", gap: "10px" }}>
-              <button
-                onClick={() => handleAddNotes(chartType === "channel" ? "Top 3 Channels" : "Top 3 Segments")}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#7d5a50",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  fontSize: "12px",
-                }}
-              >
-                <FaStickyNote size={12} /> Add Notes
-              </button>
-              <button
-                onClick={() => handleViewAnalysis(chartType === "channel" ? "Top 3 Channels" : "Top 3 Segments")}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  fontSize: "12px",
-                }}
-              >
-                <FaChartBar size={12} /> View Analysis
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* CHANNEL PERFORMANCE ANALYSIS */}
-      <div
-        style={{
-          backgroundColor: "#f7f3f0",
-          padding: "20px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          marginBottom: "30px",
-        }}
-      >
+      {/* Channel Table */}
+      <div style={{ 
+        backgroundColor: "#f5f0eb", 
+        padding: "20px", 
+        borderRadius: "8px",
+        marginBottom: "30px"
+      }}>
         <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
-          Channel Performance & ROI Analysis
+          Channel Performance
         </h3>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ backgroundColor: "#5d4037", color: "#fdfcfb" }}>
                 <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Channel</th>
-                <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Revenue (ZAR)</th>
-                <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Spend (ZAR)</th>
+                <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Revenue</th>
+                <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Spend</th>
                 <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Net Profit</th>
                 <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>ROI %</th>
                 <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>% of Revenue</th>
               </tr>
             </thead>
             <tbody>
-              {channelsWithROI.sort((a, b) => b.revenue - a.revenue).map((channel, index) => (
-                <tr
-                  key={index}
-                  style={{
-                    borderBottom: "1px solid #e8ddd4",
-                    backgroundColor: index % 2 === 0 ? "#fdfcfb" : "#f7f3f0",
-                  }}
-                >
-                  <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037", fontWeight: "600" }}>
-                    {channel.name}
-                  </td>
-                  <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
-                    R {channel.revenue.toLocaleString()}
-                  </td>
-                  <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
-                    R {channel.spend.toLocaleString()}
-                  </td>
-                  <td style={{ 
-                    padding: "10px", 
-                    fontSize: "13px", 
-                    color: channel.roiValue >= 0 ? "#16a34a" : "#dc2626", 
-                    textAlign: "right",
-                    fontWeight: "600"
-                  }}>
-                    R {Math.abs(channel.roiValue).toLocaleString()} {channel.roiValue >= 0 ? "Profit" : "Loss"}
-                  </td>
-                  <td style={{ 
-                    padding: "10px", 
-                    fontSize: "13px", 
-                    color: channel.roi >= 0 ? "#16a34a" : "#dc2626", 
-                    textAlign: "right",
-                    fontWeight: "600"
-                  }}>
-                    {channel.roi}%
-                  </td>
-                  <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
-                    {totalRevenue > 0 ? ((channel.revenue / totalRevenue) * 100).toFixed(1) : 0}%
-                  </td>
-                </tr>
-              ))}
+              {concentrationData.revenueChannels.sort((a, b) => b.revenue - a.revenue).map((channel, index) => {
+                const netProfit = channel.revenue - channel.spend
+                const roi = channel.spend > 0 ? (netProfit / channel.spend) * 100 : 0
+                const revenuePercentage = totalRevenue > 0 ? (channel.revenue / totalRevenue) * 100 : 0
+                
+                return (
+                  <tr
+                    key={index}
+                    style={{
+                      borderBottom: "1px solid #e8ddd4",
+                      backgroundColor: index % 2 === 0 ? "#fdfcfb" : "#f5f0eb",
+                    }}
+                  >
+                    <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037", fontWeight: "600" }}>
+                      {channel.name}
+                    </td>
+                    <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
+                      {formatValue(channel.revenue)}
+                    </td>
+                    <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
+                      {formatValue(channel.spend)}
+                    </td>
+                    <td style={{ 
+                      padding: "10px", 
+                      fontSize: "13px", 
+                      color: netProfit >= 0 ? "#16a34a" : "#dc2626", 
+                      textAlign: "right",
+                      fontWeight: "600"
+                    }}>
+                      {formatValue(netProfit)}
+                    </td>
+                    <td style={{ 
+                      padding: "10px", 
+                      fontSize: "13px", 
+                      color: roi >= 0 ? "#16a34a" : "#dc2626", 
+                      textAlign: "right",
+                      fontWeight: "600"
+                    }}>
+                      {roi.toFixed(1)}%
+                    </td>
+                    <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
+                      {revenuePercentage.toFixed(1)}%
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
-            <tfoot>
-              <tr style={{ backgroundColor: "#e8ddd4", fontWeight: "600" }}>
-                <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>TOTAL</td>
-                <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
-                  R {totalRevenue.toLocaleString()}
-                </td>
-                <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
-                  R {totalSpend.toLocaleString()}
-                </td>
-                <td style={{ 
-                  padding: "12px", 
-                  fontSize: "13px", 
-                  color: totalRevenue - totalSpend >= 0 ? "#16a34a" : "#dc2626", 
-                  textAlign: "right"
-                }}>
-                  R {Math.abs(totalRevenue - totalSpend).toLocaleString()} {totalRevenue - totalSpend >= 0 ? "Profit" : "Loss"}
-                </td>
-                <td style={{ 
-                  padding: "12px", 
-                  fontSize: "13px", 
-                  color: totalROI >= 0 ? "#16a34a" : "#dc2626", 
-                  textAlign: "right"
-                }}>
-                  {totalROI}%
-                </td>
-                <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
-                  100%
-                </td>
-              </tr>
-            </tfoot>
           </table>
-        </div>
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "15px" }}>
-          <button
-            onClick={() => handleAddNotes("Channel Performance")}
-            style={{
-              padding: "6px 12px",
-              backgroundColor: "#7d5a50",
-              color: "#fdfcfb",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
-              fontSize: "12px",
-            }}
-          >
-            <FaStickyNote size={12} /> Add Notes
-          </button>
         </div>
       </div>
 
-      {/* CONCENTRATION RISK ANALYSIS */}
+      {/* Concentration Risk Analysis */}
       <div style={{ 
-        backgroundColor: "#f7f3f0", 
+        backgroundColor: "#f5f0eb", 
         padding: "15px", 
         borderRadius: "6px",
       }}>
         <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px" }}>Concentration Risk Analysis</h4>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-          <div>
-            <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
-              Channel Concentration Risk
+        <div>
+          <div style={{ fontSize: "13px", color: "#5d4037", fontWeight: "600", marginBottom: "5px" }}>
+            Channel Concentration Risk
+          </div>
+          <div style={{ display: "flex", alignItems: "center", marginBottom: "10px" }}>
+            <div style={{ width: "100%", backgroundColor: "#e8ddd4", height: "20px", borderRadius: "10px", overflow: "hidden" }}>
+              <div 
+                style={{ 
+                  width: `${top3Percentage}%`, 
+                  height: "100%", 
+                  backgroundColor: top3Percentage > 70 ? "#dc2626" : top3Percentage > 50 ? "#f59e0b" : "#16a34a",
+                }} 
+              />
             </div>
-            <div style={{ 
-              display: "flex", 
-              alignItems: "center", 
-              marginBottom: "10px"
-            }}>
-              <div style={{ 
-                width: "100%", 
-                backgroundColor: "#e8ddd4", 
-                height: "20px", 
-                borderRadius: "10px",
-                overflow: "hidden"
-              }}>
-                <div 
-                  style={{ 
-                    width: `${top3Percentage}%`, 
-                    height: "100%", 
-                    backgroundColor: top3Percentage > 70 ? "#dc2626" : 
-                                   top3Percentage > 50 ? "#f59e0b" : "#16a34a",
-                  }} 
-                />
-              </div>
-              <div style={{ 
-                marginLeft: "10px", 
-                fontSize: "14px", 
-                color: "#5d4037",
-                fontWeight: "600",
-                minWidth: "40px"
-              }}>
-                {top3Percentage}%
-              </div>
-            </div>
-            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
-              Top 3 channels generate {top3Percentage}% of total revenue
-              {top3Percentage > 70 && " - High risk: Over-dependent on few channels"}
-              {top3Percentage <= 70 && top3Percentage > 50 && " - Moderate risk"}
-              {top3Percentage <= 50 && " - Low risk: Well diversified"}
+            <div style={{ marginLeft: "10px", fontSize: "14px", color: "#5d4037", fontWeight: "600", minWidth: "40px" }}>
+              {top3Percentage.toFixed(1)}%
             </div>
           </div>
-          
-          <div>
-            <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
-              Customer Segment Concentration
-            </div>
-            <div style={{ 
-              display: "flex", 
-              alignItems: "center", 
-              marginBottom: "10px"
-            }}>
-              <div style={{ 
-                width: "100%", 
-                backgroundColor: "#e8ddd4", 
-                height: "20px", 
-                borderRadius: "10px",
-                overflow: "hidden"
-              }}>
-                <div 
-                  style={{ 
-                    width: `${top3SegmentPercentage}%`, 
-                    height: "100%", 
-                    backgroundColor: top3SegmentPercentage > 70 ? "#dc2626" : 
-                                   top3SegmentPercentage > 50 ? "#f59e0b" : "#16a34a",
-                  }} 
-                />
-              </div>
-              <div style={{ 
-                marginLeft: "10px", 
-                fontSize: "14px", 
-                color: "#5d4037",
-                fontWeight: "600",
-                minWidth: "40px"
-              }}>
-                {top3SegmentPercentage}%
-              </div>
-            </div>
-            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
-              Top 3 customer segments generate {top3SegmentPercentage}% of total revenue
-              {top3SegmentPercentage > 70 && " - High risk: Over-dependent on few segments"}
-              {top3SegmentPercentage <= 70 && top3SegmentPercentage > 50 && " - Moderate risk"}
-              {top3SegmentPercentage <= 50 && " - Low risk: Well diversified"}
-            </div>
+          <div style={{ fontSize: "12px", color: "#8d6e63" }}>
+            Top 3 channels generate {top3Percentage.toFixed(1)}% of total revenue
+            {top3Percentage > 70 && " - High risk: Over-dependent on few channels"}
+            {top3Percentage <= 70 && top3Percentage > 50 && " - Moderate risk"}
+            {top3Percentage <= 50 && " - Low risk: Well diversified"}
           </div>
         </div>
       </div>
+
+      {/* Universal Add Data Modal */}
+      <UniversalAddDataModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        currentTab="revenue-concentration"
+        user={currentUser}
+        onSave={loadData}
+        loading={loading}
+      />
+
+      {/* Calculation Modal */}
+      <CalculationModal
+        isOpen={showCalculationModal}
+        onClose={() => setShowCalculationModal(false)}
+        title={selectedCalculation.title}
+        calculation={selectedCalculation.calculation}
+      />
     </div>
   )
 }
 
-// Demand Sustainability Component
-// Demand Sustainability Component
-const DemandSustainability = ({ activeSection, currentUser, isInvestorView }) => {
-  const [referralRateTrend, setReferralRateTrend] = useState(Array(12).fill(0))
-  const [repeatCustomerRate, setRepeatCustomerRate] = useState(0)
-  const [churnRate, setChurnRate] = useState(0)
-  const [campaigns, setCampaigns] = useState([])
-  const [cacLtvData, setCacLtvData] = useState(Array(12).fill({ cac: 0, ltv: 0 }))
-  const [showEditForm, setShowEditForm] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-  const [notesExpanded, setNotesExpanded] = useState(false)
+// ==================== DEMAND SUSTAINABILITY COMPONENT ====================
 
-  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+const DemandSustainability = ({ activeSection, currentUser, isInvestorView }) => {
+  const [showModal, setShowModal] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [selectedMonth, setSelectedMonth] = useState("Jan")
+  const [selectedViewMode, setSelectedViewMode] = useState("month")
+  const [expandedNotes, setExpandedNotes] = useState({})
+  const [kpiNotes, setKpiNotes] = useState({})
+  const [kpiAnalysis, setKpiAnalysis] = useState({})
+  const [currencyUnit, setCurrencyUnit] = useState("zar_million")
+  const [showCalculationModal, setShowCalculationModal] = useState(false)
+  const [selectedCalculation, setSelectedCalculation] = useState({ title: "", calculation: "" })
+  const [showTrendModal, setShowTrendModal] = useState(false)
+  const [selectedTrendItem, setSelectedTrendItem] = useState(null)
+
+  const [sustainabilityData, setSustainabilityData] = useState({
+    referralRateTrend: Array(12).fill(0),
+    repeatCustomerRate: 0,
+    churnRate: 0,
+    campaigns: [
+      { name: "Q1 Campaign", cost: 0, revenue: 0 },
+      { name: "Q2 Campaign", cost: 0, revenue: 0 },
+      { name: "Summer Sale", cost: 0, revenue: 0 },
+      { name: "Holiday Campaign", cost: 0, revenue: 0 }
+    ],
+    cacLtvData: Array(12).fill({ cac: 0, ltv: 0 }),
+    notes: "",
+  })
+
+  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
 
   useEffect(() => {
     if (currentUser && activeSection === "demand-sustainability") {
@@ -4063,1282 +3824,639 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView }) =>
 
   const loadData = async () => {
     if (!currentUser) return
+    setLoading(true)
     try {
-      setIsLoading(true)
-      const docRef = doc(db, "demand-sustainability", `${currentUser.uid}_${selectedYear}`)
+      const docRef = doc(db, "pipelineData", `${currentUser.uid}_sustainability_${selectedYear}`)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         const data = docSnap.data()
-        setReferralRateTrend(data.referralRateTrend || Array(12).fill(0))
-        setRepeatCustomerRate(data.repeatCustomerRate || 0)
-        setChurnRate(data.churnRate || 0)
-        setCampaigns(data.campaigns || [])
-        setCacLtvData(data.cacLtvData || Array(12).fill({ cac: 0, ltv: 0 }))
-      } else {
-        await setDoc(docRef, {
-          referralRateTrend: Array(12).fill(0),
-          repeatCustomerRate: 0,
-          churnRate: 0,
-          campaigns: [
+        setSustainabilityData({
+          referralRateTrend: data.referralRateTrend || Array(12).fill(0),
+          repeatCustomerRate: data.repeatCustomerRate || 0,
+          churnRate: data.churnRate || 0,
+          campaigns: data.campaigns || [
             { name: "Q1 Campaign", cost: 0, revenue: 0 },
             { name: "Q2 Campaign", cost: 0, revenue: 0 },
             { name: "Summer Sale", cost: 0, revenue: 0 },
             { name: "Holiday Campaign", cost: 0, revenue: 0 }
           ],
-          cacLtvData: Array(12).fill({ cac: 0, ltv: 0 }),
-          lastUpdated: new Date().toISOString(),
+          cacLtvData: data.cacLtvData || Array(12).fill({ cac: 0, ltv: 0 }),
+          notes: data.notes || "",
         })
       }
     } catch (error) {
       console.error("Error loading demand sustainability data:", error)
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
-  const saveData = async () => {
-    if (!currentUser || isInvestorView) {
-      alert("You cannot save data in this mode.")
-      return
-    }
-    try {
-      await setDoc(doc(db, "demand-sustainability", `${currentUser.uid}_${selectedYear}`), {
-        referralRateTrend,
-        repeatCustomerRate,
-        churnRate,
-        campaigns,
-        cacLtvData,
-        lastUpdated: new Date().toISOString(),
+  const openTrendModal = (itemName, dataArray, isPercentage = false) => {
+    if (dataArray === "referral") {
+      setSelectedTrendItem({ 
+        name: itemName, 
+        data: sustainabilityData.referralRateTrend,
+        isPercentage
       })
-      setShowEditForm(false)
-      alert("Demand sustainability data saved successfully!")
-    } catch (error) {
-      console.error("Error saving data:", error)
-      alert("Error saving data")
+    } else if (dataArray === "cacLtv") {
+      const cacData = sustainabilityData.cacLtvData.map(d => d.cac)
+      const ltvData = sustainabilityData.cacLtvData.map(d => d.ltv)
+      setSelectedTrendItem({ 
+        name: itemName, 
+        data: { cac: cacData, ltv: ltvData },
+        isPercentage
+      })
     }
+    setShowTrendModal(true)
   }
 
-  const addCampaign = () => {
-    setCampaigns([...campaigns, { name: "New Campaign", cost: 0, revenue: 0 }])
+  const handleCalculationClick = (title, calculation) => {
+    setSelectedCalculation({ title, calculation })
+    setShowCalculationModal(true)
   }
 
-  const removeCampaign = (index) => {
-    const newCampaigns = campaigns.filter((_, i) => i !== index)
-    setCampaigns(newCampaigns)
+  const months = getMonthsForYear(selectedYear, selectedViewMode)
+  const monthIndex = getMonthIndex(selectedMonth)
+
+  const formatValue = (value) => {
+    const num = Number.parseFloat(value) || 0
+    return num.toLocaleString()
   }
 
-  const updateCampaign = (index, field, value) => {
-    const newCampaigns = [...campaigns]
-    newCampaigns[index][field] = field === "name" ? value : Number(value)
-    setCampaigns(newCampaigns)
+  const generateLabels = () => {
+    if (selectedViewMode === "month") return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    else if (selectedViewMode === "quarter") return ["Q1", "Q2", "Q3", "Q4"]
+    else return [selectedYear.toString()]
   }
 
-  const handleAddNotes = (chartName) => {
-    alert(`Add Notes functionality for ${chartName}`)
-  }
+  const renderKPICard = (title, dataKey, calculation = "", isPercentage = false) => {
+    let currentValue = 0
+    
+    if (dataKey === "repeatCustomerRate") {
+      currentValue = sustainabilityData.repeatCustomerRate
+    } else if (dataKey === "churnRate") {
+      currentValue = sustainabilityData.churnRate
+    } else if (dataKey === "netRetention") {
+      currentValue = sustainabilityData.repeatCustomerRate - sustainabilityData.churnRate
+    } else if (dataKey === "avgReferralRate") {
+      currentValue = sustainabilityData.referralRateTrend.reduce((sum, r) => sum + r, 0) / 12
+    } else if (dataKey === "campaignROI") {
+      const totalCost = sustainabilityData.campaigns.reduce((sum, c) => sum + c.cost, 0)
+      const totalRevenue = sustainabilityData.campaigns.reduce((sum, c) => sum + c.revenue, 0)
+      currentValue = totalCost > 0 ? ((totalRevenue - totalCost) / totalCost) * 100 : 0
+    }
 
-  const handleViewAnalysis = (chartName) => {
-    alert(`View Analysis functionality for ${chartName}`)
-  }
+    const displayValue = isPercentage 
+      ? `${currentValue.toFixed(1)}%`
+      : formatValue(currentValue)
 
-  if (activeSection !== "demand-sustainability") return null
-
-  if (isLoading) {
     return (
       <div
         style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "200px",
           backgroundColor: "#fdfcfb",
+          padding: "20px",
           borderRadius: "8px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          marginBottom: "20px",
+          position: "relative",
         }}
       >
-        <div>Loading data...</div>
+        <EyeIcon onClick={() => handleCalculationClick(title, calculation)} />
+        
+        <div style={{ display: "flex", alignItems: "center", marginBottom: "15px" }}>
+          <div
+            style={{
+              width: "100px",
+              height: "100px",
+              borderRadius: "50%",
+              border: "5px solid #f9a825",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginRight: "20px",
+              backgroundColor: "#fff9c4",
+            }}
+          >
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "16px", fontWeight: "700", color: "#5d4037" }}>
+                {displayValue}
+              </div>
+              <div style={{ fontSize: "11px", color: "#8d6e63" }}>Current</div>
+            </div>
+          </div>
+          <div style={{ flex: 1 }}>
+            <h4 style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}>{title}</h4>
+          </div>
+        </div>
+
+        <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
+          <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+            <button
+              onClick={() => setExpandedNotes(prev => ({ ...prev, [dataKey]: !prev[dataKey] }))}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "12px",
+              }}
+            >
+              Add notes
+            </button>
+            <button
+              onClick={() => setExpandedNotes(prev => ({ ...prev, [`${dataKey}_analysis`]: !prev[`${dataKey}_analysis`] }))}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "12px",
+              }}
+            >
+              AI analysis
+            </button>
+            <button
+              onClick={() => {
+                if (dataKey === "referralTrend") {
+                  openTrendModal(title, "referral", true)
+                } else if (dataKey === "cacLtv") {
+                  openTrendModal(title, "cacLtv")
+                } else {
+                  alert("Trend view not available for this metric")
+                }
+              }}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "12px",
+              }}
+            >
+              View trend
+            </button>
+          </div>
+
+          {expandedNotes[dataKey] && (
+            <div style={{ marginBottom: "10px" }}>
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "5px",
+                }}
+              >
+                Notes / Comments:
+              </label>
+              <textarea
+                value={kpiNotes[dataKey] || ""}
+                onChange={(e) => setKpiNotes(prev => ({ ...prev, [dataKey]: e.target.value }))}
+                placeholder="Add notes or comments..."
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "60px",
+                  fontSize: "13px",
+                }}
+              />
+            </div>
+          )}
+
+          {expandedNotes[`${dataKey}_analysis`] && (
+            <div
+              style={{
+                backgroundColor: "#e3f2fd",
+                padding: "15px",
+                borderRadius: "6px",
+                border: "1px solid #90caf9",
+              }}
+            >
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#1565c0",
+                  fontWeight: "600",
+                  display: "block",
+                  marginBottom: "8px",
+                }}
+              >
+                AI Analysis:
+              </label>
+              <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
+                {kpiAnalysis[dataKey] ||
+                  `Based on the current ${title.toLowerCase()} of ${displayValue}:
+                  \n\nThis metric indicates demand sustainability.
+                  \n\nRecommended actions:
+                  \n• Monitor trends monthly
+                  \n• Focus on customer retention
+                  \n• Optimize campaign ROI`}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     )
   }
 
-  // Calculate campaign metrics
-  const totalCampaignCost = campaigns.reduce((sum, campaign) => sum + campaign.cost, 0)
-  const totalCampaignRevenue = campaigns.reduce((sum, campaign) => sum + campaign.revenue, 0)
-  const totalCampaignROI = totalCampaignCost > 0 ? ((totalCampaignRevenue - totalCampaignCost) / totalCampaignCost * 100).toFixed(1) : 0
-  const campaignsWithROI = campaigns.map(campaign => ({
-    ...campaign,
-    roi: campaign.cost > 0 ? ((campaign.revenue - campaign.cost) / campaign.cost * 100).toFixed(1) : 0,
-    roiValue: campaign.revenue - campaign.cost,
-    contribution: totalCampaignCost > 0 ? ((campaign.cost / totalCampaignCost) * 100).toFixed(1) : 0
-  }))
+  if (activeSection !== "demand-sustainability") return null
 
-  // Calculate CAC vs LTV trends
-  const avgCac = cacLtvData.reduce((sum, month) => sum + month.cac, 0) / (cacLtvData.filter(m => m.cac > 0).length || 1)
-  const avgLtv = cacLtvData.reduce((sum, month) => sum + month.ltv, 0) / (cacLtvData.filter(m => m.ltv > 0).length || 1)
-  const ltvCacRatio = avgCac > 0 ? (avgLtv / avgCac).toFixed(1) : 0
+  const avgReferralRate = sustainabilityData.referralRateTrend.reduce((sum, r) => sum + r, 0) / 12
+  const netRetention = sustainabilityData.repeatCustomerRate - sustainabilityData.churnRate
   
-  // Calculate CAC trend (is it declining?)
-  const firstHalfAvgCac = cacLtvData.slice(0, 6).reduce((sum, month) => sum + month.cac, 0) / 6
-  const secondHalfAvgCac = cacLtvData.slice(6, 12).reduce((sum, month) => sum + month.cac, 0) / 6
-  const cacDeclineRate = firstHalfAvgCac > 0 ? ((firstHalfAvgCac - secondHalfAvgCac) / firstHalfAvgCac * 100).toFixed(1) : 0
-  
-  // Calculate LTV trend (is it rising?)
-  const firstHalfAvgLtv = cacLtvData.slice(0, 6).reduce((sum, month) => sum + month.ltv, 0) / 6
-  const secondHalfAvgLtv = cacLtvData.slice(6, 12).reduce((sum, month) => sum + month.ltv, 0) / 6
-  const ltvGrowthRate = firstHalfAvgLtv > 0 ? ((secondHalfAvgLtv - firstHalfAvgLtv) / firstHalfAvgLtv * 100).toFixed(1) : 0
+  const totalCampaignCost = sustainabilityData.campaigns.reduce((sum, c) => sum + c.cost, 0)
+  const totalCampaignRevenue = sustainabilityData.campaigns.reduce((sum, c) => sum + c.revenue, 0)
+  const campaignROI = totalCampaignCost > 0 ? ((totalCampaignRevenue - totalCampaignCost) / totalCampaignCost) * 100 : 0
 
-  // Calculate referral rate average
-  const avgReferralRate = referralRateTrend.reduce((sum, rate) => sum + rate, 0) / 12
+  const avgCac = sustainabilityData.cacLtvData.reduce((sum, m) => sum + m.cac, 0) / (sustainabilityData.cacLtvData.filter(m => m.cac > 0).length || 1)
+  const avgLtv = sustainabilityData.cacLtvData.reduce((sum, m) => sum + m.ltv, 0) / (sustainabilityData.cacLtvData.filter(m => m.ltv > 0).length || 1)
+  const ltvCacRatio = avgCac > 0 ? avgLtv / avgCac : 0
 
-  // Net retention rate (Repeat - Churn)
-  const netRetentionRate = repeatCustomerRate - churnRate
+  const firstHalfCac = sustainabilityData.cacLtvData.slice(0, 6).reduce((sum, m) => sum + m.cac, 0) / 6
+  const secondHalfCac = sustainabilityData.cacLtvData.slice(6, 12).reduce((sum, m) => sum + m.cac, 0) / 6
+  const cacDeclineRate = firstHalfCac > 0 ? ((firstHalfCac - secondHalfCac) / firstHalfCac) * 100 : 0
+
+  const calculationTexts = {
+    repeatCustomerRate: "Repeat Customer Rate = (Repeat Customers ÷ Total Customers) × 100%\n\nMeasures customer loyalty and satisfaction.",
+    churnRate: "Churn Rate = (Customers Lost ÷ Total Customers) × 100%\n\nMeasures customer retention.",
+    netRetention: "Net Retention Rate = Repeat Customer Rate - Churn Rate\n\nIndicates overall customer retention health.",
+    avgReferralRate: "Average Referral Rate = Total Referrals ÷ Total Customers\n\nMeasures organic growth through referrals.",
+    campaignROI: "Campaign ROI = (Revenue - Cost) ÷ Cost × 100%\n\nMeasures marketing campaign effectiveness.",
+  }
 
   return (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "20px",
-        margin: "20px 0",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
-      <NotesSection 
-        sectionKey="demand-sustainability" 
-        isExpanded={notesExpanded}
-        onToggle={() => setNotesExpanded(!notesExpanded)}
+    <div>
+      <KeyQuestionBox
+        question="Is demand repeatable? Will demand persist without constant spend?"
+        signals="Referral rates, repeat customers, CAC trends"
+        decisions="Build demand engine, focus on retention, optimize campaigns"
+        section="demand-sustainability"
       />
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Demand Sustainability</h2>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-            style={{
-              padding: "8px 12px",
-              border: "1px solid #d4c4b0",
-              borderRadius: "4px",
-              backgroundColor: "#fdfcfb",
-              color: "#5d4037",
-            }}
-          >
-            {[2023, 2024, 2025, 2026].map(year => (
-              <option key={year} value={year}>{year}</option>
-            ))}
-          </select>
-          {!isInvestorView && (
-            <>
-              <button
-                onClick={() => setShowEditForm(!showEditForm)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                }}
-              >
-                <FaPlus /> Add Data
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {!isInvestorView && showEditForm && (
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#72542b", marginTop: 0 }}>Add Demand Sustainability Data</h3>
-
-          <h4 style={{ color: "#72542b" }}>Referral Rate Trend (Monthly %)</h4>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: "20px" }}>
-            {monthNames.map((month, index) => (
-              <div key={month}>
-                <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>{month}</label>
-                <input
-                  type="number"
-                  value={referralRateTrend[index]}
-                  onChange={(e) => {
-                    const newData = [...referralRateTrend]
-                    newData[index] = Number(e.target.value)
-                    setReferralRateTrend(newData)
-                  }}
-                  style={{
-                    width: "100%",
-                    padding: "6px",
-                    border: "1px solid #d4c4b0",
-                    borderRadius: "4px",
-                  }}
-                  min="0"
-                  max="100"
-                />
-              </div>
-            ))}
-          </div>
-
-          <h4 style={{ color: "#72542b" }}>Customer Retention Metrics</h4>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "15px", marginBottom: "20px" }}>
-            <div>
-              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>
-                Repeat Customer Rate (%)
-              </label>
-              <input
-                type="number"
-                value={repeatCustomerRate}
-                onChange={(e) => setRepeatCustomerRate(Number(e.target.value))}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-                min="0"
-                max="100"
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Churn Rate (%)</label>
-              <input
-                type="number"
-                value={churnRate}
-                onChange={(e) => setChurnRate(Number(e.target.value))}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-                min="0"
-                max="100"
-              />
-            </div>
-          </div>
-
-          <h4 style={{ color: "#72542b" }}>Campaign Cost & Revenue</h4>
-          {campaigns.map((campaign, index) => (
-            <div
-              key={index}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "2fr 1fr 1fr auto",
-                gap: "10px",
-                alignItems: "center",
-                marginBottom: "10px",
-                padding: "10px",
-                backgroundColor: "#fdfcfb",
-                borderRadius: "4px",
-              }}
-            >
-              <input
-                type="text"
-                value={campaign.name}
-                onChange={(e) => updateCampaign(index, "name", e.target.value)}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-                placeholder="Campaign Name"
-              />
-              <input
-                type="number"
-                value={campaign.cost}
-                onChange={(e) => updateCampaign(index, "cost", e.target.value)}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-                placeholder="Cost (ZAR)"
-              />
-              <input
-                type="number"
-                value={campaign.revenue}
-                onChange={(e) => updateCampaign(index, "revenue", e.target.value)}
-                style={{
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-                placeholder="Revenue (ZAR)"
-              />
-              <button
-                onClick={() => removeCampaign(index)}
-                style={{
-                  padding: "8px",
-                  backgroundColor: "#dc2626",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                }}
-              >
-                <FaTrashAlt />
-              </button>
-            </div>
-          ))}
-          <button
-            onClick={addCampaign}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#5d4037",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              marginBottom: "20px",
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
-            }}
-          >
-            <FaPlus /> Add Campaign
-          </button>
-
-          <h4 style={{ color: "#72542b" }}>CAC vs LTV (Monthly)</h4>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px", marginBottom: "20px" }}>
-            {monthNames.map((month, index) => (
-              <div key={month} style={{ backgroundColor: "#fdfcfb", padding: "10px", borderRadius: "4px" }}>
-                <label style={{ display: "block", color: "#72542b", marginBottom: "5px", fontWeight: "bold" }}>
-                  {month}
-                </label>
-                <div style={{ display: "flex", gap: "5px" }}>
-                  <input
-                    type="number"
-                    value={cacLtvData[index]?.cac || 0}
-                    onChange={(e) => {
-                      const newData = [...cacLtvData]
-                      newData[index] = { ...newData[index], cac: Number(e.target.value) }
-                      setCacLtvData(newData)
-                    }}
-                    style={{
-                      width: "50%",
-                      padding: "6px",
-                      border: "1px solid #d4c4b0",
-                      borderRadius: "4px",
-                    }}
-                    placeholder="CAC"
-                  />
-                  <input
-                    type="number"
-                    value={cacLtvData[index]?.ltv || 0}
-                    onChange={(e) => {
-                      const newData = [...cacLtvData]
-                      newData[index] = { ...newData[index], ltv: Number(e.target.value) }
-                      setCacLtvData(newData)
-                    }}
-                    style={{
-                      width: "50%",
-                      padding: "6px",
-                      border: "1px solid #d4c4b0",
-                      borderRadius: "4px",
-                    }}
-                    placeholder="LTV"
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <button
-            onClick={saveData}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              marginTop: "15px",
-            }}
-          >
-            Save Data
-          </button>
-        </div>
-      )}
-
-      {/* KEY METRICS - Top Section */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "10px", marginBottom: "30px" }}>
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "15px",
-            borderRadius: "6px",
-            textAlign: "center",
-            borderTop: "4px solid #9c7c5f",
-          }}
-        >
-          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
-            Avg Referral Rate
-          </div>
-          <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>{avgReferralRate.toFixed(1)}%</div>
-          <div style={{ fontSize: "10px", color: "#7d5a50", marginTop: "3px" }}>Organic Growth</div>
-        </div>
-        
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "15px",
-            borderRadius: "6px",
-            textAlign: "center",
-            borderTop: "4px solid #7d5a50",
-          }}
-        >
-          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
-            Repeat Customers
-          </div>
-          <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>{repeatCustomerRate}%</div>
-          <div style={{ fontSize: "10px", color: "#7d5a50", marginTop: "3px" }}>Retention Rate</div>
-        </div>
-        
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "15px",
-            borderRadius: "6px",
-            textAlign: "center",
-            borderTop: "4px solid #5d4037",
-          }}
-        >
-          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
-            Churn Rate
-          </div>
-          <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>{churnRate}%</div>
-          <div style={{ fontSize: "10px", color: "#7d5a50", marginTop: "3px" }}>Customer Loss</div>
-        </div>
-        
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "15px",
-            borderRadius: "6px",
-            textAlign: "center",
-            borderTop: "4px solid #4a352f",
-          }}
-        >
-          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
-            Net Retention
-          </div>
-          <div style={{ 
-            fontSize: "18px", 
-            color: netRetentionRate >= 0 ? "#16a34a" : "#dc2626", 
-            fontWeight: "bold" 
-          }}>
-            {netRetentionRate}%
-          </div>
-          <div style={{ fontSize: "10px", color: "#7d5a50", marginTop: "3px" }}>Repeat - Churn</div>
-        </div>
-        
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "15px",
-            borderRadius: "6px",
-            textAlign: "center",
-            borderTop: "4px solid #dc2626",
-          }}
-        >
-          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
-            Campaign ROI
-          </div>
-          <div style={{ 
-            fontSize: "18px", 
-            color: totalCampaignROI >= 0 ? "#16a34a" : "#dc2626", 
-            fontWeight: "bold" 
-          }}>
-            {totalCampaignROI}%
-          </div>
-          <div style={{ fontSize: "10px", color: "#7d5a50", marginTop: "3px" }}>Overall ROI</div>
-        </div>
-        
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "15px",
-            borderRadius: "6px",
-            textAlign: "center",
-            borderTop: "4px solid #16a34a",
-          }}
-        >
-          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
-            LTV:CAC Trend
-          </div>
-          <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>
-            {cacDeclineRate > 0 && ltvGrowthRate > 0 ? "✓ Healthy" : "⚠ Needs Work"}
-          </div>
-          <div style={{ fontSize: "10px", color: "#7d5a50", marginTop: "3px" }}>
-            {cacDeclineRate}%↓ CAC, {ltvGrowthRate}%↑ LTV
-          </div>
-        </div>
-      </div>
-
-      {/* CHARTS SECTION - 3 charts in grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px", marginBottom: "30px" }}>
-        
-        {/* Referral Rate Trend Chart */}
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          }}
-        >
-          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
-            Referral Rate Trend
-          </h3>
-          <div style={{ height: "250px", marginBottom: "15px" }}>
-            <Line
-              data={{
-                labels: monthNames,
-                datasets: [
-                  {
-                    label: "Referral Rate (%)",
-                    data: referralRateTrend,
-                    borderColor: "#9c7c5f",
-                    backgroundColor: "rgba(156, 124, 95, 0.1)",
-                    borderWidth: 2,
-                    tension: 0.3,
-                    fill: true,
-                  },
-                ],
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    display: false,
-                  },
-                },
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    max: 100,
-                    title: {
-                      display: true,
-                      text: "Referral Rate (%)",
-                      color: "#72542b",
-                    },
-                    grid: {
-                      color: "rgba(125, 90, 80, 0.1)",
-                    },
-                    ticks: {
-                      color: "#72542b",
-                      callback: function(value) {
-                        return value + '%';
-                      }
-                    },
-                  },
-                  x: {
-                    ticks: {
-                      color: "#72542b",
-                      maxRotation: 45,
-                    },
-                    grid: {
-                      color: "rgba(125, 90, 80, 0.1)",
-                    },
-                  },
-                },
-              }}
-            />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
-              Avg: {avgReferralRate.toFixed(1)}%
-            </div>
-            <div style={{ display: "flex", gap: "10px" }}>
-              <button
-                onClick={() => handleAddNotes("Referral Rate Trend")}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#7d5a50",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  fontSize: "12px",
-                }}
-              >
-                <FaStickyNote size={12} /> Add Notes
-              </button>
-              <button
-                onClick={() => handleViewAnalysis("Referral Rate Trend")}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  fontSize: "12px",
-                }}
-              >
-                <FaChartBar size={12} /> View Analysis
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Campaign Cost Contribution & ROI Chart */}
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          }}
-        >
-          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
-            Campaign Cost Contribution & ROI
-          </h3>
-          <div style={{ height: "250px", marginBottom: "15px" }}>
-            <Bar
-              data={{
-                labels: campaignsWithROI.map((c) => c.name),
-                datasets: [
-                  {
-                    label: "Cost Contribution (%)",
-                    data: campaignsWithROI.map((c) => c.contribution),
-                    backgroundColor: "#dc2626",
-                    borderColor: "#b91c1c",
-                    borderWidth: 1,
-                    borderRadius: 4,
-                    yAxisID: 'y',
-                  },
-                  {
-                    label: "ROI (%)",
-                    data: campaignsWithROI.map((c) => c.roi),
-                    backgroundColor: "#16a34a",
-                    borderColor: "#15803d",
-                    borderWidth: 1,
-                    borderRadius: 4,
-                    yAxisID: 'y1',
-                  },
-                ],
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: 'top',
-                    labels: {
-                      color: "#72542b",
-                    }
-                  },
-                },
-                scales: {
-                  y: {
-                    type: 'linear',
-                    display: true,
-                    position: 'left',
-                    title: {
-                      display: true,
-                      text: "Cost Contribution (%)",
-                      color: "#72542b",
-                    },
-                    grid: {
-                      color: "rgba(125, 90, 80, 0.1)",
-                    },
-                    ticks: {
-                      color: "#72542b",
-                      callback: function(value) {
-                        return value + '%';
-                      }
-                    },
-                  },
-                  y1: {
-                    type: 'linear',
-                    display: true,
-                    position: 'right',
-                    title: {
-                      display: true,
-                      text: "ROI (%)",
-                      color: "#72542b",
-                    },
-                    grid: {
-                      drawOnChartArea: false,
-                    },
-                    ticks: {
-                      color: "#72542b",
-                      callback: function(value) {
-                        return value + '%';
-                      }
-                    },
-                  },
-                  x: {
-                    ticks: {
-                      color: "#72542b",
-                      maxRotation: 45,
-                    },
-                    grid: {
-                      color: "rgba(125, 90, 80, 0.1)",
-                    },
-                  },
-                },
-              }}
-            />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
-              Total Cost: R{totalCampaignCost.toLocaleString()}
-            </div>
-            <div style={{ display: "flex", gap: "10px" }}>
-              <button
-                onClick={() => handleAddNotes("Campaign Analysis")}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#7d5a50",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  fontSize: "12px",
-                }}
-              >
-                <FaStickyNote size={12} /> Add Notes
-              </button>
-              <button
-                onClick={() => handleViewAnalysis("Campaign Analysis")}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  fontSize: "12px",
-                }}
-              >
-                <FaChartBar size={12} /> View Analysis
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Repeat Customers vs Churn Chart */}
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          }}
-        >
-          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
-            Customer Retention Analysis
-          </h3>
-          <div style={{ height: "250px", marginBottom: "15px" }}>
-            <Bar
-              data={{
-                labels: ["Retention vs Churn"],
-                datasets: [
-                  {
-                    label: "Repeat Customers",
-                    data: [repeatCustomerRate],
-                    backgroundColor: "#16a34a",
-                    borderColor: "#15803d",
-                    borderWidth: 1,
-                    borderRadius: 4,
-                  },
-                  {
-                    label: "Churn Rate",
-                    data: [churnRate],
-                    backgroundColor: "#dc2626",
-                    borderColor: "#b91c1c",
-                    borderWidth: 1,
-                    borderRadius: 4,
-                  },
-                ],
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: 'top',
-                    labels: {
-                      color: "#72542b",
-                    }
-                  },
-                },
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    max: 100,
-                    title: {
-                      display: true,
-                      text: "Percentage (%)",
-                      color: "#72542b",
-                    },
-                    grid: {
-                      color: "rgba(125, 90, 80, 0.1)",
-                    },
-                    ticks: {
-                      color: "#72542b",
-                      callback: function(value) {
-                        return value + '%';
-                      }
-                    },
-                  },
-                  x: {
-                    ticks: {
-                      color: "#72542b",
-                    },
-                    grid: {
-                      color: "rgba(125, 90, 80, 0.1)",
-                    },
-                  },
-                },
-              }}
-            />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: "12px", color: "#7d5a50" }}>
-              Net Retention: {netRetentionRate}%
-            </div>
-            <div style={{ display: "flex", gap: "10px" }}>
-              <button
-                onClick={() => handleAddNotes("Retention Analysis")}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#7d5a50",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  fontSize: "12px",
-                }}
-              >
-                <FaStickyNote size={12} /> Add Notes
-              </button>
-              <button
-                onClick={() => handleViewAnalysis("Retention Analysis")}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  fontSize: "12px",
-                }}
-              >
-                <FaChartBar size={12} /> View Analysis
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* DECLINING CAC WITH RISING LTV - KEY METRIC */}
       <div
         style={{
-          backgroundColor: "#f7f3f0",
-          padding: "20px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          marginBottom: "30px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "20px",
+          flexWrap: "wrap",
+          gap: "15px",
         }}
       >
-        <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
-          Declining CAC with Rising LTV (Key Health Indicator)
-        </h3>
-        <div style={{ height: "300px", marginBottom: "15px" }}>
-          <Line
-            data={{
-              labels: monthNames,
-              datasets: [
-                {
-                  label: "CAC (Customer Acquisition Cost)",
-                  data: cacLtvData.map((d) => d.cac),
-                  borderColor: "#dc2626",
-                  backgroundColor: "rgba(220, 38, 38, 0.1)",
-                  borderWidth: 3,
-                  tension: 0.4,
-                  fill: false,
-                },
-                {
-                  label: "LTV (Lifetime Value)",
-                  data: cacLtvData.map((d) => d.ltv),
-                  borderColor: "#16a34a",
-                  backgroundColor: "rgba(22, 163, 74, 0.1)",
-                  borderWidth: 3,
-                  tension: 0.4,
-                  fill: false,
-                },
-              ],
-            }}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: {
-                  position: 'top',
-                  labels: {
-                    color: "#72542b",
-                  }
-                },
-              },
-              scales: {
-                y: {
-                  beginAtZero: true,
-                  title: {
-                    display: true,
-                    text: "Value (ZAR)",
-                    color: "#72542b",
-                  },
-                  grid: {
-                    color: "rgba(125, 90, 80, 0.1)",
-                  },
-                  ticks: {
-                    color: "#72542b",
-                  },
-                },
-                x: {
-                  ticks: {
-                    color: "#72542b",
-                    maxRotation: 45,
-                  },
-                  grid: {
-                    color: "rgba(125, 90, 80, 0.1)",
-                  },
-                },
-              },
-            }}
-          />
-        </div>
-        
-        <div style={{ 
-          display: "grid", 
-          gridTemplateColumns: "repeat(4, 1fr)", 
-          gap: "15px",
-          marginTop: "20px"
-        }}>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
-              Avg CAC
+        <h2 style={{ color: "#5d4037", fontSize: "24px", fontWeight: "700", margin: 0 }}>Demand Sustainability</h2>
+
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+              <span style={{ color: "#5d4037", fontSize: "14px" }}>Year:</span>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  minWidth: "100px",
+                }}
+              >
+                {years.map((year) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
             </div>
-            <div style={{ fontSize: "20px", color: "#dc2626", fontWeight: "bold" }}>
-              R {avgCac.toFixed(0)}
+            
+            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+              <span style={{ color: "#5d4037", fontSize: "14px" }}>Month:</span>
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  minWidth: "100px",
+                }}
+              >
+                {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((month) => (
+                  <option key={month} value={month}>{month}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+              <span style={{ color: "#5d4037", fontSize: "14px" }}>Units:</span>
+              <select
+                value={currencyUnit}
+                onChange={(e) => setCurrencyUnit(e.target.value)}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  minWidth: "100px",
+                }}
+              >
+                <option value="zar">ZAR</option>
+                <option value="zar_thousand">R K</option>
+                <option value="zar_million">R m</option>
+                <option value="zar_billion">R bn</option>
+              </select>
             </div>
           </div>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
-              Avg LTV
-            </div>
-            <div style={{ fontSize: "20px", color: "#16a34a", fontWeight: "bold" }}>
-              R {avgLtv.toFixed(0)}
-            </div>
-          </div>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
-              LTV:CAC Ratio
-            </div>
-            <div style={{ 
-              fontSize: "20px", 
-              color: ltvCacRatio >= 3 ? "#16a34a" : 
-                     ltvCacRatio >= 1.5 ? "#f59e0b" : "#dc2626",
-              fontWeight: "bold" 
-            }}>
-              {ltvCacRatio}x
-            </div>
-          </div>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "14px", color: "#72542b", marginBottom: "5px", fontWeight: "600" }}>
-              Trend Health
-            </div>
-            <div style={{ 
-              fontSize: "20px", 
-              color: cacDeclineRate > 0 && ltvGrowthRate > 0 ? "#16a34a" : 
-                     cacDeclineRate > 0 || ltvGrowthRate > 0 ? "#f59e0b" : "#dc2626",
-              fontWeight: "bold" 
-            }}>
-              {cacDeclineRate > 0 && ltvGrowthRate > 0 ? "✓ Healthy" : 
-               cacDeclineRate > 0 || ltvGrowthRate > 0 ? "⚠ Mixed" : "✗ At Risk"}
-            </div>
-          </div>
-        </div>
-        
-        <div style={{ 
-          display: "flex", 
-          justifyContent: "space-between", 
-          marginTop: "20px",
-          paddingTop: "15px",
-          borderTop: "1px solid #e8ddd4"
-        }}>
-          <div style={{ fontSize: "12px", color: "#7d5a50" }}>
-            <strong>Trend Analysis:</strong> CAC {cacDeclineRate >= 0 ? `declined by ${cacDeclineRate}%` : `increased by ${Math.abs(cacDeclineRate)}%`}, 
-            LTV {ltvGrowthRate >= 0 ? `grew by ${ltvGrowthRate}%` : `declined by ${Math.abs(ltvGrowthRate)}%`}
-          </div>
-          <div style={{ display: "flex", gap: "10px" }}>
+          
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
             <button
-              onClick={() => handleAddNotes("CAC vs LTV Trend")}
+              onClick={() => setSelectedViewMode("month")}
               style={{
-                padding: "6px 12px",
-                backgroundColor: "#7d5a50",
-                color: "#fdfcfb",
+                padding: "8px 16px",
+                backgroundColor: selectedViewMode === "month" ? "#5d4037" : "#e8ddd4",
+                color: selectedViewMode === "month" ? "#fdfcfb" : "#5d4037",
                 border: "none",
                 borderRadius: "4px",
                 cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
-                fontSize: "12px",
+                fontWeight: "500",
+                fontSize: "14px",
               }}
             >
-              <FaStickyNote size={12} /> Add Notes
+              Monthly
             </button>
             <button
-              onClick={() => handleViewAnalysis("CAC vs LTV Trend")}
+              onClick={() => setSelectedViewMode("quarter")}
               style={{
-                padding: "6px 12px",
+                padding: "8px 16px",
+                backgroundColor: selectedViewMode === "quarter" ? "#5d4037" : "#e8ddd4",
+                color: selectedViewMode === "quarter" ? "#fdfcfb" : "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "14px",
+              }}
+            >
+              Quarterly
+            </button>
+            <button
+              onClick={() => setSelectedViewMode("year")}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: selectedViewMode === "year" ? "#5d4037" : "#e8ddd4",
+                color: selectedViewMode === "year" ? "#fdfcfb" : "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "14px",
+              }}
+            >
+              Yearly
+            </button>
+          </div>
+          
+          {!isInvestorView && (
+            <button
+              onClick={() => setShowModal(true)}
+              style={{
+                padding: "8px 16px",
                 backgroundColor: "#5d4037",
                 color: "#fdfcfb",
                 border: "none",
                 borderRadius: "4px",
                 cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
-                fontSize: "12px",
+                fontWeight: "600",
+                fontSize: "14px",
               }}
             >
-              <FaChartBar size={12} /> View Analysis
+              Add Data
             </button>
+          )}
+        </div>
+      </div>
+
+      {/* Summary Metrics */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "15px", marginBottom: "30px" }}>
+        <div
+          style={{
+            backgroundColor: "#f5f0eb",
+            padding: "20px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "14px", color: "#5d4037", marginBottom: "8px", fontWeight: "600" }}>
+            Avg Referral Rate
+          </div>
+          <div style={{ fontSize: "20px", color: "#5d4037", fontWeight: "700" }}>
+            {avgReferralRate.toFixed(1)}%
+          </div>
+        </div>
+        
+        <div
+          style={{
+            backgroundColor: "#f5f0eb",
+            padding: "20px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "14px", color: "#5d4037", marginBottom: "8px", fontWeight: "600" }}>
+            Repeat Customers
+          </div>
+          <div style={{ fontSize: "20px", color: "#5d4037", fontWeight: "700" }}>
+            {sustainabilityData.repeatCustomerRate}%
+          </div>
+        </div>
+        
+        <div
+          style={{
+            backgroundColor: "#f5f0eb",
+            padding: "20px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "14px", color: "#5d4037", marginBottom: "8px", fontWeight: "600" }}>
+            Churn Rate
+          </div>
+          <div style={{ fontSize: "20px", color: "#5d4037", fontWeight: "700" }}>
+            {sustainabilityData.churnRate}%
+          </div>
+        </div>
+        
+        <div
+          style={{
+            backgroundColor: "#f5f0eb",
+            padding: "20px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "14px", color: "#5d4037", marginBottom: "8px", fontWeight: "600" }}>
+            Campaign ROI
+          </div>
+          <div style={{ fontSize: "20px", color: campaignROI >= 0 ? "#16a34a" : "#dc2626", fontWeight: "700" }}>
+            {campaignROI.toFixed(1)}%
           </div>
         </div>
       </div>
 
-      {/* CAMPAIGN PERFORMANCE DETAILS */}
+      {/* KPI Cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px", marginBottom: "30px" }}>
+        {renderKPICard("Repeat Customer Rate", "repeatCustomerRate", calculationTexts.repeatCustomerRate, true)}
+        {renderKPICard("Churn Rate", "churnRate", calculationTexts.churnRate, true)}
+        {renderKPICard("Net Retention", "netRetention", calculationTexts.netRetention, true)}
+        {renderKPICard("Avg Referral Rate", "avgReferralRate", calculationTexts.avgReferralRate, true)}
+        {renderKPICard("Campaign ROI", "campaignROI", calculationTexts.campaignROI, true)}
+        {renderKPICard("Referral Trend", "referralTrend", "", true)}
+      </div>
+
+      {/* Declining CAC with Rising LTV */}
       <div style={{ 
-        backgroundColor: "#f7f3f0", 
-        padding: "15px", 
-        borderRadius: "6px",
+        backgroundColor: "#f5f0eb", 
+        padding: "20px", 
+        borderRadius: "8px",
         marginBottom: "30px"
       }}>
-        <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px" }}>Campaign Performance Details</h4>
+        <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
+          Declining CAC with Rising LTV (Key Health Indicator)
+        </h3>
+        
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "15px", marginBottom: "15px" }}>
+          <div>
+            <div style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Avg CAC</div>
+            <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "700" }}>R {avgCac.toFixed(0)}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Avg LTV</div>
+            <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "700" }}>R {avgLtv.toFixed(0)}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>LTV:CAC Ratio</div>
+            <div style={{ fontSize: "18px", color: ltvCacRatio >= 3 ? "#16a34a" : ltvCacRatio >= 1.5 ? "#f59e0b" : "#dc2626", fontWeight: "700" }}>
+              {ltvCacRatio.toFixed(1)}x
+            </div>
+          </div>
+        </div>
+        
+        <div style={{ fontSize: "12px", color: "#8d6e63" }}>
+          CAC {cacDeclineRate >= 0 ? `declined by ${cacDeclineRate.toFixed(1)}%` : `increased by ${Math.abs(cacDeclineRate).toFixed(1)}%`} over the year
+        </div>
+      </div>
+
+      {/* Campaign Table */}
+      <div style={{ 
+        backgroundColor: "#f5f0eb", 
+        padding: "15px", 
+        borderRadius: "6px",
+        marginBottom: "20px"
+      }}>
+        <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px" }}>Campaign Performance</h4>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ backgroundColor: "#5d4037", color: "#fdfcfb" }}>
                 <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Campaign</th>
-                <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Cost (ZAR)</th>
-                <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Revenue (ZAR)</th>
-                <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Net Profit</th>
+                <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Cost (R)</th>
+                <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Revenue (R)</th>
                 <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>ROI %</th>
-                <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Cost Contribution</th>
               </tr>
             </thead>
             <tbody>
-              {campaignsWithROI.sort((a, b) => b.cost - a.cost).map((campaign, index) => (
-                <tr
-                  key={index}
-                  style={{
-                    borderBottom: "1px solid #e8ddd4",
-                    backgroundColor: index % 2 === 0 ? "#fdfcfb" : "#f7f3f0",
-                  }}
-                >
-                  <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037", fontWeight: "600" }}>
-                    {campaign.name}
-                  </td>
-                  <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
-                    R {campaign.cost.toLocaleString()}
-                  </td>
-                  <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
-                    R {campaign.revenue.toLocaleString()}
-                  </td>
-                  <td style={{ 
-                    padding: "10px", 
-                    fontSize: "13px", 
-                    color: campaign.roiValue >= 0 ? "#16a34a" : "#dc2626", 
-                    textAlign: "right",
-                    fontWeight: "600"
-                  }}>
-                    R {Math.abs(campaign.roiValue).toLocaleString()} {campaign.roiValue >= 0 ? "Profit" : "Loss"}
-                  </td>
-                  <td style={{ 
-                    padding: "10px", 
-                    fontSize: "13px", 
-                    color: campaign.roi >= 0 ? "#16a34a" : "#dc2626", 
-                    textAlign: "right",
-                    fontWeight: "600"
-                  }}>
-                    {campaign.roi}%
-                  </td>
-                  <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
-                    {campaign.contribution}%
-                  </td>
-                </tr>
-              ))}
+              {sustainabilityData.campaigns.map((campaign, index) => {
+                const roi = campaign.cost > 0 ? ((campaign.revenue - campaign.cost) / campaign.cost) * 100 : 0
+                return (
+                  <tr
+                    key={index}
+                    style={{
+                      borderBottom: "1px solid #e8ddd4",
+                      backgroundColor: index % 2 === 0 ? "#fdfcfb" : "#f5f0eb",
+                    }}
+                  >
+                    <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037", fontWeight: "600" }}>
+                      {campaign.name}
+                    </td>
+                    <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
+                      R {campaign.cost.toLocaleString()}
+                    </td>
+                    <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
+                      R {campaign.revenue.toLocaleString()}
+                    </td>
+                    <td style={{ 
+                      padding: "10px", 
+                      fontSize: "13px", 
+                      color: roi >= 0 ? "#16a34a" : "#dc2626", 
+                      textAlign: "right",
+                      fontWeight: "600"
+                    }}>
+                      {roi.toFixed(1)}%
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
-            <tfoot>
-              <tr style={{ backgroundColor: "#e8ddd4", fontWeight: "600" }}>
-                <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>TOTAL</td>
-                <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
-                  R {totalCampaignCost.toLocaleString()}
-                </td>
-                <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
-                  R {totalCampaignRevenue.toLocaleString()}
-                </td>
-                <td style={{ 
-                  padding: "12px", 
-                  fontSize: "13px", 
-                  color: totalCampaignRevenue - totalCampaignCost >= 0 ? "#16a34a" : "#dc2626", 
-                  textAlign: "right"
-                }}>
-                  R {Math.abs(totalCampaignRevenue - totalCampaignCost).toLocaleString()} {totalCampaignRevenue - totalCampaignCost >= 0 ? "Profit" : "Loss"}
-                </td>
-                <td style={{ 
-                  padding: "12px", 
-                  fontSize: "13px", 
-                  color: totalCampaignROI >= 0 ? "#16a34a" : "#dc2626", 
-                  textAlign: "right"
-                }}>
-                  {totalCampaignROI}%
-                </td>
-                <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
-                  100%
-                </td>
-              </tr>
-            </tfoot>
           </table>
         </div>
       </div>
 
-      {/* SUSTAINABILITY HEALTH CHECK */}
-      <div style={{ 
-        backgroundColor: "#f7f3f0", 
-        padding: "15px", 
-        borderRadius: "6px",
-      }}>
-        <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px" }}>Demand Sustainability Health Check</h4>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "15px" }}>
-          <div>
-            <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
-              Organic Growth Health
-            </div>
-            <div style={{ 
-              fontSize: "24px", 
-              color: avgReferralRate >= 10 ? "#16a34a" : 
-                     avgReferralRate >= 5 ? "#f59e0b" : "#dc2626",
-              fontWeight: "bold" 
-            }}>
-              {avgReferralRate >= 10 ? "Strong" : 
-               avgReferralRate >= 5 ? "Moderate" : "Weak"}
-            </div>
-            <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
-              Avg Referral: {avgReferralRate.toFixed(1)}%
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
-              Customer Retention Health
-            </div>
-            <div style={{ 
-              fontSize: "24px", 
-              color: netRetentionRate >= 20 ? "#16a34a" : 
-                     netRetentionRate >= 0 ? "#f59e0b" : "#dc2626",
-              fontWeight: "bold" 
-            }}>
-              {netRetentionRate >= 20 ? "Excellent" : 
-               netRetentionRate >= 0 ? "Stable" : "At Risk"}
-            </div>
-            <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
-              Net Retention: {netRetentionRate}%
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
-              Campaign Efficiency
-            </div>
-            <div style={{ 
-              fontSize: "24px", 
-              color: totalCampaignROI >= 100 ? "#16a34a" : 
-                     totalCampaignROI >= 50 ? "#f59e0b" : "#dc2626",
-              fontWeight: "bold" 
-            }}>
-              {totalCampaignROI >= 100 ? "High ROI" : 
-               totalCampaignROI >= 50 ? "Moderate ROI" : "Low ROI"}
-            </div>
-            <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
-              Overall ROI: {totalCampaignROI}%
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
-              LTV:CAC Health
-            </div>
-            <div style={{ 
-              fontSize: "24px", 
-              color: ltvCacRatio >= 3 ? "#16a34a" : 
-                     ltvCacRatio >= 1.5 ? "#f59e0b" : "#dc2626",
-              fontWeight: "bold" 
-            }}>
-              {ltvCacRatio >= 3 ? "Healthy" : 
-               ltvCacRatio >= 1.5 ? "Acceptable" : "Poor"}
-            </div>
-            <div style={{ fontSize: "12px", color: "#7d5a50", marginTop: "5px" }}>
-              Ratio: {ltvCacRatio}x
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Universal Add Data Modal */}
+      <UniversalAddDataModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        currentTab="demand-sustainability"
+        user={currentUser}
+        onSave={loadData}
+        loading={loading}
+      />
+
+      {/* Calculation Modal */}
+      <CalculationModal
+        isOpen={showCalculationModal}
+        onClose={() => setShowCalculationModal(false)}
+        title={selectedCalculation.title}
+        calculation={selectedCalculation.calculation}
+      />
+
+      {/* Trend Modal */}
+      {showTrendModal && selectedTrendItem && (
+        <TrendModal
+          isOpen={showTrendModal}
+          onClose={() => setShowTrendModal(false)}
+          title={selectedTrendItem.name}
+          data={selectedTrendItem.data}
+          labels={generateLabels()}
+          isPercentage={selectedTrendItem.isPercentage}
+          formatValue={formatValue}
+          currencyUnit={currencyUnit}
+        />
+      )}
     </div>
   )
 }
 
-// Pipeline Table Component
-// Pipeline Table Component
-const PipelineTable = ({ activeSection, currentUser, isInvestorView }) => {
-  const [deals, setDeals] = useState([])
-  const [showAddForm, setShowAddForm] = useState(false)
-  const [confirmDialog, setConfirmDialog] = useState({ show: false, dealId: null })
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-  const [isLoading, setIsLoading] = useState(true)
+// ==================== PIPELINE TABLE COMPONENT ====================
 
-  const [newDeal, setNewDeal] = useState({
-    clientName: "",
-    segment: "",
-    stage: "initial-contact",
-    probability: 0,
-    expectedClose: "",
-    dealValue: 0,
-    source: "",
-    owner: "",
-    establishedStartDate: "",
-    expectedOnboardingDate: "",
-    signedDate: "",
-  })
+const PipelineTable = ({ activeSection, currentUser, isInvestorView }) => {
+  const [showModal, setShowModal] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [deals, setDeals] = useState([])
+  const [confirmDialog, setConfirmDialog] = useState({ show: false, dealId: null })
 
   const stageOptions = [
     { value: "initial-contact", label: "Initial Contact" },
@@ -5349,6 +4467,8 @@ const PipelineTable = ({ activeSection, currentUser, isInvestorView }) => {
     { value: "closed-lost", label: "Closed Lost" },
   ]
 
+  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
+
   useEffect(() => {
     if (currentUser && activeSection === "pipeline-table") {
       loadDeals()
@@ -5357,11 +4477,10 @@ const PipelineTable = ({ activeSection, currentUser, isInvestorView }) => {
 
   const loadDeals = async () => {
     if (!currentUser) return
+    setLoading(true)
     try {
-      setIsLoading(true)
       const q = query(
-        collection(db, "pipeline-deals"), 
-        where("userId", "==", currentUser.uid),
+        collection(db, "pipelineData", `${currentUser.uid}_deals`),
         where("year", "==", selectedYear)
       )
       const querySnapshot = await getDocs(q)
@@ -5373,53 +4492,7 @@ const PipelineTable = ({ activeSection, currentUser, isInvestorView }) => {
     } catch (error) {
       console.error("Error loading deals:", error)
     } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const addDeal = async () => {
-    if (!currentUser || isInvestorView) {
-      alert("You cannot add deals in this mode.")
-      return
-    }
-    try {
-      const riskAdjustedValue = (newDeal.dealValue * newDeal.probability) / 100
-      await addDoc(collection(db, "pipeline-deals"), {
-        clientName: newDeal.clientName,
-        segment: newDeal.segment,
-        stage: newDeal.stage,
-        probability: newDeal.probability,
-        expectedClose: newDeal.expectedClose,
-        dealValue: newDeal.dealValue,
-        riskAdjustedValue,
-        source: newDeal.source,
-        owner: newDeal.owner,
-        establishedStartDate: newDeal.establishedStartDate,
-        expectedOnboardingDate: newDeal.expectedOnboardingDate,
-        signedDate: newDeal.signedDate,
-        userId: currentUser.uid,
-        year: selectedYear,
-        createdAt: new Date().toISOString(),
-      })
-      setNewDeal({
-        clientName: "",
-        segment: "",
-        stage: "initial-contact",
-        probability: 0,
-        expectedClose: "",
-        dealValue: 0,
-        source: "",
-        owner: "",
-        establishedStartDate: "",
-        expectedOnboardingDate: "",
-        signedDate: "",
-      })
-      setShowAddForm(false)
-      loadDeals()
-      alert("Deal added successfully!")
-    } catch (error) {
-      console.error("Error adding deal:", error)
-      alert("Error adding deal")
+      setLoading(false)
     }
   }
 
@@ -5433,7 +4506,7 @@ const PipelineTable = ({ activeSection, currentUser, isInvestorView }) => {
 
   const handleConfirmDelete = async () => {
     try {
-      await deleteDoc(doc(db, "pipeline-deals", confirmDialog.dealId))
+      await deleteDoc(doc(db, "pipelineData", `${currentUser.uid}_deals`, confirmDialog.dealId))
       loadDeals()
       alert("Deal deleted successfully!")
     } catch (error) {
@@ -5444,50 +4517,13 @@ const PipelineTable = ({ activeSection, currentUser, isInvestorView }) => {
     }
   }
 
-  const handleCancelDelete = () => {
-    setConfirmDialog({ show: false, dealId: null })
-  }
-
-  const handleStageDistributionAddNotes = () => {
-    alert("Add Notes functionality for Pipeline Stage Distribution")
-  }
-
-  const handleStageDistributionViewAnalysis = () => {
-    alert("View Analysis functionality for Pipeline Stage Distribution")
-  }
-
   if (activeSection !== "pipeline-table") return null
 
-  if (isLoading) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "200px",
-          backgroundColor: "#fdfcfb",
-          borderRadius: "8px",
-        }}
-      >
-        <div>Loading deals...</div>
-      </div>
-    )
-  }
-
-  const totalPipelineValue = deals.reduce((sum, deal) => sum + deal.dealValue, 0)
-  const totalRiskAdjustedValue = deals.reduce((sum, deal) => sum + deal.riskAdjustedValue, 0)
+  const totalPipelineValue = deals.reduce((sum, deal) => sum + (deal.dealValue || 0), 0)
+  const totalRiskAdjusted = deals.reduce((sum, deal) => sum + (deal.riskAdjustedValue || 0), 0)
 
   return (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "20px",
-        margin: "20px 0",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      }}
-    >
+    <div>
       {confirmDialog.show && (
         <div
           style={{
@@ -5496,11 +4532,11 @@ const PipelineTable = ({ activeSection, currentUser, isInvestorView }) => {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            backgroundColor: "rgba(0,0,0,0.5)",
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
-            zIndex: 1000,
+            zIndex: 2000,
           }}
         >
           <div
@@ -5509,19 +4545,19 @@ const PipelineTable = ({ activeSection, currentUser, isInvestorView }) => {
               padding: "30px",
               borderRadius: "8px",
               maxWidth: "400px",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+              width: "90%",
             }}
           >
             <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px" }}>Confirm Deletion</h3>
-            <p style={{ color: "#72542b", marginBottom: "25px" }}>
+            <p style={{ color: "#5d4037", marginBottom: "25px" }}>
               Are you sure you want to delete this deal? This action cannot be undone.
             </p>
             <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
               <button
-                onClick={handleCancelDelete}
+                onClick={() => setConfirmDialog({ show: false, dealId: null })}
                 style={{
                   padding: "8px 16px",
-                  backgroundColor: "#d4c4b0",
+                  backgroundColor: "#e8ddd4",
                   color: "#5d4037",
                   border: "none",
                   borderRadius: "4px",
@@ -5535,7 +4571,7 @@ const PipelineTable = ({ activeSection, currentUser, isInvestorView }) => {
                 style={{
                   padding: "8px 16px",
                   backgroundColor: "#dc2626",
-                  color: "white",
+                  color: "#fdfcfb",
                   border: "none",
                   borderRadius: "4px",
                   cursor: "pointer",
@@ -5548,43 +4584,62 @@ const PipelineTable = ({ activeSection, currentUser, isInvestorView }) => {
         </div>
       )}
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ color: "#5d4037", marginTop: 0 }}>Pipeline Table</h2>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-            style={{
-              padding: "8px 12px",
-              border: "1px solid #d4c4b0",
-              borderRadius: "4px",
-              backgroundColor: "#fdfcfb",
-              color: "#5d4037",
-            }}
-          >
-            {[2023, 2024, 2025, 2026].map(year => (
-              <option key={year} value={year}>{year}</option>
-            ))}
-          </select>
+      <KeyQuestionBox
+        question="What deals are in the pipeline and what's their status?"
+        signals="Deal stages, values, probabilities"
+        decisions="Focus on high-probability deals, manage pipeline actively"
+        section="pipeline-table"
+      />
+
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "20px",
+          flexWrap: "wrap",
+          gap: "15px",
+        }}
+      >
+        <h2 style={{ color: "#5d4037", fontSize: "24px", fontWeight: "700", margin: 0 }}>Pipeline Table</h2>
+
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+            <span style={{ color: "#5d4037", fontSize: "14px" }}>Year:</span>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
+              style={{
+                padding: "8px 12px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+                fontSize: "14px",
+                color: "#5d4037",
+                minWidth: "100px",
+              }}
+            >
+              {years.map((year) => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+          </div>
+          
           {!isInvestorView && (
-            <>
-              <button
-                onClick={() => setShowAddForm(!showAddForm)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                }}
-              >
-                <FaPlus /> Add Data
-              </button>
-            </>
+            <button
+              onClick={() => setShowModal(true)}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "14px",
+              }}
+            >
+              Add Deal
+            </button>
           )}
         </div>
       </div>
@@ -5593,519 +4648,181 @@ const PipelineTable = ({ activeSection, currentUser, isInvestorView }) => {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "15px", marginBottom: "20px" }}>
         <div
           style={{
-            backgroundColor: "#f7f3f0",
-            padding: "15px",
+            backgroundColor: "#f5f0eb",
+            padding: "20px",
             borderRadius: "6px",
             textAlign: "center",
           }}
         >
-          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px" }}>Total Deals</div>
-          <div style={{ fontSize: "24px", color: "#5d4037", fontWeight: "bold" }}>{deals.length}</div>
+          <div style={{ fontSize: "14px", color: "#5d4037", marginBottom: "8px", fontWeight: "600" }}>
+            Total Deals
+          </div>
+          <div style={{ fontSize: "28px", color: "#5d4037", fontWeight: "700" }}>
+            {deals.length}
+          </div>
         </div>
+        
         <div
           style={{
-            backgroundColor: "#f7f3f0",
-            padding: "15px",
+            backgroundColor: "#f5f0eb",
+            padding: "20px",
             borderRadius: "6px",
             textAlign: "center",
           }}
         >
-          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px" }}>Total Pipeline Value</div>
-          <div style={{ fontSize: "24px", color: "#5d4037", fontWeight: "bold" }}>
+          <div style={{ fontSize: "14px", color: "#5d4037", marginBottom: "8px", fontWeight: "600" }}>
+            Pipeline Value
+          </div>
+          <div style={{ fontSize: "28px", color: "#5d4037", fontWeight: "700" }}>
             R {totalPipelineValue.toLocaleString()}
           </div>
         </div>
+        
         <div
           style={{
-            backgroundColor: "#f7f3f0",
-            padding: "15px",
+            backgroundColor: "#f5f0eb",
+            padding: "20px",
             borderRadius: "6px",
             textAlign: "center",
           }}
         >
-          <div style={{ fontSize: "12px", color: "#72542b", marginBottom: "5px" }}>Risk Adjustment</div>
-          <div style={{ fontSize: "24px", color: "#5d4037", fontWeight: "bold" }}>
-            R {totalRiskAdjustedValue.toLocaleString()}
+          <div style={{ fontSize: "14px", color: "#5d4037", marginBottom: "8px", fontWeight: "600" }}>
+            Risk Adjusted
+          </div>
+          <div style={{ fontSize: "28px", color: "#5d4037", fontWeight: "700" }}>
+            R {totalRiskAdjusted.toLocaleString()}
           </div>
         </div>
       </div>
 
-      {!isInvestorView && showAddForm && (
-        <div
-          style={{
-            backgroundColor: "#f7f3f0",
-            padding: "20px",
-            borderRadius: "6px",
-            marginBottom: "20px",
-          }}
-        >
-          <h3 style={{ color: "#72542b", marginTop: 0 }}>Add New Deal</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
-            <div>
-              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Client / Deal</label>
-              <input
-                type="text"
-                value={newDeal.clientName}
-                onChange={(e) => setNewDeal({ ...newDeal, clientName: e.target.value })}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Customer Segment</label>
-              <input
-                type="text"
-                value={newDeal.segment}
-                onChange={(e) => setNewDeal({ ...newDeal, segment: e.target.value })}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Stage</label>
-              <select
-                value={newDeal.stage}
-                onChange={(e) => setNewDeal({ ...newDeal, stage: e.target.value })}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-              >
-                {stageOptions.map(option => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Probability %</label>
-              <input
-                type="number"
-                value={newDeal.probability}
-                onChange={(e) => setNewDeal({ ...newDeal, probability: Number(e.target.value) })}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-                min="0"
-                max="100"
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Established Start Date</label>
-              <input
-                type="date"
-                value={newDeal.establishedStartDate}
-                onChange={(e) => setNewDeal({ ...newDeal, establishedStartDate: e.target.value })}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Expected Onboarding Date</label>
-              <input
-                type="date"
-                value={newDeal.expectedOnboardingDate}
-                onChange={(e) => setNewDeal({ ...newDeal, expectedOnboardingDate: e.target.value })}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Signed Date</label>
-              <input
-                type="date"
-                value={newDeal.signedDate}
-                onChange={(e) => setNewDeal({ ...newDeal, signedDate: e.target.value })}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Expected Close</label>
-              <input
-                type="date"
-                value={newDeal.expectedClose}
-                onChange={(e) => setNewDeal({ ...newDeal, expectedClose: e.target.value })}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Deal Value (ZAR)</label>
-              <input
-                type="number"
-                value={newDeal.dealValue}
-                onChange={(e) => setNewDeal({ ...newDeal, dealValue: Number(e.target.value) })}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Source</label>
-              <input
-                type="text"
-                value={newDeal.source}
-                onChange={(e) => setNewDeal({ ...newDeal, source: e.target.value })}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", color: "#72542b", marginBottom: "5px" }}>Owner</label>
-              <input
-                type="text"
-                value={newDeal.owner}
-                onChange={(e) => setNewDeal({ ...newDeal, owner: e.target.value })}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  border: "1px solid #d4c4b0",
-                  borderRadius: "4px",
-                }}
-              />
-            </div>
-          </div>
-          <button
-            onClick={addDeal}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              marginTop: "15px",
-            }}
-          >
-            Add Deal
-          </button>
-        </div>
-      )}
-
       {/* Deals Table */}
-      <div style={{ overflowX: "auto" }}>
-        <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            backgroundColor: "#f7f3f0",
-            borderRadius: "6px",
-            overflow: "hidden",
-          }}
-        >
-          <thead>
-            <tr style={{ backgroundColor: "#5d4037", color: "#fdfcfb" }}>
-              <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Client / Deal</th>
-              <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Customer Segment</th>
-              <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Stage</th>
-              <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Probability %</th>
-              <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Established Start</th>
-              <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Expected Onboarding</th>
-              <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Signed Date</th>
-              <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Expected Close</th>
-              <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Deal Value (ZAR)</th>
-              <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Risk Adjustment (ZAR)</th>
-              <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Source</th>
-              <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Owner</th>
-              {!isInvestorView && <th style={{ padding: "12px", textAlign: "center", fontSize: "13px" }}>Actions</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {deals.map((deal, index) => {
-              const stageLabel = stageOptions.find(option => option.value === deal.stage)?.label || deal.stage
-              return (
-                <tr
-                  key={deal.id}
-                  style={{
-                    borderBottom: "1px solid #e8ddd4",
-                    backgroundColor: index % 2 === 0 ? "#fdfcfb" : "#f7f3f0",
-                  }}
-                >
-                  <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>{deal.clientName}</td>
-                  <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>{deal.segment}</td>
-                  <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>
-                    <span style={{
-                      display: "inline-block",
-                      padding: "3px 8px",
-                      borderRadius: "12px",
-                      fontSize: "11px",
-                      fontWeight: "600",
-                      backgroundColor: 
-                        deal.stage === "initial-contact" ? "#e8ddd4" :
-                        deal.stage === "qualification" ? "#d4c4b0" :
-                        deal.stage === "proposal" ? "#9c7c5f" :
-                        deal.stage === "negotiation" ? "#7d5a50" :
-                        deal.stage === "closed-won" ? "#16a34a" :
-                        deal.stage === "closed-lost" ? "#dc2626" : "#e8ddd4",
-                      color: 
-                        deal.stage === "initial-contact" ? "#5d4037" :
-                        deal.stage === "closed-won" || deal.stage === "closed-lost" ? "white" : "#5d4037"
-                    }}>
-                      {stageLabel}
-                    </span>
-                  </td>
-                  <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>{deal.probability}%</td>
-                  <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>
-                    {deal.establishedStartDate ? new Date(deal.establishedStartDate).toLocaleDateString() : "-"}
-                  </td>
-                  <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>
-                    {deal.expectedOnboardingDate ? new Date(deal.expectedOnboardingDate).toLocaleDateString() : "-"}
-                  </td>
-                  <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>
-                    {deal.signedDate ? new Date(deal.signedDate).toLocaleDateString() : "-"}
-                  </td>
-                  <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>{deal.expectedClose}</td>
-                  <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
-                    R {deal.dealValue.toLocaleString()}
-                  </td>
-                  <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
-                    R {deal.riskAdjustedValue.toLocaleString()}
-                  </td>
-                  <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>{deal.source}</td>
-                  <td style={{ padding: "12px", fontSize: "13px", color: "#5d4037" }}>{deal.owner}</td>
-                  {!isInvestorView && (
-                    <td style={{ padding: "12px", textAlign: "center" }}>
-                      <div style={{ display: "flex", gap: "5px", justifyContent: "center" }}>
+      <div style={{ overflowX: "auto", backgroundColor: "#f5f0eb", borderRadius: "8px", padding: "20px" }}>
+        {deals.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "40px", color: "#8d6e63" }}>
+            No deals found. Click "Add Deal" to get started.
+          </div>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ backgroundColor: "#5d4037", color: "#fdfcfb" }}>
+                <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Client</th>
+                <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Segment</th>
+                <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Stage</th>
+                <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Probability</th>
+                <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Value</th>
+                <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Risk Adj</th>
+                <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Source</th>
+                <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Owner</th>
+                <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Expected Close</th>
+                {!isInvestorView && <th style={{ padding: "12px", textAlign: "center", fontSize: "13px" }}>Actions</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {deals.map((deal, index) => {
+                const stageLabel = stageOptions.find(option => option.value === deal.stage)?.label || deal.stage
+                return (
+                  <tr
+                    key={deal.id}
+                    style={{
+                      borderBottom: "1px solid #e8ddd4",
+                      backgroundColor: index % 2 === 0 ? "#fdfcfb" : "#f5f0eb",
+                    }}
+                  >
+                    <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037" }}>{deal.clientName}</td>
+                    <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037" }}>{deal.segment}</td>
+                    <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037" }}>{stageLabel}</td>
+                    <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
+                      {deal.probability}%
+                    </td>
+                    <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
+                      R {deal.dealValue?.toLocaleString()}
+                    </td>
+                    <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037", textAlign: "right" }}>
+                      R {deal.riskAdjustedValue?.toLocaleString()}
+                    </td>
+                    <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037" }}>{deal.source}</td>
+                    <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037" }}>{deal.owner}</td>
+                    <td style={{ padding: "10px", fontSize: "13px", color: "#5d4037" }}>{deal.expectedClose}</td>
+                    {!isInvestorView && (
+                      <td style={{ padding: "10px", textAlign: "center" }}>
                         <button
                           onClick={() => deleteDeal(deal.id)}
                           style={{
                             padding: "6px",
                             backgroundColor: "#dc2626",
-                            color: "white",
+                            color: "#fdfcfb",
                             border: "none",
                             borderRadius: "4px",
                             cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
                           }}
-                          title="Delete"
                         >
-                          <FaTrashAlt size={14} />
+                          Delete
                         </button>
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-        {deals.length === 0 && (
-          <div
-            style={{
-              textAlign: "center",
-              padding: "40px",
-              color: "#72542b",
-              backgroundColor: "#f7f3f0",
-              borderRadius: "6px",
-              marginTop: "10px",
-            }}
-          >
-            No deals in pipeline. Click "Add Data" to get started.
-          </div>
+                      </td>
+                    )}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         )}
       </div>
 
-      {/* Stage Distribution Chart */}
-      {deals.length > 0 && (
-        <div style={{ marginTop: "30px" }}>
-          <h3 style={{ color: "#5d4037" }}>Pipeline Stage Distribution</h3>
-          <div style={{ height: "300px" }}>
-            <Pie
-              data={{
-                labels: stageOptions.map(option => option.label),
-                datasets: [
-                  {
-                    label: "Deals by Stage",
-                    data: stageOptions.map(option => 
-                      deals.filter((d) => d.stage === option.value).length
-                    ),
-                    backgroundColor: [
-                      "#e8ddd4", // Initial Contact
-                      "#d4c4b0", // Qualification
-                      "#9c7c5f", // Proposal
-                      "#7d5a50", // Negotiation
-                      "#16a34a", // Closed Won
-                      "#dc2626", // Closed Lost
-                    ],
-                    borderColor: "#fdfcfb",
-                    borderWidth: 2,
-                  },
-                ],
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: "right",
-                    labels: {
-                      color: "#72542b",
-                      padding: 15,
-                    }
-                  },
-                },
-              }}
-            />
-          </div>
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "15px" }}>
-            <button
-              onClick={handleStageDistributionAddNotes}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#7d5a50",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
-                fontSize: "12px",
-              }}
-            >
-              <FaStickyNote size={12} /> Add Notes
-            </button>
-            <button
-              onClick={handleStageDistributionViewAnalysis}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
-                fontSize: "12px",
-                marginLeft: "10px"
-              }}
-            >
-              <FaChartBar size={12} /> View Analysis
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Key Deal Metrics */}
-      {deals.length > 0 && (
-        <div style={{ 
-          backgroundColor: "#f7f3f0", 
-          padding: "15px", 
-          borderRadius: "6px",
-          marginTop: "30px"
-        }}>
-          <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px" }}>Deal Pipeline Insights</h4>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "15px" }}>
-            <div>
-              <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
-                Average Deal Value
-              </div>
-              <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>
-                R {(totalPipelineValue / deals.length).toFixed(0).toLocaleString()}
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
-                Win Rate Potential
-              </div>
-              <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>
-                {deals.length > 0 ? (deals.reduce((sum, d) => sum + d.probability, 0) / deals.length).toFixed(1) : 0}%
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
-                Risk Adjustment %
-              </div>
-              <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>
-                {totalPipelineValue > 0 ? ((totalRiskAdjustedValue / totalPipelineValue) * 100).toFixed(1) : 0}%
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: "13px", color: "#72542b", fontWeight: "600", marginBottom: "5px" }}>
-                Active Deals
-              </div>
-              <div style={{ fontSize: "18px", color: "#5d4037", fontWeight: "bold" }}>
-                {deals.filter(d => !["closed-won", "closed-lost"].includes(d.stage)).length}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Universal Add Data Modal */}
+      <UniversalAddDataModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        currentTab="pipeline-table"
+        user={currentUser}
+        onSave={loadDeals}
+        loading={loading}
+      />
     </div>
   )
 }
 
-// Main Component
+// ==================== MAIN MARKETING SALES COMPONENT ====================
+
 export default function MarketingSales() {
   const [activeSection, setActiveSection] = useState("pipeline-visibility")
-  const [currentUser, setCurrentUser] = useState(null)
-  const [isInvestorView, setIsInvestorView] = useState(false)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [user, setUser] = useState(null)
   const [showFullDescription, setShowFullDescription] = useState(false)
 
+  const [isInvestorView, setIsInvestorView] = useState(false)
+  const [viewingSMEId, setViewingSMEId] = useState(null)
+  const [viewingSMEName, setViewingSMEName] = useState("")
+
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user)
-    })
-    return () => unsubscribe()
+    const investorViewMode = sessionStorage.getItem("investorViewMode")
+    const smeId = sessionStorage.getItem("viewingSMEId")
+    const smeName = sessionStorage.getItem("viewingSMEName")
+
+    if (investorViewMode === "true" && smeId) {
+      setIsInvestorView(true)
+      setViewingSMEId(smeId)
+      setViewingSMEName(smeName || "SME")
+    }
   }, [])
 
   useEffect(() => {
-    const checkSidebarState = () => {
-      const sidebar = document.querySelector("[data-sidebar]")
-      if (sidebar) {
-        const isCollapsed = sidebar.classList.contains("collapsed")
-        setIsSidebarCollapsed(isCollapsed)
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (isInvestorView && viewingSMEId) {
+        setUser({ uid: viewingSMEId })
+      } else {
+        setUser(currentUser)
       }
-    }
-
-    checkSidebarState()
-
-    const observer = new MutationObserver(checkSidebarState)
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
     })
+    return () => unsubscribe()
+  }, [isInvestorView, viewingSMEId])
 
+  useEffect(() => {
+    const checkSidebarState = () => {
+      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
+    }
+    checkSidebarState()
+    const observer = new MutationObserver(checkSidebarState)
+    observer.observe(document.body, { attributes: true, attributeFilter: ["class"] })
     return () => observer.disconnect()
   }, [])
 
@@ -6128,6 +4845,13 @@ export default function MarketingSales() {
     { id: "pipeline-table", label: "Pipeline Table" },
   ]
 
+  const handleExitInvestorView = () => {
+    sessionStorage.removeItem("viewingSMEId")
+    sessionStorage.removeItem("viewingSMEName")
+    sessionStorage.removeItem("investorViewMode")
+    window.location.href = "/my-cohorts"
+  }
+
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
       <Sidebar />
@@ -6138,19 +4862,24 @@ export default function MarketingSales() {
         {isInvestorView && (
           <div
             style={{
-              backgroundColor: "#fff3cd",
-              border: "1px solid #ffeaa7",
-              padding: "15px",
-              borderRadius: "6px",
-              marginBottom: "20px",
-              textAlign: "center",
+              backgroundColor: "#e8f5e9",
+              padding: "16px 20px",
+              margin: "50px 0 20px 0",
+              borderRadius: "8px",
+              border: "2px solid #4caf50",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
             }}
           >
-            <p style={{ color: "#856404", margin: "0 0 10px 0" }}>
-              You are viewing this dashboard in read-only investor mode.
-            </p>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <span style={{ fontSize: "20px" }}>👁️</span>
+              <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
+                Investor View: Viewing {viewingSMEName}'s Marketing & Sales Data
+              </span>
+            </div>
             <button
-              onClick={() => setIsInvestorView(false)}
+              onClick={handleExitInvestorView}
               style={{
                 padding: "8px 16px",
                 backgroundColor: "#4caf50",
@@ -6160,13 +4889,6 @@ export default function MarketingSales() {
                 cursor: "pointer",
                 fontWeight: "600",
                 fontSize: "14px",
-                transition: "background-color 0.3s ease",
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.backgroundColor = "#45a049"
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.backgroundColor = "#4caf50"
               }}
             >
               Back to My Cohorts
@@ -6198,7 +4920,6 @@ export default function MarketingSales() {
             </button>
           </div>
 
-          {/* Marketing & Pipeline Performance Description */}
           {showFullDescription && (
             <div
               style={{
@@ -6237,49 +4958,6 @@ export default function MarketingSales() {
                     </ul>
                   </div>
                 </div>
-
-                <div style={{ marginTop: "30px", paddingTop: "20px", borderTop: "1px solid #e8ddd4" }}>
-                  <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
-                    Key Performance Dimensions
-                  </h3>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-                    <div>
-                      <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
-                        Pipeline Visibility & Quality
-                      </h4>
-                      <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
-                        Monitor lead quality, pipeline coverage, and deal health metrics
-                      </p>
-                    </div>
-                    <div>
-                      <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
-                        Demand Risk & Concentration
-                      </h4>
-                      <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
-                        Assess customer concentration, market dependence, and revenue predictability
-                      </p>
-                    </div>
-                    <div>
-                      <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
-                        Conversion Efficiency
-                      </h4>
-                      <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
-                        Track lead-to-opportunity and opportunity-to-close conversion rates
-                      </p>
-                    </div>
-                    <div>
-                      <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
-                        Marketing Effectiveness
-                      </h4>
-                      <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
-                        Measure channel performance, cost per acquisition, and marketing ROI
-                      </p>
-                    </div>
-                  </div>
-                  <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", marginTop: "15px" }}>
-                    This dashboard provides strategic insights into your marketing funnel and sales pipeline to identify growth opportunities and mitigate revenue risks.
-                  </p>
-                </div>
               </div>
             </div>
           )}
@@ -6288,14 +4966,13 @@ export default function MarketingSales() {
           <div
             style={{
               display: "flex",
-              gap: "10px",
-              margin: "20px 0",
+              gap: "15px",
+              marginBottom: "30px",
               padding: "15px",
               backgroundColor: "#fdfcfb",
               borderRadius: "8px",
               boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-              overflowX: "auto",
-              whiteSpace: "nowrap",
+              flexWrap: "wrap",
             }}
           >
             {sectionButtons.map((button) => (
@@ -6303,18 +4980,18 @@ export default function MarketingSales() {
                 key={button.id}
                 onClick={() => setActiveSection(button.id)}
                 style={{
-                  padding: "10px 15px",
+                  padding: "12px 24px",
                   backgroundColor: activeSection === button.id ? "#5d4037" : "#e8ddd4",
                   color: activeSection === button.id ? "#fdfcfb" : "#5d4037",
                   border: "none",
                   borderRadius: "6px",
                   cursor: "pointer",
                   fontWeight: "600",
-                  fontSize: "14px",
+                  fontSize: "15px",
                   transition: "all 0.3s ease",
-                  minWidth: "150px",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                  minWidth: "180px",
                   textAlign: "center",
-                  flexShrink: 0,
                 }}
               >
                 {button.label}
@@ -6322,24 +4999,37 @@ export default function MarketingSales() {
             ))}
           </div>
 
-          <PipelineVisibility activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
-          <PipelineSufficiency
+          {/* Section Components */}
+          <PipelineVisibility
             activeSection={activeSection}
-            currentUser={currentUser}
+            currentUser={user}
             isInvestorView={isInvestorView}
           />
-          <PipelineQuality activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
+          <PipelineSufficiency
+            activeSection={activeSection}
+            currentUser={user}
+            isInvestorView={isInvestorView}
+          />
+          <PipelineQuality
+            activeSection={activeSection}
+            currentUser={user}
+            isInvestorView={isInvestorView}
+          />
           <RevenueConcentration
             activeSection={activeSection}
-            currentUser={currentUser}
+            currentUser={user}
             isInvestorView={isInvestorView}
           />
           <DemandSustainability
             activeSection={activeSection}
-            currentUser={currentUser}
+            currentUser={user}
             isInvestorView={isInvestorView}
           />
-          <PipelineTable activeSection={activeSection} currentUser={currentUser} isInvestorView={isInvestorView} />
+          <PipelineTable
+            activeSection={activeSection}
+            currentUser={user}
+            isInvestorView={isInvestorView}
+          />
         </div>
       </div>
     </div>
