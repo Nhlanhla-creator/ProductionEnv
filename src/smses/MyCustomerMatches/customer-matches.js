@@ -22,6 +22,7 @@ const onboardingSteps = [
     content: "Track your customer outreach and sales process from initial contact to closed deals and ongoing relationships.",
     icon: "📊",
   },
+  
   {
     title: "Customer Insights",
     content: "Get valuable analytics about customer engagement, conversion rates, and successful sales patterns to optimize your approach.",
