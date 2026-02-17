@@ -321,5 +321,170 @@ export const styles = {
     color: '#666',
     marginBottom: 16,
     fontSize: 14
+  },
+  modalOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'rgba(0, 0, 0, 0.6)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+    padding: 20
+  },
+  modal: {
+    background: '#fff',
+    borderRadius: 12,
+    width: '90%',
+    maxWidth: 500,
+    maxHeight: '90vh',
+    overflow: 'auto',
+    boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+  },
+  modalHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '20px 24px',
+    borderBottom: '1px solid #e5e7eb'
+  },
+  modalContent: {
+    padding: '24px'
+  },
+  modalForm: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 20
+  },
+  formGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+    padding: 16
+  },
+  formLabel: {
+    fontSize: 14,
+    fontWeight: 500,
+    color: '#374151',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8
+  },
+  formInput: {
+    padding: '10px 12px',
+    border: '1px solid #d1d5db',
+    borderRadius: 6,
+    fontSize: 14,
+    transition: 'border-color 0.2s',
+    outline: 'none'
+  },
+  formSelect: {
+    padding: '10px 12px',
+    border: '1px solid #d1d5db',
+    borderRadius: 6,
+    fontSize: 14,
+    backgroundColor: '#fff',
+    cursor: 'pointer',
+    outline: 'none'
+  },
+  modalActions: {
+    display: 'flex',
+    gap: 12,
+    justifyContent: 'flex-end',
+    paddingTop: 20,
+    borderTop: '1px solid #e5e7eb',
+    padding: 16
+  },
+  cancelButton: {
+    padding: '10px 16px',
+    background: '#fff',
+    color: '#6b7280',
+    border: '1px solid #d1d5db',
+    borderRadius: 6,
+    fontSize: 14,
+    fontWeight: 500,
+    cursor: 'pointer',
+    transition: 'all 0.2s'
+  },
+  saveButton: {
+    padding: '10px 16px',
+    background: 'var(--primary-brown)',
+    color: '#fff',
+    border: '1px solid var(--primary-brown)',
+    borderRadius: 6,
+    fontSize: 14,
+    fontWeight: 500,
+    cursor: 'pointer',
+    transition: 'all 0.2s'
+  },
+  closeButton: {
+    width: 32,
+    height: 32,
+    border: 'none',
+    borderRadius: 6,
+    background: '#f3f4f6',
+    color: '#6b7280',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.2s'
+  },
+  addOptionBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '6px 12px',
+    background: 'var(--primary-brown)',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 4,
+    fontSize: 12,
+    fontWeight: 500,
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    marginLeft: 'auto'
+  },
+  optionRow: {
+    display: 'flex',
+    gap: 8,
+    alignItems: 'center'
+  },
+  removeOptionBtn: {
+    width: 32,
+    height: 32,
+    border: '1px solid #ef4444',
+    background: '#fff',
+    color: '#ef4444',
+    borderRadius: 4,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.2s'
+  },
+  warningBox: {
+    background: '#fef2f2',
+    border: '1px solid #fecaca',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 20
+  },
+  errorMessage: {
+    color: '#ef4444',
+    fontSize: 13,
+    marginTop: 4
+  },
+  multiSelectContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+    padding: 12,
+    background: '#f9fafb',
+    borderRadius: 6,
+    border: '1px solid #e5e7eb'
   }
 };

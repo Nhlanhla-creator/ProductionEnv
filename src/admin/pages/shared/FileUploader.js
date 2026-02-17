@@ -264,7 +264,7 @@ export const FileUploader = ({
                     style={{
                       padding: '6px 10px',
                       background: 'var(--primary-brown)',
-                      color: 'white',
+                      color: 'white !important',
                       border: 'none',
                       borderRadius: 4,
                       cursor: 'pointer',
@@ -275,8 +275,8 @@ export const FileUploader = ({
                       gap: 4
                     }}
                   >
-                    <Download size={14} />
-                    Download
+                    <Download size={14} color='white' />
+                    <span style={{ color: 'white' }}>Download</span>
                   </a>
 
                   <button

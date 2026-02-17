@@ -1,6 +1,7 @@
 import React, { useState, useCallback, memo } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { TableRow } from './TableRow';
+import { AddColumnModal, AddTaskModal, DeleteSprintModal } from './Modals';
 import { styles } from './styles';
 
 export const SprintTable = memo(({ 
@@ -8,53 +9,41 @@ export const SprintTable = memo(({
   onUpdateTask, 
   onAddTask, 
   onDeleteTask,
-  onAddColumn 
+  onAddColumn,
+  onDeleteSprint 
 }) => {
   const [editingCell, setEditingCell] = useState(null);
+  const [showAddColumnModal, setShowAddColumnModal] = useState(false);
+  const [showAddTaskModal, setShowAddTaskModal] = useState(false);
+  const [showDeleteSprintModal, setShowDeleteSprintModal] = useState(false);
 
-  const handleAddTask = useCallback(() => {
-    const newTaskId = `SP${sprint.id}.${sprint.tasks.length + 1}`;
-    const newTask = { id: newTaskId };
-    
-    sprint.columns.forEach(col => {
-      if (col.type === 'multi-select') {
-        newTask[col.id] = [];
-      } else if (col.type === 'select') {
-        newTask[col.id] = 'Not started';
-      } else {
-        newTask[col.id] = '';
-      }
-    });
-    
+  const handleAddTask = useCallback((newTask) => {
     onAddTask(sprint.id, newTask);
-  }, [sprint, onAddTask]);
+  }, [sprint.id, onAddTask]);
 
-  const handleAddColumn = useCallback(() => {
-    const columnName = prompt('Enter column name:');
-    if (!columnName) return;
-    
-    const columnType = prompt('Enter column type (text/select/multi-select/date):');
-    if (!['text', 'select', 'multi-select', 'date'].includes(columnType)) {
-      alert('Invalid column type');
-      return;
-    }
-
-    onAddColumn(sprint.id, {
-      id: columnName.toLowerCase().replace(/\s+/g, '_'),
-      label: columnName,
-      type: columnType,
-      editable: true
-    });
+  const handleAddColumn = useCallback(async (columnData) => {
+    await onAddColumn(sprint.id, columnData);
   }, [sprint.id, onAddColumn]);
+
+  const handleDeleteSprint = useCallback(async () => {
+    await onDeleteSprint(sprint.id);
+  }, [sprint.id, onDeleteSprint]);
 
   if (!sprint.columns || sprint.columns.length === 0) {
     return (
       <div style={styles.emptyTable}>
         <p style={styles.emptyTableText}>No table structure defined for this sprint</p>
-        <button onClick={handleAddColumn} style={styles.addColumnBtn}>
+        <button onClick={() => setShowAddColumnModal(true)} style={styles.addColumnBtn}>
           <Plus size={16} />
           Add Column
         </button>
+        
+        <AddColumnModal
+          isOpen={showAddColumnModal}
+          onClose={() => setShowAddColumnModal(false)}
+          onAdd={handleAddColumn}
+          sprint={sprint}
+        />
       </div>
     );
   }
@@ -62,13 +51,20 @@ export const SprintTable = memo(({
   return (
     <div style={styles.tableContainer}>
       <div style={styles.tableControls}>
-        <button onClick={handleAddTask} style={styles.addTaskBtn}>
+        <button onClick={() => setShowAddTaskModal(true)} style={styles.addTaskBtn}>
           <Plus size={16} />
           Add Task
         </button>
-        <button onClick={handleAddColumn} style={styles.addColumnBtn}>
+        <button onClick={() => setShowAddColumnModal(true)} style={styles.addColumnBtn}>
           <Plus size={16} />
           Add Column
+        </button>
+        <button 
+          onClick={() => setShowDeleteSprintModal(true)} 
+          style={{...styles.deleteBtn, padding: '8px 14px'}}
+        >
+          <Trash2 size={16} />
+          Delete Sprint
         </button>
       </div>
 
@@ -99,6 +95,28 @@ export const SprintTable = memo(({
           </tbody>
         </table>
       </div>
+
+      {/* Modals */}
+      <AddColumnModal
+        isOpen={showAddColumnModal}
+        onClose={() => setShowAddColumnModal(false)}
+        onAdd={handleAddColumn}
+        sprint={sprint}
+      />
+
+      <AddTaskModal
+        isOpen={showAddTaskModal}
+        onClose={() => setShowAddTaskModal(false)}
+        onAdd={handleAddTask}
+        sprint={sprint}
+      />
+
+      <DeleteSprintModal
+        isOpen={showDeleteSprintModal}
+        onClose={() => setShowDeleteSprintModal(false)}
+        onDelete={handleDeleteSprint}
+        sprint={sprint}
+      />
     </div>
   );
 });
