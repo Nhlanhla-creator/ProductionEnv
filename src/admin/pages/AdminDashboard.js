@@ -36,26 +36,13 @@ import {
   MessageSquare,
 } from "lucide-react"
 import styles from "./admin-dashboard.module.css"
-
+import { collection, query, where, getDocs, doc, getDoc, updateDoc, deleteDoc, getCountFromServer, Timestamp, orderBy  } from "firebase/firestore"
+import { db, auth } from "../../firebaseConfig"
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
 
-// 1. User Growth & Composition
-const userGrowth = [
-  { month: "Jan", total: 1200, mau: 580 },
-  { month: "Feb", total: 1350, mau: 640 },
-  { month: "Mar", total: 1520, mau: 720 },
-  { month: "Apr", total: 1780, mau: 860 },
-  { month: "May", total: 1980, mau: 980 },
-  { month: "Jun", total: 2200, mau: 1130 },
-]
 
-const userTypes = [
-  { name: "SMEs", value: 1430, color: "#a67c52" },
-  { name: "Funders", value: 330, color: "#7d5a50" },
-  { name: "Service Providers", value: 360, color: "#c8b6a6" },
-  { name: "Catalysts", value: 80, color: "#e6d7c3" },
-]
+//2. User Composition
 
 // 2. Platform Activity
 const platformActivity = [
@@ -136,20 +123,349 @@ function SimpleGauge({ value, label, size = "medium" }) {
 }
 
 
+
 export default function AdminDashboard() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
+  const [userTypes, setUserTypes] = useState([]);
+const [userGrowth, setUserGrowth] = useState(() => {
+  const initialData = [];
+  for (let i = 5; i >= 0; i--) {
+    const date = new Date();
+    date.setMonth(date.getMonth() - i);
+    initialData.push({
+      month: date.toLocaleDateString('en-US', { month: 'short' }),
+      total: 0, // This is NEW users in that month
+      mau: 0
+    });
+  }
+  return initialData;
+});
+const [growthLoading, setGrowthLoading] = useState(true);
+const [showActiveUsersModal, setShowActiveUsersModal] = useState(false);
+const [activeUsersList, setActiveUsersList] = useState([]);
+const [loadingActiveUsers, setLoadingActiveUsers] = useState(false);
+
+
+  useEffect(() => {
+  const fetchUserCounts = async () => {
+    try {
+      const [smes, funders, catalysts, interns, advisors] = await Promise.all([
+        getCount('universalProfiles'),
+        getCount('MyuniversalProfiles'),
+        getCount('catalystProfiles'),
+        getCount('internProfiles'),
+        getCount('advisorProfiles')
+      ]);
+      
+      // Your color scheme
+      const colors = ["#a67c52", "#7d5a50", "#c8b6a6", "#e6d7c3", "#8a7968"];
+      
+      setUserTypes([
+        { name: "SMEs", value: smes, color: colors[0] },
+        { name: "Funders", value: funders, color: colors[1] },
+        { name: "Interns", value: interns, color: colors[2] },
+        { name: "Catalysts", value: catalysts, color: colors[3] },
+        { name: "Advisors", value: advisors, color: colors[4] },
+      ]);
+      
+    } catch (error) {
+      console.error('Error fetching user counts:', error);
+      // Fallback to dummy data
+      setUserTypes([
+        { name: "SMEs", value: 1430, color: "#a67c52" },
+        { name: "Investors", value: 330, color: "#7d5a50" },
+        { name: "Interns", value: 360, color: "#c8b6a6" },
+        { name: "Catalysts", value: 80, color: "#e6d7c3" },
+        { name: "Advisors", value: 20, color: "#8a7968" },
+      ]);
+    }
+  };
+  
+  const getCount = async (collectionName) => {
+    try {
+      const coll = collection(db, collectionName);
+      const snapshot = await getCountFromServer(coll);
+      return snapshot.data().count;
+    } catch {
+      return 0;
+    }
+  };
+  
+  fetchUserCounts();
+}, [])
+
+
+
+const [mauTrend, setMauTrend] = useState(0);
+const [currentMau, setCurrentMau] = useState(0); // ADD THIS STATE
+
+
+
+useEffect(() => {
+  const calculateMauTrend = async () => {
+    // Use cached trend if less than 1 hour old
+    const cachedTrend = localStorage.getItem('mauTrend');
+    const cachedTime = localStorage.getItem('mauTrendTime');
+    
+    if (cachedTrend && cachedTime && 
+        Date.now() - parseInt(cachedTime) < 60 * 60 * 1000) {
+      setMauTrend(parseFloat(cachedTrend));
+      return;
+    }
+    
+    try {
+       // Get total users
+      const totalSnapshot = await getCountFromServer(collection(db, 'users'));
+      const totalUsers = totalSnapshot.data().count;
+      
+      // Get active users in last 14 days
+      const fourteenDaysAgo = new Date();
+      fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+      
+      const activeQuery = query(
+        collection(db, 'users'),
+        where('lastActiveAt', '>=', fourteenDaysAgo)
+      );
+      
+      const activeSnapshot = await getCountFromServer(activeQuery);
+      const currentMau = activeSnapshot.data().count;
+      
+      // ✅ STORE current MAU for the card
+      setCurrentMau(currentMau);
+      
+      
+      // Get active users from 15-28 days ago (previous period)
+      const twentyEightDaysAgo = new Date();
+      twentyEightDaysAgo.setDate(twentyEightDaysAgo.getDate() - 28);
+      
+      const previousQuery = query(
+        collection(db, 'users'),
+        where('lastActiveAt', '>=', twentyEightDaysAgo),
+        where('lastActiveAt', '<', fourteenDaysAgo)
+      );
+      
+      const previousSnapshot = await getCountFromServer(previousQuery);
+      const previousMau = previousSnapshot.data().count;
+      
+      // Calculate trend
+      let trend = 0;
+      if (previousMau > 0) {
+        trend = ((currentMau - previousMau) / previousMau) * 100;
+      } else if (currentMau > 0) {
+        trend = 100;
+      }
+      
+      const roundedTrend = parseFloat(trend.toFixed(1));
+      setMauTrend(roundedTrend);
+      
+      // Cache it
+      localStorage.setItem('mauTrend', roundedTrend.toString());
+      localStorage.setItem('mauTrendTime', Date.now().toString());
+      
+    } catch (error) {
+      console.log('Error calculating metrics:', error);
+    }
+  };
+  
+  calculateMauTrend();
+}, []);
+
+useEffect(() => {
+  const fetchUserGrowth = async () => {
+    setGrowthLoading(true);
+    const growthData = [];
+    
+    // Get last 6 months
+    for (let i = 5; i >= 0; i--) {
+      const date = new Date();
+      date.setMonth(date.getMonth() - i);
+      
+      const monthName = date.toLocaleDateString('en-US', { month: 'short' });
+      const year = date.getFullYear();
+      const month = date.getMonth();
+      
+      const startOfMonth = new Date(year, month, 1);
+      const endOfMonth = new Date(year, month + 1, 1);
+      
+      let total = 0;
+      let mau = 0;
+      
+      try {
+        // Get NEW users in this month
+        const usersQuery = query(
+          collection(db, 'users'),
+          where('createdAt', '>=', startOfMonth),
+          where('createdAt', '<', endOfMonth)
+        );
+        
+        const registrationsSnapshot = await getCountFromServer(usersQuery);
+        total = registrationsSnapshot.data().count;
+        
+        // ✅ FIX: Different logic for current month vs past months
+        if (i === 0) { // Current month
+          // Use TODAY's 14-day window (same as card)
+          const today = new Date();
+          const fourteenDaysAgo = new Date(today);
+          fourteenDaysAgo.setDate(today.getDate() - 14);
+          
+          const activeQuery = query(
+            collection(db, 'users'),
+            where('lastActiveAt', '>=', fourteenDaysAgo)
+          );
+          
+          const activeSnapshot = await getCountFromServer(activeQuery);
+          mau = activeSnapshot.data().count;
+          
+          console.log(`✅ Current month (${monthName}) using today's logic:`, {
+            period: `${fourteenDaysAgo.toLocaleDateString()} to ${today.toLocaleDateString()}`,
+            mau
+          });
+          
+        } else {
+          // Past months: use month-end 14-day window
+          const monthEnd = new Date(year, month + 1, 0);
+          const fourteenDaysBeforeMonthEnd = new Date(monthEnd);
+          fourteenDaysBeforeMonthEnd.setDate(monthEnd.getDate() - 14);
+          
+          const activeQuery = query(
+            collection(db, 'users'),
+            where('lastActiveAt', '>=', fourteenDaysBeforeMonthEnd),
+            where('lastActiveAt', '<=', monthEnd)
+          );
+          
+          const activeSnapshot = await getCountFromServer(activeQuery);
+          mau = activeSnapshot.data().count;
+        }
+        
+      } catch (error) {
+        console.error(`Error for ${monthName}:`, error);
+        mau = Math.round(total * 0.7);
+      }
+      
+      growthData.push({
+        month: monthName,
+        total: total,
+        mau: mau
+      });
+    }
+    
+    setUserGrowth(growthData);
+    setGrowthLoading(false);
+  };
+  
+  fetchUserGrowth();
+}, []);
+
+const [totalUsersCount, setTotalUsersCount] = useState(0);
+
+useEffect(() => {
+  const getCurrentMetrics = async () => {
+    try {
+      // Get total users (for percentage)
+      const totalSnapshot = await getCountFromServer(collection(db, 'users'));
+      setTotalUsersCount(totalSnapshot.data().count);
+      
+      // Get current active users
+      const fourteenDaysAgo = new Date();
+      fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+      
+      const activeQuery = query(
+        collection(db, 'users'),
+        where('lastActiveAt', '>=', fourteenDaysAgo)
+      );
+      
+      const activeSnapshot = await getCountFromServer(activeQuery);
+      setCurrentMau(activeSnapshot.data().count);
+      
+    } catch (error) {
+      console.error('Error:', error);
+    }
+  };
+  
+  getCurrentMetrics();
+}, []);
+
+
 
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 600)
     return () => clearTimeout(t)
   }, [])
 
+  const handleActiveUsersClick = async () => {
+  setShowActiveUsersModal(true);
+  setLoadingActiveUsers(true);
+  
+  try {
+    const fourteenDaysAgo = new Date();
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+    
+    const activeQuery = query(
+      collection(db, 'users'),
+      where('lastActiveAt', '>=', fourteenDaysAgo),
+      orderBy('lastActiveAt', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(activeQuery);
+    
+    const users = querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        name: data.firstName || 'Unknown',
+        email: data.email || 'No email',
+        lastActive: data.lastActiveAt?.toDate(),
+        currentPlan: data?.currentPlan?.name || 'N/A',
+      };
+    });
+    
+    setActiveUsersList(users);
+  } catch (error) {
+    console.error('Error fetching active users:', error);
+  } finally {
+    setLoadingActiveUsers(false);
+  }
+};
+
+const fetchActiveUsers = async () => {
+  console.log('🔍 Fetching active users...');
+  setLoadingActiveUsers(true);
+  
+  try {
+    const fourteenDaysAgo = new Date();
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+    
+    console.log('Fetching users active since:', fourteenDaysAgo);
+    
+    const q = query(
+      collection(db, 'users'),
+      where('lastActiveAt', '>=', fourteenDaysAgo),
+      orderBy('lastActiveAt', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    console.log('Found users:', querySnapshot.size);
+    
+    const users = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      lastActive: doc.data().lastActiveAt?.toDate()
+    }));
+    
+    setActiveUsersList(users);
+  } catch (error) {
+    console.error('❌ Error:', error);
+  } finally {
+    setLoadingActiveUsers(false);
+  }
+};
+
   // Derived metrics
   const latestRevenue = revenueOpex[revenueOpex.length - 1].revenue
   const latestOpex = revenueOpex[revenueOpex.length - 1].opex
-  const totalUsers = userGrowth[userGrowth.length - 1].total
-  const mau = userGrowth[userGrowth.length - 1].mau
+  const totalUsers = userGrowth.reduce((sum, month) => sum + month.total, 0); // Total of all users
+  const mau = currentMau;
   const grossMargin = Math.round(((latestRevenue - latestOpex) / latestRevenue) * 100)
   const latestMatches = platformActivity[platformActivity.length - 1].matches
   const avgUptime = 99.4
@@ -160,6 +476,7 @@ export default function AdminDashboard() {
   const aiCostPerCall = 0.23
   const errorRate = 0.8
 
+  
   if (loading) {
     return (
       <div className={styles.loading}>
@@ -191,14 +508,17 @@ export default function AdminDashboard() {
           size="large"
         />
 
-        <MetricCard
-          title="Active Users"
-          value={mau.toLocaleString()}
-          subtitle={`${Math.round((mau / totalUsers) * 100)}% of total`}
-          icon={<Users size={18} />}
-          trend={12.5}
-          size="large"
-        />
+   
+      <div onClick={() => handleActiveUsersClick()} style={{ cursor: 'pointer' }}>
+          <MetricCard
+            title="Active Users"
+            value={currentMau.toLocaleString()}
+            subtitle={`${totalUsersCount > 0 ? Math.round((currentMau / totalUsersCount) * 100) : 0}% of total`}
+            icon={<Users size={18} />}
+            trend={mauTrend}
+            size="large"
+          />
+      </div>
 
         <MetricCard
           title="Successful Matches"
@@ -407,6 +727,51 @@ export default function AdminDashboard() {
             </div>
           </div>
         </div>
+        {showActiveUsersModal && (
+  <div className={styles.modalOverlay} onClick={() => setShowActiveUsersModal(false)}>
+    <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
+      <div className={styles.modalHeader}>
+        <h2>Active Users (Last 14 Days)</h2>
+        <button onClick={() => setShowActiveUsersModal(false)}>×</button>
+      </div>
+      
+      {loadingActiveUsers ? (
+        <div className={styles.loadingSpinner}>Loading users...</div>
+      ) : (
+        <>
+          <div className={styles.modalStats}>
+            <span>Total: {activeUsersList.length} users</span>
+            <span>Updated: {new Date().toLocaleDateString()}</span>
+          </div>
+          
+          <div className={styles.userTable}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Company</th>
+                  <th>CurrentPlan</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activeUsersList.map(user => (
+                  <tr key={user.id}>
+                    <td>{user.name}</td>
+                    <td>{user.email}</td>
+                    <td>{user.currentPlan}</td>
+                    <td>{user.lastActive?.toLocaleDateString() || 'Unknown'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  </div>
+)}
+
       </div>
     </div>
   )
