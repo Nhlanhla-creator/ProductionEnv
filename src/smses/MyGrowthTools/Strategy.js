@@ -243,6 +243,32 @@ const AIAnalysisButton = ({
     }
   }
 
+  // NEW: Function to clean up the AI response
+  const cleanAIResponse = (text) => {
+    if (!text) return text;
+    
+    // Remove all markdown hashtags (###, ##, #) and replace with bold styling or remove
+    let cleaned = text
+      // Remove hashtags at beginning of lines
+      .replace(/^#+\s*/gm, '')
+      // Remove any remaining hashtags
+      .replace(/#/g, '')
+      // Remove asterisk formatting
+      .replace(/\*\*/g, '')
+      .replace(/\*/g, '')
+      // Clean up multiple newlines
+      .replace(/\n{3,}/g, '\n\n')
+      // Remove markdown links but keep text
+      .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
+      // Trim each line
+      .split('\n')
+      .map(line => line.trim())
+      .join('\n')
+      .trim();
+    
+    return cleaned;
+  }
+
   const generateAIAnalysis = async () => {
     if (isInvestorView) {
       alert("You are in view-only mode and cannot generate AI analysis.")
@@ -275,11 +301,14 @@ const AIAnalysisButton = ({
         timestamp: new Date().toISOString()
       })
 
-      const analysis = response?.data?.content || response?.data?.analysis
+      let analysis = response?.data?.content || response?.data?.analysis
       
       if (!analysis) {
         throw new Error("No analysis generated")
       }
+
+      // Clean the analysis before saving
+      analysis = cleanAIResponse(analysis);
 
       // Save analysis to Firestore
       const aiAnalysisRef = doc(db, "strategicClarityAnalysis", userId)
@@ -355,41 +384,35 @@ ANALYSIS REQUIREMENTS:
    - Timeline for strategic review and updates
    - Key performance indicators to track progress
 
-FORMAT REQUIREMENTS:
-- Start with an executive summary
-- Use clear section headers with ###
-- Include specific examples and recommendations
-- End with a strategic clarity score and rating
-
 OUTPUT FORMAT:
-### Executive Summary
+Executive Summary
 [Brief overview of strategic clarity status]
 
-### Current Assessment
+Current Assessment
 - Vision: [Analysis of vision statement clarity and effectiveness]
 - Mission: [Analysis of mission statement alignment and focus]
 - Values: [Analysis of core values implementation]
 - Strategic Priorities: [Analysis of priority setting and execution]
 - Strategic Horizon: [Analysis of timeframe appropriateness]
 
-### Strategic Clarity Score: [X]/10
-**Rating:** [Poor/Fair/Good/Excellent]
+Strategic Clarity Score: [X]/10
+Rating: [Poor/Fair/Good/Excellent]
 
-### Data Trends & Benchmark Comparison
+Data Trends & Benchmark Comparison
 [Comparison against industry standards and historical trends]
 
-### Actionable Recommendations
+Actionable Recommendations
 1. [Specific action with timeline]
 2. [Specific action with measurable goal]
 3. [Specific action with concrete steps]
 
-### Risk Assessment & Mitigation
+Risk Assessment & Mitigation
 [Identify risks and provide mitigation strategies]
 
-### Improvement Roadmap
+Improvement Roadmap
 [Timeline and steps for strategic clarity enhancement]
 
-IMPORTANT: Be specific, actionable, and provide concrete examples based on the data provided.`
+IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your response. Use plain text only with section titles as shown above.`
   }
 
   const handleAIAnalysis = () => {
@@ -1463,6 +1486,32 @@ const BusinessModelCanvas = ({ activeSection, currentUser, isInvestorView }) => 
     }
   }
 
+  // NEW: Function to clean up the AI response
+  const cleanAIResponse = (text) => {
+    if (!text) return text;
+    
+    // Remove all markdown hashtags (###, ##, #) and replace with bold styling or remove
+    let cleaned = text
+      // Remove hashtags at beginning of lines
+      .replace(/^#+\s*/gm, '')
+      // Remove any remaining hashtags
+      .replace(/#/g, '')
+      // Remove asterisk formatting
+      .replace(/\*\*/g, '')
+      .replace(/\*/g, '')
+      // Clean up multiple newlines
+      .replace(/\n{3,}/g, '\n\n')
+      // Remove markdown links but keep text
+      .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
+      // Trim each line
+      .split('\n')
+      .map(line => line.trim())
+      .join('\n')
+      .trim();
+    
+    return cleaned;
+  }
+
   if (activeSection !== "operating-model") return null
 
   const handleSaveCanvas = async () => {
@@ -1569,15 +1618,15 @@ ANALYSIS REQUIREMENTS:
 
 FORMAT REQUIREMENTS:
 - Start with an executive summary
-- Use clear section headers with ###
+- Use plain text section headers without markdown symbols
 - Include specific examples from the data
 - End with an Operating Model Score and Rating
 
 OUTPUT FORMAT:
-### Executive Summary
+Executive Summary
 [Brief overview of operating model status]
 
-### Business Model Canvas Assessment
+Business Model Canvas Assessment
 - Key Partners: [Analysis and recommendations]
 - Key Activities: [Analysis and recommendations]
 - Key Resources: [Analysis and recommendations]
@@ -1588,23 +1637,23 @@ OUTPUT FORMAT:
 - Cost Structure: [Analysis and recommendations]
 - Revenue Streams: [Analysis and recommendations]
 
-### Operating Model Coherence Score: [X]/10
-**Rating:** [Poor/Fair/Good/Excellent]
+Operating Model Coherence Score: [X]/10
+Rating: [Poor/Fair/Good/Excellent]
 
-### Scalability Assessment
+Scalability Assessment
 [Analysis of scalability potential with recommendations]
 
-### Risk Analysis
+Risk Analysis
 [Key risks and mitigation strategies]
 
-### Top 5 Actionable Recommendations
+Top 5 Actionable Recommendations
 1. [Specific action with timeline]
 2. [Specific action with measurable goal]
 3. [Specific action with concrete steps]
 4. [Specific action with owner suggestion]
 5. [Specific action with expected impact]
 
-IMPORTANT: Be specific, actionable, and provide concrete recommendations based on the data provided.`
+IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your response. Use plain text only with section titles as shown above.`
   }
 
   const generateAIAnalysis = async () => {
@@ -1635,11 +1684,14 @@ IMPORTANT: Be specific, actionable, and provide concrete recommendations based o
         timestamp: new Date().toISOString()
       })
 
-      const analysis = response?.data?.content || response?.data?.analysis
+      let analysis = response?.data?.content || response?.data?.analysis
       
       if (!analysis) {
         throw new Error("No analysis generated")
       }
+
+      // Clean the analysis before saving
+      analysis = cleanAIResponse(analysis);
 
       // Save analysis to Firestore
       const aiAnalysisRef = doc(db, "businessModelCanvasAnalysis", currentUser.uid)
@@ -2335,6 +2387,32 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
     percentageCompletion: 0,
   })
 
+  // NEW: Function to clean up the AI response
+  const cleanAIResponse = (text) => {
+    if (!text) return text;
+    
+    // Remove all markdown hashtags (###, ##, #) and replace with bold styling or remove
+    let cleaned = text
+      // Remove hashtags at beginning of lines
+      .replace(/^#+\s*/gm, '')
+      // Remove any remaining hashtags
+      .replace(/#/g, '')
+      // Remove asterisk formatting
+      .replace(/\*\*/g, '')
+      .replace(/\*/g, '')
+      // Clean up multiple newlines
+      .replace(/\n{3,}/g, '\n\n')
+      // Remove markdown links but keep text
+      .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
+      // Trim each line
+      .split('\n')
+      .map(line => line.trim())
+      .join('\n')
+      .trim();
+    
+    return cleaned;
+  }
+
   // Load saved AI analysis
   useEffect(() => {
     if (currentUser && activeSection === "strategy-operationalisation") {
@@ -2701,40 +2779,40 @@ ANALYSIS REQUIREMENTS:
 
 FORMAT REQUIREMENTS:
 - Start with an executive summary
-- Use clear section headers with ###
+- Use plain text section headers without markdown symbols
 - Include specific examples from the data
 - End with a Strategy Execution Score and Rating
 
 OUTPUT FORMAT:
-### Executive Summary
+Executive Summary
 [Brief overview of strategy operationalisation status]
 
-### Strategy Execution Score: [X]/10
-**Rating:** [Poor/Fair/Good/Excellent]
+Strategy Execution Score: [X]/10
+Rating: [Poor/Fair/Good/Excellent]
 
-### Progress Analysis by Domain
+Progress Analysis by Domain
 [Detailed analysis of each domain's progress]
 
-### Status Distribution Analysis
+Status Distribution Analysis
 [Analysis of milestone status distribution and implications]
 
-### Risk Assessment
+Risk Assessment
 [Key risks and mitigation strategies]
 
-### Resource & Ownership Insights
+Resource & Ownership Insights
 [Analysis of team allocation and accountability]
 
-### Top 5 Actionable Recommendations
+Top 5 Actionable Recommendations
 1. [Specific action with timeline and owner suggestion]
 2. [Specific action with measurable goal]
 3. [Specific action with concrete steps]
 4. [Specific action for at-risk milestones]
 5. [Specific action for improving execution velocity]
 
-### Strategic Alignment Assessment
+Strategic Alignment Assessment
 [How well execution aligns with strategic objectives]
 
-IMPORTANT: Be specific, actionable, and provide concrete recommendations based on the actual milestone data provided.`
+IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your response. Use plain text only with section titles as shown above.`
   }
 
   const generateAIAnalysis = async () => {
@@ -2765,11 +2843,14 @@ IMPORTANT: Be specific, actionable, and provide concrete recommendations based o
         timestamp: new Date().toISOString()
       })
 
-      const analysis = response?.data?.content || response?.data?.analysis
+      let analysis = response?.data?.content || response?.data?.analysis
       
       if (!analysis) {
         throw new Error("No analysis generated")
       }
+
+      // Clean the analysis before saving
+      analysis = cleanAIResponse(analysis);
 
       // Save analysis to Firestore
       const aiAnalysisRef = doc(db, "strategyOperationalisationAnalysis", currentUser.uid)
@@ -3739,6 +3820,32 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     { id: "technology-risk", name: "Technology Risk", color: "#8b7355" },
   ]
 
+  // NEW: Function to clean up the AI response
+  const cleanAIResponse = (text) => {
+    if (!text) return text;
+    
+    // Remove all markdown hashtags (###, ##, #) and replace with bold styling or remove
+    let cleaned = text
+      // Remove hashtags at beginning of lines
+      .replace(/^#+\s*/gm, '')
+      // Remove any remaining hashtags
+      .replace(/#/g, '')
+      // Remove asterisk formatting
+      .replace(/\*\*/g, '')
+      .replace(/\*/g, '')
+      // Clean up multiple newlines
+      .replace(/\n{3,}/g, '\n\n')
+      // Remove markdown links but keep text
+      .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
+      // Trim each line
+      .split('\n')
+      .map(line => line.trim())
+      .join('\n')
+      .trim();
+    
+    return cleaned;
+  }
+
   useEffect(() => {
     const loadRiskData = async () => {
       if (!currentUser || activeSection !== "strategic-risk-control") return
@@ -4138,43 +4245,43 @@ ANALYSIS REQUIREMENTS:
 
 FORMAT REQUIREMENTS:
 - Start with an executive summary
-- Use clear section headers with ###
+- Use plain text section headers without markdown symbols
 - Include specific examples from the data
 - End with a Risk Management Maturity Score and Rating
 
 OUTPUT FORMAT:
-### Executive Summary
+Executive Summary
 [Brief overview of strategic risk control status]
 
-### Risk Management Maturity Score: [X]/10
-**Rating:** [Initial/Repeatable/Defined/Managed/Optimizing]
+Risk Management Maturity Score: [X]/10
+Rating: [Initial/Repeatable/Defined/Managed/Optimizing]
 
-### Risk Profile Analysis
+Risk Profile Analysis
 [Analysis of overall risk exposure and distribution]
 
-### Category Risk Assessment
+Category Risk Assessment
 [Detailed analysis of each risk category with scores]
 
-### Critical Risk Watchlist
+Critical Risk Watchlist
 [Top 5 risks requiring immediate attention with recommended actions]
 
-### Mitigation Effectiveness
+Mitigation Effectiveness
 [Analysis of control effectiveness and gaps]
 
-### Governance Assessment
+Governance Assessment
 [Evaluation of risk ownership, review cadence, and accountability]
 
-### Top 5 Actionable Recommendations
+Top 5 Actionable Recommendations
 1. [Specific action with timeline and owner suggestion]
 2. [Specific action with measurable outcome]
 3. [Specific action for high-risk items]
 4. [Specific action for governance improvement]
 5. [Specific action for risk culture/monitoring]
 
-### Strategic Risk Outlook
+Strategic Risk Outlook
 [How risk posture affects strategic objectives and recommendations]
 
-IMPORTANT: Be specific, actionable, and provide concrete recommendations based on the actual risk register data provided.`
+IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your response. Use plain text only with section titles as shown above.`
   }
 
   const generateAIAnalysis = async () => {
@@ -4206,11 +4313,14 @@ IMPORTANT: Be specific, actionable, and provide concrete recommendations based o
         timestamp: new Date().toISOString()
       })
 
-      const analysis = response?.data?.content || response?.data?.analysis
+      let analysis = response?.data?.content || response?.data?.analysis
       
       if (!analysis) {
         throw new Error("No analysis generated")
       }
+
+      // Clean the analysis before saving
+      analysis = cleanAIResponse(analysis);
 
       // Save analysis to Firestore
       const aiAnalysisRef = doc(db, "strategicRiskControlAnalysis", currentUser.uid)
@@ -4962,6 +5072,32 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
   const [analysisError, setAnalysisError] = useState("")
   const [savedAnalysis, setSavedAnalysis] = useState("")
 
+  // NEW: Function to clean up the AI response
+  const cleanAIResponse = (text) => {
+    if (!text) return text;
+    
+    // Remove all markdown hashtags (###, ##, #) and replace with bold styling or remove
+    let cleaned = text
+      // Remove hashtags at beginning of lines
+      .replace(/^#+\s*/gm, '')
+      // Remove any remaining hashtags
+      .replace(/#/g, '')
+      // Remove asterisk formatting
+      .replace(/\*\*/g, '')
+      .replace(/\*/g, '')
+      // Clean up multiple newlines
+      .replace(/\n{3,}/g, '\n\n')
+      // Remove markdown links but keep text
+      .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
+      // Trim each line
+      .split('\n')
+      .map(line => line.trim())
+      .join('\n')
+      .trim();
+    
+    return cleaned;
+  }
+
   useEffect(() => {
     const loadChangeData = async () => {
       if (!currentUser || activeSection !== "change-adaptability") return
@@ -5397,46 +5533,46 @@ ANALYSIS REQUIREMENTS:
 
 FORMAT REQUIREMENTS:
 - Start with an executive summary
-- Use clear section headers with ###
+- Use plain text section headers without markdown symbols
 - Include specific examples from the data
 - End with a Change Adaptability Score and Rating
 
 OUTPUT FORMAT:
-### Executive Summary
+Executive Summary
 [Brief overview of change and adaptability capability]
 
-### Change Adaptability Score: [X]/10
-**Rating:** [Rigid/Reactive/Responsive/Proactive/Agile]
+Change Adaptability Score: [X]/10
+Rating: [Rigid/Reactive/Responsive/Proactive/Agile]
 
-### Strategy Review Discipline
+Strategy Review Discipline
 [Analysis of review cadence, completion rates, and recommendations]
 
-### Strategic Adjustment Analysis
+Strategic Adjustment Analysis
 [Evaluation of adjustment quality, triggers, and patterns]
 
-### Pivot Intelligence Assessment
+Pivot Intelligence Assessment
 [Analysis of pivot themes, strategic learning, and direction changes]
 
-### Adaptation Velocity
+Adaptation Velocity
 [Assessment of change frequency and organizational responsiveness]
 
-### Documentation & Governance
+Documentation & Governance
 [Evaluation of change documentation practices and recommendations]
 
-### Organizational Learning Index
+Organizational Learning Index
 [How well the organization learns and institutionalizes change]
 
-### Top 5 Actionable Recommendations
+Top 5 Actionable Recommendations
 1. [Specific action with timeline and owner suggestion]
 2. [Specific action with measurable outcome]
 3. [Specific action for improving review discipline]
 4. [Specific action for enhancing change documentation]
 5. [Specific action for building adaptive capacity]
 
-### Strategic Resilience Outlook
+Strategic Resilience Outlook
 [How adaptability affects long-term strategic resilience]
 
-IMPORTANT: Be specific, actionable, and provide concrete recommendations based on the actual change data provided.`
+IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your response. Use plain text only with section titles as shown above.`
   }
 
   const generateAIAnalysis = async () => {
@@ -5473,11 +5609,14 @@ IMPORTANT: Be specific, actionable, and provide concrete recommendations based o
         timestamp: new Date().toISOString()
       })
 
-      const analysis = response?.data?.content || response?.data?.analysis
+      let analysis = response?.data?.content || response?.data?.analysis
       
       if (!analysis) {
         throw new Error("No analysis generated")
       }
+
+      // Clean the analysis before saving
+      analysis = cleanAIResponse(analysis);
 
       // Save analysis to Firestore
       const aiAnalysisRef = doc(db, "changeAdaptabilityAnalysis", currentUser.uid)
