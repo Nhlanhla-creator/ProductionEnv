@@ -526,28 +526,66 @@ useEffect(() => {
         Username: investor.username,
         Email: investor.email,
         "Company Name": investor.companyName,
+       "Investor Type": investor.profile?.investorType || "Not Provided",
+        "Investment Focus": investor.profile.investmentFocus,
         Created: investor.created,
         Status: investor.status,
-        Employees: investor.profile.investorType,
-        Revenue: investor.profile.investorFocus,
+       
       }));
       
-      // Create worksheet
-      const worksheet = XLSX.utils.json_to_sheet(excelData);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Investors");
-      
-      // Download
-      const fileName = `Investors_${new Date().toISOString().split('T')[0]}.xlsx`;
-      XLSX.writeFile(workbook, fileName);
-      
-      alert(`Exported ${dataToExport.length} records!`);
-      
-    } catch (error) {
-      console.error("Export error:", error);
-      alert("Export failed: " + error.message);
-    }
-  };
+     const worksheet = XLSX.utils.json_to_sheet(excelData);
+        
+        // Calculate dynamic column widths based on content
+        const calculateColumnWidths = (data) => {
+          const widths = [];
+          const keys = Object.keys(data[0] || {});
+          
+          keys.forEach((key, colIndex) => {
+            // Start with header width
+            let maxLength = key.length;
+            
+            // Check all rows for this column
+            data.forEach(row => {
+              const cellValue = String(row[key] || '');
+              if (cellValue.length > maxLength) {
+                maxLength = cellValue.length;
+              }
+            });
+            
+            // Add some padding and set a reasonable max
+            const width = Math.min(Math.max(maxLength + 2, 10), 50);
+            widths.push({ wch: width });
+          });
+          
+          return widths;
+        };
+        
+        worksheet['!cols'] = calculateColumnWidths(excelData);
+        
+        // Optional: Format headers with bold text
+        const range = XLSX.utils.decode_range(worksheet['!ref']);
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+          const headerCell = XLSX.utils.encode_cell({ r: 0, c: C });
+          if (!worksheet[headerCell]) continue;
+          worksheet[headerCell].s = {
+            font: { bold: true },
+            fill: { fgColor: { rgb: "E0E0E0" } } // Light gray background
+          };
+        }
+        
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Investors");
+        
+        const fileName = `Investors_${new Date().toISOString().split('T')[0]}.xlsx`;
+        XLSX.writeFile(workbook, fileName);
+        
+        alert(`Exported ${dataToExport.length} records!`);
+        
+      } catch (error) {
+        console.error("Export error:", error);
+        alert("Export failed: " + error.message);
+      }
+    };
 
   const getStatusBadge = (status) => {
     const statusStyles = {
