@@ -1,21 +1,13 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { FileExplorer } from './shared/FileExplorer';
-import { TextEditor } from './shared/TextEditor';
 import { FileUploader } from './shared/FileUploader';
-import { DatabaseManager } from './partners-components/DatabaseManager';
-import { PARTNERS_STRUCTURE, hasSchema } from './partners-components/partnersStructure';
+import { PARTNERS_STRUCTURE } from './structure/partnersStructure';
 import {
-  saveTextContent,
   uploadFile,
   addFileToCollection,
   deleteFile,
   loadContent,
-  loadAllContent,
-  addDatabaseEntry,
-  updateDatabaseEntry,
-  deleteDatabaseEntry,
-  loadDatabaseEntries
-} from './services/partners';
+  loadAllContent} from './services/partners';
 import { useAuth } from '../../smses/hooks/useAuth';
 import { AlertCircle } from 'lucide-react';
 
@@ -187,9 +179,7 @@ const PartnersEcosystem = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: '100vh',
-        background: 'var(--background-brown)'
-      }}>
+        minHeight: '100vh',      }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{
             width: 40,
@@ -215,9 +205,7 @@ const PartnersEcosystem = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: '100vh',
-        background: 'var(--background-brown)'
-      }}>
+        minHeight: '100vh',      }}>
         <div style={{
           textAlign: 'center',
           padding: 40,
@@ -258,7 +246,6 @@ const PartnersEcosystem = () => {
 
       <div style={{
         padding: 24,
-        background: 'var(--background-brown)',
         minHeight: '100vh'
       }}>
         <div style={{ marginBottom: 24 }}>
@@ -268,7 +255,7 @@ const PartnersEcosystem = () => {
             margin: 0,
             fontWeight: 600
           }}>
-            02 PARTNERS & ECOSYSTEM
+            PARTNERS & ECOSYSTEM
           </h2>
           <p style={{
             fontSize: 14,

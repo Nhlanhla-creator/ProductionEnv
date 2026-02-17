@@ -39,6 +39,7 @@ import TermsConditionsCheckbox from "./Ts&cs";
 import FormInput from "./FormInput";
 import RoleCard from "./RoleCard";
 import AdvisorCriteriaModal from "./AdvisorCriteriaModal";
+import TwoFactorVerification from '../Twofactorverification';
 
 // Role cards configuration
 const ROLE_CARDS = [
@@ -142,6 +143,9 @@ export default function LoginRegister() {
   const [resumingRegistration, setResumingRegistration] = useState(false);
   const [hoveredCard, setHoveredCard] = useState(null);
   const [termsAcceptanceTimestamp, setTermsAcceptanceTimestamp] = useState(null);
+const [show2FAVerification, setShow2FAVerification] = useState(false);
+const [tempUser, setTempUser] = useState(null);
+const [twoFactorSecret, setTwoFactorSecret] = useState('');
 
   // Utility functions
   const validateEmail = (email) => /\S+@\S+\.\S+/.test(email);
@@ -280,136 +284,168 @@ export default function LoginRegister() {
       setIsLoading(false);
     }
   };
+const handleLogin = async () => {
+  setIsLoading(true);
+  setErrors({});
+  setAuthError("");
 
-  const handleLogin = async () => {
-    setIsLoading(true);
-    setErrors({});
-    setAuthError("");
+  if (!validateEmail(email)) {
+    setErrors({ email: "Enter your email!" });
+    setIsLoading(false);
+    return;
+  }
+  if (!password) {
+    setErrors({ password: "Enter your password!" });
+    setIsLoading(false);
+    return;
+  }
 
-    if (!validateEmail(email)) {
-      setErrors({ email: "Enter your email!" });
+  try {
+    const userCredential = await signInWithEmailAndPassword(
+      auth,
+      email,
+      password
+    );
+    const user = userCredential.user;
+
+    await new Promise(resolve => setTimeout(resolve, 100));
+    await user.reload();
+    const refreshedUser = auth.currentUser;
+    
+    // Check email verification
+    if (!user) {
+      setAuthError("Please verify your email before logging in. Check your inbox for the verification link.");
+      await auth.signOut();
       setIsLoading(false);
       return;
     }
-    if (!password) {
-      setErrors({ password: "Enter your password!" });
+
+    // Get user document
+    const userDocRef = doc(db, "users", user.uid);
+    const userDocSnap = await getDoc(userDocRef);
+
+    if (!userDocSnap.exists()) {
+      setAuthError("Registration incomplete. Please complete your registration.");
+      setResumingRegistration(true);
+      setIsRegistering(true);
+      setCodeSent(true);
+
+      setRegistrationData({
+        email: user.email,
+        username: "",
+        uid: user.uid,
+        termsAccepted: false,
+        termsAcceptedDate: null,
+        roleArray: [],
+        role: "",
+      });
+
       setIsLoading(false);
       return;
     }
 
+    const userData = userDocSnap.data();
+
+    // ✅ CHECK FOR 2FA - If enabled, show verification modal
+    if (userData?.twoFactorEnabled && userData?.twoFactorSecret) {
+      setTempUser(user);
+      setTwoFactorSecret(userData.twoFactorSecret);
+      setShow2FAVerification(true);
+      setIsLoading(false);
+      return; // Don't proceed until 2FA is verified
+    }
+
+    // Continue with normal login flow (role selection, etc.)
+    proceedWithLogin(user, userData);
+
+  } catch (error) {
+    console.error("Login error:", error);
+    setAuthError(getCustomErrorMessage(error));
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+
+// Handler for successful 2FA verification
+const handle2FAVerified = async (verified) => {
+  if (verified && tempUser) {
+    setShow2FAVerification(false);
+    
+    // Get user data again to continue login
+    const userDocRef = doc(db, "users", tempUser.uid);
+    const userDocSnap = await getDoc(userDocRef);
+    const userData = userDocSnap.data();
+    
+    // Continue with normal login flow
+    proceedWithLogin(tempUser, userData);
+  }
+};
+
+// Extract the role selection logic into a separate function
+const proceedWithLogin = async (user, userData) => {
+  let activeRoles = [];
+  let deletedRoles = [];
+
+  if (userData.roles && typeof userData.roles === "object") {
+    Object.keys(userData.roles).forEach((r) => {
+      const roleObj = userData.roles[r];
+      if (roleObj.deletedStatus === true) {
+        deletedRoles.push({
+          name: r,
+          deletedStatus: true,
+          deletedAt: roleObj.deletedAt,
+        });
+      } else {
+        activeRoles.push({ name: r });
+      }
+    });
+  }
+
+  if (Array.isArray(userData.roleArray)) {
+    userData.roleArray.forEach((r) => {
+      if (!activeRoles.find((ar) => ar.name === r)) {
+        activeRoles.push({ name: r });
+      }
+    });
+  }
+
+  if (typeof userData.role === "string") {
+    userData.role.split(",").forEach((r) => {
+      const roleName = r.trim();
+      if (!activeRoles.find((ar) => ar.name === roleName)) {
+        activeRoles.push({ name: roleName });
+      }
+    });
+  }
+
+  const allRoles = [...activeRoles, ...deletedRoles];
+  setRoleSelectionModal({ show: true, roles: allRoles });
+
+  if (activeRoles.length === 1) {
     try {
-      const userCredential = await signInWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
-      const user = userCredential.user;
-
-      await new Promise(resolve => setTimeout(resolve, 100));
-      await user.reload();
-      const refreshedUser = auth.currentUser;
-      
-      // FIXED: UNCOMMENT email verification check
-      if (!refreshedUser.emailVerified) {
-        setAuthError("Please verify your email before logging in. Check your inbox for the verification link.");
-        await auth.signOut(); // Sign out unverified user
-        setIsLoading(false);
-        return;
+      const singleRole = activeRoles[0].name || activeRoles[0];
+      const normalized = normalizeRoleName(singleRole);
+      if (auth.currentUser) {
+        const userDocRef = doc(db, "users", auth.currentUser.uid);
+        await updateDoc(userDocRef, { currentRole: normalized });
       }
-
-      // Email is verified, continue with normal login flow
-      const userDocRef = doc(db, "users", user.uid);
-      const userDocSnap = await getDoc(userDocRef);
-
-      if (!userDocSnap.exists()) {
-        setAuthError("Registration incomplete. Please complete your registration.");
-        setResumingRegistration(true);
-        setIsRegistering(true);
-        setCodeSent(true);
-
-        setRegistrationData({
-          email: user.email,
-          username: "",
-          uid: user.uid,
-          termsAccepted: false,
-          termsAcceptedDate: null,
-          roleArray: [],
-          role: "", // Add role field
-        });
-
-        setIsLoading(false);
-        return;
-      }
-
-      const userData = userDocSnap.data();
-      let activeRoles = [];
-      let deletedRoles = [];
-
-      if (userData.roles && typeof userData.roles === "object") {
-        Object.keys(userData.roles).forEach((r) => {
-          const roleObj = userData.roles[r];
-          if (roleObj.deletedStatus === true) {
-            deletedRoles.push({
-              name: r,
-              deletedStatus: true,
-              deletedAt: roleObj.deletedAt,
-            });
-          } else {
-            activeRoles.push({ name: r });
-          }
-        });
-      }
-
-      if (Array.isArray(userData.roleArray)) {
-        userData.roleArray.forEach((r) => {
-          if (!activeRoles.find((ar) => ar.name === r)) {
-            activeRoles.push({ name: r });
-          }
-        });
-      }
-
-      if (typeof userData.role === "string") {
-        userData.role.split(",").forEach((r) => {
-          const roleName = r.trim();
-          if (!activeRoles.find((ar) => ar.name === roleName)) {
-            activeRoles.push({ name: roleName });
-          }
-        });
-      }
-
-      const allRoles = [...activeRoles, ...deletedRoles];
-      setRoleSelectionModal({ show: true, roles: allRoles });
-
-      if (activeRoles.length === 1) {
-        // IMPORTANT: Persist chosen role as currentRole for the user so header reflects it
-        try {
-          const singleRole = activeRoles[0].name || activeRoles[0];
-          const normalized = normalizeRoleName(singleRole);
-          if (auth.currentUser) {
-            const userDocRef = doc(db, "users", auth.currentUser.uid);
-            await updateDoc(userDocRef, { currentRole: normalized });
-          }
-          localStorage.setItem("selectedRole", normalized);
-        } catch (err) {
-          console.error("Error persisting single role:", err);
-        }
-        
-        setRoleSelectionModal({ show: false, roles: [] });
-        navigateToRoleDashboard(activeRoles[0].name);
-      }
-
-      if (activeRoles.length === 0 && deletedRoles.length > 0) {
-        navigate("/RetrieveAccount", {
-          state: { roleToRetrieve: deletedRoles[0].name },
-        });
-      }
-    } catch (error) {
-      console.error("Login error:", error);
-      setAuthError(getCustomErrorMessage(error));
-    } finally {
-      setIsLoading(false);
+      localStorage.setItem("selectedRole", normalized);
+    } catch (err) {
+      console.error("Error persisting single role:", err);
     }
-  };
+    
+    setRoleSelectionModal({ show: false, roles: [] });
+    navigateToRoleDashboard(activeRoles[0].name);
+  }
+
+  if (activeRoles.length === 0 && deletedRoles.length > 0) {
+    navigate("/RetrieveAccount", {
+      state: { roleToRetrieve: deletedRoles[0].name },
+    });
+  }
+};
+
 
   const handleVerify = async () => {
     setCheckingVerification(true);
@@ -1250,6 +1286,17 @@ By using this platform, you confirm that you:
         />
       )}
 
+{show2FAVerification && (
+  <TwoFactorVerification
+    isOpen={show2FAVerification}
+    onVerify={handle2FAVerified}
+    onClose={() => {
+      setShow2FAVerification(false);
+      auth.signOut();
+    }}
+    secret={twoFactorSecret}
+  />
+)}
       {renderForgotPasswordModal()}
       {renderRoleSelectionModal()}
     </div>
