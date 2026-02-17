@@ -11,7 +11,8 @@ export const SprintsView = ({
   handleAddTask,
   handleDeleteTask,
   handleAddColumn,
-  handleAddSprint
+  handleAddSprint,
+  handleDeleteSprint
 }) => {
   const sortedSprints = useMemo(() => {
     return Object.values(sprintsData).sort((a, b) => a.id - b.id);
@@ -39,6 +40,7 @@ export const SprintsView = ({
           onAddTask={(newTask) => handleAddTask(sprint.id, newTask)}
           onDeleteTask={(taskId) => handleDeleteTask(sprint.id, taskId)}
           onAddColumn={handleAddColumn}
+          onDeleteSprint={handleDeleteSprint}
         />
       ))}
     </div>

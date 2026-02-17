@@ -10,7 +10,8 @@ export const SprintCard = memo(({
   onUpdateTask, 
   onAddTask,
   onDeleteTask,
-  onAddColumn
+  onAddColumn,
+  onDeleteSprint
 }) => {
   return (
     <div style={styles.sprintCard}>
@@ -40,6 +41,7 @@ export const SprintCard = memo(({
             onAddTask={onAddTask}
             onDeleteTask={onDeleteTask}
             onAddColumn={onAddColumn}
+            onDeleteSprint={onDeleteSprint}
           />
         </div>
       )}
