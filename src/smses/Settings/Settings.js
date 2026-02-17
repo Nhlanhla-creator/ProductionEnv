@@ -7,6 +7,7 @@ import {
   collection, addDoc, query, where, 
   getDocs, arrayUnion, arrayRemove 
 } from "firebase/firestore"
+import TwoFactorSetup from '../../TwoFactorSetup';
 
 import { updatePassword, deleteUser } from "firebase/auth"
 import { differenceInDays } from "date-fns"; 
@@ -60,6 +61,10 @@ export default function Settings() {
     show: false,
     roles: [],
   });
+  // Add these state variables with your other useState declarations
+const [show2FASetup, setShow2FASetup] = useState(false);
+const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+const [disabling2FA, setDisabling2FA] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 // Add these with your existing state declarations
 const [companyMembers, setCompanyMembers] = useState([]);
@@ -100,6 +105,52 @@ const loadInvitations = async (companyId) => {
   } catch (error) {
     console.error("Error loading invitations:", error);
   }
+};
+
+// Add this useEffect to check 2FA status
+useEffect(() => {
+  const check2FAStatus = async () => {
+    const user = auth.currentUser;
+    if (user) {
+      const docRef = doc(db, "users", user.uid);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setTwoFactorEnabled(data?.twoFactorEnabled || false);
+      }
+    }
+  };
+  check2FAStatus();
+}, []);
+
+// Add handler for disabling 2FA
+const handleDisable2FA = async () => {
+  if (!window.confirm('Are you sure you want to disable two-factor authentication? This will make your account less secure.')) {
+    return;
+  }
+
+  setDisabling2FA(true);
+  try {
+    const user = auth.currentUser;
+    await updateDoc(doc(db, "users", user.uid), {
+      twoFactorEnabled: false,
+      twoFactorSecret: null,
+      twoFactorSetupDate: null
+    });
+    setTwoFactorEnabled(false);
+    alert('Two-factor authentication has been disabled.');
+  } catch (error) {
+    console.error('Error disabling 2FA:', error);
+    alert('Failed to disable 2FA. Please try again.');
+  } finally {
+    setDisabling2FA(false);
+  }
+};
+
+// Handler for successful 2FA setup
+const handle2FASetupSuccess = () => {
+  setTwoFactorEnabled(true);
+  alert('Two-factor authentication has been enabled successfully!');
 };
 
 // Call this in your useEffect when companyId changes
@@ -1476,193 +1527,322 @@ const handleUpdateRole = async (memberId, newRole) => {
 )}
 
 
-          {activeTab === "security" && (
-            <div>
-              <div style={{ marginBottom: "2rem" }}>
-                <h2
-                  style={{
-                    color: colors.textBrown,
-                    fontSize: "1.5rem",
-                    fontWeight: "600",
-                    marginBottom: "0.5rem",
-                    letterSpacing: "-0.025em",
-                  }}
-                >
-                  Security
-                </h2>
-                <p
-                  style={{
-                    color: "#6b7280",
-                    fontSize: "1rem",
-                    margin: 0,
-                  }}
-                >
-                  Manage your password and security settings.
-                </p>
-              </div>
+         
+{activeTab === "security" && (
+  <div>
+    <div style={{ marginBottom: "2rem" }}>
+      <h2
+        style={{
+          color: colors.textBrown,
+          fontSize: "1.5rem",
+          fontWeight: "600",
+          marginBottom: "0.5rem",
+          letterSpacing: "-0.025em",
+        }}
+      >
+        Security
+      </h2>
+      <p
+        style={{
+          color: "#6b7280",
+          fontSize: "1rem",
+          margin: 0,
+        }}
+      >
+        Manage your password and security settings.
+      </p>
+    </div>
 
-              <form onSubmit={handleSubmit}>
-                <div style={{ display: "grid", gap: "2rem", maxWidth: "600px" }}>
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        color: colors.textBrown,
-                        fontWeight: "500",
-                        marginBottom: "0.75rem",
-                        fontSize: "0.95rem",
-                      }}
-                    >
-                      Current Password
-                    </label>
-                    <input
-                      type="password"
-                      name="currentPassword"
-                      value={formData.currentPassword}
-                      onChange={handleInputChange}
-                      style={{
-                        width: "100%",
-                        padding: "0.875rem 1rem",
-                        border: `1px solid ${colors.mediumBrown}`,
-                        borderRadius: "8px",
-                        fontSize: "1rem",
-                        backgroundColor: "white",
-                        color: colors.textBrown,
-                        outline: "none",
-                        transition: "all 0.2s ease",
-                        boxSizing: "border-box",
-                      }}
-                      onFocus={(e) => {
-                        e.target.style.borderColor = colors.primaryBrown
-                        e.target.style.boxShadow = `0 0 0 3px ${colors.primaryBrown}15`
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = colors.mediumBrown
-                        e.target.style.boxShadow = "none"
-                      }}
-                    />
-                  </div>
+    {/* Two-Factor Authentication Section */}
+    <div style={{
+      backgroundColor: colors.backgroundBrown,
+      borderRadius: "12px",
+      padding: "1.5rem",
+      marginBottom: "2rem",
+      border: `1px solid ${colors.lightBrown}`,
+    }}>
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: "1rem",
+      }}>
+        <div>
+          <h3 style={{
+            color: colors.textBrown,
+            fontSize: "1.1rem",
+            fontWeight: "600",
+            margin: "0 0 0.5rem 0",
+          }}>
+            Two-Factor Authentication
+          </h3>
+          <p style={{
+            color: "#6b7280",
+            fontSize: "0.95rem",
+            margin: 0,
+            lineHeight: 1.5,
+          }}>
+            Add an extra layer of security to your account by requiring a code from your authenticator app in addition to your password.
+          </p>
+        </div>
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.75rem",
+        }}>
+          <span style={{
+            padding: "0.5rem 1rem",
+            backgroundColor: twoFactorEnabled ? "#d1fae5" : "#fee2e2",
+            color: twoFactorEnabled ? "#065f46" : "#991b1b",
+            borderRadius: "8px",
+            fontSize: "0.875rem",
+            fontWeight: "600",
+          }}>
+            {twoFactorEnabled ? "Enabled" : "Disabled"}
+          </span>
+        </div>
+      </div>
 
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        color: colors.textBrown,
-                        fontWeight: "500",
-                        marginBottom: "0.75rem",
-                        fontSize: "0.95rem",
-                      }}
-                    >
-                      New Password
-                    </label>
-                    <input
-                      type="password"
-                      name="newPassword"
-                      value={formData.newPassword}
-                      onChange={handleInputChange}
-                      style={{
-                        width: "100%",
-                        padding: "0.875rem 1rem",
-                        border: `1px solid ${colors.mediumBrown}`,
-                        borderRadius: "8px",
-                        fontSize: "1rem",
-                        backgroundColor: "white",
-                        color: colors.textBrown,
-                        outline: "none",
-                        transition: "all 0.2s ease",
-                        boxSizing: "border-box",
-                      }}
-                      onFocus={(e) => {
-                        e.target.style.borderColor = colors.primaryBrown
-                        e.target.style.boxShadow = `0 0 0 3px ${colors.primaryBrown}15`
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = colors.mediumBrown
-                        e.target.style.boxShadow = "none"
-                      }}
-                    />
-                  </div>
+      {twoFactorEnabled ? (
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "1rem",
+          padding: "1rem",
+          backgroundColor: "#d1fae5",
+          borderRadius: "8px",
+          border: "1px solid #a7f3d0",
+        }}>
+          <div style={{ flex: 1 }}>
+            <p style={{
+              color: "#065f46",
+              fontSize: "0.95rem",
+              margin: 0,
+              fontWeight: "500",
+            }}>
+              ✓ Two-factor authentication is active and protecting your account
+            </p>
+          </div>
+          <button
+            onClick={handleDisable2FA}
+            disabled={disabling2FA}
+            style={{
+              padding: "0.75rem 1.5rem",
+              backgroundColor: "#dc2626",
+              color: "white",
+              border: "none",
+              borderRadius: "8px",
+              fontSize: "0.9rem",
+              fontWeight: "500",
+              cursor: disabling2FA ? "not-allowed" : "pointer",
+              opacity: disabling2FA ? 0.7 : 1,
+            }}
+          >
+            {disabling2FA ? "Disabling..." : "Disable 2FA"}
+          </button>
+        </div>
+      ) : (
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "1rem",
+          padding: "1rem",
+          backgroundColor: "#fef3c7",
+          borderRadius: "8px",
+          border: "1px solid #fde68a",
+        }}>
+          <div style={{ flex: 1 }}>
+            <p style={{
+              color: "#92400e",
+              fontSize: "0.95rem",
+              margin: 0,
+              fontWeight: "500",
+            }}>
+              ⚠ Your account is not protected by two-factor authentication
+            </p>
+          </div>
+          <button
+            onClick={() => setShow2FASetup(true)}
+            style={{
+              padding: "0.75rem 1.5rem",
+              backgroundColor: colors.primaryBrown,
+              color: "white",
+              border: "none",
+              borderRadius: "8px",
+              fontSize: "0.9rem",
+              fontWeight: "500",
+              cursor: "pointer",
+            }}
+          >
+            Enable 2FA
+          </button>
+        </div>
+      )}
+    </div>
 
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        color: colors.textBrown,
-                        fontWeight: "500",
-                        marginBottom: "0.75rem",
-                        fontSize: "0.95rem",
-                      }}
-                    >
-                      Confirm New Password
-                    </label>
-                    <input
-                      type="password"
-                      name="confirmPassword"
-                      value={formData.confirmPassword}
-                      onChange={handleInputChange}
-                      style={{
-                        width: "100%",
-                        padding: "0.875rem 1rem",
-                        border: `1px solid ${colors.mediumBrown}`,
-                        borderRadius: "8px",
-                        fontSize: "1rem",
-                        backgroundColor: "white",
-                        color: colors.textBrown,
-                        outline: "none",
-                        transition: "all 0.2s ease",
-                        boxSizing: "border-box",
-                      }}
-                      onFocus={(e) => {
-                        e.target.style.borderColor = colors.primaryBrown
-                        e.target.style.boxShadow = `0 0 0 3px ${colors.primaryBrown}15`
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = colors.mediumBrown
-                        e.target.style.boxShadow = "none"
-                      }}
-                    />
-                  </div>
-                </div>
+    {/* Password Change Section */}
+    <form onSubmit={handleSubmit}>
+      <div style={{ display: "grid", gap: "2rem", maxWidth: "600px" }}>
+        <div>
+          <label
+            style={{
+              display: "block",
+              color: colors.textBrown,
+              fontWeight: "500",
+              marginBottom: "0.75rem",
+              fontSize: "0.95rem",
+            }}
+          >
+            Current Password
+          </label>
+          <input
+            type="password"
+            name="currentPassword"
+            value={formData.currentPassword}
+            onChange={handleInputChange}
+            style={{
+              width: "100%",
+              padding: "0.875rem 1rem",
+              border: `1px solid ${colors.mediumBrown}`,
+              borderRadius: "8px",
+              fontSize: "1rem",
+              backgroundColor: "white",
+              color: colors.textBrown,
+              outline: "none",
+              transition: "all 0.2s ease",
+              boxSizing: "border-box",
+            }}
+            onFocus={(e) => {
+              e.target.style.borderColor = colors.primaryBrown
+              e.target.style.boxShadow = `0 0 0 3px ${colors.primaryBrown}15`
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = colors.mediumBrown
+              e.target.style.boxShadow = "none"
+            }}
+          />
+        </div>
 
-                <div style={{ display: "flex", gap: "1rem", marginTop: "2.5rem" }}>
-                  <button
-                    type="button"
-                    style={{
-                      padding: "0.75rem 1.5rem",
-                      backgroundColor: "white",
-                      color: "#6b7280",
-                      border: `1px solid ${colors.mediumBrown}`,
-                      borderRadius: "8px",
-                      fontSize: "0.95rem",
-                      fontWeight: "500",
-                      cursor: "pointer",
-                      transition: "all 0.2s ease",
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    style={{
-                      padding: "0.75rem 1.5rem",
-                      backgroundColor: colors.primaryBrown,
-                      color: "white",
-                      border: "none",
-                      borderRadius: "8px",
-                      fontSize: "0.95rem",
-                      fontWeight: "600",
-                      cursor: loading ? "not-allowed" : "pointer",
-                      transition: "all 0.2s ease",
-                      opacity: loading ? 0.7 : 1,
-                    }}
-                  >
-                    {loading ? "Saving..." : "Save changes"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
+        <div>
+          <label
+            style={{
+              display: "block",
+              color: colors.textBrown,
+              fontWeight: "500",
+              marginBottom: "0.75rem",
+              fontSize: "0.95rem",
+            }}
+          >
+            New Password
+          </label>
+          <input
+            type="password"
+            name="newPassword"
+            value={formData.newPassword}
+            onChange={handleInputChange}
+            style={{
+              width: "100%",
+              padding: "0.875rem 1rem",
+              border: `1px solid ${colors.mediumBrown}`,
+              borderRadius: "8px",
+              fontSize: "1rem",
+              backgroundColor: "white",
+              color: colors.textBrown,
+              outline: "none",
+              transition: "all 0.2s ease",
+              boxSizing: "border-box",
+            }}
+            onFocus={(e) => {
+              e.target.style.borderColor = colors.primaryBrown
+              e.target.style.boxShadow = `0 0 0 3px ${colors.primaryBrown}15`
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = colors.mediumBrown
+              e.target.style.boxShadow = "none"
+            }}
+          />
+        </div>
+
+        <div>
+          <label
+            style={{
+              display: "block",
+              color: colors.textBrown,
+              fontWeight: "500",
+              marginBottom: "0.75rem",
+              fontSize: "0.95rem",
+            }}
+          >
+            Confirm New Password
+          </label>
+          <input
+            type="password"
+            name="confirmPassword"
+            value={formData.confirmPassword}
+            onChange={handleInputChange}
+            style={{
+              width: "100%",
+              padding: "0.875rem 1rem",
+              border: `1px solid ${colors.mediumBrown}`,
+              borderRadius: "8px",
+              fontSize: "1rem",
+              backgroundColor: "white",
+              color: colors.textBrown,
+              outline: "none",
+              transition: "all 0.2s ease",
+              boxSizing: "border-box",
+            }}
+            onFocus={(e) => {
+              e.target.style.borderColor = colors.primaryBrown
+              e.target.style.boxShadow = `0 0 0 3px ${colors.primaryBrown}15`
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = colors.mediumBrown
+              e.target.style.boxShadow = "none"
+            }}
+          />
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: "1rem", marginTop: "2.5rem" }}>
+        <button
+          type="button"
+          style={{
+            padding: "0.75rem 1.5rem",
+            backgroundColor: "white",
+            color: "#6b7280",
+            border: `1px solid ${colors.mediumBrown}`,
+            borderRadius: "8px",
+            fontSize: "0.95rem",
+            fontWeight: "500",
+            cursor: "pointer",
+            transition: "all 0.2s ease",
+          }}
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={loading}
+          style={{
+            padding: "0.75rem 1.5rem",
+            backgroundColor: colors.primaryBrown,
+            color: "white",
+            border: "none",
+            borderRadius: "8px",
+            fontSize: "0.95rem",
+            fontWeight: "600",
+            cursor: loading ? "not-allowed" : "pointer",
+            transition: "all 0.2s ease",
+            opacity: loading ? 0.7 : 1,
+          }}
+        >
+          {loading ? "Saving..." : "Save changes"}
+        </button>
+      </div>
+    </form>
+  </div>
+)}
 
           {(activeTab === "profile" || activeTab === "billing" || activeTab === "integrations") && (
             <div>
@@ -1962,7 +2142,7 @@ const handleUpdateRole = async (memberId, newRole) => {
           </div>
         </div>
       )}
-      // Add this modal at the end of your component (before the final closing div)
+    
 {showAddMemberModal && (
   <div style={{
     position: "fixed",
@@ -2143,6 +2323,15 @@ const handleUpdateRole = async (memberId, newRole) => {
       </div>
     </div>
   </div>
+)}
+
+
+{show2FASetup && (
+  <TwoFactorSetup
+    isOpen={show2FASetup}
+    onClose={() => setShow2FASetup(false)}
+    onSuccess={handle2FASetupSuccess}
+  />
 )}
     </div>
     

@@ -1,4 +1,3 @@
-// partners-components/partnersFirebaseService.js
 import { db, auth, storage } from '../../../firebaseConfig';
 import { 
   collection, 
