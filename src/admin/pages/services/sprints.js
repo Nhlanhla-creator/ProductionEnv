@@ -51,7 +51,6 @@ export const loadSprintsFromFirebase = async () => {
       };
     });
 
-    console.log('✅ Loaded sprints from Firebase:', Object.keys(sprints).length);
     return sprints;
   } catch (error) {
     console.error('❌ Error loading sprints from Firebase:', error);
@@ -75,7 +74,6 @@ export const saveSprint = async (sprint) => {
     };
 
     await setDoc(sprintRef, sprintData, { merge: true });
-    console.log('✅ Saved sprint to Firebase:', sprint.id);
     return { success: true, id: sprint.id };
   } catch (error) {
     console.error('❌ Error saving sprint:', error);
@@ -100,7 +98,6 @@ export const saveAllSprints = async (sprintsData) => {
     });
 
     await Promise.all(promises);
-    console.log('✅ Saved all sprints to Firebase');
     return { success: true };
   } catch (error) {
     console.error('❌ Error saving all sprints:', error);
@@ -121,7 +118,6 @@ export const updateTask = async (sprintId, taskId, columnId, newValue) => {
       updatedAt: serverTimestamp()
     });
 
-    console.log('✅ Updated task in Firebase:', taskId);
     return { success: true };
   } catch (error) {
     // If task doesn't exist, create it
@@ -151,7 +147,6 @@ export const addTask = async (sprintId, task) => {
     };
 
     await setDoc(taskRef, taskData);
-    console.log('✅ Added task to Firebase:', task.id);
     return { success: true, id: task.id };
   } catch (error) {
     console.error('❌ Error adding task:', error);
@@ -168,7 +163,6 @@ export const deleteTask = async (sprintId, taskId) => {
     const taskRef = doc(db, SPRINT_TASKS_COLLECTION, `${user.uid}_task_${sprintId}_${taskId}`);
 
     await deleteDoc(taskRef);
-    console.log('✅ Deleted task from Firebase:', taskId);
     return { success: true };
   } catch (error) {
     console.error('❌ Error deleting task:', error);
@@ -198,7 +192,6 @@ export const addColumn = async (sprintId, column) => {
       updatedAt: serverTimestamp()
     });
 
-    console.log('✅ Added column to Firebase:', column.id);
     return { success: true };
   } catch (error) {
     console.error('❌ Error adding column:', error);
@@ -232,7 +225,6 @@ export const deleteSprint = async (sprintId) => {
     
     // Delete the sprint
     await deleteDoc(sprintRef);
-    console.log('✅ Deleted sprint from Firebase:', sprintId);
     return { success: true };
   } catch (error) {
     console.error('❌ Error deleting sprint:', error);
@@ -261,7 +253,6 @@ export const subscribeToSprints = (callback) => {
       });
 
       callback(sprints);
-      console.log('🔄 Sprints updated in real-time');
     }, (error) => {
       console.error('❌ Error in sprint subscription:', error);
     });
@@ -310,11 +301,9 @@ export const initializeSprintsForUser = async (initialSprintsData) => {
     const querySnapshot = await getDocs(q);
 
     if (querySnapshot.empty) {
-      console.log('🆕 Initializing sprints for new user');
       await saveAllSprints(initialSprintsData);
       return { success: true, initialized: true };
     } else {
-      console.log('✅ User already has sprints');
       return { success: true, initialized: false };
     }
   } catch (error) {
@@ -332,10 +321,8 @@ export const mergeSprintData = (localSprint, remoteSprint) => {
   const remoteTime = new Date(remoteSprint.updatedAt).getTime();
 
   if (localTime > remoteTime) {
-    console.log('📤 Local version is newer, using local');
     return localSprint;
   } else {
-    console.log('📥 Remote version is newer, using remote');
     return remoteSprint;
   }
 };
@@ -352,7 +339,6 @@ export const exportSprintsData = async () => {
       sprints: sprints
     };
 
-    console.log('✅ Exported sprints data');
     return exportData;
   } catch (error) {
     console.error('❌ Error exporting sprints:', error);
@@ -370,10 +356,97 @@ export const importSprintsData = async (importData) => {
     }
 
     await saveAllSprints(importData.sprints);
-    console.log('✅ Imported sprints data');
     return { success: true };
   } catch (error) {
     console.error('❌ Error importing sprints:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete all sprints for the current user
+ * Used for complete data reset
+ */
+export const deleteAllSprints = async () => {
+  try {
+    const user = getCurrentUser();
+    const sprintsRef = collection(db, SPRINTS_COLLECTION);
+    const q = query(sprintsRef, where('userId', '==', user.uid));
+    const querySnapshot = await getDocs(q);
+    
+    const deletePromises = [];
+    querySnapshot.forEach((doc) => {
+      deletePromises.push(deleteDoc(doc.ref));
+    });
+    
+    // Also delete all tasks
+    const tasksRef = collection(db, SPRINT_TASKS_COLLECTION);
+    const tasksQuery = query(tasksRef, where('userId', '==', user.uid));
+    const tasksSnapshot = await getDocs(tasksQuery);
+    
+    tasksSnapshot.forEach((doc) => {
+      deletePromises.push(deleteDoc(doc.ref));
+    });
+    
+    await Promise.all(deletePromises);
+    // console.log('✅ Deleted all sprints and tasks');
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error deleting all sprints:', error);
+    throw error;
+  }
+};
+
+/**
+ * Migrate existing sprints to add missing column options
+ * This fixes sprints created before options were added to columns
+ */
+export const migrateSprintColumns = async () => {
+  try {
+    const user = getCurrentUser();
+    const sprints = await loadSprintsFromFirebase();
+    
+    // Default options that should be on columns
+    const DEFAULT_OPTIONS = {
+      'category': ['Frontend', 'Backend', 'QA', 'Security', 'Traction', 'Funding', 'Intake/Comms'],
+      'assignee': ['Lindelani', 'Nhlanhla Msomi', 'Makha', 'Lerato Nama', 'Thando'],
+      'status': ['Not started', 'In progress', 'Done', 'Blocked']
+    };
+    
+    let migratedCount = 0;
+    
+    for (const sprint of Object.values(sprints)) {
+      let needsMigration = false;
+      
+      const updatedColumns = sprint.columns.map(col => {
+        // Check if this column should have options but doesn't
+        if ((col.type === 'select' || col.type === 'multi-select') && !col.options) {
+          needsMigration = true;
+          return {
+            ...col,
+            options: DEFAULT_OPTIONS[col.id] || []
+          };
+        }
+        return col;
+      });
+      
+      if (needsMigration) {
+        const updatedSprint = {
+          ...sprint,
+          columns: updatedColumns,
+          updatedAt: serverTimestamp()
+        };
+        
+        await saveSprint(updatedSprint);
+        migratedCount++;
+        //console.log(`✅ Migrated sprint ${sprint.id}: ${sprint.name}`);
+      }
+    }
+    
+    // console.log(`✅ Migration complete: ${migratedCount} sprints updated`);
+    return { success: true, migratedCount };
+  } catch (error) {
+    console.error('❌ Error during migration:', error);
     throw error;
   }
 };

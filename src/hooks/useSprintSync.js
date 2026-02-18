@@ -35,7 +35,20 @@ export const useSprintSync = (initialSprintsData, user) => {
 
         if (Object.keys(remoteSprints).length > 0) {
           // User has existing sprints
-          console.log('📥 Loaded sprints from Firebase');
+          // console.log('📥 Loaded sprints from Firebase');
+          
+          // Check if migration is needed (columns missing options)
+          const needsMigration = Object.values(remoteSprints).some(sprint => 
+            sprint.columns?.some(col => 
+              (col.type === 'select' || col.type === 'multi-select') && !col.options
+            )
+          );
+          
+          if (needsMigration) {
+            console.warn('⚠️ Some columns are missing options. This may cause issues with adding tasks.');
+            console.warn('💡 Use the "Re-seed Sprint Data" button to fix this issue.');
+          }
+          
           setSprintsData(remoteSprints);
         } else {
           // Initialize with default data for new users
@@ -62,15 +75,13 @@ export const useSprintSync = (initialSprintsData, user) => {
   useEffect(() => {
     if (!user) return;
 
-    console.log('🔄 Setting up real-time sync');
-    
     const unsubscribe = subscribeToSprints((updatedSprints) => {
       setSprintsData(updatedSprints);
       setLastSyncTime(new Date());
     });
 
     return () => {
-      console.log('🔌 Disconnecting real-time sync');
+      // console.log('🔌 Disconnecting real-time sync');
       unsubscribe();
     };
   }, [user]);

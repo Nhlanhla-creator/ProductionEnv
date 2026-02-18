@@ -59,7 +59,6 @@ export const saveTextContent = async (path, content) => {
     };
 
     await setDoc(docRef, data, { merge: true });
-    console.log('✅ Saved text content:', path.join(' > '));
     return { success: true };
   } catch (error) {
     console.error('❌ Error saving text content:', error);
@@ -101,7 +100,6 @@ export const uploadFile = async (path, file) => {
     };
 
     await setDoc(docRef, data, { merge: true });
-    console.log('✅ Uploaded file:', file.name);
     return { success: true, url: downloadURL };
   } catch (error) {
     console.error('❌ Error uploading file:', error);
@@ -149,7 +147,6 @@ export const addFileToCollection = async (path, file) => {
       createdAt: docSnap.exists() ? docSnap.data().createdAt : serverTimestamp()
     }, { merge: true });
 
-    console.log('✅ Added file to collection:', file.name);
     return { success: true, url: downloadURL };
   } catch (error) {
     console.error('❌ Error adding file:', error);
@@ -188,7 +185,6 @@ export const deleteFile = async (path, fileIndex) => {
       updatedAt: serverTimestamp()
     }, { merge: true });
 
-    console.log('✅ Deleted file:', fileToDelete.name);
     return { success: true };
   } catch (error) {
     console.error('❌ Error deleting file:', error);
@@ -245,7 +241,6 @@ export const loadAllContent = async () => {
       };
     });
 
-    console.log('✅ Loaded all partners content:', Object.keys(content).length);
     return content;
   } catch (error) {
     console.error('❌ Error loading all content:', error);
@@ -276,7 +271,6 @@ export const addDatabaseEntry = async (path, data) => {
     };
 
     const docRef = await addDoc(collectionRef, entry);
-    console.log('✅ Added database entry:', docRef.id);
     return { success: true, id: docRef.id };
   } catch (error) {
     console.error('❌ Error adding database entry:', error);
@@ -296,7 +290,6 @@ export const updateDatabaseEntry = async (entryId, data) => {
       updatedAt: serverTimestamp()
     });
 
-    console.log('✅ Updated database entry:', entryId);
     return { success: true };
   } catch (error) {
     console.error('❌ Error updating database entry:', error);
@@ -312,7 +305,6 @@ export const deleteDatabaseEntry = async (entryId) => {
     const docRef = doc(db, PARTNERS_DATA_COLLECTION, entryId);
     await deleteDoc(docRef);
 
-    console.log('✅ Deleted database entry:', entryId);
     return { success: true };
   } catch (error) {
     console.error('❌ Error deleting database entry:', error);
@@ -348,7 +340,6 @@ export const loadDatabaseEntries = async (path) => {
       });
     });
 
-    console.log('✅ Loaded database entries:', entries.length);
     return entries;
   } catch (error) {
     console.error('❌ Error loading database entries:', error);
@@ -375,7 +366,6 @@ export const deleteContent = async (path) => {
     }
 
     await deleteDoc(docRef);
-    console.log('✅ Deleted content:', path.join(' > '));
     return { success: true };
   } catch (error) {
     console.error('❌ Error deleting content:', error);

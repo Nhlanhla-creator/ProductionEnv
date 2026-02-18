@@ -71,7 +71,6 @@ export const uploadFile = async (path, file) => {
     };
 
     await setDoc(docRef, data, { merge: true });
-    console.log('✅ Uploaded pilots file:', file.name);
     return { success: true, url: downloadURL };
   } catch (error) {
     console.error('❌ Error uploading file:', error);
@@ -119,7 +118,6 @@ export const addFileToCollection = async (path, file) => {
       createdAt: docSnap.exists() ? docSnap.data().createdAt : serverTimestamp()
     }, { merge: true });
 
-    console.log('✅ Added pilots file to collection:', file.name);
     return { success: true, url: downloadURL };
   } catch (error) {
     console.error('❌ Error adding file:', error);
@@ -158,7 +156,6 @@ export const deleteFile = async (path, fileIndex) => {
       updatedAt: serverTimestamp()
     }, { merge: true });
 
-    console.log('✅ Deleted pilots file:', fileToDelete.name);
     return { success: true };
   } catch (error) {
     console.error('❌ Error deleting file:', error);
@@ -179,7 +176,6 @@ export const loadContent = async (path) => {
 
     if (docSnap.exists()) {
       const data = docSnap.data();
-      console.log('✅ Loaded pilots content:', path.join(' > '));
       return {
         ...data,
         createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
@@ -215,7 +211,6 @@ export const loadAllContent = async () => {
       };
     });
 
-    console.log('✅ Loaded all pilots content:', Object.keys(content).length);
     return content;
   } catch (error) {
     console.error('❌ Error loading all content:', error);
@@ -242,7 +237,6 @@ export const deleteContent = async (path) => {
     }
 
     await deleteDoc(docRef);
-    console.log('✅ Deleted pilots content:', path.join(' > '));
     return { success: true };
   } catch (error) {
     console.error('❌ Error deleting content:', error);

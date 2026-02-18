@@ -1,13 +1,14 @@
 .mainContent {
-    min-width: calc(100% - 300px);
     margin-top: 80px;
     transition: margin-left 0.3s ease;
 }
 
 .mainContent.sidebarExpanded {
+    min-width: calc(100% - 280px);
     margin-left: 280px;
 }
 
 .mainContent.sidebarCollapsed {
+    min-width: calc(100% - 80px);
     margin-left: 80px;
 }

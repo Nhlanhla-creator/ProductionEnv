@@ -1,3 +1,5 @@
+import { CATEGORIES, ASSIGNEES, STATUSES } from './constants';
+
 export const INITIAL_SPRINTS_DATA = {
   0: {
     id: 0,
@@ -122,6 +124,7 @@ export const INITIAL_SPRINTS_DATA = {
         label: "Category",
         type: "multi-select",
         editable: true,
+        options: CATEGORIES
       },
       {
         id: "dependencies",
@@ -134,10 +137,11 @@ export const INITIAL_SPRINTS_DATA = {
         label: "By who",
         type: "multi-select",
         editable: true,
+        options: ASSIGNEES
       },
       { id: "startDate", label: "From when", type: "date", editable: true },
       { id: "endDate", label: "By when", type: "date", editable: true },
-      { id: "status", label: "Status", type: "select", editable: true },
+      { id: "status", label: "Status", type: "select", editable: true, options: STATUSES },
     ],
   },
   1: {
@@ -275,6 +279,7 @@ export const INITIAL_SPRINTS_DATA = {
         label: "Category",
         type: "multi-select",
         editable: true,
+        options: CATEGORIES
       },
       {
         id: "dependencies",
@@ -287,10 +292,11 @@ export const INITIAL_SPRINTS_DATA = {
         label: "By who",
         type: "multi-select",
         editable: true,
+        options: ASSIGNEES
       },
       { id: "startDate", label: "From when", type: "date", editable: true },
       { id: "endDate", label: "By when", type: "date", editable: true },
-      { id: "status", label: "Status", type: "select", editable: true },
+      { id: "status", label: "Status", type: "select", editable: true, options: STATUSES },
     ],
   },
   2: {
@@ -428,6 +434,7 @@ export const INITIAL_SPRINTS_DATA = {
         label: "Category",
         type: "multi-select",
         editable: true,
+        options: CATEGORIES
       },
       {
         id: "dependencies",
@@ -440,10 +447,11 @@ export const INITIAL_SPRINTS_DATA = {
         label: "By who",
         type: "multi-select",
         editable: true,
+        options: ASSIGNEES
       },
       { id: "startDate", label: "From when", type: "date", editable: true },
       { id: "endDate", label: "By when", type: "date", editable: true },
-      { id: "status", label: "Status", type: "select", editable: true },
+      { id: "status", label: "Status", type: "select", editable: true, options: STATUSES },
     ],
   },
   3: {
@@ -605,6 +613,7 @@ export const INITIAL_SPRINTS_DATA = {
         label: "Category",
         type: "multi-select",
         editable: true,
+        options: CATEGORIES
       },
       {
         id: "dependencies",
@@ -617,10 +626,11 @@ export const INITIAL_SPRINTS_DATA = {
         label: "By who",
         type: "multi-select",
         editable: true,
+        options: ASSIGNEES
       },
       { id: "startDate", label: "From when", type: "date", editable: true },
       { id: "endDate", label: "By when", type: "date", editable: true },
-      { id: "status", label: "Status", type: "select", editable: true },
+      { id: "status", label: "Status", type: "select", editable: true, options: STATUSES },
     ],
   },
   4: {
@@ -937,6 +947,7 @@ export const INITIAL_SPRINTS_DATA = {
         label: "Category",
         type: "multi-select",
         editable: true,
+        options: CATEGORIES
       },
       {
         id: "dependencies",
@@ -949,10 +960,11 @@ export const INITIAL_SPRINTS_DATA = {
         label: "By who",
         type: "multi-select",
         editable: true,
+        options: ASSIGNEES
       },
       { id: "startDate", label: "From when", type: "date", editable: true },
       { id: "endDate", label: "By when", type: "date", editable: true },
-      { id: "status", label: "Status", type: "select", editable: true },
+      { id: "status", label: "Status", type: "select", editable: true, options: STATUSES },
     ],
   },
   5: {
@@ -1061,6 +1073,7 @@ export const INITIAL_SPRINTS_DATA = {
         label: "Category",
         type: "multi-select",
         editable: true,
+        options: CATEGORIES
       },
       {
         id: "dependencies",
@@ -1073,10 +1086,11 @@ export const INITIAL_SPRINTS_DATA = {
         label: "By who",
         type: "multi-select",
         editable: true,
+        options: ASSIGNEES
       },
       { id: "startDate", label: "From when", type: "date", editable: true },
       { id: "endDate", label: "By when", type: "date", editable: true },
-      { id: "status", label: "Status", type: "select", editable: true },
+      { id: "status", label: "Status", type: "select", editable: true, options: STATUSES },
     ],
   },
   6: {
@@ -1164,6 +1178,7 @@ export const INITIAL_SPRINTS_DATA = {
         label: "Category",
         type: "multi-select",
         editable: true,
+        options: CATEGORIES
       },
       {
         id: "dependencies",
@@ -1176,10 +1191,11 @@ export const INITIAL_SPRINTS_DATA = {
         label: "By who",
         type: "multi-select",
         editable: true,
+        options: ASSIGNEES
       },
       { id: "startDate", label: "From when", type: "date", editable: true },
       { id: "endDate", label: "By when", type: "date", editable: true },
-      { id: "status", label: "Status", type: "select", editable: true },
+      { id: "status", label: "Status", type: "select", editable: true, options: STATUSES },
     ],
   },
   9: {
@@ -1298,6 +1314,7 @@ export const INITIAL_SPRINTS_DATA = {
         label: "Category",
         type: "multi-select",
         editable: true,
+        options: CATEGORIES
       },
       {
         id: "dependencies",
@@ -1310,41 +1327,11 @@ export const INITIAL_SPRINTS_DATA = {
         label: "By who",
         type: "multi-select",
         editable: true,
+        options: ASSIGNEES
       },
       { id: "startDate", label: "From when", type: "date", editable: true },
       { id: "endDate", label: "By when", type: "date", editable: true },
-      { id: "status", label: "Status", type: "select", editable: true },
+      { id: "status", label: "Status", type: "select", editable: true, options: STATUSES },
     ],
-  },
-  10: {
-    id: 10,
-    name: "Sprint 10",
-    subtitle: "Stay organized with tasks, your way.",
-    tasks: [],
-    columns: [
-      { id: "id", label: "Number", type: "text", editable: false },
-      { id: "action", label: "Task", type: "text", editable: true },
-      { id: "status", label: "Status", type: "select", editable: true },
-      {
-        id: "category",
-        label: "Category",
-        type: "multi-select",
-        editable: true,
-      },
-      {
-        id: "assignee",
-        label: "By who",
-        type: "multi-select",
-        editable: true,
-      },
-      { id: "startDate", label: "From when", type: "date", editable: true },
-      { id: "endDate", label: "By when", type: "date", editable: true },
-      {
-        id: "dependencies",
-        label: "Dependencies",
-        type: "text",
-        editable: true,
-      },
-    ],
-  },
+  }
 };

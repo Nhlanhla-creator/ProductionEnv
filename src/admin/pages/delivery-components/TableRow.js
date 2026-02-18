@@ -7,7 +7,7 @@ export const TableRow = memo(({
   task, 
   columns, 
   onUpdateTask, 
-  onDeleteTask,
+  onRequestDelete,
   editingCell,
   setEditingCell
 }) => {
@@ -43,6 +43,7 @@ export const TableRow = memo(({
               value={task[column.id]}
               columnType={column.type}
               columnId={column.id}
+              columnOptions={column.options}
               isEditing={isEditing}
               onSave={(newValue) => handleSave(column.id, newValue)}
               onCancel={handleCancel}
@@ -52,8 +53,8 @@ export const TableRow = memo(({
       })}
       <td style={styles.tableCell}>
         <button
-          onClick={() => onDeleteTask(task.id)}
-          style={styles.deleteBtn}
+          onClick={() => onRequestDelete(task)}
+          style={styles.deleteBtnIcon}
           title="Delete task"
         >
           <Trash2 size={16} />

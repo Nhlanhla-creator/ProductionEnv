@@ -17,7 +17,10 @@ export const ASSIGNEES = [
   'Nhlanhla Msomi',
   'Makha',
   'Lerato Nama',
-  'Thando'
+  'Thando',
+  'Edward Molefe',
+  'Lethabo',
+  'Sbonelo'
 ];
 
 export const STATUSES = ['Not started', 'In progress', 'Done', 'Blocked'];
@@ -44,4 +47,62 @@ export const MEETING_TYPES = [
   'weekly-reviews',
   'stakeholders',
   'technical-reviews'
+];
+
+// ============================================================================
+// DEFAULT SPRINT COLUMNS
+// Use these exact column definitions everywhere for consistency
+// ============================================================================
+export const DEFAULT_SPRINT_COLUMNS = [
+  { 
+    id: "id", 
+    label: "Number", 
+    type: "text", 
+    editable: false 
+  },
+  { 
+    id: "action", 
+    label: "Task", 
+    type: "text", 
+    editable: true 
+  },
+  { 
+    id: "category", 
+    label: "Category", 
+    type: "multi-select", 
+    editable: true,
+    options: CATEGORIES
+  },
+  { 
+    id: "dependencies", 
+    label: "Dependencies", 
+    type: "text", 
+    editable: true 
+  },
+  { 
+    id: "assignee", 
+    label: "By who", 
+    type: "multi-select", 
+    editable: true,
+    options: ASSIGNEES
+  },
+  { 
+    id: "startDate", 
+    label: "From when", 
+    type: "date", 
+    editable: true 
+  },
+  { 
+    id: "endDate", 
+    label: "By when", 
+    type: "date", 
+    editable: true 
+  },
+  { 
+    id: "status", 
+    label: "Status", 
+    type: "select", 
+    editable: true,
+    options: STATUSES
+  }
 ];
