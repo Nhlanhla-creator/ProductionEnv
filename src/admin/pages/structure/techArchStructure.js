@@ -4,12 +4,76 @@
  */
 
 export const TECH_STRUCTURE = {
+  "System Architecture Overview": {
+    type: "file",
+    icon: "layers",
+    accept: ".pdf,.docx,.doc,.png,.jpg,.svg,.drawio",
+    maxSize: 2097152,
+    description: "Upload system architecture overview diagrams and documentation (PDF/Word/Images/Draw.io, max 2MB)"
+  },
+
+  "Backend Structure": {
+    type: "file",
+    icon: "server",
+    accept: ".pdf,.docx,.doc,.json,.yaml,.md",
+    maxSize: 2097152,
+    description: "Upload backend architecture and structure documentation (PDF/Word/JSON/YAML/Markdown, max 2MB)"
+  },
+
+  "Frontend Structure": {
+    type: "file",
+    icon: "monitor",
+    accept: ".pdf,.docx,.doc,.json,.yaml,.md",
+    maxSize: 2097152,
+    description: "Upload frontend architecture and component structure (PDF/Word/JSON/YAML/Markdown, max 2MB)"
+  },
+
   "Database Schema": {
     type: "file",
     icon: "database",
     accept: ".pdf,.docx,.doc,.sql,.json,.png,.jpg,.svg",
     maxSize: 2097152,
     description: "Upload database schema diagrams and documentation (PDF/Word/SQL/Images, max 2MB)"
+  },
+
+  "BIG Score Logic": {
+    type: "file",
+    icon: "calculator",
+    accept: ".pdf,.docx,.doc,.json,.yaml,.md,.xlsx,.xls",
+    maxSize: 2097152,
+    description: "Upload BIG Score calculation logic and algorithms (PDF/Word/JSON/YAML/Markdown/Excel, max 2MB)"
+  },
+
+  "Matching Logic": {
+    type: "file",
+    icon: "git-branch",
+    accept: ".pdf,.docx,.doc,.json,.yaml,.md,.js,.py",
+    maxSize: 2097152,
+    description: "Upload matching algorithms and business logic (PDF/Word/JSON/YAML/Markdown/Code, max 2MB)"
+  },
+
+  "Deployment Steps": {
+    type: "file",
+    icon: "rocket",
+    accept: ".pdf,.docx,.doc,.yaml,.yml,.sh,.md",
+    maxSize: 2097152,
+    description: "Upload deployment procedures and step-by-step guides (PDF/Word/YAML/Shell/Markdown, max 2MB)"
+  },
+
+  "Payment Integration Flow": {
+    type: "file",
+    icon: "credit-card",
+    accept: ".pdf,.docx,.doc,.json,.yaml,.md,.png,.jpg,.svg",
+    maxSize: 2097152,
+    description: "Upload payment integration flows and documentation (PDF/Word/JSON/YAML/Markdown/Images, max 2MB)"
+  },
+
+  "Third-party Services List": {
+    type: "file",
+    icon: "external-link",
+    accept: ".pdf,.docx,.doc,.json,.yaml,.md,.xlsx,.xls",
+    maxSize: 2097152,
+    description: "Upload third-party services documentation and integration guides (PDF/Word/JSON/YAML/Markdown/Excel, max 2MB)"
   },
 
   "Firebase / Supabase": {
@@ -38,10 +102,10 @@ export const TECH_STRUCTURE = {
 
   "DevOps Deployment": {
     type: "file",
-    icon: "rocket",
+    icon: "settings",
     accept: ".pdf,.docx,.doc,.yaml,.yml,.sh",
     maxSize: 2097152,
-    description: "Upload deployment scripts and CI/CD documentation (PDF/Word/YAML/Shell, max 2MB)"
+    description: "Upload DevOps configuration and CI/CD documentation (PDF/Word/YAML/Shell, max 2MB)"
   },
 
   "Cost Management": {

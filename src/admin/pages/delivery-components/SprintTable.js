@@ -1,7 +1,7 @@
 import React, { useState, useCallback, memo } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Edit2, X as XIcon } from 'lucide-react';
 import { TableRow } from './TableRow';
-import { AddColumnModal, AddTaskModal, DeleteSprintModal } from './Modals';
+import { AddColumnModal, AddTaskModal, DeleteSprintModal, DeleteColumnModal, DeleteTaskModal } from './Modals';
 import { styles } from './styles';
 
 export const SprintTable = memo(({ 
@@ -10,14 +10,19 @@ export const SprintTable = memo(({
   onAddTask, 
   onDeleteTask,
   onAddColumn,
-  onDeleteSprint 
+  onDeleteSprint,
+  onDeleteColumn
 }) => {
   const [editingCell, setEditingCell] = useState(null);
   const [showAddColumnModal, setShowAddColumnModal] = useState(false);
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
   const [showDeleteSprintModal, setShowDeleteSprintModal] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [columnToDelete, setColumnToDelete] = useState(null);
+  const [taskToDelete, setTaskToDelete] = useState(null);
 
   const handleAddTask = useCallback((newTask) => {
+    console.log('Adding task to sprint:', sprint.id, 'Task data:', newTask);
     onAddTask(sprint.id, newTask);
   }, [sprint.id, onAddTask]);
 
@@ -28,6 +33,17 @@ export const SprintTable = memo(({
   const handleDeleteSprint = useCallback(async () => {
     await onDeleteSprint(sprint.id);
   }, [sprint.id, onDeleteSprint]);
+
+  const handleDeleteColumn = useCallback(async (columnId) => {
+    await onDeleteColumn(sprint.id, columnId);
+    setColumnToDelete(null);
+    setIsEditMode(false);
+  }, [sprint.id, onDeleteColumn]);
+
+  const handleDeleteTask = useCallback(async (taskId) => {
+    await onDeleteTask(sprint.id, taskId);
+    setTaskToDelete(null);
+  }, [sprint.id, onDeleteTask]);
 
   if (!sprint.columns || sprint.columns.length === 0) {
     return (
@@ -51,19 +67,32 @@ export const SprintTable = memo(({
   return (
     <div style={styles.tableContainer}>
       <div style={styles.tableControls}>
-        <button onClick={() => setShowAddTaskModal(true)} style={styles.addTaskBtn}>
-          <Plus size={16} />
-          Add Task
-        </button>
-        <button onClick={() => setShowAddColumnModal(true)} style={styles.addColumnBtn}>
-          <Plus size={16} />
-          Add Column
-        </button>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <button onClick={() => setShowAddTaskModal(true)} style={styles.addTaskBtn}>
+            <Plus size={10} />
+            Add Task
+          </button>
+          <button onClick={() => setShowAddColumnModal(true)} style={styles.addColumnBtn}>
+            <Plus size={10} />
+            Add Column
+          </button>
+          <button 
+            onClick={() => setIsEditMode(!isEditMode)} 
+            style={{
+              ...styles.addColumnBtn,
+              backgroundColor: isEditMode ? '#ef4444' : 'var(--primary-brown)',
+              borderColor: isEditMode ? '#ef4444' : 'var(--primary-brown)'
+            }}
+          >
+            {isEditMode ? <XIcon size={10} /> : <Edit2 size={10} />}
+            {isEditMode ? 'Cancel Edit' : 'Edit Columns'}
+          </button>
+        </div>
         <button 
           onClick={() => setShowDeleteSprintModal(true)} 
-          style={{...styles.deleteBtn, padding: '8px 14px'}}
+          style={{...styles.deleteBtn, padding: '4px 8px', fontSize: 10}}
         >
-          <Trash2 size={16} />
+          <Trash2 size={10} style={{marginRight: 4}} />
           Delete Sprint
         </button>
       </div>
@@ -74,7 +103,27 @@ export const SprintTable = memo(({
             <tr style={styles.tableHeaderRow}>
               {sprint.columns.map(column => (
                 <th key={column.id} style={styles.tableHeader}>
-                  {column.label}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span>{column.label}</span>
+                    {isEditMode && column.editable !== false && (
+                      <button
+                        onClick={() => setColumnToDelete(column)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#ef4444',
+                          cursor: 'pointer',
+                          padding: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          marginLeft: '8px'
+                        }}
+                        title={`Delete ${column.label} column`}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
                 </th>
               ))}
               <th style={styles.tableHeader}>Actions</th>
@@ -87,7 +136,7 @@ export const SprintTable = memo(({
                 task={task}
                 columns={sprint.columns}
                 onUpdateTask={onUpdateTask}
-                onDeleteTask={onDeleteTask}
+                onRequestDelete={setTaskToDelete}
                 editingCell={editingCell}
                 setEditingCell={setEditingCell}
               />
@@ -115,6 +164,22 @@ export const SprintTable = memo(({
         isOpen={showDeleteSprintModal}
         onClose={() => setShowDeleteSprintModal(false)}
         onDelete={handleDeleteSprint}
+        sprint={sprint}
+      />
+
+      <DeleteColumnModal
+        isOpen={columnToDelete !== null}
+        onClose={() => setColumnToDelete(null)}
+        onDelete={handleDeleteColumn}
+        column={columnToDelete}
+        sprint={sprint}
+      />
+
+      <DeleteTaskModal
+        isOpen={taskToDelete !== null}
+        onClose={() => setTaskToDelete(null)}
+        onDelete={handleDeleteTask}
+        task={taskToDelete}
         sprint={sprint}
       />
     </div>

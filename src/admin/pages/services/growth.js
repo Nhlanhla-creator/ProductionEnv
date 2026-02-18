@@ -57,7 +57,6 @@ export const saveTextContent = async (path, content) => {
     };
 
     await setDoc(docRef, data, { merge: true });
-    console.log('✅ Saved text content:', path.join(' > '));
     return { success: true };
   } catch (error) {
     console.error('❌ Error saving text content:', error);
@@ -101,7 +100,6 @@ export const uploadFile = async (path, file) => {
     };
 
     await setDoc(docRef, data, { merge: true });
-    console.log('✅ Uploaded file:', file.name);
     return { success: true, url: downloadURL };
   } catch (error) {
     console.error('❌ Error uploading file:', error);
@@ -152,7 +150,6 @@ export const addFileToCollection = async (path, file) => {
       createdAt: docSnap.exists() ? docSnap.data().createdAt : serverTimestamp()
     }, { merge: true });
 
-    console.log('✅ Added file to collection:', file.name);
     return { success: true, url: downloadURL };
   } catch (error) {
     console.error('❌ Error adding file:', error);
@@ -194,7 +191,6 @@ export const deleteFile = async (path, fileIndex) => {
       updatedAt: serverTimestamp()
     }, { merge: true });
 
-    console.log('✅ Deleted file:', fileToDelete.name);
     return { success: true };
   } catch (error) {
     console.error('❌ Error deleting file:', error);
@@ -215,7 +211,6 @@ export const loadContent = async (path) => {
 
     if (docSnap.exists()) {
       const data = docSnap.data();
-      console.log('✅ Loaded content:', path.join(' > '));
       return {
         ...data,
         createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
@@ -251,7 +246,6 @@ export const loadAllContent = async () => {
       };
     });
 
-    console.log('✅ Loaded all content:', Object.keys(content).length);
     return content;
   } catch (error) {
     console.error('❌ Error loading all content:', error);
@@ -281,7 +275,6 @@ export const deleteContent = async (path) => {
 
     // Delete document
     await deleteDoc(docRef);
-    console.log('✅ Deleted content:', path.join(' > '));
     return { success: true };
   } catch (error) {
     console.error('❌ Error deleting content:', error);

@@ -19,11 +19,12 @@ export const styles = {
     display: 'flex',
   },
   categorySidebar: {
-    width: 300,
+    width: '100%',
     background: 'var(--pale-brown)',
-    borderRight: '1px solid var(--medium-brown)',
-    padding: '20px 0',
-    minHeight: 'calc(100vh - 68px)'
+    borderBottom: '1px solid var(--medium-brown)',
+    minHeight: 'auto',
+    display: 'flex',
+    gap: 0
   },
   categoryButton: {
     display: 'flex',
@@ -149,6 +150,8 @@ export const styles = {
   },
   tableControls: {
     display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 12,
     marginBottom: 16
   },
@@ -156,13 +159,13 @@ export const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: 6,
-    padding: '8px 14px',
+    padding: '4px 8px',
     background: 'var(--primary-brown)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,
     cursor: 'pointer',
-    fontSize: 13,
+    fontSize: 10,
     fontWeight: 500,
     transition: 'all 0.2s'
   },
@@ -170,13 +173,13 @@ export const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: 6,
-    padding: '8px 14px',
-    background: 'var(--accent-brown)',
+    padding: '4px 8px',
+    background: 'var(--primary-brown)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,
     cursor: 'pointer',
-    fontSize: 13,
+    fontSize: 10,
     fontWeight: 500,
     transition: 'all 0.2s'
   },
@@ -310,6 +313,18 @@ export const styles = {
     transition: 'all 0.2s',
     flexShrink: 0
   },
+  deleteBtnIcon: {
+    padding: '6px 10px',
+    color: '#ef4444',
+    border: 'none',
+    background: 'transparent',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.2s',
+    flexShrink: 0
+  },
   emptyTable: {
     padding: 40,
     textAlign: 'center',
@@ -349,7 +364,8 @@ export const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '20px 24px',
-    borderBottom: '1px solid #e5e7eb'
+    borderBottom: '1px solid #e5e7eb',
+    fontSize: 10
   },
   modalContent: {
     padding: '24px'
@@ -363,7 +379,7 @@ export const styles = {
     display: 'flex',
     flexDirection: 'column',
     gap: 8,
-    padding: 16
+    // padding: 16
   },
   formLabel: {
     fontSize: 14,

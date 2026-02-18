@@ -23,7 +23,6 @@ export const loadQATable = async () => {
 
     if (docSnap.exists()) {
       const data = docSnap.data();
-      console.log('✅ Loaded QA table:', data.tasks.length, 'tasks');
       return data.tasks;
     }
 
@@ -34,7 +33,6 @@ export const loadQATable = async () => {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
-    console.log('✅ Seeded QA table with initial data');
     return INITIAL_QA_TASKS;
   } catch (error) {
     console.error('❌ Error loading QA table:', error);
@@ -55,7 +53,6 @@ export const saveQATable = async (tasks) => {
       tasks,
       updatedAt: serverTimestamp(),
     }, { merge: true });
-    console.log('✅ Saved QA table:', tasks.length, 'tasks');
     return { success: true };
   } catch (error) {
     console.error('❌ Error saving QA table:', error);

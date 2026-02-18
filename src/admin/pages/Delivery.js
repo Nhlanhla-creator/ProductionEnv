@@ -3,10 +3,12 @@ import { Sidebar } from './delivery-components/Sidebar';
 import { EmptyState, ComingSoon } from './delivery-components/Placeholders';
 import { SprintsView } from './delivery-components/SprintsView';
 import { INITIAL_SPRINTS_DATA } from './delivery-components/initialData';
+import { DEFAULT_SPRINT_COLUMNS } from './delivery-components/constants';
+// import { ReseedDataButton } from './delivery-components/ReseedDataButton';
 import { styles } from './delivery-components/styles';
 import { useAuth } from '../../smses/hooks/useAuth'; // Adjust path as needed
 import { useSprintSync } from '../../hooks/useSprintSync';
-import { syncSprintToFirebase } from './services/sprints';
+import { syncSprintToFirebase, deleteSprint } from './services/sprints';
 
 // ============================================================================
 // MAIN DELIVERY COMPONENT
@@ -98,6 +100,11 @@ const Delivery = () => {
   const handleAddTask = useCallback(async (sprintId, newTask) => {
     setSprintsData(prev => {
       const sprint = prev[sprintId];
+      if (!sprint) return prev;
+      
+      // Ensure newTask is an object, not just the ID
+      console.log('Adding task to sprint:', sprintId, 'Task data:', newTask);
+      
       const updatedSprint = {
         ...sprint,
         tasks: [...sprint.tasks, newTask],
@@ -118,9 +125,32 @@ const Delivery = () => {
     });
   }, [user]);
 
+  const handleUpdateSprint = useCallback(async (sprintId, updates) => {
+    setSprintsData(prev => {
+      const sprint = prev[sprintId];
+      if (!sprint) return prev;
+
+      const updatedSprint = {
+        ...sprint,
+        ...updates,
+        updatedAt: new Date().toISOString()
+      };
+
+      // Sync to Firebase
+      if (user) {
+        syncSprintToFirebase(updatedSprint, 1000).catch(err => {
+          console.error('Failed to sync sprint update:', err);
+        });
+      }
+
+      return {
+        ...prev,
+        [sprintId]: updatedSprint
+      };
+    });
+  }, [user]);
+
   const handleDeleteTask = useCallback(async (sprintId, taskId) => {
-    if (!window.confirm('Are you sure you want to delete this task?')) return;
-    
     setSprintsData(prev => {
       const sprint = prev[sprintId];
       const updatedSprint = {
@@ -148,7 +178,7 @@ const Delivery = () => {
       const sprint = prev[sprintId];
       const updatedColumns = [...(sprint.columns || []), newColumn];
       
-      // Add the new column to all existing tasks with default value
+      // Add new column to all existing tasks with default value
       const updatedTasks = sprint.tasks.map(task => ({
         ...task,
         [newColumn.id]: newColumn.type === 'multi-select' ? [] : 
@@ -176,14 +206,49 @@ const Delivery = () => {
     });
   }, [user]);
 
+  const handleDeleteColumn = useCallback(async (sprintId, columnId) => {
+    setSprintsData(prev => {
+      const sprint = prev[sprintId];
+      
+      // Remove column from columns array
+      const updatedColumns = sprint.columns.filter(col => col.id !== columnId);
+      
+      // Remove column data from all tasks
+      const updatedTasks = sprint.tasks.map(task => {
+        const { [columnId]: removed, ...rest } = task;
+        return rest;
+      });
+
+      const updatedSprint = {
+        ...sprint,
+        columns: updatedColumns,
+        tasks: updatedTasks,
+        updatedAt: new Date().toISOString()
+      };
+
+      // Sync to Firebase
+      if (user) {
+        syncSprintToFirebase(updatedSprint, 1000).catch(err => {
+          console.error('Failed to sync column deletion:', err);
+        });
+      }
+
+      return {
+        ...prev,
+        [sprintId]: updatedSprint
+      };
+    });
+  }, [user]);
+
   const handleAddSprint = useCallback(async () => {
     const newSprintId = Math.max(...Object.keys(sprintsData).map(Number)) + 1;
+    
     const newSprint = {
       id: newSprintId,
       name: `Sprint ${newSprintId}`,
       subtitle: 'New sprint - add your description',
       tasks: [],
-      columns: [],
+      columns: DEFAULT_SPRINT_COLUMNS,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -205,6 +270,25 @@ const Delivery = () => {
     });
   }, [sprintsData, user]);
 
+  const handleDeleteSprint = useCallback(async (sprintId) => {
+    try {
+      // Delete from Firebase first
+      if (user) {
+        await deleteSprint(sprintId);
+      }
+      
+      // Then update local state
+      setSprintsData(prev => {
+        const newSprintsData = { ...prev };
+        delete newSprintsData[sprintId];
+        return newSprintsData;
+      });
+    } catch (error) {
+      console.error('Failed to delete sprint:', error);
+      throw error;
+    }
+  }, [user]);
+
   // ========== RENDER ==========
   
   // Show loading state while auth or sprints are loading
@@ -225,7 +309,6 @@ const Delivery = () => {
           }
 
           .delivery-wrapper {
-            background: var(--background-brown);
             min-height: 100vh;
           }
 
@@ -280,7 +363,6 @@ const Delivery = () => {
         }
 
         .delivery-wrapper {
-          background: var(--background-brown);
           min-height: 100vh;
         }
 
@@ -381,21 +463,26 @@ const Delivery = () => {
 
       <div className="delivery-wrapper">
         <div style={styles.pageTitle}>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <h1 style={styles.titleText}>DELIVERY</h1>
-            {user && (
-              <div style={{ fontSize: 12, color: '#666', display: 'flex', alignItems: 'center', gap: 8 }}>
-                {lastSyncTime && (
-                  <span style={{ fontSize: 11, color: '#999' }}>
-                    Last synced: {new Date(lastSyncTime).toLocaleTimeString()}
-                  </span>
-                )}
-              </div>
-            )}
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              <h1 style={styles.titleText}>DELIVERY</h1>
+              {user && (
+                <div style={{ fontSize: 12, color: '#666', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {lastSyncTime && (
+                    <span style={{ fontSize: 11, color: '#999' }}>
+                      Last synced: {new Date(lastSyncTime).toLocaleTimeString()}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+            {/* {user && activeCategory === 'sprints' && (
+              <ReseedDataButton onComplete={refreshFromFirebase} />
+            )} */}
           </div>
         </div>
 
-        <div style={styles.contentWrapper}>
+        <div>
           <Sidebar 
             activeCategory={activeCategory} 
             setActiveCategory={setActiveCategory} 
@@ -415,7 +502,10 @@ const Delivery = () => {
                 handleAddTask={handleAddTask}
                 handleDeleteTask={handleDeleteTask}
                 handleAddColumn={handleAddColumn}
+                handleDeleteColumn={handleDeleteColumn}
                 handleAddSprint={handleAddSprint}
+                handleDeleteSprint={handleDeleteSprint}
+                handleUpdateSprint={handleUpdateSprint}
               />
             )}
           </div>

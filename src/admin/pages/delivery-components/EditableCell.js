@@ -1,12 +1,12 @@
 import React, { useState, useCallback, memo } from 'react';
 import { Save, X } from 'lucide-react';
-import { STATUSES, STATUS_COLORS, CATEGORY_COLORS, CATEGORIES, ASSIGNEES } from './constants';
 import { styles } from './styles';
 
 export const EditableCell = memo(({ 
   value, 
   columnType,
   columnId,
+  columnOptions,
   isEditing, 
   onSave, 
   onCancel 
@@ -23,7 +23,7 @@ export const EditableCell = memo(({
         <span 
           style={{
             ...styles.statusBadge,
-            background: STATUS_COLORS[value] || '#6b7280'
+            background: value === 'Done' ? '#10b981' : value === 'In Progress' ? '#f59e0b' : value === 'Blocked' ? '#ef4444' : '#6b7280'
           }}
         >
           {value || 'Not started'}
@@ -40,7 +40,7 @@ export const EditableCell = memo(({
               key={idx}
               style={{
                 ...styles.categoryBadge,
-                background: CATEGORY_COLORS[item] || '#6b7280'
+                background: '#3b82f6'
               }}
             >
               {item}
@@ -55,15 +55,24 @@ export const EditableCell = memo(({
 
   // Editing mode
   if (columnType === 'select') {
+    // Use column options or fallback options
+    const getFallbackOptions = () => {
+      if (columnId === 'status') {
+        return ["Not started", "In Progress", "Done", "Blocked"];
+      }
+      return [];
+    };
+    const options = columnOptions || getFallbackOptions();
+    
     return (
       <div style={styles.editControls} className="edit-controls-wrapper" onClick={(e) => e.stopPropagation()}>
         <select
-          value={editValue || 'Not started'}
+          value={editValue || ''}
           onChange={(e) => setEditValue(e.target.value)}
           style={styles.editInput}
         >
-          {STATUSES.map(status => (
-            <option key={status} value={status}>{status}</option>
+          {options.map(option => (
+            <option key={option} value={option}>{option}</option>
           ))}
         </select>
         <button onClick={handleSave} style={styles.saveBtn}>
@@ -78,8 +87,15 @@ export const EditableCell = memo(({
 
   if (columnType === 'multi-select') {
     const selectedItems = Array.isArray(editValue) ? editValue : [];
-    // Determine which options to show based on column ID
-    const options = columnId === 'assignee' ? ASSIGNEES : CATEGORIES;
+    const getFallbackOptions = () => {
+      if (columnId === 'assignee') {
+        return ["Nhlanhla Msomi", "Lerato Nama", "Makha", "Lindelani", "Thando", "Sbonelo", "Lethabo"];
+      } else if (columnId === 'category') {
+        return ["Frontend", "Backend", "QA", "Security", "Traction", "Funding", "Design", "DevOps"];
+      }
+      return [];
+    };
+    const options = columnOptions || getFallbackOptions();
 
     return (
       <div style={styles.editControls} className="edit-controls-wrapper" onClick={(e) => e.stopPropagation()}>
