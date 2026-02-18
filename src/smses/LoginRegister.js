@@ -30,7 +30,7 @@ import {
   sendEmailVerification,
   sendPasswordResetEmail,
 } from "../firebaseConfig";
-import { doc, setDoc, getDoc, updateDoc } from "firebase/firestore"; // Added updateDoc
+import { doc, setDoc, getDoc, updateDoc, increment, serverTimestamp } from "firebase/firestore"; // Added updateDoc
 import { db } from "../firebaseConfig";
 import { onAuthStateChanged, deleteUser } from "firebase/auth";
 import { normalizeRoleName } from "../utils/profileHelpers"; // Added this import
@@ -805,6 +805,47 @@ By using this platform, you confirm that you:
   };
 
   // Effects
+  useEffect(() => {
+  const updateOnLogin = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+    
+    const today = new Date().toDateString(); // "Tue Jan 28 2025"
+    const userRef = doc(db, 'users', user.uid);
+    
+    try {
+      // Get current Firestore document
+      const userSnap = await getDoc(userRef);
+      
+      if (!userSnap.exists()) {
+        // First time - create document
+        await setDoc(userRef, {
+          lastActiveAt: serverTimestamp(),
+          lastActiveDate: today,
+          loginCount: 1,
+          createdAt: serverTimestamp()
+        });
+      } else {
+        const userData = userSnap.data();
+        
+        // Check if we already updated today using our own field
+        if (userData.lastActiveDate !== today) {
+          await updateDoc(userRef, {
+            lastActiveAt: serverTimestamp(),
+            lastActiveDate: today,
+            loginCount: increment(1)
+          });
+        }
+        // If same date, do nothing (save the write)
+      }
+    } catch (error) {
+      console.error('Failed to update activity:', error);
+    }
+  };
+  
+  updateOnLogin();
+}, [auth.currentUser]);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
