@@ -23,27 +23,35 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointEleme
 
 // ==================== HELPER FUNCTIONS ====================
 
-const getMonthsForYear = (year, viewMode = "month") => {
-  if (viewMode === "year") return [`FY ${year}`]
-  if (viewMode === "quarter") return ["Q1", "Q2", "Q3", "Q4"]
+const getMonthsForYear = (year, financialYearStart = "Jan") => {
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-  return months
+  const startIndex = months.indexOf(financialYearStart)
+  if (startIndex === -1) return months
+  return [...months.slice(startIndex), ...months.slice(0, startIndex)]
 }
 
-const formatCurrency = (value, unit = "zar_million") => {
+const getYearsRange = (startYear = 2021, endYear = 2030) => {
+  const years = []
+  for (let year = startYear; year <= endYear; year++) {
+    years.push(year)
+  }
+  return years
+}
+
+const formatCurrency = (value, unit = "zar_million", decimals = 2) => {
   const num = Number.parseFloat(value) || 0
   switch(unit) {
-    case "zar": return `R${num.toLocaleString()}`
-    case "zar_thousand": return `R${(num * 1000).toLocaleString()}K`
-    case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})}m`
-    case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}bn`
-    default: return `R${num.toLocaleString()}`
+    case "zar": return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
+    case "zar_thousand": return `R${(num * 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}K`
+    case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}m`
+    case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}bn`
+    default: return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
   }
 }
 
-const formatPercentage = (value) => {
+const formatPercentage = (value, decimals = 2) => {
   const num = Number.parseFloat(value) || 0
-  return `${num.toFixed(1)}%`
+  return `${num.toFixed(decimals)}%`
 }
 
 const getMonthIndex = (month) => {
@@ -65,6 +73,28 @@ const calculateTotal = (items, monthIndex) => {
     const val = Number.parseFloat(arr[monthIndex]) || 0
     return sum + val
   }, 0)
+}
+
+const getFinancialYearStart = async (userId) => {
+  try {
+    const userDoc = await getDoc(doc(db, "universalProfiles", userId))
+    if (userDoc.exists()) {
+      const data = userDoc.data()
+      const financialYearEnd = data.entityOverview?.financialYearEnd
+      if (financialYearEnd) {
+        // financialYearEnd is in format "YYYY-MM"
+        const month = new Date(financialYearEnd + "-01").toLocaleString('default', { month: 'short' })
+        // Financial year start is the month after year end
+        const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        const endIndex = months.indexOf(month)
+        const startIndex = (endIndex + 1) % 12
+        return months[startIndex]
+      }
+    }
+  } catch (error) {
+    console.error("Error getting financial year start:", error)
+  }
+  return "Jan" // Default to Jan if not found
 }
 
 // ==================== COMPONENTS ====================
@@ -241,22 +271,222 @@ const KeyQuestionBox = ({ question, signals, decisions, section }) => {
   )
 }
 
+// ==================== BUDGET ARROW COMPONENT ====================
+
+const BudgetArrow = ({ actual, budget }) => {
+  const actualNum = Number.parseFloat(actual) || 0
+  const budgetNum = Number.parseFloat(budget) || 0
+  const variance = actualNum - budgetNum
+  const variancePercent = budgetNum !== 0 ? (variance / budgetNum) * 100 : 0
+  
+  let arrow = null
+  let color = "#5d4037"
+  
+  if (variance > 0) {
+    arrow = "↑"
+    color = "#2e7d32" // green
+  } else if (variance < 0) {
+    arrow = "↓"
+    color = "#c62828" // red
+  } else {
+    arrow = "→"
+    color = "#f9a825" // yellow
+  }
+  
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+      <span style={{ color, fontWeight: "600", fontSize: "14px" }}>{arrow}</span>
+      <span style={{ fontSize: "11px", color: "#8d6e63" }}>
+        {variancePercent !== 0 && `${Math.abs(variancePercent).toFixed(1)}%`}
+      </span>
+    </div>
+  )
+}
+
+// ==================== KPI CARD WITH BUDGET CIRCLE ====================
+
+const KPICard = ({ 
+  title, 
+  actualValue, 
+  budgetValue, 
+  unit = "zar_million", 
+  isPercentage = false,
+  onEyeClick,
+  onAddNotes,
+  onAnalysis,
+  onTrend,
+  notes,
+  analysis,
+  formatValue,
+  decimals = 2
+}) => {
+  const [expanded, setExpanded] = useState(false)
+  
+  const formattedActual = isPercentage 
+    ? formatPercentage(actualValue, decimals)
+    : formatValue(actualValue, unit, decimals)
+    
+  const formattedBudget = isPercentage
+    ? formatPercentage(budgetValue, decimals)
+    : formatValue(budgetValue, unit, decimals)
+
+  return (
+    <div
+      style={{
+        backgroundColor: "#fdfcfb",
+        padding: "20px",
+        borderRadius: "8px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        marginBottom: "20px",
+        position: "relative",
+      }}
+    >
+      <EyeIcon onClick={onEyeClick} />
+      
+      <div style={{ textAlign: "center", marginBottom: "15px" }}>
+        <h4 style={{ color: "#5d4037", margin: 0, fontSize: "16px" }}>{title}</h4>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-around", alignItems: "center", marginBottom: "15px" }}>
+        {/* Actual Circle */}
+        <div style={{ textAlign: "center" }}>
+          <div
+            style={{
+              width: "90px",
+              height: "90px",
+              borderRadius: "50%",
+              border: "4px solid #5d4037",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 8px",
+              backgroundColor: "#fdfcfb",
+            }}
+          >
+            <div style={{ fontSize: "14px", fontWeight: "700", color: "#5d4037" }}>
+              {formattedActual}
+            </div>
+            <div style={{ fontSize: "10px", color: "#8d6e63" }}>Actual</div>
+          </div>
+        </div>
+
+        {/* Budget Circle */}
+        <div style={{ textAlign: "center" }}>
+          <div
+            style={{
+              width: "90px",
+              height: "90px",
+              borderRadius: "50%",
+              border: "4px solid #f9a825",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 8px",
+              backgroundColor: "#fff9c4",
+              position: "relative",
+            }}
+          >
+            <div style={{ fontSize: "14px", fontWeight: "700", color: "#5d4037" }}>
+              {formattedBudget}
+            </div>
+            <div style={{ fontSize: "10px", color: "#8d6e63" }}>Budget</div>
+            
+            {/* Budget Arrow */}
+            <div style={{ position: "absolute", bottom: "-20px", left: "50%", transform: "translateX(-50%)" }}>
+              <BudgetArrow actual={actualValue} budget={budgetValue} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
+        <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
+          <button
+            onClick={() => setExpanded(!expanded)}
+            style={{
+              padding: "6px 12px",
+              backgroundColor: "#e8ddd4",
+              color: "#5d4037",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "11px",
+            }}
+          >
+            Notes
+          </button>
+          <button
+            onClick={onAnalysis}
+            style={{
+              padding: "6px 12px",
+              backgroundColor: "#e8ddd4",
+              color: "#5d4037",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "11px",
+            }}
+          >
+            Analysis
+          </button>
+          <button
+            onClick={onTrend}
+            style={{
+              padding: "6px 12px",
+              backgroundColor: "#e8ddd4",
+              color: "#5d4037",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "11px",
+            }}
+          >
+            Trend
+          </button>
+        </div>
+
+        {expanded && (
+          <div style={{ marginTop: "10px" }}>
+            <textarea
+              value={notes || ""}
+              onChange={(e) => onAddNotes(e.target.value)}
+              placeholder="Add notes or comments..."
+              style={{
+                width: "100%",
+                padding: "8px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+                minHeight: "60px",
+                fontSize: "12px",
+              }}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ==================== TREND MODAL COMPONENT ====================
 
-const TrendModal = ({ isOpen, onClose, item, currencyUnit, generateLabels, aggregateDataForView, formatValue }) => {
+const TrendModal = ({ isOpen, onClose, item, currencyUnit, labels, data, formatValue, financialYearStart }) => {
   if (!isOpen || !item) return null
 
-  const labels = generateLabels()
-  
-  // Check if we have budget data
-  const hasBudget = item.budget && Array.isArray(item.budget) && item.budget.some(v => parseFloat(v) !== 0)
-  
   const chartData = {
-    labels,
+    labels: labels.map(label => {
+      if (label.includes("(")) return label
+      if (label.length === 3) return `${label}(${financialYearStart})`
+      return label
+    }),
     datasets: [
       {
         label: `${item.name} - Actual`,
-        data: aggregateDataForView ? aggregateDataForView(item.actual) : item.actual,
+        data: item.actual || [],
         borderColor: "#5d4037",
         backgroundColor: "rgba(93, 64, 55, 0.1)",
         borderWidth: 3,
@@ -266,10 +496,10 @@ const TrendModal = ({ isOpen, onClose, item, currencyUnit, generateLabels, aggre
     ]
   }
   
-  if (hasBudget) {
+  if (item.budget && item.budget.some(v => parseFloat(v) !== 0)) {
     chartData.datasets.push({
       label: `${item.name} - Budget`,
-      data: aggregateDataForView ? aggregateDataForView(item.budget) : item.budget,
+      data: item.budget,
       borderColor: "#f9a825",
       backgroundColor: "rgba(249, 168, 37, 0.1)",
       borderWidth: 2,
@@ -397,7 +627,7 @@ const TrendModal = ({ isOpen, onClose, item, currencyUnit, generateLabels, aggre
               <div style={{ fontSize: "12px", color: "#8d6e63", marginBottom: "5px" }}>Current Value</div>
               <div style={{ fontSize: "16px", fontWeight: "600", color: "#5d4037" }}>
                 {item.isPercentage 
-                  ? `${parseFloat(currentValue).toFixed(1)}%`
+                  ? `${parseFloat(currentValue).toFixed(2)}%`
                   : formatValue(currentValue, currencyUnit)
                 }
               </div>
@@ -406,7 +636,7 @@ const TrendModal = ({ isOpen, onClose, item, currencyUnit, generateLabels, aggre
               <div style={{ fontSize: "12px", color: "#8d6e63", marginBottom: "5px" }}>Average</div>
               <div style={{ fontSize: "16px", fontWeight: "600", color: "#5d4037" }}>
                 {item.isPercentage
-                  ? `${parseFloat(averageValue).toFixed(1)}%`
+                  ? `${parseFloat(averageValue).toFixed(2)}%`
                   : formatValue(averageValue, currencyUnit)
                 }
               </div>
@@ -427,7 +657,7 @@ const TrendModal = ({ isOpen, onClose, item, currencyUnit, generateLabels, aggre
         </div>
 
         {/* Budget vs Actual Summary */}
-        {hasBudget && (
+        {item.budget && item.budget.some(v => parseFloat(v) !== 0) && (
           <div style={{ 
             backgroundColor: "#e8ddd4", 
             padding: "20px", 
@@ -440,7 +670,7 @@ const TrendModal = ({ isOpen, onClose, item, currencyUnit, generateLabels, aggre
                 <div style={{ fontSize: "12px", color: "#8d6e63", marginBottom: "5px" }}>Actual (Current)</div>
                 <div style={{ fontSize: "16px", fontWeight: "600", color: "#5d4037" }}>
                   {item.isPercentage 
-                    ? `${parseFloat(currentValue).toFixed(1)}%`
+                    ? `${parseFloat(currentValue).toFixed(2)}%`
                     : formatValue(currentValue, currencyUnit)
                   }
                 </div>
@@ -450,7 +680,7 @@ const TrendModal = ({ isOpen, onClose, item, currencyUnit, generateLabels, aggre
                 <div style={{ fontSize: "16px", fontWeight: "600", color: "#5d4037" }}>
                   {item.budget && item.budget.length > 0
                     ? item.isPercentage 
-                      ? `${parseFloat(item.budget[item.budget.length - 1] || 0).toFixed(1)}%`
+                      ? `${parseFloat(item.budget[item.budget.length - 1] || 0).toFixed(2)}%`
                       : formatValue(item.budget[item.budget.length - 1] || 0, currencyUnit)
                     : "N/A"
                   }
@@ -465,7 +695,7 @@ const TrendModal = ({ isOpen, onClose, item, currencyUnit, generateLabels, aggre
                 }}>
                   {item.budget && item.budget.length > 0
                     ? item.isPercentage
-                      ? `${(parseFloat(currentValue) - parseFloat(item.budget[item.budget.length - 1] || 0)).toFixed(1)}%`
+                      ? `${(parseFloat(currentValue) - parseFloat(item.budget[item.budget.length - 1] || 0)).toFixed(2)}%`
                       : formatValue(parseFloat(currentValue) - parseFloat(item.budget[item.budget.length - 1] || 0), currencyUnit)
                     : "N/A"
                   }
@@ -505,11 +735,12 @@ const UniversalAddDataModal = ({
   user,
   onSave,
   loading,
-  initialData = {}
+  initialData = {},
+  financialYearStart = "Jan"
 }) => {
   const [activeModalTab, setActiveModalTab] = useState(currentTab)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-  const [selectedMonth, setSelectedMonth] = useState("Jan")
+  const [selectedMonth, setSelectedMonth] = useState(financialYearStart)
   
   // ========== CAPITAL STRUCTURE / BALANCE SHEET DATA ==========
   const [balanceSheetData, setBalanceSheetData] = useState({
@@ -716,8 +947,8 @@ const UniversalAddDataModal = ({
     budget: Array(12).fill("")
   })
 
-  const months = getMonthsForYear(selectedYear, "month")
-  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
+  const months = getMonthsForYear(selectedYear, financialYearStart)
+  const years = getYearsRange(2021, 2030)
 
   // Tab definitions
   const modalTabs = [
@@ -753,34 +984,34 @@ const UniversalAddDataModal = ({
             const data = pnlDoc.data()
             setPnlData(prev => ({
               ...prev,
-              sales: data.sales?.map(String) || Array(12).fill(""),
-              salesBudget: data.salesBudget?.map(String) || Array(12).fill(""),
-              cogs: data.cogs?.map(String) || Array(12).fill(""),
-              cogsBudget: data.cogsBudget?.map(String) || Array(12).fill(""),
-              opex: data.opex?.map(String) || Array(12).fill(""),
-              opexBudget: data.opexBudget?.map(String) || Array(12).fill(""),
-              salaries: data.salaries?.map(String) || Array(12).fill(""),
-              salariesBudget: data.salariesBudget?.map(String) || Array(12).fill(""),
-              rent: data.rent?.map(String) || Array(12).fill(""),
-              rentBudget: data.rentBudget?.map(String) || Array(12).fill(""),
-              utilities: data.utilities?.map(String) || Array(12).fill(""),
-              utilitiesBudget: data.utilitiesBudget?.map(String) || Array(12).fill(""),
-              marketing: data.marketing?.map(String) || Array(12).fill(""),
-              marketingBudget: data.marketingBudget?.map(String) || Array(12).fill(""),
-              admin: data.admin?.map(String) || Array(12).fill(""),
-              adminBudget: data.adminBudget?.map(String) || Array(12).fill(""),
-              otherExpenses: data.otherExpenses?.map(String) || Array(12).fill(""),
-              otherExpensesBudget: data.otherExpensesBudget?.map(String) || Array(12).fill(""),
-              depreciation: data.depreciation?.map(String) || Array(12).fill(""),
-              depreciationBudget: data.depreciationBudget?.map(String) || Array(12).fill(""),
-              amortization: data.amortization?.map(String) || Array(12).fill(""),
-              amortizationBudget: data.amortizationBudget?.map(String) || Array(12).fill(""),
-              interestExpense: data.interestExpense?.map(String) || Array(12).fill(""),
-              interestExpenseBudget: data.interestExpenseBudget?.map(String) || Array(12).fill(""),
-              interestIncome: data.interestIncome?.map(String) || Array(12).fill(""),
-              interestIncomeBudget: data.interestIncomeBudget?.map(String) || Array(12).fill(""),
-              tax: data.tax?.map(String) || Array(12).fill(""),
-              taxBudget: data.taxBudget?.map(String) || Array(12).fill(""),
+              sales: data.sales?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              salesBudget: data.salesBudget?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              cogs: data.cogs?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              cogsBudget: data.cogsBudget?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              opex: data.opex?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              opexBudget: data.opexBudget?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              salaries: data.salaries?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              salariesBudget: data.salariesBudget?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              rent: data.rent?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              rentBudget: data.rentBudget?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              utilities: data.utilities?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              utilitiesBudget: data.utilitiesBudget?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              marketing: data.marketing?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              marketingBudget: data.marketingBudget?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              admin: data.admin?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              adminBudget: data.adminBudget?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              otherExpenses: data.otherExpenses?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              otherExpensesBudget: data.otherExpensesBudget?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              depreciation: data.depreciation?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              depreciationBudget: data.depreciationBudget?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              amortization: data.amortization?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              amortizationBudget: data.amortizationBudget?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              interestExpense: data.interestExpense?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              interestExpenseBudget: data.interestExpenseBudget?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              interestIncome: data.interestIncome?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              interestIncomeBudget: data.interestIncomeBudget?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              tax: data.tax?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              taxBudget: data.taxBudget?.map(v => v.toFixed(2)) || Array(12).fill(""),
               notes: data.notes || "",
             }))
           }
@@ -790,11 +1021,11 @@ const UniversalAddDataModal = ({
           if (costDoc.exists()) {
             const data = costDoc.data()
             setCostAgilityData({
-              fixedCosts: data.fixedCosts?.map(String) || Array(12).fill(""),
-              variableCosts: data.variableCosts?.map(String) || Array(12).fill(""),
-              discretionaryCosts: data.discretionaryCosts?.map(String) || Array(12).fill(""),
-              semiVariableCosts: data.semiVariableCosts?.map(String) || Array(12).fill(""),
-              lockInDuration: data.lockInDuration?.map(String) || Array(12).fill(""),
+              fixedCosts: data.fixedCosts?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              variableCosts: data.variableCosts?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              discretionaryCosts: data.discretionaryCosts?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              semiVariableCosts: data.semiVariableCosts?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              lockInDuration: data.lockInDuration?.map(v => v.toFixed(0)) || Array(12).fill(""),
               notes: data.notes || "",
             })
           }
@@ -804,18 +1035,18 @@ const UniversalAddDataModal = ({
           if (liquidityDoc.exists()) {
             const data = liquidityDoc.data()
             setLiquidityData({
-              currentRatio: data.currentRatio?.map(String) || Array(12).fill(""),
-              quickRatio: data.quickRatio?.map(String) || Array(12).fill(""),
-              cashRatio: data.cashRatio?.map(String) || Array(12).fill(""),
-              burnRate: data.burnRate?.map(String) || Array(12).fill(""),
-              cashCover: data.cashCover?.map(String) || Array(12).fill(""),
-              cashflow: data.cashflow?.map(String) || Array(12).fill(""),
-              operatingCashflow: data.operatingCashflow?.map(String) || Array(12).fill(""),
-              investingCashflow: data.investingCashflow?.map(String) || Array(12).fill(""),
-              financingCashflow: data.financingCashflow?.map(String) || Array(12).fill(""),
-              loanRepayments: data.loanRepayments?.map(String) || Array(12).fill(""),
-              cashBalance: data.cashBalance?.map(String) || Array(12).fill(""),
-              workingCapital: data.workingCapital?.map(String) || Array(12).fill(""),
+              currentRatio: data.currentRatio?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              quickRatio: data.quickRatio?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              cashRatio: data.cashRatio?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              burnRate: data.burnRate?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              cashCover: data.cashCover?.map(v => v.toFixed(1)) || Array(12).fill(""),
+              cashflow: data.cashflow?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              operatingCashflow: data.operatingCashflow?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              investingCashflow: data.investingCashflow?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              financingCashflow: data.financingCashflow?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              loanRepayments: data.loanRepayments?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              cashBalance: data.cashBalance?.map(v => v.toFixed(2)) || Array(12).fill(""),
+              workingCapital: data.workingCapital?.map(v => v.toFixed(2)) || Array(12).fill(""),
               notes: data.notes || "",
             })
           }
@@ -1991,10 +2222,10 @@ const UniversalAddDataModal = ({
 
 // ==================== CAPITAL STRUCTURE COMPONENT ====================
 
-const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmbedded }) => {
+const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmbedded, financialYearStart }) => {
   const [activeSubTab, setActiveSubTab] = useState("balance-sheet")
   const [showModal, setShowModal] = useState(false)
-  const [selectedMonth, setSelectedMonth] = useState("Jan")
+  const [selectedMonth, setSelectedMonth] = useState(financialYearStart)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [loading, setLoading] = useState(false)
   const [showTrendModal, setShowTrendModal] = useState(false)
@@ -2002,7 +2233,6 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
   const [expandedNotes, setExpandedNotes] = useState({})
   const [kpiNotes, setKpiNotes] = useState({})
   const [kpiAnalysis, setKpiAnalysis] = useState({})
-  const [financialYear, setFinancialYear] = useState("FY")
   const [currencyUnit, setCurrencyUnit] = useState("zar_million")
   const [showCalculationModal, setShowCalculationModal] = useState(false)
   const [selectedCalculation, setSelectedCalculation] = useState({ title: "", calculation: "" })
@@ -2150,8 +2380,8 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
     equityRatio: Array(12).fill("0"),
   })
 
-  const months = getMonthsForYear(selectedYear, "month")
-  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
+  const months = getMonthsForYear(selectedYear, financialYearStart)
+  const years = getYearsRange(2021, 2030)
 
   const subTabs = [
     { id: "balance-sheet", label: "Balance Sheet" },
@@ -2276,7 +2506,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
     const longTermDebtRatio = totalAssets !== 0 ? (longTermDebt / totalAssets) : 0
     const equityMultiplier = totalEquity !== 0 ? (totalAssets / totalEquity) : 0
     
-    // Set values
+    // Set values with 2 decimal places
     newSolvencyData.debtToEquity[monthIndex] = debtToEquity.toFixed(2)
     newSolvencyData.debtToAssets[monthIndex] = debtToAssets.toFixed(2)
     newSolvencyData.equityRatio[monthIndex] = equityRatio.toFixed(2)
@@ -2426,14 +2656,14 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
   const totalEquity = calculateTotalEquity(monthIndex)
   const netAssets = totalAssets - totalLiabilities
 
-  const formatValue = (value) => {
+  const formatValue = (value, unit = currencyUnit, decimals = 2) => {
     const num = Number.parseFloat(value) || 0
-    switch(currencyUnit) {
-      case "zar": return `R${num.toLocaleString()}`
-      case "zar_thousand": return `R${(num * 1000).toLocaleString()}K`
-      case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})}m`
-      case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}bn`
-      default: return `R${num.toLocaleString()}`
+    switch(unit) {
+      case "zar": return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
+      case "zar_thousand": return `R${(num * 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}K`
+      case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}m`
+      case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}bn`
+      default: return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
     }
   }
 
@@ -2442,13 +2672,13 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
     setShowCalculationModal(true)
   }
 
-  const openTrendModal = (itemName, dataArray, isPercentage = false, hasBudget = false, budgetArray = null) => {
+  const openTrendModal = (itemName, dataArray, budgetArray = null, isPercentage = false) => {
     // Ensure dataArray is an array
     const actualData = Array.isArray(dataArray) 
       ? dataArray.map(v => parseFloat(v) || 0)
       : Array(12).fill(0)
     
-    const budgetData = hasBudget && Array.isArray(budgetArray)
+    const budgetData = budgetArray && Array.isArray(budgetArray)
       ? budgetArray.map(v => parseFloat(v) || 0)
       : null
     
@@ -2464,7 +2694,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
   const renderTrendModal = () => {
     if (!selectedTrendItem) return null
 
-    const labels = months
+    const labels = months.map(month => `${month}(${selectedYear})`)
     
     const chartData = {
       labels,
@@ -2595,7 +2825,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                 <div style={{ fontSize: "12px", color: "#8d6e63", marginBottom: "5px" }}>Current Value</div>
                 <div style={{ fontSize: "16px", fontWeight: "600", color: "#5d4037" }}>
                   {selectedTrendItem.isPercentage 
-                    ? `${(selectedTrendItem.actual[selectedTrendItem.actual.length - 1] || 0).toFixed(1)}%`
+                    ? `${(selectedTrendItem.actual[selectedTrendItem.actual.length - 1] || 0).toFixed(2)}%`
                     : formatValue(selectedTrendItem.actual[selectedTrendItem.actual.length - 1] || 0)
                   }
                 </div>
@@ -2604,7 +2834,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                 <div style={{ fontSize: "12px", color: "#8d6e63", marginBottom: "5px" }}>Average</div>
                 <div style={{ fontSize: "16px", fontWeight: "600", color: "#5d4037" }}>
                   {selectedTrendItem.isPercentage
-                    ? `${(selectedTrendItem.actual.reduce((a, b) => a + b, 0) / selectedTrendItem.actual.length || 0).toFixed(1)}%`
+                    ? `${(selectedTrendItem.actual.reduce((a, b) => a + b, 0) / selectedTrendItem.actual.length || 0).toFixed(2)}%`
                     : formatValue(selectedTrendItem.actual.reduce((a, b) => a + b, 0) / selectedTrendItem.actual.length || 0)
                   }
                 </div>
@@ -2650,164 +2880,27 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
 
   const renderKPICard = (title, data, kpiKey, unit = "", isPercentage = false) => {
     const currentValue = Number.parseFloat(data[monthIndex]) || 0
+    const budgetValue = 0 // Budget would come from a separate source
     
     return (
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          marginBottom: "20px",
-          position: "relative",
+      <KPICard
+        title={title}
+        actualValue={currentValue}
+        budgetValue={budgetValue}
+        unit={currencyUnit}
+        isPercentage={isPercentage}
+        onEyeClick={() => {
+          const tab = subTabs.find(t => t.id === activeSubTab)
+          handleCalculationClick(title, tab?.calculation || "No calculation available")
         }}
-      >
-        <EyeIcon 
-          onClick={() => {
-            const tab = subTabs.find(t => t.id === activeSubTab)
-            handleCalculationClick(title, tab?.calculation || "No calculation available")
-          }} 
-        />
-        
-        <div style={{ display: "flex", alignItems: "center", marginBottom: "15px" }}>
-          <div
-            style={{
-              width: "100px",
-              height: "100px",
-              borderRadius: "50%",
-              border: "5px solid #f9a825",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              marginRight: "20px",
-              backgroundColor: "#fff9c4",
-            }}
-          >
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: "16px", fontWeight: "700", color: "#5d4037" }}>
-                {isPercentage ? `${currentValue.toFixed(1)}%` : 
-                 kpiKey === "nav" ? formatValue(currentValue * 1000000) :
-                 currentValue.toFixed(2)}
-              </div>
-              <div style={{ fontSize: "11px", color: "#8d6e63" }}>Current</div>
-            </div>
-          </div>
-          <div style={{ flex: 1 }}>
-            <h4 style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}>{title}</h4>
-          </div>
-        </div>
-
-        <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
-          <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
-            <button
-              onClick={() => setExpandedNotes(prev => ({ ...prev, [kpiKey]: !prev[kpiKey] }))}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              Add notes
-            </button>
-            <button
-              onClick={() => setExpandedNotes(prev => ({ ...prev, [`${kpiKey}_analysis`]: !prev[`${kpiKey}_analysis`] }))}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              AI analysis
-            </button>
-            <button
-              onClick={() => openTrendModal(title, data, isPercentage, false, null)}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              View trend
-            </button>
-          </div>
-
-          {expandedNotes[kpiKey] && (
-            <div style={{ marginBottom: "10px" }}>
-              <label
-                style={{
-                  fontSize: "12px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                  display: "block",
-                  marginBottom: "5px",
-                }}
-              >
-                Notes / Comments:
-              </label>
-              <textarea
-                value={kpiNotes[kpiKey] || ""}
-                onChange={(e) => setKpiNotes(prev => ({ ...prev, [kpiKey]: e.target.value }))}
-                placeholder="Add notes or comments..."
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  minHeight: "60px",
-                  fontSize: "13px",
-                }}
-              />
-            </div>
-          )}
-
-          {expandedNotes[`${kpiKey}_analysis`] && (
-            <div
-              style={{
-                backgroundColor: "#e3f2fd",
-                padding: "15px",
-                borderRadius: "6px",
-                border: "1px solid #90caf9",
-              }}
-            >
-              <label
-                style={{
-                  fontSize: "12px",
-                  color: "#1565c0",
-                  fontWeight: "600",
-                  display: "block",
-                  marginBottom: "8px",
-                }}
-              >
-                AI Analysis:
-              </label>
-              <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
-                {kpiAnalysis[kpiKey] ||
-                  `Based on the current ${title.toLowerCase()} of ${isPercentage ? `${currentValue.toFixed(1)}%` : currentValue.toFixed(2)}:
-                  \n\nThis metric indicates the company's ${title.toLowerCase()} position. 
-                  \n\nRecommended actions:
-                  \n• Monitor this metric monthly
-                  \n• Compare against industry benchmarks
-                  \n• Set target ranges for this KPI`}
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
+        onAddNotes={(notes) => setKpiNotes(prev => ({ ...prev, [kpiKey]: notes }))}
+        onAnalysis={() => setExpandedNotes(prev => ({ ...prev, [`${kpiKey}_analysis`]: !prev[`${kpiKey}_analysis`] }))}
+        onTrend={() => openTrendModal(title, data, null, isPercentage)}
+        notes={kpiNotes[kpiKey]}
+        analysis={kpiAnalysis[kpiKey]}
+        formatValue={formatValue}
+        decimals={2}
+      />
     )
   }
 
@@ -2926,7 +3019,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                     <tr key={dividend.id} style={{ borderBottom: "1px solid #e8ddd4", backgroundColor: index % 2 === 0 ? "#fdfcfb" : "#f7f3f0" }}>
                       <td style={{ padding: "12px", color: "#5d4037", fontSize: "13px" }}>{dividend.date}</td>
                       <td style={{ padding: "12px", textAlign: "right", color: "#5d4037", fontSize: "13px", fontWeight: "600" }}>
-                        {formatCurrency(dividend.amount, "zar")}
+                        {formatCurrency(dividend.amount, "zar", 2)}
                       </td>
                       <td style={{ padding: "12px", color: "#5d4037", fontSize: "13px" }}>{dividend.type}</td>
                       <td style={{ padding: "12px", color: "#5d4037", fontSize: "13px" }}>{dividend.declaredBy}</td>
@@ -2949,7 +3042,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
             <div>
               <div style={{ fontSize: "12px", color: "#8d6e63", marginBottom: "5px" }}>Total Dividends (12 months)</div>
               <div style={{ fontSize: "18px", fontWeight: "700", color: "#5d4037" }}>
-                {formatCurrency(last12MonthsDividends, "zar")}
+                {formatCurrency(last12MonthsDividends, "zar", 2)}
               </div>
             </div>
             <div>
@@ -3120,9 +3213,8 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                           onClick={() => openTrendModal(
                             key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase()),
                             balanceSheetData.assets.bank[key],
-                            false,
-                            false,
-                            null
+                            null,
+                            false
                           )}
                           style={{
                             background: "none",
@@ -3199,9 +3291,8 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                           onClick={() => openTrendModal(
                             key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase()),
                             balanceSheetData.assets.currentAssets[key],
-                            false,
-                            false,
-                            null
+                            null,
+                            false
                           )}
                           style={{
                             background: "none",
@@ -3270,9 +3361,8 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                         onClick={() => openTrendModal(
                           "Land",
                           [balanceSheetData?.assets?.fixedAssets?.land?.[monthIndex]],
-                          false,
-                          false,
-                          null
+                          null,
+                          false
                         )}
                         style={{
                           background: "none",
@@ -3305,9 +3395,8 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                         onClick={() => openTrendModal(
                           "Buildings",
                           [balanceSheetData?.assets?.fixedAssets?.buildings?.[monthIndex]],
-                          false,
-                          false,
-                          null
+                          null,
+                          false
                         )}
                         style={{
                           background: "none",
@@ -3340,9 +3429,8 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                         onClick={() => openTrendModal(
                           "Computer Equipment",
                           [balanceSheetData?.assets?.fixedAssets?.computerEquipment?.[monthIndex]],
-                          false,
-                          false,
-                          null
+                          null,
+                          false
                         )}
                         style={{
                           background: "none",
@@ -3375,9 +3463,8 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                         onClick={() => openTrendModal(
                           "Vehicles",
                           [balanceSheetData?.assets?.fixedAssets?.vehicles?.[monthIndex]],
-                          false,
-                          false,
-                          null
+                          null,
+                          false
                         )}
                         style={{
                           background: "none",
@@ -3410,9 +3497,8 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                         onClick={() => openTrendModal(
                           "Furniture",
                           [balanceSheetData?.assets?.fixedAssets?.furniture?.[monthIndex]],
-                          false,
-                          false,
-                          null
+                          null,
+                          false
                         )}
                         style={{
                           background: "none",
@@ -3445,9 +3531,8 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                         onClick={() => openTrendModal(
                           "Machinery",
                           [balanceSheetData?.assets?.fixedAssets?.machinery?.[monthIndex]],
-                          false,
-                          false,
-                          null
+                          null,
+                          false
                         )}
                         style={{
                           background: "none",
@@ -3480,9 +3565,8 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                         onClick={() => openTrendModal(
                           "Other PPE",
                           [balanceSheetData?.assets?.fixedAssets?.otherPropertyPlantEquipment?.[monthIndex]],
-                          false,
-                          false,
-                          null
+                          null,
+                          false
                         )}
                         style={{
                           background: "none",
@@ -3512,9 +3596,8 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                         onClick={() => openTrendModal(
                           "Assets Under Construction",
                           [balanceSheetData?.assets?.fixedAssets?.assetsUnderConstruction?.[monthIndex]],
-                          false,
-                          false,
-                          null
+                          null,
+                          false
                         )}
                         style={{
                           background: "none",
@@ -3576,9 +3659,8 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                               onClick={() => openTrendModal(
                                 "Accumulated Amortization",
                                 [balanceSheetData.assets.intangibleAssets[key]?.[monthIndex]],
-                                false,
-                                false,
-                                null
+                                null,
+                                false
                               )}
                               style={{
                                 background: "none",
@@ -3613,9 +3695,8 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                             onClick={() => openTrendModal(
                               key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase()),
                               [balanceSheetData.assets.intangibleAssets[key]?.[monthIndex]],
-                              false,
-                              false,
-                              null
+                              null,
+                              false
                             )}
                             style={{
                               background: "none",
@@ -3677,9 +3758,8 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                           onClick={() => openTrendModal(
                             key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase()),
                             [balanceSheetData.assets.nonCurrentAssets[key]?.[monthIndex]],
-                            false,
-                            false,
-                            null
+                            null,
+                            false
                           )}
                           style={{
                             background: "none",
@@ -3741,9 +3821,8 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                             onClick={() => openTrendModal(
                               itemKey,
                               [custom.items[itemKey]?.[monthIndex]],
-                              false,
-                              false,
-                              null
+                              null,
+                              false
                             )}
                             style={{
                               background: "none",
@@ -3834,9 +3913,8 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                           onClick={() => openTrendModal(
                             key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase()),
                             [balanceSheetData.liabilities.currentLiabilities[key]?.[monthIndex]],
-                            false,
-                            false,
-                            null
+                            null,
+                            false
                           )}
                           style={{
                             background: "none",
@@ -3897,9 +3975,8 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                           onClick={() => openTrendModal(
                             key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase()),
                             [balanceSheetData.liabilities.nonCurrentLiabilities[key]?.[monthIndex]],
-                            false,
-                            false,
-                            null
+                            null,
+                            false
                           )}
                           style={{
                             background: "none",
@@ -3972,9 +4049,8 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                               onClick={() => openTrendModal(
                                 "Treasury Shares",
                                 [balanceSheetData.equity[key]?.[monthIndex]],
-                                false,
-                                false,
-                                null
+                                null,
+                                false
                               )}
                               style={{
                                 background: "none",
@@ -4009,9 +4085,8 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                             onClick={() => openTrendModal(
                               key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase()),
                               [balanceSheetData.equity[key]?.[monthIndex]],
-                              false,
-                              false,
-                              null
+                              null,
+                              false
                             )}
                             style={{
                               background: "none",
@@ -4093,7 +4168,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                   </div>
                   <div style={{ fontSize: "16px", fontWeight: "600", color: "#5d4037" }}>
                     {key.includes("Percentage") || key.includes("per") ? 
-                      `${Number.parseFloat(balanceSheetData.assets.additionalMetrics[key]?.[monthIndex] || 0).toFixed(1)}%` :
+                      `${Number.parseFloat(balanceSheetData.assets.additionalMetrics[key]?.[monthIndex] || 0).toFixed(2)}%` :
                       formatValue(Number.parseFloat(balanceSheetData.assets.additionalMetrics[key]?.[monthIndex] || 0))
                     }
                   </div>
@@ -4315,6 +4390,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
         user={user}
         onSave={loadCapitalStructureData}
         loading={loading}
+        financialYearStart={financialYearStart}
       />
 
       {/* Dividend Modal */}
@@ -4336,7 +4412,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
 
 // ==================== PERFORMANCE ENGINE COMPONENT ====================
 
-const PerformanceEngine = ({ activeSection, viewMode, financialYearStart, pnlData, user, onUpdateChartData, isInvestorView }) => {
+const PerformanceEngine = ({ activeSection, viewMode, financialYearStart, user, onUpdateChartData, isInvestorView }) => {
   const [visibleCharts, setVisibleCharts] = useState({
     sales: true,
     cogs: true,
@@ -4372,7 +4448,7 @@ const PerformanceEngine = ({ activeSection, viewMode, financialYearStart, pnlDat
   const [firebaseChartData, setFirebaseChartData] = useState({})
   const [loading, setLoading] = useState(false)
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
-  const [selectedFinancialYearStart, setSelectedFinancialYearStart] = useState("Jan")
+  const [selectedFinancialYearStart, setSelectedFinancialYearStart] = useState(financialYearStart)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [showAddKPIModal, setShowAddKPIModal] = useState(false)
   const [newKPI, setNewKPI] = useState({ name: "", type: "bar", dataType: "currency" })
@@ -4399,20 +4475,20 @@ const PerformanceEngine = ({ activeSection, viewMode, financialYearStart, pnlDat
       if (pnlManualDoc.exists()) {
         const firebaseData = pnlManualDoc.data()
         setPnlDetails({
-          sales: firebaseData.sales?.map(String) || Array(12).fill(""),
-          cogs: firebaseData.cogs?.map(String) || Array(12).fill(""),
-          opex: firebaseData.opex?.map(String) || Array(12).fill(""),
-          tax: firebaseData.tax?.map(String) || Array(12).fill(""),
-          interestExpense: firebaseData.interestExpense?.map(String) || Array(12).fill(""),
-          depreciation: firebaseData.depreciation?.map(String) || Array(12).fill(""),
-          amortization: firebaseData.amortization?.map(String) || Array(12).fill(""),
-          salesBudget: firebaseData.salesBudget?.map(String) || Array(12).fill(""),
-          cogsBudget: firebaseData.cogsBudget?.map(String) || Array(12).fill(""),
-          opexBudget: firebaseData.opexBudget?.map(String) || Array(12).fill(""),
-          taxBudget: firebaseData.taxBudget?.map(String) || Array(12).fill(""),
-          interestExpenseBudget: firebaseData.interestExpenseBudget?.map(String) || Array(12).fill(""),
-          depreciationBudget: firebaseData.depreciationBudget?.map(String) || Array(12).fill(""),
-          amortizationBudget: firebaseData.amortizationBudget?.map(String) || Array(12).fill(""),
+          sales: firebaseData.sales?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          cogs: firebaseData.cogs?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          opex: firebaseData.opex?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          tax: firebaseData.tax?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          interestExpense: firebaseData.interestExpense?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          depreciation: firebaseData.depreciation?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          amortization: firebaseData.amortization?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          salesBudget: firebaseData.salesBudget?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          cogsBudget: firebaseData.cogsBudget?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          opexBudget: firebaseData.opexBudget?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          taxBudget: firebaseData.taxBudget?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          interestExpenseBudget: firebaseData.interestExpenseBudget?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          depreciationBudget: firebaseData.depreciationBudget?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          amortizationBudget: firebaseData.amortizationBudget?.map(v => v.toFixed(2)) || Array(12).fill(""),
           notes: firebaseData.notes || "",
         })
         if (firebaseData.chartNotes) setChartNotes(firebaseData.chartNotes)
@@ -4517,7 +4593,11 @@ const PerformanceEngine = ({ activeSection, viewMode, financialYearStart, pnlDat
   const renderTrendModal = () => {
     if (!selectedTrendItem) return null
 
-    const labels = generateLabels()
+    const labels = generateLabels().map(label => {
+      if (label.includes("(")) return label
+      if (label.length === 3) return `${label}(${selectedYear})`
+      return label
+    })
     
     const chartData = {
       labels,
@@ -4548,111 +4628,15 @@ const PerformanceEngine = ({ activeSection, viewMode, financialYearStart, pnlDat
     }
 
     return (
-      <div
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: "rgba(0,0,0,0.5)",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          zIndex: 1001,
-        }}
-      >
-        <div
-          style={{
-            backgroundColor: "#fdfcfb",
-            padding: "30px",
-            borderRadius: "8px",
-            maxWidth: "900px",
-            width: "95%",
-            maxHeight: "90vh",
-            overflow: "auto",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-            <h3 style={{ color: "#5d4037", margin: 0 }}>{selectedTrendItem.name} - Trend Analysis</h3>
-            <button
-              onClick={() => setShowTrendModal(false)}
-              style={{
-                background: "none",
-                border: "none",
-                fontSize: "24px",
-                color: "#5d4037",
-                cursor: "pointer",
-                padding: "0",
-                lineHeight: "1",
-              }}
-            >
-              ×
-            </button>
-          </div>
-          
-          <div style={{ height: "400px", marginBottom: "20px" }}>
-            <Line
-              data={chartData}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: { 
-                    display: true,
-                    position: "top",
-                  },
-                  title: { display: false },
-                  tooltip: {
-                    callbacks: {
-                      label: (context) => {
-                        const value = context.raw
-                        return selectedTrendItem.isPercentage
-                          ? `${context.dataset.label}: ${value.toFixed(2)}%`
-                          : `${context.dataset.label}: ${formatValue(value, currencyUnit)}`
-                      },
-                    },
-                  },
-                },
-                scales: {
-                  y: { 
-                    beginAtZero: true,
-                    title: {
-                      display: true,
-                      text: selectedTrendItem.isPercentage ? "Percentage (%)" : `Value (${currencyUnit === "zar_million" ? "R m" : currencyUnit})`,
-                      color: "#5d4037",
-                    },
-                  },
-                  x: {
-                    title: {
-                      display: true,
-                      text: "Time Period",
-                      color: "#5d4037",
-                    },
-                  },
-                },
-              }}
-            />
-          </div>
-
-          <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
-            <button
-              onClick={() => setShowTrendModal(false)}
-              style={{
-                padding: "10px 20px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontWeight: "600",
-              }}
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
+      <TrendModal
+        isOpen={showTrendModal}
+        onClose={() => setShowTrendModal(false)}
+        item={selectedTrendItem}
+        currencyUnit={currencyUnit}
+        labels={labels}
+        formatValue={formatValue}
+        financialYearStart={selectedFinancialYearStart}
+      />
     )
   }
 
@@ -4683,14 +4667,14 @@ const PerformanceEngine = ({ activeSection, viewMode, financialYearStart, pnlDat
     }
   }
 
-  const formatValue = (value, unit = currencyUnit) => {
+  const formatValue = (value, unit = currencyUnit, decimals = 2) => {
     const num = Number.parseFloat(value) || 0
     switch(unit) {
-      case "zar": return `R${num.toLocaleString()}`
-      case "zar_thousand": return `R${(num * 1000).toLocaleString()}K`
-      case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})}m`
-      case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}bn`
-      default: return `R${num.toLocaleString()}`
+      case "zar": return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
+      case "zar_thousand": return `R${(num * 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}K`
+      case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}m`
+      case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}bn`
+      default: return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
     }
   }
 
@@ -4702,137 +4686,26 @@ const PerformanceEngine = ({ activeSection, viewMode, financialYearStart, pnlDat
   const renderKPICard = (title, dataKey, isPercentage = false, calculation = "") => {
     const data = firebaseChartData[dataKey] || { actual: [], budget: [] }
     const chartData = aggregateDataForView(data.actual)
+    const budgetData = aggregateDataForView(data.budget || [])
     const currentValue = chartData.length > 0 ? chartData[chartData.length - 1] : 0
+    const currentBudget = budgetData.length > 0 ? budgetData[budgetData.length - 1] : 0
     
     return (
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          marginBottom: "20px",
-          position: "relative",
-        }}
-      >
-        <EyeIcon 
-          onClick={() => handleCalculationClick(title, calculation)} 
-        />
-        
-        <div style={{ display: "flex", alignItems: "center", marginBottom: "15px" }}>
-          <div
-            style={{
-              width: "100px",
-              height: "100px",
-              borderRadius: "50%",
-              border: "5px solid #f9a825",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              marginRight: "20px",
-              backgroundColor: "#fff9c4",
-            }}
-          >
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: "16px", fontWeight: "700", color: "#5d4037" }}>
-                {isPercentage ? `${currentValue.toFixed(1)}%` : formatValue(currentValue)}
-              </div>
-              <div style={{ fontSize: "11px", color: "#8d6e63" }}>Current</div>
-            </div>
-          </div>
-          <div style={{ flex: 1 }}>
-            <h4 style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}>{title}</h4>
-          </div>
-        </div>
-
-        <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
-          <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
-            <button
-              onClick={() => setExpandedNotes(prev => ({ ...prev, [dataKey]: !prev[dataKey] }))}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              Add notes
-            </button>
-            <button
-              onClick={() => setExpandedNotes(prev => ({ ...prev, [`${dataKey}_analysis`]: !prev[`${dataKey}_analysis`] }))}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              AI analysis
-            </button>
-            <button
-              onClick={() => openTrendModal(title, dataKey, isPercentage)}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              View trend
-            </button>
-          </div>
-
-          {expandedNotes[dataKey] && (
-            <div style={{ marginBottom: "10px" }}>
-              <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600", display: "block", marginBottom: "5px" }}>
-                Notes / Comments:
-              </label>
-              <textarea
-                value={chartNotes[dataKey] || ""}
-                onChange={(e) => setChartNotes(prev => ({ ...prev, [dataKey]: e.target.value }))}
-                placeholder="Add notes or comments..."
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  minHeight: "60px",
-                  fontSize: "13px",
-                }}
-              />
-            </div>
-          )}
-
-          {expandedNotes[`${dataKey}_analysis`] && (
-            <div style={{ backgroundColor: "#e3f2fd", padding: "15px", borderRadius: "6px", border: "1px solid #90caf9" }}>
-              <label style={{ fontSize: "12px", color: "#1565c0", fontWeight: "600", display: "block", marginBottom: "8px" }}>
-                AI Analysis:
-              </label>
-              <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
-                {chartAnalysis[dataKey] ||
-                  `Based on current ${title.toLowerCase()} of ${isPercentage ? `${currentValue.toFixed(1)}%` : formatValue(currentValue)}:
-                  \n\nThis metric indicates ${title.toLowerCase()} performance.
-                  \n\nRecommended actions:
-                  \n• Monitor trend monthly
-                  \n• Compare to budget targets
-                  \n• Investigate significant variances`}
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
+      <KPICard
+        title={title}
+        actualValue={currentValue}
+        budgetValue={currentBudget}
+        unit={currencyUnit}
+        isPercentage={isPercentage}
+        onEyeClick={() => handleCalculationClick(title, calculation)}
+        onAddNotes={(notes) => setChartNotes(prev => ({ ...prev, [dataKey]: notes }))}
+        onAnalysis={() => setExpandedNotes(prev => ({ ...prev, [`${dataKey}_analysis`]: !prev[`${dataKey}_analysis`] }))}
+        onTrend={() => openTrendModal(title, dataKey, isPercentage)}
+        notes={chartNotes[dataKey]}
+        analysis={chartAnalysis[dataKey]}
+        formatValue={formatValue}
+        decimals={2}
+      />
     )
   }
 
@@ -5014,61 +4887,32 @@ const PerformanceEngine = ({ activeSection, viewMode, financialYearStart, pnlDat
         <>
           <h3 style={{ color: "#5d4037", fontSize: "20px", fontWeight: "600", marginBottom: "15px" }}>Custom KPIs</h3>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px" }}>
-            {Object.values(customKPIs).map((kpi) => (
-              <div
-                key={kpi.chartName}
-                style={{
-                  backgroundColor: "#fdfcfb",
-                  padding: "20px",
-                  borderRadius: "8px",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-                  position: "relative",
-                }}
-              >
-                <EyeIcon onClick={() => handleCalculationClick(kpi.name, `Custom KPI: ${kpi.name}\n\nData Type: ${kpi.dataType}\nChart Type: ${kpi.type}`)} />
-                <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>{kpi.name}</h4>
-                <div style={{ height: "200px" }}>
-                  <Bar
-                    data={{
-                      labels,
-                      datasets: [
-                        {
-                          label: "Actual",
-                          data: aggregateDataForView(kpi.actual || []),
-                          backgroundColor: "rgba(93, 64, 55, 0.6)",
-                          borderColor: "rgb(93, 64, 55)",
-                          borderWidth: 2,
-                        },
-                        {
-                          label: "Budget",
-                          data: aggregateDataForView(kpi.budget || []),
-                          backgroundColor: "rgba(249, 168, 37, 0.6)",
-                          borderColor: "rgb(249, 168, 37)",
-                          borderWidth: 2,
-                        },
-                      ],
-                    }}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      plugins: {
-                        legend: { display: true },
-                        tooltip: {
-                          callbacks: {
-                            label: (context) => {
-                              const value = context.raw
-                              if (kpi.dataType === "percentage") return `${context.dataset.label}: ${value.toFixed(1)}%`
-                              if (kpi.dataType === "currency") return `${context.dataset.label}: ${formatValue(value)}`
-                              return `${context.dataset.label}: ${value.toFixed(2)}`
-                            }
-                          }
-                        }
-                      }
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
+            {Object.values(customKPIs).map((kpi) => {
+              const data = firebaseChartData[kpi.chartName] || { actual: [], budget: [] }
+              const chartData = aggregateDataForView(data.actual)
+              const budgetData = aggregateDataForView(data.budget || [])
+              const currentValue = chartData.length > 0 ? chartData[chartData.length - 1] : 0
+              const currentBudget = budgetData.length > 0 ? budgetData[budgetData.length - 1] : 0
+              
+              return (
+                <KPICard
+                  key={kpi.chartName}
+                  title={kpi.name}
+                  actualValue={currentValue}
+                  budgetValue={currentBudget}
+                  unit={currencyUnit}
+                  isPercentage={kpi.dataType === "percentage"}
+                  onEyeClick={() => handleCalculationClick(kpi.name, `Custom KPI: ${kpi.name}\n\nData Type: ${kpi.dataType}\nChart Type: ${kpi.type}`)}
+                  onAddNotes={(notes) => setChartNotes(prev => ({ ...prev, [kpi.chartName]: notes }))}
+                  onAnalysis={() => setExpandedNotes(prev => ({ ...prev, [`${kpi.chartName}_analysis`]: !prev[`${kpi.chartName}_analysis`] }))}
+                  onTrend={() => openTrendModal(kpi.name, kpi.chartName, kpi.dataType === "percentage")}
+                  notes={chartNotes[kpi.chartName]}
+                  analysis={chartAnalysis[kpi.chartName]}
+                  formatValue={formatValue}
+                  decimals={2}
+                />
+              )
+            })}
           </div>
         </>
       )}
@@ -5084,6 +4928,7 @@ const PerformanceEngine = ({ activeSection, viewMode, financialYearStart, pnlDat
           loadCustomKPIs()
         }}
         loading={loading}
+        financialYearStart={selectedFinancialYearStart}
       />
 
       {/* Calculation Modal */}
@@ -5102,10 +4947,10 @@ const PerformanceEngine = ({ activeSection, viewMode, financialYearStart, pnlDat
 
 // ==================== COST AGILITY COMPONENT ====================
 
-const CostAgility = ({ activeSection, user, isInvestorView }) => {
+const CostAgility = ({ activeSection, user, isInvestorView, financialYearStart }) => {
   const [showModal, setShowModal] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [selectedMonth, setSelectedMonth] = useState("Jan")
+  const [selectedMonth, setSelectedMonth] = useState(financialYearStart)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [selectedViewMode, setSelectedViewMode] = useState("month")
   const [expandedNotes, setExpandedNotes] = useState({})
@@ -5139,11 +4984,11 @@ const CostAgility = ({ activeSection, user, isInvestorView }) => {
       if (costDoc.exists()) {
         const firebaseData = costDoc.data()
         setCostDetails({
-          fixedCosts: firebaseData.fixedCosts?.map(String) || Array(12).fill(""),
-          variableCosts: firebaseData.variableCosts?.map(String) || Array(12).fill(""),
-          discretionaryCosts: firebaseData.discretionaryCosts?.map(String) || Array(12).fill(""),
-          semiVariableCosts: firebaseData.semiVariableCosts?.map(String) || Array(12).fill(""),
-          lockInDuration: firebaseData.lockInDuration?.map(String) || Array(12).fill(""),
+          fixedCosts: firebaseData.fixedCosts?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          variableCosts: firebaseData.variableCosts?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          discretionaryCosts: firebaseData.discretionaryCosts?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          semiVariableCosts: firebaseData.semiVariableCosts?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          lockInDuration: firebaseData.lockInDuration?.map(v => v.toFixed(0)) || Array(12).fill(""),
           notes: firebaseData.notes || "",
         })
         processFirebaseDataForCharts(firebaseData)
@@ -5192,7 +5037,11 @@ const CostAgility = ({ activeSection, user, isInvestorView }) => {
   const renderTrendModal = () => {
     if (!selectedTrendItem) return null
 
-    const labels = generateLabels()
+    const labels = generateLabels().map(label => {
+      if (label.includes("(")) return label
+      if (label.length === 3) return `${label}(${selectedYear})`
+      return label
+    })
     
     const chartData = {
       labels,
@@ -5210,111 +5059,15 @@ const CostAgility = ({ activeSection, user, isInvestorView }) => {
     }
 
     return (
-      <div
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: "rgba(0,0,0,0.5)",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          zIndex: 1001,
-        }}
-      >
-        <div
-          style={{
-            backgroundColor: "#fdfcfb",
-            padding: "30px",
-            borderRadius: "8px",
-            maxWidth: "900px",
-            width: "95%",
-            maxHeight: "90vh",
-            overflow: "auto",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-            <h3 style={{ color: "#5d4037", margin: 0 }}>{selectedTrendItem.name} - Trend Analysis</h3>
-            <button
-              onClick={() => setShowTrendModal(false)}
-              style={{
-                background: "none",
-                border: "none",
-                fontSize: "24px",
-                color: "#5d4037",
-                cursor: "pointer",
-                padding: "0",
-                lineHeight: "1",
-              }}
-            >
-              ×
-            </button>
-          </div>
-          
-          <div style={{ height: "400px", marginBottom: "20px" }}>
-            <Line
-              data={chartData}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: { 
-                    display: true,
-                    position: "top",
-                  },
-                  title: { display: false },
-                  tooltip: {
-                    callbacks: {
-                      label: (context) => {
-                        const value = context.raw
-                        return selectedTrendItem.isPercentage
-                          ? `${context.dataset.label}: ${value.toFixed(2)}%`
-                          : `${context.dataset.label}: ${formatValue(value)}`
-                      },
-                    },
-                  },
-                },
-                scales: {
-                  y: { 
-                    beginAtZero: true,
-                    title: {
-                      display: true,
-                      text: selectedTrendItem.isPercentage ? "Percentage (%)" : `Value (${currencyUnit === "zar_million" ? "R m" : currencyUnit})`,
-                      color: "#5d4037",
-                    },
-                  },
-                  x: {
-                    title: {
-                      display: true,
-                      text: "Time Period",
-                      color: "#5d4037",
-                    },
-                  },
-                },
-              }}
-            />
-          </div>
-
-          <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
-            <button
-              onClick={() => setShowTrendModal(false)}
-              style={{
-                padding: "10px 20px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontWeight: "600",
-              }}
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
+      <TrendModal
+        isOpen={showTrendModal}
+        onClose={() => setShowTrendModal(false)}
+        item={selectedTrendItem}
+        currencyUnit={currencyUnit}
+        labels={labels}
+        formatValue={formatValue}
+        financialYearStart={financialYearStart}
+      />
     )
   }
 
@@ -5322,7 +5075,10 @@ const CostAgility = ({ activeSection, user, isInvestorView }) => {
 
   const generateLabels = () => {
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    if (selectedViewMode === "month") return months
+    const startMonthIndex = months.indexOf(financialYearStart)
+    const orderedMonths = [...months.slice(startMonthIndex), ...months.slice(0, startMonthIndex)]
+
+    if (selectedViewMode === "month") return orderedMonths
     else if (selectedViewMode === "quarter") return ["Q1", "Q2", "Q3", "Q4"]
     else return [selectedYear.toString()]
   }
@@ -5342,14 +5098,14 @@ const CostAgility = ({ activeSection, user, isInvestorView }) => {
     }
   }
 
-  const formatValue = (value) => {
+  const formatValue = (value, unit = currencyUnit, decimals = 2) => {
     const num = Number.parseFloat(value) || 0
-    switch(currencyUnit) {
-      case "zar": return `R${num.toLocaleString()}`
-      case "zar_thousand": return `R${(num * 1000).toLocaleString()}K`
-      case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})}m`
-      case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}bn`
-      default: return `R${num.toLocaleString()}`
+    switch(unit) {
+      case "zar": return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
+      case "zar_thousand": return `R${(num * 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}K`
+      case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}m`
+      case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}bn`
+      default: return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
     }
   }
 
@@ -5364,140 +5120,26 @@ const CostAgility = ({ activeSection, user, isInvestorView }) => {
     const currentValue = chartData.length > 0 ? chartData[chartData.length - 1] : 0
     
     return (
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          marginBottom: "20px",
-          position: "relative",
-        }}
-      >
-        <EyeIcon onClick={() => handleCalculationClick(title, calculation)} />
-        
-        <div style={{ display: "flex", alignItems: "center", marginBottom: "15px" }}>
-          <div
-            style={{
-              width: "100px",
-              height: "100px",
-              borderRadius: "50%",
-              border: "5px solid #f9a825",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              marginRight: "20px",
-              backgroundColor: "#fff9c4",
-            }}
-          >
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: "16px", fontWeight: "700", color: "#5d4037" }}>
-                {isPercentage ? `${currentValue.toFixed(1)}%` : 
-                 dataKey === "lockInDuration" ? `${currentValue.toFixed(0)} months` :
-                 formatValue(currentValue)}
-              </div>
-              <div style={{ fontSize: "11px", color: "#8d6e63" }}>Current</div>
-            </div>
-          </div>
-          <div style={{ flex: 1 }}>
-            <h4 style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}>{title}</h4>
-          </div>
-        </div>
-
-        <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
-          <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
-            <button
-              onClick={() => setExpandedNotes(prev => ({ ...prev, [dataKey]: !prev[dataKey] }))}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              Add notes
-            </button>
-            <button
-              onClick={() => setExpandedNotes(prev => ({ ...prev, [`${dataKey}_analysis`]: !prev[`${dataKey}_analysis`] }))}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              AI analysis
-            </button>
-            <button
-              onClick={() => openTrendModal(title, dataKey, isPercentage)}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              View trend
-            </button>
-          </div>
-
-          {expandedNotes[dataKey] && (
-            <div style={{ marginBottom: "10px" }}>
-              <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600", display: "block", marginBottom: "5px" }}>
-                Notes / Comments:
-              </label>
-              <textarea
-                value={chartNotes[dataKey] || ""}
-                onChange={(e) => setChartNotes(prev => ({ ...prev, [dataKey]: e.target.value }))}
-                placeholder="Add notes or comments..."
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  minHeight: "60px",
-                  fontSize: "13px",
-                }}
-              />
-            </div>
-          )}
-
-          {expandedNotes[`${dataKey}_analysis`] && (
-            <div style={{ backgroundColor: "#e3f2fd", padding: "15px", borderRadius: "6px", border: "1px solid #90caf9" }}>
-              <label style={{ fontSize: "12px", color: "#1565c0", fontWeight: "600", display: "block", marginBottom: "8px" }}>
-                AI Analysis:
-              </label>
-              <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
-                {chartAnalysis[dataKey] ||
-                  `Based on current ${title.toLowerCase()} of ${isPercentage ? `${currentValue.toFixed(1)}%` : formatValue(currentValue)}:
-                  \n\nThis metric indicates your ${title.toLowerCase()} position.
-                  \n\nRecommended actions:
-                  \n• Review cost structure
-                  \n• Identify optimization opportunities
-                  \n• Consider contract renegotiations`}
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
+      <KPICard
+        title={title}
+        actualValue={currentValue}
+        budgetValue={0}
+        unit={currencyUnit}
+        isPercentage={isPercentage}
+        onEyeClick={() => handleCalculationClick(title, calculation)}
+        onAddNotes={(notes) => setChartNotes(prev => ({ ...prev, [dataKey]: notes }))}
+        onAnalysis={() => setExpandedNotes(prev => ({ ...prev, [`${dataKey}_analysis`]: !prev[`${dataKey}_analysis`] }))}
+        onTrend={() => openTrendModal(title, dataKey, isPercentage)}
+        notes={chartNotes[dataKey]}
+        analysis={chartAnalysis[dataKey]}
+        formatValue={formatValue}
+        decimals={2}
+      />
     )
   }
 
-  const months = getMonthsForYear(selectedYear, "month")
-  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
-  const labels = generateLabels()
+  const months = getMonthsForYear(selectedYear, financialYearStart)
+  const years = getYearsRange(2021, 2030)
 
   const calculationTexts = {
     fixedCosts: "Fixed Costs: Costs that remain constant regardless of production volume.\n\nExamples: Rent, Salaries, Insurance, Depreciation",
@@ -5691,6 +5333,7 @@ const CostAgility = ({ activeSection, user, isInvestorView }) => {
         user={user}
         onSave={loadCostDataFromFirebase}
         loading={loading}
+        financialYearStart={financialYearStart}
       />
 
       {/* Calculation Modal */}
@@ -5709,10 +5352,10 @@ const CostAgility = ({ activeSection, user, isInvestorView }) => {
 
 // ==================== LIQUIDITY & SURVIVAL COMPONENT ====================
 
-const LiquiditySurvival = ({ activeSection, user, isInvestorView }) => {
+const LiquiditySurvival = ({ activeSection, user, isInvestorView, financialYearStart }) => {
   const [showModal, setShowModal] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [selectedMonth, setSelectedMonth] = useState("Jan")
+  const [selectedMonth, setSelectedMonth] = useState(financialYearStart)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [selectedViewMode, setSelectedViewMode] = useState("month")
   const [expandedNotes, setExpandedNotes] = useState({})
@@ -5757,18 +5400,18 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView }) => {
       if (liquidityDoc.exists()) {
         const firebaseData = liquidityDoc.data()
         setLiquidityDetails({
-          currentRatio: firebaseData.currentRatio?.map(String) || Array(12).fill(""),
-          quickRatio: firebaseData.quickRatio?.map(String) || Array(12).fill(""),
-          cashRatio: firebaseData.cashRatio?.map(String) || Array(12).fill(""),
-          burnRate: firebaseData.burnRate?.map(String) || Array(12).fill(""),
-          cashCover: firebaseData.cashCover?.map(String) || Array(12).fill(""),
-          cashflow: firebaseData.cashflow?.map(String) || Array(12).fill(""),
-          operatingCashflow: firebaseData.operatingCashflow?.map(String) || Array(12).fill(""),
-          investingCashflow: firebaseData.investingCashflow?.map(String) || Array(12).fill(""),
-          financingCashflow: firebaseData.financingCashflow?.map(String) || Array(12).fill(""),
-          loanRepayments: firebaseData.loanRepayments?.map(String) || Array(12).fill(""),
-          cashBalance: firebaseData.cashBalance?.map(String) || Array(12).fill(""),
-          workingCapital: firebaseData.workingCapital?.map(String) || Array(12).fill(""),
+          currentRatio: firebaseData.currentRatio?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          quickRatio: firebaseData.quickRatio?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          cashRatio: firebaseData.cashRatio?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          burnRate: firebaseData.burnRate?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          cashCover: firebaseData.cashCover?.map(v => v.toFixed(1)) || Array(12).fill(""),
+          cashflow: firebaseData.cashflow?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          operatingCashflow: firebaseData.operatingCashflow?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          investingCashflow: firebaseData.investingCashflow?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          financingCashflow: firebaseData.financingCashflow?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          loanRepayments: firebaseData.loanRepayments?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          cashBalance: firebaseData.cashBalance?.map(v => v.toFixed(2)) || Array(12).fill(""),
+          workingCapital: firebaseData.workingCapital?.map(v => v.toFixed(2)) || Array(12).fill(""),
           notes: firebaseData.notes || "",
         })
         processFirebaseDataForCharts(firebaseData)
@@ -5839,7 +5482,11 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView }) => {
   const renderTrendModal = () => {
     if (!selectedTrendItem) return null
 
-    const labels = generateLabels()
+    const labels = generateLabels().map(label => {
+      if (label.includes("(")) return label
+      if (label.length === 3) return `${label}(${selectedYear})`
+      return label
+    })
     
     const chartData = {
       labels,
@@ -5857,111 +5504,15 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView }) => {
     }
 
     return (
-      <div
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: "rgba(0,0,0,0.5)",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          zIndex: 1001,
-        }}
-      >
-        <div
-          style={{
-            backgroundColor: "#fdfcfb",
-            padding: "30px",
-            borderRadius: "8px",
-            maxWidth: "900px",
-            width: "95%",
-            maxHeight: "90vh",
-            overflow: "auto",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-            <h3 style={{ color: "#5d4037", margin: 0 }}>{selectedTrendItem.name} - Trend Analysis</h3>
-            <button
-              onClick={() => setShowTrendModal(false)}
-              style={{
-                background: "none",
-                border: "none",
-                fontSize: "24px",
-                color: "#5d4037",
-                cursor: "pointer",
-                padding: "0",
-                lineHeight: "1",
-              }}
-            >
-              ×
-            </button>
-          </div>
-          
-          <div style={{ height: "400px", marginBottom: "20px" }}>
-            <Line
-              data={chartData}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: { 
-                    display: true,
-                    position: "top",
-                  },
-                  title: { display: false },
-                  tooltip: {
-                    callbacks: {
-                      label: (context) => {
-                        const value = context.raw
-                        return selectedTrendItem.isPercentage
-                          ? `${context.dataset.label}: ${value.toFixed(2)}%`
-                          : `${context.dataset.label}: ${formatValue(value)}`
-                      },
-                    },
-                  },
-                },
-                scales: {
-                  y: { 
-                    beginAtZero: true,
-                    title: {
-                      display: true,
-                      text: selectedTrendItem.isPercentage ? "Percentage (%)" : `Value (${currencyUnit === "zar_million" ? "R m" : currencyUnit})`,
-                      color: "#5d4037",
-                    },
-                  },
-                  x: {
-                    title: {
-                      display: true,
-                      text: "Time Period",
-                      color: "#5d4037",
-                    },
-                  },
-                },
-              }}
-            />
-          </div>
-
-          <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
-            <button
-              onClick={() => setShowTrendModal(false)}
-              style={{
-                padding: "10px 20px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontWeight: "600",
-              }}
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
+      <TrendModal
+        isOpen={showTrendModal}
+        onClose={() => setShowTrendModal(false)}
+        item={selectedTrendItem}
+        currencyUnit={currencyUnit}
+        labels={labels}
+        formatValue={formatValue}
+        financialYearStart={financialYearStart}
+      />
     )
   }
 
@@ -5969,7 +5520,10 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView }) => {
 
   const generateLabels = () => {
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    if (selectedViewMode === "month") return months
+    const startMonthIndex = months.indexOf(financialYearStart)
+    const orderedMonths = [...months.slice(startMonthIndex), ...months.slice(0, startMonthIndex)]
+
+    if (selectedViewMode === "month") return orderedMonths
     else if (selectedViewMode === "quarter") return ["Q1", "Q2", "Q3", "Q4"]
     else return [selectedYear.toString()]
   }
@@ -5989,14 +5543,14 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView }) => {
     }
   }
 
-  const formatValue = (value) => {
+  const formatValue = (value, unit = currencyUnit, decimals = 2) => {
     const num = Number.parseFloat(value) || 0
-    switch(currencyUnit) {
-      case "zar": return `R${num.toLocaleString()}`
-      case "zar_thousand": return `R${(num * 1000).toLocaleString()}K`
-      case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})}m`
-      case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}bn`
-      default: return `R${num.toLocaleString()}`
+    switch(unit) {
+      case "zar": return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
+      case "zar_thousand": return `R${(num * 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}K`
+      case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}m`
+      case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}bn`
+      default: return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
     }
   }
 
@@ -6013,140 +5567,27 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView }) => {
     const displayValue = customFormatter 
       ? customFormatter(currentValue) 
       : isPercentage 
-        ? `${currentValue.toFixed(1)}%` 
+        ? `${currentValue.toFixed(2)}%` 
         : dataKey.includes("ratio") 
           ? currentValue.toFixed(2) 
           : formatValue(currentValue)
     
     return (
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          marginBottom: "20px",
-          position: "relative",
-        }}
-      >
-        <EyeIcon onClick={() => handleCalculationClick(title, calculation)} />
-        
-        <div style={{ display: "flex", alignItems: "center", marginBottom: "15px" }}>
-          <div
-            style={{
-              width: "100px",
-              height: "100px",
-              borderRadius: "50%",
-              border: "5px solid #f9a825",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              marginRight: "20px",
-              backgroundColor: "#fff9c4",
-            }}
-          >
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: "16px", fontWeight: "700", color: "#5d4037" }}>
-                {displayValue}
-              </div>
-              <div style={{ fontSize: "11px", color: "#8d6e63" }}>
-                {dataKey === "monthsRunway" ? "Months" : "Current"}
-              </div>
-            </div>
-          </div>
-          <div style={{ flex: 1 }}>
-            <h4 style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}>{title}</h4>
-          </div>
-        </div>
-
-        <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
-          <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
-            <button
-              onClick={() => setExpandedNotes(prev => ({ ...prev, [dataKey]: !prev[dataKey] }))}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              Add notes
-            </button>
-            <button
-              onClick={() => setExpandedNotes(prev => ({ ...prev, [`${dataKey}_analysis`]: !prev[`${dataKey}_analysis`] }))}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              AI analysis
-            </button>
-            <button
-              onClick={() => openTrendModal(title, dataKey, isPercentage)}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              View trend
-            </button>
-          </div>
-
-          {expandedNotes[dataKey] && (
-            <div style={{ marginBottom: "10px" }}>
-              <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600", display: "block", marginBottom: "5px" }}>
-                Notes / Comments:
-              </label>
-              <textarea
-                value={chartNotes[dataKey] || ""}
-                onChange={(e) => setChartNotes(prev => ({ ...prev, [dataKey]: e.target.value }))}
-                placeholder="Add notes or comments..."
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  minHeight: "60px",
-                  fontSize: "13px",
-                }}
-              />
-            </div>
-          )}
-
-          {expandedNotes[`${dataKey}_analysis`] && (
-            <div style={{ backgroundColor: "#e3f2fd", padding: "15px", borderRadius: "6px", border: "1px solid #90caf9" }}>
-              <label style={{ fontSize: "12px", color: "#1565c0", fontWeight: "600", display: "block", marginBottom: "8px" }}>
-                AI Analysis:
-              </label>
-              <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
-                {chartAnalysis[dataKey] ||
-                  `Based on current ${title.toLowerCase()} of ${displayValue}:
-                  \n\nThis metric indicates your ${title.toLowerCase()} position.
-                  \n\nRecommended actions:
-                  \n• Monitor this metric weekly/monthly
-                  \n• Set target ranges
-                  \n• Develop contingency plans if below target`}
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
+      <KPICard
+        title={title}
+        actualValue={currentValue}
+        budgetValue={0}
+        unit={currencyUnit}
+        isPercentage={isPercentage}
+        onEyeClick={() => handleCalculationClick(title, calculation)}
+        onAddNotes={(notes) => setChartNotes(prev => ({ ...prev, [dataKey]: notes }))}
+        onAnalysis={() => setExpandedNotes(prev => ({ ...prev, [`${dataKey}_analysis`]: !prev[`${dataKey}_analysis`] }))}
+        onTrend={() => openTrendModal(title, dataKey, isPercentage)}
+        notes={chartNotes[dataKey]}
+        analysis={chartAnalysis[dataKey]}
+        formatValue={formatValue}
+        decimals={2}
+      />
     )
   }
 
@@ -6268,9 +5709,8 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView }) => {
     )
   }
 
-  const months = getMonthsForYear(selectedYear, "month")
-  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
-  const labels = generateLabels()
+  const months = getMonthsForYear(selectedYear, financialYearStart)
+  const years = getYearsRange(2021, 2030)
 
   const calculationTexts = {
     currentRatio: "Current Ratio = Current Assets ÷ Current Liabilities\n\nMeasures ability to pay short-term obligations.\n\nHealthy range: 1.5 - 3.0",
@@ -6467,6 +5907,7 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView }) => {
           loadLoans()
         }}
         loading={loading}
+        financialYearStart={financialYearStart}
       />
 
       {/* Calculation Modal */}
@@ -6490,6 +5931,7 @@ const FinancialPerformance = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [user, setUser] = useState(null)
   const [showFullDescription, setShowFullDescription] = useState(false)
+  const [financialYearStart, setFinancialYearStart] = useState("Jan")
 
   const [isInvestorView, setIsInvestorView] = useState(false)
   const [viewingSMEId, setViewingSMEId] = useState(null)
@@ -6508,11 +5950,19 @@ const FinancialPerformance = () => {
   }, [])
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (isInvestorView && viewingSMEId) {
         setUser({ uid: viewingSMEId })
-      } else {
+        // Get financial year start for the viewed SME
+        const fyStart = await getFinancialYearStart(viewingSMEId)
+        setFinancialYearStart(fyStart)
+      } else if (currentUser) {
         setUser(currentUser)
+        // Get financial year start for the logged-in user
+        const fyStart = await getFinancialYearStart(currentUser.uid)
+        setFinancialYearStart(fyStart)
+      } else {
+        setUser(null)
       }
     })
     return () => unsubscribe()
@@ -6709,12 +6159,13 @@ const FinancialPerformance = () => {
           user={user}
           isInvestorView={isInvestorView}
           isEmbedded={true}
+          financialYearStart={financialYearStart}
         />
 
         <PerformanceEngine
           activeSection={activeSection}
           viewMode="month"
-          financialYearStart="Jan"
+          financialYearStart={financialYearStart}
           pnlData={null}
           user={user}
           onUpdateChartData={() => {}}
@@ -6725,12 +6176,14 @@ const FinancialPerformance = () => {
           activeSection={activeSection}
           user={user}
           isInvestorView={isInvestorView}
+          financialYearStart={financialYearStart}
         />
 
         <LiquiditySurvival
           activeSection={activeSection}
           user={user}
           isInvestorView={isInvestorView}
+          financialYearStart={financialYearStart}
         />
       </div>
     </div>
