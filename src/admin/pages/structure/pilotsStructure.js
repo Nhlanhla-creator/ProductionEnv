@@ -8,40 +8,40 @@ export const PILOTS_STRUCTURE = {
     type: "file",
     icon: "compass",
     accept: ".pdf,.docx,.doc,.pptx",
-    maxSize: 2097152,
-    description: "Upload pilot program designs and planning documents (PDF/Word/PPT, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload pilot program designs and planning documents (PDF/Word/PPT, max 10MB)"
   },
 
   "Pilot Participants": {
     type: "file",
     icon: "users",
     accept: ".pdf,.docx,.doc,.xlsx,.xls,.csv",
-    maxSize: 2097152,
-    description: "Upload participant lists and profiles (PDF/Word/Excel/CSV, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload participant lists and profiles (PDF/Word/Excel/CSV, max 10MB)"
   },
 
   "Results Insights": {
     type: "file",
     icon: "bar-chart-2",
     accept: ".pdf,.docx,.doc,.xlsx,.xls,.pptx",
-    maxSize: 2097152,
-    description: "Upload pilot results, data analysis, and insights (PDF/Word/Excel/PPT, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload pilot results, data analysis, and insights (PDF/Word/Excel/PPT, max 10MB)"
   },
 
   "Testimonials": {
     type: "file",
     icon: "message-square",
     accept: ".pdf,.docx,.doc,.mp4,.mp3",
-    maxSize: 2097152,
-    description: "Upload testimonial documents, videos, and audio (PDF/Word/Video/Audio, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload testimonial documents, videos, and audio (PDF/Word/Video/Audio, max 10MB)"
   },
 
   "Case Studies": {
     type: "file",
     icon: "book-open",
     accept: ".pdf,.docx,.doc,.pptx",
-    maxSize: 2097152,
-    description: "Upload detailed case study documentation (PDF/Word/PPT, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload detailed case study documentation (PDF/Word/PPT, max 10MB)"
   }
 };
 

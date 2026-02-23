@@ -8,64 +8,64 @@ export const OPS_STRUCTURE = {
     type: "file",
     icon: "sitemap",
     accept: ".pdf,.docx,.doc,.png,.jpg,.svg,.pptx",
-    maxSize: 2097152,
-    description: "Upload org charts and structure diagrams (PDF/Word/Images/PPT, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload org charts and structure diagrams (PDF/Word/Images/PPT, max 10MB)"
   },
 
   "Roles KPIs": {
     type: "file",
     icon: "target",
     accept: ".pdf,.docx,.doc,.xlsx,.xls",
-    maxSize: 2097152,
-    description: "Upload role definitions and KPI documentation (PDF/Word/Excel, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload role definitions and KPI documentation (PDF/Word/Excel, max 10MB)"
   },
 
   "Intern Programme": {
     type: "file",
     icon: "users",
     accept: ".pdf,.docx,.doc",
-    maxSize: 2097152,
-    description: "Upload internship program documentation (PDF/Word, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload internship program documentation (PDF/Word, max 10MB)"
   },
 
   "SOPs": {
     type: "file",
     icon: "file-text",
     accept: ".pdf,.docx,.doc",
-    maxSize: 2097152,
-    description: "Upload Standard Operating Procedures (PDF/Word, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload Standard Operating Procedures (PDF/Word, max 10MB)"
   },
 
   "Meetings Notes": {
     type: "file",
     icon: "clipboard",
     accept: ".pdf,.docx,.doc",
-    maxSize: 2097152,
-    description: "Upload meeting minutes and notes (PDF/Word, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload meeting minutes and notes (PDF/Word, max 10MB)"
   },
 
   "Tools Access": {
     type: "file",
     icon: "key",
     accept: ".pdf,.docx,.doc,.xlsx,.xls",
-    maxSize: 2097152,
-    description: "Upload tools access documentation and credentials (PDF/Word/Excel, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload tools access documentation and credentials (PDF/Word/Excel, max 10MB)"
   },
 
   "Training": {
     type: "file",
     icon: "book-open",
     accept: ".pdf,.docx,.doc,.pptx,.mp4",
-    maxSize: 2097152,
-    description: "Upload training materials and guides (PDF/Word/PPT, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload training materials and guides (PDF/Word/PPT, max 10MB)"
   },
 
   "Admin Dashboards": {
     type: "file",
     icon: "layout-dashboard",
     accept: ".pdf,.docx,.doc,.png,.jpg,.xlsx,.xls",
-    maxSize: 2097152,
-    description: "Upload admin dashboard documentation (PDF/Word/Images/Excel, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload admin dashboard documentation (PDF/Word/Images/Excel, max 10MB)"
   }
 };
 

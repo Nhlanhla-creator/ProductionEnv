@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { FileExplorer } from './shared/FileExplorer';
 import { FileUploader } from './shared/FileUploader';
 import { REPORTS_STRUCTURE } from './structure/reportsStructure';
-import { uploadFile, addFileToCollection, deleteFile, loadContent, loadAllContent } from './services/reports';
+import { uploadFile, deleteFile, loadContent, loadAllContent } from './services/reports';
 import { useAuth } from '../../smses/hooks/useAuth';
 import { AlertCircle } from 'lucide-react';
 
@@ -73,11 +73,7 @@ const ReportingAnalytics = () => {
     if (!selectedPath || !user) return;
     try {
       setIsUploading(true);
-      if (currentContent && currentContent.files && currentContent.files.length > 0) {
-        await addFileToCollection(selectedPath, file);
-      } else {
-        await uploadFile(selectedPath, file);
-      }
+      await uploadFile(selectedPath, file);
       const pathKey = selectedPath.join(' > ');
       setContentStatus(prev => ({ ...prev, [pathKey]: true }));
       const updatedContent = await loadContent(selectedPath);
@@ -88,7 +84,7 @@ const ReportingAnalytics = () => {
     } finally {
       setIsUploading(false);
     }
-  }, [selectedPath, currentContent, user]);
+  }, [selectedPath, user]);
 
   const handleDeleteFile = useCallback(async (fileIndex) => {
     if (!selectedPath || !user) return;

@@ -59,6 +59,14 @@ export const FileUploader = ({
   const handleFiles = (fileList) => {
     const file = fileList[0];
     
+    // Check file size if maxSize is specified
+    if (itemConfig?.maxSize && file.size > itemConfig.maxSize) {
+      const maxSizeMB = Math.round(itemConfig.maxSize / (1024 * 1024));
+      const fileSizeMB = Math.round(file.size / (1024 * 1024) * 100) / 100;
+      alert(`File size (${fileSizeMB}MB) exceeds the maximum allowed size (${maxSizeMB}MB). Please choose a smaller file.`);
+      return;
+    }
+    
     // Check file type if accept is specified
     if (itemConfig?.accept) {
       const acceptedTypes = itemConfig.accept.split(',').map(t => t.trim());

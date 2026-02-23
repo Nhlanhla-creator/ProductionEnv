@@ -4,7 +4,6 @@ import { FileUploader } from './shared/FileUploader';
 import { GROWTH_STRUCTURE } from './structure/growthStructure';
 import {
   uploadFile,
-  addFileToCollection,
   deleteFile,
   loadContent,
   loadAllContent
@@ -120,11 +119,7 @@ const Growth = () => {
       setIsUploading(true);
       
       // Check if this is the first file or adding to existing collection
-      if (currentContent && currentContent.files && currentContent.files.length > 0) {
-        await addFileToCollection(selectedPath, file);
-      } else {
-        await uploadFile(selectedPath, file);
-      }
+      await uploadFile(selectedPath, file);
 
       // Update status
       const pathKey = selectedPath.join(' > ');
@@ -142,7 +137,7 @@ const Growth = () => {
     } finally {
       setIsUploading(false);
     }
-  }, [selectedPath, currentContent, user]);
+  }, [selectedPath, user]);
 
   const handleDeleteFile = useCallback(async (fileIndex) => {
     if (!selectedPath || !user) return;

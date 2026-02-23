@@ -4,7 +4,6 @@ import { FileUploader } from './shared/FileUploader';
 import { PARTNERS_STRUCTURE } from './structure/partnersStructure';
 import {
   uploadFile,
-  addFileToCollection,
   deleteFile,
   loadContent,
   loadAllContent} from './services/partners';
@@ -117,11 +116,7 @@ const PartnersEcosystem = () => {
     try {
       setIsUploading(true);
       
-      if (currentContent && currentContent.files && currentContent.files.length > 0) {
-        await addFileToCollection(selectedPath, file);
-      } else {
-        await uploadFile(selectedPath, file);
-      }
+      await uploadFile(selectedPath, file);
 
       // Update status
       const pathKey = selectedPath.join(' > ');
@@ -139,7 +134,7 @@ const PartnersEcosystem = () => {
     } finally {
       setIsUploading(false);
     }
-  }, [selectedPath, currentContent, user]);
+  }, [selectedPath, user]);
 
   const handleDeleteFile = useCallback(async (fileIndex) => {
     if (!selectedPath || !user) return;
