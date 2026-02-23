@@ -4,7 +4,6 @@ import { FileUploader } from './shared/FileUploader';
 import { PILOTS_STRUCTURE } from './structure/pilotsStructure';
 import {
   uploadFile,
-  addFileToCollection,
   deleteFile,
   loadContent,
   loadAllContent
@@ -103,11 +102,7 @@ const PilotsCaseStudies = () => {
     try {
       setIsUploading(true);
       
-      if (currentContent && currentContent.files && currentContent.files.length > 0) {
-        await addFileToCollection(selectedPath, file);
-      } else {
-        await uploadFile(selectedPath, file);
-      }
+      await uploadFile(selectedPath, file);
 
       const pathKey = selectedPath.join(' > ');
       setContentStatus(prev => ({
@@ -123,7 +118,7 @@ const PilotsCaseStudies = () => {
     } finally {
       setIsUploading(false);
     }
-  }, [selectedPath, currentContent, user]);
+  }, [selectedPath, user]);
 
   const handleDeleteFile = useCallback(async (fileIndex) => {
     if (!selectedPath || !user) return;

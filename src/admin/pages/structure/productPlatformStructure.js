@@ -1,20 +1,13 @@
 /**
- * Product Platform structure with file upload definitions
- * All sections use file uploads (no text editors or databases)
+ * Platform & Product structure
+ * Restructured hierarchy with 5 top-level sections
  */
 
 export const PRODUCT_STRUCTURE = {
-  "Platform Modules": {
+  "1_Product Modules": {
     type: "folder",
     icon: "layers",
     items: {
-      "SME Onboarding": {
-        type: "file",
-        icon: "user-plus",
-        accept: ".pdf,.docx,.doc",
-        maxSize: 2097152,
-        description: "Upload SME onboarding documentation (PDF/Word, max 2MB)"
-      },
       "BIG Score": {
         type: "folder",
         icon: "award",
@@ -23,8 +16,8 @@ export const PRODUCT_STRUCTURE = {
             type: "file",
             icon: "book-open",
             accept: ".pdf,.docx,.doc",
-            maxSize: 2097152,
-            description: "Upload BIG Score overview document (PDF/Word, max 2MB)"
+            maxSize: 10485760,
+            description: "Upload BIG Score overview document (PDF/Word, max 10MB)"
           },
           "Scoring Logic": {
             type: "folder",
@@ -34,50 +27,50 @@ export const PRODUCT_STRUCTURE = {
                 type: "file",
                 icon: "book",
                 accept: ".pdf,.docx,.doc",
-                maxSize: 2097152,
-                description: "Upload scoring methodology (PDF/Word, max 2MB)"
+                maxSize: 10485760,
+                description: "Upload scoring methodology (PDF/Word, max 10MB)"
               },
               "Scoring Logic Rules": {
                 type: "file",
                 icon: "list",
                 accept: ".pdf,.docx,.doc,.xlsx,.xls",
-                maxSize: 2097152,
-                description: "Upload scoring rules (PDF/Word/Excel, max 2MB)"
+                maxSize: 10485760,
+                description: "Upload scoring rules (PDF/Word/Excel, max 10MB)"
               },
               "Lifecycle Models": {
                 type: "file",
                 icon: "activity",
                 accept: ".pdf,.docx,.doc,.xlsx,.xls",
-                maxSize: 2097152,
-                description: "Upload lifecycle models (PDF/Word/Excel, max 2MB)"
+                maxSize: 10485760,
+                description: "Upload lifecycle models (PDF/Word/Excel, max 10MB)"
               },
               "Validation Framework": {
                 type: "file",
                 icon: "check-circle",
                 accept: ".pdf,.docx,.doc",
-                maxSize: 2097152,
-                description: "Upload validation framework (PDF/Word, max 2MB)"
+                maxSize: 10485760,
+                description: "Upload validation framework (PDF/Word, max 10MB)"
               },
               "AI ML Models": {
                 type: "file",
                 icon: "cpu",
                 accept: ".pdf,.docx,.doc",
-                maxSize: 2097152,
-                description: "Upload AI/ML model documentation (PDF/Word, max 2MB)"
+                maxSize: 10485760,
+                description: "Upload AI/ML model documentation (PDF/Word, max 10MB)"
               },
               "Training Data": {
                 type: "file",
                 icon: "database",
                 accept: ".csv,.xlsx,.xls,.json,.pdf",
-                maxSize: 2097152,
-                description: "Upload training datasets (CSV/Excel/JSON/PDF, max 2MB)"
+                maxSize: 10485760,
+                description: "Upload training datasets (CSV/Excel/JSON/PDF, max 10MB)"
               },
               "Funder Feedback": {
                 type: "file",
                 icon: "message-circle",
                 accept: ".pdf,.docx,.doc",
-                maxSize: 2097152,
-                description: "Upload funder feedback (PDF/Word, max 2MB)"
+                maxSize: 10485760,
+                description: "Upload funder feedback (PDF/Word, max 10MB)"
               }
             }
           },
@@ -89,36 +82,36 @@ export const PRODUCT_STRUCTURE = {
                 type: "file",
                 icon: "shield-check",
                 accept: ".pdf,.docx,.doc",
-                maxSize: 2097152,
-                description: "Upload compliance score documentation (PDF/Word, max 2MB)"
+                maxSize: 10485760,
+                description: "Upload compliance score documentation (PDF/Word, max 10MB)"
               },
               "Legitimacy Score": {
                 type: "file",
                 icon: "check-square",
                 accept: ".pdf,.docx,.doc",
-                maxSize: 2097152,
-                description: "Upload legitimacy score documentation (PDF/Word, max 2MB)"
+                maxSize: 10485760,
+                description: "Upload legitimacy score documentation (PDF/Word, max 10MB)"
               },
               "Leadership Score": {
                 type: "file",
                 icon: "users",
                 accept: ".pdf,.docx,.doc",
-                maxSize: 2097152,
-                description: "Upload leadership score documentation (PDF/Word, max 2MB)"
+                maxSize: 10485760,
+                description: "Upload leadership score documentation (PDF/Word, max 10MB)"
               },
               "Governance Score": {
                 type: "file",
                 icon: "briefcase",
                 accept: ".pdf,.docx,.doc",
-                maxSize: 2097152,
-                description: "Upload governance score documentation (PDF/Word, max 2MB)"
+                maxSize: 10485760,
+                description: "Upload governance score documentation (PDF/Word, max 10MB)"
               },
               "Capital Appeal Score": {
                 type: "file",
                 icon: "dollar-sign",
                 accept: ".pdf,.docx,.doc",
-                maxSize: 2097152,
-                description: "Upload capital appeal score documentation (PDF/Word, max 2MB)"
+                maxSize: 10485760,
+                description: "Upload capital appeal score documentation (PDF/Word, max 10MB)"
               }
             }
           }
@@ -128,83 +121,107 @@ export const PRODUCT_STRUCTURE = {
         type: "file",
         icon: "git-merge",
         accept: ".pdf,.docx,.doc,.xlsx,.xls",
-        maxSize: 2097152,
-        description: "Upload matching engine documentation (PDF/Word/Excel, max 2MB)"
+        maxSize: 10485760,
+        description: "Upload matching engine documentation (PDF/Word/Excel, max 10MB)"
       },
-      "Dashboards": {
+      "Growth Suite": {
+        type: "file",
+        icon: "trending-up",
+        accept: ".pdf,.docx,.doc,.png,.jpg,.fig",
+        maxSize: 10485760,
+        description: "Upload Growth Suite specs and designs (PDF/Word/Images, max 10MB)"
+      },
+      "ESD Dashboard": {
         type: "file",
         icon: "layout-dashboard",
         accept: ".pdf,.docx,.doc,.png,.jpg,.fig",
-        maxSize: 2097152,
-        description: "Upload dashboard designs and specs (PDF/Word/Images, max 2MB)"
+        maxSize: 10485760,
+        description: "Upload ESD Dashboard documentation and designs (PDF/Word/Images, max 10MB)"
       },
-      "Payments": {
-        type: "folder",
-        icon: "credit-card",
-        items: {
-          "Payment Gateways": {
-            type: "file",
-            icon: "landmark",
-            accept: ".pdf,.docx,.doc",
-            maxSize: 2097152,
-            description: "Upload payment gateway documentation (PDF/Word, max 2MB)"
-          },
-          "Invoicing": {
-            type: "file",
-            icon: "file-text",
-            accept: ".pdf,.docx,.doc,.xlsx,.xls",
-            maxSize: 2097152,
-            description: "Upload invoicing documentation (PDF/Word/Excel, max 2MB)"
-          },
-          "Refunds": {
-            type: "file",
-            icon: "rotate-ccw",
-            accept: ".pdf,.docx,.doc",
-            maxSize: 2097152,
-            description: "Upload refunds policy and process (PDF/Word, max 2MB)"
-          }
-        }
-      },
-      "API Integrations": {
+      "Association Management": {
         type: "file",
-        icon: "code",
-        accept: ".pdf,.docx,.doc,.json",
-        maxSize: 2097152,
-        description: "Upload API documentation (PDF/Word/JSON, max 2MB)"
+        icon: "users",
+        accept: ".pdf,.docx,.doc,.xlsx,.xls",
+        maxSize: 10485760,
+        description: "Upload Association Management documentation (PDF/Word/Excel, max 10MB)"
       }
     }
   },
 
-  "Messaging and Alerts": {
-    type: "file",
-    icon: "bell",
-    accept: ".pdf,.docx,.doc",
-    maxSize: 2097152,
-    description: "Upload messaging and alerts specifications (PDF/Word, max 2MB)"
+  "2_Technical Architecture": {
+    type: "folder",
+    icon: "server",
+    items: {
+      "_placeholder": {
+        type: "file",
+        icon: "info",
+        accept: ".pdf,.docx,.doc",
+        maxSize: 10485760,
+        description: "Technical Architecture — managed separately. Placeholder only."
+      }
+    }
   },
 
-  "Customer Services": {
-    type: "file",
+  "3_QA & Testing": {
+    type: "folder",
+    icon: "check-circle",
+    items: {
+      "_placeholder": {
+        type: "file",
+        icon: "info",
+        accept: ".pdf,.docx,.doc",
+        maxSize: 10485760,
+        description: "QA & Testing — managed separately. Placeholder only."
+      }
+    }
+  },
+
+  "4_Customer & Support": {
+    type: "folder",
     icon: "headphones",
-    accept: ".pdf,.docx,.doc",
-    maxSize: 2097152,
-    description: "Upload customer service documentation (PDF/Word, max 2MB)"
+    items: {
+      "Email Trigger Logic": {
+        type: "file",
+        icon: "mail",
+        accept: ".pdf,.docx,.doc,.xlsx,.xls",
+        maxSize: 10485760,
+        description: "Upload email trigger logic documentation (PDF/Word/Excel, max 10MB)"
+      },
+      "Notification Workflows": {
+        type: "file",
+        icon: "bell",
+        accept: ".pdf,.docx,.doc,.png,.jpg",
+        maxSize: 10485760,
+        description: "Upload notification workflow diagrams and specs (PDF/Word/Images, max 10MB)"
+      },
+      "Onboarding Flow Documentation": {
+        type: "file",
+        icon: "user-plus",
+        accept: ".pdf,.docx,.doc,.png,.jpg,.svg",
+        maxSize: 10485760,
+        description: "Upload onboarding flow documentation (PDF/Word/Images, max 10MB)"
+      },
+      "Reporting Templates": {
+        type: "file",
+        icon: "file-text",
+        accept: ".pdf,.docx,.doc,.xlsx,.xls",
+        maxSize: 10485760,
+        description: "Upload reporting templates (PDF/Word/Excel, max 10MB)"
+      },
+      "SLA Execution Mechanics": {
+        type: "file",
+        icon: "clock",
+        accept: ".pdf,.docx,.doc,.xlsx,.xls",
+        maxSize: 10485760,
+        description: "Upload SLA execution mechanics documentation (PDF/Word/Excel, max 10MB)"
+      }
+    }
   },
 
-  "User Flows": {
-    type: "file",
-    icon: "workflow",
-    accept: ".pdf,.docx,.doc,.png,.jpg,.svg",
-    maxSize: 2097152,
-    description: "Upload user flow diagrams (PDF/Word/Images, max 2MB)"
-  },
-
-  "UX Requirements": {
-    type: "file",
-    icon: "monitor",
-    accept: ".pdf,.docx,.doc,.fig",
-    maxSize: 2097152,
-    description: "Upload UX requirements and designs (PDF/Word/Figma, max 2MB)"
+  "5_Documentation & Governance Checklist": {
+    type: "checklist",
+    icon: "clipboard-list",
+    description: "Live documentation and governance checklist — edit rows directly"
   }
 };
 
@@ -221,7 +238,6 @@ export const navigateToPath = (structure, path) => {
   return current;
 };
 
-// Helper function to get item type
 export const getItemType = (structure, path) => {
   const item = navigateToPath(structure, path);
   return item?.type || null;

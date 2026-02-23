@@ -15,64 +15,64 @@ export const GROWTH_STRUCTURE = {
         type: "file", 
         icon: "flag",
         accept: ".pdf,.docx,.doc",
-        maxSize: 2097152, // 2MB in bytes
-        description: "Upload your vision and mission statements (PDF/Word, max 2MB)"
+        maxSize: 10485760, // 2MB in bytes
+        description: "Upload your vision and mission statements (PDF/Word, max 10MB)"
       },
       "Platform Thesis": { 
         type: "file", 
         icon: "layers",
         accept: ".pdf,.docx,.doc",
-        maxSize: 2097152,
-        description: "Upload your platform thesis document (PDF/Word, max 2MB)"
+        maxSize: 10485760,
+        description: "Upload your platform thesis document (PDF/Word, max 10MB)"
       },
       "Unicorn Roadmap": { 
         type: "file", 
         icon: "trending-up",
         accept: ".pdf,.docx,.doc",
-        maxSize: 2097152,
-        description: "Upload your roadmap to unicorn status (PDF/Word, max 2MB)"
+        maxSize: 10485760,
+        description: "Upload your roadmap to unicorn status (PDF/Word, max 10MB)"
       },
       "Market Problem Definition": { 
         type: "file", 
         icon: "alert-circle",
         accept: ".pdf,.docx,.doc",
-        maxSize: 2097152,
-        description: "Upload market problem analysis (PDF/Word, max 2MB)"
+        maxSize: 10485760,
+        description: "Upload market problem analysis (PDF/Word, max 10MB)"
       },
       "Competitive Analysis": { 
         type: "file", 
         icon: "bar-chart",
         accept: ".pdf,.docx,.doc,.xlsx,.xls",
-        maxSize: 2097152,
-        description: "Upload competitive analysis (PDF/Word/Excel, max 2MB)"
+        maxSize: 10485760,
+        description: "Upload competitive analysis (PDF/Word/Excel, max 10MB)"
       },
       "ESG ESD Strategy": { 
         type: "file", 
         icon: "leaf",
         accept: ".pdf,.docx,.doc",
-        maxSize: 2097152,
-        description: "Upload ESG/ESD strategy document (PDF/Word, max 2MB)"
+        maxSize: 10485760,
+        description: "Upload ESG/ESD strategy document (PDF/Word, max 10MB)"
       },
       "Expansion Roadmap": { 
         type: "file", 
         icon: "map",
         accept: ".pdf,.docx,.doc",
-        maxSize: 2097152,
-        description: "Upload expansion roadmap (PDF/Word, max 2MB)"
+        maxSize: 10485760,
+        description: "Upload expansion roadmap (PDF/Word, max 10MB)"
       },
       "Financial Models": { 
         type: "file", 
         icon: "file-spreadsheet",
         accept: ".xlsx,.xls,.csv,.pdf",
-        maxSize: 2097152,
-        description: "Upload financial projection spreadsheets (Excel/PDF, max 2MB)"
+        maxSize: 10485760,
+        description: "Upload financial projection spreadsheets (Excel/PDF, max 10MB)"
       },
       "Budgets Forecasts": { 
         type: "file", 
         icon: "calculator",
         accept: ".xlsx,.xls,.csv,.pdf",
-        maxSize: 2097152,
-        description: "Upload budget and forecast documents (Excel/PDF, max 2MB)"
+        maxSize: 10485760,
+        description: "Upload budget and forecast documents (Excel/PDF, max 10MB)"
       }
     }
   },
@@ -89,22 +89,22 @@ export const GROWTH_STRUCTURE = {
             type: "file", 
             icon: "seed",
             accept: ".pdf,.docx,.doc",
-            maxSize: 2097152,
-            description: "Upload pre-seed funding documentation (PDF/Word, max 2MB)"
+            maxSize: 10485760,
+            description: "Upload pre-seed funding documentation (PDF/Word, max 10MB)"
           },
           "Seed": { 
             type: "file", 
             icon: "sprout",
             accept: ".pdf,.docx,.doc",
-            maxSize: 2097152,
-            description: "Upload seed funding documentation (PDF/Word, max 2MB)"
+            maxSize: 10485760,
+            description: "Upload seed funding documentation (PDF/Word, max 10MB)"
           },
           "Series A": { 
             type: "file", 
             icon: "bar-chart-2",
             accept: ".pdf,.docx,.doc",
-            maxSize: 2097152,
-            description: "Upload Series A funding documentation (PDF/Word, max 2MB)"
+            maxSize: 10485760,
+            description: "Upload Series A funding documentation (PDF/Word, max 10MB)"
           }
         }
       },
@@ -112,22 +112,22 @@ export const GROWTH_STRUCTURE = {
         type: "file", 
         icon: "presentation",
         accept: ".pdf,.pptx,.key",
-        maxSize: 2097152,
-        description: "Upload pitch decks and investor presentations (PDF/PPT, max 2MB)"
+        maxSize: 10485760,
+        description: "Upload pitch decks and investor presentations (PDF/PPT, max 10MB)"
       },
       "Grant Applications": { 
         type: "file", 
         icon: "file-text",
         accept: ".pdf,.docx,.doc",
-        maxSize: 2097152,
-        description: "Upload grant application documents (PDF/Word, max 2MB)"
+        maxSize: 10485760,
+        description: "Upload grant application documents (PDF/Word, max 10MB)"
       },
       "Revenue Models": { 
         type: "file", 
         icon: "dollar-sign",
         accept: ".pdf,.docx,.doc,.xlsx,.xls",
-        maxSize: 2097152,
-        description: "Upload revenue model documentation (PDF/Word/Excel, max 2MB)"
+        maxSize: 10485760,
+        description: "Upload revenue model documentation (PDF/Word/Excel, max 10MB)"
       }
     }
   },
@@ -140,43 +140,43 @@ export const GROWTH_STRUCTURE = {
         type: "file", 
         icon: "target",
         accept: ".pdf,.docx,.doc",
-        maxSize: 2097152,
-        description: "Upload brand positioning document (PDF/Word, max 2MB)"
+        maxSize: 10485760,
+        description: "Upload brand positioning document (PDF/Word, max 10MB)"
       },
       "Website Content": { 
         type: "file", 
         icon: "globe",
         accept: ".pdf,.docx,.doc",
-        maxSize: 2097152,
-        description: "Upload website content and messaging (PDF/Word, max 2MB)"
+        maxSize: 10485760,
+        description: "Upload website content and messaging (PDF/Word, max 10MB)"
       },
       "Thought Leadership": { 
         type: "file", 
         icon: "message-circle",
         accept: ".pdf,.docx,.doc",
-        maxSize: 2097152,
-        description: "Upload thought leadership content (PDF/Word, max 2MB)"
+        maxSize: 10485760,
+        description: "Upload thought leadership content (PDF/Word, max 10MB)"
       },
       "BIG Pulse": { 
         type: "file", 
         icon: "activity",
         accept: ".pdf,.docx,.doc,.xlsx,.xls",
-        maxSize: 2097152,
-        description: "Upload market pulse and trends analysis (PDF/Word/Excel, max 2MB)"
+        maxSize: 10485760,
+        description: "Upload market pulse and trends analysis (PDF/Word/Excel, max 10MB)"
       },
       "Campaigns": { 
         type: "file", 
         icon: "zap",
         accept: ".pdf,.docx,.doc",
-        maxSize: 2097152,
-        description: "Upload marketing campaign plans (PDF/Word, max 2MB)"
+        maxSize: 10485760,
+        description: "Upload marketing campaign plans (PDF/Word, max 10MB)"
       },
       "Partnerships Comms": { 
         type: "file", 
         icon: "users",
         accept: ".pdf,.docx,.doc",
-        maxSize: 2097152,
-        description: "Upload partnership communications (PDF/Word, max 2MB)"
+        maxSize: 10485760,
+        description: "Upload partnership communications (PDF/Word, max 10MB)"
       },
       "Asset Design & Templates": {
         type: "folder",
@@ -186,36 +186,36 @@ export const GROWTH_STRUCTURE = {
             type: "file", 
             icon: "book",
             accept: ".pdf,.docx",
-            maxSize: 2097152,
-            description: "Upload brand style guides (PDF/Word, max 2MB)"
+            maxSize: 10485760,
+            description: "Upload brand style guides (PDF/Word, max 10MB)"
           },
           "Logos": { 
             type: "file", 
             icon: "image",
             accept: ".svg,.png,.jpg,.ai,.eps,.pdf",
-            maxSize: 2097152,
-            description: "Upload logo files and variations (max 2MB)"
+            maxSize: 10485760,
+            description: "Upload logo files and variations (max 10MB)"
           },
           "UI Designs": { 
             type: "file", 
             icon: "layout",
             accept: ".fig,.sketch,.xd,.png,.jpg,.pdf",
-            maxSize: 2097152,
-            description: "Upload UI design files (max 2MB)"
+            maxSize: 10485760,
+            description: "Upload UI design files (max 10MB)"
           },
           "Pitch Visuals": { 
             type: "file", 
             icon: "presentation",
             accept: ".pdf,.pptx,.png,.jpg",
-            maxSize: 2097152,
-            description: "Upload pitch presentation visuals (PDF/PPT/Images, max 2MB)"
+            maxSize: 10485760,
+            description: "Upload pitch presentation visuals (PDF/PPT/Images, max 10MB)"
           },
           "Diagrams": { 
             type: "file", 
             icon: "git-branch",
             accept: ".svg,.png,.jpg,.pdf",
-            maxSize: 2097152,
-            description: "Upload diagrams and flowcharts (max 2MB)"
+            maxSize: 10485760,
+            description: "Upload diagrams and flowcharts (max 10MB)"
           }
         }
       }

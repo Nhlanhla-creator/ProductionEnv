@@ -4,7 +4,6 @@ import { FileUploader } from './shared/FileUploader';
 import { USERS_STRUCTURE } from './structure/usersMpStructure';
 import {
   uploadFile,
-  addFileToCollection,
   deleteFile,
   loadContent,
   loadAllContent
@@ -119,11 +118,7 @@ const UsersMarketplace = () => {
     try {
       setIsUploading(true);
       
-      if (currentContent && currentContent.files && currentContent.files.length > 0) {
-        await addFileToCollection(selectedPath, file);
-      } else {
-        await uploadFile(selectedPath, file);
-      }
+      await uploadFile(selectedPath, file);
 
       // Update status
       const pathKey = selectedPath.join(' > ');

@@ -189,7 +189,7 @@ function AdminSidebar() {
         },
         {
           id: "product-platform",
-          label: "Product Platform",
+          label: "Product & Platform",
           icon: <Boxes size={16} />,
           route: "/admin/notion/product-platform",
         },

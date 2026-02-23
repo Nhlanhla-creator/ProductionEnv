@@ -4,15 +4,13 @@ import { ADMIN_STRUCTURE } from './structure/adminGovStructure';
 import { FileExplorer } from './shared/FileExplorer';
 import {
   uploadFile,
-  addFileToCollection,
   deleteFile,
   loadContent,
   loadAllContent
 } from './services/governance';
 import { useAuth } from '../../smses/hooks/useAuth';
 import {
-  Building2, Users, FileCheck, Table, Shield, ScrollText, AlertTriangle,
-  ClipboardList, UserCheck, Scale, ChevronRight, ChevronDown, AlertCircle
+  AlertCircle
 } from 'lucide-react';
 
 const AdminGovernance = () => {
@@ -72,11 +70,7 @@ const AdminGovernance = () => {
     if (!selectedPath || !user) return;
     try {
       setIsUploading(true);
-      if (currentContent && currentContent.files && currentContent.files.length > 0) {
-        await addFileToCollection(selectedPath, file);
-      } else {
-        await uploadFile(selectedPath, file);
-      }
+      await uploadFile(selectedPath, file);
       const pathKey = selectedPath.join(' > ');
       setContentStatus(prev => ({ ...prev, [pathKey]: true }));
       const updatedContent = await loadContent(selectedPath);
@@ -87,7 +81,7 @@ const AdminGovernance = () => {
     } finally {
       setIsUploading(false);
     }
-  }, [selectedPath, currentContent, user]);
+  }, [selectedPath, user]);
 
   const handleDeleteFile = useCallback(async (fileIndex) => {
     if (!selectedPath || !user) return;
