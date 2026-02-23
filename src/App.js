@@ -18,6 +18,7 @@ import AllCatalysts from "./admin/pages/AllCatalysts"
 import AllAdvisors from "./admin/pages/AllAdvisors"
 import DocumentManagement from "./admin/pages/growth-tools-purchased"
 import AdminSettings from "./admin/pages/AdminSettings"
+import AcceptInvitation from "./smses/AcceptInvitation"
 
 import AllInterns from "./admin/pages/AllInterns"
 import AllSponsors from "./admin/pages/AllSponsors"
@@ -954,6 +955,7 @@ function App() {
         <Route path="/program-sponsor/billing/info" element={withProtection(ProgramSponsorBillingInfo, {}, renderProgramSponsorRoute)} />
         <Route path="/program-sponsor/billing/subscriptions" element={withProtection(ProgramSponsorSubscription, {}, renderProgramSponsorRoute)} />
         <Route path="/program-sponsor/billing/history" element={withProtection(ProgramSponsorBillingHistory, {}, renderProgramSponsorRoute)} />
+        
 
         {/* Protected Support Program Dashboard Routes */}
         <Route path="/support-profile" element={withProtection(CatalystUniversalProfile, {}, renderSupportProgramRoute)} />
@@ -1050,6 +1052,7 @@ function App() {
         <Route path="/support-profile/matching-preference" element={renderSupportProfileSection(CatalystMatchingPreference, "generalMatchingPreference")} />
         <Route path="/support-profile/declaration-consent" element={renderSupportProfileSection(CatalystDeclarationConsent, "declarationConsent")} />
         <Route path="/support-profile/summary" element={renderSupportProfileSection(CatalystUniversalProfile, "summary")} />
+        <Route path="accept-invitation" element={<AcceptInvitation />} />
 
         {/* Matches Routes */}
         <Route path="/opportunity-matches" element={withProtection(OpportunityMatchesPage, {}, renderSMERoute)} />

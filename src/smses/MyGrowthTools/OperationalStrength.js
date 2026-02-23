@@ -23,6 +23,22 @@ import {
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Title, Tooltip, Legend)
 
+// Helper function to format numbers to 2 decimal places
+const formatToTwoDecimals = (value) => {
+  if (value === null || value === undefined || value === "") return ""
+  const num = Number(value)
+  if (isNaN(num)) return value
+  return Number(num.toFixed(2))
+}
+
+// Helper function to parse and validate number inputs
+const parseToTwoDecimals = (value) => {
+  if (value === null || value === undefined || value === "") return ""
+  const num = Number(value)
+  if (isNaN(num)) return ""
+  return Math.round(num * 100) / 100
+}
+
 // Helper function to get months array based on year
 const getMonthsForYear = (year, viewMode = "month") => {
   if (viewMode === "year") return [`FY ${year}`]
@@ -154,7 +170,7 @@ const ChartViewModal = ({ isOpen, onClose, kpiData, historicalData = [] }) => {
       
       const analysis = `Based on the trend analysis for ${kpiData.kpi}:
 
-🎯 **Performance Summary**: The current value of ${kpiData.currentValue} ${kpiData.units} is ${kpiData.currentValue > kpiData.target ? 'above' : 'below'} the target of ${kpiData.target} ${kpiData.units}.
+🎯 **Performance Summary**: The current value of ${formatToTwoDecimals(kpiData.currentValue)} ${kpiData.units} is ${kpiData.currentValue > kpiData.target ? 'above' : 'below'} the target of ${formatToTwoDecimals(kpiData.target)} ${kpiData.units}.
 
 📈 **Trend Insight**: Historical data shows ${Math.random() > 0.5 ? 'an improving' : 'a declining'} trend over the past 12 months, with ${Math.random() > 0.5 ? 'notable improvement' : 'some fluctuations'} in Q${Math.floor(Math.random() * 4) + 1}.
 
@@ -191,7 +207,7 @@ const ChartViewModal = ({ isOpen, onClose, kpiData, historicalData = [] }) => {
       const yearMultiplier = 1 + (selectedYear - new Date().getFullYear()) * 0.1
       const baseValue = kpiData.currentValue || 50
       const variation = Math.random() * 20 - 10
-      return Math.max(0, (baseValue * yearMultiplier) + variation)
+      return Math.max(0, parseToTwoDecimals((baseValue * yearMultiplier) + variation))
     })
     
     return {
@@ -237,6 +253,26 @@ const ChartViewModal = ({ isOpen, onClose, kpiData, historicalData = [] }) => {
         borderWidth: 1,
         padding: 12,
         displayColors: false,
+        callbacks: {
+          label: function(context) {
+            let label = context.dataset.label || '';
+            if (label) {
+              label += ': ';
+            }
+            if (context.parsed.y !== null) {
+              const value = formatToTwoDecimals(context.parsed.y);
+              label += value;
+              if (kpiData.units === '%') {
+                label += '%';
+              } else if (kpiData.units === 'R') {
+                label = 'R' + value;
+              } else {
+                label += ' ' + kpiData.units;
+              }
+            }
+            return label;
+          }
+        }
       },
     },
     scales: {
@@ -249,9 +285,10 @@ const ChartViewModal = ({ isOpen, onClose, kpiData, historicalData = [] }) => {
           color: "#5d4037",
           font: { size: 12 },
           callback: function(value) {
-            if (kpiData.units === '%') return value + '%'
-            if (kpiData.units === 'R') return 'R' + value
-            return value
+            const formatted = formatToTwoDecimals(value);
+            if (kpiData.units === '%') return formatted + '%'
+            if (kpiData.units === 'R') return 'R' + formatted
+            return formatted
           }
         },
       },
@@ -315,7 +352,7 @@ const ChartViewModal = ({ isOpen, onClose, kpiData, historicalData = [] }) => {
                 Units: {kpiData.units}
               </span>
               <span style={{ color: "#8d6e63", fontSize: "14px" }}>
-                Target: {kpiData.target} {kpiData.units}
+                Target: {formatToTwoDecimals(kpiData.target)} {kpiData.units}
               </span>
             </div>
           </div>
@@ -648,7 +685,7 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
               const kpiKey = `${category.id}-${subCategory.name}-${kpi.name}-${month}`
               const baseValue = kpi.currentValue || 50
               const variation = Math.random() * (baseValue * 0.2) - (baseValue * 0.1)
-              initialValues[kpiKey] = Math.round((baseValue * yearMultiplier + variation) * 10) / 10
+              initialValues[kpiKey] = parseToTwoDecimals(baseValue * yearMultiplier + variation)
             })
           })
         })
@@ -666,11 +703,16 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
   const handleSave = async () => {
     setLoading(true)
     try {
-      // Here you would save to Firebase
+      // Format all values to 2 decimals before saving
+      const formattedDataValues = {}
+      Object.keys(dataValues).forEach(key => {
+        formattedDataValues[key] = parseToTwoDecimals(dataValues[key])
+      })
+      
       console.log("Saving data:", {
         category: activeCategory,
         year: selectedYear,
-        dataValues,
+        dataValues: formattedDataValues,
         notes
       })
       
@@ -706,7 +748,7 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
     updatedStructure[categoryIndex].subCategories[subCategoryIndex].kpis.push({
       name: newKPI.name,
       units: newKPI.units,
-      target: Number.parseFloat(newKPI.target),
+      target: parseToTwoDecimals(newKPI.target),
       currentValue: 0
     })
     
@@ -723,6 +765,26 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
     setDataValues(newDataValues)
     
     alert("New KPI added successfully!")
+  }
+
+  const handleInputChange = (kpiKey, value) => {
+    // Allow empty string or valid number
+    if (value === "" || value === "-") {
+      setDataValues(prev => ({
+        ...prev,
+        [kpiKey]: value
+      }))
+      return
+    }
+    
+    // Parse to number and format to 2 decimals
+    const num = parseFloat(value)
+    if (!isNaN(num)) {
+      setDataValues(prev => ({
+        ...prev,
+        [kpiKey]: parseToTwoDecimals(num)
+      }))
+    }
   }
 
   return (
@@ -949,8 +1011,9 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
                 </label>
                 <input
                   type="number"
+                  step="0.01"
                   value={newKPI.target}
-                  onChange={(e) => setNewKPI({...newKPI, target: e.target.value})}
+                  onChange={(e) => setNewKPI({...newKPI, target: parseToTwoDecimals(e.target.value)})}
                   placeholder="Enter target"
                   style={{
                     width: "100%",
@@ -1104,7 +1167,7 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
                           fontWeight: "600",
                           backgroundColor: "#f0e6d6"
                         }}>
-                          {kpi.target}
+                          {formatToTwoDecimals(kpi.target)}
                         </td>
                         {months.map((month, monthIndex) => {
                           const kpiKey = `${currentCategory.id}-${subCategory.name}-${kpi.name}-${month}`
@@ -1115,7 +1178,8 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
                             }}>
                               <input
                                 type="number"
-                                value={dataValues[kpiKey] || ""}
+                                step="0.01"
+                                value={dataValues[kpiKey] !== undefined ? dataValues[kpiKey] : ""}
                                 placeholder="-"
                                 style={{
                                   width: "100%",
@@ -1127,12 +1191,7 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
                                   textAlign: "center",
                                   backgroundColor: "white"
                                 }}
-                                onChange={(e) => {
-                                  setDataValues(prev => ({
-                                    ...prev,
-                                    [kpiKey]: e.target.value
-                                  }))
-                                }}
+                                onChange={(e) => handleInputChange(kpiKey, e.target.value)}
                               />
                             </td>
                           )
@@ -1180,7 +1239,7 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
           borderTop: "1px solid #e8ddd4"
         }}>
           <div style={{ fontSize: "13px", color: "#8d6e63" }}>
-            Data values adjust based on selected year. Enter values for all months at once.
+            All values will be rounded to 2 decimal places when saved. Enter values for all months at once.
           </div>
           
           <div style={{ display: "flex", gap: "10px" }}>
@@ -1320,6 +1379,18 @@ const KPIDashboard = ({ activeSection, isInvestorView, financialYearStartMonth }
     }
   ]
 
+  // Format all KPI values to 2 decimals on load
+  useEffect(() => {
+    kpiStructure.forEach(category => {
+      category.subCategories.forEach(subCategory => {
+        subCategory.kpis.forEach(kpi => {
+          kpi.target = parseToTwoDecimals(kpi.target)
+          kpi.currentValue = parseToTwoDecimals(kpi.currentValue)
+        })
+      })
+    })
+  }, [])
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -1350,7 +1421,14 @@ const KPIDashboard = ({ activeSection, isInvestorView, financialYearStartMonth }
           const docRef = doc(db, section, userId)
           const docSnap = await getDoc(docRef)
           if (docSnap.exists()) {
-            data[section] = docSnap.data()
+            // Format all numbers to 2 decimals when loading
+            const docData = docSnap.data()
+            Object.keys(docData).forEach(key => {
+              if (typeof docData[key] === 'number') {
+                docData[key] = parseToTwoDecimals(docData[key])
+              }
+            })
+            data[section] = docData
           }
         } catch (error) {
           console.error(`Error loading ${section} data:`, error)
@@ -1382,7 +1460,7 @@ const KPIDashboard = ({ activeSection, isInvestorView, financialYearStartMonth }
       category.subCategories.forEach(subCategory => {
         subCategory.kpis.forEach(kpi => {
           const variance = typeof kpi.currentValue === 'number' && typeof kpi.target === 'number' 
-            ? kpi.currentValue - kpi.target
+            ? parseToTwoDecimals(kpi.currentValue - kpi.target)
             : "N/A"
           
           const status = typeof variance === 'number' 
@@ -1394,9 +1472,9 @@ const KPIDashboard = ({ activeSection, isInvestorView, financialYearStartMonth }
             subCategory.name,
             kpi.name,
             kpi.units,
-            kpi.target,
-            kpi.currentValue,
-            variance,
+            formatToTwoDecimals(kpi.target),
+            formatToTwoDecimals(kpi.currentValue),
+            formatToTwoDecimals(variance),
             status
           ])
         })
@@ -1429,7 +1507,7 @@ const KPIDashboard = ({ activeSection, isInvestorView, financialYearStartMonth }
         <div>
           <h2 style={{ color: "#4a352f", marginTop: 0, marginBottom: "5px" }}>KPI Dashboard Summary</h2>
           <p style={{ color: "#7d5a50", fontSize: "14px", margin: 0 }}>
-            Operational Performance Metrics Overview
+            Operational Performance Metrics Overview (All values shown to 2 decimal places)
           </p>
         </div>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
@@ -1559,7 +1637,7 @@ const KPIDashboard = ({ activeSection, isInvestorView, financialYearStartMonth }
                   const isFirstKPI = kpiIndex === 0
                   const isFirstSubCategory = subCategoryIndex === 0 && kpiIndex === 0
                   const variance = typeof kpi.currentValue === 'number' && typeof kpi.target === 'number' 
-                    ? kpi.currentValue - kpi.target
+                    ? parseToTwoDecimals(kpi.currentValue - kpi.target)
                     : "N/A"
                   
                   return (
@@ -1620,7 +1698,7 @@ const KPIDashboard = ({ activeSection, isInvestorView, financialYearStartMonth }
                         borderRight: "1px solid #ddd",
                         backgroundColor: "#f0e6d6",
                       }}>
-                        {kpi.target}
+                        {formatToTwoDecimals(kpi.target)}
                       </td>
                       
                       <td style={{ 
@@ -1630,7 +1708,7 @@ const KPIDashboard = ({ activeSection, isInvestorView, financialYearStartMonth }
                         borderRight: "1px solid #ddd",
                         backgroundColor: "#e8e0d1",
                       }}>
-                        {kpi.currentValue}
+                        {formatToTwoDecimals(kpi.currentValue)}
                       </td>
                       
                       <td style={{ 
@@ -1643,7 +1721,7 @@ const KPIDashboard = ({ activeSection, isInvestorView, financialYearStartMonth }
                           ? (variance >= 0 ? "#e8f5e9" : "#ffebee") 
                           : "#f5f0eb",
                       }}>
-                        {typeof variance === 'number' ? (variance >= 0 ? '+' : '') + variance : variance}
+                        {typeof variance === 'number' ? (variance >= 0 ? '+' : '') + formatToTwoDecimals(variance) : variance}
                       </td>
                       
                       <td style={{ padding: "12px", textAlign: "center" }}>
@@ -1693,7 +1771,7 @@ const KPIDashboard = ({ activeSection, isInvestorView, financialYearStartMonth }
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <span style={{ fontSize: "20px" }}>💡</span>
             <span style={{ color: "#2e7d32", fontSize: "14px" }}>
-              <strong>Tip:</strong> Click the 👁️ icon to view charts and AI-powered analysis for each KPI. Use "+ Add Data" button to enter values for multiple KPIs at once.
+              <strong>Tip:</strong> All values are rounded to 2 decimal places. Click the 👁️ icon to view charts and AI-powered analysis for each KPI. Use "+ Add Data" button to enter values for multiple KPIs at once.
             </span>
           </div>
         </div>
@@ -1893,6 +1971,7 @@ const OperationalPerformance = () => {
                       <li>Add data for multiple KPIs at once by category</li>
                       <li>Add custom KPIs with "Add New KPI" button</li>
                       <li>Target vs actual performance comparison with notes</li>
+                      <li>All values rounded to 2 decimal places</li>
                     </ul>
                   </div>
 
