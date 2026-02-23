@@ -42,9 +42,9 @@ const formatCurrency = (value, unit = "zar_million", decimals = 2) => {
   const num = Number.parseFloat(value) || 0
   switch(unit) {
     case "zar": return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
-    case "zar_thousand": return `R${(num * 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}K`
-    case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}m`
-    case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}bn`
+    case "zar_thousand": return `R${(num * 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
+    case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
+    case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
     default: return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
   }
 }
@@ -2660,9 +2660,9 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
     const num = Number.parseFloat(value) || 0
     switch(unit) {
       case "zar": return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
-      case "zar_thousand": return `R${(num * 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}K`
-      case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}m`
-      case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}bn`
+      case "zar_thousand": return `R${(num * 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
+      case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
+      case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
       default: return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
     }
   }
@@ -3129,7 +3129,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
               </select>
             </div>
 
-            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+            {/* <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
               <span style={{ color: "#5d4037", fontSize: "14px", whiteSpace: "nowrap" }}>Units:</span>
               <select
                 value={currencyUnit}
@@ -3148,7 +3148,7 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                 <option value="zar_million">R m</option>
                 <option value="zar_billion">R bn</option>
               </select>
-            </div>
+            </div> */}
           </div>
 
           {!isInvestorView && (
@@ -4671,9 +4671,9 @@ const PerformanceEngine = ({ activeSection, viewMode, financialYearStart, user, 
     const num = Number.parseFloat(value) || 0
     switch(unit) {
       case "zar": return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
-      case "zar_thousand": return `R${(num * 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}K`
-      case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}m`
-      case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}bn`
+      case "zar_thousand": return `R${(num * 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
+      case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
+      case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
       default: return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
     }
   }
@@ -4794,7 +4794,7 @@ const PerformanceEngine = ({ activeSection, viewMode, financialYearStart, user, 
             </button>
           </div>
           
-          <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+          {/* <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
             <span style={{ color: "#5d4037", fontSize: "14px" }}>Units:</span>
             <select
               value={currencyUnit}
@@ -4813,7 +4813,7 @@ const PerformanceEngine = ({ activeSection, viewMode, financialYearStart, user, 
               <option value="zar_million">R m</option>
               <option value="zar_billion">R bn</option>
             </select>
-          </div>
+          </div> */}
           
           <button
             onClick={() => setShowVariance(!showVariance)}
@@ -5102,9 +5102,9 @@ const CostAgility = ({ activeSection, user, isInvestorView, financialYearStart }
     const num = Number.parseFloat(value) || 0
     switch(unit) {
       case "zar": return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
-      case "zar_thousand": return `R${(num * 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}K`
-      case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}m`
-      case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}bn`
+      case "zar_thousand": return `R${(num * 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
+      case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
+      case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
       default: return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
     }
   }
@@ -5214,7 +5214,7 @@ const CostAgility = ({ activeSection, user, isInvestorView, financialYearStart }
               </select>
             </div>
 
-            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+            {/* <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
               <span style={{ color: "#5d4037", fontSize: "14px" }}>Units:</span>
               <select
                 value={currencyUnit}
@@ -5233,7 +5233,7 @@ const CostAgility = ({ activeSection, user, isInvestorView, financialYearStart }
                 <option value="zar_million">R m</option>
                 <option value="zar_billion">R bn</option>
               </select>
-            </div>
+            </div> */}
           </div>
           
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
@@ -5547,9 +5547,9 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView, financialYearS
     const num = Number.parseFloat(value) || 0
     switch(unit) {
       case "zar": return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
-      case "zar_thousand": return `R${(num * 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}K`
-      case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}m`
-      case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}bn`
+      case "zar_thousand": return `R${(num * 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
+      case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
+      case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
       default: return `R${num.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals})}`
     }
   }
@@ -5786,7 +5786,7 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView, financialYearS
               </select>
             </div>
 
-            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+            {/* <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
               <span style={{ color: "#5d4037", fontSize: "14px" }}>Units:</span>
               <select
                 value={currencyUnit}
@@ -5805,7 +5805,7 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView, financialYearS
                 <option value="zar_million">R m</option>
                 <option value="zar_billion">R bn</option>
               </select>
-            </div>
+            </div> */}
           </div>
           
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
