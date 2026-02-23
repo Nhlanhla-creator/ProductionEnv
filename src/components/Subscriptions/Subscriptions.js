@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { v4 as uuidv4 } from "uuid"
 import { getAuth } from "firebase/auth"
-import { collection, getFirestore, query, where, getDocs, doc, getDoc } from "firebase/firestore"
+import { collection, getFirestore, query, where, getDocs, doc, getDoc, setDoc } from "firebase/firestore"
 import { useNavigate } from "react-router-dom"
 import EmbeddedCheckout from "../EmbeddedCheckout"
 import { colors } from "../../shared/theme"
@@ -19,128 +19,100 @@ import {
   isPopularPlan,
   getAddOns
 } from "../../config/subscriptionsConfig"
-import { validate, saveToFirebase, updateCurrentPlan } from "./Actions"
 
-const createSubscriptionCheckout = async (
-  amount,
-  currency,
-  userId,
-  planName,
-  billingCycle,
-  actionType = "subscription",
-  userType = "investor"
-) => {
+// FRONTEND-ONLY: Mock payment processing
+const processMockPayment = async (paymentDetails) => {
+  console.log("🔄 Processing mock payment:", paymentDetails)
+  
+  // Simulate payment processing delay
+  await new Promise(resolve => setTimeout(resolve, 2000))
+  
+  // Mock successful payment response
+  return {
+    success: true,
+    transactionId: `mock_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    amount: paymentDetails.amount,
+    status: "Success",
+    message: "Payment processed successfully (mock)"
+  }
+}
+
+// FRONTEND-ONLY: Save subscription to Firestore
+const saveSubscriptionToFirebase = async (subscriptionData) => {
   try {
-    console.log("🔄 Creating subscription checkout:", { 
-      amount, currency, userId, planName, billingCycle, actionType, userType 
+    const db = getFirestore()
+    const subscriptionRef = doc(collection(db, "subscriptions"))
+    await setDoc(subscriptionRef, {
+      ...subscriptionData,
+      id: subscriptionRef.id,
+      createdAt: new Date().toISOString()
     })
-
-    // ✅ NEW: Validate required fields before making the request
-    if (!userId || !planName || !billingCycle) {
-      throw new Error("Missing required fields: userId, planName, or billingCycle")
-    }
-
-    // ✅ NEW: Check for new user eligibility for trial period
-    const isTrialEligible = actionType === "subscription" || actionType === "upgrade"
-
-    const response = await fetch(`${"http://localhost:8000"}/api/payments/create-subscription`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        // ✅ NEW: Added toString() conversions for safety and type consistency
-        userId: userId.toString(),
-        planName: planName.toString(),
-        billingCycle: billingCycle.toString(),
-        // ✅ NEW: Ensure amount is a number with proper handling
-        amount: Number(amount) || 0,
-        currency: currency || "ZAR",
-        // ✅ NEW: Provide default values for optional fields
-        customerEmail: getAuth().currentUser?.email || "",
-        customerName: getAuth().currentUser?.displayName || "",
-        actionType: actionType || "subscription",
-        userType: userType || "investor",
-        // ✅ NEW: Store original price for future billing
-        originalAmount: Number(amount) || 0,
-        // ✅ NEW: Enhanced trial period handling
-        isTrialPeriod: isTrialEligible,
-        // ✅ NEW: Trial duration configuration
-        trialDuration: isTrialEligible ? 3 : 0, // 3 months trial for eligible users
-      }),
-    })
-
-    const data = await response.json()
-    console.log("✅ Subscription checkout response:", data)
-
-    if (!data.success) {
-      throw new Error(data.error || "Failed to create subscription checkout")
-    }
-
-    return data
+    
+    // Also update user document with current subscription
+    const userRef = doc(db, "users", subscriptionData.userId)
+    await setDoc(userRef, {
+      currentSubscription: {
+        plan: subscriptionData.plan,
+        status: subscriptionData.status,
+        amount: subscriptionData.amount,
+        cycle: subscriptionData.cycle,
+        lastUpdated: new Date().toISOString(),
+        transactionRef: subscriptionData.transactionRef,
+        isTrialPeriod: subscriptionData.isTrialPeriod || false,
+        originalAmount: subscriptionData.originalAmount,
+        trialStartDate: subscriptionData.trialStartDate,
+        trialEndDate: subscriptionData.trialEndDate
+      }
+    }, { merge: true })
+    
+    return subscriptionRef.id
   } catch (error) {
-    console.error("❌ Subscription checkout error:", error)
+    console.error("Error saving to Firebase:", error)
     throw error
   }
 }
 
-// UPDATED: Enhanced createOneTimeCheckout function with better error handling
-const createOneTimeCheckout = async (
-  amount,
-  currency,
-  userId,
-  itemName,
-  itemId,
-  actionType = "addon",
-  userType = "investor"
-) => {
+// FRONTEND-ONLY: Update current plan in user document
+const updateCurrentPlan = async (planName, billingCycle, additionalData = {}) => {
   try {
-    console.log("💳 Creating one-time checkout for add-on:", { 
-      amount, currency, userId, itemName, itemId, actionType, userType 
-    })
-
-    // ✅ NEW: Validate required fields
-    if (!userId || !itemName || !itemId) {
-      throw new Error("Missing required fields for one-time checkout")
-    }
-
-    const response = await fetch(`${process.env.REACT_APP_API_URL}/api/payments/create-checkout`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        // ✅ NEW: Type-safe data formatting
-        userId: userId.toString(),
-        itemName: itemName.toString(),
-        itemId: itemId.toString(),
-        amount: Number(amount) || 0,
-        currency: currency || "ZAR",
-        // ✅ NEW: Default values for optional fields
-        customerEmail: getAuth().currentUser?.email || "",
-        customerName: getAuth().currentUser?.displayName || "",
-        actionType: actionType || "addon",
-        userType: userType || "investor",
-        // ✅ NEW: Add metadata for better tracking
-        checkoutMetadata: {
-          type: actionType,
-          timestamp: new Date().toISOString(),
-          userAgent: navigator.userAgent,
-        },
-      }),
-    })
-
-    const data = await response.json()
-    console.log("✅ One-time checkout response:", data)
-
-    if (!data.success) {
-      throw new Error(data.error || "Failed to create one-time checkout")
-    }
-
-    return data
+    const db = getFirestore()
+    const auth = getAuth()
+    const user = auth.currentUser
+    
+    if (!user) throw new Error("No user logged in")
+    
+    const userRef = doc(db, "users", user.uid)
+    await setDoc(userRef, {
+      currentSubscription: {
+        plan: planName,
+        cycle: billingCycle,
+        lastUpdated: new Date().toISOString(),
+        ...additionalData
+      }
+    }, { merge: true })
+    
+    return true
   } catch (error) {
-    console.error("❌ One-time checkout error:", error)
+    console.error("Error updating current plan:", error)
     throw error
+  }
+}
+
+// FRONTEND-ONLY: Validate user input
+const validate = (email, fullName) => {
+  const errors = {}
+  
+  if (!email || !email.includes("@")) {
+    errors.email = "Valid email is required"
+  }
+  
+  if (!fullName || fullName.trim().length < 2) {
+    errors.fullName = "Full name is required"
+  }
+  
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors
   }
 }
 
@@ -149,7 +121,6 @@ const ReusableSubscription = ({
   sidebarOpen = true, 
   sidebarWidth = 280, 
   onSidebarToggle,
-  // Additional props
   showAddOns = false,
   customTitle = null,
   customSubtitle = null
@@ -170,7 +141,6 @@ const ReusableSubscription = ({
   const [selectedAddOn, setSelectedAddOn] = useState(null)
   const [hoveredPlan, setHoveredPlan] = useState(null)
   const [paymentProcessing, setPaymentProcessing] = useState(false)
-  const [checkoutId, setCheckoutId] = useState(null)
   const [showCheckout, setShowCheckout] = useState(false)
 
   // Get configuration based on user type
@@ -262,7 +232,7 @@ const ReusableSubscription = ({
     return plans[planKey]?.price?.[cycle] || 0
   }
 
-  // Enhanced load user subscription data
+  // Enhanced load user subscription data (FRONTEND-ONLY)
   const loadUserSubscription = async (userId) => {
     console.log(`🔍 Loading ${userType} subscription for user:`, userId)
     setIsLoading(true)
@@ -555,7 +525,7 @@ const ReusableSubscription = ({
         transactionRef: `downgrade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       }
 
-      await saveToFirebase(newRecord)
+      await saveSubscriptionToFirebase(newRecord)
       await updateCurrentPlan(plans[selectedPlan].name, billingCycle, { userType })
       setHistory([newRecord, ...history])
       setCurrentSubscription(newRecord)
@@ -614,7 +584,7 @@ const ReusableSubscription = ({
       }
 
       // Save cancellation record
-      await saveToFirebase(cancellationRecord)
+      await saveSubscriptionToFirebase(cancellationRecord)
 
       // Update current plan to free plan
       await updateCurrentPlan(plans[freePlanKey].name, "monthly", { userType })
@@ -638,7 +608,7 @@ const ReusableSubscription = ({
     }
   }
 
-  // Handle payment with proper subscription vs one-time logic
+  // FRONTEND-ONLY: Handle payment with mock processing
   const handlePay = async () => {
     console.log("Starting payment process for plan:", selectedPlan)
 
@@ -669,7 +639,7 @@ const ReusableSubscription = ({
         }
 
         setHistory([newRecord, ...history])
-        await saveToFirebase(newRecord)
+        await saveSubscriptionToFirebase(newRecord)
         await updateCurrentPlan(plans[selectedPlan].name, billingCycle, { userType })
         setCurrentSubscription(newRecord)
         setIsExistingUser(true)
@@ -694,37 +664,103 @@ const ReusableSubscription = ({
       return
     }
 
-    console.log("Creating subscription checkout...")
+    console.log("Processing mock payment...")
     setPaymentProcessing(true)
 
     try {
-      const checkoutData = await createSubscriptionCheckout(
-        planPrice,
-        "ZAR",
-        user.uid,
-        plans[selectedPlan].name,
-        billingCycle,
-        isExistingUser ? upgradeDowngradeAction || "upgrade" : "subscription",
-        userType
-      )
+      // FRONTEND-ONLY: Mock payment processing
+      const mockPaymentResult = await processMockPayment({
+        amount: planPrice,
+        currency: "ZAR",
+        userId: user.uid,
+        planName: plans[selectedPlan].name,
+        billingCycle: billingCycle
+      })
 
-      console.log("Subscription checkout created:", checkoutData)
+      console.log("Mock payment processed:", mockPaymentResult)
 
-      if (checkoutData.success && checkoutData.checkoutId) {
-        setCheckoutId(checkoutData.checkoutId)
-        setShowCheckout(true)
+      if (mockPaymentResult.success) {
+        // Handle successful payment
+        const isTrialEligible = isNewUser()
+        const trialStartDate = new Date()
+        const trialEndDate = new Date()
+        trialEndDate.setMonth(trialEndDate.getMonth() + 3)
+
+        const newRecord = {
+          id: uuidv4(),
+          email: email,
+          plan: plans[selectedPlan].name,
+          cycle: billingCycle,
+          amount: 0, // During trial
+          originalAmount: plans[selectedPlan].price[billingCycle],
+          fullName: fullName,
+          companyName,
+          createdAt: new Date().toISOString(),
+          status: "Success",
+          autoRenew: true,
+          transactionRef: mockPaymentResult.transactionId,
+          userId: user.uid,
+          userType: userType,
+          subscriptionType: "recurring",
+          isTrialPeriod: isTrialEligible,
+          trialStartDate: isTrialEligible ? trialStartDate.toISOString() : null,
+          trialEndDate: isTrialEligible ? trialEndDate.toISOString() : null,
+          action: isExistingUser ? upgradeDowngradeAction || "upgrade" : "new_subscription",
+          paymentCompleted: true,
+          paymentDate: new Date().toISOString(),
+        }
+
+        console.log("💾 Saving subscription record:", newRecord)
+
+        // Save to Firebase
+        await saveSubscriptionToFirebase(newRecord)
+
+        // Update current plan with additional data
+        const additionalData = {
+          amount: newRecord.amount,
+          originalAmount: newRecord.originalAmount,
+          isTrialPeriod: newRecord.isTrialPeriod,
+          trialStartDate: newRecord.trialStartDate,
+          trialEndDate: newRecord.trialEndDate,
+          transactionRef: newRecord.transactionRef,
+          userType: userType
+        }
+
+        await updateCurrentPlan(plans[selectedPlan].name, billingCycle, additionalData)
+
+        // Update local state
+        setHistory([newRecord, ...history])
+        setCurrentSubscription(newRecord)
+        setIsExistingUser(true)
+        setPaymentProcessing(false)
+
+        // Clear upgrade/downgrade state
+        setUpgradeDowngradeAction(null)
+        setShowPlanChangeConfirm(false)
+
+        // Show success message with trial information
+        const successMessage = isTrialEligible
+          ? `🎉 Welcome to your ${plans[selectedPlan].name} plan!\n\n✨ You're getting 3 MONTHS FREE!\n• Trial period: ${trialStartDate.toLocaleDateString()} - ${trialEndDate.toLocaleDateString()}\n• Regular billing starts: ${trialEndDate.toLocaleDateString()}\n• Monthly rate after trial: R${plans[selectedPlan].price[billingCycle]}\n\nEnjoy all premium features at no cost for the first 3 months!`
+          : `🎉 Subscription activated successfully!\n\nYour ${plans[selectedPlan].name} plan is now active with automatic renewals.\n\nYou can now access all premium features!`
+
+        alert(successMessage)
+
+        // Reload subscription data to ensure sync
+        setTimeout(async () => {
+          console.log("🔄 Reloading subscription data...")
+          await loadUserSubscription(user.uid)
+        }, 2000)
       } else {
-        throw new Error(checkoutData.error || "Failed to create subscription checkout")
+        throw new Error(mockPaymentResult.error || "Payment failed")
       }
     } catch (error) {
-      console.error("Subscription checkout creation error:", error)
-      alert(`Failed to initialize subscription payment: ${error.message}. Please try again.`)
-    } finally {
+      console.error("Payment processing error:", error)
+      alert(`Failed to process payment: ${error.message}. Please try again.`)
       setPaymentProcessing(false)
     }
   }
 
-  // Handle add-on purchase
+  // FRONTEND-ONLY: Handle add-on purchase with mock payment
   const handleAddOnClick = (addOn) => {
     setSelectedAddOn(addOn)
     setShowAddOnModal(true)
@@ -736,43 +772,20 @@ const ReusableSubscription = ({
       return
     }
 
-    console.log("Creating add-on checkout...")
+    console.log("Processing add-on payment...")
     setPaymentProcessing(true)
 
     try {
-      const checkoutData = await createOneTimeCheckout(
-        selectedAddOn.amount,
-        "ZAR",
-        user.uid,
-        selectedAddOn.name,
-        selectedAddOn.id,
-        "addon",
-        userType
-      )
+      // FRONTEND-ONLY: Mock payment processing for add-on
+      const mockPaymentResult = await processMockPayment({
+        amount: selectedAddOn.amount,
+        currency: "ZAR",
+        userId: user.uid,
+        itemName: selectedAddOn.name,
+        itemId: selectedAddOn.id
+      })
 
-      if (checkoutData.success && checkoutData.checkoutId) {
-        setCheckoutId(checkoutData.checkoutId)
-        setShowCheckout(true)
-        setShowAddOnModal(false)
-      } else {
-        throw new Error(checkoutData.error || "Failed to create add-on checkout")
-      }
-    } catch (error) {
-      console.error("Add-on checkout creation error:", error)
-      alert(`Failed to initialize add-on payment: ${error.message}. Please try again.`)
-    } finally {
-      setPaymentProcessing(false)
-    }
-  }
-
-  // Handle checkout completion
-  const handleCheckoutCompleted = async (event) => {
-    console.log("🎉 Payment completed:", event)
-    setPaymentProcessing(true)
-
-    try {
-      // Handle add-on payment
-      if (selectedAddOn) {
+      if (mockPaymentResult.success) {
         const addOnRecord = {
           id: uuidv4(),
           email: email,
@@ -784,101 +797,31 @@ const ReusableSubscription = ({
           companyName: companyName,
           createdAt: new Date().toISOString(),
           status: "Success",
-          transactionRef: event.id || event.transactionId,
+          transactionRef: mockPaymentResult.transactionId,
           userId: user.uid,
           userType: userType,
         }
 
-        await saveToFirebase(addOnRecord)
+        await saveSubscriptionToFirebase(addOnRecord)
         setHistory([addOnRecord, ...history])
         alert(`Payment successful! ${selectedAddOn.name} has been added to your account.`)
-        setShowCheckout(false)
+        setShowAddOnModal(false)
         setSelectedAddOn(null)
-        setPaymentProcessing(false)
-        return
+      } else {
+        throw new Error(mockPaymentResult.error || "Add-on payment failed")
       }
-
-      // Handle subscription/plan payment with trial period
-      const isTrialEligible = isNewUser()
-      const trialStartDate = new Date()
-      const trialEndDate = new Date()
-      trialEndDate.setMonth(trialEndDate.getMonth() + 3)
-
-      const newRecord = {
-        id: uuidv4(),
-        email: email,
-        plan: plans[selectedPlan].name,
-        cycle: billingCycle,
-        amount: 0,
-        originalAmount: plans[selectedPlan].price[billingCycle],
-        fullName: fullName,
-        companyName,
-        createdAt: new Date().toISOString(),
-        status: "Success",
-        autoRenew: true,
-        transactionRef: event.id || event.transactionId || `trial_${Date.now()}`,
-        userId: user.uid,
-        userType: userType,
-        subscriptionType: "recurring",
-        isTrialPeriod: isTrialEligible,
-        trialStartDate: isTrialEligible ? trialStartDate.toISOString() : null,
-        trialEndDate: isTrialEligible ? trialEndDate.toISOString() : null,
-        ...(event.registrationId && { registrationId: event.registrationId }),
-        ...(event.cardBrand && { cardBrand: event.cardBrand }),
-        ...(event.cardLast4 && { cardLast4: event.cardLast4 }),
-        action: isExistingUser ? upgradeDowngradeAction || "upgrade" : "new_subscription",
-        paymentCompleted: true,
-        paymentDate: new Date().toISOString(),
-      }
-
-      console.log("💾 Saving subscription record:", newRecord)
-
-      // Save to Firebase
-      await saveToFirebase(newRecord)
-
-      // Update current plan with additional data
-      const additionalData = {
-        amount: newRecord.amount,
-        originalAmount: newRecord.originalAmount,
-        isTrialPeriod: newRecord.isTrialPeriod,
-        trialStartDate: newRecord.trialStartDate,
-        trialEndDate: newRecord.trialEndDate,
-        transactionRef: newRecord.transactionRef,
-        userType: userType
-      }
-
-      await updateCurrentPlan(plans[selectedPlan].name, billingCycle, additionalData)
-
-      // Update local state
-      setHistory([newRecord, ...history])
-      setCurrentSubscription(newRecord)
-      setIsExistingUser(true)
-      setShowCheckout(false)
-      setPaymentProcessing(false)
-
-      // Clear upgrade/downgrade state
-      setUpgradeDowngradeAction(null)
-      setShowPlanChangeConfirm(false)
-
-      // Show success message with trial information
-      const successMessage = isTrialEligible
-        ? `🎉 Welcome to your ${plans[selectedPlan].name} plan!\n\n✨ You're getting 3 MONTHS FREE!\n• Trial period: ${trialStartDate.toLocaleDateString()} - ${trialEndDate.toLocaleDateString()}\n• Regular billing starts: ${trialEndDate.toLocaleDateString()}\n• Monthly rate after trial: R${plans[selectedPlan].price[billingCycle]}\n\nEnjoy all premium features at no cost for the first 3 months!`
-        : `🎉 Subscription activated successfully!\n\nYour ${plans[selectedPlan].name} plan is now active with automatic renewals.\n\nYou can now access all premium features!`
-
-      alert(successMessage)
-
-      // Reload subscription data to ensure sync
-      setTimeout(async () => {
-        console.log("🔄 Reloading subscription data...")
-        await loadUserSubscription(user.uid)
-      }, 2000)
     } catch (error) {
-      console.error("❌ Error processing completed payment:", error)
+      console.error("Add-on payment error:", error)
+      alert(`Failed to process add-on payment: ${error.message}. Please try again.`)
+    } finally {
       setPaymentProcessing(false)
-      alert(
-        `❌ Payment Error\n\nYour payment was processed but there was an error saving your subscription:\n\n${error.message}\n\nPlease contact support with your transaction ID: ${event.id || event.transactionId}`,
-      )
     }
+  }
+
+  // Handle checkout completion (simplified for frontend)
+  const handleCheckoutCompleted = async (event) => {
+    console.log("🎉 Payment completed:", event)
+    // This is now handled in handlePay and handleAddOnPayment
   }
 
   const handleCheckoutCancelled = () => {
@@ -1039,14 +982,6 @@ const ReusableSubscription = ({
                 <div style={styles.subscriptionDetail}>
                   <span>Auto Renewal:</span>
                   <span style={{ fontWeight: 600, color: colors.featureCheck }}>Enabled</span>
-                </div>
-              )}
-              {currentSubscription.cardLast4 && (
-                <div style={styles.subscriptionDetail}>
-                  <span>Payment Method:</span>
-                  <span style={{ fontWeight: 600 }}>
-                    {currentSubscription.cardBrand || "Card"} ending in {currentSubscription.cardLast4}
-                  </span>
                 </div>
               )}
             </div>
@@ -1298,7 +1233,7 @@ const ReusableSubscription = ({
                         lineHeight: "1.4",
                       }}
                     >
-                      Your card will be saved for automatic billing after the trial period ends. Cancel anytime during
+                      Your subscription will be saved for automatic billing after the trial period ends. Cancel anytime during
                       the trial with no charges.
                     </p>
                   </div>
@@ -1324,8 +1259,7 @@ const ReusableSubscription = ({
                       gap: "0.5rem",
                     }}
                   >
-                    💳 <strong>Important:</strong> For automatic renewals, please pay with a{" "}
-                    <strong>Credit or Debit Card</strong>
+                    💳 <strong>Demo Mode:</strong> No actual payment will be processed
                   </p>
                   <p
                     style={{
@@ -1335,8 +1269,7 @@ const ReusableSubscription = ({
                       lineHeight: "1.4",
                     }}
                   >
-                    Other payment methods (Scan to Pay, EFT) will complete this payment but won't enable automatic
-                    subscription renewals.
+                    This is a demonstration version. Clicking "Subscribe" will simulate a successful payment and activate your plan.
                   </p>
                 </div>
 
@@ -1356,7 +1289,7 @@ const ReusableSubscription = ({
                   </li>
                   <li style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
                     <span style={{ color: colors.featureCheck }}>✓</span>
-                    Cards are securely saved for automatic {billingCycle} renewals
+                    Subscription saved for automatic {billingCycle} renewals
                   </li>
                   <li style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
                     <span style={{ color: colors.featureCheck }}>✓</span>
@@ -1367,10 +1300,6 @@ const ReusableSubscription = ({
                   <li style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
                     <span style={{ color: colors.featureCheck }}>✓</span>
                     Cancel anytime from your account settings
-                  </li>
-                  <li style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                    <span style={{ color: colors.featureCheck }}>✓</span>
-                    256-bit SSL encryption for all transactions
                   </li>
                 </ul>
               </div>
@@ -1388,14 +1317,6 @@ const ReusableSubscription = ({
                   key={addOn.id}
                   style={styles.addOnItem}
                   onClick={() => handleAddOnClick(addOn)}
-                  // onMouseEnter={(e) => {
-                  //   e.target.style.transform = "translateY(-4px)"
-                  //   e.target.style.boxShadow = `0 8px 20px ${colors.darkBrown}26`
-                  // }}
-                  // onMouseLeave={(e) => {
-                  //   e.target.style.transform = "translateY(0)"
-                  //   e.target.style.boxShadow = "none"
-                  // }}
                 >
                   <div style={styles.addOnName}>{addOn.name}</div>
                   <div style={styles.addOnDescription}>{addOn.description}</div>
@@ -1432,202 +1353,54 @@ const ReusableSubscription = ({
           </div>
         )}
 
-        {/* Enhanced Checkout Modal with Loading States */}
-        {showCheckout && checkoutId && (
+        {/* Processing Modal */}
+        {paymentProcessing && (
           <div style={styles.planChangeModal}>
             <div
               style={{
                 background: colors.offWhite,
                 padding: "2rem",
                 borderRadius: "24px",
-                maxWidth: "600px",
+                maxWidth: "400px",
                 width: "100%",
-                maxHeight: "90vh",
-                overflow: "auto",
                 boxShadow: `0 24px 60px ${colors.darkBrown}33`,
                 border: `1px solid ${colors.lightTan}`,
                 position: "relative",
+                textAlign: "center",
               }}
             >
-              <h2
-                style={{
-                  color: colors.darkBrown,
-                  marginBottom: "0.5rem",
-                  textAlign: "center",
-                  fontSize: "1.5rem",
-                  fontWeight: 700,
-                }}
-              >
-                {selectedAddOn ? "Complete Your Purchase" : 
-                 isNewUser() ? "Start Your Free Trial" : "Complete Your Subscription"}
-              </h2>
-
               <div
                 style={{
-                  background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
-                  borderRadius: "12px",
-                  padding: "1rem",
-                  marginBottom: "1.5rem",
-                  border: `1px solid ${colors.lightTan}`,
-                  textAlign: "center",
+                  width: "80px",
+                  height: "80px",
+                  border: `6px solid ${colors.lightTan}`,
+                  borderTop: `6px solid ${colors.accentGold}`,
+                  borderRadius: "50%",
+                  animation: "spin 1s linear infinite",
+                  margin: "0 auto 2rem auto",
+                }}
+              ></div>
+              <h3
+                style={{
+                  color: colors.darkBrown,
+                  fontSize: "1.5rem",
+                  fontWeight: 700,
+                  marginBottom: "1rem",
                 }}
               >
-                <p
-                  style={{
-                    color: colors.darkBrown,
-                    margin: 0,
-                    fontSize: "1rem",
-                    fontWeight: 600,
-                  }}
-                >
-                  {selectedAddOn ? (
-                    <>🛒 Purchasing {selectedAddOn.name}</>
-                  ) : isNewUser() ? (
-                    <>🎉 Starting {plans[selectedPlan].name} Free Trial</>
-                  ) : (
-                    <>🔄 Setting up {plans[selectedPlan].name} Plan</>
-                  )}
-                </p>
-                <p
-                  style={{
-                    color: colors.mediumBrown,
-                    margin: "0.5rem 0 0 0",
-                    fontSize: "0.9rem",
-                  }}
-                >
-                  {selectedAddOn ? (
-                    "One-time purchase - no recurring charges"
-                  ) : isNewUser() ? (
-                    "Free for 3 months, then automatic billing begins"
-                  ) : (
-                    `Your card will be saved for automatic ${billingCycle} renewals`
-                  )}
-                </p>
-              </div>
-
-              <EmbeddedCheckout
-                checkoutId={checkoutId}
-                onCompleted={handleCheckoutCompleted}
-                onCancelled={handleCheckoutCancelled}
-                onExpired={handleCheckoutExpired}
-                paymentType={selectedAddOn ? "addon" : "subscription"}
-                amount={selectedAddOn ? selectedAddOn.amount : 0}
-                planName={selectedAddOn ? undefined : plans[selectedPlan].name}
-                toolName={selectedAddOn ? selectedAddOn.name : undefined}
-                userEmail={email}
-                userName={fullName}
-              />
-
-              <div style={{ textAlign: "center", marginTop: "1rem" }}>
-                <button
-                  style={{
-                    padding: "1rem 2rem",
-                    background: `linear-gradient(135deg, ${colors.lightTan} 0%, ${colors.cream} 100%)`,
-                    color: colors.darkBrown,
-                    border: "none",
-                    borderRadius: "12px",
-                    fontWeight: 700,
-                    fontSize: "1rem",
-                    cursor: "pointer",
-                    opacity: paymentProcessing ? 0.5 : 1,
-                  }}
-                  onClick={() => {
-                    if (!paymentProcessing) {
-                      setShowCheckout(false)
-                      setPaymentProcessing(false)
-                    }
-                  }}
-                  disabled={paymentProcessing}
-                >
-                  {paymentProcessing ? "Processing..." : "Cancel"}
-                </button>
-              </div>
-
-              {/* Processing Overlay */}
-              {paymentProcessing && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    background: `${colors.offWhite}F5`,
-                    backdropFilter: "blur(6px)",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    zIndex: 1001,
-                    borderRadius: "24px",
-                    boxShadow: `inset 0 0 20px ${colors.darkBrown}20`,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "80px",
-                      height: "80px",
-                      border: `6px solid ${colors.lightTan}`,
-                      borderTop: `6px solid ${colors.accentGold}`,
-                      borderRadius: "50%",
-                      animation: "spin 1s linear infinite",
-                      marginBottom: "2rem",
-                    }}
-                  ></div>
-                  <h3
-                    style={{
-                      color: colors.darkBrown,
-                      fontSize: "1.75rem",
-                      fontWeight: 800,
-                      marginBottom: "1rem",
-                      textAlign: "center",
-                      textShadow: `0 2px 4px ${colors.darkBrown}20`,
-                    }}
-                  >
-                    {selectedAddOn ? "Processing Add-on Purchase..." : 
-                     isNewUser() ? "Setting up Your Free Trial..." : "Processing Subscription..."}
-                  </h3>
-                  <p
-                    style={{
-                      color: colors.mediumBrown,
-                      fontSize: "1.1rem",
-                      textAlign: "center",
-                      lineHeight: "1.6",
-                      maxWidth: "350px",
-                      fontWeight: 500,
-                      textShadow: `0 1px 2px ${colors.darkBrown}10`,
-                    }}
-                  >
-                    🔒 {selectedAddOn ? "Securing your add-on purchase" : 
-                     isNewUser() ? "Activating your 3-month free trial" : "Securing your subscription"}...
-                    <br />
-                    <strong>Please do not close this window.</strong>
-                  </p>
-
-                  {/* Progress indicator */}
-                  <div
-                    style={{
-                      marginTop: "2rem",
-                      width: "200px",
-                      height: "4px",
-                      background: colors.lightTan,
-                      borderRadius: "2px",
-                      overflow: "hidden",
-                      position: "relative",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: "50%",
-                        height: "100%",
-                        background: `linear-gradient(90deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
-                        borderRadius: "2px",
-                        animation: "progressSlide 2s linear infinite",
-                      }}
-                    ></div>
-                  </div>
-                </div>
-              )}
+                {selectedAddOn ? "Processing Add-on..." : "Processing Subscription..."}
+              </h3>
+              <p
+                style={{
+                  color: colors.mediumBrown,
+                  fontSize: "1rem",
+                  lineHeight: "1.5",
+                }}
+              >
+                🔒 Please wait while we process your request...
+                <br />
+                <strong>Do not close this window.</strong>
+              </p>
             </div>
           </div>
         )}
@@ -1829,7 +1602,7 @@ const ReusableSubscription = ({
                   onClick={handleAddOnPayment}
                   disabled={paymentProcessing}
                 >
-                  {paymentProcessing ? "Processing..." : `Purchase for R${selectedAddOn.amount}`}
+                  {paymentProcessing ? "Processing..." : `Purchase for ${selectedAddOn.price}`}
                 </button>
               </div>
             </div>
