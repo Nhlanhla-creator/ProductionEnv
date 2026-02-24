@@ -37,9 +37,9 @@ export default function useSubscriptionPlan(providedUid) {
 
         if (userDocSnap.exists()) {
           const userData = userDocSnap.data()
-          const planData = userData.currentPlan
+          const planData = userData?.currentSubscription || userData?.currentPlan
 
-          const planName = (userData.investorPlan || planData?.name || userData.plan || "discover").toLowerCase()
+          const planName = (planData?.plan || planData?.name || userData.investorPlan || "discover").toLowerCase()
 
           // Direct mapping to original plan names
           if (planName.includes("basic") || planName.includes("discover")) {
