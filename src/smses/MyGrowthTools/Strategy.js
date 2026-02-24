@@ -2708,6 +2708,9 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
+      datalabels: {
+      display: false // This disables datalabels for this specific chart
+    },
       legend: {
         display: false,
       },
@@ -4218,6 +4221,9 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
+       datalabels: {
+      display: false // This disables datalabels for this specific chart
+    },
       legend: {
         display: false,
       },

@@ -233,6 +233,9 @@ const ChartViewModal = ({ isOpen, onClose, kpiData, historicalData = [] }) => {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
+      datalabels: {
+      display: false // This disables datalabels for this specific chart
+    },
       legend: {
         position: 'top',
         labels: {

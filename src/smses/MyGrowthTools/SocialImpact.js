@@ -19,7 +19,7 @@ import {
   Tooltip,
   Legend,
 } from "chart.js"
-import ChartDataLabels from "chartjs-plugin-datalabels"
+
 
 // Register ChartJS components
 ChartJS.register(
@@ -32,7 +32,7 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  ChartDataLabels
+
 )
 
 // Helper function to get months array based on financial year

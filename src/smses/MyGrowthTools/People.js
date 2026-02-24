@@ -345,6 +345,9 @@ const TrendModal = ({ isOpen, onClose, item, currencyUnit, generateLabels, aggre
               responsive: true,
               maintainAspectRatio: false,
               plugins: {
+                 datalabels: {
+      display: false // This disables datalabels for this specific chart
+    },
                 legend: { 
                   display: true,
                   position: "top",

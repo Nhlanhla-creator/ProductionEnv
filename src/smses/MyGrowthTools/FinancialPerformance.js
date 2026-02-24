@@ -577,6 +577,9 @@ const TrendModal = ({ isOpen, onClose, item, currencyUnit, labels, data, formatV
               responsive: true,
               maintainAspectRatio: false,
               plugins: {
+                 datalabels: {
+      display: false // This disables datalabels for this specific chart
+    },
                 legend: { 
                   display: true,
                   position: "top",
@@ -2775,6 +2778,9 @@ const CapitalStructure = ({ activeSection, viewMode, user, isInvestorView, isEmb
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
+                   datalabels: {
+      display: false // This disables datalabels for this specific chart
+    },
                   legend: { 
                     display: true,
                     position: "top",
