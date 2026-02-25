@@ -750,8 +750,8 @@ const fetchActiveUsers = async () => {
                 <tr>
                   <th>Name</th>
                   <th>Email</th>
-                  <th>Company</th>
-                  <th>CurrentPlan</th>
+                  <th>Plan</th>
+                  <th>Last Active</th>
                 </tr>
               </thead>
               <tbody>
