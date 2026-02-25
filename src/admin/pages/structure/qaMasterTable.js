@@ -26,6 +26,7 @@ const SELECT_STYLE = {
   appearance: 'auto',
   cursor: 'pointer',
   background: '#fff',
+  maxWidth: 120,
 };
 
 // ─── Badge ───────────────────────────────────────────────────────────────────
@@ -89,6 +90,7 @@ const QACell = memo(({ col, value, isEditing, onSave, onCancel }) => {
     outline: 'none',
     background: '#fff',
     minWidth: 80,
+    maxWidth: 120,
   };
 
   return (
@@ -213,7 +215,7 @@ export const QAMasterTable = ({ tasks, onUpdateTask, onAddTask, onDeleteTask, is
             placeholder="Search…"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            style={{ padding: '6px 10px', border: '1px solid #e6d7c3', borderRadius: 6, fontSize: 12, outline: 'none', minWidth: 150, background: '#fff' }}
+            style={{ padding: '6px 10px', border: '1px solid #e6d7c3', borderRadius: 6, fontSize: 12, outline: 'none', minWidth: 150, background: '#fff', maxWidth: 10485760 }}
           />
 
           {/* Status filter */}
@@ -237,7 +239,7 @@ export const QAMasterTable = ({ tasks, onUpdateTask, onAddTask, onDeleteTask, is
           {/* Add row */}
           <button
             onClick={onAddTask}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: '#a67c52', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: '#a67c52', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', maxWidth: 10485760 }}
           >
             <Plus size={14} /> Add Row
           </button>
@@ -278,11 +280,12 @@ export const QAMasterTable = ({ tasks, onUpdateTask, onAddTask, onDeleteTask, is
                   padding: '10px 12px', textAlign: 'left', fontWeight: 700,
                   color: '#4a352f', whiteSpace: 'nowrap', fontSize: 12,
                   borderRight: '1px solid #e6d7c3', minWidth: col.width,
+                  maxWidth: 120,
                 }}>
                   {col.label}
                 </th>
               ))}
-              <th style={{ padding: '10px 12px', color: '#4a352f', fontSize: 12, minWidth: 52 }}>Del</th>
+              <th style={{ padding: '10px 12px', color: '#4a352f', fontSize: 12, minWidth: 52, maxWidth: 52 }}>Del</th>
             </tr>
           </thead>
           <tbody>

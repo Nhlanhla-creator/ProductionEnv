@@ -8,40 +8,40 @@ export const USERS_STRUCTURE = {
     type: "file",
     icon: "briefcase",
     accept: ".pdf,.docx,.doc,.xlsx,.xls,.csv",
-    maxSize: 2097152,
-    description: "Upload SME profiles, databases, and documentation (PDF/Word/Excel/CSV, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload SME profiles, databases, and documentation (PDF/Word/Excel/CSV, max 10MB)"
   },
 
   "Investors": {
     type: "file",
     icon: "trending-up",
     accept: ".pdf,.docx,.doc,.xlsx,.xls,.csv",
-    maxSize: 2097152,
-    description: "Upload investor profiles, databases, and documentation (PDF/Word/Excel/CSV, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload investor profiles, databases, and documentation (PDF/Word/Excel/CSV, max 10MB)"
   },
 
   "Service Providers": {
     type: "file",
     icon: "users",
     accept: ".pdf,.docx,.doc,.xlsx,.xls,.csv",
-    maxSize: 2097152,
-    description: "Upload service provider profiles and databases (PDF/Word/Excel/CSV, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload service provider profiles and databases (PDF/Word/Excel/CSV, max 10MB)"
   },
 
   "User Personas": {
     type: "file",
     icon: "user-circle",
     accept: ".pdf,.docx,.doc,.png,.jpg,.pptx",
-    maxSize: 2097152,
-    description: "Upload user persona documentation and profiles (PDF/Word/Images/PPT, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload user persona documentation and profiles (PDF/Word/Images/PPT, max 10MB)"
   },
 
   "Onboarding Materials": {
     type: "file",
     icon: "clipboard-check",
     accept: ".pdf,.docx,.doc,.pptx,.mp4",
-    maxSize: 2097152,
-    description: "Upload user onboarding guides and materials (PDF/Word/PPT, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload user onboarding guides and materials (PDF/Word/PPT, max 10MB)"
   }
 };
 

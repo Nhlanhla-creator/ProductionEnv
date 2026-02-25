@@ -12,8 +12,8 @@ export const PARTNERS_STRUCTURE = {
     type: "file",
     icon: "building-2",
     accept: ".pdf,.docx,.doc,.xlsx,.xls",
-    maxSize: 2097152,
-    description: "Upload funder and investor database/list (PDF/Word/Excel, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload funder and investor database/list (PDF/Word/Excel, max 10MB)"
   },
 
   "Service Providers": {
@@ -24,22 +24,22 @@ export const PARTNERS_STRUCTURE = {
         type: "file",
         icon: "users",
         accept: ".pdf,.docx,.doc,.xlsx,.xls",
-        maxSize: 2097152,
-        description: "Upload vendor database/list (PDF/Word/Excel, max 2MB)"
+        maxSize: 10485760,
+        description: "Upload vendor database/list (PDF/Word/Excel, max 10MB)"
       },
       "Vendor Agreements": {
         type: "file",
         icon: "file-text",
         accept: ".pdf,.docx,.doc",
-        maxSize: 2097152,
-        description: "Upload vendor contracts and agreements (PDF/Word, max 2MB)"
+        maxSize: 10485760,
+        description: "Upload vendor contracts and agreements (PDF/Word, max 10MB)"
       },
       "Vendor Communications": {
         type: "file",
         icon: "message-square",
         accept: ".pdf,.docx,.doc",
-        maxSize: 2097152,
-        description: "Upload vendor communication logs (PDF/Word, max 2MB)"
+        maxSize: 10485760,
+        description: "Upload vendor communication logs (PDF/Word, max 10MB)"
       }
     }
   },
@@ -48,24 +48,24 @@ export const PARTNERS_STRUCTURE = {
     type: "file",
     icon: "building",
     accept: ".pdf,.docx,.doc,.xlsx,.xls",
-    maxSize: 2097152,
-    description: "Upload corporate ESD partnerships database (PDF/Word/Excel, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload corporate ESD partnerships database (PDF/Word/Excel, max 10MB)"
   },
 
   "Government": {
     type: "file",
     icon: "landmark",
     accept: ".pdf,.docx,.doc,.xlsx,.xls",
-    maxSize: 2097152,
-    description: "Upload government partnerships database (PDF/Word/Excel, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload government partnerships database (PDF/Word/Excel, max 10MB)"
   },
 
   "MOUs Agreements": {
     type: "file",
     icon: "file-signature",
     accept: ".pdf,.docx,.doc",
-    maxSize: 2097152,
-    description: "Upload MOUs, contracts, and partnership agreements (PDF/Word, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload MOUs, contracts, and partnership agreements (PDF/Word, max 10MB)"
   },
 
   "Product Platform": {
@@ -76,22 +76,22 @@ export const PARTNERS_STRUCTURE = {
         type: "file",
         icon: "layout",
         accept: ".pdf,.docx,.doc",
-        maxSize: 2097152,
-        description: "Upload product overview document (PDF/Word, max 2MB)"
+        maxSize: 10485760,
+        description: "Upload product overview document (PDF/Word, max 10MB)"
       },
       "Feature Roadmap": {
         type: "file",
         icon: "map",
         accept: ".pdf,.docx,.doc,.xlsx,.xls",
-        maxSize: 2097152,
-        description: "Upload feature roadmap (PDF/Word/Excel, max 2MB)"
+        maxSize: 10485760,
+        description: "Upload feature roadmap (PDF/Word/Excel, max 10MB)"
       },
       "MVP Definition": {
         type: "file",
         icon: "target",
         accept: ".pdf,.docx,.doc",
-        maxSize: 2097152,
-        description: "Upload MVP definition document (PDF/Word, max 2MB)"
+        maxSize: 10485760,
+        description: "Upload MVP definition document (PDF/Word, max 10MB)"
       },
       "SME Onboarding": {
         type: "folder",
@@ -101,8 +101,8 @@ export const PARTNERS_STRUCTURE = {
             type: "file",
             icon: "book-open",
             accept: ".pdf,.docx,.doc",
-            maxSize: 2097152,
-            description: "Upload SME onboarding documentation (PDF/Word, max 2MB)"
+            maxSize: 10485760,
+            description: "Upload SME onboarding documentation (PDF/Word, max 10MB)"
           }
         }
       },
@@ -118,50 +118,50 @@ export const PARTNERS_STRUCTURE = {
                 type: "file",
                 icon: "book",
                 accept: ".pdf,.docx,.doc",
-                maxSize: 2097152,
-                description: "Upload scoring methodology document (PDF/Word, max 2MB)"
+                maxSize: 10485760,
+                description: "Upload scoring methodology document (PDF/Word, max 10MB)"
               },
               "Scoring Logic Rules": {
                 type: "file",
                 icon: "list",
                 accept: ".pdf,.docx,.doc,.xlsx,.xls",
-                maxSize: 2097152,
-                description: "Upload scoring rules document (PDF/Word/Excel, max 2MB)"
+                maxSize: 10485760,
+                description: "Upload scoring rules document (PDF/Word/Excel, max 10MB)"
               },
               "Lifecycle Models": {
                 type: "file",
                 icon: "activity",
                 accept: ".pdf,.docx,.doc,.xlsx,.xls",
-                maxSize: 2097152,
-                description: "Upload lifecycle models (PDF/Word/Excel, max 2MB)"
+                maxSize: 10485760,
+                description: "Upload lifecycle models (PDF/Word/Excel, max 10MB)"
               },
               "Validation Framework": {
                 type: "file",
                 icon: "check-circle",
                 accept: ".pdf,.docx,.doc",
-                maxSize: 2097152,
-                description: "Upload validation framework (PDF/Word, max 2MB)"
+                maxSize: 10485760,
+                description: "Upload validation framework (PDF/Word, max 10MB)"
               },
               "AI / ML Models": {
                 type: "file",
                 icon: "cpu",
                 accept: ".pdf,.docx,.doc",
-                maxSize: 2097152,
-                description: "Upload AI/ML model documentation (PDF/Word, max 2MB)"
+                maxSize: 10485760,
+                description: "Upload AI/ML model documentation (PDF/Word, max 10MB)"
               },
               "Training Data": {
                 type: "file",
                 icon: "database",
                 accept: ".csv,.xlsx,.xls,.json,.pdf",
-                maxSize: 2097152,
-                description: "Upload training datasets (CSV/Excel/JSON/PDF, max 2MB)"
+                maxSize: 10485760,
+                description: "Upload training datasets (CSV/Excel/JSON/PDF, max 10MB)"
               },
               "Funder Feedback": {
                 type: "file",
                 icon: "message-circle",
                 accept: ".pdf,.docx,.doc",
-                maxSize: 2097152,
-                description: "Upload funder feedback documentation (PDF/Word, max 2MB)"
+                maxSize: 10485760,
+                description: "Upload funder feedback documentation (PDF/Word, max 10MB)"
               }
             }
           }

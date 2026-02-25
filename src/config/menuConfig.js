@@ -28,12 +28,12 @@ import {
 } from "lucide-react";
 
 export const advisorMenuItems = [
-  // {
-  //   id: "home",
-  //   label: "Home",
-  //   icon: <Home size={18} />,
-  //   route: "/HomePageAdvisor",
-  // },
+  {
+    id: "home",
+    label: "Home",
+    icon: <Home size={18} />,
+    route: "/HomePageAdvisor",
+  },
   {
     id: "profile",
     label: "My Profile",
@@ -79,12 +79,12 @@ export const advisorMenuItems = [
 ];
 
 export const catalystMenuItems = [
-  // {
-  //   id: "home",
-  //   label: "Home",
-  //   icon: <Home size={18} />,
-  //   route: "/HomePageCatalysts",
-  // },
+  {
+    id: "home",
+    label: "Home",
+    icon: <Home size={18} />,
+    route: "/HomePageCatalysts",
+  },
   {
     id: "profile",
     label: "My Profile",
@@ -169,12 +169,12 @@ export const catalystMenuItems = [
 ];
 
 export const internMenuItems = [
-  // {
-  //   id: "home",
-  //   label: "Home",
-  //   icon: <Home size={18} />,
-  //   route: "/HomePageInterns",
-  // },
+  {
+    id: "home",
+    label: "Home",
+    icon: <Home size={18} />,
+    route: "/HomePageInterns",
+  },
   {
     id: "dashboard",
     label: "My BIG Score",
@@ -226,12 +226,12 @@ export const internMenuItems = [
 ];
 
 export const investorMenuItems = [
-  // {
-  //   id: "home",
-  //   label: "Home",
-  //   icon: <Home size={18} />,
-  //   route: "/HomePageInvestor",
-  // },
+  {
+    id: "home",
+    label: "Home",
+    icon: <Home size={18} />,
+    route: "/HomePageInvestor",
+  },
   {
     id: "profile",
     label: "My Profile",
@@ -317,12 +317,12 @@ export const investorMenuItems = [
 
 // Add this to your existing config file
 export const programSponsorMenuItems = [
-  // { 
-  //   id: "home", 
-  //   label: "Home", 
-  //   icon: <Home size={18} />, 
-  //   route: "/HomePageProgram" 
-  // },
+  { 
+    id: "home", 
+    label: "Home", 
+    icon: <Home size={18} />, 
+    route: "/HomePageProgram" 
+  },
   { 
     id: "profile", 
     label: "My Profile", 

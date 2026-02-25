@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Bar, Line, Pie, Doughnut, Scatter } from "react-chartjs-2"
+import { Bar, Line, Pie, Doughnut } from "react-chartjs-2"
 import Sidebar from "smses/Sidebar/Sidebar"
 import Header from "../DashboardHeader/DashboardHeader"
 import { db, auth } from "../../firebaseConfig"
@@ -19,7 +19,7 @@ import {
   Tooltip,
   Legend,
 } from "chart.js"
-import ChartDataLabels from "chartjs-plugin-datalabels"
+
 
 // Register ChartJS components
 ChartJS.register(
@@ -32,23 +32,53 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  ChartDataLabels
+
 )
 
-// Helper function to get months array based on year
-const getMonthsForYear = (year, viewMode = "month") => {
-  if (viewMode === "year") return [`FY ${year}`]
-  if (viewMode === "quarter") return ["Q1", "Q2", "Q3", "Q4"]
+// Helper function to get months array based on financial year
+const getMonthsForYear = (financialYearEnd) => {
+  // Determine financial year start (yearEnd - 1, month 03 (April))
+  const currentDate = new Date()
+  const currentYear = currentDate.getFullYear()
+  const currentMonth = currentDate.getMonth()
   
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  // Parse financial year end (e.g., "2026-03" for March 2026)
+  let yearEnd = financialYearEnd || "2026-03"
+  let endYear = parseInt(yearEnd.split('-')[0])
+  let endMonth = parseInt(yearEnd.split('-')[1]) - 1 // Convert to 0-based month
+  
+  // Financial year starts 12 months before end date
+  let startYear = endYear - 1
+  let startMonth = endMonth + 1 // Month after end month
+  
+  // Generate months from start date to current date only
+  const months = []
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  
+  let year = startYear
+  let month = startMonth
+  
+  // Stop at current date
+  while (year < currentYear || (year === currentYear && month <= currentMonth)) {
+    months.push(`${monthNames[month]}(${year})`)
+    
+    month++
+    if (month > 11) {
+      month = 0
+      year++
+    }
+    
+    // Safety break
+    if (year > currentYear + 1) break
+  }
+  
   return months
 }
 
-// Key Question Component with Show More functionality (from Financial Performance)
+// Key Question Component with See More button under heading
 const KeyQuestionBox = ({ question, signals, decisions, section }) => {
   const [showMore, setShowMore] = useState(false)
   
-  // Get first sentence
   const getFirstSentence = (text) => {
     const match = text.match(/^[^.!?]+[.!?]/)
     return match ? match[0] : text.split('.')[0] + '.'
@@ -57,11 +87,11 @@ const KeyQuestionBox = ({ question, signals, decisions, section }) => {
   return (
     <div
       style={{
-        backgroundColor: "	#DCDCDC",
+        backgroundColor: "#DCDCDC",
         padding: "15px 20px",
         borderRadius: "8px",
         marginBottom: "20px",
-        border: "1px solid	#5d4037",
+        border: "1px solid #5d4037",
       }}
     >
       <div style={{ marginBottom: "8px" }}>
@@ -69,7 +99,7 @@ const KeyQuestionBox = ({ question, signals, decisions, section }) => {
         <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
           {showMore ? question : getFirstSentence(question)}
         </span>
-       {!showMore && (question.length > getFirstSentence(question).length || signals || decisions) && (
+        {!showMore && (question.length > getFirstSentence(question).length || signals || decisions) && (
           <button
             onClick={() => setShowMore(true)}
             style={{
@@ -82,7 +112,7 @@ const KeyQuestionBox = ({ question, signals, decisions, section }) => {
               textDecoration: "underline",
             }}
           >
-            Show more
+            See more
           </button>
         )}
       </div>
@@ -109,7 +139,7 @@ const KeyQuestionBox = ({ question, signals, decisions, section }) => {
               textDecoration: "underline",
             }}
           >
-            Show less
+            See less
           </button>
         </>
       )}
@@ -117,9 +147,11 @@ const KeyQuestionBox = ({ question, signals, decisions, section }) => {
   )
 }
 
-// Data Entry Modal Component
-const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData }) => {
+// Data Entry Modal Component with Month/Year inside
+const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financialYearEnd }) => {
   const [formData, setFormData] = useState({})
+  const [selectedMonth, setSelectedMonth] = useState("")
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
 
   useEffect(() => {
     if (currentData) {
@@ -131,8 +163,33 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    onSave(formData)
+    // Add month/year to the data being saved
+    const dataWithPeriod = {
+      ...formData,
+      dataMonth: selectedMonth,
+      dataYear: selectedYear,
+      financialYearEnd: financialYearEnd
+    }
+    onSave(dataWithPeriod)
     onClose()
+  }
+
+  const getMonthOptions = () => {
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    return months.map(month => (
+      <option key={month} value={month}>{month}</option>
+    ))
+  }
+
+  const getYearOptions = () => {
+    const currentYear = new Date().getFullYear()
+    const years = []
+    for (let i = currentYear - 2; i <= currentYear; i++) {
+      years.push(i)
+    }
+    return years.map(year => (
+      <option key={year} value={year}>{year}</option>
+    ))
   }
 
   const renderFormFields = () => {
@@ -717,6 +774,231 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData }) => {
                 }}
               />
             </div>
+
+            <div style={{ marginBottom: "15px" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "10px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                }}
+              >
+                Total Procurement Spend (R):
+              </label>
+              <input
+                type="number"
+                value={formData.totalProcurementSpend || ""}
+                onChange={(e) => setFormData({ ...formData, totalProcurementSpend: Number.parseFloat(e.target.value) || 0 })}
+                placeholder="Total Procurement Spend"
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  fontSize: "14px",
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: "15px" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "10px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                }}
+              >
+                Procurement % to HDI:
+              </label>
+              <input
+                type="number"
+                value={formData.procurementPercentage || ""}
+                onChange={(e) => setFormData({ ...formData, procurementPercentage: Number.parseFloat(e.target.value) || 0 })}
+                placeholder="Percentage"
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  fontSize: "14px",
+                }}
+              />
+            </div>
+          </>
+        )
+
+      case "governance-policies":
+        return (
+          <>
+            <div style={{ marginBottom: "15px" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "10px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                }}
+              >
+                Core Governance Policies in Place:
+              </label>
+              <select
+                value={formData.corePolicies || "no"}
+                onChange={(e) => setFormData({ ...formData, corePolicies: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  fontSize: "14px",
+                }}
+              >
+                <option value="no">No</option>
+                <option value="partial">Partial</option>
+                <option value="yes">Yes</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: "15px" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "10px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                }}
+              >
+                Critical SOPs Documented:
+              </label>
+              <select
+                value={formData.criticalSOPs || "no"}
+                onChange={(e) => setFormData({ ...formData, criticalSOPs: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  fontSize: "14px",
+                }}
+              >
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: "15px" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "10px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                }}
+              >
+                Policy / SOP Owner Assigned:
+              </label>
+              <select
+                value={formData.policyOwner || "no"}
+                onChange={(e) => setFormData({ ...formData, policyOwner: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  fontSize: "14px",
+                }}
+              >
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: "15px" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "10px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                }}
+              >
+                Review Cycle Defined:
+              </label>
+              <select
+                value={formData.reviewCycle || "no"}
+                onChange={(e) => setFormData({ ...formData, reviewCycle: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  fontSize: "14px",
+                }}
+              >
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </div>
+          </>
+        )
+
+      case "governance-risk":
+        return (
+          <>
+            <div style={{ marginBottom: "15px" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "10px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                }}
+              >
+                Risk Register Maintained:
+              </label>
+              <select
+                value={formData.riskRegister || "no"}
+                onChange={(e) => setFormData({ ...formData, riskRegister: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  fontSize: "14px",
+                }}
+              >
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: "15px" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "10px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                }}
+              >
+                Reporting Responsibility Assigned:
+              </label>
+              <select
+                value={formData.reportingResponsibility || "no"}
+                onChange={(e) => setFormData({ ...formData, reportingResponsibility: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  fontSize: "14px",
+                }}
+              >
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </div>
           </>
         )
 
@@ -921,206 +1203,6 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData }) => {
           </>
         )
 
-      case "governance-policies":
-        return (
-          <>
-            <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
-                Core Governance Policies in Place:
-              </label>
-              <select
-                value={formData.corePolicies || "no"}
-                onChange={(e) => setFormData({ ...formData, corePolicies: e.target.value })}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  borderRadius: "6px",
-                  border: "2px solid #e8ddd4",
-                  fontSize: "14px",
-                }}
-              >
-                <option value="no">No</option>
-                <option value="partial">Partial</option>
-                <option value="yes">Yes</option>
-              </select>
-            </div>
-
-            <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
-                Conditional Policies Identified & In Place:
-              </label>
-              <select
-                value={formData.conditionalPolicies || "no"}
-                onChange={(e) => setFormData({ ...formData, conditionalPolicies: e.target.value })}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  borderRadius: "6px",
-                  border: "2px solid #e8ddd4",
-                  fontSize: "14px",
-                }}
-              >
-                <option value="no">No</option>
-                <option value="yes">Yes</option>
-              </select>
-            </div>
-
-            <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
-                Critical SOPs Documented:
-              </label>
-              <select
-                value={formData.criticalSOPs || "no"}
-                onChange={(e) => setFormData({ ...formData, criticalSOPs: e.target.value })}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  borderRadius: "6px",
-                  border: "2px solid #e8ddd4",
-                  fontSize: "14px",
-                }}
-              >
-                <option value="no">No</option>
-                <option value="yes">Yes</option>
-              </select>
-            </div>
-
-            <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
-                Policy / SOP Owner Assigned:
-              </label>
-              <select
-                value={formData.policyOwner || "no"}
-                onChange={(e) => setFormData({ ...formData, policyOwner: e.target.value })}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  borderRadius: "6px",
-                  border: "2px solid #e8ddd4",
-                  fontSize: "14px",
-                }}
-              >
-                <option value="no">No</option>
-                <option value="yes">Yes</option>
-              </select>
-            </div>
-
-            <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
-                Review Cycle Defined:
-              </label>
-              <select
-                value={formData.reviewCycle || "no"}
-                onChange={(e) => setFormData({ ...formData, reviewCycle: e.target.value })}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  borderRadius: "6px",
-                  border: "2px solid #e8ddd4",
-                  fontSize: "14px",
-                }}
-              >
-                <option value="no">No</option>
-                <option value="yes">Yes</option>
-              </select>
-            </div>
-          </>
-        )
-
-      case "governance-risk":
-        return (
-          <>
-            <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
-                Risk Register Maintained:
-              </label>
-              <select
-                value={formData.riskRegister || "no"}
-                onChange={(e) => setFormData({ ...formData, riskRegister: e.target.value })}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  borderRadius: "6px",
-                  border: "2px solid #e8ddd4",
-                  fontSize: "14px",
-                }}
-              >
-                <option value="no">No</option>
-                <option value="yes">Yes</option>
-              </select>
-            </div>
-
-            <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
-                Reporting Responsibility Assigned:
-              </label>
-              <select
-                value={formData.reportingResponsibility || "no"}
-                onChange={(e) => setFormData({ ...formData, reportingResponsibility: e.target.value })}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  borderRadius: "6px",
-                  border: "2px solid #e8ddd4",
-                  fontSize: "14px",
-                }}
-              >
-                <option value="no">No</option>
-                <option value="yes">Yes</option>
-              </select>
-            </div>
-          </>
-        )
-
       default:
         return null
     }
@@ -1164,6 +1246,51 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData }) => {
           {section === "governance-policies" && "Enter Policies and SOPs Data"}
           {section === "governance-risk" && "Enter Risk, Controls & Reporting Data"}
         </h3>
+        
+        {/* Month and Year Selection */}
+        <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600", fontSize: "14px" }}>
+              Month:
+            </label>
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "10px",
+                borderRadius: "6px",
+                border: "2px solid #e8ddd4",
+                fontSize: "14px",
+              }}
+              required
+            >
+              <option value="">Select Month</option>
+              {getMonthOptions()}
+            </select>
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600", fontSize: "14px" }}>
+              Year:
+            </label>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+              style={{
+                width: "100%",
+                padding: "10px",
+                borderRadius: "6px",
+                border: "2px solid #e8ddd4",
+                fontSize: "14px",
+              }}
+              required
+            >
+              <option value="">Select Year</option>
+              {getYearOptions()}
+            </select>
+          </div>
+        </div>
+
         <form onSubmit={handleSubmit}>
           {renderFormFields()}
           <div style={{ display: "flex", gap: "15px", justifyContent: "center", marginTop: "25px" }}>
@@ -1347,7 +1474,396 @@ const ESGChartCard = ({ title, chartType, data, options, kpiKey, unit = "", onAd
   )
 }
 
-// Environmental Tab Components - SIMPLIFIED WITH DROPDOWNS
+// Policies Table Component
+const PoliciesTable = ({ policies, onUpdate, isInvestorView }) => {
+  const [showTable, setShowTable] = useState(false)
+
+  if (!showTable && !isInvestorView) {
+    return (
+      <button
+        onClick={() => setShowTable(true)}
+        style={{
+          padding: "8px 16px",
+          backgroundColor: "#5d4037",
+          color: "#fdfcfb",
+          border: "none",
+          borderRadius: "6px",
+          cursor: "pointer",
+          fontWeight: "600",
+          fontSize: "13px",
+          marginTop: "10px",
+        }}
+      >
+        Show Policies & SOPs Details
+      </button>
+    )
+  }
+
+  return (
+    <div style={{ marginTop: "20px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+        <h4 style={{ color: "#5d4037", fontSize: "16px", margin: 0 }}>Policies & SOPs Register</h4>
+        {!isInvestorView && (
+          <button
+            onClick={() => setShowTable(false)}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#5d4037",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "13px",
+              textDecoration: "underline",
+            }}
+          >
+            Hide Table
+          </button>
+        )}
+      </div>
+      <div
+        style={{
+          backgroundColor: "#fdfcfb",
+          padding: "20px",
+          borderRadius: "8px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        }}
+      >
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ backgroundColor: "#e8ddd4" }}>
+              <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Policy/SOP Name</th>
+              <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Type</th>
+              <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Owner</th>
+              <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Review Date</th>
+              <th style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {policies && policies.length > 0 ? (
+              policies.map((policy, index) => (
+                <tr key={index} style={{ borderBottom: "1px solid #e8ddd4" }}>
+                  <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{policy.name}</td>
+                  <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{policy.type}</td>
+                  <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{policy.owner}</td>
+                  <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{policy.reviewDate}</td>
+                  <td style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>
+                    <button style={{ background: "none", border: "none", color: "#5d4037", cursor: "pointer", margin: "0 5px" }}>Edit</button>
+                    <button style={{ background: "none", border: "none", color: "#5d4037", cursor: "pointer", margin: "0 5px" }}>Delete</button>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan="5" style={{ padding: "20px", textAlign: "center", color: "#8d6e63", fontSize: "14px" }}>
+                  No policies added yet. Click "Add Policy" to create one.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+        {!isInvestorView && (
+          <div style={{ marginTop: "15px", textAlign: "right" }}>
+            <button
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "13px",
+              }}
+            >
+              + Add Policy/SOP
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Risk Register Table Component
+const RiskTable = ({ risks, onUpdate, isInvestorView }) => {
+  const [showTable, setShowTable] = useState(false)
+
+  if (!showTable && !isInvestorView) {
+    return (
+      <button
+        onClick={() => setShowTable(true)}
+        style={{
+          padding: "8px 16px",
+          backgroundColor: "#5d4037",
+          color: "#fdfcfb",
+          border: "none",
+          borderRadius: "6px",
+          cursor: "pointer",
+          fontWeight: "600",
+          fontSize: "13px",
+          marginTop: "10px",
+        }}
+      >
+        Show Risk Register Details
+      </button>
+    )
+  }
+
+  return (
+    <div style={{ marginTop: "20px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+        <h4 style={{ color: "#5d4037", fontSize: "16px", margin: 0 }}>Risk Register</h4>
+        {!isInvestorView && (
+          <button
+            onClick={() => setShowTable(false)}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#5d4037",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "13px",
+              textDecoration: "underline",
+            }}
+          >
+            Hide Table
+          </button>
+        )}
+      </div>
+      <div
+        style={{
+          backgroundColor: "#fdfcfb",
+          padding: "20px",
+          borderRadius: "8px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        }}
+      >
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ backgroundColor: "#e8ddd4" }}>
+              <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Risk Category</th>
+              <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Risk Description</th>
+              <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Likelihood</th>
+              <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Impact</th>
+              <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Mitigation</th>
+              <th style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {risks && risks.length > 0 ? (
+              risks.map((risk, index) => (
+                <tr key={index} style={{ borderBottom: "1px solid #e8ddd4" }}>
+                  <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{risk.category}</td>
+                  <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{risk.description}</td>
+                  <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{risk.likelihood}</td>
+                  <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{risk.impact}</td>
+                  <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{risk.mitigation}</td>
+                  <td style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>
+                    <button style={{ background: "none", border: "none", color: "#5d4037", cursor: "pointer", margin: "0 5px" }}>Edit</button>
+                    <button style={{ background: "none", border: "none", color: "#5d4037", cursor: "pointer", margin: "0 5px" }}>Delete</button>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan="6" style={{ padding: "20px", textAlign: "center", color: "#8d6e63", fontSize: "14px" }}>
+                  No risks added yet. Click "Add Risk" to create one.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+        {!isInvestorView && (
+          <div style={{ marginTop: "15px", textAlign: "right" }}>
+            <button
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "13px",
+              }}
+            >
+              + Add Risk
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Board Table Component (based on oversight structure)
+const BoardTable = ({ boardData, oversightStructure, onUpdate, isInvestorView }) => {
+  const [showTable, setShowTable] = useState(false)
+
+  if (!boardData) return null
+
+  if (!showTable && !isInvestorView) {
+    return (
+      <button
+        onClick={() => setShowTable(true)}
+        style={{
+          padding: "8px 16px",
+          backgroundColor: "#5d4037",
+          color: "#fdfcfb",
+          border: "none",
+          borderRadius: "6px",
+          cursor: "pointer",
+          fontWeight: "600",
+          fontSize: "13px",
+          marginTop: "10px",
+        }}
+      >
+        Show {oversightStructure === "formal-board" ? "Board" : oversightStructure === "advisory-board" ? "Advisory Board" : "Oversight"} Details
+      </button>
+    )
+  }
+
+  const getTableTitle = () => {
+    switch(oversightStructure) {
+      case "formal-board": return "Board of Directors"
+      case "advisory-board": return "Advisory Board"
+      case "founder-only": return "Founder Oversight"
+      default: return "Oversight Structure"
+    }
+  }
+
+  return (
+    <div style={{ marginTop: "20px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+        <h4 style={{ color: "#5d4037", fontSize: "16px", margin: 0 }}>{getTableTitle()}</h4>
+        {!isInvestorView && (
+          <button
+            onClick={() => setShowTable(false)}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#5d4037",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "13px",
+              textDecoration: "underline",
+            }}
+          >
+            Hide Table
+          </button>
+        )}
+      </div>
+      <div
+        style={{
+          backgroundColor: "#fdfcfb",
+          padding: "20px",
+          borderRadius: "8px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        }}
+      >
+        {oversightStructure === "formal-board" && (
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ backgroundColor: "#e8ddd4" }}>
+                <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Name</th>
+                <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Role</th>
+                <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Gender</th>
+                <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Independent</th>
+                <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Appointed Date</th>
+                <th style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {boardData.directors && boardData.directors.length > 0 ? (
+                boardData.directors.map((director, index) => (
+                  <tr key={index} style={{ borderBottom: "1px solid #e8ddd4" }}>
+                    <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{director.name}</td>
+                    <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{director.role}</td>
+                    <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{director.gender}</td>
+                    <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{director.independent ? "Yes" : "No"}</td>
+                    <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{director.appointedDate}</td>
+                    <td style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>
+                      <button style={{ background: "none", border: "none", color: "#5d4037", cursor: "pointer", margin: "0 5px" }}>Edit</button>
+                      <button style={{ background: "none", border: "none", color: "#5d4037", cursor: "pointer", margin: "0 5px" }}>Delete</button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="6" style={{ padding: "20px", textAlign: "center", color: "#8d6e63", fontSize: "14px" }}>
+                    No directors added yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
+
+        {oversightStructure === "advisory-board" && (
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ backgroundColor: "#e8ddd4" }}>
+                <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Name</th>
+                <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Expertise</th>
+                <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Appointed Date</th>
+                <th style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {boardData.advisors && boardData.advisors.length > 0 ? (
+                boardData.advisors.map((advisor, index) => (
+                  <tr key={index} style={{ borderBottom: "1px solid #e8ddd4" }}>
+                    <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{advisor.name}</td>
+                    <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{advisor.expertise}</td>
+                    <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{advisor.appointedDate}</td>
+                    <td style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>
+                      <button style={{ background: "none", border: "none", color: "#5d4037", cursor: "pointer", margin: "0 5px" }}>Edit</button>
+                      <button style={{ background: "none", border: "none", color: "#5d4037", cursor: "pointer", margin: "0 5px" }}>Delete</button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="4" style={{ padding: "20px", textAlign: "center", color: "#8d6e63", fontSize: "14px" }}>
+                    No advisors added yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
+
+        {oversightStructure === "founder-only" && (
+          <div style={{ padding: "20px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>
+            <p>Founder-only oversight structure. No formal board or advisory committee in place.</p>
+            <p>Consider establishing advisory or board oversight for enhanced governance.</p>
+          </div>
+        )}
+
+        {!isInvestorView && oversightStructure !== "none" && oversightStructure !== "founder-only" && (
+          <div style={{ marginTop: "15px", textAlign: "right" }}>
+            <button
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#5d4037",
+                color: "#fdfcfb",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "13px",
+              }}
+            >
+              + Add {oversightStructure === "formal-board" ? "Director" : "Advisor"}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Environmental Tab Component
 const EnvironmentalTab = ({ userData, onSave, isInvestorView }) => {
   // Handle dropdown changes
   const handleDropdownChange = (field, value) => {
@@ -1364,224 +1880,226 @@ const EnvironmentalTab = ({ userData, onSave, isInvestorView }) => {
         section="environmental-exposure"
       />
 
-      {/* Environmental Exposure & Compliance Section */}
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "25px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          marginBottom: "30px",
-        }}
-      >
-        <h3
+      {/* Two columns for Environmental sections */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "30px" }}>
+        {/* Environmental Exposure & Compliance Section */}
+        <div
           style={{
-            color: "#5d4037",
-            marginTop: 0,
-            marginBottom: "25px",
-            fontSize: "18px",
-            fontWeight: "600",
-            borderBottom: "2px solid #e8ddd4",
-            paddingBottom: "10px",
+            backgroundColor: "#fdfcfb",
+            padding: "25px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
           }}
         >
-          Environmental Exposure & Compliance
-        </h3>
+          <h3
+            style={{
+              color: "#5d4037",
+              marginTop: 0,
+              marginBottom: "25px",
+              fontSize: "18px",
+              fontWeight: "600",
+              borderBottom: "2px solid #e8ddd4",
+              paddingBottom: "10px",
+            }}
+          >
+            Environmental Exposure & Compliance
+          </h3>
 
-        <div style={{ display: "grid", gap: "20px" }}>
-          {/* Environmental Exposure Type */}
-          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-            <label
-              style={{
-                minWidth: "220px",
-                color: "#5d4037",
-                fontWeight: "600",
-                fontSize: "14px",
-              }}
-            >
-              Environmental Exposure Type:
-            </label>
-            <select
-              value={userData?.exposureType || "none"}
-              onChange={(e) => handleDropdownChange("exposureType", e.target.value)}
-              style={{
-                flex: 1,
-                padding: "10px 15px",
-                borderRadius: "6px",
-                border: "2px solid #e8ddd4",
-                fontSize: "14px",
-                color: "#5d4037",
-                backgroundColor: "#fdfcfb",
-                cursor: isInvestorView ? "not-allowed" : "pointer",
-                opacity: isInvestorView ? 0.7 : 1,
-              }}
-              disabled={isInvestorView}
-            >
-              <option value="none">None</option>
-              <option value="indirect">Indirect</option>
-              <option value="direct">Direct</option>
-            </select>
-          </div>
+          <div style={{ display: "grid", gap: "20px" }}>
+            {/* Environmental Exposure Type */}
+            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+              <label
+                style={{
+                  minWidth: "180px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                }}
+              >
+                Environmental Exposure Type:
+              </label>
+              <select
+                value={userData?.exposureType || "none"}
+                onChange={(e) => handleDropdownChange("exposureType", e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: "10px 15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  backgroundColor: "#fdfcfb",
+                  cursor: isInvestorView ? "not-allowed" : "pointer",
+                  opacity: isInvestorView ? 0.7 : 1,
+                }}
+                disabled={isInvestorView}
+              >
+                <option value="none">None</option>
+                <option value="indirect">Indirect</option>
+                <option value="direct">Direct</option>
+              </select>
+            </div>
 
-          {/* Environmental Compliance Required */}
-          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-            <label
-              style={{
-                minWidth: "220px",
-                color: "#5d4037",
-                fontWeight: "600",
-                fontSize: "14px",
-              }}
-            >
-              Environmental Compliance Required:
-            </label>
-            <select
-              value={userData?.complianceRequired || "no"}
-              onChange={(e) => handleDropdownChange("complianceRequired", e.target.value)}
-              style={{
-                flex: 1,
-                padding: "10px 15px",
-                borderRadius: "6px",
-                border: "2px solid #e8ddd4",
-                fontSize: "14px",
-                color: "#5d4037",
-                backgroundColor: "#fdfcfb",
-                cursor: isInvestorView ? "not-allowed" : "pointer",
-                opacity: isInvestorView ? 0.7 : 1,
-              }}
-              disabled={isInvestorView}
-            >
-              <option value="no">No</option>
-              <option value="yes">Yes</option>
-            </select>
-          </div>
+            {/* Environmental Compliance Required */}
+            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+              <label
+                style={{
+                  minWidth: "180px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                }}
+              >
+                Environmental Compliance Required:
+              </label>
+              <select
+                value={userData?.complianceRequired || "no"}
+                onChange={(e) => handleDropdownChange("complianceRequired", e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: "10px 15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  backgroundColor: "#fdfcfb",
+                  cursor: isInvestorView ? "not-allowed" : "pointer",
+                  opacity: isInvestorView ? 0.7 : 1,
+                }}
+                disabled={isInvestorView}
+              >
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </div>
 
-          {/* Environmental Permits in Place */}
-          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-            <label
-              style={{
-                minWidth: "220px",
-                color: "#5d4037",
-                fontWeight: "600",
-                fontSize: "14px",
-              }}
-            >
-              Environmental Permits in Place:
-            </label>
-            <select
-              value={userData?.permitsInPlace || "no"}
-              onChange={(e) => handleDropdownChange("permitsInPlace", e.target.value)}
-              style={{
-                flex: 1,
-                padding: "10px 15px",
-                borderRadius: "6px",
-                border: "2px solid #e8ddd4",
-                fontSize: "14px",
-                color: "#5d4037",
-                backgroundColor: "#fdfcfb",
-                cursor: isInvestorView ? "not-allowed" : "pointer",
-                opacity: isInvestorView ? 0.7 : 1,
-              }}
-              disabled={isInvestorView}
-            >
-              <option value="no">No</option>
-              <option value="partial">Partial</option>
-              <option value="yes">Yes</option>
-            </select>
+            {/* Environmental Permits in Place */}
+            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+              <label
+                style={{
+                  minWidth: "180px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                }}
+              >
+                Environmental Permits in Place:
+              </label>
+              <select
+                value={userData?.permitsInPlace || "no"}
+                onChange={(e) => handleDropdownChange("permitsInPlace", e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: "10px 15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  backgroundColor: "#fdfcfb",
+                  cursor: isInvestorView ? "not-allowed" : "pointer",
+                  opacity: isInvestorView ? 0.7 : 1,
+                }}
+                disabled={isInvestorView}
+              >
+                <option value="no">No</option>
+                <option value="partial">Partial</option>
+                <option value="yes">Yes</option>
+              </select>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Environmental Incidents & Controls Section */}
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "25px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        }}
-      >
-        <h3
+        {/* Environmental Incidents & Controls Section */}
+        <div
           style={{
-            color: "#5d4037",
-            marginTop: 0,
-            marginBottom: "25px",
-            fontSize: "18px",
-            fontWeight: "600",
-            borderBottom: "2px solid #e8ddd4",
-            paddingBottom: "10px",
+            backgroundColor: "#fdfcfb",
+            padding: "25px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
           }}
         >
-          Environmental Incidents & Controls
-        </h3>
+          <h3
+            style={{
+              color: "#5d4037",
+              marginTop: 0,
+              marginBottom: "25px",
+              fontSize: "18px",
+              fontWeight: "600",
+              borderBottom: "2px solid #e8ddd4",
+              paddingBottom: "10px",
+            }}
+          >
+            Environmental Incidents & Controls
+          </h3>
 
-        <div style={{ display: "grid", gap: "20px" }}>
-          {/* Environmental Incidents */}
-          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-            <label
-              style={{
-                minWidth: "220px",
-                color: "#5d4037",
-                fontWeight: "600",
-                fontSize: "14px",
-              }}
-            >
-              Environmental Incidents:
-            </label>
-            <select
-              value={userData?.incidents || "none"}
-              onChange={(e) => handleDropdownChange("incidents", e.target.value)}
-              style={{
-                flex: 1,
-                padding: "10px 15px",
-                borderRadius: "6px",
-                border: "2px solid #e8ddd4",
-                fontSize: "14px",
-                color: "#5d4037",
-                backgroundColor: "#fdfcfb",
-                cursor: isInvestorView ? "not-allowed" : "pointer",
-                opacity: isInvestorView ? 0.7 : 1,
-              }}
-              disabled={isInvestorView}
-            >
-              <option value="none">None</option>
-              <option value="minor">Minor</option>
-              <option value="major">Major</option>
-            </select>
-          </div>
+          <div style={{ display: "grid", gap: "20px" }}>
+            {/* Environmental Incidents */}
+            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+              <label
+                style={{
+                  minWidth: "180px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                }}
+              >
+                Environmental Incidents:
+              </label>
+              <select
+                value={userData?.incidents || "none"}
+                onChange={(e) => handleDropdownChange("incidents", e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: "10px 15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  backgroundColor: "#fdfcfb",
+                  cursor: isInvestorView ? "not-allowed" : "pointer",
+                  opacity: isInvestorView ? 0.7 : 1,
+                }}
+                disabled={isInvestorView}
+              >
+                <option value="none">None</option>
+                <option value="minor">Minor</option>
+                <option value="major">Major</option>
+              </select>
+            </div>
 
-          {/* Environmental Controls */}
-          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-            <label
-              style={{
-                minWidth: "220px",
-                color: "#5d4037",
-                fontWeight: "600",
-                fontSize: "14px",
-              }}
-            >
-              Environmental Controls:
-            </label>
-            <select
-              value={userData?.controls || "none"}
-              onChange={(e) => handleDropdownChange("controls", e.target.value)}
-              style={{
-                flex: 1,
-                padding: "10px 15px",
-                borderRadius: "6px",
-                border: "2px solid #e8ddd4",
-                fontSize: "14px",
-                color: "#5d4037",
-                backgroundColor: "#fdfcfb",
-                cursor: isInvestorView ? "not-allowed" : "pointer",
-                opacity: isInvestorView ? 0.7 : 1,
-              }}
-              disabled={isInvestorView}
-            >
-              <option value="none">None</option>
-              <option value="basic">Basic</option>
-              <option value="formal">Formal</option>
-            </select>
+            {/* Environmental Controls */}
+            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+              <label
+                style={{
+                  minWidth: "180px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                }}
+              >
+                Environmental Controls:
+              </label>
+              <select
+                value={userData?.controls || "none"}
+                onChange={(e) => handleDropdownChange("controls", e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: "10px 15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  backgroundColor: "#fdfcfb",
+                  cursor: isInvestorView ? "not-allowed" : "pointer",
+                  opacity: isInvestorView ? 0.7 : 1,
+                }}
+                disabled={isInvestorView}
+              >
+                <option value="none">None</option>
+                <option value="basic">Basic</option>
+                <option value="formal">Formal</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -1589,13 +2107,11 @@ const EnvironmentalTab = ({ userData, onSave, isInvestorView }) => {
   )
 }
 
-// Social Tab Components - WITH PIE CHARTS
-// Social Tab Components - WITH PIE CHARTS
+// Social Tab Component
 const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestorView }) => {
-  const [selectedViewMode, setSelectedViewMode] = useState("month")
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [activeSpendTab, setActiveSpendTab] = useState("csi") // "csi" or "hdi"
   const [activeProcurementTab, setActiveProcurementTab] = useState("amount") // "amount" or "percentage"
+  const [financialYearEnd, setFinancialYearEnd] = useState("2026-03")
 
   // Chart options for pie/doughnut charts with values on top
   const getPieChartOptions = (title, showLegend = true) => ({
@@ -1654,7 +2170,6 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
           section="workforce-demographics"
         />
 
-        {/* Workforce Demographics - REMOVED B-BBEE dropdown from top */}
         <div
           style={{
             backgroundColor: "#fdfcfb",
@@ -1810,7 +2325,6 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
           section="ownership-inclusion"
         />
 
-        {/* Ownership Dropdowns - REMOVED B-BBEE dropdown from here */}
         <div
           style={{
             backgroundColor: "#fdfcfb",
@@ -1833,8 +2347,6 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
           >
             Ownership & Inclusion
           </h3>
-
-          {/* REMOVED the entire dropdown grid section */}
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
             {/* HDI Ownership Chart */}
@@ -1863,11 +2375,11 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
               title="Shareholder Gender"
               chartType="pie"
               data={{
-                labels: ["Male", "Female", "Other"],
+                labels: ["Male", "Female"],
                 datasets: [
                   {
-                    data: [ownershipData.shareholderGenderMale, ownershipData.shareholderGenderFemale, 5],
-                    backgroundColor: ["#3e2723", "#8d6e63", "#d7ccc8"],
+                    data: [ownershipData.shareholderGenderMale, ownershipData.shareholderGenderFemale],
+                    backgroundColor: ["#3e2723", "#8d6e63"],
                     borderColor: "#ffffff",
                     borderWidth: 3,
                   },
@@ -1884,11 +2396,11 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
               title="Shareholder Race"
               chartType="pie"
               data={{
-                labels: ["Black", "White", "Colored", "Indian/Asian", "Other"],
+                labels: ["Black", "White", "Colored", "Indian/Asian"],
                 datasets: [
                   {
-                    data: [ownershipData.shareholderRaceBlack, 30, 15, 10, 5],
-                    backgroundColor: ["#3e2723", "#5d4037", "#8d6e63", "#a1887f", "#d7ccc8"],
+                    data: [ownershipData.shareholderRaceBlack, 30, 15, 10],
+                    backgroundColor: ["#3e2723", "#5d4037", "#8d6e63", "#a1887f"],
                     borderColor: "#ffffff",
                     borderWidth: 3,
                   },
@@ -1900,12 +2412,12 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
               isInvestorView={isInvestorView}
             />
 
-            {/* Total Jobs Created Chart with B-BBEE Level circle NEXT TO IT */}
+            {/* Total Jobs Created Chart with B-BBEE Level circle */}
             <div style={{ 
               display: "flex", 
               flexDirection: "column",
               gap: "20px",
-              gridColumn: "span 2" // Make this take 2 columns
+              gridColumn: "span 2"
             }}>
               <div style={{ 
                 display: "grid", 
@@ -1913,17 +2425,17 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
                 gap: "20px",
                 alignItems: "center"
               }}>
-                {/* Jobs Created Chart - 2/3 width */}
+                {/* Jobs Created Chart */}
                 <div>
                   <ESGChartCard
                     title="Total Jobs Created"
                     chartType="bar"
                     data={{
-                      labels: ["Permanent", "Contract", "Temporary", "Internship"],
+                      labels: ["Permanent", "Contract"],
                       datasets: [
                         {
                           label: "Jobs",
-                          data: [ownershipData.permanentJobs, ownershipData.contractJobs, 30, 20],
+                          data: [ownershipData.permanentJobs, ownershipData.contractJobs],
                           backgroundColor: "#5d4037",
                           borderColor: "#5d4037",
                           borderWidth: 2,
@@ -1957,7 +2469,7 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
                   />
                 </div>
 
-                {/* B-BBEE Level Circle - 1/3 width */}
+                {/* B-BBEE Level Circle */}
                 <div
                   style={{
                     backgroundColor: "#fdfcfb",
@@ -2003,7 +2515,10 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
   }
 
 const renderCommunityESD = () => {
-    // Data from userData with fallbacks
+    // Get months based on financial year end
+    const months = getMonthsForYear(financialYearEnd)
+    
+    // Data from userData with fallbacks (using actual data instead of random)
     const csiData = {
       csiSpend: userData?.csiSpend || 500000,
       csiPercentage: userData?.csiPercentage || 2.5,
@@ -2012,6 +2527,14 @@ const renderCommunityESD = () => {
       totalProcurementSpend: userData?.totalProcurementSpend || 2000000,
       procurementPercentage: userData?.procurementPercentage || 65,
     }
+
+    // Create monthly data arrays (spread the annual values across months)
+    const monthlyCsiSpend = months.map(() => csiData.csiSpend / months.length)
+    const monthlyCsiPercentage = months.map(() => csiData.csiPercentage)
+    const monthlyHdiSpend = months.map(() => csiData.hdiVendorSpend / months.length)
+    const monthlyHdiPercentage = months.map(() => csiData.hdiPercentage)
+    const monthlyProcurementSpend = months.map(() => csiData.totalProcurementSpend / months.length)
+    const monthlyProcurementPercentage = months.map(() => csiData.procurementPercentage)
 
     return (
       <div>
@@ -2022,7 +2545,6 @@ const renderCommunityESD = () => {
           section="community-esd"
         />
 
-        {/* Community & ESD Section */}
         <div
           style={{
             backgroundColor: "#fdfcfb",
@@ -2045,44 +2567,6 @@ const renderCommunityESD = () => {
           >
             Community & ESD Participation
           </h3>
-
-          {/* View Mode Selectors */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-            <div style={{ display: "flex", gap: "10px" }}>
-              <select
-                value={selectedViewMode}
-                onChange={(e) => setSelectedViewMode(e.target.value)}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  fontSize: "14px",
-                  color: "#5d4037",
-                }}
-              >
-                <option value="month">Monthly</option>
-                <option value="quarter">Quarterly</option>
-                <option value="year">Yearly</option>
-              </select>
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  fontSize: "14px",
-                  color: "#5d4037",
-                }}
-              >
-                {[selectedYear - 2, selectedYear - 1, selectedYear, selectedYear + 1, selectedYear + 2].map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
 
           {/* CSI/HDI Spend Selection */}
           <div style={{ marginBottom: "20px" }}>
@@ -2132,23 +2616,16 @@ const renderCommunityESD = () => {
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
-            {/* CSI/CSR Spend OR HDI Spend Chart (based on active tab) */}
+            {/* CSI/CSR Spend OR HDI Spend Chart */}
             <ESGChartCard
               title={activeSpendTab === "csi" ? "CSI/CSR Spend (R)" : "HDI Spend (R)"}
               chartType="bar"
               data={{
-                labels: getMonthsForYear(selectedYear, selectedViewMode),
+                labels: months,
                 datasets: [
                   {
                     label: activeSpendTab === "csi" ? "CSI Spend" : "HDI Spend",
-                    data: Array(getMonthsForYear(selectedYear, selectedViewMode).length)
-                      .fill(0)
-                      .map(() => {
-                        const base = activeSpendTab === "csi" ? 
-                          (Math.random() * 100000 + 50000) : 
-                          (Math.random() * 500000 + 250000);
-                        return base;
-                      }),
+                    data: activeSpendTab === "csi" ? monthlyCsiSpend : monthlyHdiSpend,
                     backgroundColor: activeSpendTab === "csi" ? "#5d4037" : "#8d6e63",
                     borderColor: activeSpendTab === "csi" ? "#5d4037" : "#8d6e63",
                     borderWidth: 2,
@@ -2181,23 +2658,16 @@ const renderCommunityESD = () => {
               isInvestorView={isInvestorView}
             />
 
-            {/* CSI/CSR Spend % OR HDI Spend % Chart (based on active tab) */}
+            {/* CSI/CSR Spend % OR HDI Spend % Chart */}
             <ESGChartCard
               title={activeSpendTab === "csi" ? "CSI Spend as % of Revenue" : "HDI Spend as % of Revenue"}
               chartType="line"
               data={{
-                labels: getMonthsForYear(selectedYear, selectedViewMode),
+                labels: months,
                 datasets: [
                   {
                     label: activeSpendTab === "csi" ? "CSI %" : "HDI %",
-                    data: Array(getMonthsForYear(selectedYear, selectedViewMode).length)
-                      .fill(0)
-                      .map(() => {
-                        const base = activeSpendTab === "csi" ? 
-                          (Math.random() * 5) : 
-                          (Math.random() * 50 + 10);
-                        return base;
-                      }),
+                    data: activeSpendTab === "csi" ? monthlyCsiPercentage : monthlyHdiPercentage,
                     borderColor: activeSpendTab === "csi" ? "#5d4037" : "#8d6e63",
                     backgroundColor: activeSpendTab === "csi" ? "rgba(93, 64, 55, 0.1)" : "rgba(141, 110, 99, 0.1)",
                     borderWidth: 2,
@@ -2232,7 +2702,7 @@ const renderCommunityESD = () => {
               isInvestorView={isInvestorView}
             />
 
-            {/* Total Procurement Spend Chart - IN THE SAME LINE AS OTHERS */}
+            {/* Procurement Spend - FIXED: Now independent from CSI/HDI */}
             <div>
               {/* Procurement Tabs */}
               <div style={{ 
@@ -2272,27 +2742,20 @@ const renderCommunityESD = () => {
                     flex: 1
                   }}
                 >
-                  Procurement % Spent
+                  Procurement % to HDI
                 </button>
               </div>
 
-              {/* Total Procurement Spend Chart */}
+              {/* Total Procurement Spend Chart - Independent data */}
               <ESGChartCard
                 title="Procurement Spend"
                 chartType={activeProcurementTab === "amount" ? "bar" : "line"}
                 data={{
-                  labels: getMonthsForYear(selectedYear, selectedViewMode),
+                  labels: months,
                   datasets: [
                     {
-                      label: activeProcurementTab === "amount" ? "Procurement Spend" : "Procurement %",
-                      data: Array(getMonthsForYear(selectedYear, selectedViewMode).length)
-                        .fill(0)
-                        .map(() => {
-                          const base = activeProcurementTab === "amount" ? 
-                            (Math.random() * 1000000 + 500000) : 
-                            (Math.random() * 30 + 50);
-                          return base;
-                        }),
+                      label: activeProcurementTab === "amount" ? "Procurement Spend" : "Procurement % to HDI",
+                      data: activeProcurementTab === "amount" ? monthlyProcurementSpend : monthlyProcurementPercentage,
                       backgroundColor: activeProcurementTab === "amount" ? "#3e2723" : "rgba(62, 39, 35, 0.1)",
                       borderColor: "#3e2723",
                       borderWidth: 2,
@@ -2453,8 +2916,13 @@ const renderCommunityESD = () => {
     </div>
   )
 }
-// Governance Tab Components - SIMPLIFIED WITH DROPDOWNS
+
+// Governance Tab Component - REDESIGNED WITH TABLES
 const GovernanceTab = ({ userData, onSave, isInvestorView }) => {
+  const [policies, setPolicies] = useState(userData?.policies || [])
+  const [risks, setRisks] = useState(userData?.risks || [])
+  const [boardData, setBoardData] = useState(userData?.boardData || { directors: [], advisors: [] })
+
   // Handle dropdown changes for governance data
   const handleDropdownChange = (field, value) => {
     const updatedData = { ...userData, [field]: value };
@@ -2470,379 +2938,483 @@ const GovernanceTab = ({ userData, onSave, isInvestorView }) => {
         section="governance-ownership"
       />
 
-      {/* Ownership & Control Section */}
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "25px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          marginBottom: "30px",
-        }}
-      >
-        <h3
+      {/* First Row: Policies and SOPs AND Risk, Controls & Reporting */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "30px" }}>
+        {/* Policies and SOPs Section */}
+        <div
           style={{
-            color: "#5d4037",
-            marginTop: 0,
-            marginBottom: "25px",
-            fontSize: "18px",
-            fontWeight: "600",
-            borderBottom: "2px solid #e8ddd4",
-            paddingBottom: "10px",
+            backgroundColor: "#fdfcfb",
+            padding: "25px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
           }}
         >
-          Ownership & Control
-        </h3>
+          <h3
+            style={{
+              color: "#5d4037",
+              marginTop: 0,
+              marginBottom: "25px",
+              fontSize: "18px",
+              fontWeight: "600",
+              borderBottom: "2px solid #e8ddd4",
+              paddingBottom: "10px",
+            }}
+          >
+            Policies and SOPs
+          </h3>
 
-        <div style={{ display: "grid", gap: "20px" }}>
-          {/* Shareholder Register */}
-          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-            <label
-              style={{
-                minWidth: "220px",
-                color: "#5d4037",
-                fontWeight: "600",
-                fontSize: "14px",
-              }}
-            >
-              Shareholder Register Maintained:
-            </label>
-            <select
-              value={userData?.shareholderRegister || "no"}
-              onChange={(e) => handleDropdownChange("shareholderRegister", e.target.value)}
-              style={{
-                flex: 1,
-                padding: "10px 15px",
-                borderRadius: "6px",
-                border: "2px solid #e8ddd4",
-                fontSize: "14px",
-                color: "#5d4037",
-                backgroundColor: "#fdfcfb",
-                cursor: isInvestorView ? "not-allowed" : "pointer",
-                opacity: isInvestorView ? 0.7 : 1,
-              }}
-              disabled={isInvestorView}
-            >
-              <option value="no">No</option>
-              <option value="yes">Yes</option>
-            </select>
+          <div style={{ display: "grid", gap: "20px" }}>
+            {/* Core Governance Policies */}
+            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+              <label
+                style={{
+                  minWidth: "150px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                }}
+              >
+                Core Governance Policies:
+              </label>
+              <select
+                value={userData?.corePolicies || "no"}
+                onChange={(e) => handleDropdownChange("corePolicies", e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: "10px 15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  backgroundColor: "#fdfcfb",
+                  cursor: isInvestorView ? "not-allowed" : "pointer",
+                  opacity: isInvestorView ? 0.7 : 1,
+                }}
+                disabled={isInvestorView}
+              >
+                <option value="no">No</option>
+                <option value="partial">Partial</option>
+                <option value="yes">Yes</option>
+              </select>
+            </div>
+
+            {/* Critical SOPs */}
+            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+              <label
+                style={{
+                  minWidth: "150px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                }}
+              >
+                Critical SOPs Documented:
+              </label>
+              <select
+                value={userData?.criticalSOPs || "no"}
+                onChange={(e) => handleDropdownChange("criticalSOPs", e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: "10px 15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  backgroundColor: "#fdfcfb",
+                  cursor: isInvestorView ? "not-allowed" : "pointer",
+                  opacity: isInvestorView ? 0.7 : 1,
+                }}
+                disabled={isInvestorView}
+              >
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </div>
           </div>
 
-          {/* Voting Rights */}
-          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-            <label
-              style={{
-                minWidth: "220px",
-                color: "#5d4037",
-                fontWeight: "600",
-                fontSize: "14px",
+          {/* Show Policies Table if answer is Yes */}
+          {(userData?.corePolicies === "yes" || userData?.criticalSOPs === "yes") && (
+            <PoliciesTable 
+              policies={policies} 
+              onUpdate={(newPolicies) => {
+                setPolicies(newPolicies)
+                onSave({ ...userData, policies: newPolicies })
               }}
-            >
-              Voting Rights Documented:
-            </label>
-            <select
-              value={userData?.votingRights || "no"}
-              onChange={(e) => handleDropdownChange("votingRights", e.target.value)}
-              style={{
-                flex: 1,
-                padding: "10px 15px",
-                borderRadius: "6px",
-                border: "2px solid #e8ddd4",
-                fontSize: "14px",
-                color: "#5d4037",
-                backgroundColor: "#fdfcfb",
-                cursor: isInvestorView ? "not-allowed" : "pointer",
-                opacity: isInvestorView ? 0.7 : 1,
-              }}
-              disabled={isInvestorView}
-            >
-              <option value="no">No</option>
-              <option value="yes">Yes</option>
-            </select>
+              isInvestorView={isInvestorView}
+            />
+          )}
+        </div>
+
+        {/* Risk, Controls & Reporting Section */}
+        <div
+          style={{
+            backgroundColor: "#fdfcfb",
+            padding: "25px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          }}
+        >
+          <h3
+            style={{
+              color: "#5d4037",
+              marginTop: 0,
+              marginBottom: "25px",
+              fontSize: "18px",
+              fontWeight: "600",
+              borderBottom: "2px solid #e8ddd4",
+              paddingBottom: "10px",
+            }}
+          >
+            Risk, Controls & Reporting
+          </h3>
+
+          <div style={{ display: "grid", gap: "20px" }}>
+            {/* Risk Register */}
+            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+              <label
+                style={{
+                  minWidth: "150px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                }}
+              >
+                Risk Register Maintained:
+              </label>
+              <select
+                value={userData?.riskRegister || "no"}
+                onChange={(e) => handleDropdownChange("riskRegister", e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: "10px 15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  backgroundColor: "#fdfcfb",
+                  cursor: isInvestorView ? "not-allowed" : "pointer",
+                  opacity: isInvestorView ? 0.7 : 1,
+                }}
+                disabled={isInvestorView}
+              >
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </div>
+
+            {/* Reporting Responsibility */}
+            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+              <label
+                style={{
+                  minWidth: "150px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                }}
+              >
+                Reporting Responsibility Assigned:
+              </label>
+              <select
+                value={userData?.reportingResponsibility || "no"}
+                onChange={(e) => handleDropdownChange("reportingResponsibility", e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: "10px 15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  backgroundColor: "#fdfcfb",
+                  cursor: isInvestorView ? "not-allowed" : "pointer",
+                  opacity: isInvestorView ? 0.7 : 1,
+                }}
+                disabled={isInvestorView}
+              >
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </div>
           </div>
+
+          {/* Show Risk Table if answer is Yes */}
+          {userData?.riskRegister === "yes" && (
+            <RiskTable 
+              risks={risks} 
+              onUpdate={(newRisks) => {
+                setRisks(newRisks)
+                onSave({ ...userData, risks: newRisks })
+              }}
+              isInvestorView={isInvestorView}
+            />
+          )}
         </div>
       </div>
 
-      {/* Oversight & Accountability Section */}
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "25px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          marginBottom: "30px",
-        }}
-      >
-        <h3
+      {/* Second Row: Ownership & Control AND Oversight & Accountability */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "30px" }}>
+        {/* Ownership & Control Section */}
+        <div
           style={{
-            color: "#5d4037",
-            marginTop: 0,
-            marginBottom: "25px",
-            fontSize: "18px",
-            fontWeight: "600",
-            borderBottom: "2px solid #e8ddd4",
-            paddingBottom: "10px",
+            backgroundColor: "#fdfcfb",
+            padding: "25px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
           }}
         >
-          Oversight & Accountability
-        </h3>
+          <h3
+            style={{
+              color: "#5d4037",
+              marginTop: 0,
+              marginBottom: "25px",
+              fontSize: "18px",
+              fontWeight: "600",
+              borderBottom: "2px solid #e8ddd4",
+              paddingBottom: "10px",
+            }}
+          >
+            Ownership & Control
+          </h3>
 
-        <div style={{ display: "grid", gap: "20px" }}>
-          {/* Oversight Structure */}
-          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-            <label
-              style={{
-                minWidth: "220px",
-                color: "#5d4037",
-                fontWeight: "600",
-                fontSize: "14px",
-              }}
-            >
-              Oversight Structure:
-            </label>
-            <select
-              value={userData?.oversightStructure || "none"}
-              onChange={(e) => handleDropdownChange("oversightStructure", e.target.value)}
-              style={{
-                flex: 1,
-                padding: "10px 15px",
-                borderRadius: "6px",
-                border: "2px solid #e8ddd4",
-                fontSize: "14px",
-                color: "#5d4037",
-                backgroundColor: "#fdfcfb",
-                cursor: isInvestorView ? "not-allowed" : "pointer",
-                opacity: isInvestorView ? 0.7 : 1,
-              }}
-              disabled={isInvestorView}
-            >
-              <option value="none">None</option>
-              <option value="founder-only">Founder Only</option>
-              <option value="advisory-board">Advisory Board</option>
-              <option value="formal-board">Formal Board</option>
-            </select>
-          </div>
+          <div style={{ display: "grid", gap: "20px" }}>
+            {/* Shareholder Register */}
+            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+              <label
+                style={{
+                  minWidth: "150px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                }}
+              >
+                Shareholder Register Maintained:
+              </label>
+              <select
+                value={userData?.shareholderRegister || "no"}
+                onChange={(e) => handleDropdownChange("shareholderRegister", e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: "10px 15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  backgroundColor: "#fdfcfb",
+                  cursor: isInvestorView ? "not-allowed" : "pointer",
+                  opacity: isInvestorView ? 0.7 : 1,
+                }}
+                disabled={isInvestorView}
+              >
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </div>
 
-          {/* Meeting Cadence */}
-          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-            <label
-              style={{
-                minWidth: "220px",
-                color: "#5d4037",
-                fontWeight: "600",
-                fontSize: "14px",
-              }}
-            >
-              Meeting Cadence:
-            </label>
-            <select
-              value={userData?.meetingCadence || "ad-hoc"}
-              onChange={(e) => handleDropdownChange("meetingCadence", e.target.value)}
-              style={{
-                flex: 1,
-                padding: "10px 15px",
-                borderRadius: "6px",
-                border: "2px solid #e8ddd4",
-                fontSize: "14px",
-                color: "#5d4037",
-                backgroundColor: "#fdfcfb",
-                cursor: isInvestorView ? "not-allowed" : "pointer",
-                opacity: isInvestorView ? 0.7 : 1,
-              }}
-              disabled={isInvestorView}
-            >
-              <option value="ad-hoc">Ad Hoc</option>
-              <option value="quarterly">Quarterly</option>
-              <option value="monthly">Monthly</option>
-              <option value="regular">Regular</option>
-            </select>
+            {/* Voting Rights */}
+            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+              <label
+                style={{
+                  minWidth: "150px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                }}
+              >
+                Voting Rights Documented:
+              </label>
+              <select
+                value={userData?.votingRights || "no"}
+                onChange={(e) => handleDropdownChange("votingRights", e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: "10px 15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  backgroundColor: "#fdfcfb",
+                  cursor: isInvestorView ? "not-allowed" : "pointer",
+                  opacity: isInvestorView ? 0.7 : 1,
+                }}
+                disabled={isInvestorView}
+              >
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Policies and SOPs Section */}
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "25px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          marginBottom: "30px",
-        }}
-      >
-        <h3
+        {/* Oversight & Accountability Section */}
+        <div
           style={{
-            color: "#5d4037",
-            marginTop: 0,
-            marginBottom: "25px",
-            fontSize: "18px",
-            fontWeight: "600",
-            borderBottom: "2px solid #e8ddd4",
-            paddingBottom: "10px",
+            backgroundColor: "#fdfcfb",
+            padding: "25px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
           }}
         >
-          Policies and SOPs
-        </h3>
+          <h3
+            style={{
+              color: "#5d4037",
+              marginTop: 0,
+              marginBottom: "25px",
+              fontSize: "18px",
+              fontWeight: "600",
+              borderBottom: "2px solid #e8ddd4",
+              paddingBottom: "10px",
+            }}
+          >
+            Oversight & Accountability
+          </h3>
 
-        <div style={{ display: "grid", gap: "20px" }}>
-          {/* Core Governance Policies */}
-          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-            <label
-              style={{
-                minWidth: "220px",
-                color: "#5d4037",
-                fontWeight: "600",
-                fontSize: "14px",
-              }}
-            >
-              Core Governance Policies:
-            </label>
-            <select
-              value={userData?.corePolicies || "no"}
-              onChange={(e) => handleDropdownChange("corePolicies", e.target.value)}
-              style={{
-                flex: 1,
-                padding: "10px 15px",
-                borderRadius: "6px",
-                border: "2px solid #e8ddd4",
-                fontSize: "14px",
-                color: "#5d4037",
-                backgroundColor: "#fdfcfb",
-                cursor: isInvestorView ? "not-allowed" : "pointer",
-                opacity: isInvestorView ? 0.7 : 1,
-              }}
-              disabled={isInvestorView}
-            >
-              <option value="no">No</option>
-              <option value="partial">Partial</option>
-              <option value="yes">Yes</option>
-            </select>
+          <div style={{ display: "grid", gap: "20px" }}>
+            {/* Oversight Structure */}
+            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+              <label
+                style={{
+                  minWidth: "150px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                }}
+              >
+                Oversight Structure:
+              </label>
+              <select
+                value={userData?.oversightStructure || "none"}
+                onChange={(e) => handleDropdownChange("oversightStructure", e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: "10px 15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  backgroundColor: "#fdfcfb",
+                  cursor: isInvestorView ? "not-allowed" : "pointer",
+                  opacity: isInvestorView ? 0.7 : 1,
+                }}
+                disabled={isInvestorView}
+              >
+                <option value="none">None</option>
+                <option value="founder-only">Founder Only</option>
+                <option value="advisory-board">Advisory Board</option>
+                <option value="formal-board">Formal Board</option>
+              </select>
+            </div>
+
+            {/* Meeting Cadence */}
+            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+              <label
+                style={{
+                  minWidth: "150px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                }}
+              >
+                Meeting Cadence:
+              </label>
+              <select
+                value={userData?.meetingCadence || "ad-hoc"}
+                onChange={(e) => handleDropdownChange("meetingCadence", e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: "10px 15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  backgroundColor: "#fdfcfb",
+                  cursor: isInvestorView ? "not-allowed" : "pointer",
+                  opacity: isInvestorView ? 0.7 : 1,
+                }}
+                disabled={isInvestorView}
+              >
+                <option value="ad-hoc">Ad Hoc</option>
+                <option value="quarterly">Quarterly</option>
+                <option value="monthly">Monthly</option>
+                <option value="regular">Regular</option>
+              </select>
+            </div>
+
+            {/* Female Directors */}
+            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+              <label
+                style={{
+                  minWidth: "150px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                }}
+              >
+                Female Directors:
+              </label>
+              <input
+                type="number"
+                value={userData?.femaleDirectors || ""}
+                onChange={(e) => handleDropdownChange("femaleDirectors", Number.parseInt(e.target.value) || 0)}
+                placeholder="Number"
+                style={{
+                  flex: 1,
+                  padding: "10px 15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  backgroundColor: "#fdfcfb",
+                  cursor: isInvestorView ? "not-allowed" : "text",
+                  opacity: isInvestorView ? 0.7 : 1,
+                }}
+                disabled={isInvestorView}
+              />
+            </div>
+
+            {/* Male Directors */}
+            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+              <label
+                style={{
+                  minWidth: "150px",
+                  color: "#5d4037",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                }}
+              >
+                Male Directors:
+              </label>
+              <input
+                type="number"
+                value={userData?.maleDirectors || ""}
+                onChange={(e) => handleDropdownChange("maleDirectors", Number.parseInt(e.target.value) || 0)}
+                placeholder="Number"
+                style={{
+                  flex: 1,
+                  padding: "10px 15px",
+                  borderRadius: "6px",
+                  border: "2px solid #e8ddd4",
+                  fontSize: "14px",
+                  color: "#5d4037",
+                  backgroundColor: "#fdfcfb",
+                  cursor: isInvestorView ? "not-allowed" : "text",
+                  opacity: isInvestorView ? 0.7 : 1,
+                }}
+                disabled={isInvestorView}
+              />
+            </div>
           </div>
 
-          {/* Critical SOPs */}
-          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-            <label
-              style={{
-                minWidth: "220px",
-                color: "#5d4037",
-                fontWeight: "600",
-                fontSize: "14px",
+          {/* Show Board Table based on oversight structure */}
+          {userData?.oversightStructure && userData?.oversightStructure !== "none" && (
+            <BoardTable 
+              boardData={boardData}
+              oversightStructure={userData.oversightStructure}
+              onUpdate={(newBoardData) => {
+                setBoardData(newBoardData)
+                onSave({ ...userData, boardData: newBoardData })
               }}
-            >
-              Critical SOPs Documented:
-            </label>
-            <select
-              value={userData?.criticalSOPs || "no"}
-              onChange={(e) => handleDropdownChange("criticalSOPs", e.target.value)}
-              style={{
-                flex: 1,
-                padding: "10px 15px",
-                borderRadius: "6px",
-                border: "2px solid #e8ddd4",
-                fontSize: "14px",
-                color: "#5d4037",
-                backgroundColor: "#fdfcfb",
-                cursor: isInvestorView ? "not-allowed" : "pointer",
-                opacity: isInvestorView ? 0.7 : 1,
-              }}
-              disabled={isInvestorView}
-            >
-              <option value="no">No</option>
-              <option value="yes">Yes</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Risk, Controls & Reporting Section */}
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "25px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        }}
-      >
-        <h3
-          style={{
-            color: "#5d4037",
-            marginTop: 0,
-            marginBottom: "25px",
-            fontSize: "18px",
-            fontWeight: "600",
-            borderBottom: "2px solid #e8ddd4",
-            paddingBottom: "10px",
-          }}
-        >
-          Risk, Controls & Reporting
-        </h3>
-
-        <div style={{ display: "grid", gap: "20px" }}>
-          {/* Risk Register */}
-          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-            <label
-              style={{
-                minWidth: "220px",
-                color: "#5d4037",
-                fontWeight: "600",
-                fontSize: "14px",
-              }}
-            >
-              Risk Register Maintained:
-            </label>
-            <select
-              value={userData?.riskRegister || "no"}
-              onChange={(e) => handleDropdownChange("riskRegister", e.target.value)}
-              style={{
-                flex: 1,
-                padding: "10px 15px",
-                borderRadius: "6px",
-                border: "2px solid #e8ddd4",
-                fontSize: "14px",
-                color: "#5d4037",
-                backgroundColor: "#fdfcfb",
-                cursor: isInvestorView ? "not-allowed" : "pointer",
-                opacity: isInvestorView ? 0.7 : 1,
-              }}
-              disabled={isInvestorView}
-            >
-              <option value="no">No</option>
-              <option value="yes">Yes</option>
-            </select>
-          </div>
-
-          {/* Reporting Responsibility */}
-          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-            <label
-              style={{
-                minWidth: "220px",
-                color: "#5d4037",
-                fontWeight: "600",
-                fontSize: "14px",
-              }}
-            >
-              Reporting Responsibility Assigned:
-            </label>
-            <select
-              value={userData?.reportingResponsibility || "no"}
-              onChange={(e) => handleDropdownChange("reportingResponsibility", e.target.value)}
-              style={{
-                flex: 1,
-                padding: "10px 15px",
-                borderRadius: "6px",
-                border: "2px solid #e8ddd4",
-                fontSize: "14px",
-                color: "#5d4037",
-                backgroundColor: "#fdfcfb",
-                cursor: isInvestorView ? "not-allowed" : "pointer",
-                opacity: isInvestorView ? 0.7 : 1,
-              }}
-              disabled={isInvestorView}
-            >
-              <option value="no">No</option>
-              <option value="yes">Yes</option>
-            </select>
-          </div>
+              isInvestorView={isInvestorView}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -2862,6 +3434,7 @@ const ESG = () => {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [modalSection, setModalSection] = useState("")
   const [userData, setUserData] = useState({})
+  const [financialYearEnd, setFinancialYearEnd] = useState("2026-03")
 
   useEffect(() => {
     const investorViewMode = sessionStorage.getItem("investorViewMode")
@@ -2872,6 +3445,12 @@ const ESG = () => {
       setIsInvestorView(true)
       setViewingSMEId(smeId)
       setViewingSMEName(smeName || "SME")
+    }
+    
+    // Get financial year end from user profile or set default
+    const savedFYE = localStorage.getItem("financialYearEnd")
+    if (savedFYE) {
+      setFinancialYearEnd(savedFYE)
     }
   }, [])
 
@@ -3025,7 +3604,7 @@ const ESG = () => {
       onClick={() => setShowFullDescription(!showFullDescription)}
       style={{
         padding: "8px 16px",
-        backgroundColor: "#7d5a50",
+        backgroundColor: "#5d4037",
         color: "#fdfcfb",
         border: "none",
         borderRadius: "6px",
@@ -3035,7 +3614,7 @@ const ESG = () => {
         whiteSpace: "nowrap",
       }}
     >
-      {showFullDescription ? "See less" : "See more"}
+      {showFullDescription ? "See less" : "See more about dashboard"}
     </button>
   </div>
 
@@ -3050,69 +3629,67 @@ const ESG = () => {
         marginBottom: "30px",
       }}
     >
-      <div style={{ padding: "50px", paddingTop: "100px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginTop: "-80px" }}>
-          <div>
-            <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
-              What this dashboard DOES
-            </h3>
-            <ul style={{ color: "#4a352f", fontSize: "14px", lineHeight: "1.7", margin: 0, paddingLeft: "20px" }}>
-              <li>Confirms ESG factors are tracked and governed</li>
-              <li>Signals readiness for disclosure to funders, corporates, DFIs</li>
-              <li>Assesses external trustworthiness and credibility</li>
-              <li>Feeds into BIG Score (Governance, Compliance, Capital Appeal)</li>
-              <li>Monitors ESG framework implementation and oversight</li>
-            </ul>
-          </div>
-
-          <div>
-            <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
-              What this dashboard does NOT do
-            </h3>
-            <ul style={{ color: "#4a352f", fontSize: "14px", lineHeight: "1.7", margin: 0, paddingLeft: "20px" }}>
-              <li>Measure internal execution performance</li>
-              <li>Provide sustainability reporting or SDG mapping</li>
-              <li>Calculate carbon footprints or create ESG narratives</li>
-              <li>Optimize impact or operational performance</li>
-              <li>Replace audits, certifications, or statutory disclosures</li>
-            </ul>
-          </div>
-        </div>
-
-        <div style={{ marginTop: "30px", paddingTop: "20px", borderTop: "1px solid #e8ddd4" }}>
-          <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
-            Key ESG Impact Dimensions
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+        <div>
+          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
+            What this dashboard DOES
           </h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "20px" }}>
-            <div>
-              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
-                Environmental
-              </h4>
-              <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
-                Track exposure, compliance, incidents, and controls to manage environmental risks
-              </p>
-            </div>
-            <div>
-              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
-                Social
-              </h4>
-              <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
-                Monitor workforce demographics, ownership inclusion, and community development
-              </p>
-            </div>
-            <div>
-              <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
-                Governance
-              </h4>
-              <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
-                Assess ownership structures, oversight mechanisms, policies, and risk management
-              </p>
-            </div>
-          </div>
-          <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", marginTop: "15px" }}>
-            Dashboards show the data. ESG confirms it exists, is governed, and is credible for external stakeholders.
-          </p>
+          <ul style={{ color: "#4a352f", fontSize: "14px", lineHeight: "1.7", margin: 0, paddingLeft: "20px" }}>
+            <li>Confirms ESG factors are tracked and governed</li>
+            <li>Signals readiness for disclosure to funders, corporates, DFIs</li>
+            <li>Assesses external trustworthiness and credibility</li>
+            <li>Feeds into BIG Score (Governance, Compliance, Capital Appeal)</li>
+            <li>Monitors ESG framework implementation and oversight</li>
+          </ul>
         </div>
+
+        <div>
+          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
+            What this dashboard does NOT do
+          </h3>
+          <ul style={{ color: "#4a352f", fontSize: "14px", lineHeight: "1.7", margin: 0, paddingLeft: "20px" }}>
+            <li>Measure internal execution performance</li>
+            <li>Provide sustainability reporting or SDG mapping</li>
+            <li>Calculate carbon footprints or create ESG narratives</li>
+            <li>Optimize impact or operational performance</li>
+            <li>Replace audits, certifications, or statutory disclosures</li>
+          </ul>
+        </div>
+      </div>
+
+      <div style={{ marginTop: "30px", paddingTop: "20px", borderTop: "1px solid #e8ddd4" }}>
+        <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
+          Key ESG Impact Dimensions
+        </h3>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "20px" }}>
+          <div>
+            <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
+              Environmental
+            </h4>
+            <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
+              Track exposure, compliance, incidents, and controls to manage environmental risks
+            </p>
+          </div>
+          <div>
+            <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
+              Social
+            </h4>
+            <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
+              Monitor workforce demographics, ownership inclusion, and community development
+            </p>
+          </div>
+          <div>
+            <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
+              Governance
+            </h4>
+            <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
+              Assess ownership structures, oversight mechanisms, policies, and risk management
+            </p>
+          </div>
+        </div>
+        <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", marginTop: "15px" }}>
+          Dashboards show the data. ESG confirms it exists, is governed, and is credible for external stakeholders.
+        </p>
       </div>
     </div>
   )}
@@ -3135,7 +3712,6 @@ const ESG = () => {
         key={tab.id}
         onClick={() => {
           setActiveMainTab(tab.id)
-          // Reset sub tab when main tab changes
           if (tab.id === "social") setActiveSubTab("workforce-demographics")
         }}
         style={{
@@ -3193,6 +3769,7 @@ const ESG = () => {
         section={modalSection}
         onSave={handleSaveData}
         currentData={userData}
+        financialYearEnd={financialYearEnd}
       />
     </div>
   )
