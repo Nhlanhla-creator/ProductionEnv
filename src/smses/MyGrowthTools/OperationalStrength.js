@@ -209,10 +209,11 @@ const ChartViewModal = ({ isOpen, onClose, kpiData, historicalData = [] }) => {
       const variation = Math.random() * 20 - 10
       return Math.max(0, parseToTwoDecimals((baseValue * yearMultiplier) + variation))
     })
-    
+      const labelsWithYear = months.map(month => `${month} ${selectedYear}`)
+
     return {
-      labels: months,
-      datasets: [{
+        labels: labelsWithYear,     
+         datasets: [{
         label: `${kpiData.kpi} - ${selectedYear}`,
         data: chartData,
         backgroundColor: brownShades[1] + "80", // 80 = 50% opacity
@@ -1394,6 +1395,14 @@ const KPIDashboard = ({ activeSection, isInvestorView, financialYearStartMonth }
     })
   }, [])
 
+    const parseToTwoDecimals = (value) => {
+  if (typeof value === 'number') {
+    return Math.round(value * 100) / 100
+  }
+  return value
+}
+
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -1406,6 +1415,7 @@ const KPIDashboard = ({ activeSection, isInvestorView, financialYearStartMonth }
 
     return () => unsubscribe()
   }, [])
+
 
   const loadAllData = async (userId) => {
     try {
@@ -1595,191 +1605,362 @@ const KPIDashboard = ({ activeSection, isInvestorView, financialYearStartMonth }
           )}
         </div>
       </div>
-
-      <div style={{ overflowX: "auto" }}>
-        <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            backgroundColor: "white",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-          }}
-        >
-          <thead>
-            <tr style={{ backgroundColor: "#9c8269" }}>
-              <th style={{ padding: "12px", textAlign: "left", color: "white", fontWeight: "bold", borderRight: "1px solid #8b7355", width: "150px" }}>
-                Category
-              </th>
-              <th style={{ padding: "12px", textAlign: "left", color: "white", fontWeight: "bold", borderRight: "1px solid #8b7355", width: "180px" }}>
-                Sub-Category
-              </th>
-              <th style={{ padding: "12px", textAlign: "left", color: "white", fontWeight: "bold", borderRight: "1px solid #8b7355" }}>
-                KPI
-              </th>
-              <th style={{ padding: "12px", textAlign: "center", color: "white", fontWeight: "bold", borderRight: "1px solid #8b7355", width: "80px" }}>
-                Units
-              </th>
-              <th style={{ padding: "12px", textAlign: "center", color: "white", fontWeight: "bold", borderRight: "1px solid #8b7355", backgroundColor: "#b4a592" }}>
-                Target
-              </th>
-              <th style={{ padding: "12px", textAlign: "center", color: "white", fontWeight: "bold", borderRight: "1px solid #8b7355", backgroundColor: "#a89885" }}>
-                Current
-              </th>
-              <th style={{ padding: "12px", textAlign: "center", color: "white", fontWeight: "bold", borderRight: "1px solid #8b7355", backgroundColor: "#9c8c78" }}>
-                Variance
-              </th>
-              <th style={{ padding: "12px", textAlign: "center", color: "white", fontWeight: "bold", backgroundColor: "#8b7c69", width: "80px" }}>
-                Chart
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {kpiStructure.map((category, categoryIndex) => (
-              category.subCategories.map((subCategory, subCategoryIndex) => (
-                subCategory.kpis.map((kpi, kpiIndex) => {
-                  const isFirstKPI = kpiIndex === 0
-                  const isFirstSubCategory = subCategoryIndex === 0 && kpiIndex === 0
-                  const variance = typeof kpi.currentValue === 'number' && typeof kpi.target === 'number' 
-                    ? parseToTwoDecimals(kpi.currentValue - kpi.target)
-                    : "N/A"
-                  
-                  return (
-                    <tr
-                      key={`${category.category}-${subCategory.name}-${kpi.name}`}
-                      style={{
-                        backgroundColor: (categoryIndex + subCategoryIndex + kpiIndex) % 2 === 0 ? "#f5f5f5" : "#e8e8e8",
-                        borderBottom: "1px solid #ddd",
-                      }}
-                    >
-                      {isFirstSubCategory ? (
-                        <td
-                          rowSpan={category.subCategories.reduce((total, sc) => total + sc.kpis.length, 0)}
-                          style={{
-                            padding: "12px",
-                            fontWeight: "bold",
-                            color: "#4a352f",
-                            borderRight: "2px solid #999",
-                            backgroundColor: categoryIndex % 2 === 0 ? "#e6d7c3" : "#d4c4b0",
-                            verticalAlign: "top",
-                            fontSize: "14px",
-                            width: "150px",
-                          }}
-                        >
-                          {category.category}
-                        </td>
-                      ) : null}
-                      
-                      {isFirstKPI ? (
-                        <td
-                          rowSpan={subCategory.kpis.length}
-                          style={{
-                            padding: "12px",
-                            color: "#5d4037",
-                            borderRight: "1px solid #ddd",
-                            backgroundColor: (categoryIndex + subCategoryIndex) % 2 === 0 ? "#f0e6d6" : "#e8e0d1",
-                            fontWeight: "600",
-                            fontSize: "13px",
-                            width: "180px",
-                          }}
-                        >
-                          {subCategory.name}
-                        </td>
-                      ) : null}
-                      
-                      <td style={{ padding: "12px", color: "#4a352f", borderRight: "1px solid #ddd" }}>
-                        {kpi.name}
-                      </td>
-                      
-                      <td style={{ padding: "12px", textAlign: "center", color: "#4a352f", borderRight: "1px solid #ddd", width: "80px" }}>
-                        {kpi.units}
-                      </td>
-                      
-                      <td style={{ 
-                        padding: "12px", 
-                        textAlign: "center", 
-                        color: "#5d4037", 
-                        borderRight: "1px solid #ddd",
-                        backgroundColor: "#f0e6d6",
-                      }}>
-                        {formatToTwoDecimals(kpi.target)}
-                      </td>
-                      
-                      <td style={{ 
-                        padding: "12px", 
-                        textAlign: "center", 
-                        color: "#4a352f", 
-                        borderRight: "1px solid #ddd",
-                        backgroundColor: "#e8e0d1",
-                      }}>
-                        {formatToTwoDecimals(kpi.currentValue)}
-                      </td>
-                      
-                      <td style={{ 
-                        padding: "12px", 
-                        textAlign: "center", 
-                        color: typeof variance === 'number' ? (variance >= 0 ? "#2e7d32" : "#c62828") : "#5d4037", 
-                        fontWeight: "bold",
-                        borderRight: "1px solid #ddd",
-                        backgroundColor: typeof variance === 'number' 
-                          ? (variance >= 0 ? "#e8f5e9" : "#ffebee") 
-                          : "#f5f0eb",
-                      }}>
-                        {typeof variance === 'number' ? (variance >= 0 ? '+' : '') + formatToTwoDecimals(variance) : variance}
-                      </td>
-                      
-                      <td style={{ padding: "12px", textAlign: "center" }}>
-                        <button
-                          onClick={() => handleViewChart(category.category, subCategory, kpi)}
-                          style={{
-                            padding: "6px 10px",
-                            backgroundColor: "transparent",
-                            color: "#5d4037",
-                            border: "none",
-                            borderRadius: "4px",
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            margin: "0 auto",
-                            transition: "all 0.3s ease",
-                          }}
-                          onMouseEnter={(e) => {
-                            e.target.style.backgroundColor = "#e8ddd4"
-                            e.target.style.transform = "scale(1.1)"
-                          }}
-                          onMouseLeave={(e) => {
-                            e.target.style.backgroundColor = "transparent"
-                            e.target.style.transform = "scale(1)"
-                          }}
-                          title="View Chart & AI Analysis"
-                        >
-                          <EyeIcon size={20} />
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })
-              ))
-            ))}
-          </tbody>
-        </table>
-        
-        <div style={{ 
-          marginTop: "20px", 
-          padding: "15px", 
-          backgroundColor: "#e8f5e9", 
-          borderRadius: "8px",
-          border: "1px solid #c8e6c9",
+<div style={{ overflowX: "auto" }}>
+  {kpiStructure.map((category, categoryIndex) => (
+    <div key={category.category} style={{ marginBottom: "40px" }}>
+      {/* Category Heading with decorative elements */}
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        marginBottom: "15px",
+      }}>
+        <div style={{
+          width: "8px",
+          height: "32px",
+          backgroundColor: categoryIndex === 0 ? "#5d4037" : categoryIndex === 1 ? "#8d6e63" : "#a67c52",
+          borderRadius: "4px",
+          marginRight: "12px",
+        }} />
+        <h3 style={{
+          color: "#4a352f",
+          margin: 0,
+          fontSize: "18px",
+          fontWeight: "700",
+          letterSpacing: "0.5px",
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <span style={{ fontSize: "20px" }}>💡</span>
-            <span style={{ color: "#2e7d32", fontSize: "14px" }}>
-              <strong>Tip:</strong> All values are rounded to 2 decimal places. Click the 👁️ icon to view charts and AI-powered analysis for each KPI. Use "+ Add Data" button to enter values for multiple KPIs at once.
-            </span>
-          </div>
-        </div>
+          {category.category}
+        </h3>
+        <div style={{
+          flex: 1,
+          height: "2px",
+          background: "linear-gradient(90deg, #9c8269 0%, #e8ddd4 100%)",
+          marginLeft: "20px",
+        }} />
       </div>
       
+      {/* Table for this category with enhanced borders */}
+      <table
+        style={{
+          width: "100%",
+          borderCollapse: "collapse",
+          backgroundColor: "white",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+          marginBottom: "20px",
+          border: `2px solid ${
+            categoryIndex === 0 ? "#5d4037" : 
+            categoryIndex === 1 ? "#8d6e63" : 
+            "#a67c52"
+          }`,
+          borderRadius: "8px",
+          overflow: "hidden",
+        }}
+      >
+        <thead>
+          <tr style={{ 
+            backgroundColor: categoryIndex === 0 ? "#5d4037" : 
+                           categoryIndex === 1 ? "#8d6e63" : 
+                           "#a67c52",
+          }}>
+            <th style={{ 
+              padding: "14px 12px", 
+              textAlign: "left", 
+              color: "white", 
+              fontWeight: "bold", 
+              borderRight: "2px solid rgba(255,255,255,0.2)", 
+              width: "180px",
+              fontSize: "14px",
+            }}>
+              Category
+            </th>
+            <th style={{ 
+              padding: "14px 12px", 
+              textAlign: "left", 
+              color: "white", 
+              fontWeight: "bold", 
+              borderRight: "2px solid rgba(255,255,255,0.2)",
+              fontSize: "14px",
+            }}>
+              KPI
+            </th>
+            <th style={{ 
+              padding: "14px 12px", 
+              textAlign: "center", 
+              color: "white", 
+              fontWeight: "bold", 
+              borderRight: "2px solid rgba(255,255,255,0.2)", 
+              width: "80px",
+              fontSize: "14px",
+            }}>
+              Units
+            </th>
+            <th style={{ 
+              padding: "14px 12px", 
+              textAlign: "center", 
+              color: "white", 
+              fontWeight: "bold", 
+              borderRight: "2px solid rgba(255,255,255,0.2)", 
+              backgroundColor: "rgba(255,255,255,0.15)",
+              fontSize: "14px",
+            }}>
+              Target
+            </th>
+            <th style={{ 
+              padding: "14px 12px", 
+              textAlign: "center", 
+              color: "white", 
+              fontWeight: "bold", 
+              borderRight: "2px solid rgba(255,255,255,0.2)", 
+              backgroundColor: "rgba(255,255,255,0.1)",
+              fontSize: "14px",
+            }}>
+              Current
+            </th>
+            <th style={{ 
+              padding: "14px 12px", 
+              textAlign: "center", 
+              color: "white", 
+              fontWeight: "bold", 
+              borderRight: "2px solid rgba(255,255,255,0.2)", 
+              backgroundColor: "rgba(255,255,255,0.05)",
+              fontSize: "14px",
+            }}>
+              Variance
+            </th>
+            <th style={{ 
+              padding: "14px 12px", 
+              textAlign: "center", 
+              color: "white", 
+              fontWeight: "bold", 
+              backgroundColor: "rgba(0,0,0,0.2)", 
+              width: "80px",
+              fontSize: "14px",
+            }}>
+              Chart
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {category.subCategories.map((subCategory, subCategoryIndex) => (
+            subCategory.kpis.map((kpi, kpiIndex) => {
+              const isFirstKPIInSubCategory = kpiIndex === 0
+              const variance = typeof kpi.currentValue === 'number' && typeof kpi.target === 'number' 
+                ? kpi.currentValue - kpi.target
+                : "N/A"
+              
+              return (
+                <tr
+                  key={`${category.category}-${subCategory.name}-${kpi.name}`}
+                  style={{
+                    backgroundColor: (subCategoryIndex + kpiIndex) % 2 === 0 ? "#faf7f2" : "#f5f0eb",
+                    borderBottom: subCategoryIndex === category.subCategories.length - 1 && 
+                                 kpiIndex === subCategory.kpis.length - 1 
+                                 ? "none" 
+                                 : "2px solid #e8ddd4",
+                  }}
+                >
+                  {isFirstKPIInSubCategory ? (
+                    <td
+                      rowSpan={subCategory.kpis.length}
+                      style={{
+                        padding: "14px 12px",
+                        color: "#5d4037",
+                        borderRight: "2px solid #d7ccc8",
+                        backgroundColor: subCategoryIndex % 2 === 0 ? "#f0e6d6" : "#e8e0d1",
+                        fontWeight: "700",
+                        fontSize: "14px",
+                        width: "180px",
+                        borderBottom: subCategoryIndex === category.subCategories.length - 1 
+                                     ? "none" 
+                                     : "2px solid #d7ccc8",
+                        boxShadow: "inset -2px 0 0 rgba(93, 64, 55, 0.1)",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center" }}>
+                        <span style={{
+                          display: "inline-block",
+                          width: "6px",
+                          height: "6px",
+                          backgroundColor: "#5d4037",
+                          borderRadius: "50%",
+                          marginRight: "8px",
+                        }} />
+                        {subCategory.name}
+                      </div>
+                    </td>
+                  ) : null}
+                  
+                  <td style={{ 
+                    padding: "14px 12px", 
+                    color: "#4a352f", 
+                    borderRight: "2px solid #d7ccc8",
+                    fontWeight: "500",
+                  }}>
+                    {kpi.name}
+                  </td>
+                  
+                  <td style={{ 
+                    padding: "14px 12px", 
+                    textAlign: "center", 
+                    color: "#4a352f", 
+                    borderRight: "2px solid #d7ccc8", 
+                    width: "80px",
+                    backgroundColor: "rgba(215, 204, 200, 0.2)",
+                  }}>
+                    {kpi.units}
+                  </td>
+                  
+                  <td style={{ 
+                    padding: "14px 12px", 
+                    textAlign: "center", 
+                    color: "#5d4037", 
+                    borderRight: "2px solid #d7ccc8",
+                    backgroundColor: "#f0e6d6",
+                    fontWeight: "600",
+                  }}>
+                    {kpi.target}
+                  </td>
+                  
+                  <td style={{ 
+                    padding: "14px 12px", 
+                    textAlign: "center", 
+                    color: "#4a352f", 
+                    borderRight: "2px solid #d7ccc8",
+                    backgroundColor: "#e8e0d1",
+                    fontWeight: "600",
+                  }}>
+                    {kpi.currentValue}
+                  </td>
+                  
+                  <td style={{ 
+                    padding: "14px 12px", 
+                    textAlign: "center", 
+                    color: typeof variance === 'number' ? (variance >= 0 ? "#2e7d32" : "#c62828") : "#5d4037", 
+                    fontWeight: "bold",
+                    borderRight: "2px solid #d7ccc8",
+                    backgroundColor: typeof variance === 'number' 
+                      ? (variance >= 0 ? "#e8f5e9" : "#ffebee") 
+                      : "#f5f0eb",
+                  }}>
+                    {typeof variance === 'number' ? (variance >= 0 ? '+' : '') + variance.toFixed(2) : variance}
+                  </td>
+                  
+                  <td style={{ 
+                    padding: "14px 12px", 
+                    textAlign: "center",
+                    backgroundColor: "#f5f0eb",
+                  }}>
+                    <button
+                      onClick={() => handleViewChart(category.category, subCategory, kpi)}
+                      style={{
+                        padding: "8px 12px",
+                        backgroundColor: "transparent",
+                        color: "#5d4037",
+                        border: `2px solid ${
+                          categoryIndex === 0 ? "#5d4037" : 
+                          categoryIndex === 1 ? "#8d6e63" : 
+                          "#a67c52"
+                        }`,
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        margin: "0 auto",
+                        transition: "all 0.3s ease",
+                        width: "40px",
+                        height: "40px",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.backgroundColor = categoryIndex === 0 ? "#5d4037" : 
+                                                       categoryIndex === 1 ? "#8d6e63" : 
+                                                       "#a67c52"
+                        e.target.style.transform = "scale(1.1)"
+                        e.target.style.color = "white"
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.backgroundColor = "transparent"
+                        e.target.style.transform = "scale(1)"
+                        e.target.style.color = "#5d4037"
+                      }}
+                      title="View Chart & AI Analysis"
+                    >
+                      <EyeIcon size={20} />
+                    </button>
+                  </td>
+                </tr>
+              )
+            })
+          ))}
+        </tbody>
+      </table>
+      
+      {/* Category footer with subtle border */}
+      <div style={{
+        marginTop: "5px",
+        padding: "8px 15px",
+        backgroundColor: categoryIndex === 0 ? "rgba(93, 64, 55, 0.05)" : 
+                        categoryIndex === 1 ? "rgba(141, 110, 99, 0.05)" : 
+                        "rgba(166, 124, 82, 0.05)",
+        borderRadius: "0 0 8px 8px",
+        borderLeft: `4px solid ${
+          categoryIndex === 0 ? "#5d4037" : 
+          categoryIndex === 1 ? "#8d6e63" : 
+          "#a67c52"
+        }`,
+        fontSize: "12px",
+        color: "#8d6e63",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+      }}>
+        <span>
+          <strong>{category.subCategories.length} categories</strong> • 
+          <strong> {category.subCategories.reduce((total, sc) => total + sc.kpis.length, 0)} KPIs</strong>
+        </span>
+        <span style={{ fontStyle: "italic" }}>
+          Last updated: {new Date().toLocaleDateString()}
+        </span>
+      </div>
+    </div>
+  ))}
+  
+  {/* Tip section - enhanced with gradient border */}
+  <div style={{ 
+    marginTop: "30px", 
+    padding: "20px 25px", 
+    background: "linear-gradient(135deg, #f1f8e9 0%, #e8f5e9 100%)", 
+    borderRadius: "12px",
+    border: "2px solid #a5d6a7",
+    boxShadow: "0 4px 12px rgba(76, 175, 80, 0.2)",
+  }}>
+    <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
+      <div style={{
+        width: "40px",
+        height: "40px",
+        backgroundColor: "#4caf50",
+        borderRadius: "50%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "24px",
+        color: "white",
+      }}>
+        💡
+      </div>
+      <div>
+        <span style={{ color: "#2e7d32", fontSize: "16px", fontWeight: "600", display: "block", marginBottom: "4px" }}>
+          Pro Tip
+        </span>
+        <span style={{ color: "#1b5e20", fontSize: "14px" }}>
+          Click the 👁️ icon to view charts and AI-powered analysis for each KPI. 
+          Use "+ Add Data" button to enter values for multiple KPIs at once. 
+          Each category table is color-coded for easy identification.
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+
       {/* Add Data Modal */}
       <AddDataModal
         isOpen={showAddDataModal}
