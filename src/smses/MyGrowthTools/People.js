@@ -35,9 +35,9 @@ const formatCurrency = (value, unit = "zar_million") => {
   const num = Number.parseFloat(value) || 0
   switch(unit) {
     case "zar": return `R${num.toLocaleString()}`
-    case "zar_thousand": return `R${(num * 1000).toLocaleString()}K`
-    case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})}m`
-    case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}bn`
+    case "zar_thousand": return `R${(num * 1000).toLocaleString()}`
+    case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})}`
+    case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
     default: return `R${num.toLocaleString()}`
   }
 }
@@ -345,6 +345,9 @@ const TrendModal = ({ isOpen, onClose, item, currencyUnit, generateLabels, aggre
               responsive: true,
               maintainAspectRatio: false,
               plugins: {
+                 datalabels: {
+      display: false // This disables datalabels for this specific chart
+    },
                 legend: { 
                   display: true,
                   position: "top",
@@ -2622,9 +2625,9 @@ const Productivity = ({ activeSection, user, isInvestorView }) => {
     const num = Number.parseFloat(value) || 0
     switch(unit) {
       case "zar": return `R${num.toLocaleString()}`
-      case "zar_thousand": return `R${(num * 1000).toLocaleString()}K`
-      case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})}m`
-      case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}bn`
+      case "zar_thousand": return `R${(num * 1000).toLocaleString()}`
+      case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})}`
+      case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
       default: return `R${num.toLocaleString()}`
     }
   }
@@ -2893,7 +2896,7 @@ const Productivity = ({ activeSection, user, isInvestorView }) => {
               </select>
             </div>
             
-            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+            {/* <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
               <span style={{ color: "#5d4037", fontSize: "14px" }}>Units:</span>
               <select
                 value={currencyUnit}
@@ -2912,7 +2915,7 @@ const Productivity = ({ activeSection, user, isInvestorView }) => {
                 <option value="zar_million">R m</option>
                 <option value="zar_billion">R bn</option>
               </select>
-            </div>
+            </div> */}
           </div>
           
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
@@ -3209,9 +3212,9 @@ const CapabilityTraining = ({ activeSection, user, isInvestorView }) => {
     const num = Number.parseFloat(value) || 0
     switch(unit) {
       case "zar": return `R${num.toLocaleString()}`
-      case "zar_thousand": return `R${(num * 1000).toLocaleString()}K`
-      case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})}m`
-      case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}bn`
+      case "zar_thousand": return `R${(num * 1000).toLocaleString()}`
+      case "zar_million": return `R${num.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})}`
+      case "zar_billion": return `R${(num / 1000).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
       default: return `R${num.toLocaleString()}`
     }
   }
@@ -3696,7 +3699,7 @@ const CapabilityTraining = ({ activeSection, user, isInvestorView }) => {
               </select>
             </div>
             
-            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+            {/* <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
               <span style={{ color: "#5d4037", fontSize: "14px" }}>Units:</span>
               <select
                 value={currencyUnit}
@@ -3715,7 +3718,7 @@ const CapabilityTraining = ({ activeSection, user, isInvestorView }) => {
                 <option value="zar_million">R m</option>
                 <option value="zar_billion">R bn</option>
               </select>
-            </div>
+            </div> */}
           </div>
           
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>

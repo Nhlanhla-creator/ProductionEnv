@@ -293,6 +293,8 @@ import { AcceleratorInsights as CatalystInsights } from "./catalyst/CatalystInsi
 import { InvestorInsights } from "./Investor/InvestorInsights/investorInsights"
 import MyCohorts from "./Investor/MyCohorts/MyCohorts"
 
+import SkeletonLoader from "shared/SkeletonLoader"
+
 // Initial Data States
 const initialFormData = {
   entityOverview: {},
@@ -373,6 +375,12 @@ function App() {
   const [showSummary, setShowSummary] = useState(false)
   const companyName = "Acme Inc"
   const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+        <SkeletonLoader />
+    );
+  }
 
   const updateFormData = (section, data) => {
     setFormData((prev) => ({

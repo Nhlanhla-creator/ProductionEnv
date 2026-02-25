@@ -19,58 +19,60 @@ import {
 
 const TECH_COLLECTION = 'tech_content';
 
-/**
- * Get current user
- */
 const getCurrentUser = () => {
   const user = auth.currentUser;
-  if (!user) {
-    throw new Error('User not authenticated');
-  }
+  if (!user) throw new Error('User not authenticated');
   return user;
 };
 
 /**
- * Generate document ID from path
+ * FIX: Use | as separator so path segments with spaces/underscores never collide.
  */
 const getDocId = (userId, path) => {
-  return `${userId}_${path.join('_').toLowerCase().replace(/\s+/g, '_')}`;
+  const sanitized = path.map(s => s.toLowerCase().replace(/\s+/g, '_')).join('|');
+  return `${userId}_${sanitized}`;
 };
 
 /**
- * Upload file
+ * Upload file — always reads existing files first, then appends.
+ * Replaces both the old uploadFile and addFileToCollection.
  */
 export const uploadFile = async (path, file) => {
   try {
     const user = getCurrentUser();
     const timestamp = Date.now();
     const fileName = `${timestamp}_${file.name}`;
-    const filePath = `tech/${user.uid}/${path.join('/')}/${fileName}`;
-    
-    const fileRef = storageRef(storage, filePath);
+    const storagePath = `tech/${user.uid}/${path.map(s => s.replace(/\s+/g, '_')).join('/')}/${fileName}`;
+
+    const fileRef = storageRef(storage, storagePath);
     await uploadBytes(fileRef, file);
     const downloadURL = await getDownloadURL(fileRef);
 
     const docId = getDocId(user.uid, path);
     const docRef = doc(db, TECH_COLLECTION, docId);
 
-    const data = {
-      userId: user.uid,
-      path: path,
-      type: 'file',
-      files: [{
-        name: file.name,
-        url: downloadURL,
-        storagePath: filePath,
-        size: file.size,
-        mimeType: file.type,
-        uploadedAt: new Date().toISOString()
-      }],
-      updatedAt: serverTimestamp(),
-      createdAt: serverTimestamp()
+    // Always read existing files before writing — never blindly overwrite
+    const docSnap = await getDoc(docRef);
+    const existingFiles = docSnap.exists() ? docSnap.data().files || [] : [];
+
+    const newFile = {
+      name: file.name,
+      url: downloadURL,
+      storagePath,
+      size: file.size,
+      mimeType: file.type,
+      uploadedAt: new Date().toISOString()
     };
 
-    await setDoc(docRef, data, { merge: true });
+    await setDoc(docRef, {
+      userId: user.uid,
+      path,
+      type: 'file',
+      files: [...existingFiles, newFile],
+      updatedAt: serverTimestamp(),
+      createdAt: docSnap.exists() ? docSnap.data().createdAt : serverTimestamp()
+    });
+
     return { success: true, url: downloadURL };
   } catch (error) {
     console.error('❌ Error uploading file:', error);
@@ -79,54 +81,7 @@ export const uploadFile = async (path, file) => {
 };
 
 /**
- * Add file to existing collection
- */
-export const addFileToCollection = async (path, file) => {
-  try {
-    const user = getCurrentUser();
-    const docId = getDocId(user.uid, path);
-    const docRef = doc(db, TECH_COLLECTION, docId);
-
-    const docSnap = await getDoc(docRef);
-    const existingFiles = docSnap.exists() ? docSnap.data().files || [] : [];
-
-    const timestamp = Date.now();
-    const fileName = `${timestamp}_${file.name}`;
-    const filePath = `tech/${user.uid}/${path.join('/')}/${fileName}`;
-    
-    const fileRef = storageRef(storage, filePath);
-    await uploadBytes(fileRef, file);
-    const downloadURL = await getDownloadURL(fileRef);
-
-    const newFile = {
-      name: file.name,
-      url: downloadURL,
-      storagePath: filePath,
-      size: file.size,
-      mimeType: file.type,
-      uploadedAt: new Date().toISOString()
-    };
-
-    const updatedFiles = [...existingFiles, newFile];
-
-    await setDoc(docRef, {
-      userId: user.uid,
-      path: path,
-      type: 'file',
-      files: updatedFiles,
-      updatedAt: serverTimestamp(),
-      createdAt: docSnap.exists() ? docSnap.data().createdAt : serverTimestamp()
-    }, { merge: true });
-
-    return { success: true, url: downloadURL };
-  } catch (error) {
-    console.error('❌ Error adding file:', error);
-    throw error;
-  }
-};
-
-/**
- * Delete file from collection
+ * Delete a single file from a path's collection.
  */
 export const deleteFile = async (path, fileIndex) => {
   try {
@@ -135,26 +90,25 @@ export const deleteFile = async (path, fileIndex) => {
     const docRef = doc(db, TECH_COLLECTION, docId);
 
     const docSnap = await getDoc(docRef);
-    if (!docSnap.exists()) {
-      throw new Error('Document not found');
-    }
+    if (!docSnap.exists()) throw new Error('Document not found');
 
     const files = docSnap.data().files || [];
     const fileToDelete = files[fileIndex];
-
-    if (!fileToDelete) {
-      throw new Error('File not found');
-    }
+    if (!fileToDelete) throw new Error('File not found');
 
     const fileRef = storageRef(storage, fileToDelete.storagePath);
     await deleteObject(fileRef);
 
-    const updatedFiles = files.filter((_, index) => index !== fileIndex);
+    const updatedFiles = files.filter((_, i) => i !== fileIndex);
 
-    await setDoc(docRef, {
-      files: updatedFiles,
-      updatedAt: serverTimestamp()
-    }, { merge: true });
+    if (updatedFiles.length === 0) {
+      await deleteDoc(docRef);
+    } else {
+      await setDoc(docRef, {
+        files: updatedFiles,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    }
 
     return { success: true };
   } catch (error) {
@@ -164,26 +118,23 @@ export const deleteFile = async (path, fileIndex) => {
 };
 
 /**
- * Load content by path
+ * Load content by path.
  */
 export const loadContent = async (path) => {
   try {
     const user = getCurrentUser();
     const docId = getDocId(user.uid, path);
     const docRef = doc(db, TECH_COLLECTION, docId);
-
     const docSnap = await getDoc(docRef);
 
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-      return {
-        ...data,
-        createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
-        updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt)
-      };
-    }
+    if (!docSnap.exists()) return null;
 
-    return null;
+    const data = docSnap.data();
+    return {
+      ...data,
+      createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
+      updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt)
+    };
   } catch (error) {
     console.error('❌ Error loading content:', error);
     throw error;
@@ -191,7 +142,7 @@ export const loadContent = async (path) => {
 };
 
 /**
- * Load all content for user
+ * Load all content for the current user.
  */
 export const loadAllContent = async () => {
   try {
@@ -201,9 +152,11 @@ export const loadAllContent = async () => {
     const querySnapshot = await getDocs(q);
 
     const content = {};
-    querySnapshot.forEach((doc) => {
-      const data = doc.data();
+    querySnapshot.forEach((docSnap) => {
+      const data = docSnap.data();
       const pathKey = data.path.join(' > ');
+      // Only mark as having content if there are actual files
+      if (!data.files || data.files.length === 0) return;
       content[pathKey] = {
         ...data,
         createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
@@ -219,7 +172,7 @@ export const loadAllContent = async () => {
 };
 
 /**
- * Delete content by path
+ * Delete all content (files + Firestore doc) for a path.
  */
 export const deleteContent = async (path) => {
   try {
@@ -228,7 +181,7 @@ export const deleteContent = async (path) => {
     const docRef = doc(db, TECH_COLLECTION, docId);
 
     const docSnap = await getDoc(docRef);
-    if (docSnap.exists() && docSnap.data().type === 'file') {
+    if (docSnap.exists()) {
       const files = docSnap.data().files || [];
       for (const file of files) {
         const fileRef = storageRef(storage, file.storagePath);

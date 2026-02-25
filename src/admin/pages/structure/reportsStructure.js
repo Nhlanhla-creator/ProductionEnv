@@ -8,40 +8,40 @@ export const REPORTS_STRUCTURE = {
     type: "file",
     icon: "trending-up",
     accept: ".pdf,.docx,.doc,.xlsx,.xls,.pptx",
-    maxSize: 2097152,
-    description: "Upload platform usage metrics and KPI reports (PDF/Word/Excel/PPT, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload platform usage metrics and KPI reports (PDF/Word/Excel/PPT, max 10MB)"
   },
 
   "ESG Impact": {
     type: "file",
     icon: "leaf",
     accept: ".pdf,.docx,.doc,.xlsx,.xls,.pptx",
-    maxSize: 2097152,
-    description: "Upload ESG and impact measurement reports (PDF/Word/Excel/PPT, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload ESG and impact measurement reports (PDF/Word/Excel/PPT, max 10MB)"
   },
 
   "Investor Reports": {
     type: "file",
     icon: "file-text",
     accept: ".pdf,.docx,.doc,.xlsx,.xls,.pptx",
-    maxSize: 2097152,
-    description: "Upload investor updates and financial reports (PDF/Word/Excel/PPT, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload investor updates and financial reports (PDF/Word/Excel/PPT, max 10MB)"
   },
 
   "Usage Analytics": {
     type: "file",
     icon: "bar-chart",
     accept: ".pdf,.docx,.doc,.xlsx,.xls,.csv",
-    maxSize: 2097152,
-    description: "Upload user analytics and engagement data (PDF/Word/Excel/CSV, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload user analytics and engagement data (PDF/Word/Excel/CSV, max 10MB)"
   },
 
   "Board Reports": {
     type: "file",
     icon: "briefcase",
     accept: ".pdf,.docx,.doc,.pptx",
-    maxSize: 2097152,
-    description: "Upload board meeting presentations and reports (PDF/Word/PPT, max 2MB)"
+    maxSize: 10485760,
+    description: "Upload board meeting presentations and reports (PDF/Word/PPT, max 10MB)"
   }
 };
 

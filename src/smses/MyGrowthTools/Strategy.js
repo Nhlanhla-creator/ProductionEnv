@@ -40,8 +40,6 @@ ChartJS.register(
   Legend,
 )
 
-
-
 const SECTION_DATA = {
   "strategic-clarity": {
     name: "Strategic Clarity",
@@ -52,6 +50,7 @@ const SECTION_DATA = {
       "Vision",
       "Mission",
       "Values",
+      "Operating Principles",
       "Strategic Priorities (Max 3-5)",
       "Strategic Horizon (timeframe selector 12-36 months)",
     ],
@@ -124,8 +123,8 @@ const getMonths = (year) => {
   )
 }
 
-// Key Question Component with Show More functionality
-const KeyQuestionBox = ({ question, signals, decisions }) => {
+// Key Question Component with Show More functionality - UPDATED
+const KeyQuestionBox = ({ question, signals, decisions, section }) => {
   const [showMore, setShowMore] = useState(false)
   
   const getFirstSentence = (text) => {
@@ -143,12 +142,12 @@ const KeyQuestionBox = ({ question, signals, decisions }) => {
         border: "1px solid #5d4037",
       }}
     >
-      <div style={{ display: "flex", alignItems: "flex-start", marginBottom: "8px" }}>
-        <strong style={{ color: "#5d4037", fontSize: "14px", minWidth: "100px" }}>Key Question:</strong>
-        <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px", flex: 1 }}>
+      <div style={{ marginBottom: "8px" }}>
+        <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Question:</strong>
+        <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
           {showMore ? question : getFirstSentence(question)}
         </span>
-      {!showMore && (question.length > getFirstSentence(question).length || signals || decisions) && (
+        {!showMore && (question.length > getFirstSentence(question).length || signals || decisions) && (
           <button
             onClick={() => setShowMore(true)}
             style={{
@@ -157,9 +156,8 @@ const KeyQuestionBox = ({ question, signals, decisions }) => {
               color: "#5d4037",
               fontWeight: "600",
               cursor: "pointer",
-              marginLeft: "10px",
+              marginLeft: "5px",
               textDecoration: "underline",
-              whiteSpace: "nowrap",
             }}
           >
             See more
@@ -169,13 +167,13 @@ const KeyQuestionBox = ({ question, signals, decisions }) => {
       
       {showMore && (
         <>
-          <div style={{ display: "flex", alignItems: "flex-start", marginBottom: "8px" }}>
-            <strong style={{ color: "#5d4037", fontSize: "14px", minWidth: "100px" }}>Key Signals:</strong>
-            <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px", flex: 1 }}>{signals}</span>
+          <div style={{ marginBottom: "8px" }}>
+            <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Signals:</strong>
+            <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>{signals}</span>
           </div>
-          <div style={{ display: "flex", alignItems: "flex-start" }}>
-            <strong style={{ color: "#5d4037", fontSize: "14px", minWidth: "100px" }}>Key Decisions:</strong>
-            <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px", flex: 1 }}>{decisions}</span>
+          <div>
+            <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Decisions:</strong>
+            <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>{decisions}</span>
           </div>
           <button
             onClick={() => setShowMore(false)}
@@ -336,14 +334,17 @@ const AIAnalysisButton = ({
       vision: data.vision || "Not provided",
       mission: data.mission || "Not provided",
       values: data.values || [],
+      operatingPrinciples: data.operatingPrinciples || [],
       strategicPriorities: data.strategicPriorities || [],
       strategicHorizon: data.strategicHorizon || "12",
       completedPriorities: data.strategicPriorities?.filter(p => p.status === "Done").length || 0,
       totalPriorities: data.strategicPriorities?.length || 0,
       valuesCount: data.values?.length || 0,
+      operatingPrinciplesCount: data.operatingPrinciples?.length || 0,
       hasVision: !!data.vision,
       hasMission: !!data.mission,
       hasValues: data.values?.length > 0,
+      hasOperatingPrinciples: data.operatingPrinciples?.length > 0,
       hasPriorities: data.strategicPriorities?.length > 0
     }
   }
@@ -355,20 +356,21 @@ STRATEGIC CLARITY ASSESSMENT DATA:
 1. Vision Statement: ${data.vision}
 2. Mission Statement: ${data.mission}
 3. Core Values: ${data.valuesCount} values defined - ${data.values.join(", ")}
-4. Strategic Horizon: ${data.strategicHorizon} months
-5. Strategic Priorities: ${data.totalPriorities} total, ${data.completedPriorities} completed
+4. Operating Principles: ${data.operatingPrinciplesCount} principles defined - ${data.operatingPrinciples.join(", ")}
+5. Strategic Horizon: ${data.strategicHorizon} months
+6. Strategic Priorities: ${data.totalPriorities} total, ${data.completedPriorities} completed
    ${data.strategicPriorities.map((p, i) => `${i+1}. ${p.description} (Due: ${p.dueDate}, Status: ${p.status})`).join("\n   ")}
 
 ANALYSIS REQUIREMENTS:
 1. ASSESSMENT OVERVIEW:
-   - Evaluate completeness of strategic elements (vision, mission, values, priorities)
+   - Evaluate completeness of strategic elements (vision, mission, values, operating principles, priorities)
    - Rate strategic clarity on a scale of 1-10 (10 being highest)
    - Identify strengths and gaps
 
 2. DATA TRENDS ANALYSIS:
    - Compare against industry benchmarks for strategic planning
    - Analyze completion rate of strategic priorities
-   - Assess alignment between vision, mission, and actual priorities
+   - Assess alignment between vision, mission, principles, and actual priorities
 
 3. ACTIONABLE INSIGHTS:
    - Provide 3-5 specific, actionable recommendations
@@ -392,6 +394,7 @@ Current Assessment
 - Vision: [Analysis of vision statement clarity and effectiveness]
 - Mission: [Analysis of mission statement alignment and focus]
 - Values: [Analysis of core values implementation]
+- Operating Principles: [Analysis of operating principles and their impact]
 - Strategic Priorities: [Analysis of priority setting and execution]
 - Strategic Horizon: [Analysis of timeframe appropriateness]
 
@@ -629,18 +632,21 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
 }
 
 
-// Strategic Clarity Component with updated UI
+// Strategic Clarity Component with updated UI and Operating Principles
 const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
   const [visionMissionData, setVisionMissionData] = useState({
     vision: "",
     mission: "",
     values: [],
+    operatingPrinciples: [],
     strategicPriorities: [],
     strategicHorizon: "12",
   })
   const [showModal, setShowModal] = useState(false)
+  const [showOperatingPrincipleModal, setShowOperatingPrincipleModal] = useState(false)
   const [showPriorityModal, setShowPriorityModal] = useState(false)
   const [newValue, setNewValue] = useState("")
+  const [newOperatingPrinciple, setNewOperatingPrinciple] = useState("")
   const [newPriority, setNewPriority] = useState({
     description: "",
     dueDate: "",
@@ -664,6 +670,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
             vision: data.vision || "",
             mission: data.mission || "",
             values: data.values || [],
+            operatingPrinciples: data.operatingPrinciples || [],
             strategicPriorities: data.strategicPriorities || [],
             strategicHorizon: data.strategicHorizon || "12",
           })
@@ -688,6 +695,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
           vision: data.vision || "",
           mission: data.mission || "",
           values: data.values || [],
+          operatingPrinciples: data.operatingPrinciples || [],
           strategicPriorities: data.strategicPriorities || [],
           strategicHorizon: data.strategicHorizon || "12",
         })
@@ -773,6 +781,34 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
     setVisionMissionData((prev) => ({
       ...prev,
       values: prev.values.filter((_, i) => i !== index),
+    }))
+  }
+
+  const handleAddOperatingPrinciple = () => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+
+    if (newOperatingPrinciple.trim()) {
+      setVisionMissionData((prev) => ({
+        ...prev,
+        operatingPrinciples: [...prev.operatingPrinciples, newOperatingPrinciple.trim()],
+      }))
+      setNewOperatingPrinciple("")
+      setShowOperatingPrincipleModal(false)
+    }
+  }
+
+  const handleRemoveOperatingPrinciple = (index) => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+
+    setVisionMissionData((prev) => ({
+      ...prev,
+      operatingPrinciples: prev.operatingPrinciples.filter((_, i) => i !== index),
     }))
   }
 
@@ -925,6 +961,7 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
             </div>
           </div>
 
+          {/* Core Values Section */}
           <div
             style={{
               backgroundColor: "#f7f3f0",
@@ -1001,6 +1038,91 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Operating Principles Section - NEW */}
+          <div
+            style={{
+              backgroundColor: "#f7f3f0",
+              padding: "20px",
+              borderRadius: "6px",
+              marginBottom: "30px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "15px",
+              }}
+            >
+              <h3 style={{ color: "#5d4037", margin: 0 }}>Operating Principles</h3>
+              {!isInvestorView && (
+                <button
+                  onClick={() => setShowOperatingPrincipleModal(true)}
+                  style={{
+                    padding: "8px 16px",
+                    backgroundColor: "#7d5a50",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontWeight: "500",
+                    fontSize: "12px",
+                  }}
+                >
+                  Add Principle
+                </button>
+              )}
+            </div>
+
+            {visionMissionData.operatingPrinciples.length === 0 ? (
+              <p style={{ color: "#7d5a50", textAlign: "center", padding: "20px" }}>
+                No operating principles added yet. Add principles that guide how you operate and make decisions.
+              </p>
+            ) : (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))",
+                  gap: "15px",
+                }}
+              >
+                {visionMissionData.operatingPrinciples.map((principle, index) => (
+                  <div
+                    key={index}
+                    style={{
+                      backgroundColor: "#fdfcfb",
+                      padding: "15px",
+                      borderRadius: "4px",
+                      border: "2px solid #bcaaa4",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <span style={{ color: "#5d4037", fontWeight: "500" }}>{principle}</span>
+                    {!isInvestorView && (
+                      <button
+                        onClick={() => handleRemoveOperatingPrinciple(index)}
+                        style={{
+                          backgroundColor: "transparent",
+                          border: "none",
+                          color: "#d32f2f",
+                          cursor: "pointer",
+                          fontSize: "18px",
+                          padding: "0 5px",
+                        }}
+                        title="Delete"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Strategic Horizon */}
@@ -1297,6 +1419,87 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
                 }}
               >
                 Add Value
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Operating Principle Modal - NEW */}
+      {showOperatingPrincipleModal && !isInvestorView && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "white",
+              padding: "30px",
+              borderRadius: "8px",
+              width: "90%",
+              maxWidth: "500px",
+            }}
+          >
+            <h3 style={{ color: "#5d4037", marginTop: 0 }}>Add Operating Principle</h3>
+            <input
+              type="text"
+              value={newOperatingPrinciple}
+              onChange={(e) => setNewOperatingPrinciple(e.target.value)}
+              placeholder="Enter an operating principle..."
+              style={{
+                width: "100%",
+                padding: "12px",
+                border: "2px solid #e8ddd4",
+                borderRadius: "4px",
+                fontSize: "14px",
+                boxSizing: "border-box",
+                marginBottom: "20px",
+              }}
+            />
+            <div
+              style={{
+                display: "flex",
+                gap: "10px",
+                justifyContent: "flex-end",
+              }}
+            >
+              <button
+                onClick={() => setShowOperatingPrincipleModal(false)}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#e6d7c3",
+                  color: "#4a352f",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddOperatingPrinciple}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#7d5a50",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                }}
+              >
+                Add Principle
               </button>
             </div>
           </div>
@@ -2505,6 +2708,9 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
+      datalabels: {
+      display: false // This disables datalabels for this specific chart
+    },
       legend: {
         display: false,
       },
@@ -4015,6 +4221,9 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
+       datalabels: {
+      display: false // This disables datalabels for this specific chart
+    },
       legend: {
         display: false,
       },
@@ -6798,12 +7007,16 @@ const Strategy = () => {
           </div>
         )}
 
-                <div style={{ padding: "50px", paddingTop: "100px" }}>
+        <div style={{ padding: "50px", paddingTop: "100px" }}>
+          {/* UPDATED: Moved the "See more about dashboard" button under the heading */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
             <h1 style={{ color: "#5d4037", fontSize: "32px", fontWeight: "700", margin: 0 }}>
               Strategy & Execution
             </h1>
-            
+          </div>
+          
+          {/* Moved button here to be directly under the heading */}
+          <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: "20px" }}>
             <button
               onClick={() => setShowFullDescription(!showFullDescription)}
               style={{
@@ -6818,7 +7031,7 @@ const Strategy = () => {
                 whiteSpace: "nowrap",
               }}
             >
-              {showFullDescription ? "See less" : "See more"}
+              {showFullDescription ? "See less" : "See more about dashboard"}
             </button>
           </div>
 
@@ -6833,9 +7046,15 @@ const Strategy = () => {
                 marginBottom: "30px",
               }}
             >
-         
-              <div style={{ marginTop: "-30px", paddingTop: "20px", borderTop: "1px solid #e8ddd4" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginTop: "20px" }}>
+              <p style={{ color: "#4a352f", fontSize: "16px", lineHeight: "1.6", margin: 0 }}>
+                The Strategy & Execution dashboard helps you assess whether your business is deliberately steered, 
+                not reactive. It evaluates how strategy is translated into structure, priorities, and action, and 
+                surfaces strategic execution risks rather than operational performance. This dashboard tests whether 
+                your operating model fits your business's current reality.
+              </p>
+              
+              <div style={{ marginTop: "20px", paddingTop: "20px", borderTop: "1px solid #e8ddd4" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
                   <div>
                     <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
                       What this dashboard DOES
