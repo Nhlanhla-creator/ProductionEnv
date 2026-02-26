@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 
 const ai = new GoogleGenAI({ 
-  apiKey: "AIzaSyCNgMy76oz4N-mNXEmoc5e3XPO-Sem4ca8"
+  apiKey: "AIzaSyA3AIJgagmVwL930v9CO56i3M45Gq0usPI"
 });
 
 export const documentValidationRules = {
@@ -129,18 +129,18 @@ export const documentValidationRules = {
     ],
     strictChecks: ["issued_by_compensation_fund", "has_employer_reference", "shows_good_standing"]
   },
-  "CV": {
-    requiredElements: [
-      "Personal details and contact information",
-      "Professional summary/objective",
-      "Work experience with dates and descriptions",
-      "Educational background and qualifications",
-      "Skills and competencies",
-      "Professional certifications (if any)",
-      "References or availability upon request"
-    ],
-    strictChecks: ["has_work_experience", "has_education", "has_contact_info"]
-  },
+"CV": {
+  requiredElements: [
+    "Person's full name",
+    "Work experience with dates",
+    "Educational background",
+    "Skills or competencies"
+  ],
+  strictChecks: ["has_work_experience", "has_education", "is_cv"],
+  skipNameCheck: true, 
+  ignoreCompanyName: true 
+},
+
   "Financial Statements": {
     requiredElements: [
       "Financial statements (Balance Sheet, Income Statement, Cash Flow)",
@@ -240,6 +240,44 @@ export const documentValidationRules = {
 const createStrictPrompt = (docLabel, rules, registeredName) => { 
   let customInstructions = "";
   
+  // SPECIAL HANDLING FOR CVs - OVERRIDE EVERYTHING
+  if (docLabel === "CV") {
+    return `ANALYZE THE UPLOADED DOCUMENT FILE:
+
+DOCUMENT VALIDATION FOR: CV
+
+IMPORTANT - CV VALIDATION RULES:
+1. 🔴 THIS IS A CV - DO NOT CHECK COMPANY NAME
+2. 🔴 CVs are personal documents - they will NOT contain "${registeredName}"
+3. 🔴 ONLY validate that this is a legitimate CV/resume
+
+REQUIRED ELEMENTS:
+- Person's full name
+- Work experience with dates
+- Educational background
+- Skills or competencies
+
+ACCEPT IF:
+- Document is a CV, resume, or curriculum vitae
+- Contains personal details and work history
+- Shows education or qualifications
+
+REJECT IF:
+- Document is not a CV (e.g., company document, ID, certificate)
+- No work experience or education section
+- Appears to be a company document
+
+RESPOND WITH:
+{
+  "isValid": true/false,
+  "status": "verified" | "wrong_type" | "incomplete",
+  "identifiedDocumentType": "What you detected",
+  "message": "Brief validation result",
+  "warnings": []
+}`;
+  }
+  
+  // Special handling for B-BBEE
   if (docLabel === "B-BBEE Certificate") {
     customInstructions = `SPECIAL INSTRUCTIONS FOR B-BBEE DOCUMENTS:
 - ACCEPT BOTH: Traditional B-BBEE Certificates AND Exemption Affidavits for micro-enterprises
@@ -315,7 +353,7 @@ DOCUMENT VALIDATION FOR: ${docLabel}
 
 CRITICAL CHECKS:
 1. 🔴 DOCUMENT TYPE: Must be exactly ${docLabel}
-2. 🔴 COMPANY NAME: Must match "${registeredName}" 
+2. 🔴 COMPANY NAME: ${docLabel === "CV" ? "NOT REQUIRED - IGNORE COMPANY NAME" : `Must match "${registeredName}"`}
 3. 🔴 EXPIRY DATE: Must not be expired (current year: 2025)
 4. 🔴 COMPLETENESS: Required elements present (somewhere in the document)
 
@@ -332,6 +370,7 @@ ANALYZE THE UPLOADED FILE AND RESPOND WITH:
 }
 `;
 };
+
 
 // Helper function to parse AI response
 const parseDetailedResponse = (responseText, docLabel) => {
@@ -413,27 +452,45 @@ const parseDetailedResponse = (responseText, docLabel) => {
       }
       
       if (parsed.status === "wrong_type" || (!parsed.isValid && identifiedType !== docLabel)) {
-        if (docLabel === "Financial Statements" && 
-            (identifiedType.includes("Financial") || identifiedType.includes("Statement") || 
-             identifiedType.includes("Balance Sheet") || identifiedType.includes("Income Statement") || 
-             identifiedType.includes("Cash Flow"))) {
-          const isAudited = responseText.toLowerCase().includes('audit') || 
-                           responseText.toLowerCase().includes('auditor') ||
-                           responseText.toLowerCase().includes('audited') ||
-                           responseText.toLowerCase().includes('audit report') ||
-                           responseText.toLowerCase().includes('audit opinion');
-          
-          if (isAudited) {
-            userMessage = "Audited financial statements verified";
-            status = "verified";
-          } else {
-            userMessage = "Financial statements verified (not audited)";
-            status = "verified:not_audited";
-          }
-        } else {
-          userMessage = `Please upload a ${docLabel} doc, not ${identifiedType}`;
-          status = "wrong_type";
-        }
+  // SPECIAL HANDLING FOR CVs
+  if (docLabel === "CV") {
+    // Check if the identified type is actually a CV but mislabeled
+    const lowerIdentified = identifiedType.toLowerCase();
+    const isActuallyCV = lowerIdentified.includes('cv') || 
+                        lowerIdentified.includes('resume') || 
+                        lowerIdentified.includes('curriculum') ||
+                        lowerIdentified.includes('personal') ||
+                        lowerIdentified.includes('work experience');
+    
+    if (isActuallyCV) {
+      userMessage = "CV verified";
+      status = "verified";
+    } else {
+      userMessage = `Please upload a CV, not ${identifiedType}`;
+      status = "wrong_type";
+    }
+  }
+  else if (docLabel === "Financial Statements" && 
+      (identifiedType.includes("Financial") || identifiedType.includes("Statement") || 
+       identifiedType.includes("Balance Sheet") || identifiedType.includes("Income Statement") || 
+       identifiedType.includes("Cash Flow"))) {
+    const isAudited = responseText.toLowerCase().includes('audit') || 
+                     responseText.toLowerCase().includes('auditor') ||
+                     responseText.toLowerCase().includes('audited') ||
+                     responseText.toLowerCase().includes('audit report') ||
+                     responseText.toLowerCase().includes('audit opinion');
+    
+    if (isAudited) {
+      userMessage = "Audited financial statements verified";
+      status = "verified";
+    } else {
+      userMessage = "Financial statements verified (not audited)";
+      status = "verified:not_audited";
+    }
+  } else {
+    userMessage = `Please upload a ${docLabel} doc, not ${identifiedType}`;
+    status = "wrong_type";
+  }
       } else if (parsed.status === "name_mismatch") {
         userMessage = "Company name does not match your registered name";
         status = "name_mismatch";
